@@ -62,6 +62,41 @@ export interface BotInfo {
   routines: number;
 }
 
+/** How the bridge found one file of the bot's profile for its page: read (`ok`), absent, larger than it reads
+ *  (`too_big`: sized only), not a regular file or a failed read (`unreadable`), or a link that leads out of the
+ *  profile, which it never follows (`outside`). */
+export type PageFileState = "ok" | "missing" | "too_big" | "unreadable" | "outside";
+
+/** The profile's `SOUL.md` (the bot's persona), read-only. `text` is "" unless `state` is `ok`; `lossy`: some bytes
+ *  were not UTF-8 and show as U+FFFD. */
+export interface BotSoul {
+  file: string;
+  state: PageFileState;
+  size: number | null;
+  text: string;
+  lossy: boolean;
+}
+
+/** One of Hermes' built-in memory targets (`memories/MEMORY.md`, `memories/USER.md`), read-only: its entries split
+ *  on Hermes' delimiter, the characters Hermes counts against `limit`, and whether config.yaml switches it on. */
+export interface MemoryTarget {
+  target: "memory" | "user";
+  file: string;
+  state: PageFileState;
+  size: number | null;
+  lossy: boolean;
+  entries: string[];
+  chars: number;
+  limit: number;
+  enabled: boolean;
+}
+
+/** `bots.page`: what the bot page shows of who the bot is. */
+export interface BotPage {
+  soul: BotSoul;
+  memory: MemoryTarget[];
+}
+
 /** One of a bot's skills (a `SKILL.md` under `<profile>/skills`), for the composer's `./` picker. */
 /** `{slack: {C0BLC924P1P: "#docs-harness"}, discord: {1544…: "#cron"}}`: names for link chips. */
 export interface LinkPlaces {
@@ -422,6 +457,8 @@ export interface OpMap {
     result: { avatar_rev: number | null };
   };
   "bots.info": { params: { bot: string }; result: BotInfo };
+  /** The bot page's persona and memory files, read-only (BOUNDARY rule 40); a bot on another computer is read there. */
+  "bots.page": { params: { bot: string }; result: BotPage };
   /** The bot's skills from its profile folder (read-only), sorted by name. */
   "skills.list": { params: { bot: string }; result: { skills: Skill[] } };
   /** The slash commands Hermes answers for this bot, from Hermes' own registry (read-only). */

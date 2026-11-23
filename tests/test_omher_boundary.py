@@ -3035,3 +3035,23 @@ class BotPageReadsPersonaAndMemoryOnly(unittest.TestCase):
             text = rs.read_text(encoding="utf-8")
             for name in ("SOUL.md", "MEMORY.md", "USER.md", "memories/"):
                 self.assertNotIn(name, text, f"{rs.name}: {name}")
+
+    def test_the_page_only_reads_and_edit_only_drafts(self) -> None:
+        store = (UI_SRC / "state" / "store.ts").read_text(encoding="utf-8")
+        self.assertEqual(store.count('"bots.page"'), 1)
+        self.assertIn('botPage: (bot) => bridge.request("bots.page", { bot }),', store)
+        draft = store.split("async draftTo(bot, text) {", 1)[1].split("\n    },", 1)[0]
+        self.assertIn('dispatch({ type: "ui.draft", bot, text });', draft)
+        for bad in ("send", "request(", "chat."):
+            self.assertNotIn(bad, draft, bad)
+        page = (UI_SRC / "settings" / "BotSections.tsx").read_text(encoding="utf-8")
+        helpers = (UI_SRC / "settings" / "botPage.ts").read_text(encoding="utf-8")
+        self.assertIn("s.draftTo(bot.name, editDraft(kind))", page)
+        for text in (page, helpers):
+            for bad in ("console.", "localStorage", "sessionStorage", "dangerouslySetInnerHTML", "bridge.request", ".send(",
+                        "sendTo(", "Markdown"):
+                self.assertNotIn(bad, text, bad)
+        # nowhere else in the app names the op or keeps what it answered (unit tests may name it)
+        hits = [p.relative_to(UI_SRC).as_posix() for p in UI_SRC.rglob("*.ts*")
+                if ".test." not in p.name and '"bots.page"' in p.read_text(encoding="utf-8")]
+        self.assertEqual(sorted(hits), ["lib/protocol.ts", "state/store.ts"])

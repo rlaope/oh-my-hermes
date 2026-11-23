@@ -644,6 +644,51 @@ let noSkills;
 let linearMcp;
 let notReady = new Map();
 
+// The bot page's persona and memory (bots.page), as the bridge's read_bot_page answers: one bot with everything,
+// one with no SOUL.md, a memory file too big to read and a switched-off target, one whose SOUL.md links out of its
+// folder and whose memory could not be read. A bot on another computer reads like its own profile there.
+const DELIM = "\n§\n";
+const pageFile = (file, state, text = "", extra = {}) => ({
+  file,
+  state,
+  size: state === "ok" ? new TextEncoder().encode(text).length : null,
+  text: state === "ok" ? text : "",
+  lossy: false,
+  ...extra,
+});
+const memTarget = (target, file, state, entries, limit, enabled = true, extra = {}) => ({
+  ...pageFile(`memories/${file}`, state, entries.join(DELIM), extra),
+  target,
+  entries: state === "ok" ? entries : [],
+  chars: state === "ok" ? entries.join(DELIM).length : 0,
+  limit,
+  enabled,
+});
+const BOT_PAGE_SEED = {
+  kami: () => ({
+    soul: pageFile("SOUL.md", "ok", "# Kami\n\nA calm, direct helper. Short answers first, details when asked.\n<b>not markup</b>\n"),
+    memory: [
+      memTarget("memory", "MEMORY.md", "ok", ["The web app deploys from main after CI passes.", "Release notes go in CHANGELOG.md."], 2200),
+      memTarget("user", "USER.md", "ok", ["Prefers short answers.\nAsks for the command first."], 1375),
+    ],
+  }),
+  friren: () => ({
+    soul: pageFile("SOUL.md", "missing"),
+    memory: [
+      { ...memTarget("memory", "MEMORY.md", "too_big", [], 2200), size: 3 * 1024 * 1024 },
+      memTarget("user", "USER.md", "missing", [], 1375, false),
+    ],
+  }),
+  default: () => ({
+    soul: pageFile("SOUL.md", "outside"),
+    memory: [memTarget("memory", "MEMORY.md", "unreadable", [], 2200), memTarget("user", "USER.md", "missing", [], 1375)],
+  }),
+};
+const remotePage = () => ({
+  soul: pageFile("SOUL.md", "ok", "The persona kept on the other computer.\n"),
+  memory: [memTarget("memory", "MEMORY.md", "ok", ["Builds run on this machine overnight."], 2200), memTarget("user", "USER.md", "missing", [], 1375)],
+});
+
 // What each bot has done (bots.info): sessions per place, skills, routines.
 const INFO_SEED = {
   kami: { places: { slack: 78, discord: 48, cron: 15 }, first: 14 * 24 * 3600, skills: 134 },
@@ -1471,6 +1516,11 @@ const OPS = {
       skills: i.skills,
       routines: (ROUTINE_SEED[b.name] ?? []).length,
     };
+  },
+  "bots.page": (p) => {
+    const b = needBotAny(p);
+    const seed = b.host ? remotePage : (BOT_PAGE_SEED[b.name] ?? (() => ({ soul: pageFile("SOUL.md", "missing"), memory: [memTarget("memory", "MEMORY.md", "missing", [], 2200), memTarget("user", "USER.md", "missing", [], 1375)] })));
+    return seed();
   },
   "skills.list": (p) => {
     needBot(p);

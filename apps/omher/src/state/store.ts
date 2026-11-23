@@ -31,6 +31,7 @@ import type {
   ReplyRef,
   Routine,
   BotInfo,
+  BotPage,
   TerminalRun,
   Worktree,
   UsageProvider,
@@ -396,6 +397,8 @@ export interface Ui {
   back: "chat" | "session";
   /** Automations: the job the detail panel shows (`<bot>:<id>`); Plugins: the bot whose plugins the page shows. */
   automation: string | null;
+  /** Automations: the bot the list is filtered to when the page opens (a bot page's "Open in Automations"). */
+  automationsBot: string | null;
   pluginsBot: string | null;
   /** The UI language (Settings › General › Language), saved as `omher.lang`. */
   lang: Lang;
@@ -636,6 +639,7 @@ export function initialState(): AppState {
       session: null,
       thread: null,
       automation: null,
+      automationsBot: null,
       pluginsBot: null,
       lang: readLang(),
     },
@@ -957,7 +961,7 @@ export type Action =
   | { type: "peek.failed"; id: string; error: string }
   | { type: "routines"; bot: string; routines: Routine[] }
   | { type: "automations"; automations: Automation[] }
-  | { type: "ui.automations"; job?: string | null }
+  | { type: "ui.automations"; job?: string | null; bot?: string | null }
   | { type: "ui.plugins"; bot?: string | null }
   | { type: "ui.tasks" }
   | { type: "ui.lang"; lang: Lang }
@@ -1524,7 +1528,10 @@ export function reduce(state: AppState, a: Action): AppState {
     case "automations":
       return { ...state, automations: a.automations };
     case "ui.automations":
-      return { ...state, ui: { ...state.ui, view: "automations", back: backOf(state.ui), ...(a.job !== undefined ? { automation: a.job } : {}) } };
+      return {
+        ...state,
+        ui: { ...state.ui, view: "automations", back: backOf(state.ui), automationsBot: a.bot ?? null, ...(a.job !== undefined ? { automation: a.job } : {}) },
+      };
     case "ui.plugins":
       return { ...state, ui: { ...state.ui, view: "plugins", back: backOf(state.ui), ...(a.bot ? { pluginsBot: a.bot } : {}) } };
     case "ui.tasks":
@@ -1944,8 +1951,8 @@ export interface Actions {
   loadRoutines(bot?: string): Promise<void>;
   /** Re-read every bot's automations (files only; no gateway). */
   loadAutomations(): Promise<void>;
-  /** Open the Automations page, on one job (`<bot>:<id>`) when given. */
-  openAutomations(job?: string | null): void;
+  /** Open the Automations page, on one job (`<bot>:<id>`) when given, its list filtered to `bot` when given. */
+  openAutomations(job?: string | null, bot?: string | null): void;
   /** Open the Plugins page, scoped to `bot` when given (else the last one, else the selected bot). */
   openPlugins(bot?: string | null): void;
   /** Open the Tasks page (src/tasks: issues and pull requests, read-only). */
@@ -1986,6 +1993,9 @@ export interface Actions {
   setPanelMax(open: boolean, tab?: PanelTabId): void;
   /** Put text in the selected bot's composer and focus it. Never sends. */
   prefill(text: string): void;
+  /** Open `bot`'s main chat (not a thread) with `text` in its composer, for the person to finish and send. Never
+   *  sends (the bot page's Edit). */
+  draftTo(bot: string, text: string): Promise<void>;
   setTheme(theme: Theme): void;
   setLook(look: Partial<Look>): void;
   openSettings(page?: string): void;
@@ -2019,6 +2029,8 @@ export interface Actions {
   renameBot(bot: string, name: string): Promise<void>;
   setAvatar(bot: string, data: string | null): Promise<void>;
   botInfo(bot: string): Promise<BotInfo>;
+  /** The bot page's persona and memory (bridge `bots.page`, read-only files; never kept in the store). */
+  botPage(bot: string): Promise<BotPage>;
   /** The bot's skills for the composer's `$` picker, read once per bot (`fresh`: read again, e.g. right after an
    *  install); [] when the bridge cannot list them. */
   skills(bot: string, fresh?: boolean): Promise<Skill[]>;
@@ -2799,8 +2811,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     loadRoutines,
     loadAutomations,
     loadModels,
-    openAutomations: (job) => {
-      dispatch({ type: "ui.automations", job });
+    openAutomations: (job, bot) => {
+      dispatch({ type: "ui.automations", job, bot });
       void loadAutomations();
     },
     openTasks: () => dispatch({ type: "ui.tasks" }),
@@ -2882,6 +2894,10 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     setPanelTab: (tab) => dispatch({ type: "ui.panelTab", tab }),
     openRun: (run) => dispatch({ type: "ui.run", run }),
     setPanelMax: (open, tab) => dispatch({ type: "ui.panelMax", open, tab }),
+    async draftTo(bot, text) {
+      if (state.selectedBot !== bot || state.ui.view !== "chat" || state.ui.thread) await selectBot(bot);
+      dispatch({ type: "ui.draft", bot, text });
+    },
     prefill(text) {
       const bot = state.selectedBot;
       if (!bot) return;
@@ -2959,6 +2975,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       dispatch({ type: "bots", bots: state.bots.map((b) => (b.name === bot ? { ...b, avatar_rev: r.avatar_rev } : b)) });
     },
     botInfo: (bot) => bridge.request("bots.info", { bot }),
+    botPage: (bot) => bridge.request("bots.page", { bot }),
     skills(bot, fresh) {
       if (fresh) skillLists.delete(bot);
       let list = skillLists.get(bot);

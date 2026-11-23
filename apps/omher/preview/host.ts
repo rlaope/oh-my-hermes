@@ -316,6 +316,19 @@ const OPS: Record<string, (p: Json) => unknown> = {
     const i = INFO[need(p).name] as { places: Json; first: number; skills: number };
     return { places: { ...i.places }, first_active: nowS() - i.first, last_active: nowS() - 20, skills: i.skills, routines: (ROUTINES[String(p.bot)] ?? []).length };
   },
+  // the bot page's persona and memory: staged, no profile is read
+  "bots.page": (p) => {
+    const b = need(p);
+    const mem = (target: string, file: string, entries: string[], limit: number) => ({
+      target, file: `memories/${file}`, state: entries.length ? "ok" : "missing", size: entries.length ? entries.join("\n§\n").length : null,
+      lossy: false, entries, chars: entries.join("\n§\n").length, limit, enabled: true,
+    });
+    const soul = `# ${String(b.display_name)}\n\n${String(b.description)}: short answers first, details when asked.\n`;
+    return {
+      soul: { file: "SOUL.md", state: "ok", size: soul.length, text: soul, lossy: false },
+      memory: [mem("memory", "MEMORY.md", ["The web app deploys from main after CI passes."], 2200), mem("user", "USER.md", ["Prefers short answers."], 1375)],
+    };
+  },
   "bots.avatar": () => ({ rev: null, data: null }),
   "skills.list": (p) => (need(p), { skills: SKILLS }),
   "panel.terminal": () => ({ runs: [] }),

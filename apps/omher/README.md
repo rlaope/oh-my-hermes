@@ -125,6 +125,15 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
 - **While it answers** (Settings › General): a message sent while a bot is answering waits in the steer queue until
   the turn ends (the default), or, set to Steer, is steered into the running answer at once, as its Steer button
   would; a message behind another held one still waits its turn (`e2e/steer-queue.spec.ts`).
+- **A bot's page** (Settings › Bots › the bot; the row menu's Edit bot, or Edit in the Details panel): its picture and
+  name (editable), then who it is, read-only. Persona is the profile's `SOUL.md` as plain text with its size; Memory is
+  Hermes' built-in `memories/MEMORY.md` and `memories/USER.md`, each as its entries with its characters against the
+  limit `config.yaml` sets and an Off mark when it is switched off; then the bot's automations (Open in Automations
+  shows them filtered), its sessions elsewhere and its open threads with their status. The bridge reads the three
+  files with `bots.page` when the page opens and on Read again, at most 1 MB each, never through a link out of the
+  profile (`read_bot_page`). Edit writes nothing: it opens the bot's main chat with a request in the composer for the
+  person to finish and send. A bot on another computer is read by that computer's own bridge over the SSH link.
+  `BOUNDARY.md` rule 40.
 - **Remote machines over SSH** (`src-tauri/src/peers.rs`, `src/peers/`): the sidebar `+` › Connect over SSH (or the
   chip under a bot's `omher-peer` reply, or Settings › Remote machines) takes a host from `~/.ssh/config` or
   `user@host`, checks it and shows the exact `ssh` command, the Hermes found there and its bots; only Connect saves it

@@ -59,7 +59,8 @@ export function AutomationsPage() {
   const bots = s.bots;
   const [askBot, setAskBot] = useState<string | null>(null);
   const [text, setText] = useState("");
-  const [filter, setFilter] = useState<string | null>(null);
+  // a bot page's "Open in Automations" opens the list on that bot
+  const [filter, setFilter] = useState<string | null>(s.ui.automationsBot);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
