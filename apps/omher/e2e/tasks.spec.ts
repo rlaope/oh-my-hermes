@@ -7,7 +7,7 @@
 //    URL, title and body + "Work on this issue." (thread.create + chat.send session=<thread>);
 // 5. gh not signed in: one sentence naming `gh auth login` and a button that opens a terminal shell;
 // 6. right-click the row -> Hide from sidebar; Settings › General shows it again;
-// 7. Linear: the connect screen names the bot and the `hermes -p <bot> mcp install linear` command.
+// 7. Linear: the connect screen names the bot and opens the Apps page for it (no command to copy any more).
 // Shots first (OMHER_SHOTS=<dir>): tasks-bar-dark, tasks-page-github-{dark,light}, tasks-detail, tasks-start-thread.
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
@@ -283,17 +283,25 @@ test("right-click › Hide from sidebar; Settings › General shows it again", a
   await expect(page.getByTestId("tasks-bar")).toBeVisible();
 });
 
-test("Linear: connect screen with the bot's own Hermes command; a configured Linear MCP is said, nothing listed", async ({ page }) => {
+test("Linear: the connect screen opens the Apps page for the picked bot; a configured Linear MCP is said, nothing listed", async ({ page }) => {
   await setup(page);
   await openOn(page, "linear");
   await expect(page.getByTestId("tasks-linear-connect")).toContainText("Connect Linear to Kami");
-  await expect(page.getByTestId("tasks-linear-cmd")).toContainText("hermes -p kami mcp install linear");
+  await expect(page.getByTestId("tasks-linear-connect")).toContainText("on the Apps page");
+  await expect(page.getByTestId("tasks-linear-connect")).not.toContainText("hermes -p");
   await mock("mock.linear", { bot: "kami", server: "linear" });
   await page.getByTestId("tasks-linear-bot").click();
   await page.getByTestId("tasks-linear-bot-friren").click();
-  await expect(page.getByTestId("tasks-linear-cmd")).toContainText("hermes -p friren mcp install linear");
+  await expect(page.getByTestId("tasks-linear-connect")).toContainText("Connect Linear to Friren");
   await page.getByTestId("tasks-linear-bot").click();
   await page.getByTestId("tasks-linear-bot-kami").click();
   await expect(page.getByTestId("tasks-linear-on")).toContainText("Kami has Linear (linear)");
   expect((await calls("tasks.linear")).map((c) => c.params.bot)).toEqual(["kami", "friren", "kami"]);
+  // the button opens Apps on that bot, where Connect is
+  await page.getByTestId("tasks-linear-bot").click();
+  await page.getByTestId("tasks-linear-bot-friren").click();
+  await page.getByTestId("tasks-linear-apps").click();
+  await expect(page.getByTestId("apps")).toBeVisible();
+  await expect(page.getByTestId("apps-scope")).toContainText("Friren's apps");
+  await expect(page.getByTestId("app-install-linear")).toBeVisible();
 });

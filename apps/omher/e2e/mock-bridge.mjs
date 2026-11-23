@@ -14,6 +14,8 @@
 // mock.offline {bot, on} (a bot's gateway down for the Automations / Plugins writes),
 // mock.restart {bot, outcome: "ok"|"refused"|"failed"|"slow", work?, line?} (what Hermes' restart answers next),
 // mock.pluginLoad {load: "live"|"reload"|"restart"|"failed"} (what the next plugin install / reload says),
+// mock.apps {bot, name, state} (one Apps entry's state for a bot), mock.appsNext {verb, line} (the next apps.<verb> run
+// fails with Hermes' text), mock.appsDelay {verb, ms} (how long an apps.<verb> run takes),
 // mock.botStatus {bot, status} (a bot goes offline or online),
 // mock.manual {bot, on} (a message to that bot, or to its folder chats, starts a turn that runs no script: the test
 // drives it with mock.emit),
@@ -31,6 +33,11 @@
 // Threads under a bot: thread.create / thread.list / thread.open / thread.remove as the bridge answers them (a thread
 // is a folder entry with `thread: true`, so chat.send / interrupt / approval take `session=<thread>` as for a folder
 // chat); mock.threads {bot, threads: [{title, ago?}]} seeds a bot's threads (listed newest first).
+// A thread's pull requests (rule 40): thread.prs reads the full PR links in the thread's assistant rows (newest first,
+// three at most) and answers each one's state from mock.prs {prs: {"<owner>/<repo>#<n>": {state, checks, head?}}}
+// (a PR it has not been told about reads `unknown` with no checks, as without gh); a peer bot is refused, as the real
+// bridge refuses every thread op for one. mock.threadAnswer {bot, thread, text} is a bot answer in that thread: saved
+// in its history, then turn.start, message and turn.end as a real turn sends them.
 // The bot opens threads itself (bridge `split`): once the app read a bot's threads, its main-chat turns carry the
 // threads note (recorded as `hint: true` on mock.submits, the text left as typed; a thread's submit carries `session`); mock.answer {bot, text} queues a
 // recorded answer for the bot's next main-chat turn. Its top-level ```omher-thread``` blocks open a thread each (task
@@ -627,6 +634,7 @@ const restartTimers = new Set();
 // Every ask event sent, by request id: chat.open sends the ones still pending again, as the bridge does.
 let asked;
 let threadHistory = new Map(); // thread id -> its messages (as thread.open returns them)
+let prStates = new Map(); // "<owner>/<repo>#<n>" -> {state, checks, head?} (what `gh` would say; mock.prs)
 let threadsShown = new Set(); // bots whose threads the app read (thread.list): their main-chat turns carry the note
 let answers = {}; // bot -> recorded answers for its next main-chat turns (mock.answer)
 // Bots that have no Bot Chat yet (mock.noBotChat): chat.open with existing_only answers not_found for them.
@@ -647,6 +655,30 @@ let lostQueue = new Map();
 let noSkills;
 // Tasks › Linear: the bots whose config names a Linear MCP server (mock.linear {bot, server|null})
 let linearMcp;
+// Apps (apps.*, BOUNDARY rule 41): Hermes' MCP catalog (APP_CATALOG) and each bot's state per entry (`<bot>:<name>` ->
+// installed | needs_signin | disabled | unknown; absent = available); appsNext {verb: {line}} makes that verb's next run
+// fail with Hermes' text (mock.appsNext {verb, line}); mock.apps {bot, name, state} sets one state. Each run answers
+// after APPS_RUN_MS (mock.appsDelay {verb, ms} for one verb), so a test sees the page while it runs. mock.appsHold {bot}
+// holds that bot's next apps.list answer until mock.appsRelease {bot}, so a test decides when a reload lands.
+let appState, appsNext, appsDelay, appsHold;
+const APPS_RUN_MS = 300;
+const APP_CATALOG = [
+  { name: "asana", description: "Asana tasks, projects and goals.", auth: "oauth", asks: ["ASANA_CLIENT_ID", "ASANA_CLIENT_SECRET"], terminal: true, device: false },
+  { name: "atlassian", description: "Jira issues and Confluence pages.", auth: "oauth", asks: [], terminal: false, device: false },
+  { name: "datadog", description: "Datadog monitors, logs and incidents.", auth: "oauth", asks: [], terminal: false, device: false },
+  { name: "deepwiki", description: "Ask questions about public GitHub repositories.", auth: "none", asks: [], terminal: false, device: false },
+  { name: "figma", description: "Figma files, frames and comments.", auth: "oauth", asks: [], terminal: false, device: false },
+  { name: "linear", description: "Find, create, and update Linear issues, projects, and comments.", auth: "oauth", asks: [], terminal: false, device: false },
+  { name: "notion", description: "Search, read and write Notion pages and databases.", auth: "oauth", asks: [], terminal: false, device: false },
+  { name: "wolfram", description: "Wolfram Alpha answers and computations.", auth: "none", asks: [], terminal: false, device: false },
+];
+const APP_SKILL_SEED = {
+  kami: [
+    { name: "google-workspace", description: "Gmail, Calendar, Drive, Docs, Sheets via gws CLI or Python.", state: "installed" },
+    { name: "obsidian", description: "Read, search, create, and edit notes in the Obsidian vault.", state: "disabled" },
+    { name: "himalaya", description: "Himalaya CLI: IMAP/SMTP email from terminal.", state: "available" },
+  ],
+};
 let notReady = new Map();
 
 // What each bot has done (bots.info): sessions per place, skills, routines.
@@ -808,6 +840,7 @@ function reset() {
   queues = {};
   avatars = {};
   threadHistory = new Map();
+  prStates = new Map();
   threadsShown = new Set();
   answers = {};
   folders = new Map(); // folder chat id -> { bot, cwd, open }; a thread also has thread, title, started, archived
@@ -835,6 +868,10 @@ function reset() {
   lostQueue = new Map();
   noSkills = new Set();
   linearMcp = new Map();
+  appState = new Map([["kami:linear", "installed"], ["kami:figma", "needs_signin"], ["kami:datadog", "disabled"]]);
+  appsNext = {};
+  appsDelay = {};
+  appsHold = new Map(); // bot -> { arrived, release }: its next apps.list waits for mock.appsRelease
   notReady = new Map(); // bot -> the sign-in provider that now passes its strict check ("" = none)
   idSeq = 0;
   calls = [];
@@ -1037,12 +1074,41 @@ function needFolder(p, b) {
 }
 // A folder chat's scripted turn runs under its own key; its events go out as the bot's, tagged `session`.
 const folderTurnKey = (bot, session) => `${bot}\u0000${session}`;
+// the bridge's THREAD_PR_URL: a full github.com PR link, nothing glued before it, no further path segment
+const THREAD_PR_URL = /(?<![A-Za-z0-9.@/-])https:\/\/github\.com\/([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))\/([A-Za-z0-9_.-]{1,100})\/pull\/([1-9][0-9]{0,6})(?![A-Za-z0-9_/])/g;
 function needStr(p, k) {
   if (typeof p[k] !== "string" || !p[k]) throw new OpError("bad_request", `missing ${k}`);
   return p[k];
 }
 
 // A write needs the bot's gateway: a bot marked with mock.offline answers the way the bridge does.
+// One `hermes -p <bot> mcp install|login|remove <name>` as the bridge runs it: the name from the catalog, refusals
+// before anything runs, Hermes' own text when it did not work, and the state read back after.
+const APP_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+function appRun(p, verb) {
+  const b = needBotAny(p);
+  if (typeof p.name !== "string" || !APP_NAME.test(p.name)) throw new OpError("bad_request", "need an app from Hermes' MCP catalog");
+  const entry = APP_CATALOG.find((e) => e.name === p.name);
+  if (!entry) throw new OpError("not_found", `${p.name} is not in Hermes' MCP catalog`);
+  const key = `${b.name}:${p.name}`;
+  const was = appState.get(key);
+  if (verb !== "install" && !was) throw new OpError("not_found", `${b.display_name} has no ${p.name}`);
+  if (verb === "login" && entry.auth !== "oauth") throw new OpError("bad_request", `${p.name} has no sign-in`);
+  // as the bridge: Connect only what is not there yet (Hermes' install would replace the whole server block)
+  if (verb === "install" && was) throw new OpError("exists", `${b.display_name} already has ${p.name}`);
+  // refusals above throw before anything runs (their code reaches the page); the run itself answers later
+  return new Promise((r) => setTimeout(r, appsDelay[verb] ?? APPS_RUN_MS)).then(() => {
+    const fail = appsNext[verb];
+    delete appsNext[verb];
+    if (fail) return { outcome: "failed", line: fail.line, state: was ?? "available" };
+    if (verb === "install" && entry.asks.length)
+      return { outcome: "failed", line: `✗ install failed: ${entry.asks[0]} is required but no value was provided`, state: "available" };
+    if (verb === "remove") appState.delete(key);
+    else appState.set(key, verb === "install" && entry.auth === "oauth" ? "needs_signin" : "installed");
+    return { outcome: "ok", state: appState.get(key) ?? "available" };
+  });
+}
+
 function needWritable(p) {
   const b = needBot(p);
   if (offlineWrites.has(b.name)) throw new OpError("bot_offline", `${b.name} is offline: gateway not running`);
@@ -1293,6 +1359,24 @@ const OPS = {
       lost: lostTurns.get(key) ?? [],
       running: Boolean(turns[key]), model: m.model, provider: m.provider, reasoning: m.reasoning };
   },
+  "thread.prs": (p) => {
+    const b = needBot(p);
+    if (b.host) throw new OpError("remote_bot", "thread.prs is not available for a bot on another computer");
+    needThread(p, b);
+    const seen = new Map();
+    for (const m of threadHistory.get(p.thread) ?? []) {
+      if (m.role !== "assistant" || typeof m.text !== "string") continue;
+      for (const hit of m.text.matchAll(THREAD_PR_URL)) {
+        if (hit[2] === "." || hit[2] === "..") continue;
+        const key = `${hit[1]}/${hit[2]}#${Number(hit[3])}`;
+        seen.delete(key);
+        seen.set(key, { number: Number(hit[3]), repo: `${hit[1]}/${hit[2]}`, url: `https://github.com/${hit[1]}/${hit[2]}/pull/${Number(hit[3])}` });
+      }
+    }
+    const prs = [...seen.entries()].reverse().slice(0, 3)
+      .map(([key, ref]) => ({ ...ref, ...(prStates.get(key) ?? { state: "unknown", checks: "none" }) }));
+    return { prs };
+  },
   "thread.remove": (p) => {
     const b = needBot(p);
     if (p.thread === `main-${b.name}`) throw new OpError("bad_request", "that is the bot's main chat, not a thread");
@@ -1488,6 +1572,22 @@ const OPS = {
     needBot(p);
     return { commands: COMMAND_SEED.map((x) => ({ ...x, kind: "command", prefix: "/" })) };
   },
+  "apps.list": (p) => {
+    const b = needBotAny(p);
+    const hold = appsHold.get(b.name);
+    if (hold && !hold.arrived) {
+      hold.arrived = true;
+      return hold.gate.then(() => OPS["apps.list"]({ bot: b.name }));
+    }
+    return {
+      catalog: true,
+      apps: APP_CATALOG.map((e) => ({ ...e, asks: [...e.asks], state: appState.get(`${b.name}:${e.name}`) ?? "available" })),
+      skills: structuredClone(APP_SKILL_SEED[b.name] ?? []),
+    };
+  },
+  "apps.install": (p) => appRun(p, "install"),
+  "apps.login": (p) => appRun(p, "login"),
+  "apps.remove": (p) => appRun(p, "remove"),
   "tasks.linear": (p) => {
     const server = linearMcp.get(needBot(p).name);
     return server ? { configured: true, server } : { configured: false, server: "" };
@@ -2013,9 +2113,54 @@ const OPS = {
     setTimeout(() => broadcast({ event: "thread.added", bot: b.name, thread: ids[0] ?? "", title: "" }), 0);
     return { threads: ids };
   },
+  "mock.prs": (p) => {
+    if (!p.prs || typeof p.prs !== "object") throw new OpError("bad_request", "prs must be an object");
+    for (const [key, v] of Object.entries(p.prs)) prStates.set(key, v);
+    return {};
+  },
+  "mock.threadAnswer": (p) => {
+    const b = needBot(p);
+    needThread(p, b);
+    const text = needStr(p, "text");
+    const id = nextId("a");
+    threadHistory.get(p.thread)?.push({ id, role: "assistant", text, ts: now() });
+    const key = folderTurnKey(b.name, p.thread);
+    ev(key, "turn.start", {});
+    ev(key, "message", { id, text });
+    ev(key, "turn.end", { outcome: "done" });
+    return { id };
+  },
   "mock.answer": (p) => {
     const b = needBot(p);
     (answers[b.name] ??= []).push(needStr(p, "text"));
+    return {};
+  },
+  "mock.apps": (p) => {
+    const b = needBotAny(p);
+    if (p.state) appState.set(`${b.name}:${p.name}`, String(p.state));
+    else appState.delete(`${b.name}:${p.name}`);
+    return {};
+  },
+  "mock.appsHold": (p) => {
+    const b = needBotAny(p);
+    let release;
+    const gate = new Promise((r) => (release = r));
+    appsHold.set(b.name, { arrived: false, gate, release });
+    return {};
+  },
+  "mock.appsRelease": (p) => {
+    const b = needBotAny(p);
+    const hold = appsHold.get(b.name);
+    appsHold.delete(b.name);
+    hold?.release();
+    return { arrived: !!hold?.arrived };
+  },
+  "mock.appsDelay": (p) => {
+    appsDelay[String(p.verb)] = Number(p.ms);
+    return {};
+  },
+  "mock.appsNext": (p) => {
+    appsNext[String(p.verb)] = { line: String(p.line) };
     return {};
   },
   "mock.linear": (p) => {
