@@ -1,0 +1,93 @@
+{
+  "schema_version": "omh_scenario_suite/v1",
+  "suite": "automation-intent/v1",
+  "title": "Automation intent: does a plain-language request become the right prepared automation?",
+  "question": "Given a request and the state around it, does the arm prepare the automation the request asks for -- schedule, target, delivery, filters, silence -- or correctly ask, decline, or edit the existing job instead?",
+  "status": "prepared_not_observed",
+  "latest_measured": null,
+  "categories": [
+    "schedule",
+    "github",
+    "slack",
+    "filters",
+    "results-to",
+    "ask",
+    "no-automation",
+    "edit"
+  ],
+  "splits": {
+    "tuning": {
+      "file": "corpus/tuning.json",
+      "scenarios": 27,
+      "digest": "8576b280c580797ad6defc8b435f23099d49c37112ecbd4d73ffea192c5dc1da"
+    },
+    "held_out": {
+      "file": "corpus/held-out.json",
+      "scenarios": 9,
+      "digest": "3d7cfb2d4110801bd32284d92eca004f4215a2287ab425515c6230960de93cc8"
+    }
+  },
+  "held_out_policy": {
+    "default_split": "tuning",
+    "held_out_read_only_when_named": true,
+    "held_out_report_detail": "totals only; no per-category rate, scenario id, decision or failure",
+    "never_used_for": "tuning skill text, prompts or the grader",
+    "held_out_runs_whole_split": true,
+    "held_out_report_requires_every_scenario": true
+  },
+  "grader": "src/quality/automation_intent_grading.py",
+  "shared_shape": "src/quality/scenario_suite.py",
+  "observations_schema": "omh_scenario_observations/v1",
+  "report_schema": "omh_scenario_suite_report/v1",
+  "rate_shape": "omh_reported_rate/v1 with a Wilson 95% interval",
+  "excluded_observation_classes": [
+    "arm_did_not_run",
+    "timeout",
+    "transport_error",
+    "not_observed"
+  ],
+  "arms": {
+    "skill-text": {
+      "kind": "omh_hermes_child",
+      "live": true,
+      "skill_files": [
+        "skills/omh-automation-blueprint/SKILL.md",
+        "skills/omh-automation-blueprint/references/recurring-surface-choice.md",
+        "skills/omh-automation-blueprint/references/channel-watch.md"
+      ]
+    },
+    "bare": {
+      "kind": "omh_hermes_child",
+      "live": true,
+      "skill_files": []
+    },
+    "external": {
+      "kind": "operator_supplied",
+      "live": false,
+      "observations_from": "an omh_scenario_observations/v1 file the operator recorded with any tool"
+    }
+  },
+  "execution_policy": {
+    "offline_by_default": true,
+    "live_path": "omh coding hermes-child dispatch --confirm-dispatch",
+    "live_requires_explicit_flags": [
+      "--allow-paid-live",
+      "--max-paid-calls",
+      "--confirm"
+    ],
+    "prompt_on_stdin": true,
+    "prompts_persisted": false,
+    "decision_file": ".omh-scenario-decision.json",
+    "concurrency": 1,
+    "runs_in_ci": false
+  },
+  "fixture": {
+    "file": "fixtures/recorded-observations.json",
+    "measures": "nothing; it exercises the grader"
+  },
+  "claim_boundary": "A rate describes one arm on one split of this corpus at this revision. It grades a prepared decision structurally; it is not evidence that an automation ran, a hand-off executed, or a reply was delivered, and it says nothing about another model, prompt or corpus.",
+  "integrity": {
+    "algorithm": "sha256",
+    "canonical_json": "sorted-keys-compact-ascii"
+  }
+}
