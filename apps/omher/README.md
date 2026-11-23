@@ -161,7 +161,7 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   conversation, else the CLI's name. Above the bots, the Tasks row opens the Tasks page: open issues and pull or merge
   requests of the repository, read-only through your own `gh` or `glab` (`BOUNDARY.md` rule 33), with a drawer for
   one item and Start in thread, which opens a thread under the bot you pick with the issue as its first message.
-  Linear shows a connect screen naming the `hermes -p <bot> mcp install linear` command; omher keeps no Linear key.
+  Linear shows a connect screen that opens the Apps page for the bot; omher keeps no Linear key.
   The page's "나" (Me) scope (`src/tasks/MeView.tsx`, `src-tauri/src/gh_me.rs`) lists, across every repository, the
   open pull requests asking for your review, your open pull requests, the open issues assigned to you and the last
   week's mentions, for the GitHub accounts you add in Settings › Accounts › GitHub (the ones your `gh` is signed in
@@ -237,6 +237,13 @@ Rules the code keeps:
   `cron/jobs.json` and changes a job only with that bot's `cron.manage` (add, pause, resume, remove); Run now and
   Edit are chat messages. The Plugins page reads the catalog cache and the profile's plugin folder names and changes
   a plugin only with the bot's `plugins.manage`; installs are catalog-only, inspected first and confirmed.
+- **Apps through the bot's own Hermes.** The Apps page (`src/apps/`, the plug in the sidebar's foot) lists Hermes' MCP
+  catalog and its integration skills (Google Workspace, Obsidian, Apple Notes and the rest) for one bot, grouped work
+  apps, ops and data, then the rest, each with its state: not connected, connected, turned off, needs sign-in, or state
+  unknown when the bot's config cannot be read. Connect, Sign in and Remove run that bot's own
+  `hermes -p <bot> mcp install|login|remove <name>` (`BOUNDARY.md` rule 42); the sign-in is Hermes' own browser page,
+  a value an install asks for is typed in a terminal, and omher never sees a key or a token. Skills only show their
+  state.
 - **A Slack briefing with nothing to set up.** For a bot whose Hermes profile has Slack connected, omher sets up one
   automation, `omher-brief`, by itself: every 15 minutes the channel-watch collector checks the Slack channels the bot
   shares with you and wakes the bot only when something needs you (someone asked you and got no answer, a thread it

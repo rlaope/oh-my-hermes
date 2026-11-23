@@ -937,13 +937,14 @@ def read_linear_mcp(profile_dir: Path) -> dict:
     return linear_server(mcp_server_names(profile_dir / "config.yaml"))
 
 
-def mcp_server_names(path: Path) -> dict:
+def mcp_server_names(path: Path, keys: tuple[str, ...] = ("enabled",)) -> dict | None:
     """`{name: {"enabled": bool}}` (or `{name: {}}` when it has no `enabled`) for each server under the top-level
-    `mcp_servers` mapping of the YAML file at *path*; {} when there is none or it does not parse. The file goes
-    through the safe loader's event stream and nothing is built from it: a scalar is kept only when it is a top-level
-    key equal to `mcp_servers`, a key directly under it (a server name), or the plain `enabled` value of one; every
-    other scalar (a url, headers, env, auth: a credential may sit there) is dropped as it passes, so no other value
-    of the file is kept, returned or cached."""
+    `mcp_servers` mapping of the YAML file at *path*; {} when there is no file or no such mapping, None when the file
+    cannot be read or parsed. The file goes through the safe loader's event stream and nothing is built from it: a
+    scalar is kept only when it is a top-level key equal to `mcp_servers`, a key directly under it (a server name), or
+    the plain value of one of *keys* in one (`enabled`, and for the Apps page also the legacy `disabled`, each read as
+    a bool the way Hermes' `mcp_server_enabled` words it); every other scalar (a url, headers, env, auth: a credential
+    may sit there) is dropped as it passes, so no other value of the file is kept, returned or cached."""
     try:
         out: dict[str, dict] = {}
         stack: list[list] = []  # one per open collection: [is_map, kept key or None, awaiting a key, was a key]
@@ -952,6 +953,8 @@ def mcp_server_names(path: Path) -> dict:
             # the words for false: YAML 1.1 as Hermes' own `hermes_yaml` (ruamel) reads it also takes `n` and `N`
             off = ("false", "False", "FALSE", "no", "No", "NO", "off", "Off", "OFF")
             off += ("n", "N") if yaml.__name__.startswith("ruamel") else ()
+            on = ("true", "True", "TRUE", "yes", "Yes", "YES", "on", "On", "ON")
+            on += ("y", "Y") if yaml.__name__.startswith("ruamel") else ()
             for ev in events:
                 if isinstance(ev, (yaml.MappingEndEvent, yaml.SequenceEndEvent)):
                     was_key = stack.pop()[3]
@@ -971,21 +974,24 @@ def mcp_server_names(path: Path) -> dict:
                         top[1] = ev.value
                         out.setdefault(ev.value, {})
                     elif depth == 3 and servers and stack[1][1] is not None:
-                        top[1] = "enabled" if ev.value == "enabled" else None
+                        top[1] = ev.value if ev.value in keys else None
                     else:
                         top[1] = None
                 elif as_key:
                     top[1] = None
-                elif (depth == 3 and servers and isinstance(ev, yaml.ScalarEvent) and top[0] and top[1] == "enabled"
+                elif (depth == 3 and servers and isinstance(ev, yaml.ScalarEvent) and top[0] and top[1] in keys
                       and stack[1][1] is not None and ev.implicit[0]):
-                    out[stack[1][1]]["enabled"] = ev.value not in off
+                    # `disabled` is on only when it says so; `enabled` is off only when it says so (Hermes' defaults)
+                    out[stack[1][1]][top[1]] = ev.value in on if top[1] == "disabled" else ev.value not in off
                 if isinstance(ev, (yaml.MappingStartEvent, yaml.SequenceStartEvent)):
                     stack.append([isinstance(ev, yaml.MappingStartEvent), None, True, as_key])
                 elif top and top[0]:
                     top[2] = not as_key
         return out
-    except Exception:
+    except FileNotFoundError:
         return {}
+    except Exception:
+        return None
 
 
 def linear_server(servers) -> dict:
@@ -2390,6 +2396,201 @@ def reload_plugins(home: Path, root: Path):
     if answer is None and Path(home).resolve() != Path(root).resolve():
         answer = reload_gateway_plugins(root, profile_home=home)
     return answer
+
+
+# ---------------------------------------------------------------- apps (Hermes' MCP catalog, BOUNDARY rule 42)
+# The Apps page reads Hermes' MCP catalog (the `optional-mcps/<name>/manifest.yaml` files Hermes ships), the names and
+# on/off switches of the bot's `mcp_servers`, whether Hermes keeps an OAuth token file for a server (a stat, the file is
+# never opened) and the bot's integration skills. A press runs one of three fixed argvs, `hermes -p <bot> mcp
+# install|login|remove <name>`, with a name from the catalog it just read.
+
+# A catalog entry's name: Hermes' manifest grammar (`hermes_cli/mcp_catalog.py` `^[A-Za-z0-9_-]+$`) without a leading
+# `-`, so a name can never read as an option of `hermes mcp`.
+MCP_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
+MCP_VERBS = ("install", "login", "remove")
+# seconds one run may take: an install probes the server; a sign-in waits for the person in the browser (Hermes'
+# `login_connect_timeout`: the 300 s OAuth callback window plus 15 s for the token exchange) and 15 s more
+MCP_TIMEOUT = {"install": 300.0, "login": 330.0, "remove": 60.0}
+MCP_CATALOG_MAX = 256           # catalog folders read
+MCP_MANIFEST_MAX = 64 * 1024    # bytes of one manifest.yaml
+MCP_SAID_LINES = 8              # lines of Hermes' own output shown when a run did not work
+_ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,63}")
+# Hermes' bundled and optional skills that connect a bot to an outside app (the plan's platform list); the page shows
+# each one's state and runs nothing for them.
+APP_SKILLS = ("google-workspace", "himalaya", "email-inbox-triage", "obsidian", "apple-notes", "apple-reminders",
+              "microsoft-office", "teams-meeting-pipeline", "meeting-action-items", "agentmail", "siyuan", "box")
+
+
+def _hermes_dir(env_var: str, sub: str, root: Path | None = None, environ=None) -> Path:
+    """A folder of the Hermes checkout as `hermes_constants._packaged_dir` finds it: the package manager's variable
+    (`HERMES_OPTIONAL_MCPS`, `HERMES_BUNDLED_SKILLS`, `HERMES_OPTIONAL_SKILLS`), else the checkout's own folder."""
+    environ = os.environ if environ is None else environ
+    override = (environ.get(env_var) or "").strip()
+    return Path(override) if override else (root or DEFAULT_HERMES_ROOT) / sub
+
+
+def _install_asks(auth: dict) -> list[str]:
+    """The `auth.env` values Hermes asks for at install: required (its default) and without a default value."""
+    env = auth.get("env")
+    if not isinstance(env, list):
+        return []
+    return [str(e["name"]) for e in env if isinstance(e, dict) and isinstance(e.get("name"), str)
+            and _ENV_NAME.fullmatch(e["name"]) and e.get("required", True) and not e.get("default")][:8]
+
+
+def read_mcp_catalog(folder: Path) -> list[dict] | None:
+    """The entries Hermes' `hermes mcp catalog` lists (`hermes_cli/mcp_catalog.py` `list_catalog`): each
+    `<folder>/<entry>/manifest.yaml` of manifest version 1 with a name and a description, in folder order, the first of
+    a repeated name. Only the name, the description, the auth type and the names of the values Hermes asks for at
+    install are kept. None when the folder is not there; a linked or oversized manifest is skipped."""
+    try:
+        children = sorted(folder.iterdir())[:MCP_CATALOG_MAX]
+    except OSError:
+        return None
+    out: list[dict] = []
+    for child in children:
+        manifest = child / "manifest.yaml"
+        try:
+            if manifest.is_symlink() or not manifest.is_file() or manifest.stat().st_size > MCP_MANIFEST_MAX:
+                continue
+            data = _yaml_safe_load(manifest.read_text(encoding="utf-8-sig"))
+        except Exception:
+            continue
+        if not isinstance(data, dict) or data.get("manifest_version") != 1:
+            continue
+        name, desc = data.get("name"), " ".join(str(data.get("description") or "").split())
+        auth = data.get("auth") or {"type": "none"}
+        kind = (auth.get("type") or "none") if isinstance(auth, dict) else None
+        if (not isinstance(name, str) or not MCP_NAME.fullmatch(name) or not desc
+                or kind not in ("api_key", "oauth", "none") or any(e["name"] == name for e in out)):
+            continue
+        out.append({"name": name, "description": _clip(desc, 200), "auth": kind, "asks": _install_asks(auth)})
+    return out
+
+
+def mcp_token_file(profile_dir: Path, name: str) -> Path:
+    """Where Hermes keeps a server's OAuth tokens for this profile (`tools/mcp_oauth.py` `HermesTokenStorage`:
+    `<home>/mcp-tokens/<safe name>.json`). omher only asks whether it is there and when it changed."""
+    safe = re.sub(r"[^\w\-]", "_", name).strip("_")[:128] or "default"
+    return profile_dir / "mcp-tokens" / f"{safe}.json"
+
+
+def _token_stamp(profile_dir: Path, name: str) -> tuple[int, int] | None:
+    try:
+        st = mcp_token_file(profile_dir, name).stat()
+    except OSError:
+        return None
+    return st.st_mtime_ns, st.st_size
+
+
+def app_state(entry: dict, servers: dict | None, signed_in: bool) -> str:
+    """One catalog entry for one bot: `unknown` when its config could not be read, `available` when its `mcp_servers`
+    has no server by that name, `disabled` when that server is switched off, `needs_signin` for an OAuth entry with no
+    token file, else `installed`."""
+    if servers is None:
+        return "unknown"
+    server = servers.get(entry["name"])
+    if server is None:
+        return "available"
+    if server.get("enabled") is False or server.get("disabled") is True:
+        return "disabled"
+    if entry["auth"] == "oauth" and not signed_in:
+        return "needs_signin"
+    return "installed"
+
+
+def _skill_names(value) -> set[str]:
+    """`skills.disabled` as Hermes' `parse_config_string_list` reads it: a list, a quoted list, or one name."""
+    if isinstance(value, str) and value.strip().startswith("["):
+        import ast
+        with contextlib.suppress(ValueError, SyntaxError):
+            value = ast.literal_eval(value.strip())
+    if isinstance(value, str):
+        value = [value]
+    return {str(v).strip() for v in value if str(v).strip()} if isinstance(value, list) else set()
+
+
+def _shipped_skill(bases: list[Path], name: str) -> dict | None:
+    """The head of a skill Hermes ships under one of *bases* (`<base>/<category>/<name>/SKILL.md`), or None."""
+    for base in bases:
+        try:
+            cats = sorted(c for c in base.iterdir() if c.is_dir() and not c.name.startswith("."))
+        except OSError:
+            continue
+        for cat in cats:
+            skill = cat / name / "SKILL.md"
+            head = read_skill_head(skill) if skill.is_file() else None
+            if head is not None:
+                return head
+    return None
+
+
+def read_app_skills(profile_dir: Path, root: Path | None = None, environ=None) -> list[dict]:
+    """APP_SKILLS for one bot: `installed`, or `disabled` when its config's `skills.disabled` names it, for a skill the
+    bot has (rule 19's read); `available` for one Hermes ships (`skills/`, `optional-skills/`) that the bot does not
+    have; one Hermes does not ship is left out. Read-only, SKILL.md heads only."""
+    have = {s["name"]: s["description"] for s in read_skills(profile_dir)}
+    cfg = _load_yaml(profile_dir / "config.yaml")
+    off = _skill_names(cfg["skills"].get("disabled")) if isinstance(cfg.get("skills"), dict) else set()
+    bases = [_hermes_dir("HERMES_BUNDLED_SKILLS", "skills", root, environ),
+             _hermes_dir("HERMES_OPTIONAL_SKILLS", "optional-skills", root, environ)]
+    out = []
+    for name in APP_SKILLS:
+        if name in have:
+            out.append({"name": name, "description": have[name], "state": "disabled" if name in off else "installed"})
+        elif (head := _shipped_skill(bases, name)) is not None:
+            desc = " ".join(head["description"].split())
+            out.append({"name": name, "description": _clip(desc, SKILL_DESC_MAX), "state": "available"})
+    return out
+
+
+def read_apps(profile_dir: Path, root: Path | None = None, environ=None) -> dict:
+    """`apps.list`: Hermes' MCP catalog with each entry's state for this bot, and its integration skills. `catalog`
+    is False when this Hermes has no catalog folder."""
+    catalog = read_mcp_catalog(_hermes_dir("HERMES_OPTIONAL_MCPS", "optional-mcps", root, environ))
+    servers = mcp_server_names(profile_dir / "config.yaml", ("enabled", "disabled"))
+    apps = [{**e, "state": app_state(e, servers, _token_stamp(profile_dir, e["name"]) is not None)} for e in catalog or []]
+    return {"catalog": catalog is not None, "apps": apps, "skills": read_app_skills(profile_dir, root, environ)}
+
+
+def mcp_argv(hermes: str, bot: str, verb: str, name: str) -> list[str]:
+    """`hermes -p <bot> mcp install|login|remove <name>`: the profile and the catalog name are checked here, each one
+    argv element; nothing else varies. `-p` always: without it Hermes follows its sticky `active_profile` file."""
+    if verb not in MCP_VERBS:
+        raise ValueError(f"not an mcp verb omher runs: {verb!r}")
+    if not isinstance(bot, str) or not PROFILE_ID.fullmatch(bot):
+        raise ValueError(f"not a profile id: {bot!r}")
+    if not isinstance(name, str) or not MCP_NAME.fullmatch(name):
+        raise ValueError(f"not a catalog name: {name!r}")
+    return [hermes, "-p", bot, "mcp", verb, name]
+
+
+def hermes_said(output: str) -> str:
+    """Hermes' own words when a run did not work: its error and warning lines (`✗`, `⚠`, `Error:`), else its last
+    lines, without colour codes, trimmed."""
+    lines = [ln.strip() for ln in _ANSI.sub("", output or "").splitlines() if ln.strip()]
+    marked = [ln for ln in lines if ln.startswith(("✗", "⚠", "Error:"))]
+    return _clip("\n".join((marked or lines)[-MCP_SAID_LINES:]), 800)
+
+
+def run_hermes_mcp(hermes: str, bot: str, verb: str, name: str, home: Path, timeout: float) -> tuple[int | None, str]:
+    """Run one `hermes mcp` argv and return (exit code, its output); None for a run stopped at *timeout*. No shell,
+    nothing on stdin (so Hermes asks nothing: a value it needs is refused in its own words), the Hermes root as
+    HERMES_HOME, none of the gateway's own markers, and UTF-8 output on every system."""
+    argv = mcp_argv(hermes, bot, verb, name)
+    env = {k: v for k, v in os.environ.items() if k not in _GATEWAY_MARKERS}
+    env.update(HERMES_HOME=str(home), PYTHONIOENCODING="utf-8", NO_COLOR="1")
+    kw = {}
+    if os.name == "nt":
+        kw["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
+    try:
+        r = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                           text=True, encoding="utf-8", errors="replace", timeout=timeout, env=env, **kw)
+    except subprocess.TimeoutExpired:
+        return None, ""
+    except OSError as e:
+        return -1, f"Hermes could not be started: {e}"
+    return r.returncode, r.stdout or ""
 
 
 class PrStates:
@@ -5907,6 +6108,8 @@ class Bridge:
             "plugins.inspect": self.op_plugins_inspect, "plugins.install": self.op_plugins_install,
             "plugins.toggle": self.op_plugins_toggle, "plugins.update": self.op_plugins_update,
             "plugins.remove": self.op_plugins_remove, "plugins.reload": self.op_plugins_reload,
+            "apps.list": self.op_apps_list, "apps.install": self.op_apps_install, "apps.login": self.op_apps_login,
+            "apps.remove": self.op_apps_remove,
             "bots.restart": self.op_bots_restart, "bots.restart_scope": self.op_bots_restart_scope,
             "peers.probe": self.op_peers_probe, "peers.attach": self.op_peers_attach, "peers.detach": self.op_peers_detach,
         }
@@ -5914,6 +6117,7 @@ class Bridge:
         self._peers_seen: set[str] = set()  # peer ids attached before: a later attach is the same bots coming back
         self.announce_media = False  # amain: tell the app (stdout) which files it may open
         self._restarting: set[str] = set()      # bots whose restart command runs now
+        self._apps_busy: set[str] = set()       # bots whose `hermes mcp` run (rule 42) runs now
         self._refused: dict[str, float] = {}     # bot -> when Hermes last refused its restart (live work)
         self._reattaching: set[str] = set()     # bots that omher's own restart attaches again (`_reattach`)
         self._recovering: set[str] = set()      # bots a `_recover` looks for
@@ -7881,6 +8085,67 @@ class Bridge:
         conn = await self._conn(bot["name"])
         await self._plugins(conn, "remove", name=name)
         return {"name": name}
+
+    # ------------------------------------------------------------ apps (BOUNDARY rule 42)
+    # Reads are files only (Hermes' MCP catalog, the bot's `mcp_servers` names and switches, a token file's stat).
+    # A press runs `hermes -p <bot> mcp install|login|remove <name>`: one run at a time per bot, the name from the
+    # catalog just read, and the outcome read back from the files, never from Hermes' exit code alone.
+
+    async def op_apps_list(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        return await asyncio.to_thread(read_apps, bot["path"])
+
+    async def op_apps_install(self, p) -> dict:
+        return await self._apps_run(p, "install")
+
+    async def op_apps_login(self, p) -> dict:
+        return await self._apps_run(p, "login")
+
+    async def op_apps_remove(self, p) -> dict:
+        return await self._apps_run(p, "remove")
+
+    async def _apps_run(self, p, verb: str) -> dict:
+        bot = self._bot(p.get("bot"))
+        name, app = bot["name"], p.get("name")
+        if not PROFILE_ID.fullmatch(name):
+            raise BridgeError("bad_request", f"{name} is not a profile id Hermes accepts")
+        if not isinstance(app, str) or not MCP_NAME.fullmatch(app):
+            raise BridgeError("bad_request", "need an app from Hermes' MCP catalog")
+        catalog = await asyncio.to_thread(read_mcp_catalog, _hermes_dir("HERMES_OPTIONAL_MCPS", "optional-mcps"))
+        entry = next((e for e in catalog or [] if e["name"] == app), None)
+        if entry is None:
+            raise BridgeError("not_found", f"{app} is not in Hermes' MCP catalog")
+        config = bot["path"] / "config.yaml"
+        servers = await asyncio.to_thread(mcp_server_names, config, ("enabled", "disabled"))
+        if verb != "install" and (servers is None or app not in servers):
+            raise BridgeError("not_found", f"{bot['display_name']} has no {app}")
+        if verb == "login" and entry["auth"] != "oauth":
+            raise BridgeError("bad_request", f"{app} has no sign-in")
+        if name in self._apps_busy:
+            raise BridgeError("busy", f"{bot['display_name']} is still changing an app")
+        hermes = hermes_path()
+        if not hermes:
+            return {"outcome": "failed", "line": "Hermes is not on this computer.", "state": app_state(entry, servers, False)}
+        before = _token_stamp(bot["path"], app)
+        self._apps_busy.add(name)
+        try:
+            code, output = await asyncio.to_thread(run_hermes_mcp, hermes, name, verb, app, self.home, MCP_TIMEOUT[verb])
+        finally:
+            self._apps_busy.discard(name)
+        servers = await asyncio.to_thread(mcp_server_names, config, ("enabled", "disabled"))
+        after = _token_stamp(bot["path"], app)
+        state = app_state(entry, servers, after is not None)
+        # Hermes' `mcp login` and `mcp remove` exit 0 whatever happened: the files say whether it did
+        done = {"install": code == 0 and servers is not None and app in servers,
+                "login": after is not None and after != before,
+                "remove": servers is not None and app not in servers}[verb]
+        if done:
+            return {"outcome": "ok", "state": state}
+        if code is None:
+            line = f"Hermes did not finish in {int(MCP_TIMEOUT[verb])} seconds."
+        else:
+            line = hermes_said(output) or f"Hermes exited with code {code}."
+        return {"outcome": "failed", "line": line, "state": state}
 
     def poll_routines(self) -> list[tuple[str, dict]]:
         """Compare each profile's cron/jobs.json to the last look; returns (bot, job) for each new run. A changed

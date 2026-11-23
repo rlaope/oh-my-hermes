@@ -352,6 +352,17 @@ All notable changes will be documented here.
   news everywhere (an accent dot on the row and the folder summary, a slowly breathing accent edge on the cell, "rang"
   in the notification), and the amber warning is kept for waits omher knows: a bot's request to type, a chat's approval
   or question. (`apps/omher/src/sessions/SplitLayoutCard.tsx`) (#3138)
+- **omher: an Apps page connects a bot to Notion, Linear, Jira and the rest of Hermes' MCP catalog.** The plug in
+  the sidebar's foot opens one bot's apps: every entry of Hermes' MCP catalog and its integration skills (Google
+  Workspace, Obsidian, Apple Notes and Reminders, Microsoft Office and others), grouped as work apps, ops and data,
+  then the rest, each with its state for that bot (not connected, connected, turned off, needs sign-in, or state
+  unknown when the bot's config cannot be read). Connect, Sign in and Remove run the bot's own
+  `hermes -p <bot> mcp install|login|remove <name>`; the sign-in is Hermes' own browser page, a value an install asks
+  for is typed in a terminal, and Hermes' own words are shown when a run does not work. New chats get the app's tools
+  within about a minute (Hermes' gateway reconciles its MCP servers on its own); an open chat gets them after
+  `/reload-mcp`. The Tasks page's Linear screen now opens this page instead of printing the command. omher reads the
+  catalog files, the bot's `mcp_servers` names and switches and whether a sign-in token file exists, and never sees a
+  key or a token (`docs/OMHER-BOUNDARY.md` rule 42). (`apps/omher/src/apps/`)
 
 - The OMH TUI no longer asks for kitty image previews in an omher terminal that cannot paint them. omher 1.1.3
   and earlier set `TERM_PROGRAM=omher` but draw no kitty Unicode placeholders, so pasting an image showed a block of

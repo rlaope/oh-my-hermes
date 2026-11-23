@@ -49,6 +49,7 @@ import type {
   InspectResult,
   OpMap,
   PluginRow,
+  AppRun,
   DiffFile,
   PlanItem,
   Msg,
@@ -390,13 +391,15 @@ export interface Ui {
   theme: Theme;
   look: Look;
   /** "session" = a terminal session (SESSIONS in the sidebar) fills the main column; `session` names it.
-   *  "automations" and "plugins" are the two pages of the sidebar's foot. */
-  view: "chat" | "settings" | "session" | "automations" | "plugins" | "tasks";
+   *  "automations", "plugins" and "apps" are the pages of the sidebar's foot. */
+  view: "chat" | "settings" | "session" | "automations" | "plugins" | "apps" | "tasks";
   /** Where a page's back arrow (and Settings' ×) returns: the chat or the session the page was opened from. */
   back: "chat" | "session";
   /** Automations: the job the detail panel shows (`<bot>:<id>`); Plugins: the bot whose plugins the page shows. */
   automation: string | null;
   pluginsBot: string | null;
+  /** Apps: the bot whose apps the page shows. */
+  appsBot: string | null;
   /** The UI language (Settings › General › Language), saved as `omher.lang`. */
   lang: Lang;
   settingsPage: string;
@@ -637,6 +640,7 @@ export function initialState(): AppState {
       thread: null,
       automation: null,
       pluginsBot: null,
+      appsBot: null,
       lang: readLang(),
     },
   };
@@ -959,6 +963,7 @@ export type Action =
   | { type: "automations"; automations: Automation[] }
   | { type: "ui.automations"; job?: string | null }
   | { type: "ui.plugins"; bot?: string | null }
+  | { type: "ui.apps"; bot?: string | null }
   | { type: "ui.tasks" }
   | { type: "ui.lang"; lang: Lang }
   | { type: "models"; bot: string; options: ModelOptions }
@@ -1527,6 +1532,8 @@ export function reduce(state: AppState, a: Action): AppState {
       return { ...state, ui: { ...state.ui, view: "automations", back: backOf(state.ui), ...(a.job !== undefined ? { automation: a.job } : {}) } };
     case "ui.plugins":
       return { ...state, ui: { ...state.ui, view: "plugins", back: backOf(state.ui), ...(a.bot ? { pluginsBot: a.bot } : {}) } };
+    case "ui.apps":
+      return { ...state, ui: { ...state.ui, view: "apps", back: backOf(state.ui), ...(a.bot ? { appsBot: a.bot } : {}) } };
     case "ui.tasks":
       return { ...state, ui: { ...state.ui, view: "tasks", back: backOf(state.ui) } };
     case "ui.lang":
@@ -1948,6 +1955,8 @@ export interface Actions {
   openAutomations(job?: string | null): void;
   /** Open the Plugins page, scoped to `bot` when given (else the last one, else the selected bot). */
   openPlugins(bot?: string | null): void;
+  /** Open the Apps page, scoped to `bot` when given (else the last one, else the selected bot). */
+  openApps(bot?: string | null): void;
   /** Open the Tasks page (src/tasks: issues and pull requests, read-only). */
   openTasks(): void;
   /** Tasks › Linear: whether `bot`'s config names a Linear MCP server (bridge `tasks.linear`, config only). */
@@ -1968,6 +1977,10 @@ export interface Actions {
   pluginsToggle(bot: string, key: string, enable: boolean): Promise<OpMap["plugins.toggle"]["result"]>;
   pluginsUpdate(bot: string, name: string): Promise<OpMap["plugins.update"]["result"]>;
   pluginsRemove(bot: string, name: string): Promise<void>;
+  /** Apps (BOUNDARY rule 42): Hermes' MCP catalog and the bot's integration skills, read from files; a press runs one
+   *  of `hermes -p <bot> mcp install|login|remove <name>`. */
+  appsList(bot: string): Promise<OpMap["apps.list"]["result"]>;
+  appsRun(verb: "install" | "login" | "remove", bot: string, name: string): Promise<AppRun>;
   /** Settings › General › Language: saved on this computer, applied at once (no restart). */
   setLanguage(lang: Lang): void;
   loadModels(bot?: string): Promise<void>;
@@ -2822,6 +2835,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       }
     },
     openPlugins: (bot) => dispatch({ type: "ui.plugins", bot: bot ?? state.ui.pluginsBot ?? state.selectedBot ?? state.bots[0]?.name ?? null }),
+    openApps: (bot) => dispatch({ type: "ui.apps", bot: bot ?? state.ui.appsBot ?? state.selectedBot ?? state.bots[0]?.name ?? null }),
     async sendTo(bot, text) {
       if (!text.trim()) return;
       if (state.selectedBot !== bot || state.ui.view !== "chat") await selectBot(bot);
@@ -2846,6 +2860,13 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     async pluginsRemove(bot, name) {
       await bridge.request("plugins.remove", { bot, name });
     },
+    appsList: (bot) => bridge.request("apps.list", { bot }),
+    appsRun: (verb, bot, name) =>
+      verb === "install"
+        ? bridge.request("apps.install", { bot, name })
+        : verb === "login"
+          ? bridge.request("apps.login", { bot, name })
+          : bridge.request("apps.remove", { bot, name }),
     setLanguage(lang) {
       try {
         if (typeof localStorage !== "undefined") localStorage.setItem(LANG_KEY, lang);

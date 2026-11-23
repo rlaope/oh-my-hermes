@@ -1626,8 +1626,9 @@ class ReadOnlyRule(BridgeCase):
                     if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id == "subprocess" \
                             and n.attr in ("run", "Popen", "call", "check_call", "check_output"):
                         uses.append(fn.name)
-        # _hermes_run: rule 24's one `hermes -p <bot> cron create` for the briefing (test_brief_setup pins its argv)
-        self.assertEqual(uses, ["_git", "_hermes_run", "gh_pr_view", "run_hermes_restart"])
+        # _hermes_run: rule 24's one `hermes -p <bot> cron create` for the briefing (test_brief_setup pins its argv);
+        # run_hermes_mcp: rule 42's `hermes -p <bot> mcp install|login|remove <name>` (test_apps pins its argv)
+        self.assertEqual(uses, ["_git", "_hermes_run", "gh_pr_view", "run_hermes_restart", "run_hermes_mcp"])
         self.assertNotIn("create_subprocess", src)
         self.assertNotIn("os.system", src)
         self.assertEqual(ob.GIT_READS, {("worktree", "list"), ("rev-parse",), ("status",), ("diff",), ("log",),
@@ -4964,7 +4965,11 @@ class TasksLinear(unittest.TestCase):
         d = self._dir("mcp_servers:\n  notion: {url: x}\n  lin:\n    nested: {enabled: false}\n    enabled: off\n"
                       "  q:\n    enabled: 'false'\nskills:\n  mcp_servers: {linear: {}}\n")
         self.assertEqual(ob.mcp_server_names(d / "config.yaml"), {"notion": {}, "lin": {"enabled": False}, "q": {}})
-        self.assertEqual(ob.mcp_server_names(self._dir("mcp_servers: {linear: {enabled: false}\n") / "config.yaml"), {})
+        # a file that does not parse is None (the Apps page says "state unknown"); the Linear source reads it as off
+        broken = self._dir("mcp_servers: {linear: {enabled: false}\n")
+        self.assertIsNone(ob.mcp_server_names(broken / "config.yaml"))
+        self.assertEqual(ob.read_linear_mcp(broken), {"configured": False, "server": ""})
+        self.assertEqual(ob.mcp_server_names(broken / "missing.yaml"), {})
 
     def test_none_off_or_broken(self):
         for text in ("", "mcp_servers: []\n", "mcp_servers:\n  notion:\n    url: https://mcp.notion.com/mcp\n",
