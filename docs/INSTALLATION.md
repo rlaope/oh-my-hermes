@@ -4287,6 +4287,80 @@ shown only when it has something to say). Both read Hermes'
 All of it is local files only, in bounded reads; OMH stops, kills and
 restarts nothing, and the doctor row warns without failing.
 
+`omh doctor` also prints a **Hermes gateways (read-only)** section, whatever
+it finds, and carries the same report as the `gateway_health` row's `detail`
+in `--json` (`omh_gateway_health/v1`, its printed `lines` included). It
+answers three questions for the root Hermes home and every profile under it
+(the OMH TUI's own runtime profile too):
+
+- **Fleet against build.** Each running gateway with the profiles it serves
+  and its start time, from Hermes' own `gateway_state.json` (a record counts
+  only while the process it names is the one that wrote it), plus every
+  `hermes gateway run` the process table shows. Each is compared
+  with the installed Hermes build stamp (`hermes-agent/install-stamp.json`,
+  `builtAt`); a record that stamps the commit it runs (`code_sha`) is
+  believed over its start time. Beside it, Hermes' own pending-fleet-restart
+  record (the host obligation file in Hermes' host state directory, or a
+  home's `fleet_restart_pending` marker) and its latest update receipt
+  (`logs/update_receipts/latest.json`, an incomplete gateway restart or a
+  fleet row marked stale). The remedy is Hermes' `hermes gateway restart`
+  (`hermes --profile <name> gateway restart` for a standalone profile): while
+  turns are live Hermes asks first, refuses with no terminal to ask on, and
+  interrupts them only with `--yes`.
+- **Fleet shape.** A gateway process no record under this Hermes root names
+  (another Hermes home's, such as a scratch or test home, or one left
+  running), and a profile two recorded gateways both serve, by PID. Which
+  home and which checkout an unrecorded process runs is not known, so it is
+  never counted as a stale gateway: its start is only compared with this
+  install's build, and a profile name it shares with a recorded gateway is
+  said as a shared name. The listing recognizes `python -m hermes_cli.main …
+  gateway run`, `python …/hermes-agent/hermes gateway run` and Hermes' own
+  launcher (`python -I -c <bootstrap> … gateway run`, which service units
+  use). A process Hermes retitled to just `hermes` is named as unreadable,
+  not counted.
+- **Messaging adapters.** Per profile and platform, the state now: the
+  serving gateway's own entry in its `gateway_state.json` when that process
+  stamped it (its state, error code and Hermes' "needs attention" flag),
+  else the newest line of this gateway run in the gateway log tails, read
+  with the rotated `.1` when short. Both the host's `<home>/logs/gateway.log`
+  and each profile's own are read, because a served profile's lines land in
+  either: its reconnect lines, for one, are only in the profile's own log.
+  Within one log the line written last wins; across logs, the stamps decide.
+  A later "connected" supersedes an earlier failure, and a later failure or
+  stop supersedes a "connected". The log also
+  supplies the reason: a served profile's reconnect writes only the
+  adapter's own failure line, with no `✗` line, and that line counts. A line
+  from before the serving gateway started, or for a profile no running
+  gateway serves, is shown as that and never as the state now. Hermes'
+  in-process `local` adapter is not a bot and is left out. A reconnect Hermes
+  is still retrying is not a finding until Hermes flags it as needing
+  attention. A Discord bot refused for privileged intents gets which
+  intents Hermes requests (Message Content always; Server Members when the
+  profile has a role allowlist or a username rather than a numeric id in its
+  user allowlist, as Hermes' own record says when it holds the guidance) and
+  where to enable them: the Discord Developer Portal, the application's Bot
+  page, Privileged Gateway Intents. Hermes does not retry that failure on its
+  own, so the gateway needs a restart afterwards. A rejected token is named
+  too; any other reason is shown, bounded, as unrecognized.
+
+Missing evidence is said as missing: no Hermes install, no build stamp, no
+receipt, no running gateway, a log that is absent, unreadable or not in
+Hermes' format, and a process table that cannot be read (on Windows, where
+only recorded gateways are counted). Nothing is reported healthy from what
+was not read. Doctor spawns no process for this: the process table is read
+from the kernel, for your own processes only (`/proc/<pid>/cmdline` of the
+processes you own on Linux; `proc_listallpids` and `sysctl(KERN_PROCARGS2)`
+on macOS), and only each process's command-line arguments are decoded,
+never its environment. Times are shown in UTC; a log stamp is read in this
+machine's local time, as Hermes wrote it. Log reads are
+bounded tails that tolerate a cut first line and bytes that are not UTF-8;
+only lines in an adapter-state shape are kept, never a message, and a reason
+text loses Discord, Slack and Telegram bot tokens, Discord and Slack ids,
+email addresses and a URL's query. A failure to read any of it costs only
+this section: doctor prints it as not read and runs every other row. `--no-personal-files` does not
+change this section: it names SOUL.md and Hermes' memory files, and the
+gateway log is read here as the `hermes_gateway` row already reads it.
+
 To opt one bot out of managed skill registration, unregister that profile only:
 
 ```sh

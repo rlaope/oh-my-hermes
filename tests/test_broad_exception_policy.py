@@ -68,6 +68,12 @@ class ClassifiedSite(NamedTuple):
 
 CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
     ClassifiedSite(
+        "src/maintenance/doctor.py", "_gateway_health_check", INTENTIONAL,
+        "The gateway health row reads Hermes' files and the kernel's process table; an unexpected failure becomes "
+        "an observed=False warning row naming the exception class ('gateway health could not be read'), never a "
+        "healthy report, and the other doctor rows still run.",
+    ),
+    ClassifiedSite(
         "src/tui/proofread.py", "_run", INTENTIONAL,
         "The daemon worker surfaces an unexpected failure as Outcome.error naming the exception class; "
         "the main loop displays that failure instead of claiming a clean draft or applying corrections.",
@@ -1148,10 +1154,12 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # 114 -> 115 / 103 -> 104: the channel-watch collector's `main` (an unexpected error names its class only, exit 1;
 # a traceback could quote the bot token).
 # 115 -> 116 / 104 -> 105: proofread.Worker._run reports unexpected failure as Outcome.error.
-# 116 -> 117 / 105 -> 106: the monitor-recipe HTTP read, `api_watch.Client.call` (a malformed reply is a
+# 116 -> 117 / 105 -> 106: doctor's `_gateway_health_check` (#3147: an unexpected failure is an observed=False
+# warning row naming the exception class, never a healthy report).
+# 117 -> 118 / 106 -> 107: the monitor-recipe HTTP read, `api_watch.Client.call` (a malformed reply is a
 # fixed `unreachable reason=bad_response`, exit 1, never a change).
-EXPECTED_HANDLER_COUNT = 117
-EXPECTED_ANCHOR_COUNT = 106
+EXPECTED_HANDLER_COUNT = 118
+EXPECTED_ANCHOR_COUNT = 107
 
 
 class DerivedSite(NamedTuple):

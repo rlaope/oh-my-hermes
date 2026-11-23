@@ -189,6 +189,8 @@ SITES: dict[tuple[str, str], tuple[str, list[Case]]] = {
     ("src/maintenance/auto_resume_state.py", "_age_seconds"): (
         "omh.maintenance.auto_resume_state", [lambda m: lambda s: m._age_seconds(s, NOON)]),
     ("src/maintenance/hermes_gateway.py", "_iso_epoch"): ("omh.maintenance.hermes_gateway", [lambda m: m._iso_epoch]),
+    ("src/maintenance/hermes_gateway_formats.py", "_iso_epoch"): (
+        "omh.maintenance.hermes_gateway_formats", [lambda m: m._iso_epoch]),
     ("src/coding/executor_auth_signals.py", "_age_seconds"): (
         "omh.coding.executor_auth_signals", [lambda m: m._age_seconds]),
     ("src/coding/executor_capability_snapshots.py", "_is_timestamp"): (
