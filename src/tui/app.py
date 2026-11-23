@@ -1176,6 +1176,16 @@ PROGRESS_DONE = "\x1b]9;4;0" + STRING_TERMINATOR
 PROGRESS_TERMINALS = frozenset({"omher", "WezTerm", "ghostty", "iTerm.app"})
 PROGRESS_ENV_MARKS = ("WT_SESSION", "ConEmuPID")
 OMHER_TERMINAL = "omher"
+
+
+def progress_understood(environ: Mapping[str, str]) -> bool:
+    """Whether this terminal reads OSC 9;4 as progress: a `TERM_PROGRAM` that does, else Windows Terminal's or ConEmu's
+    own variable, but only with no other `TERM_PROGRAM` named: VS Code or screen started inside Windows Terminal keeps
+    `WT_SESSION`, and the terminal drawing the TUI is then that other one."""
+    program = environ.get("TERM_PROGRAM", "")
+    if program in PROGRESS_TERMINALS:
+        return True
+    return not program and any(environ.get(mark) for mark in PROGRESS_ENV_MARKS)
 TITLE_DEFAULT = "Hermes"
 TITLE_CHARS = 80
 # How many earlier sessions of this launch `omh`'s session file names (`opened`), newest kept.
@@ -3391,7 +3401,7 @@ class App(ModesMixin, AgentViewMixin):
                     self.region.flush_above(stable, cols, self.size[1])
             finally:
                 self.region.clear(self.size[1])  # the rows on the screen on the terminal's own background
-            self._write_progress(False)  # a turn cut short by the exit is not left working in the terminal
+                self._write_progress(False)  # a turn cut short by the exit (or a last frame that failed) is not left working
             if self.title_pushed:
                 self.terminal.write(TITLE_POP)  # the title the shell had
                 self.title_pushed = False
@@ -4603,8 +4613,7 @@ class App(ModesMixin, AgentViewMixin):
         (`PROGRESS_TERMINALS`, `PROGRESS_ENV_MARKS`). It is state, not a ring: OMH_TUI_BELL=0 keeps it."""
         if working == self.progress_shown:
             return
-        if self.environ.get("TERM_PROGRAM") not in PROGRESS_TERMINALS and not any(
-                self.environ.get(mark) for mark in PROGRESS_ENV_MARKS):
+        if not progress_understood(self.environ):
             return
         self.progress_shown = working
         self.terminal.write(PROGRESS_WORKING if working else PROGRESS_DONE)

@@ -27,7 +27,9 @@ OMHER = {"TERM_PROGRAM": "omher"}
 UNDERSTANDING = ({"TERM_PROGRAM": "omher"}, {"TERM_PROGRAM": "WezTerm"}, {"TERM_PROGRAM": "ghostty"},
                  {"TERM_PROGRAM": "iTerm.app"}, {"WT_SESSION": "7b3c0e1a"}, {"ConEmuPID": "4242"})
 UNKNOWN = ({}, {"TERM_PROGRAM": "Apple_Terminal"}, {"TERM_PROGRAM": "vscode"}, {"TERM": "foot"},
-           {"TERM": "xterm-256color"})
+           {"TERM": "xterm-256color"},
+           # another terminal started inside Windows Terminal or ConEmu keeps their variable: it is not them
+           {"TERM_PROGRAM": "vscode", "WT_SESSION": "7b3c0e1a"}, {"TERM_PROGRAM": "screen", "ConEmuPID": "4242"})
 APPROVAL = ServerRequest("srq-1", "approval", {"command": "rm -rf ./x", "description": "recursive delete"})
 
 
@@ -93,6 +95,18 @@ class ProgressTests(unittest.TestCase):
         app._shutdown()
         self.assertEqual(writes(app).count(DONE), 1)
         self.assertLess(writes(app).index(WORKING), writes(app).index(DONE))
+
+    def test_the_way_out_says_done_even_when_the_last_frame_fails(self) -> None:
+        app, _client = make_app(busy=True, environ=OMHER)
+        drawn(app)
+
+        def broken(*_args: object, **_kwargs: object) -> list[str]:
+            raise RuntimeError("the last frame could not be drawn")
+
+        app.transcript.take_stable_lines = broken  # type: ignore[method-assign]
+        with self.assertRaises(RuntimeError):
+            app._shutdown()
+        self.assertEqual(writes(app).count(DONE), 1)
 
     def test_the_way_out_says_nothing_when_done_was_the_last_word(self) -> None:
         app, _client = make_app(environ=OMHER)
