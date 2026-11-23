@@ -144,15 +144,17 @@ export const isCollapsed = (p: FolderPrefs, cwd: string): boolean => p.collapsed
 export const allCollapsed = (p: FolderPrefs, all: readonly string[]): boolean => all.length > 0 && all.every((c) => isCollapsed(p, c));
 
 /** A collapsed folder's header summary: how many sessions, whether one prints output now, whether one waits on the
- *  person (it rang), whether one failed. */
+ *  person (a wait omher knows: `bell`, a bot's request to type), whether one rang unseen (`news`: finished or waiting,
+ *  not known which), whether one failed. */
 export interface FolderSummary {
   count: number;
   busy: boolean;
   needs: boolean;
+  news: boolean;
   failed: boolean;
 }
-export function folderSummary(statuses: readonly ("busy" | "bell" | "ok" | "err" | null)[]): FolderSummary {
-  return { count: statuses.length, busy: statuses.includes("busy"), needs: statuses.includes("bell"), failed: statuses.includes("err") };
+export function folderSummary(statuses: readonly ("busy" | "news" | "bell" | "ok" | "err" | null)[]): FolderSummary {
+  return { count: statuses.length, busy: statuses.includes("busy"), needs: statuses.includes("bell"), news: statuses.includes("news"), failed: statuses.includes("err") };
 }
 
 // ---- the store --------------------------------------------------------------------------------------------------

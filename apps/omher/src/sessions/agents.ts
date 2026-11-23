@@ -406,13 +406,15 @@ export function termGroups<T extends Pick<SessionRec, "cwd">>(list: readonly T[]
 /** The output counts as flowing for this long after the terminal's last output (the row's spinner). */
 export const BUSY_MS = 2_000;
 
-/** What a TERMINALS row's status glyph shows: `busy` (output in the last BUSY_MS), `bell` (it rang while unseen),
+/** What a TERMINALS row's status glyph shows: `busy` (output in the last BUSY_MS), `news` (it rang while unseen: a
+ *  bell, an OSC 9 message or a progress done; it may have finished or be waiting, omher cannot tell), `bell` (a wait
+ *  omher knows: a bot's open request to type into it, which the row passes in itself; termStatus never returns it),
  *  `ok` (exited 0), `err` (exited non-zero or failed to start), or nothing (idle at a prompt, or stopped). */
-export type TermStatus = "busy" | "bell" | "ok" | "err" | null;
+export type TermStatus = "busy" | "news" | "bell" | "ok" | "err" | null;
 export function termStatus(rec: Pick<SessionRec, "status" | "exitCode" | "lastOut">, unseen: Unseen | undefined, now: number): TermStatus {
   if (rec.status === "failed") return "err";
   if (rec.status === "exited") return rec.exitCode === 0 ? "ok" : typeof rec.exitCode === "number" ? "err" : null;
-  if (unseen === "bell") return "bell";
+  if (isNews(unseen)) return "news";
   if ((rec.status === "running" || rec.status === "starting") && rec.lastOut && now - rec.lastOut < BUSY_MS) return "busy";
   return null;
 }
@@ -512,12 +514,18 @@ export interface ChatLive {
 }
 
 /** What a session did while the person was not looking at it, kept on its row until they open it: its terminal rang
- *  its bell, or it finished (a turn, or the program itself). */
-export type Unseen = "bell" | "end";
+ *  its bell (`bell`, which notifies), its program reported its work done (`quiet`, OSC 9;4 done: news on the row but no
+ *  notification, and gone when the program reports working again), or it finished (a turn, or the program itself). A
+ *  bell after a quiet done is a new ring: it notifies. */
+export type Unseen = "bell" | "quiet" | "end";
 
-/** The state a row shows in the time's place, as a sign and a word: it waits for the person, it stopped on an error,
- *  or it finished something the person has not seen. */
-export type RowMark = "needs" | "error" | "done";
+/** An unseen ring or quiet done: the row, the card and the chip show it as news. */
+export const isNews = (u: Unseen | undefined): boolean => u === "bell" || u === "quiet";
+
+/** The state a row shows in the time's place, as a sign and a word: it waits for the person (a wait omher knows: an
+ *  approval or question, a bot's request to type), it stopped on an error, it rang unseen (news: finished or waiting,
+ *  not known which), or it finished something the person has not seen. */
+export type RowMark = "needs" | "error" | "news" | "done";
 
 /** The other rows a row is told apart from: every session's folder, and the home folder for `~`. */
 export interface RowContext {
@@ -537,6 +545,8 @@ export function rowModel(
   chat?: ChatLive,
   ctx?: RowContext,
   unseen?: Unseen,
+  /** a bot's open request to type into it (usePendingRequests) */
+  asked?: boolean,
 ): {
   title: string;
   titleSource: TitleSource;
@@ -571,7 +581,8 @@ export function rowModel(
   const failedTurn = s.status === "running" && !!chat?.failed;
   const broke =
     s.status === "failed" || failedTurn || (s.status === "exited" && !s.paused && (!!s.error || (typeof s.exitCode === "number" && s.exitCode !== 0)));
-  const mark: RowMark | null = needsYou || (alive && unseen === "bell") ? "needs" : broke ? "error" : unseen === "end" ? "done" : null;
+  // only a wait omher knows is "needs"; a ring is news, since it may as well mean the program finished
+  const mark: RowMark | null = needsYou || (alive && asked) ? "needs" : broke ? "error" : alive && isNews(unseen) ? "news" : unseen === "end" ? "done" : null;
   // While running the ring (chat) or the live dot (terminal) says it, and while it waits on the person "waiting" and
   // the amber dot say it, so the line is just the agent.
   // The state's sign and word (waiting, error, done) stand in the time's place on line 1, so line 2 is as before.

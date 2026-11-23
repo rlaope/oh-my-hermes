@@ -1168,6 +1168,24 @@ TITLE_POP = f"{CSI}23;0t"
 # Every OSC string written here ends with ST, not BEL, so a BEL on the wire is only ever the bell itself.
 STRING_TERMINATOR = "\x1b\\"
 TITLE_SET = "\x1b]2;{}" + STRING_TERMINATOR
+# The turn's progress (OSC 9;4): working (3, indeterminate) as the title's state turns running, done (0) as it leaves
+# it, on change only. Written only where the terminal reads it as progress (`TERM_PROGRAM`, or Windows Terminal's or
+# ConEmu's own variable); another terminal may print it. Inside omher the done is the turn end's signal: no bell.
+PROGRESS_WORKING = "\x1b]9;4;3" + STRING_TERMINATOR
+PROGRESS_DONE = "\x1b]9;4;0" + STRING_TERMINATOR
+PROGRESS_TERMINALS = frozenset({"omher", "WezTerm", "ghostty", "iTerm.app"})
+PROGRESS_ENV_MARKS = ("WT_SESSION", "ConEmuPID")
+OMHER_TERMINAL = "omher"
+
+
+def progress_understood(environ: Mapping[str, str]) -> bool:
+    """Whether this terminal reads OSC 9;4 as progress: a `TERM_PROGRAM` that does, else Windows Terminal's or ConEmu's
+    own variable, but only with no other `TERM_PROGRAM` named: VS Code or screen started inside Windows Terminal keeps
+    `WT_SESSION`, and the terminal drawing the TUI is then that other one."""
+    program = environ.get("TERM_PROGRAM", "")
+    if program in PROGRESS_TERMINALS:
+        return True
+    return not program and any(environ.get(mark) for mark in PROGRESS_ENV_MARKS)
 TITLE_DEFAULT = "Hermes"
 TITLE_CHARS = 80
 # How many earlier sessions of this launch `omh`'s session file names (`opened`), newest kept.
@@ -2689,6 +2707,7 @@ class App(ModesMixin, AgentViewMixin):
         # The info line's right side last composed: what it showed, and the theme and HUD snapshot it was composed with.
         self.info_held: tuple[tuple[object, ...], Theme, HudSnapshot | None, tuple[Line, ...]] | None = None
         self.title_pushed = False
+        self.progress_shown = False  # OSC 9;4 working was the last progress written (`_write_progress`)
         self.herdr = HerdrReporter(self.environ)  # the title's state, told to herdr inside a herdr pane
         self.background_mode = BACKGROUND_AUTO
         self.dirty = True
@@ -3382,6 +3401,7 @@ class App(ModesMixin, AgentViewMixin):
                     self.region.flush_above(stable, cols, self.size[1])
             finally:
                 self.region.clear(self.size[1])  # the rows on the screen on the terminal's own background
+                self._write_progress(False)  # a turn cut short by the exit (or a last frame that failed) is not left working
             if self.title_pushed:
                 self.terminal.write(TITLE_POP)  # the title the shell had
                 self.title_pushed = False
@@ -4557,8 +4577,10 @@ class App(ModesMixin, AgentViewMixin):
         self.terminal.write(BELL if signal == BELL or self._window_focused() else BELL + signal)
 
     def _alert_turn_end(self, seconds: float) -> None:
-        """A turn of `TURN_ALERT_SECONDS` or more ends with the terminal's attention signal, unless OMH_TUI_BELL=0."""
-        if seconds < TURN_ALERT_SECONDS or self.environ.get(BELL_ENV) == BELL_OFF:
+        """A turn of `TURN_ALERT_SECONDS` or more ends with the terminal's attention signal, unless OMH_TUI_BELL=0.
+        Inside omher nothing: the progress done (`_write_progress`) is the signal, and omher marks the row itself."""
+        if (seconds < TURN_ALERT_SECONDS or self.environ.get(BELL_ENV) == BELL_OFF
+                or self.environ.get("TERM_PROGRAM") == OMHER_TERMINAL):
             return
         signal = attention_sequence(self.environ, TURN_ALERT_TEXT.format(elapsed=elapsed_text(seconds)))
         self.terminal.write(BELL if self._window_focused() else signal)
@@ -4573,6 +4595,7 @@ class App(ModesMixin, AgentViewMixin):
         """The terminal title, `<session title> · <state>`, written only when it changed (the first one pushes the old)."""
         state = STATE_WAITING if self.slot is not None else STATE_RUNNING if self._busy() else STATE_IDLE
         self.herdr.report(HERDR_STATES[state])
+        self._write_progress(state == STATE_RUNNING)
         words = f"{self.session_title or TITLE_DEFAULT} · {state}"
         if words == self.title_words:
             return  # every frame asks; most change nothing here
@@ -4584,6 +4607,16 @@ class App(ModesMixin, AgentViewMixin):
         push = "" if self.title_pushed else TITLE_PUSH
         self.title_pushed = True
         self.terminal.write(push + TITLE_SET.format(title))  # the session title was cleaned as it arrived
+
+    def _write_progress(self, working: bool) -> None:
+        """OSC 9;4 working or done, written only when it changes and only on a terminal that reads it as progress
+        (`PROGRESS_TERMINALS`, `PROGRESS_ENV_MARKS`). It is state, not a ring: OMH_TUI_BELL=0 keeps it."""
+        if working == self.progress_shown:
+            return
+        if not progress_understood(self.environ):
+            return
+        self.progress_shown = working
+        self.terminal.write(PROGRESS_WORKING if working else PROGRESS_DONE)
 
     def _watch_turn(self, event_type: str) -> None:
         """Say once when a submitted turn has brought no event it shows, only types the contract does not declare.
@@ -5637,6 +5670,7 @@ class App(ModesMixin, AgentViewMixin):
         self.region.clear(self.size[1])
         self._restore_ground()  # the shell's own background while stopped; the first frame after sets it again
         self._restore_cursor_shape()  # likewise the shell's own cursor
+        self._write_progress(False)  # the shell's tab is not left working while the TUI is stopped
         if self.title_pushed:
             self.terminal.write(TITLE_POP)
             self.title_pushed, self.shown_title, self.title_words = False, None, ""

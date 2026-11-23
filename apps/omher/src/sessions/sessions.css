@@ -1616,6 +1616,10 @@ body.split-dragging .xterm {
 .tg-dot.needs {
   background: var(--needs);
 }
+/* it rang unseen: news, in the accent, not the warning amber */
+.tg-dot.news {
+  background: var(--accent);
+}
 .tg-dot.err {
   background: var(--danger);
 }
@@ -1819,6 +1823,10 @@ body.split-dragging .xterm {
 }
 .tst.bell {
   color: #e8a33c;
+}
+/* news: a 6 px accent dot, the folder summary dots' size, centred in the glyph's 12 px box */
+.tst.news {
+  color: var(--accent);
 }
 @keyframes tst-turn {
   to {

@@ -98,7 +98,7 @@ export function graceMs(seconds: number, override?: unknown): number {
 }
 
 /** The split a closed row was in, as it was when it closed. */
-export type SplitWas = { layout: Layout; zoom?: true };
+export type SplitWas = { layout: Layout; zoom?: true; mapH?: number };
 
 /** Session `id` put back into the split it was in (`was`), in the same slot: the panes of that layout that are still
  *  listed (`alive`) and in no other split keep their places and sizes. The same list back when the slot is gone (the
@@ -119,7 +119,9 @@ export function restoreSplitIn(groups: SplitGroup[], id: string, was: SplitWas, 
     layout = layout ? removePane(layout, p).layout : null;
   }
   if (!layout || panesOf(layout).length < 2 || panesOf(layout).length > MAX_PANES) return groups;
-  const back: SplitGroup = { layout, ...((g ? g.zoom : was.zoom) ? { zoom: true as const } : {}) };
+  // the card height comes back too: the split's own while it went on, else the one it had when the row closed
+  const mapH = g ? g.mapH : was.mapH;
+  const back: SplitGroup = { layout, ...((g ? g.zoom : was.zoom) ? { zoom: true as const } : {}), ...(mapH === undefined ? {} : { mapH }) };
   return g ? groups.map((x) => (x === g ? back : x)) : [...groups, back];
 }
 

@@ -432,18 +432,21 @@ test("the partner passes over a row in another split and a chat of the same fold
   await expect.poll(async () => (await list()).find((r) => r.id === chat)?.status).toBe("running");
   await expect(page.getByTestId(`session-${chat}`)).toHaveCount(0);
   const [b] = await sessions(page, ["/w/a"]);
-  // /w/a lists b, p (in the other split) and a; the chat of /w/a sits between b and a in the session list
-  expect(await rows(page, "/w/a")).toEqual([b, p, a]);
+  // the /w/a group lists b and a (p shows in its split's card on top); in the session list p and the chat of /w/a
+  // both sit between b and a, so the rule has to pass over each of them
+  expect(await rows(page, "/w/a")).toEqual([b, a]);
   const ids = (await list()).filter((r) => r.cwd === "/w/a").map((r) => r.id);
-  expect(ids.indexOf(chat)).toBeGreaterThan(ids.indexOf(b));
-  expect(ids.indexOf(chat)).toBeLessThan(ids.indexOf(a));
+  for (const skip of [p, chat]) {
+    expect(ids.indexOf(skip)).toBeGreaterThan(ids.indexOf(b));
+    expect(ids.indexOf(skip)).toBeLessThan(ids.indexOf(a));
+  }
   await pressHeaderOnto(page, term(page, b), "down");
   await expect(fill(page)).toHaveAttribute("data-session", a);
   await page.mouse.up();
   await expect(split(page)).toHaveAttribute("data-panes", "2");
   await expect(pane(page, a)).toHaveCount(1);
-  // p's own split with x is as it was
-  await openRow(page, x);
+  // p's own split with x is as it was (opened from its card)
+  await page.locator(`[data-testid="split-cell"][data-session="${x}"] .sc-open`).click();
   await expect(split(page)).toHaveAttribute("data-panes", "2");
   expect(await order(page)).toEqual([x, p]);
 });

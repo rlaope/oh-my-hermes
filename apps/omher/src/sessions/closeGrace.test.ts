@@ -165,6 +165,14 @@ describe("restoreSplitIn", () => {
     expect(restoreSplitIn([two], "s2", two, alive(1, 2))).toEqual([two]);
   });
 
+  it("the card height comes back with the slot: the one it had when the row closed, or the split's own if it went on", () => {
+    expect(restoreSplitIn([], "s2", { ...two, mapH: 100 }, alive(1, 2))).toEqual([{ ...two, mapH: 100 }]);
+    const left = { layout: { dir: "row" as const, ratio: 0.5, a: { pane: 1 }, b: { pane: 3 } }, mapH: 120 };
+    expect(restoreSplitIn([left], "s2", { ...three, mapH: 100 }, alive(1, 2, 3))).toEqual([{ ...three, mapH: 120 }]);
+    // none saved: none comes back
+    expect("mapH" in restoreSplitIn([], "s2", two, alive(1, 2))[0]!).toBe(false);
+  });
+
   it("a pane whose session closed meanwhile is left out; the rest keep their places", () => {
     expect(restoreSplitIn([], "s2", three, alive(2, 3))).toEqual([{ layout: { dir: "col", ratio: 0.5, a: { pane: 2 }, b: { pane: 3 } } }]);
   });
