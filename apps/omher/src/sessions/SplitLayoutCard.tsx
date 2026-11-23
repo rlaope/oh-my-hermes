@@ -152,28 +152,40 @@ export function SplitCard({ group, current, list, agents, unseen, ticking, lang,
     return () => ro?.disconnect();
   }, []);
   const set = (h: number | null) => setMapHeight(ids[0]!, h);
+  // the drag in progress, dropped without saving when the card goes away mid-drag (its split ended): a later blur must
+  // not size whichever split those sessions are in by then
+  const dragging = useRef<(() => void) | null>(null);
+  useEffect(() => () => dragging.current?.(), []);
   const onGripDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     e.preventDefault();
+    dragging.current?.();
     const grip = e.currentTarget;
+    const pointer = e.pointerId;
     const y0 = e.clientY;
     const h0 = mapH;
     let last = h0;
-    grip.setPointerCapture?.(e.pointerId);
+    grip.setPointerCapture?.(pointer);
     const move = (ev: PointerEvent) => {
       last = clampCardHeight(h0 + ev.clientY - y0);
       setDrag(last);
     };
-    // a release, a lost capture or the window losing focus all end the drag where it is
-    const end = () => {
+    const off = () => {
+      dragging.current = null;
       grip.removeEventListener("pointermove", move);
       grip.removeEventListener("pointerup", end);
       grip.removeEventListener("pointercancel", end);
       grip.removeEventListener("lostpointercapture", end);
       window.removeEventListener("blur", end);
+      if (grip.hasPointerCapture?.(pointer)) grip.releasePointerCapture(pointer);
+    };
+    // a release, a lost capture or the window losing focus all end the drag where it is
+    const end = () => {
+      off();
       setDrag(null);
       if (last !== h0) set(last);
     };
+    dragging.current = off;
     grip.addEventListener("pointermove", move);
     grip.addEventListener("pointerup", end);
     grip.addEventListener("pointercancel", end);

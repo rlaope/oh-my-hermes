@@ -210,6 +210,30 @@ test("the grip tells assistive technology its real range, and its value follows 
   expect((await gripAx(page)).now).toBe(240);
 });
 
+test("a split that ends while its grip is held saves nothing, and a later window blur leaves the next split's height alone", async ({ page }) => {
+  await openApp(page);
+  const [a, b, c] = await sessions(page, ["/w/a", "/w/b", "/w/c"]);
+  await splitWith(page, a, b);
+  const grip = page.getByTestId("split-card-grip");
+  await expect(grip).toHaveAttribute("aria-valuenow", "62");
+  // hold the grip 31 px down, then the split ends under the held pointer (the pane's Leave)
+  const g = (await grip.boundingBox())!;
+  await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2 + 31, { steps: 5 });
+  await expect(grip).toHaveAttribute("aria-valuenow", "93");
+  await page.evaluate(async (id) => (await import("/src/sessions/SplitView.tsx" as string)).leaveSplit(id), b);
+  await expect(grip).toHaveCount(0);
+  await page.mouse.up();
+  // a and c make a new split at its default height; the window losing focus must not hand it the old drag's height
+  await splitWith(page, a, c);
+  await expect(grip).toHaveAttribute("aria-valuenow", "62");
+  await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+  await page.waitForTimeout(100);
+  await expect(grip).toHaveAttribute("aria-valuenow", "62");
+  expect(await page.evaluate(() => localStorage.getItem("omher.splits"))).not.toContain("mapH");
+});
+
 test("a long name in a tall cell keeps its start and ends in an ellipsis inside the cell", async ({ page }) => {
   await openApp(page);
   const [a, b, c, d] = await sessions(page, ["/w/a", "/w/b", "/w/c", "/w/d"]);
