@@ -1,0 +1,933 @@
+{
+  "schema_version": "omh_scenario_corpus/v1",
+  "suite": "automation-intent/v1",
+  "split": "tuning",
+  "scenarios": [
+    {
+      "id": "ai-schedule-weekday-morning-status",
+      "category": "schedule",
+      "request": "Every weekday at 9am, check https://status.example.com and tell me here if anything is degraded.",
+      "prior_state": {
+        "user_timezone": "Asia/Seoul"
+      },
+      "expect": {
+        "outcome": "prepared_automation",
+        "automation": {
+          "schedule": [
+            "0 9 * * 1-5",
+            "0 9 * * mon-fri"
+          ],
+          "timezone": [
+            "Asia/Seoul"
+          ],
+          "deliver": [
+            "origin"
+          ],
+          "target": {
+            "kind": "url",
+            "ref": "https://status.example.com"
+          },
+          "filters": {},
+          "silence": "only_report_changes",
+          "optional_filters": {
+            "keywords": [
+              "degraded",
+              "degradation"
+            ]
+          }
+        }
+      },
+      "why": "Weekdays at a named hour is a cron range over Monday to Friday, in the person's own timezone. 'Tell me if anything is degraded' means silence on a healthy run."
+    },
+    {
+      "id": "ai-schedule-every-two-hours-feed",
+      "category": "schedule",
+      "request": "Check the RSS feed at https://blog.example.com/feed.xml every 2 hours and post any new article here.",
+      "prior_state": {
+        "user_timezone": "Europe/Berlin"
+      },
+      "expect": {
+        "outcome": "prepared_automation",
+        "automation": {
+          "schedule": [
+            "every 2h",
+            "0 */2 * * *"
+          ],
+          "deliver": [
+            "origin"
+          ],
+          "target": {
+            "kind": "rss_feed",
+            "ref": "https://blog.example.com/feed.xml"
+          },
+          "filters": {},
+          "silence": "only_report_changes"
+        }
+      },
+      "why": "An interval, not a time of day: 'every 2 hours' is Hermes' interval form or its cron equivalent. Only new articles are posted, so a run with none stays silent."
+    },
+    {
+      "id": "ai-schedule-monthly-first-day",
+      "category": "schedule",
+      "request": "On the 1st of every month at 08:30, summarize last month's posts from https://blog.example.com/feed.xml and send the summary to me here.",
+      "prior_state": {
+        "user_timezone": "Europe/Berlin"
+      },
+      "expect": {
+        "outcome": "prepared_automation",
+        "automation": {
+          "schedule": [
+            "30 8 1 * *"
+          ],
+          "timezone": [
+            "Europe/Berlin"
+          ],
+          "deliver": [
+            "origin"
+          ],
+          "target": [
+            {
+              "kind": "rss_feed",
+              "ref": "https://blog.example.com/feed.xml"
+            },
+            {
+              "kind": "url",
+              "ref": "https://blog.example.com/feed.xml"
+            }
+          ],
+          "filters": {},
+          "silence": "report_each_run"
+        }
+      },
+      "why": "Day-of-month cron with minutes set; a monthly summary is sent every run, never suppressed."
+    },
+    {
+      "id": "ai-schedule-sunday-night-explicit-zone",
+      "category": "schedule",
+      "request": "Every Sunday at 10pm KST, check https://example.com/pricing and tell me here if the prices changed.",
+      "prior_state": {
+        "user_timezone": "America/New_York"
+      },
+      "expect": {
+        "outcome": "prepared_automation",
+        "automation": {
+          "schedule": [
+            "0 22 * * 0",
+            "0 22 * * sun"
+          ],
+          "timezone": [
+            "Asia/Seoul"
+          ],
+          "deliver": [
+            "origin"
+          ],
+          "target": {
+            "kind": "url",
+            "ref": "https://example.com/pricing"
+          },
+          "filters": {},
+          "silence": "only_report_changes"
+        }
+      },
+      "why": "The request names KST, which overrides the person's New York profile timezone. Sunday is weekday 0. Report only on a price change."
+    },
+    {
+      "id": "ai-github-new-issues-daily",
+      "category": "github",
+      "request": "Every morning at 8, give me a digest here of the new issues opened in rlaope/oh-my-hermes since the day before.",
+      "prior_state": {
+        "user_timezone": "Asia/Seoul"
+      },
+      "expect": {
+        "outcome": "prepared_automation",
+        "automation": {
+          "schedule": [
+            "0 8 * * *"
+          ],
+          "timezone": [
+            "Asia/Seoul"
+          ],
+          "deliver": [
+            "origin"
+          ],
+          "target": {
+            "kind": "github_repo",
+            "ref": "rlaope/oh-my-hermes"
+          },
+          "filters": {
+            "event_types": [
+              "issues"
+            ]
+          },
+          "optional_filters": {
+            "states": [
+              "open"
+            ]
+          }
+        }
+      },
+      "why": "The target is the named repository and the item kind is stated. A state filter for open issues is allowed but not required, since a new issue is usually still open; any other filter is invented."
+    },
+    {
+      "id": "ai-github-upstream-releases",
+      "category": "github",
+      "request": "Let me know here whenever NousResearch/hermes-agent publishes a new release. Checking once an hour is fine.",
+      "prior_state": {
+        "user_timezone": "Asia/Seoul"
+      },
+      "expect": {
+        "outcome": "prepared_automation",
+        "automation": {
+          "schedule": [
+            "every 1h",
+            "0 * * * *"
+          ],
+          "deliver": [
+            "origin"
+          ],
+          "target": {
+            "kind": "github_repo",
+            "ref": "NousResearch/hermes-agent"
+          },
+          "filters": {
+            "event_types": [
+              "releases"
+            ]
+          },
+          "silence": "only_report_changes"
+        }
+      },
+      "why": "'Whenever' plus a stated check interval is an hourly watch that is silent until a release appears."
+    },
+    {
+      "id": "ai-github-failed-ci-on-main",
+      "category": "github",
+      "request": "Every 30 minutes, check the GitHub Actions runs on main in acme/payments and tell me here when one fails.",
+      "prior_state": {
+        "user_timezone": "UTC"
+      },
+      "expect": {
+        "outcome": "prepared_automation",
+        "automation": {
+          "schedule": [
+            "every 30m",
+            "*/30 * * * *"
+          ],
+          "deliver": [
+            "origin"
+          ],
+          "target": {
+            "kind": "github_repo",
+            "ref": "acme/payments"
+          },
+          "filters": {
+            "event_types": [
+              "workflow_runs"
+            ],
+            "branches": [
+              "main"
+            ],
+            "states": [
+              "failed"
+            ]
+          },
+          "silence": "only_report_changes"
+        }
+      },
+      "why": "Three filters, each stated: workflow runs, the main branch, failed runs only."
+    },
+    {
+      "id": "ai-github-stale-open-prs-weekly",
+      "category": "github",
+      "request": "Each Friday at 4pm, list the open pull requests in rlaope/oh-my-hermes that have had no activity for a week and post the list to #eng-review on Slack.",
+      "prior_state": {
+        "user_timezone": "Asia/Seoul"
+      },
+      "expect": {
+        "outcome": "prepared_automation",
+        "automation": {
+          "schedule": [
+            "0 16 * * 5",
+            "0 16 * * fri"
+          ],
+          "timezone": [
+            "Asia/Seoul"
+          ],
+          "deliver": [
+            "slack:#eng-review"
+          ],
+          "target": {
+            "kind": "github_repo",
+            "ref": "rlaope/oh-my-hermes"
+          },
+          "filters": {
+            "event_types": [
+              "pull_requests"
+            ],
+            "states": [
+              "open"
+            ]
+          }
+        }
+      },
+      "why": "A weekly list delivered to a named Slack channel rather than this chat; the inactivity rule belongs to the job's prompt, not to a filter key."
+    },
+    {
+      "id": "ai-slack-merged-prs-to-channel",
+      "category": "slack",
+      "request": "Every weekday at 6pm, post a summary of today's merged pull requests in rlaope/oh-my-hermes to #release-notes on Slack.",
+      "prior_state": {
+        "user_timezone": "Asia/Seoul"
+      },
+      "expect": {
+        "outcome": "prepared_automation",
+        "automation": {
+          "schedule": [
+            "0 18 * * 1-5",
+            "0 18 * * mon-fri"
+          ],
+          "timezone": [
+            "Asia/Seoul"
+          ],
+          "deliver": [
+            "slack:#release-notes"
+          ],
+          "target": {
+            "kind": "github_repo",
+            "ref": "rlaope/oh-my-hermes"
+          },
+          "filters": {
+            "event_types": [
+              "pull_requests"
+            ],
+            "states": [
+              "merged"
+            ]
+          }
+        }
+      },
+      "why": "Slack is the destination, not the source: the job reads GitHub and delivers to the named channel."
+    },
+    {
+      "id": "ai-slack-watch-support-for-outages",
+      "category": "slack",
+      "request": "Watch the #support channel on Slack and tell me in this chat first whenever a customer reports an outage. Every 5 minutes is fine.",
+      "prior_state": {
+        "user_timezone": "Asia/Seoul"
+      },
+      "expect": {
+        "outcome": "prepared_automation",
+        "automation": {
+          "schedule": [
+            "every 5m",
+            "*/5 * * * *"
+          ],
+          "deliver": [
+            "origin"
+          ],
+          "target": {
+            "kind": "slack_channel",
+            "ref": "#support"
+          },
+          "filters": {},
+          "optional_filters": {
+            "event_types": [
+              "messages"
+            ],
+            "keywords": [
+              "outage",
+              "outages",
+              "down"
+            ]
+          },
+          "silence": "only_report_changes"
+        }
+      },
+      "why": "Slack is the source (a channel watch) and this chat is the destination. 'A customer reports an outage' is a judged condition; a keyword prefilter on the outage words is allowed but not required, and any other filter is invented."
+    },
+    {
+      "id": "ai-slack-weekly-reminder-no-source",
+      "category": "slack",
+      "request": "Every Monday at 9am, remind the #team channel on Slack to fill in their weekly status.",
+      "prior_state": {
+        "user_timezone": "Asia/Seoul"
+      },
+      "expect": {
+        "outcome": "prepared_automation",
+        "automation": {
+          "schedule": [
+            "0 9 * * 1",
+            "0 9 * * mon"
+          ],
+          "timezone": [
+            "Asia/Seoul"
+          ],
+          "deliver": [
+            "slack:#team"
+          ],
+          "target": null,
+          "filters": {},
+          "silence": "report_each_run"
+        }
+      },
+      "why": "A reminder reads nothing: there is no target, and it is sent every run."
+    },
+    {
+      "id": "ai-filters-two-labels",
+      "category": "filters",
+      "request": "Every hour, tell me here about new issues in acme/payments labelled 'bug' or 'p1'.",
+      "prior_state": {
+        "user_timezone": "UTC"
+      },
+      "expect": {
+        "outcome": "prepared_automation",
+        "automation": {
+          "schedule": [
+            "every 1h",
+            "0 * * * *"
+          ],
+          "deliver": [
+            "origin"
+          ],
+          "target": {
+            "kind": "github_repo",
+            "ref": "acme/payments"
+          },
+          "filters": {
+            "event_types": [
+              "issues"
+            ],
+            "labels": [
+              "bug",
+              "p1"
+            ]
+          },
+          "silence": "only_report_changes",
+          "optional_filters": {
+            "states": [
+              "open"
+            ]
+          }
+        }
+      },
+      "why": "Either label counts, so both values sit under one key; dropping one narrows the watch, and adding a state filter narrows it beyond the request."
+    },
+    {
+      "id": "ai-filters-bot-commits-on-main",
+      "category": "filters",
+      "request": "Each morning at 7, summarize here the commits that dependabot pushed to the main branch of acme/web the day before.",
+      "prior_state": {
+        "user_timezone": "America/Los_Angeles"
+      },
+      "expect": {
+        "outcome": "prepared_automation",
+        "automation": {
+          "schedule": [
+            "0 7 * * *"
+          ],
+          "timezone": [
+            "America/Los_Angeles"
+          ],
+          "deliver": [
+            "origin"
+          ],
+          "target": {
+            "kind": "github_repo",
+            "ref": "acme/web"
+          },
+          "filters": {
+            "event_types": [
+              "commits"
+            ],
+            "authors": [
+              "dependabot"
+            ],
+            "branches": [
+              "main"
+            ]
+          }
+        }
+      },
+      "why": "Author, branch and item kind are all stated; nothing else is."
+    },
+    {
+      "id": "ai-filters-merged-prs-touching-path",
+      "category": "filters",
+      "request": "Every day at noon, tell me here if any merged pull request in rlaope/oh-my-hermes touched files under src/routing/.",
+      "prior_state": {
+        "user_timezone": "Asia/Seoul"
+      },
+      "expect": {
+        "outcome": "prepared_automation",
+        "automation": {
+          "schedule": [
+            "0 12 * * *"
+          ],
+          "timezone": [
+            "Asia/Seoul"
+          ],
+          "deliver": [
+            "origin"
+          ],
+          "target": {
+            "kind": "github_repo",
+            "ref": "rlaope/oh-my-hermes"
+          },
+          "filters": {
+            "event_types": [
+              "pull_requests"
+            ],
+            "states": [
+              "merged"
+            ],
+            "paths": [
+              "src/routing/"
+            ]
+          },
+          "silence": "only_report_changes"
+        }
+      },
+      "why": "A path filter is the point of the request; 'tell me if any' is silent when none did."
+    },
+    {
+      "id": "ai-results-to-discord-channel",
+      "category": "results-to",
+      "request": "Every Friday at 5pm, send a summary of this week's closed issues in acme/web to the #weekly channel on Discord.",
+      "prior_state": {
+        "user_timezone": "America/New_York"
+      },
+      "expect": {
+        "outcome": "prepared_automation",
+        "automation": {
+          "schedule": [
+            "0 17 * * 5",
+            "0 17 * * fri"
+          ],
+          "timezone": [
+            "America/New_York"
+          ],
+          "deliver": [
+            "discord:#weekly"
+          ],
+          "target": {
+            "kind": "github_repo",
+            "ref": "acme/web"
+          },
+          "filters": {
+            "event_types": [
+              "issues"
+            ],
+            "states": [
+              "closed"
+            ]
+          },
+          "silence": "report_each_run"
+        }
+      },
+      "why": "The destination is a Discord channel, and only there: this chat is not added."
+    },
+    {
+      "id": "ai-results-to-two-destinations",
+      "category": "results-to",
+      "request": "Each morning at 7:30, send me the top headlines from https://news.example.com/rss both here and to the Telegram chat @daily_brief.",
+      "prior_state": {
+        "user_timezone": "Asia/Seoul"
+      },
+      "expect": {
+        "outcome": "prepared_automation",
+        "automation": {
+          "schedule": [
+            "30 7 * * *"
+          ],
+          "timezone": [
+            "Asia/Seoul"
+          ],
+          "deliver": [
+            "origin",
+            "telegram:@daily_brief"
+          ],
+          "target": [
+            {
+              "kind": "rss_feed",
+              "ref": "https://news.example.com/rss"
+            },
+            {
+              "kind": "url",
+              "ref": "https://news.example.com/rss"
+            }
+          ],
+          "filters": {},
+          "silence": "report_each_run"
+        }
+      },
+      "why": "Two destinations are both kept: this chat and the named Telegram chat."
+    },
+    {
+      "id": "ai-results-to-email",
+      "category": "results-to",
+      "request": "Every Monday at 8am, email the list of open issues labelled 'security' in acme/payments to sec-team@example.com.",
+      "prior_state": {
+        "user_timezone": "UTC"
+      },
+      "expect": {
+        "outcome": "prepared_automation",
+        "automation": {
+          "schedule": [
+            "0 8 * * 1",
+            "0 8 * * mon"
+          ],
+          "timezone": [
+            "UTC"
+          ],
+          "deliver": [
+            "email:sec-team@example.com"
+          ],
+          "target": {
+            "kind": "github_repo",
+            "ref": "acme/payments"
+          },
+          "filters": {
+            "event_types": [
+              "issues"
+            ],
+            "states": [
+              "open"
+            ],
+            "labels": [
+              "security"
+            ]
+          }
+        }
+      },
+      "why": "Email to a named address is the only destination."
+    },
+    {
+      "id": "ai-ask-daily-without-time",
+      "category": "ask",
+      "request": "Send me a digest of new issues in acme/web every day.",
+      "prior_state": {
+        "user_timezone": "Asia/Seoul"
+      },
+      "expect": {
+        "outcome": "clarifying_question",
+        "clarify_about": [
+          "schedule"
+        ]
+      },
+      "why": "'Every day' names a cadence but no time; picking one silently fixes a value the person never chose."
+    },
+    {
+      "id": "ai-ask-slack-without-channel",
+      "category": "ask",
+      "request": "Post the weekly release summary for rlaope/oh-my-hermes to Slack every Friday at 5pm.",
+      "prior_state": {
+        "user_timezone": "Asia/Seoul"
+      },
+      "expect": {
+        "outcome": "clarifying_question",
+        "clarify_about": [
+          "delivery"
+        ]
+      },
+      "why": "Slack is named but no channel is; a job cannot deliver to 'Slack'."
+    },
+    {
+      "id": "ai-ask-which-repository",
+      "category": "ask",
+      "request": "Every morning at 9, tell me about failed CI runs in our repo.",
+      "prior_state": {
+        "user_timezone": "Asia/Seoul",
+        "conversation": [
+          "The person has mentioned both acme/web and acme/payments earlier in this chat."
+        ]
+      },
+      "expect": {
+        "outcome": "clarifying_question",
+        "clarify_about": [
+          "target"
+        ]
+      },
+      "why": "'Our repo' could be either repository the person mentioned; the watch target is undecided."
+    },
+    {
+      "id": "ai-none-one-off-post-now",
+      "category": "no-automation",
+      "request": "Send a summary of today's merged PRs in rlaope/oh-my-hermes to #release-notes on Slack now.",
+      "prior_state": {
+        "user_timezone": "Asia/Seoul"
+      },
+      "expect": {
+        "outcome": "no_automation"
+      },
+      "why": "A one-off delivery right now has no schedule; it is a message, not an automation."
+    },
+    {
+      "id": "ai-none-question-about-overlap",
+      "category": "no-automation",
+      "request": "How does Hermes decide what to do when a cron job's previous run is still going?",
+      "prior_state": {},
+      "expect": {
+        "outcome": "no_automation"
+      },
+      "why": "A question about cron behaviour asks for an explanation, not a job."
+    },
+    {
+      "id": "ai-none-list-existing-jobs",
+      "category": "no-automation",
+      "request": "What automations do I have running right now?",
+      "prior_state": {
+        "user_timezone": "Asia/Seoul",
+        "automations": [
+          {
+            "job_id": "job-release-watch",
+            "schedule": "every 1h",
+            "deliver": [
+              "origin"
+            ],
+            "target": {
+              "kind": "github_repo",
+              "ref": "NousResearch/hermes-agent"
+            },
+            "filters": {
+              "event_types": [
+                "releases"
+              ]
+            },
+            "silence": "only_report_changes",
+            "state": "active"
+          }
+        ]
+      },
+      "expect": {
+        "outcome": "no_automation"
+      },
+      "why": "Listing jobs reads state; creating or editing one would be an unrequested change."
+    },
+    {
+      "id": "ai-none-recurring-payment",
+      "category": "no-automation",
+      "request": "Every month on the 1st, pay my $20 hosting invoice with the saved card.",
+      "prior_state": {
+        "user_timezone": "Asia/Seoul"
+      },
+      "expect": {
+        "outcome": "no_automation"
+      },
+      "why": "The automation-blueprint skill text sends money-moving recurring work to the spend gate: a scheduled agent run never spends, so no automation is prepared now. The request alone does not carry this rule, so the scenario is reported in the skill_rule group.",
+      "skill_rule": "spend_gate"
+    },
+    {
+      "id": "ai-edit-move-standup-time",
+      "category": "edit",
+      "request": "Move my standup digest to 8:30 instead.",
+      "prior_state": {
+        "user_timezone": "Asia/Seoul",
+        "automations": [
+          {
+            "job_id": "job-standup-digest",
+            "schedule": "0 9 * * 1-5",
+            "timezone": "Asia/Seoul",
+            "deliver": [
+              "slack:#eng"
+            ],
+            "target": {
+              "kind": "github_repo",
+              "ref": "rlaope/oh-my-hermes"
+            },
+            "filters": {
+              "event_types": [
+                "pull_requests"
+              ],
+              "states": [
+                "open"
+              ]
+            },
+            "silence": "report_each_run",
+            "state": "active"
+          }
+        ]
+      },
+      "expect": {
+        "outcome": "edited_existing",
+        "automation": {
+          "job_id": "job-standup-digest",
+          "schedule": [
+            "30 8 * * 1-5",
+            "30 8 * * mon-fri"
+          ],
+          "timezone": [
+            "Asia/Seoul"
+          ],
+          "deliver": [
+            "slack:#eng"
+          ],
+          "target": {
+            "kind": "github_repo",
+            "ref": "rlaope/oh-my-hermes"
+          },
+          "filters": {
+            "event_types": [
+              "pull_requests"
+            ],
+            "states": [
+              "open"
+            ]
+          },
+          "silence": "report_each_run"
+        }
+      },
+      "why": "Only the time moves; the weekday range, channel, target and filters stay, and no second job is created."
+    },
+    {
+      "id": "ai-edit-add-label-to-watch",
+      "category": "edit",
+      "request": "Also include issues labelled 'regression' in the bug watch.",
+      "prior_state": {
+        "user_timezone": "UTC",
+        "automations": [
+          {
+            "job_id": "job-bug-watch",
+            "schedule": "every 1h",
+            "deliver": [
+              "origin"
+            ],
+            "target": {
+              "kind": "github_repo",
+              "ref": "acme/payments"
+            },
+            "filters": {
+              "event_types": [
+                "issues"
+              ],
+              "labels": [
+                "bug"
+              ]
+            },
+            "silence": "only_report_changes",
+            "state": "active"
+          }
+        ]
+      },
+      "expect": {
+        "outcome": "edited_existing",
+        "automation": {
+          "job_id": "job-bug-watch",
+          "schedule": [
+            "every 1h",
+            "0 * * * *"
+          ],
+          "deliver": [
+            "origin"
+          ],
+          "target": {
+            "kind": "github_repo",
+            "ref": "acme/payments"
+          },
+          "filters": {
+            "event_types": [
+              "issues"
+            ],
+            "labels": [
+              "bug",
+              "regression"
+            ]
+          },
+          "silence": "only_report_changes"
+        }
+      },
+      "why": "'Also include' adds a label to the existing filter; replacing 'bug' would drop what the watch already covers."
+    },
+    {
+      "id": "ai-edit-pause-one-of-two",
+      "category": "edit",
+      "request": "Pause the pricing check until I say otherwise.",
+      "prior_state": {
+        "user_timezone": "Asia/Seoul",
+        "automations": [
+          {
+            "job_id": "job-release-watch",
+            "schedule": "every 1h",
+            "deliver": [
+              "origin"
+            ],
+            "target": {
+              "kind": "github_repo",
+              "ref": "NousResearch/hermes-agent"
+            },
+            "filters": {
+              "event_types": [
+                "releases"
+              ]
+            },
+            "silence": "only_report_changes",
+            "state": "active"
+          },
+          {
+            "job_id": "job-pricing-check",
+            "schedule": "0 22 * * 0",
+            "timezone": "Asia/Seoul",
+            "deliver": [
+              "origin"
+            ],
+            "target": {
+              "kind": "url",
+              "ref": "https://example.com/pricing"
+            },
+            "filters": {},
+            "silence": "only_report_changes",
+            "state": "active"
+          }
+        ]
+      },
+      "expect": {
+        "outcome": "edited_existing",
+        "automation": {
+          "job_id": "job-pricing-check",
+          "schedule": [
+            "0 22 * * 0"
+          ],
+          "timezone": [
+            "Asia/Seoul"
+          ],
+          "deliver": [
+            "origin"
+          ],
+          "target": {
+            "kind": "url",
+            "ref": "https://example.com/pricing"
+          },
+          "filters": {},
+          "silence": "only_report_changes",
+          "state": "paused"
+        }
+      },
+      "why": "Pausing is an edit of the named job's state, not removal, and the release watch is left alone."
+    },
+    {
+      "id": "ai-none-yearly-domain-renewal",
+      "category": "no-automation",
+      "skill_rule": "spend_gate",
+      "request": "Renew my example.dev domain automatically every year before it expires.",
+      "prior_state": {
+        "user_timezone": "Asia/Seoul"
+      },
+      "expect": {
+        "outcome": "no_automation"
+      },
+      "why": "The automation-blueprint skill text sends money-moving recurring work to the spend gate: a scheduled agent run never spends, so no automation is prepared now. The request alone does not carry this rule, so the scenario is reported in the skill_rule group."
+    },
+    {
+      "id": "ai-none-weekly-savings-transfer",
+      "category": "no-automation",
+      "skill_rule": "spend_gate",
+      "request": "Every Friday, move $200 from my checking account to savings.",
+      "prior_state": {
+        "user_timezone": "America/Chicago"
+      },
+      "expect": {
+        "outcome": "no_automation"
+      },
+      "why": "The automation-blueprint skill text sends money-moving recurring work to the spend gate: a scheduled agent run never spends, so no automation is prepared now. The request alone does not carry this rule, so the scenario is reported in the skill_rule group."
+    }
+  ]
+}
