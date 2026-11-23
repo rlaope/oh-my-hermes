@@ -120,6 +120,27 @@ class AutomationIntentGraderTests(unittest.TestCase):
                 with self.subTest(scenario_id):
                     self.assertNotIn(" both ", f" {scenario['request'].casefold()} ")
 
+    def test_coding_the_parent_may_do_without_an_owner_rests_on_the_owner_rule(self) -> None:
+        # With the rule out of the shared instructions, a coding request that names
+        # no owner in this request can be answered "hand it off" by an arm that
+        # never read the rule. Every such scenario is in the skill_rule group.
+        for scenario_id, scenario in ORCHESTRATION.items():
+            expect = scenario["expect"]
+            if expect["handoff"] == "forbidden" and expect["parent_may_edit"]:
+                with self.subTest(scenario_id):
+                    self.assertEqual(scenario.get("skill_rule"), "owner_named_in_this_request")
+
+    def test_the_skill_rule_group_is_more_than_one_observation_in_every_split(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        for lane in ("automation-intent", "orchestration"):
+            manifest = json.loads((root / "benchmarks" / lane / "v1" / "manifest.json").read_text(encoding="utf-8"))
+            for split, block in manifest["splits"].items():
+                corpus = load_split(root / "benchmarks" / lane / "v1", split)
+                ruled = sum(1 for row in corpus["scenarios"] if row.get("skill_rule"))
+                with self.subTest(lane=lane, split=split):
+                    self.assertGreaterEqual(ruled, 2)
+                    self.assertEqual(block["skill_rule_scenarios"], ruled)
+
     def test_skill_rules_reach_only_the_skill_text_arm(self) -> None:
         # The rule a skill_rule scenario rests on is in the skill text the
         # skill-text arm reads, and in nothing every arm is given.
@@ -595,6 +616,16 @@ class OrchestrationGraderTests(unittest.TestCase):
                 self.assertEqual(orchestration.reply_links(prose), [])
         self.assertEqual(orchestration.reply_links("socket.io/docs at https://socket.io/docs"), ["https://socket.io/docs"])
         self.assertEqual(orchestration.reply_links("docs.socket.io/v4"), ["https://docs.socket.io/v4"])
+
+    def test_two_label_docs_hosts_on_any_tld_are_links(self) -> None:
+        for reply in ("See nousresearch.ai/docs/cron", "See hermes-agent.io/docs/cron", "See example.xyz/guide"):
+            decision = {"handoffs": [], "parent_edits": [], "reply": reply}
+            with self.subTest(reply):
+                self.assertEqual(_checks(self.grade("orc-links-none-observed", decision)), ["reply.links (not in observed evidence)"])
+        for prose in ("uses socket.io/client for the stream", "ported from ASP.NET/Core"):
+            decision = {"handoffs": [], "parent_edits": [], "reply": prose}
+            with self.subTest(prose):
+                self.assertEqual(self.grade("orc-links-none-observed", decision), ())
 
     def test_github_link_case_is_not_an_invented_link(self) -> None:
         decision = {"handoffs": [], "parent_edits": [], "reply": "Merged: https://github.com/RLAOPE/Oh-My-Hermes/pull/3102"}

@@ -569,14 +569,25 @@ def child_dispatch_argv(
 
 
 def read_decision_file(workspace: Path) -> tuple[dict[str, Any] | None, str]:
-    """The decision an arm wrote, or why there is none."""
+    """The decision an arm wrote, or why there is none.
+
+    A reason names the file only, never its directory: it is stored on the
+    observation, and the workspace path can carry a home directory.
+    """
     target = Path(workspace) / DECISION_FILENAME
     if not target.exists():
         return None, f"{DECISION_FILENAME} was not written"
     try:
-        document = read_json_document(target, limit=MAX_DECISION_FILE_BYTES)
-    except ScenarioSuiteError as exc:
-        return None, str(exc)
+        with target.open("rb") as handle:
+            raw = handle.read(MAX_DECISION_FILE_BYTES + 1)
+    except OSError as exc:
+        return None, f"{DECISION_FILENAME} is not readable ({type(exc).__name__})"
+    if len(raw) > MAX_DECISION_FILE_BYTES:
+        return None, f"{DECISION_FILENAME} exceeds the {MAX_DECISION_FILE_BYTES}-byte cap"
+    try:
+        document = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None, f"{DECISION_FILENAME} is not readable UTF-8 JSON"
     if not isinstance(document, dict):
         return None, f"{DECISION_FILENAME} is not a JSON object"
     return document, ""

@@ -15,13 +15,15 @@
   "splits": {
     "tuning": {
       "file": "corpus/tuning.json",
-      "scenarios": 18,
-      "digest": "8e0c983c14acb5357feb08d3195b99b52eeba1f7e60541aa7fef3b223cb64191"
+      "scenarios": 20,
+      "digest": "fedf301cc674a4487bee4e5d781062deae75ecc577a1e3eba69672078473d936",
+      "skill_rule_scenarios": 4
     },
     "held_out": {
       "file": "corpus/held-out.json",
-      "scenarios": 6,
-      "digest": "c9c350b400145c4c3c0972a40bf570bcc5dbe0eb309f431c267d4cabcf567d19"
+      "scenarios": 8,
+      "digest": "d26209d4095e3866f24d8bd6416cb61e537bdd634e916ea89bb45a6abb9013f5",
+      "skill_rule_scenarios": 2
     }
   },
   "held_out_policy": {

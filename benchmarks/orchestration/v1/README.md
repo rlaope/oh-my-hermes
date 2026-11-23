@@ -123,9 +123,20 @@ the decision contract) and `skill_rule`. A `skill_rule` scenario rests on a
 rule the request does not carry, which only the skill text states: here
 `owner_named_in_this_request`, from `skills/dag-ulw/SKILL.md` ("No external
 coding CLI runs unless the person named it as the coding owner in this
-request"). The `skill-text` arm gets that file inlined; the `bare` arm is
-never told the rule, so the gap between the arms on that group is what the
-skill text teaches.
+request"). Every coding request that names no owner in this request is in
+that group, whether nobody chose an owner or the choice came from an earlier
+request: without the rule, handing it to an external CLI is a defensible
+reading. The `skill-text` arm gets that file inlined; the `bare` arm is never
+told the rule, so the gap between the arms on that group is what the skill
+text teaches.
+
+The `skill_rule` group is small by design: a few scenarios in each split, with
+the counts pinned in `manifest.json` (`skill_rule_scenarios`) and at least two
+in every split. It can show whether inlining the skill text moves an arm on
+the rule that text states, as a gap between the `skill-text` and `bare` arms
+on the same scenarios. It cannot give a precise rate (its Wilson interval is
+wide), and on the held-out split it is never reported on its own, because a
+held-out report carries totals only.
 
 ## Observation classes, report, arms, safety
 

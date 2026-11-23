@@ -476,6 +476,22 @@ class DispatchClassificationTests(unittest.TestCase):
         self.assertEqual(failed_with_decision["status"], "observed")
 
 
+class DecisionFileReasonTests(unittest.TestCase):
+    def test_an_unreadable_decision_file_reason_names_no_path(self) -> None:
+        with TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "private-user" / "ws"
+            workspace.mkdir(parents=True)
+            target = workspace / shared.DECISION_FILENAME
+            for content in (b"{not json", b"[1, 2]", b"x" * (shared.MAX_DECISION_FILE_BYTES + 1)):
+                target.write_bytes(content)
+                decision, reason = shared.read_decision_file(workspace)
+                with self.subTest(content[:8]):
+                    self.assertIsNone(decision)
+                    self.assertIn(shared.DECISION_FILENAME, reason)
+                    self.assertNotIn(tmp, reason)
+                    self.assertNotIn("private-user", reason)
+
+
 class PromptAndArgvTests(unittest.TestCase):
     def test_prompt_shows_neither_the_answer_nor_the_label(self) -> None:
         for module, lane, _grade in SUITES:

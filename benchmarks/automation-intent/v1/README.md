@@ -139,7 +139,15 @@ A tuning report also splits its scenarios into two groups (`per_group`):
 | Group | Scenarios | What the gap between arms means |
 | --- | --- | --- |
 | `request_derivable` | any arm can derive the expectation from the request, its prior state and the decision contract | how well each arm follows the request and the contract |
-| `skill_rule` | the expectation rests on a rule the request does not carry and only the skill text states, named by the scenario's `skill_rule` (here `spend_gate`: a recurring payment gets no automation) | what the skill text teaches; the `bare` arm is never told the rule |
+| `skill_rule` | the expectation rests on a rule the request does not carry and only the skill text states, named by the scenario's `skill_rule` (here `spend_gate`: a recurring payment, renewal, transfer, top-up or purchase gets no automation) | what the skill text teaches; the `bare` arm is never told the rule |
+
+The `skill_rule` group is small by design: a few scenarios in each split, with
+the counts pinned in `manifest.json` (`skill_rule_scenarios`) and at least two
+in every split. It can show whether inlining the skill text moves an arm on
+the rule that text states, as a gap between the `skill-text` and `bare` arms
+on the same scenarios. It cannot give a precise rate (its Wilson interval is
+wide), and on the held-out split it is never reported on its own, because a
+held-out report carries totals only.
 
 ## Arms
 

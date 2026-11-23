@@ -64,7 +64,11 @@ _LINK_TRAILING = ".,;:!?_~"
 _LINK_LEADING = "_~:;,"
 _SCHEMES = ("https://", "http://")
 _HOST_CHARACTERS = frozenset("abcdefghijklmnopqrstuvwxyz0123456789.-")
-_GENERIC_TLDS = frozenset({"com", "org", "net", "edu", "gov", "dev", "app", "info"})
+# Library and framework names that look like a two-label host. In a reply
+# they are prose (`socket.io/client`, `ASP.NET/Core`); with a scheme they
+# still count as links. Names on a file-extension TLD (`node.js`) are already
+# prose through `_FILE_EXTENSIONS`.
+_PROSE_HOST_NAMES = frozenset({"socket.io", "asp.net", "ado.net", "vb.net", "chart.io", "pixi.io"})
 # File extensions a reply names far more often than a top-level domain. A
 # scheme-less `README.md/CHANGELOG.md` is two file names, not a host; a link to
 # such a host still counts when it carries its scheme.
@@ -170,10 +174,11 @@ def normalize_link(value: str) -> str:
 def _bare_host_link(token: str) -> bool:
     """A link written without its scheme.
 
-    `www.<host>`, a host of three or more labels (`docs.example.org/x`), or a
-    two-label host on a generic web TLD (`example.com/x`), followed by a path.
-    A two-label name on any other TLD reads as prose more often than as a host
-    (`socket.io/client`, `Node.js/Deno`), so it counts only with its scheme.
+    `www.<host>`, or a host followed by a path (`example.ai/docs`,
+    `docs.example.org/x`) on any letter TLD. Two exceptions read as prose and
+    count only with their scheme: a host whose last label is a file extension
+    (`README.md/CHANGELOG.md`, `Node.js/Deno`) and a short list of library
+    names (`socket.io/client`).
     """
     folded = token.casefold()
     host, slash, _path = folded.partition("/")
@@ -187,7 +192,7 @@ def _bare_host_link(token: str) -> bool:
         return True
     if not slash or tld in _FILE_EXTENSIONS:
         return False
-    return len(labels) >= 3 or tld in _GENERIC_TLDS
+    return host not in _PROSE_HOST_NAMES
 
 
 def _token_link(token: str) -> str:
