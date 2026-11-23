@@ -495,6 +495,16 @@ RULES = (
     " value an install asks for, never reads, writes or shows a key or a token, never edits `config.yaml`, `.env` or"
     " `mcp-tokens/` itself, and never reloads or restarts anything after a change:",
     "to connect Linear the page opens the Apps page for that bot (rule 41); it lists nothing from Linear itself.",
+    "\"Hand to <bot>\" (a TERMINALS row's menu, a Worktrees row's menu) adds no read: its git facts are that Worktrees"
+    " list and one `panel.diff` of a worktree in it,",
+    "and a folder inside none of those worktrees goes with no git facts.",
+    "The folder is the one the TERMINALS session started in, never a folder its shell reported (OSC 7, rule 11).",
+    "Open thread starts the thread as \"Start in thread\" does (rule 33: `thread.create`, then `chat.send` of that"
+    " text), and nothing is moved, closed or typed into the terminal.",
+    "It is offered only on a Worktrees row of a bot of this computer (never a bot over SSH, whose folders are on another"
+    " computer) and only while a bot of this computer is online to take it; with none, nothing is read.",
+    "so nothing read from a repository can add a line to the message; a worktree the bridge no longer finds is said to"
+    " be gone and nothing is sent.",    "\"Hand to <bot>\" (rule 10) starts its thread the same way;",
 )
 TAURI_CONF = ROOT / "apps" / "omher" / "src-tauri" / "tauri.conf.json"
 CAPABILITIES = ROOT / "apps" / "omher" / "src-tauri" / "capabilities" / "default.json"
@@ -2895,6 +2905,54 @@ class TasksReadOnly(unittest.TestCase):
         self.assertIn("await actions.threadSend(bot, row.thread, text);", start)
         host = (UI_SRC / "tasks" / "host.ts").read_text(encoding="utf-8")
         self.assertEqual(sorted(set(re.findall(r'invoke<[^>]+>\("([a-z_]+)"', host))), ["gh_accounts", "tasks_list", "tasks_me", "tasks_remote", "tasks_status", "tasks_view"])
+
+
+class HandToBotAddsNoRead(unittest.TestCase):
+    """Rule 10 (and 33's thread start): "Hand to <bot>" reads only the bot's Worktrees list and one `panel.diff` of a
+    worktree in it, starts its thread through the store's one `startTaskThread`, and writes nothing to a terminal."""
+
+    def setUp(self) -> None:
+        self.card = (UI_SRC / "handover" / "HandoverCard.tsx").read_text(encoding="utf-8")
+        self.msg = (UI_SRC / "handover" / "message.ts").read_text(encoding="utf-8")
+
+    def test_reads_only_the_worktree_list_and_one_diff(self) -> None:
+        for src in (self.card, self.msg):
+            for bad in ("invoke(", "bridge.request", "@tauri-apps"):
+                self.assertNotIn(bad, src, bad)
+        self.assertEqual(re.findall(r"actions\.(\w+)\(", self.card), ["panelDiff"])
+        self.assertIn("loadTrees(reader)", self.card)
+        trees = (UI_SRC / "elsewhere" / "trees.ts").read_text(encoding="utf-8")
+        self.assertEqual(re.findall(r"actions\.(\w+)\(", trees), ["panelWorktrees"])
+
+    def test_starts_the_thread_like_start_in_thread_and_types_nothing(self) -> None:
+        self.assertEqual(re.findall(r"\bs\.(\w+)\(", self.card), ["startTaskThread"])
+        for bad in ("getSessions", "typeAllowed", "sendText", "shell_start", ".write("):
+            self.assertNotIn(bad, self.card, bad)
+        # the session's own folder, never the one its shell reports through OSC 7 (act.cwd stays in the page)
+        rows = (UI_SRC / "sessions" / "SessionsSection.tsx").read_text(encoding="utf-8")
+        self.assertIn('from={{ kind: "terminal", folder: rec.cwd }}', rows)
+        self.assertNotIn("folder: act.cwd", rows)
+
+    def test_offered_only_for_a_local_bot_with_one_online(self) -> None:
+        panel = (UI_SRC / "elsewhere" / "PanelTabs.tsx").read_text(encoding="utf-8")
+        self.assertIn("const canHand = () => !bot.host && handBots(getStore().getSnapshot().bots).length > 0;", panel)
+        self.assertIn("if (!canHand()) return;", panel)
+        self.assertIn('export const handBots = (bots: Bot[]) => bots.filter((b) => !b.host && b.status !== "offline");', self.card)
+        rows = (UI_SRC / "sessions" / "SessionsSection.tsx").read_text(encoding="utf-8")
+        self.assertIn("termMenuItems(rec, handBots(getStore().getSnapshot().bots).length > 0)", rows)
+        # no bot to send to: no read at all
+        self.assertIn("if (!reader) return;", self.card)
+
+    def test_every_name_is_printable_before_it_enters_the_message(self) -> None:
+        # one way in for a name: printable() then a code span; the goal is one printable line
+        body = self.msg.split("function name(s: string): string {", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("const t = tokens(s);", body)  # the same escapes printable() makes, cut on whole tokens
+        self.assertIn("[...span].length <= NAME_CHARS", body)  # the cap holds with the code span's fences
+        self.assertEqual(self.msg.count("codeSpan("), 2)  # its definition and name(): no raw name reaches a span
+        self.assertIn("return printable(goal.replace(", self.msg)
+        unsafe = self.msg.split("const UNSAFE = /[", 1)[1].split("]/g;", 1)[0]
+        for part in ("\\u0000-\\u001f", "\\u007f-\\u009f", "\\u2028\\u2029", "\\u200e\\u200f", "\\u202a-\\u202e", "\\u2066-\\u2069"):
+            self.assertIn(part, unsafe, part)
 
 
 class GithubMeReadOnly(unittest.TestCase):

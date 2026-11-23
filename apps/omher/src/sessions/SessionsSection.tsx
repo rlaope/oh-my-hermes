@@ -39,6 +39,7 @@ import { onOpenNewSessionMenu, useShells } from "./newMenu";
 import { onTermSettings, readTermSettings } from "./term/settings";
 import { TermLinkGone } from "./termLinkOpen";
 import { getAddOmh } from "./addOmh";
+import { HandoverCard, handBots, handLabel } from "../handover/HandoverCard";
 import type { Account, AccountCli, AccountGroup } from "../lib/protocol";
 import { useAccounts } from "../settings/accounts/useAccounts";
 import { accountForNewSessions } from "../settings/accounts/rules";
@@ -1161,11 +1162,11 @@ export function rowMenuItems(rec: Pick<SessionRec, "cwd" | "agentSession">): Row
   return ["rename", ...(rec.cwd ? (["reveal", "terminal"] as const) : []), ...(rec.agentSession ? (["copy"] as const) : []), "here", "close"];
 }
 /** A TERMINALS row's menu: Rename, Reveal, Open in the system terminal, Copy link (its `omher://terminal/…`),
- *  New terminal here, Close. */
-export function termMenuItems(rec: Pick<SessionRec, "cwd" | "linkId">): RowAction[] {
-  return ["rename", ...(rec.cwd ? (["reveal", "terminal"] as const) : []), ...(rec.linkId ? (["link"] as const) : []), "here", "close"];
+ *  Hand to <bot> (its folder, when a bot of this computer is online: `canHand`), New terminal here, Close. */
+export function termMenuItems(rec: Pick<SessionRec, "cwd" | "linkId">, canHand = false): RowAction[] {
+  return ["rename", ...(rec.cwd ? (["reveal", "terminal"] as const) : []), ...(rec.linkId ? (["link"] as const) : []), ...(rec.cwd && canHand ? (["hand"] as const) : []), "here", "close"];
 }
-export type RowAction = "rename" | "reveal" | "terminal" | "copy" | "link" | "here" | "close";
+export type RowAction = "rename" | "reveal" | "terminal" | "copy" | "link" | "hand" | "here" | "close";
 
 /** \"Show in Finder\" on macOS, \"Show in Explorer\" on Windows, \"Show in file manager\" elsewhere. */
 const revealWord = () => {
@@ -1179,6 +1180,7 @@ const ROW_ACTION_LABEL: Record<RowAction, () => string> = {
   terminal: () => t("ss.menu.terminal"),
   copy: () => t("ss.menu.copyId"),
   link: () => t("tlink.copy"),
+  hand: handLabel,
   here: () => t("term.here"),
   close: () => t("ss.close"),
 };
@@ -1188,13 +1190,14 @@ const ROW_ACTION_ID: Record<RowAction, string> = {
   terminal: "session-system-terminal",
   copy: "session-copy-id",
   link: "session-copy-link",
+  hand: "session-hand",
   here: "session-new-here",
   close: "session-menu-close",
 };
 
 /** Right-click menu of a session row (rowMenuItems). Placed at the pointer, inside the window. Arrow keys move,
  *  Home / End jump, Enter picks, Esc closes. */
-function SessionMenu({ at, name, actions, onPick, onDismiss }: { at: { x: number; y: number }; name: string; actions: RowAction[]; onPick: (a: RowAction) => void; onDismiss: () => void }) {
+export function SessionMenu({ at, name, actions, onPick, onDismiss }: { at: { x: number; y: number }; name: string; actions: RowAction[]; onPick: (a: RowAction) => void; onDismiss: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     ref.current?.querySelector<HTMLButtonElement>("button")?.focus();
@@ -1247,8 +1250,8 @@ function SessionMenu({ at, name, actions, onPick, onDismiss }: { at: { x: number
 }
 
 /** The row menu's size, to keep it inside the window: 168 wide, 26 per row plus its padding and separator. */
-const MENU_W_PX = 168;
-const menuHeight = (rows: number) => rows * 26 + 14;
+export const MENU_W_PX = 168;
+export const menuHeight = (rows: number) => rows * 26 + 14;
 
 /** Where a row menu of `rows` items opens for a right-click at the pointer: inside the sidebar and the window. */
 function menuSpot(e: { clientX: number; clientY: number }, from: Element | null, rows: number): { x: number; y: number } {
@@ -1388,8 +1391,12 @@ const TermRow = memo(function TermRow({ rec, agents, unseen, active, ticking, on
   const activity = termActivity({ agent: rec.agent, fgAgent: rec.fgAgent, lastLine: act.lastLine, oscTitle: act.oscTitle });
   // a CLI runs in it: the card's thin amber lane on its left edge (the folder summary's "running" counts the same)
   const running = live && markAgent !== null;
-  const actions = termMenuItems(rec);
-  const pick = (a: RowAction) => termRowAct(rec, a, () => setEditing(true), onClose);
+  const [hand, setHand] = useState<{ x: number; y: number } | null>(null);
+  // read, not subscribed: the row re-renders when its menu opens, which is when the bots are looked at
+  const actions = termMenuItems(rec, handBots(getStore().getSnapshot().bots).length > 0);
+  // Hand to <bot> opens its card at the menu's place; every other item is the shared row action (a split card's
+  // cells list no Hand item: termMenuItems without canHand)
+  const pick = (a: RowAction) => (a === "hand" ? setHand(menu) : termRowAct(rec, a, () => setEditing(true), onClose));
   const endEdit = (name: string | null | undefined) => {
     setEditing(false);
     if (name !== undefined) getSessions().rename(rec.id, name);
@@ -1492,6 +1499,8 @@ const TermRow = memo(function TermRow({ rec, agents, unseen, active, ticking, on
         </button>
       )}
       {menu && <SessionMenu at={menu} name={title.title} actions={actions} onPick={pick} onDismiss={() => setMenu(null)} />}
+      {/* the folder the session started in (never one its shell reported later through OSC 7, which stays in the page) */}
+      {hand && <HandoverCard at={hand} from={{ kind: "terminal", folder: rec.cwd }} onClose={() => setHand(null)} />}
     </div>
   );
 });
