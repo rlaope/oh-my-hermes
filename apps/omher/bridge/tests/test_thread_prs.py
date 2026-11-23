@@ -119,10 +119,11 @@ class Checks(unittest.TestCase):
         self.assertEqual(ob.pr_checks_of([self.ctx("SUCCESS", context="FAILURE")]), "passing")
         self.assertEqual(ob.pr_checks_of([{**r(), "description": "FAILURE", "detailsUrl": "x"}]), "passing")
 
-    def test_only_the_first_entries_are_looked_at(self):
+    def test_entries_past_the_bound_are_not_looked_at_and_never_read_as_passing(self):
         rollup = [self.run_()] * ob.PR_ROLLUP_MAX + [self.run_(conclusion="FAILURE")]
-        self.assertEqual(ob.pr_checks_of(rollup), "passing")
-
+        self.assertEqual(ob.pr_checks_of(rollup), "running")  # the unread failure could be there
+        self.assertEqual(ob.pr_checks_of([self.run_()] * ob.PR_ROLLUP_MAX), "passing")
+        self.assertEqual(ob.pr_checks_of([self.run_(conclusion="FAILURE")] + [self.run_()] * ob.PR_ROLLUP_MAX), "failing")
 
 class Limits(unittest.TestCase):
     def test_a_view_gives_state_checks_and_a_head_only_when_it_is_a_commit_id(self):
@@ -176,7 +177,7 @@ class Limits(unittest.TestCase):
         self.assertEqual(calls, [9, 9, 9])  # the 5 minute window ran out
         self.assertEqual((ob.PR_TTL, ob.PR_FRESH_MIN), (300.0, 10.0))
 
-    def test_at_most_thirty_calls_a_minute_across_plans_and_threads(self):
+    def test_at_most_thirty_calls_a_minute_of_which_threads_take_twenty(self):
         calls, now = [], [1000.0]
 
         def view(repo, n):
@@ -184,17 +185,21 @@ class Limits(unittest.TestCase):
             return {"state": "MERGED", "mergedAt": "t"}
 
         prs = ob.PrStates(view=view, clock=lambda: now[0])
-        self.assertEqual(ob.PR_CALLS_PER_MIN, 30)
-        for n in range(1, 21):  # 20 from threads
-            prs.thread([{"number": n, "repo": "o/r", "url": "u"}])
+        self.assertEqual((ob.PR_CALLS_PER_MIN, ob.PR_THREAD_CALLS_PER_MIN), (30, 20))
+        got = [prs.thread([{"number": n, "repo": "o/r", "url": "u"}])[0] for n in range(1, 26)]  # 25 from threads
+        self.assertEqual(len(calls), 20)  # threads stop at 20
+        self.assertEqual([g["state"] for g in got[20:]], ["unknown"] * 5)
+        self.assertTrue(all(g.get("limited") is True for g in got[20:]))  # over the cap, not "no gh"
+        self.assertNotIn("limited", got[0])
         run = {"nodes": [{"id": str(n), "pr": {"number": n, "repo": "p/q"}} for n in range(1, 16)]}
-        got = prs.states(run)  # 15 from a plan: 10 fit
+        states = prs.states(run)  # a plan still has 10
         self.assertEqual(len(calls), 30)
-        self.assertEqual(sorted(v["state"] for v in got.values()), ["merged"] * 10 + ["unknown"] * 5)
-        # past the cap: a PR already known keeps its answer even on a refresh, a new one reads unknown and is not kept
+        self.assertEqual(sorted(v["state"] for v in states.values()), ["merged"] * 10 + ["unknown"] * 5)
+        # past the cap: a PR already known keeps its answer even on a refresh; a new one is not kept as unknown
         now[0] = 1000.0 + 30
         self.assertEqual(prs.thread([{"number": 1, "repo": "o/r", "url": "u"}], fresh=True)[0]["state"], "merged")
-        self.assertEqual(prs.thread([{"number": 99, "repo": "o/r", "url": "u"}])[0]["state"], "unknown")
+        self.assertEqual(prs.thread([{"number": 99, "repo": "o/r", "url": "u"}])[0], {"number": 99, "repo": "o/r", "url": "u",
+                                                                                    "state": "unknown", "checks": "none", "limited": True})
         self.assertEqual(len(calls), 30)
         now[0] = 1000.0 + 61  # the window moved on
         self.assertEqual(prs.thread([{"number": 99, "repo": "o/r", "url": "u"}])[0]["state"], "merged")
@@ -318,6 +323,22 @@ class ThreadPrsOp(BridgeCase):
             self.assertEqual((await s.req("thread.prs", bot="kami", thread=main))["error"]["code"], "bad_request")
             self.assertEqual((await s.req("thread.prs", bot="kami", thread="stored-th-99"))["error"]["code"], "not_found")
             self.assertEqual((await s.req("thread.prs", bot="kami"))["error"]["code"], "bad_request")
+
+    async def test_the_links_are_read_again_only_when_the_thread_has_a_new_row(self):
+        async with ThreadEnv(HermesStore()) as env:
+            env.bridge.prs = ob.PrStates(view=lambda repo, n: {"state": "OPEN"})
+            s = await self.open(env)
+            tid = ok(await s.req("thread.create", bot="kami"))["thread"]
+            prof = env.home / "profiles" / "kami"
+            save_rows(prof, tid, ROWS)
+            with mock.patch.object(ob, "read_thread_rows", wraps=ob.read_thread_rows) as rows:
+                self.assertEqual([p["number"] for p in ok(await s.req("thread.prs", bot="kami", thread=tid))["prs"]], [4])
+                ok(await s.req("thread.prs", bot="kami", thread=tid))
+                self.assertEqual(rows.call_count, 1)  # no new row: the kept links
+                save_rows(prof, tid, [("user", "and?"), ("assistant", "Opened https://github.com/o/r/pull/8 too.")])
+                got = ok(await s.req("thread.prs", bot="kami", thread=tid))["prs"]
+                self.assertEqual(rows.call_count, 2)
+                self.assertEqual([p["number"] for p in got], [8, 4])
 
     async def test_a_listed_thread_not_attached_is_read_without_attaching_it(self):
         store = HermesStore()

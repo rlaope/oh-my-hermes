@@ -43,6 +43,7 @@ export const zh: Record<Key, string> = {
   "pr.checks.failing": "检查失败",
   "pr.checks.running": "检查运行中",
   "pr.unknown": "无法获取 GitHub 状态（没有 gh、未登录或离线）",
+  "pr.limited": "等待再次查询 GitHub（同时有很多拉取请求）",
   "pr.remote": "这个机器人运行在另一台电脑上，omher 不读取它的拉取请求",
   "pr.refresh": "重新查询 {pr} 的状态",
   "pr.card": "{repo} 的拉取请求 {pr}",

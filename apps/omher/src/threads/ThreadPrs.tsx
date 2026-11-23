@@ -25,6 +25,8 @@ export function getThreadPrs(): ThreadPrs {
     notify({ bot, thread, pr }) {
       const st = store.getState();
       if (!notifyEnabled()) return;
+      // a thread removed while its read was under way never rings
+      if (!(st.threads[bot] ?? []).some((r) => r.thread === thread)) return;
       if (windowWatched() && st.ui.view === "chat" && st.selectedBot === bot && st.ui.thread === thread) return;
       const row = (st.threads[bot] ?? []).find((r) => r.thread === thread);
       const title = row?.title || t("thread.untitled");
@@ -68,6 +70,9 @@ export function prMarkText(pr: ThreadPr): string {
   return [`#${pr.number}`, t(`pr.${pr.state}`), live && pr.checks !== "none" ? t(`pr.checks.${pr.checks}`) : ""].filter(Boolean).join(" · ");
 }
 
+/** Why a PR shows no state: a bot on another computer, the bridge's per-minute cap (asked again shortly), or gh. */
+const unknownWhy = (pr: ThreadPr, remote: boolean) => t(remote ? "pr.remote" : pr.limited ? "pr.limited" : "pr.unknown");
+
 /** The checks' mark: a check, an x, or a dot while they run. */
 function ChecksMark({ checks }: { checks: ThreadPr["checks"] }) {
   if (checks === "none") return null;
@@ -89,7 +94,7 @@ export function PrMark({ pr, remote }: { pr: ThreadPr; remote: boolean }) {
       data-testid="thread-pr"
       data-state={pr.state}
       data-checks={live ? pr.checks : "none"}
-      title={pr.state === "unknown" ? `${prMarkText(pr)} · ${t(remote ? "pr.remote" : "pr.unknown")}` : prMarkText(pr)}
+      title={pr.state === "unknown" ? `${prMarkText(pr)} · ${unknownWhy(pr, remote)}` : prMarkText(pr)}
     >
       <PrIcon state={pr.state} size={11} />
       <span className="th-pr-n">#{pr.number}</span>
@@ -116,7 +121,7 @@ export function ThreadPrCard({ pr, remote, busy, onRefresh }: { pr: ThreadPr; re
             {t(`pr.checks.${pr.checks}`)}
           </span>
         )}
-        {pr.state === "unknown" && <span className="th-prc-none">{t(remote ? "pr.remote" : "pr.unknown")}</span>}
+        {pr.state === "unknown" && <span className="th-prc-none">{unknownWhy(pr, remote)}</span>}
       </button>
       {!remote && (
         <button type="button" className="th-prc-refresh" onClick={onRefresh} disabled={busy} aria-label={t("pr.refresh", { pr: label })} title={t("pr.refresh", { pr: label })} data-testid="thread-pr-refresh">

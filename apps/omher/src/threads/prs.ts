@@ -6,15 +6,19 @@
 // When a thread is read (never on a tight loop):
 //   - when the person opens it, after a turn of it ends, and on the card's Refresh (which asks GitHub again);
 //   - when its sidebar row comes into view, unless it was read in the last 5 minutes;
-//   - while its row stays in view, again every 5 minutes, only while a PR it named is open, a draft, or not known;
-//     after a failed read (the bridge refused, or gh could not say) the wait doubles each time, up to an hour.
+//   - on a 60 s tick, again every 5 minutes at the soonest, while its row is in view or it is in Needs you, only
+//     while a PR it named is open, a draft, or not known. The tick runs while omher's window is hidden too (rule 36
+//     keeps the app running), so a PR that starts failing can still notify. After a failed read (the bridge refused,
+//     or gh could say nothing about any of its PRs) the wait doubles each time, up to an hour; an answer the bridge
+//     held back for its per-minute cap (`limited`) is no failure and is asked again a minute later.
 //   - at most two reads at a time; a thread already waiting or being read is not asked twice.
 // A bot on another computer (an SSH peer) is never asked: thread reads stay on this computer (rule 31), so its
 // threads show the number from the transcript with no state.
 //
-// Notifications: at most one system notification per failing head commit of a PR (`failKey`), kept across restarts
-// in this computer's storage (`omher.prNotified`, the newest 200 keys). Seen while the person looks at that thread,
-// it is counted as told and never rings later. No Dock count.
+// Notifications (`mayRing`): at most one per failing head commit of a PR, and never two for the same PR within 6
+// hours (a PR whose head GitHub did not give: the 6 hours alone), kept across restarts in this computer's storage
+// (`omher.prNotified`: the newest 200 head keys and 200 PR times). Seen while the person looks at that thread, it is
+// counted as told. No Dock count.
 import type { PrState } from "../lib/runs";
 
 export type PrChecks = "passing" | "failing" | "running" | "none";
@@ -32,6 +36,8 @@ export interface ThreadPr extends PrRef {
   checks: PrChecks;
   /** The head commit's id (40 hex), when GitHub gave one. Never shown; it only keys the one notification. */
   head?: string;
+  /** Not asked: the bridge's per-minute cap was reached. No state, but not a failure either. */
+  limited?: boolean;
 }
 
 /** The bridge's THREAD_PR_URL, the same strictness: https only, the host exactly github.com, nothing glued before it,
@@ -46,8 +52,10 @@ export const PR_REREAD_MS = 5 * 60_000;
 export const PR_BACKOFF_MAX_MS = 60 * 60_000;
 /** Reads in flight at once. */
 export const PR_READS_AT_ONCE = 2;
-/** How often the visible rows are looked over. */
+/** How often the visible rows are looked over, and the wait after an answer held back by the bridge's cap. */
 export const PR_TICK_MS = 60_000;
+/** The least time between two notifications for the same PR. */
+export const PR_RING_GAP_MS = 6 * 3600_000;
 
 export const prKey = (p: Pick<PrRef, "repo" | "number">) => `${p.repo}#${p.number}`;
 
@@ -65,9 +73,15 @@ export function prLinksIn(text: string): PrRef[] {
 
 type Said = { kind: string; id?: string; text?: string };
 
+const named = new WeakMap<readonly Said[], (PrRef & { at: string })[]>();
+
 /** The newest PRs the bot named in `items` (its answers only, never the person's words), newest first, each once,
- *  with the id of the answer that last named each. */
+ *  with the id of the answer that last named each. Kept per `items` array (the store makes a new one on a change). */
 export function namedPrs(items: readonly Said[], max = THREAD_PRS_MAX): (PrRef & { at: string })[] {
+  if (max === THREAD_PRS_MAX) {
+    const hit = named.get(items);
+    if (hit) return hit;
+  }
   const seen = new Map<string, PrRef & { at: string }>();
   for (const it of items) {
     if (it.kind !== "assistant" || typeof it.text !== "string" || !it.id) continue;
@@ -77,7 +91,9 @@ export function namedPrs(items: readonly Said[], max = THREAD_PRS_MAX): (PrRef &
       seen.set(k, { ...ref, at: it.id });
     }
   }
-  return [...seen.values()].reverse().slice(0, max);
+  const out = [...seen.values()].reverse().slice(0, max);
+  if (max === THREAD_PRS_MAX) named.set(items, out);
+  return out;
 }
 
 /** The bridge's answer as this page trusts it: a known state and checks word, the canonical URL for that repo and
@@ -93,7 +109,8 @@ export function cleanPrs(raw: unknown): ThreadPr[] {
     const state = STATES.includes(o.state as PrState) ? (o.state as PrState) : "unknown";
     const checks = CHECKS.includes(o.checks as PrChecks) ? (o.checks as PrChecks) : "none";
     const head = typeof o.head === "string" && /^[0-9a-f]{40}$/.test(o.head) ? o.head : undefined;
-    out.push({ ...ref, state, checks, ...(head ? { head } : {}) });
+    const limited = state === "unknown" && o.limited === true;
+    out.push({ ...ref, state, checks, ...(head ? { head } : {}), ...(limited ? { limited } : {}) });
   }
   return out;
 }
@@ -103,15 +120,45 @@ export function withState<R extends PrRef>(refs: readonly R[], read: readonly Th
   const by = new Map((read ?? []).map((p) => [prKey(p), p]));
   return refs.map((r) => {
     const got = by.get(prKey(r));
-    return { ...r, state: got?.state ?? "unknown", checks: got?.checks ?? "none", ...(got?.head ? { head: got.head } : {}) };
+    return {
+      ...r,
+      state: got?.state ?? "unknown",
+      checks: got?.checks ?? "none",
+      ...(got?.head ? { head: got.head } : {}),
+      ...(got?.limited ? { limited: true } : {}),
+    };
   });
 }
 
 /** The newest PR that is open (not a draft) with failing checks: the thread's Needs reason; null when none. */
 export const failingPr = <P extends ThreadPr>(prs: readonly P[]): P | null => prs.find((p) => p.state === "open" && p.checks === "failing") ?? null;
 
-/** One notification per failing head: the PR and its head commit (`?` when GitHub gave none). */
+/** A failing head: the PR and its head commit (`?` when GitHub gave none). */
 export const failKey = (p: ThreadPr) => `${prKey(p)}@${p.head ?? "?"}`;
+
+/** What has rung: the failing heads (newest last) and when each PR last rang (ms). */
+export interface Told {
+  heads: string[];
+  prs: Record<string, number>;
+}
+const TOLD_MAX = 200;
+
+/** Whether failing `p` rings now, and the record after it. Once per failing head (a head seen counts even when the
+ *  6 hours keep it quiet, so it never rings later); never twice for the same PR within PR_RING_GAP_MS; a PR with no
+ *  head: the 6 hours alone. Pure. */
+export function mayRing(t: Told, p: ThreadPr, now: number): { ring: boolean; told: Told } {
+  const head = p.head ? failKey(p) : null;
+  if (head && t.heads.includes(head)) return { ring: false, told: t };
+  const heads = head ? [...t.heads, head].slice(-TOLD_MAX) : t.heads;
+  const last = t.prs[prKey(p)];
+  if (last !== undefined && now - last < PR_RING_GAP_MS) return { ring: false, told: { heads, prs: t.prs } };
+  const prs = Object.fromEntries(
+    Object.entries({ ...t.prs, [prKey(p)]: now })
+      .sort((a, b) => a[1] - b[1])
+      .slice(-TOLD_MAX),
+  );
+  return { ring: true, told: { heads, prs } };
+}
 
 /** Worth asking again in the background: a PR that may still change (open, draft) or whose state is not known. */
 export const mayChange = (prs: readonly ThreadPr[]) => prs.some((p) => p.state === "open" || p.state === "draft" || p.state === "unknown");
@@ -125,7 +172,13 @@ export interface PrEntry {
   /** ms of the last answer (or failure) */
   at: number;
   failures: number;
+  /** some PR was held back by the bridge's cap: asked again on the next tick */
+  limited?: boolean;
 }
+
+/** A failed read: the bridge refused, or gh could say nothing about any of the thread's PRs (an answer held back by
+ *  the cap is not one; one PR gh cannot read beside others it can is not one either). */
+export const readFailed = (prs: readonly ThreadPr[]) => prs.length > 0 && prs.every((p) => p.state === "unknown" && !p.limited);
 
 export interface FailingThread {
   bot: string;
@@ -140,7 +193,7 @@ export interface ThreadPrDeps {
   now(): number;
   /** Ring for this failing PR, unless the person looks at that thread (the caller decides). */
   notify(f: FailingThread): void;
-  told: { has(key: string): boolean; add(key: string): void };
+  told: { get(): Told; set(t: Told): void };
 }
 
 export type ReadWhy = "open" | "view" | "turn" | "refresh" | "tick";
@@ -183,12 +236,13 @@ export function createThreadPrs(deps: ThreadPrDeps) {
           (r) => {
             const prs = cleanPrs(r?.prs);
             const old = entries.get(k);
-            const unknown = prs.some((p) => p.state === "unknown");
-            entries.set(k, { bot: job.bot, thread: job.thread, prs, at: deps.now(), failures: unknown ? (old?.failures ?? 0) + 1 : 0 });
+            const limited = prs.some((p) => p.limited);
+            entries.set(k, { bot: job.bot, thread: job.thread, prs, at: deps.now(), failures: readFailed(prs) ? (old?.failures ?? 0) + 1 : 0, limited });
             for (const p of prs) {
-              if (p.state !== "open" || p.checks !== "failing" || deps.told.has(failKey(p))) continue;
-              deps.told.add(failKey(p));
-              deps.notify({ bot: job.bot, thread: job.thread, pr: p });
+              if (p.state !== "open" || p.checks !== "failing") continue;
+              const { ring, told } = mayRing(deps.told.get(), p, deps.now());
+              deps.told.set(told);
+              if (ring) deps.notify({ bot: job.bot, thread: job.thread, pr: p });
             }
           },
           () => {
@@ -211,7 +265,7 @@ export function createThreadPrs(deps: ThreadPrDeps) {
     const e = entries.get(k);
     const age = e ? deps.now() - e.at : Infinity;
     if (why === "view" && age < PR_REREAD_MS) return;
-    if (why === "tick" && (!e?.prs || !mayChange(e.prs) || age < nextDelay(e.failures))) return;
+    if (why === "tick" && (!e?.prs || !mayChange(e.prs) || age < (e.limited ? PR_TICK_MS : nextDelay(e.failures)))) return;
     const fresh = why === "refresh";
     const waiting = queue.find((j) => keyOf(j.bot, j.thread) === k);
     if (waiting) {
@@ -225,8 +279,11 @@ export function createThreadPrs(deps: ThreadPrDeps) {
   };
 
   let timer: ReturnType<typeof setInterval> | null = null;
+  /** The rows in view, and the threads in Needs you wherever their row is (so one leaves when its PR is merged). */
   const tick = () => {
-    for (const v of visible.values()) read(v.bot, v.thread, "tick");
+    const due = new Map([...visible].map(([k, v]) => [k, v]));
+    for (const f of failing) due.set(keyOf(f.bot, f.thread), { bot: f.bot, thread: f.thread, n: 1 });
+    for (const v of due.values()) read(v.bot, v.thread, "tick");
   };
 
   return {
@@ -271,27 +328,26 @@ export function createThreadPrs(deps: ThreadPrDeps) {
 
 export type ThreadPrs = ReturnType<typeof createThreadPrs>;
 
-/** The notified keys, newest last, kept in this computer's storage for the app. */
+/** What has rung, kept in this computer's storage for the app (`omher.prNotified`). */
 const TOLD_KEY = "omher.prNotified";
-const TOLD_MAX = 200;
 export function storedTold(): ThreadPrDeps["told"] {
-  let keys: string[] = [];
+  let t: Told = { heads: [], prs: {} };
   try {
-    const raw = typeof localStorage !== "undefined" ? JSON.parse(localStorage.getItem(TOLD_KEY) ?? "[]") : [];
-    keys = Array.isArray(raw) ? raw.filter((k): k is string => typeof k === "string").slice(-TOLD_MAX) : [];
+    const raw = typeof localStorage !== "undefined" ? JSON.parse(localStorage.getItem(TOLD_KEY) ?? "null") : null;
+    if (raw && Array.isArray(raw.heads) && raw.prs && typeof raw.prs === "object") {
+      const prs = Object.entries(raw.prs as Record<string, unknown>).filter((e): e is [string, number] => typeof e[1] === "number");
+      t = { heads: (raw.heads as unknown[]).filter((k): k is string => typeof k === "string").slice(-TOLD_MAX), prs: Object.fromEntries(prs.slice(-TOLD_MAX)) };
+    }
   } catch {
-    keys = [];
+    t = { heads: [], prs: {} };
   }
-  const set = new Set(keys);
   return {
-    has: (k) => set.has(k),
-    add(k) {
-      if (set.has(k)) return;
-      set.add(k);
-      keys.push(k);
-      while (keys.length > TOLD_MAX) set.delete(keys.shift()!);
+    get: () => t,
+    set(next) {
+      if (next === t) return;
+      t = next;
       try {
-        localStorage.setItem(TOLD_KEY, JSON.stringify(keys));
+        localStorage.setItem(TOLD_KEY, JSON.stringify(t));
       } catch {
         /* no storage: told for this run only */
       }

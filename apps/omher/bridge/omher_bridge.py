@@ -2061,6 +2061,7 @@ PR_TTL_MISS = 60.0      # and a failed look-up (no gh, no network): tried again 
 PR_TIMEOUT = 3.0        # seconds one `gh pr view` may take
 PR_POOL = 4             # look-ups at once, across every plan and thread
 PR_CALLS_PER_MIN = 30   # `gh pr view` runs in any 60 seconds, across every plan and thread; past it, the kept answer
+PR_THREAD_CALLS_PER_MIN = 20  # of those, at most this many for threads: the rest stays for the plan the person opened
 PR_FRESH_MIN = 10.0     # an explicit refresh asks again only when the kept answer is older than this
 PR_STATES = ("open", "merged", "closed", "draft", "unknown")
 PR_CHECKS = ("passing", "failing", "running", "none")
@@ -2138,10 +2139,13 @@ def pr_checks_of(rollup) -> str:
     """The checks of `gh pr view --json statusCheckRollup` as one of PR_CHECKS, from GitHub's enum fields only (a
     check run's `status` and `conclusion`, a status context's `state`); a check's name, URL or any other text is never
     read, so no name can make a state. Any failed: failing; else any not finished (or not understood): running; else
-    any passed: passing; else (none, or only skipped and neutral ones): none."""
+    any passed: passing; else (none, or only skipped and neutral ones): none. Past PR_ROLLUP_MAX entries the rest are
+    not looked at and a result that would be passing or none reads running."""
     if not isinstance(rollup, list):
         return "none"
     failed = running = passed = False
+    if len(rollup) > PR_ROLLUP_MAX:
+        running = True  # an entry not looked at may have failed: never "passing" without seeing every one
     for c in rollup[:PR_ROLLUP_MAX]:
         if not isinstance(c, dict):
             continue
@@ -2439,8 +2443,9 @@ def reload_plugins(home: Path, root: Path):
 class PrStates:
     """PR states and check results by (repo, number), each kept PR_TTL seconds (a failed look-up PR_TTL_MISS). `view`
     is the look-up (gh_pr_view; tests pass a stub). Every plan and thread shares one instance, so the limits hold for
-    all of them together: at most PR_POOL look-ups at once and PR_CALLS_PER_MIN in any 60 seconds; past that a PR
-    keeps its last answer (or reads `unknown`, not kept) until the window has room."""
+    all of them together: at most PR_POOL look-ups at once and PR_CALLS_PER_MIN in any 60 seconds, of which threads
+    take at most PR_THREAD_CALLS_PER_MIN, so a plan always has room. Past that a PR keeps its last answer, or reads
+    `unknown` with `limited: true` (not kept, and not a failed look-up: the page asks again a minute later)."""
 
     def __init__(self, view=None, clock=time.monotonic):
         self._view = view or gh_pr_view
@@ -2448,25 +2453,27 @@ class PrStates:
         self._cache: dict[tuple[str, int], tuple[float, dict, float]] = {}
         self._lock = threading.Lock()
         self._gate = threading.BoundedSemaphore(PR_POOL)
-        self._calls: list[float] = []  # when each look-up in the last 60 seconds started
+        self._calls: list[tuple[float, bool]] = []  # (when, for a thread) of each look-up in the last 60 seconds
 
-    def _may_call(self, now: float) -> bool:
+    def _may_call(self, now: float, thread: bool) -> bool:
         with self._lock:
-            self._calls = [t for t in self._calls if now - t < 60.0]
+            self._calls = [c for c in self._calls if now - c[0] < 60.0]
             if len(self._calls) >= PR_CALLS_PER_MIN:
                 return False
-            self._calls.append(now)
+            if thread and sum(1 for _, th in self._calls if th) >= PR_THREAD_CALLS_PER_MIN:
+                return False
+            self._calls.append((now, thread))
             return True
 
-    def _one(self, repo: str, number: int, fresh: bool = False) -> dict:
+    def _one(self, repo: str, number: int, fresh: bool = False, thread: bool = False) -> dict:
         key = (repo, number)
         now = self._clock()
         with self._lock:
             hit = self._cache.get(key)
         if hit and now < hit[0] and not (fresh and now - hit[2] >= PR_FRESH_MIN):
             return hit[1]
-        if not self._may_call(now):
-            return hit[1] if hit else {"state": "unknown", "checks": "none"}
+        if not self._may_call(now, thread):
+            return hit[1] if hit else {"state": "unknown", "checks": "none", "limited": True}
         try:
             with self._gate:
                 view = self._view(repo, number)
@@ -2488,7 +2495,7 @@ class PrStates:
 
     def thread(self, refs: list[dict], fresh: bool = False) -> list[dict]:
         """Each of a thread's PRs (thread_pr_refs) with its state and checks, in the same order."""
-        return [{**r, **{k: v for k, v in self._one(r["repo"], r["number"], fresh).items() if k != "url"}} for r in refs]
+        return [{**r, **{k: v for k, v in self._one(r["repo"], r["number"], fresh, True).items() if k != "url"}} for r in refs]
 
     def states(self, run: dict) -> dict[str, dict]:
         """{node id: {number, repo?, url?, state}} for every node of `run` that names a PR; a PR with no repo is
@@ -4782,6 +4789,24 @@ def read_session_cwds(profile_dir: Path, ids: list[str]) -> dict[str, str]:
 THREAD_ROWS_MAX = 2000  # a thread's newest user and assistant rows read for its PR links
 
 
+def thread_last_row(profile_dir: Path, session_id: str) -> int | None:
+    """The id of a thread's newest saved row (`messages`), from the profile's state.db opened read-only: when it has
+    not moved, the thread's PR links have not either. None when it has none (or no state.db). Nothing is written."""
+    import sqlite3
+    db = profile_dir / "state.db"
+    if not session_id or not db.is_file():
+        return None
+    try:
+        con = sqlite3.connect(ro_uri(db), uri=True, timeout=1.0)
+        try:
+            row = con.execute("SELECT MAX(id) FROM messages WHERE session_id = ?", (session_id,)).fetchone()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return None
+    return row[0] if row and isinstance(row[0], int) else None
+
+
 def read_thread_rows(profile_dir: Path, session_id: str) -> list[dict]:
     """One thread's saved user and assistant rows (`messages`: id, role, content, timestamp, and display_kind where the
     column exists), oldest first, the newest THREAD_ROWS_MAX, from the profile's state.db opened read-only; [] when it
@@ -6024,6 +6049,9 @@ class Bridge:
         self.cli = CliRuns()
         self.node_sessions = NodeSessions(delegations=self.runs.delegations)
         self.prs = PrStates()
+        # a thread's PR links by (bot, thread): (its newest row id, whether a turn ran, the links), so a re-read whose
+        # thread has no new row goes straight to the PR states
+        self._thread_refs: dict[tuple[str, str], tuple[int, bool, list[dict]]] = {}
 
     # ------------------------------------------------------------ lifecycle
 
@@ -7285,8 +7313,18 @@ class Bridge:
         conn = await self._conn(p.get("bot"))
         tid = self._thread_known(conn, p.get("thread"))
         chat = conn.folders.get(tid)
-        rows = await asyncio.to_thread(read_thread_rows, conn.bot["path"], chat.stored_id if chat else tid)
-        refs = thread_pr_refs(chat_messages(rows, running=bool(chat and chat.in_turn)))
+        sid, running = chat.stored_id if chat else tid, bool(chat and chat.in_turn)
+        last = await asyncio.to_thread(thread_last_row, conn.bot["path"], sid)
+        kept = self._thread_refs.get((conn.name, tid))
+        if last is not None and kept and kept[:2] == (last, running):
+            refs = kept[2]
+        else:
+            rows = await asyncio.to_thread(read_thread_rows, conn.bot["path"], sid)
+            refs = thread_pr_refs(chat_messages(rows, running=running))
+            if last is not None:
+                if len(self._thread_refs) > 500:
+                    self._thread_refs.clear()
+                self._thread_refs[(conn.name, tid)] = (last, running, refs)
         return {"prs": await asyncio.to_thread(self.prs.thread, refs, p.get("fresh") is True) if refs else []}
 
     def _hint_rows(self, conn: Conn) -> list[dict]:

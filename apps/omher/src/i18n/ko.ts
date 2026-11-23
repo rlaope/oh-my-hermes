@@ -43,6 +43,7 @@ export const ko: Record<Key, string> = {
   "pr.checks.failing": "체크 실패",
   "pr.checks.running": "체크 진행 중",
   "pr.unknown": "GitHub 상태를 알 수 없어요 (gh 없음, 로그인 안 됨, 또는 오프라인)",
+  "pr.limited": "GitHub에 다시 물어보기를 기다리는 중 (한꺼번에 많은 PR)",
   "pr.remote": "다른 컴퓨터에서 도는 봇이라 omher가 PR을 읽지 않아요",
   "pr.refresh": "{pr} 상태 다시 확인",
   "pr.card": "{repo}의 PR {pr}",

@@ -43,6 +43,7 @@ export const ja: Record<Key, string> = {
   "pr.checks.failing": "チェック失敗",
   "pr.checks.running": "チェック実行中",
   "pr.unknown": "GitHub の状態がわかりません（gh がない、未ログイン、またはオフライン）",
+  "pr.limited": "GitHub への再確認を待っています（一度に多くのプルリクエスト）",
   "pr.remote": "別のコンピューターで動くボットなので、omher はその PR を読みません",
   "pr.refresh": "{pr} の状態をもう一度確認",
   "pr.card": "{repo} のプルリクエスト {pr}",

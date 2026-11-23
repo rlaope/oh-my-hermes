@@ -2,15 +2,20 @@ import { describe, expect, it, vi } from "vitest";
 import {
   PR_BACKOFF_MAX_MS,
   PR_REREAD_MS,
+  PR_RING_GAP_MS,
+  PR_TICK_MS,
   cleanPrs,
   createThreadPrs,
   failKey,
   failingPr,
   mayChange,
+  mayRing,
   namedPrs,
   nextDelay,
   prLinksIn,
+  readFailed,
   withState,
+  type Told,
   type ThreadPr,
   type ThreadPrDeps,
 } from "./prs";
@@ -114,7 +119,7 @@ function rig(answers: Record<string, unknown>, remote = false) {
   let now = 1_000_000;
   const calls: { thread: string; fresh: boolean }[] = [];
   const notes: string[] = [];
-  const told = new Set<string>();
+  let told: Told = { heads: [], prs: {} };
   const pending: (() => void)[] = [];
   const deps: ThreadPrDeps = {
     read: (_bot, thread, fresh) => {
@@ -130,7 +135,7 @@ function rig(answers: Record<string, unknown>, remote = false) {
     remote: () => remote,
     now: () => now,
     notify: (f) => notes.push(failKey(f.pr)),
-    told: { has: (k) => told.has(k), add: (k) => void told.add(k) },
+    told: { get: () => told, set: (t) => void (told = t) },
   };
   const prs = createThreadPrs(deps);
   const settle = async () => {
@@ -140,7 +145,7 @@ function rig(answers: Record<string, unknown>, remote = false) {
       await new Promise((r) => setTimeout(r, 0));
     }
   };
-  return { prs, calls, notes, settle, later: (ms: number) => (now += ms), told };
+  return { prs, calls, notes, settle, later: (ms: number) => (now += ms), told: () => told };
 }
 
 describe("when a thread is read", () => {
@@ -253,7 +258,16 @@ describe("Needs you and the notification", () => {
     answers.t = [pr(5, "open", "failing", other)];
     r.prs.read("kami", "t", "turn");
     await r.settle();
-    expect(r.notes).toEqual([`o/r#5@${SHA}`, `o/r#5@${other}`]); // a new head that fails rings once more
+    expect(r.notes).toHaveLength(1); // a new failing head within 6 hours of the last ring: quiet, and told
+    const third = SHA.replace("0", "e");
+    r.later(PR_RING_GAP_MS);
+    r.prs.read("kami", "t", "turn");
+    await r.settle();
+    expect(r.notes).toHaveLength(1); // that quiet head never rings later
+    answers.t = [pr(5, "open", "failing", third)];
+    r.prs.read("kami", "t", "turn");
+    await r.settle();
+    expect(r.notes).toEqual([`o/r#5@${SHA}`, `o/r#5@${third}`]); // a new failing head after 6 hours rings once more
     answers.t = [pr(5, "merged", "failing", other)];
     r.prs.read("kami", "t", "turn");
     await r.settle();
@@ -272,5 +286,66 @@ describe("Needs you and the notification", () => {
     expect(r.prs.failing()).toEqual([]);
     expect(r.notes).toEqual([]);
     r.prs.stop();
+  });
+});
+
+describe("review fixes: rings, failures, the cap, and Needs out of view", () => {
+  it("rings once per failing head, never twice for one PR within six hours; a PR with no head by the hours alone", () => {
+    let t: Told = { heads: [], prs: {} };
+    const step = (p: ThreadPr, now: number) => {
+      const r = mayRing(t, p, now);
+      t = r.told;
+      return r.ring;
+    };
+    const a = SHA, b = SHA.replace("0", "b");
+    expect(step(pr(1, "open", "failing", a), 0)).toBe(true);
+    expect(step(pr(1, "open", "failing", a), PR_RING_GAP_MS * 3)).toBe(false); // the same head, ever
+    expect(step(pr(2, "open", "failing", a, "x/y"), 10)).toBe(true); // another PR: its own count
+    expect(step(pr(3, "open", "failing"), 0)).toBe(true);
+    expect(step(pr(3, "open", "failing"), PR_RING_GAP_MS - 1)).toBe(false);
+    expect(step(pr(3, "open", "failing"), PR_RING_GAP_MS)).toBe(true);
+    expect(step(pr(1, "open", "failing", b), PR_RING_GAP_MS * 3 + 1)).toBe(true);
+  });
+
+  it("a read fails only when gh could say nothing about any PR; the cap is no failure", () => {
+    expect(readFailed([])).toBe(false);
+    expect(readFailed([pr(1, "unknown", "none")])).toBe(true);
+    expect(readFailed([pr(1, "unknown", "none"), pr(2, "open", "passing")])).toBe(false);
+    expect(readFailed([{ ...pr(1, "unknown", "none"), limited: true }])).toBe(false);
+    expect(cleanPrs([{ ...pr(1, "unknown", "none"), limited: true }])[0].limited).toBe(true);
+    expect(cleanPrs([{ ...pr(1, "open", "none"), limited: true }])[0].limited).toBeUndefined();
+  });
+
+  it("an answer held back by the cap is asked again on the next tick, not after a backoff", async () => {
+    const answers: Record<string, unknown> = { t: [{ ...pr(1, "unknown", "none"), limited: true }] };
+    const r = rig(answers);
+    r.prs.show("kami", "t");
+    await r.settle();
+    expect(r.prs.get("kami", "t")?.failures).toBe(0);
+    r.later(PR_TICK_MS);
+    r.prs.tick();
+    await r.settle();
+    expect(r.calls).toHaveLength(2);
+    r.prs.stop();
+  });
+
+  it("the tick re-reads a thread in Needs you even when its row is out of view, so it leaves when merged", async () => {
+    const answers: Record<string, unknown> = { t: [pr(5, "open", "failing", SHA)] };
+    const r = rig(answers);
+    r.prs.read("kami", "t", "open"); // opened, never shown in the sidebar
+    await r.settle();
+    expect(r.prs.failing()).toHaveLength(1);
+    answers.t = [pr(5, "merged", "passing", SHA)];
+    r.later(PR_REREAD_MS);
+    r.prs.tick();
+    await r.settle();
+    expect(r.prs.failing()).toEqual([]);
+    r.prs.stop();
+  });
+
+  it("names the PRs of one transcript once (kept per items array)", () => {
+    const items = [{ kind: "assistant", id: "a", text: "https://github.com/o/r/pull/1" }];
+    expect(namedPrs(items)).toBe(namedPrs(items));
+    expect(namedPrs([...items])).not.toBe(namedPrs(items));
   });
 });

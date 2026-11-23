@@ -238,7 +238,8 @@ RULES = (
     "with one fixed read: `gh pr view <number> -R <owner>/<repo> --json state,isDraft,mergedAt,url,statusCheckRollup,headRefOid`.",
     "This is the bridge's only `gh` argv; rule 40 uses the same read for threads.",
     "it never asks for a title, a body or an author, and never reads a check's name.",
-    "at most 4 calls run at once and at most 30 start in any minute, for plans and threads together",
+    "at most 4 calls run at once and at most 30 start in any minute, for plans and threads together, of which threads"
+    " take at most 20",
     "Tasks (the sidebar's Tasks row and the Tasks page) list open issues and pull or merge requests read-only,"
     " through the person's own GitHub CLI (`gh`) and GitLab CLI (`glab`) under their own logins:",
     "The only argv are `auth status` (only its exit code is read; its output, which can name a token, goes nowhere:"
@@ -1187,6 +1188,8 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         self.assertIn("PR_TTL = 300.0", self.source)
         self.assertIn("PR_POOL = 4", self.source)
         self.assertIn("PR_CALLS_PER_MIN = 30", self.source)
+        self.assertIn("PR_THREAD_CALLS_PER_MIN = 20", self.source)
+        self.assertIn("PR_TTL_MISS = 60.0", self.source)
         self.assertIn("PR_THREAD_MAX = 3", self.source)
         refs = [c for c in ast.walk(self.tree) if isinstance(c, ast.Name) and c.id == "gh_pr_view"]
         prstates = next(c for c in ast.walk(self.tree) if isinstance(c, ast.ClassDef) and c.name == "PrStates")
@@ -1195,7 +1198,7 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         self.assertIn(refs[0], list(ast.walk(prstates)))
         one = ast.unparse(next(f for f in ast.walk(prstates) if isinstance(f, ast.FunctionDef) and f.name == "_one"))
         self.assertIn("with self._gate:", one)  # at most PR_POOL at once
-        self.assertIn("if not self._may_call(now):", one)  # at most PR_CALLS_PER_MIN a minute
+        self.assertIn("if not self._may_call(now, thread):", one)  # at most PR_CALLS_PER_MIN a minute, threads fewer
         self.assertIn("pr_checks_of(view.get('statusCheckRollup'))", one)  # the rollup reduced to one word
         users = sorted(f.name for f in ast.walk(self.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))
                        and any(isinstance(c, ast.Attribute) and c.attr == "prs" and ast.unparse(c) == "self.prs"
@@ -1263,18 +1266,21 @@ class ThreadPullRequests(unittest.TestCase):
     never read; a peer bot's threads are never read."""
 
     RULE_40 = (
-        "40. A bot's thread shows the pull requests its bot named there, through rule 21's one fixed `gh pr view` read,"
+        "40. A bot's thread shows the pull requests its bot linked there, through rule 21's one fixed `gh pr view` read,"
         " under its cache and limits.",
-        "A thread's pull request is one the bot named in its own answer in that thread, never in the person's message or"
-        " a tool's output.",
+        "A thread's pull request is any full pull request link the bot wrote in its own answer in that thread, whoever's"
+        " pull request it is, never one in the person's message or a tool's output.",
         "read only and only for a thread it created or listed, and makes no gateway call for it, so a thread that is not"
         " open in omher is never resumed or attached to be read.",
-        "the host exactly `github.com`, no further path segment, a number of one to seven digits, the newest three of a"
-        " thread, and keeps neither the rows nor anything else from them.",
-        "at most two threads are read at a time.",
+        "a number of one to seven digits with no leading zero, the newest three of a thread, and keeps only those links,"
+        " until the thread has a new row.",
+        "The tick runs while omher's window is hidden too (rule 36), so a pull request that starts failing can still notify.",
+        "A thread whose row was never in view and that was never opened is not read. At most two threads are read at a time.",
         "A Refresh asks GitHub again only once the kept answer is 10 seconds old.",
-        "The threads of a bot on another computer (rule 31) are not read this way: their numbers show with no state.",
-        "raises at most one system notification for each failing head commit",
+        "A bot on another computer has no threads in omher (rule 31 forwards no thread request), and a thread of such a bot"
+        " is never read this way.",
+        "raises at most one system notification for each failing head commit and never two for the same pull request"
+        " within 6 hours",
         "in this computer's storage for the app (`omher.prNotified`), and nothing else.",
         "This changes no thread's state and starts, steers or stops nothing.",
     )
@@ -1296,14 +1302,18 @@ class ThreadPullRequests(unittest.TestCase):
         fns = {f.name: f for f in ast.walk(self.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))}
         op = ast.unparse(fns["op_thread_prs"])
         self.assertIn("tid = self._thread_known(conn, p.get('thread'))", op)
-        self.assertIn("await asyncio.to_thread(read_thread_rows, conn.bot['path'], chat.stored_id if chat else tid)", op)
+        self.assertIn("sid, running = (chat.stored_id if chat else tid, bool(chat and chat.in_turn))", op)
+        self.assertIn("await asyncio.to_thread(thread_last_row, conn.bot['path'], sid)", op)
+        self.assertIn("await asyncio.to_thread(read_thread_rows, conn.bot['path'], sid)", op)
         self.assertIn("thread_pr_refs(chat_messages(rows", op)
         self.assertNotIn("self._call(", op)  # no gateway call: never a history read of a stored id, never a resume
-        rows = ast.unparse(ast.Module(body=fns["read_thread_rows"].body[1:], type_ignores=[]))  # without its docstring
-        self.assertIn("ro_uri(db)", rows)  # read-only
-        self.assertIn("role IN ('user', 'assistant')", rows)
-        for word in ("INSERT", "UPDATE", "DELETE", "reasoning", "tool_calls", "api_content"):
-            self.assertNotIn(word, rows)
+        for name in ("read_thread_rows", "thread_last_row"):
+            rows = ast.unparse(ast.Module(body=fns[name].body[1:], type_ignores=[]))  # without its docstring
+            self.assertIn("ro_uri(db)", rows)  # read-only
+            self.assertIn("WHERE session_id = ?", rows)
+            for word in ("INSERT", "UPDATE", "DELETE", "reasoning", "tool_calls", "api_content"):
+                self.assertNotIn(word, rows)
+        self.assertIn("role IN ('user', 'assistant')", ast.unparse(fns["read_thread_rows"]))
         refs = ast.unparse(fns["thread_pr_refs"])
         self.assertIn("m.get('role') != 'assistant'", refs)
         self.assertIn("THREAD_PR_URL.finditer", refs)

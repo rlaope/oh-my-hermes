@@ -44,6 +44,7 @@ export const en = {
   "pr.checks.failing": "Checks failing",
   "pr.checks.running": "Checks running",
   "pr.unknown": "GitHub's state is not available (no gh, not signed in, or offline)",
+  "pr.limited": "Waiting to ask GitHub again (many pull requests at once)",
   "pr.remote": "This bot runs on another computer; omher does not read its pull requests",
   "pr.refresh": "Ask GitHub again for {pr}",
   "pr.card": "Pull request {pr} in {repo}",
