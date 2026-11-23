@@ -3059,6 +3059,80 @@ record, so a model pinned by hand will not come back. Deleting the file by
 hand is safe and means only that OMH stops claiming it knows what the keys
 held before it.
 
+#### The rest of the chain inside the child (opt-in)
+
+By default a route names only the chain head, and the rest of the chain is
+used only after a child has failed and the agent calls `action=fallback` to
+re-dispatch. On a quota error (HTTP 429) Hermes retries the head several times,
+waiting between attempts, before the child gives up, so the later positions sit
+idle for minutes. With this option on, `omh_delegate_route set` also writes the
+chain positions after the head into `delegation.fallback_providers`, in chain
+order and each as `{provider, model, reasoning_effort}`, so a child whose head
+fails moves to position 2 at position 2's effort in the same dispatch. Turn it
+on with `~/.omh/routing/delegate-route.json`:
+
+```json
+{"schema_version": "delegate_route_options/v1", "write_fallback_providers": true}
+```
+
+It is off without that file and with an invalid one, and it applies only on a
+Hermes that honours a fallback entry's own `reasoning_effort`. Older Hermes
+releases give every fallback the `agent.reasoning_overrides` or global effort
+instead (hermes-agent #136441), and a chain run at efforts the operator did not
+choose is worse than no chain. OMH looks for hermes-agent PR #144787's
+`resolve_fallback_reasoning(agent, entry, ...)`, reading the entry's
+`reasoning_effort`, in `agent/fallback_reasoning.py` of the Hermes source. It
+reads the file as text and never imports it. On a Hermes without it, only the
+three scalars are written, the `set` result's `in_child_fallback` says
+`host_unsupported`, and `omh doctor` (`plugin_delegate_route_fallback_chain`)
+says why. The file on disk is not always the code that runs. Inside a running
+Hermes, the capability module already loaded counts as support. A capability
+file changed after that Hermes loaded OMH's plugin is `restart_pending` instead,
+and nothing beyond the scalars is written until Hermes restarts. `omh doctor`
+compares the file with the gateway's `gateway.pid` the same way.
+
+What OMH writes is what Hermes will try, in chain order:
+
+- A position whose provider you have not configured is passed over. A
+  fallback sends the child's whole task to its provider, and the re-dispatch
+  passes it over too.
+- Writing stops at the first position Hermes would not try or OMH cannot
+  write. That is a position with no provider route in
+  `~/.omh/routing/model-providers.json` (Hermes drops such an entry), an effort
+  the model refuses, or a provider and model that the head or an earlier entry
+  already has (`same_backend_as_earlier`: Hermes drops the duplicate or skips
+  its own backend). Those positions are left for the re-dispatch.
+- Skipped positions are listed with their reason. An explicit `model` routes no
+  chain.
+
+OMH records the chain it wrote with the route and takes it back out at the end
+of the turn and on `clear`, so an absent key stays absent. The lost-update
+guard and the per-conversation route both include it. A dispatch puts a
+conversation's chain back only while the option is on and the host honours it.
+A value you set yourself is never written over: `set` reports `person_owned`
+and writes only the three scalars. Your value can be any of these:
+
+- `[]`, which tells Hermes to give delegated children no fallback at all.
+  Unsetting it (`hermes config unset delegation.fallback_providers`) is how you
+  opt in.
+- A list with `base_url`, or with any key other than the three.
+- A comment anywhere in the block.
+- A list in OMH's own shape that OMH did not write.
+
+A person's chain is never part of OMH's route, so editing or removing it
+during a route does not stop the route coming back out. If you edit or remove
+the chain OMH wrote during the turn and leave the scalars alone, the chain
+becomes yours and stays as you left it, and the scalars still come back out
+(`chain_foreign_edit`). A bare `null`, or a `fallback_providers:` with nothing
+under it, is Hermes' "absent": OMH may replace it, and the restore leaves the
+key absent.
+
+`action=fallback` is still how a child that ended in failure gets
+re-dispatched. It continues after the last position the route wrote into
+`delegation.fallback_providers` (`walked_in_child`), which it identifies by
+chain index, so an alias that appears twice is not confused. The child already
+tried those positions.
+
 A fourth sibling, `~/.omh/routing/dispatch-models.json`
 (`omh_dispatch_model_preferences/v1`), applies to a different surface:
 `omh coding fanout dispatch`'s `--model` fallback for a spawned agent CLI,
