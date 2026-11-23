@@ -1157,7 +1157,7 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # 116 -> 117 / 105 -> 106: the monitor-recipe HTTP read, `api_watch.Client.call` (a malformed reply is a
 # fixed `unreachable reason=bad_response`, exit 1, never a change).
 # 117 -> 118 / 106 -> 107: merged with the doctor's gateway health row (`doctor._gateway_health_check`, an
-# unexpected failure is an observed=False warning row), which reached this branch through #3157.
+# unexpected failure is an observed=False warning row), from main (#3147).
 EXPECTED_HANDLER_COUNT = 118
 EXPECTED_ANCHOR_COUNT = 107
 

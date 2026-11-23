@@ -78,6 +78,9 @@ _RESERVED_PREFIXES: Final = frozenset({"refs/", "heads/", "tags/", "remotes/", "
 # A PR URL exactly as `gh pr create` prints it on success.
 PR_URL: Final = re.compile(r"^https://([A-Za-z0-9.-]+)/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/pull/([1-9][0-9]{0,9})$")
 MAX_GRANT_BYTES: Final = 16_384
+# POSIX owner and mode bits. On Windows they say nothing, so the file is read
+# as recorded there (`docs/PR-DELIVERY-GRANT.md`, Windows).
+MODE_BITS_MEAN_SOMETHING: Final = os.name == "posix"
 MAX_OPENED_RECORDS: Final = 500
 MAX_OPENED_BYTES: Final = 1_048_576
 
@@ -119,7 +122,7 @@ def _load_object(path: Path) -> tuple[dict | None, str]:
         info = path.stat()
         if info.st_size > MAX_GRANT_BYTES:
             return None, "grant_file_too_large"
-        if os.name == "posix" and (info.st_uid != os.getuid() or info.st_mode & 0o022):
+        if MODE_BITS_MEAN_SOMETHING and (info.st_uid != os.getuid() or info.st_mode & 0o022):
             return None, "grant_file_not_private"
         raw = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:

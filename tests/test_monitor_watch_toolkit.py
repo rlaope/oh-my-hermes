@@ -527,6 +527,29 @@ class GoogleWatchTest(unittest.TestCase):
         self.assertEqual(done.stdout.splitlines()[1:], ["event aa start=2026-11-24T09:05:00Z",
                                                         "event zz start=2026-11-24T09:05:00Z"])
 
+    def test_start_reads_every_shape_google_calendar_sends(self):
+        import datetime as dt
+        module = _load(GOOGLE, "google_watch_start_check")
+        utc = dt.timezone.utc
+        self.assertEqual(module._start("2026-11-24T10:00:00+09:00"), dt.datetime(2026, 11, 24, 1, tzinfo=utc))
+        self.assertEqual(module._start("2026-11-24T01:00:00Z"), dt.datetime(2026, 11, 24, 1, tzinfo=utc))
+        self.assertEqual(module._start("2026-11-24T01:00:00z"), dt.datetime(2026, 11, 24, 1, tzinfo=utc))
+        self.assertEqual(module._start("2026-11-24T01:00:00.250Z"),
+                         dt.datetime(2026, 11, 24, 1, 0, 0, 250000, tzinfo=utc))
+        self.assertEqual(module._start("2026-11-24T00:00:00-05:00"), dt.datetime(2026, 11, 24, 5, tzinfo=utc))
+        for unreadable in ("2026-11-24",              # all-day: a date, not a start time
+                           "2026-11-24T10:00:00",     # no offset names no instant
+                           "2026-11-24T24:00:00Z",    # hour 24, refused on every Python
+                           "2026-11-24T24:00:00+09:00", "2026-11-24T25:00:00Z", "not a time", "", None, 1700000000,
+                           "2026-11-24T10:00:00Z\nevent x"):
+            with self.subTest(value=unreadable):
+                self.assertIsNone(module._start(unreadable))
+
+    def test_an_hour_24_start_is_left_out_not_moved_to_the_next_day(self):
+        events = [{"id": "odd", "start": "2026-11-24T24:00:00Z"}, {"id": "real", "start": "2026-11-24T09:05:00Z"}]
+        done = self.watch(events, cfg={"kind": "calendar"})
+        self.assertEqual(done.stdout, "monitor: calendar watch=w\nevent real start=2026-11-24T09:05:00Z\n")
+
     def test_no_skill_or_no_sign_in_is_one_fixed_line_and_runs_nothing(self):
         (self.home / "google_token.json").unlink()
         done = self.watch(cfg={"kind": "gmail", "query": "is:starred"})

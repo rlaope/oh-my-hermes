@@ -2099,7 +2099,7 @@ EVERYDAY_SENSE_PHRASES: dict[str, tuple[tuple[str, ...], frozenset[str]]] = {
             {
                 "app", "build", "code", "component", "components", "css", "design", "frontend", "handoff",
                 "html", "implement", "layout", "page", "react", "responsive", "screen", "site", "svelte",
-                "tailwind", "tokens", "ui", "vue", "website",
+                "tailwind", "tokens", "vue", "website",
             }
         ),
     ),

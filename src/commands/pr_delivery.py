@@ -28,7 +28,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -86,20 +85,24 @@ def write_pr_delivery_grant(paths, *, state: str, branch_prefix: str, previous: 
     return document
 
 
+def terminal_devices() -> tuple[str, str]:
+    """(read, write) devices of the controlling terminal: the console on Windows, `/dev/tty` elsewhere."""
+    return ("CONIN$", "CONOUT$") if os.name == "nt" else ("/dev/tty", "/dev/tty")
+
+
 def confirm_on_terminal(prompt: str) -> bool:
     """A yes typed at the controlling terminal. A gateway- or cron-run child has none, so it is a no.
 
-    POSIX reads `/dev/tty`; Windows, which has no `/dev/tty`, asks on stdin
-    only when stdin is a console. Untested on Windows.
+    POSIX reads `/dev/tty`. Windows has none; its equivalent is the console
+    itself, `CONIN$` and `CONOUT$`, which a process without a console cannot
+    open. Either way a missing terminal is a no, never a crash.
     """
-    if os.name == "nt":
-        if not sys.stdin.isatty():
-            return False
-        return input(prompt).strip().lower() in ("y", "yes")
+    reader, writer = terminal_devices()
     try:
-        with open("/dev/tty", "r+", encoding="utf-8") as tty:
-            tty.write(prompt)
-            tty.flush()
+        with open(writer, "w", encoding="utf-8") as out:
+            out.write(prompt)
+            out.flush()
+        with open(reader, encoding="utf-8") as tty:
             answer = tty.readline()
     except OSError:
         return False

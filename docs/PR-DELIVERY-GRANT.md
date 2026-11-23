@@ -204,6 +204,35 @@ the forge without passing the gate:
   refused);
 - on Windows, the grant file's mode bits, which mean nothing there.
 
+## Windows
+
+Nothing of this has run on Windows; the following is what the code does
+there, held by tests that run on every platform through fakes.
+
+- `on` asks for its yes on the console (`CONIN$` and `CONOUT$`), the Windows
+  equivalent of `/dev/tty`. A process without a console cannot open them, and
+  `on` then refuses with "turning the grant on needs a yes typed at your own
+  terminal"; it never crashes.
+- The grant file's owner and mode are not checked: POSIX mode bits mean
+  nothing there, so the grant reads as recorded. On POSIX the check only
+  excludes other users and group or world writes; on Windows protect the OMH
+  home with the folder's own ACL.
+- The file-write guard folds Windows spellings to the file the system opens:
+  backslashes, drive letters, letter case, trailing dots and spaces
+  (`.git.`), NTFS stream suffixes (`.git::$INDEX_ALLOCATION`), the 8.3 name
+  `GIT~1`, and gh's `GitHub CLI\config.yml` and `hosts.yml` under AppData.
+- Commands are read with a POSIX shell lexer. `git.exe`, `gh.exe` and
+  PowerShell's `& git ...` are read as git and gh. A command that names git
+  or gh and holds a backslash before a letter or digit (a Windows path such
+  as `C:\Program Files\Git\cmd\git.exe`), a cmd.exe `^` escape or `%VAR%`, a
+  PowerShell backtick, `$env:GH_REPO = ...`, `Set-Item Env:...`, `set` or
+  `setx` of a forge variable, `cmd /c ...`, `powershell -Command ...` or
+  `Start-Process git ...` is refused as unparseable in an unattended run.
+  The cost is that an ordinary command quoting a Windows path next to git is
+  refused too.
+- Not handled: a PowerShell alias or function (`Set-Alias`, `function git`)
+  defined under another name, and `[Environment]::SetEnvironmentVariable`.
+
 ## Residuals, stated
 
 - Only `git` and `gh` are recognized as forge CLIs.

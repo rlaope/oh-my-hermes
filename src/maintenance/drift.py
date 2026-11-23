@@ -1034,11 +1034,12 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # Its review round: Linear as a common noun, 지라 inside 지라도, a Sentry alert read, a reply about work in
             # Korean, a secrets vault, a bolt (볼트), and two questions about meeting notes stay off them (+8).
             # Merged with monitor recipes: 1584 (#3153) + 17 cross-platform cases = 1601, re-derived from the producer.
+            # Its anchor round: viewing a Figma frame in presentation mode is a question, not design to code (+1).
             # bot-template: a bot template coded for Discord, Slack or Telegram, in Python, in Korean, and a
             # Jinja and two prompt templates stay off it (+8). Its review round: four repository template files
             # named like a template id (release-notes, pr-review) stay off it (+4). Its verification round: deleting,
             # removing, exporting a template and building one in Python stay off it (+4).
-            expected=1617,
+            expected=1618,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

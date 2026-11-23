@@ -37,15 +37,20 @@ BOT_TEMPLATE_JOB_PHRASES = (
     *(f"{template_id} 템플릿" for template_id in bot_template_ids()),
 )
 
-# Template ids as the router keeps them (hyphenated ids stay one token), the words of their titles that name a bot's
-# job, and the words that apply, list, show or use one.
+# Each template id as the router keeps it: one hyphenated token ("pr-review"), or its first hyphenated token when
+# the tokenizer splits on a stopword ("meeting-to-issues" -> "meeting-to").
+_ID_TOKENS = frozenset(
+    token for template_id in bot_template_ids() for token in routing_tokens(template_id) if "-" in token
+)
+
+# Template ids as the router keeps them, the words of their titles that name a bot's job, and the words that apply,
+# list or show one ("use" is a stopword the router drops, so it is no anchor).
 BOT_TEMPLATE_ANCHORS = frozenset(
     {
-        *bot_template_ids(),
+        *_ID_TOKENS,
         "apply",
         "applying",
         "applied",
-        "use",
         "set",
         "list",
         "show",
@@ -126,7 +131,7 @@ def bot_template_code_sense(normalized_query: str) -> bool:
     if bot_template_file_sense(normalized_query) or bot_template_other_action(normalized_query):
         return True
     tokens = routing_tokens(normalized_query)
-    return bool(tokens & _CODE_TOKENS) and not tokens & frozenset(bot_template_ids())
+    return bool(tokens & _CODE_TOKENS) and not tokens & _ID_TOKENS
 
 
 def bot_template_names_the_job(normalized_query: str) -> bool:
@@ -157,7 +162,7 @@ def bot_template_korean_match(normalized_query: str) -> bool:
     if bot_template_code_sense(normalized_query):
         return False
     tokens = routing_tokens(normalized_query)
-    if tokens & frozenset(bot_template_ids()):
+    if tokens & _ID_TOKENS:
         return True
     words = routing_tokens(" ".join(_KOREAN_PHRASES))
     leftover = {token for token in tokens if token not in words and token not in _KOREAN_FILLER}
