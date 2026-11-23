@@ -257,9 +257,12 @@ _SCRIPT_SUFFIX: Final = re.compile(r"\.(?:ps1|bat|cmd)$", re.IGNORECASE)
 _LINKERS: Final = frozenset({"ln", "mklink", "new-item", "ni", "cp", "mv", "install", "rsync", "tar", "unzip"})
 # Programs that only read the files they name.
 # `tree` (`-o` writes) and `rg` (`--pre` runs a program) are not on it.
-_READERS: Final = frozenset({"cat", "less", "more", "head", "tail", "ls", "stat", "file", "wc", "grep",
-                             "find", "diff", "cmp", "sha256sum", "shasum", "md5sum", "du", "realpath",
-                             "readlink", "basename", "dirname", "test", "["})
+# Programs that cannot run a command or write a file from their arguments or
+# environment. Pagers, `find`, `tree`, `rg`, `sed`, `awk`, `xargs`, `sort` and
+# anything with an output-file or preprocessor option are not on it.
+_READERS: Final = frozenset({"cat", "head", "tail", "ls", "stat", "wc", "grep", "egrep", "fgrep"})
+# A variable that makes a reader (or a pager it starts) run something, anywhere on the line.
+_READER_ENV: Final = re.compile(r"\b(?:LESS\w*|PAGER|GIT_PAGER|MANPAGER|MORE|GREP_\w*|LS_\w*)\b")
 _FORGE_API_HOST: Final = re.compile(r"api\.github\.com|/api/v3/|/api/graphql", re.IGNORECASE)
 _WRITE_METHOD: Final = re.compile(r"\b(?:PUT|POST|PATCH|DELETE)\b|--data|(?:^|\s)-d\b|--json|--form", re.IGNORECASE)
 
@@ -297,6 +300,7 @@ class _Context:
         self.pr_head = ""
         self.pr_creates = 0
         self.segments = 0
+        self.line = ""
 
 
 def nobody_can_answer(session_id: object) -> bool:
@@ -390,6 +394,7 @@ def _classify(command: object, context: _Context, depth: int) -> str:
     segments = _segments(whole)
     if depth == 0:
         context.segments = len(segments) if len(lines) <= 1 else len(segments) + len(lines)
+        context.line = command
     classes = [_classify_segment(segment, context, depth) for segment in segments]
     # The per-line pass catches a push on its own line, which `shlex` reads as
     # more arguments of the line before; a line that does not tokenize alone
@@ -460,16 +465,14 @@ def _runs_only_a_script(name: str, args: list[str]) -> bool:
     return False
 
 
-def _plain_read(name: str, assignments: list[str], args: list[str]) -> bool:
-    """A reader that reads and runs nothing: no assignment before it (`LESSOPEN='|cmd' less`), no
-    option that runs or writes (`find -exec`, `less +!cmd`)."""
-    if name not in _READERS or assignments:
-        return False
-    if name == "find":
-        return not any(word.lower().startswith(("-exec", "-ok", "-delete", "-fprint", "-fls")) for word in args)
-    if name in ("less", "more"):
-        return not any(word.startswith("+") or word.lower().startswith(("-k", "--lesskey")) for word in args)
-    return True
+def _plain_read(name: str, assignments: list[str], line: str) -> bool:
+    """A reader on `_READERS` with no assignment in its segment and no reader variable on the line.
+
+    It earns exactly one exception: a protected path it names is neither the
+    protected-path refusal's business nor a forge word for the fallback.
+    Every other check runs on it as on any program.
+    """
+    return name in _READERS and not assignments and not _READER_ENV.search(line)
 
 
 def _names_forge_config(word: str) -> bool:
@@ -581,7 +584,7 @@ def _classify_segment(segment: list[str], context: _Context, depth: int) -> str:
         return LOCAL if _runs_only_a_script(name, words[1:]) and not forge_text else UNCLASSIFIED
     if name in _LINKERS and any(_names_forge_config(word) for word in words[1:]):
         return UNCLASSIFIED  # a link to `.git` or a git config lets a later plain write land there
-    reader = _plain_read(name, names, words[1:])
+    reader = _plain_read(name, names, context.line)
     if not reader and any(_names_forge_config(word) for word in words[1:]) and not _FORGE_CLI.match(name):
         return UNCLASSIFIED  # a shell write into `.git/` or a git or gh config file
     if name in _SHELLS:
@@ -595,7 +598,10 @@ def _classify_segment(segment: list[str], context: _Context, depth: int) -> str:
     if name in _HTTP_CLIENTS and _FORGE_API_HOST.search(text) and _WRITE_METHOD.search(text):
         return OTHER_PR_OR_REPO  # a forge API write that skips gh
     if reader:
-        return LOCAL  # a read of a protected path is not a write; redirections were judged above
+        # The one exception: protected paths a plain reader names are not forge words. The rest of
+        # its text is judged by the fallback exactly as for any other program.
+        text = " ".join(word for word in words if not _names_forge_config(word))
+        forge_text = _FORGE_WORD.search(text) is not None
     if forge_text and _FORGE_VERB.search(text):
         return UNCLASSIFIED
     return LOCAL

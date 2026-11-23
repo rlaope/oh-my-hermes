@@ -217,13 +217,17 @@ the forge without passing the gate:
   command side is lexical: a link made through a glob or a variable
   (`ln -s .gi? g`, `L=.git; ln -s $L g`), or by any program not named here,
   and then written through by a shell redirect (`echo x > g/hooks/pre-push`)
-  is not seen. Plain reads of a protected path (`cat`, `less`, `head`,
-  `tail`, `grep`, `ls`, `stat`, `git config --get` or `--list`) are allowed,
-  but only with no variable assigned before the reader (`LESSOPEN='|…' less`
-  runs a command) and no option that runs or writes (`less +!…`, `find
-  -exec`); `tree` and `rg` are not readers here (`tree -o` writes, `rg
-  --pre` runs a program). Writes, links, copies onto it and redirects into
-  it are refused;
+  is not seen. Plain reads of a protected path are allowed by `cat`,
+  `head`, `tail`, `ls`, `stat`, `wc`, `grep`/`egrep`/`fgrep` and the read
+  forms of `git config` (`--get`, `--get-all`, `--get-regexp`, `--list`),
+  and only when their segment assigns no variable and the line names no
+  pager or reader variable (`LESS*`, `PAGER`, `GIT_PAGER`, `MANPAGER`,
+  `MORE`, `GREP_*`, `LS_*`). The allowance is an exception to the
+  protected-path refusal alone: every other check still runs on the
+  reader. Pagers, `find`, `tree`, `rg`, `sed`, `awk`, `xargs` and `sort`
+  keep the refusal (`LESSOPEN='|…' less` runs a command, `tree -o` writes,
+  `rg --pre` runs a program). Writes, links, copies onto a protected path
+  and redirects into it are refused;
 - the grant file and the opened-PR record written by arbitrary code under
   another spelling (the file tools and command lines that name the store are
   refused);

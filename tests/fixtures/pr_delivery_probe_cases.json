@@ -2626,6 +2626,64 @@
    "command": "tree -o .git/hooks/pre-push",
    "class": "unclassified",
    "verdict": "refused"
+  },
+  {
+   "command": "rg --pre ./x url .git/config",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "LESSCLOSE='|gh pr merge 42' cat .git/config",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "PAGER='gh pr merge 42' cat .git/config",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "GIT_PAGER=x cat .git/config",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env LESS=x cat .git/config",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "export LESSOPEN='|gh pr merge 42'; cat README.md",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "less .git/config",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "find .git -name config",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "wc -l .git/config",
+   "class": "local",
+   "verdict": "allowed",
+   "why_allowed": "local: a plain read of a protected path is not a write"
+  },
+  {
+   "command": "tail .gitmodules",
+   "class": "local",
+   "verdict": "allowed",
+   "why_allowed": "local: a plain read of a protected path is not a write"
+  },
+  {
+   "command": "stat .git/hooks/pre-push",
+   "class": "local",
+   "verdict": "allowed",
+   "why_allowed": "local: a plain read of a protected path is not a write"
   }
  ]
 }

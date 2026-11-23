@@ -589,7 +589,7 @@ class UnattendedMatrixTests(_Home):
         "git log --format='%h\\t%s'", "grep -E '\\bfoo\\b' notes.txt",
         "powershell -NoProfile -File build.ps1", "pwsh build.ps1", "cmd /c build.bat", "ls .git",
         # Plain reads of a protected path are not writes.
-        "cat .git/config", "less .git/hooks/pre-push", "head -5 ~/.gitconfig", "tail .gitmodules",
+        "cat .git/config", "head -5 ~/.gitconfig", "tail .gitmodules", "wc -l .git/config",
         "grep -n url .git/config", "stat .git/hooks/pre-push", "git config --list",
         "git config --get remote.origin.url",
     )
@@ -726,7 +726,11 @@ class UnattendedMatrixTests(_Home):
                         "LESSOPEN=\"|git push -f origin HEAD:main %s\" less README.md",
                         "env LESSOPEN='|gh pr merge 42' less README.md", "LESSOPEN='|gh pr merge 42 %s' more README.md",
                         "less '+!gh pr merge 42' README.md", "tree -o .git/hooks/pre-push",
-                        "rg --pre ./x url .git/config"):
+                        "rg --pre ./x url .git/config", "less .git/config", "more .git/config",
+                        "find .git -name config", "LESSCLOSE='|x' cat .git/config", "PAGER=x cat .git/config",
+                        "GIT_PAGER=x cat .git/config", "env LESS=x cat .git/config", "LANG=C cat .git/config",
+                        "export LESSOPEN='|gh pr merge 42'; cat README.md", "grep 'git push' notes.md",
+                        "cat .git/config | sh"):
             with self.subTest(command=command):
                 self.assertEqual(self.terminal(command)["action"], "block")
         self.assertIsNone(self.terminal("ln -s build/out latest"))
