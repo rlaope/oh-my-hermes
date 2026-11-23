@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: a click on a side-panel tab right after maximise or restore picks that tab.** While the panel slides,
+  a press on a tab that is still moving counts as the tab row's own press (for a double-click on the row), and its
+  click goes nowhere. The check for "still moving" looked at every frame of the last 60 ms. So a tab that had already
+  stopped, two or three frames before the click, still read as moving if an earlier frame in that window had moved
+  it. The click was dropped and the panel stayed on its old tab. Only the last two frames before the press count now.
+  A tab that held still in them is the person's to click.
+  (`apps/omher/src/elsewhere/PanelTabs.tsx`; e2e `panel-max.spec.ts`, seen on macOS CI)
 - **omher: an open thread reads again cleanly after the bridge comes back.** After a bridge restart, the page re-read an
   open thread at the same time as it listed the bot's threads again. The new bridge knew no thread yet and refused
   it, so the thread showed a false "not reachable" line and a turn Hermes lost there stayed unseen. Threads are now

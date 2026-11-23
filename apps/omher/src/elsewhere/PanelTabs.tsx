@@ -191,16 +191,18 @@ function freeBox(row: HTMLElement): Box | null {
   const x1 = Math.min(rest.length ? Math.min(...rest) : b.right, window.innerWidth);
   return x1 > x0 ? { at: performance.now(), x0, x1, y0: b.top, y1: b.bottom } : null;
 }
-/** The row moved more than a pixel in the last MOVE_MS, or the slide itself still runs (the window's grid, or the
- *  overlay panel): what is under the pointer is not what the person aimed at. A busy main thread draws the slide's
- *  frames further apart than MOVE_MS, so two samples alone can miss a row that is still moving. */
+/** The slide itself still runs (the window's grid, or the overlay panel), or the row moved more than a pixel between
+ *  the last two frames drawn before the press (within MOVE_MS): what is under the pointer is not what the person aimed
+ *  at. A busy main thread draws the slide's frames further apart than MOVE_MS, so two samples alone can miss a row
+ *  that is still moving. A row that held still in those two frames has stopped, even if an earlier frame in the window
+ *  moved it: a tab pressed then is the tab's. */
 const MOVE_MS = 60;
 const sliding = () =>
   [document.querySelector(".window"), document.querySelector(".details")].some((el) => el?.getAnimations().some((a) => a instanceof CSSTransition));
 const moving = (now: number) => {
   if (sliding()) return true;
-  const last = swept.filter((b) => now - b.at <= MOVE_MS).map((b) => b.x0);
-  return last.length > 1 && Math.max(...last) - Math.min(...last) > 1;
+  const last = swept.filter((b) => b.at <= now && now - b.at <= MOVE_MS).slice(-2).map((b) => b.x0);
+  return last.length > 1 && Math.abs(last[1] - last[0]) > 1;
 };
 
 function onSweptPress(e: PointerEvent) {
