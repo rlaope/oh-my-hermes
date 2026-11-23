@@ -19,18 +19,29 @@ exactly as before:
   (hermes-agent #136441), so a chain written there would run every step at
   the wrong effort. The PR adds `agent/fallback_reasoning.py` with
   `resolve_fallback_reasoning`, whose precedence starts with the entry's
-  effort. `host_support` looks for that function in the Hermes source,
-  read off disk as text: nothing is imported or executed. That is evidence
-  of what the installation declares, not of what a running process loaded,
-  so a Hermes updated on disk but not restarted reads as the new one.
+  effort. `host_support` looks for that function, with the PR's own
+  signature and its read of the entry's `reasoning_effort`, in the Hermes
+  source, read off disk as text: nothing is imported or executed.
+
+  The source on disk is what the installation declares, not what a running
+  process loaded, and a running Hermes that predates the update would run
+  the chain at the wrong efforts -- worse than no chain. So inside a running
+  Hermes the answer also takes runtime evidence: the capability module
+  already loaded in this process is support; a capability file changed
+  after this process loaded OMH's plugin is `restart_pending`, not support.
+  `omh doctor`, outside the process, compares the file with the gateway's
+  pid file the same way.
 
 Read-only: nothing here writes. `omh doctor` reports both answers
-(`delegate_route_fallback_chain`).
+(`plugin_delegate_route_fallback_chain`).
 """
 
 from __future__ import annotations
 
 import json
+import re
+import sys
+import time
 from importlib.util import find_spec
 from pathlib import Path
 from typing import Any
@@ -42,9 +53,16 @@ OPTION_KEY = "write_fallback_providers"
 # The module and function hermes-agent PR #144787 adds; their presence is
 # the capability. The PR number is named so a reader can check the claim.
 HOST_CAPABILITY_MODULE = Path("agent") / "fallback_reasoning.py"
-HOST_CAPABILITY_FUNCTION = "def resolve_fallback_reasoning("
+HOST_CAPABILITY_MODULE_NAME = "agent.fallback_reasoning"
 HOST_CAPABILITY_REFERENCE = "hermes-agent PR #144787 (agent.fallback_reasoning)"
+# The PR's resolver takes the fallback entry and reads the entry's own
+# effort; a function of the same name that does neither is not the capability.
+_CAPABILITY_SIGNATURE = re.compile(r"^def resolve_fallback_reasoning\(\s*agent\b[^)]*\bentry\b", re.MULTILINE)
+_CAPABILITY_ENTRY_READ = re.compile(r"""\bentry\.get\(\s*["']reasoning_effort["']\s*\)""")
 _MAX_SOURCE_BYTES = 256_000
+# When this process loaded OMH's plugin, which Hermes does at startup: a
+# capability file newer than this was not there when this Hermes started.
+PROCESS_LOADED_AT = time.time()
 
 
 def delegate_route_options_path(omh_home: str | Path | None = None) -> Path:
@@ -87,13 +105,21 @@ def running_hermes_code_root() -> Path | None:
     return Path(locations[0]).parent if locations else None
 
 
-def host_support(code_root: str | Path | None = None) -> dict[str, Any]:
+def host_support(code_root: str | Path | None = None, *, started_at: float | None = None) -> dict[str, Any]:
     """Whether the Hermes at `code_root` honours a fallback entry's `reasoning_effort`.
 
-    `code_root` defaults to the running Hermes (`running_hermes_code_root`);
-    `omh doctor` passes the installation under the Hermes home. The answer
-    carries `supported`, a `reason` token and the file it read.
+    `code_root` defaults to the running Hermes (`running_hermes_code_root`),
+    where the capability module already in `sys.modules` is the strongest
+    evidence and `started_at` defaults to `PROCESS_LOADED_AT`. `omh doctor`
+    passes the installation under the Hermes home and the gateway's start.
+    A capability file modified after `started_at` is `restart_pending`. The
+    answer carries `supported`, a `reason` token and the file it read.
     """
+    if code_root is None:
+        loaded = sys.modules.get(HOST_CAPABILITY_MODULE_NAME)
+        if callable(getattr(loaded, "resolve_fallback_reasoning", None)):
+            return {"supported": True, "reason": "capability_loaded", "evidence": str(getattr(loaded, "__file__", ""))}
+        started_at = PROCESS_LOADED_AT if started_at is None else started_at
     root = Path(code_root) if code_root is not None else running_hermes_code_root()
     if root is None:
         return {"supported": False, "reason": "hermes_source_not_found", "evidence": ""}
@@ -101,12 +127,20 @@ def host_support(code_root: str | Path | None = None) -> dict[str, Any]:
     try:
         if not source.is_file() or source.stat().st_size > _MAX_SOURCE_BYTES:
             return {"supported": False, "reason": "fallback_reasoning_missing", "evidence": source.as_posix()}
+        modified = source.stat().st_mtime
         text = source.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return {"supported": False, "reason": "fallback_reasoning_unreadable", "evidence": source.as_posix()}
-    if HOST_CAPABILITY_FUNCTION not in text or "reasoning_effort" not in text:
+    if not (_CAPABILITY_SIGNATURE.search(text) and _CAPABILITY_ENTRY_READ.search(text)):
         return {"supported": False, "reason": "fallback_reasoning_without_entry_effort", "evidence": source.as_posix()}
+    if started_at is not None and modified > started_at:
+        return {"supported": False, "reason": "restart_pending", "evidence": source.as_posix()}
     return {"supported": True, "reason": "entry_effort_honoured", "evidence": source.as_posix()}
+
+
+def chain_allowed(omh_home: str | Path | None = None) -> bool:
+    """The option is on and the running host honours the entry's effort."""
+    return load_fallback_chain_option(omh_home)[0] and bool(host_support()["supported"])
 
 
 def host_support_note(support: dict[str, Any]) -> str:
@@ -115,6 +149,11 @@ def host_support_note(support: dict[str, Any]) -> str:
         return f"this Hermes honours a fallback entry's reasoning_effort ({support.get('evidence')})"
     where = support.get("evidence") or "the running Hermes"
     reason = str(support.get("reason", ""))
+    if reason == "restart_pending":
+        return (
+            f"{where} honours a fallback entry's reasoning_effort but changed after this Hermes started, "
+            "so the running Hermes may not; restart Hermes (and its gateway) to pick it up"
+        )
     if reason == "hermes_source_not_found":
         return "the Hermes source could not be found, so whether it honours a fallback entry's reasoning_effort is unknown"
     return (

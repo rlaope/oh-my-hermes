@@ -12,10 +12,14 @@ All notable changes will be documented here.
   It is off by default. It applies only on a Hermes whose source has hermes-agent PR #144787's
   `agent/fallback_reasoning.py`, because an older Hermes runs every fallback at `agent.reasoning_overrides` rather
   than the entry's effort. On such a Hermes only the three scalars are written, and the result's `in_child_fallback`
-  and `omh doctor` (`plugin_delegate_route_fallback_chain`) say why. Positions whose provider you have not
-  configured are skipped. OMH records the chain it wrote with the route and takes it back out at turn end and on
+  and `omh doctor` (`plugin_delegate_route_fallback_chain`) say why. A Hermes updated on disk but still running the
+  old code reads as `restart_pending` and writes no chain until it restarts. Positions whose provider you have not
+  configured are skipped. Writing stops at the first position Hermes would not try: one with no provider route, or one
+  whose provider and model the head or an earlier entry already has. That keeps the re-dispatch's starting point
+  exact. OMH records the chain it wrote with the route and takes it back out at turn end and on
   `clear` (an absent key stays absent), and the lost-update and per-conversation guards cover it. Your own
-  `delegation.fallback_providers` (`[]` included) is never overwritten. The list writer keeps the scalar writer's
+  `delegation.fallback_providers` (`[]` included) is never overwritten, and an edit you make to OMH's chain mid-turn is
+  kept while the scalars still come back out (`chain_foreign_edit`). The list writer keeps the scalar writer's
   rules: plain tokens only, an atomic replace, a symlinked config refused. `action=fallback` still re-dispatches,
   continuing after the positions the child already walked (`walked_in_child`). Requested by @rafaelmoreiraai in
   #3124. (`src/plugin_bundle/omh/delegation_fallback_chain.py`, `src/plugin_bundle/omh/delegation_routing.py`,

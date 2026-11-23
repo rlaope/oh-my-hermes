@@ -951,7 +951,10 @@ def _delegate_route_fallback_chain_check(paths: OmhPaths) -> Check:
     Opt-in (`write_fallback_providers` in `routing/delegate-route.json`) and
     host-gated: the Hermes this home runs from must honour a fallback entry's
     `reasoning_effort` (hermes-agent PR #144787), read off its source as
-    `delegation_fallback_chain.host_support` does. A person's own
+    `delegation_fallback_chain.host_support` does. A capability file newer
+    than the gateway's pid file is `restart_pending`: the running gateway
+    predates it. A TUI has no such marker, so its start is not checked here;
+    the plugin checks its own process when it routes. A person's own
     `delegation.fallback_providers` keeps the chain out too, and is named.
     Never fails: an option that cannot apply leaves routing exactly as it was.
     """
@@ -968,6 +971,7 @@ def _delegate_route_fallback_chain_check(paths: OmhPaths) -> Check:
         CHAIN_UNSUPPORTED,
         FALLBACK_CHAIN_KEY,
         delegation_config_path,
+        fallback_chain_is_empty_list,
         read_delegation_route,
         read_fallback_chain_state,
     )
@@ -988,13 +992,23 @@ def _delegate_route_fallback_chain_check(paths: OmhPaths) -> Check:
             f"in-child fallback chain is off (opt-in: write_fallback_providers in {options}); {scalars}",
             observed=False,
         )
-    support = host_support(resolve_hermes_code_root(paths.hermes_home))
+    pid_file = paths.hermes_home / "gateway.pid"
+    try:
+        gateway_started = pid_file.stat().st_mtime if pid_file.is_file() else None
+    except OSError:
+        gateway_started = None
+    support = host_support(resolve_hermes_code_root(paths.hermes_home), started_at=gateway_started)
     if not support["supported"]:
+        restart = support["reason"] == "restart_pending"
         return Check(
             "plugin_delegate_route_fallback_chain", True,
             f"write_fallback_providers is on, but {host_support_note(support)}; so {scalars}",
             severity="warning",
-            next_action="update Hermes (`hermes update`) to a release with hermes-agent PR #144787, then restart it",
+            next_action=(
+                "restart the Hermes gateway (and any open TUI) so it runs the updated code"
+                if restart
+                else "update Hermes (`hermes update`) to a release with hermes-agent PR #144787, then restart it"
+            ),
             observed=support["reason"] != "hermes_source_not_found",
         )
     state = read_fallback_chain_state(paths.hermes_home)
@@ -1012,12 +1026,23 @@ def _delegate_route_fallback_chain_check(paths: OmhPaths) -> Check:
         record = {}  # another profile's record says nothing about this file
     owned = state == CHAIN_OMH_SHAPE and chain not in omh_written_chains(record, paths.omh_home)
     if state == CHAIN_FOREIGN or owned:
+        disabled = fallback_chain_is_empty_list(paths.hermes_home)
+        held = (
+            "`[]`, which turns in-child fallback off for delegated children"
+            if disabled
+            else "your own value"
+        )
         return Check(
             "plugin_delegate_route_fallback_chain", True,
-            "write_fallback_providers is on, but delegation.fallback_providers in config.yaml holds your own "
-            f"value, which OMH never overwrites; so {scalars}",
+            f"write_fallback_providers is on, but delegation.fallback_providers in config.yaml holds {held}, "
+            f"which OMH never overwrites; so {scalars}",
             severity="warning",
-            next_action="remove it (`hermes config unset delegation.fallback_providers`) to let OMH write the chain",
+            next_action=(
+                "unset it (`hermes config unset delegation.fallback_providers`) to opt in: OMH then writes the "
+                "chain for a routed lane and takes it back out after"
+                if disabled
+                else "remove it (`hermes config unset delegation.fallback_providers`) to let OMH write the chain"
+            ),
         )
     return Check(
         "plugin_delegate_route_fallback_chain", True,

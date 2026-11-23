@@ -217,6 +217,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Collection, Mapping
 
+from . import delegation_fallback_chain as _fallback_chain
 from . import runtime_paths
 from .awareness_delivery import LOCK_MECHANISM_NONE, _awareness_delivery_lock
 from .delegation_routing import (
@@ -1405,7 +1406,11 @@ def _restore_locked(
                 **lineage_report,
             }
     current = route_like(read_delegation_route(hermes_home, with_chain=True), record["written"])
-    if current != record["written"]:
+    # The person edited or removed only the chain OMH wrote: the chain is
+    # theirs now and stays as they left it, but the three scalars are still
+    # OMH's route and come back out.
+    chain_edited = current != record["written"] and _scalars(current) == _scalars(record["written"])
+    if current != record["written"] and not chain_edited:
         # Someone else owns the value now. Drop the record: keeping it
         # would let a later restore act on a baseline that no longer
         # describes anything in the file.
@@ -1419,7 +1424,9 @@ def _restore_locked(
             "lock_enforced": enforced,
         }
     baseline = record["baseline"]
-    result = _put_baseline_back(hermes_home, baseline, current, record["written"])
+    result = _put_baseline_back(
+        hermes_home, baseline, current, _scalars(record["written"]) if chain_edited else record["written"]
+    )
     if result.get("status") not in ("routed", "cleared"):
         return {
             "status": "error",
@@ -1436,7 +1443,7 @@ def _restore_locked(
         # separate names: `restored` put values back, `cleared` is the
         # baseline that had no keys to put back, which is the same
         # end state the tool reported before baselines existed.
-        "status": "restored" if baseline else "cleared",
+        "status": "chain_foreign_edit" if chain_edited else "restored" if baseline else "cleared",
         "trigger": trigger,
         "restored": baseline,
         "baseline_origin": record["baseline_origin"],
@@ -1625,8 +1632,14 @@ def _dispatch_plan(
     now: float,
     conversation: Callable[[], set[str]],
     ancestors: Callable[[], list[set[str]] | None],
+    chain_allowed: bool = True,
 ) -> dict[str, Any]:
     """What the keys must hold for this dispatch, read from the three stores.
+
+    `chain_allowed` false (the in-child chain switched off, or a host that
+    no longer honours it) drops the chain from every route this dispatch
+    would put back, so the reapply takes OMH's chain out instead of
+    writing back one the person turned off.
 
     `action` is `none`, `reapply` (a route this dispatch should run on is
     not in the keys) or `restore_baseline` (the caller has no route and the
@@ -1657,6 +1670,8 @@ def _dispatch_plan(
         and now - entry["written_at"] <= LIVE_TUI_SESSION_FRESH_SECONDS
     ]
     entries = _in_force(entries, record, omh_home)
+    if not chain_allowed:
+        entries = [{**entry, "route": _scalars(entry["route"])} for entry in entries]
     # With the chain; each comparison below sees it only when the stored
     # mapping names one (`route_like`).
     current = read_delegation_route(hermes_home, with_chain=True)
@@ -1693,6 +1708,8 @@ def _dispatch_plan(
         ancestry = [group - own for group in ancestry or []]
     if lineage:
         route = _newest_inherited(entries, ancestry or [], record, omh_home, config_path=config_path, now=now)
+        if route and not chain_allowed:
+            route = {**route, "route": _scalars(route["route"])}
         if route:
             # Written back on behalf of the parent, so the record names the
             # parent's task and the parent's own turn end takes it out.
@@ -1911,6 +1928,9 @@ def prepare_dispatch_route(
     home = hermes_home or runtime_paths.default_hermes_home()
     tick = float(now if now is not None else time.time())
     cache: dict[str, Any] = {}
+    # Asked once per dispatch: whether a route's in-child chain may still be
+    # put back (#3124 review).
+    chain_allowed = _fallback_chain.chain_allowed(omh_home)
 
     def conversation() -> set[str]:
         if "conversation" not in cache:
@@ -1934,6 +1954,7 @@ def prepare_dispatch_route(
             now=tick,
             conversation=conversation,
             ancestors=ancestors,
+            chain_allowed=chain_allowed,
         )
 
     peek = plan()

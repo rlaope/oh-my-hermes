@@ -200,14 +200,33 @@ def _read_route_with_chain(text: str) -> dict[str, str]:
 def read_fallback_chain_state(hermes_home: str | Path | None = None) -> str:
     """`absent`, `chain` (a list in this writer's shape), `foreign` (a shape only a person writes) or `unsupported`.
 
-    `null` and `~` read as absent: Hermes treats them as the key not being
-    there. An unreadable config reads as `foreign`, so nothing is written
+    `null`, `~` and a bare `fallback_providers:` read as absent: Hermes treats
+    them as the key not being there. An unreadable config reads as `foreign`, so nothing is written
     over a value nobody could see.
     """
     text, _, error = _read_config_snapshot(_config_path(hermes_home))
     if error:
         return CHAIN_FOREIGN
     return _read_fallback_chain(text.removeprefix(BOM).splitlines())[0]
+
+
+def fallback_chain_is_empty_list(hermes_home: str | Path | None = None) -> bool:
+    """Whether `delegation.fallback_providers` is the explicit `[]`, Hermes' "no fallback"."""
+    text, _, error = _read_config_snapshot(_config_path(hermes_home))
+    if error:
+        return False
+    lines = text.removeprefix(BOM).splitlines()
+    child_indents = _delegation_child_indents(lines)
+    in_section, child_indent, empty = False, 2, False
+    for index, line in enumerate(lines):
+        if _SECTION_RE.match(line):
+            in_section, child_indent = True, child_indents.get(index, 2)
+            continue
+        if in_section and _top_level_key(line) is not None:
+            in_section = False
+        if in_section and _mapping_key(line, child_indent) == FALLBACK_CHAIN_KEY:
+            empty = line.partition(":")[2].split("#", 1)[0].strip() == "[]"
+    return empty
 
 
 def encode_fallback_chain(entries: Iterable[Mapping[str, Any]]) -> str | None:
@@ -291,6 +310,9 @@ def _read_fallback_chain(lines: list[str]) -> tuple[str, str, tuple[int, int] | 
         if inline.casefold() in {"null", "~"} and end == index + 1:
             return CHAIN_ABSENT, "", (index, end)
         return CHAIN_FOREIGN, "", None
+    if end == index + 1:
+        # A bare `fallback_providers:` with nothing under it is YAML null.
+        return CHAIN_ABSENT, "", (index, end)
     entries = _parse_chain_items(lines[index + 1 : end])
     encoded = encode_fallback_chain(entries) if entries else None
     if encoded is None:
@@ -351,6 +373,11 @@ def _parse_chain_items(block: list[str]) -> list[dict[str, str]] | None:
         if not separator or key not in _CHAIN_ENTRY_KEYS or key in entries[-1]:
             return None
         if raw and not raw[0].isspace():
+            return None
+        if "#" in raw:
+            # No token this writer writes holds `#`, so it is a comment, and
+            # a chain with the person's note in it is theirs: rewriting it
+            # would drop the note.
             return None
         value = _yaml_string_token(raw)
         if not value:

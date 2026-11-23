@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -39,7 +40,7 @@ from omh.plugin_bundle.omh.delegation_routing import (
     write_delegation_route,
 )
 from omh.plugin_bundle.omh.hermes_delegation import load_delegation_route_provenance
-from omh.plugin_bundle.omh.hooks.session_hooks import on_session_end
+from omh.plugin_bundle.omh.hooks.session_hooks import on_session_end, on_session_start
 from omh.plugin_bundle.omh.hooks.tool_hooks import pre_tool_call
 from omh.plugin_bundle.omh.tools.delegate_route_tool import omh_delegate_route_handler
 from omh.maintenance.doctor import _delegate_route_fallback_chain_check
@@ -68,6 +69,23 @@ CHAINS = {
             {"model": "quick-head", "reasoning_effort": "low"},
             {"model": "quick-next", "reasoning_effort": "minimal"},
         ],
+        # One alias twice at two efforts, and a backend repeated.
+        "writing": [
+            {"model": "dup-a", "reasoning_effort": "high"},
+            {"model": "dup-b", "reasoning_effort": "low"},
+            {"model": "dup-c", "reasoning_effort": "medium"},
+            {"model": "dup-b", "reasoning_effort": "high"},
+        ],
+        "unspecified-low": [
+            {"model": "dup-a", "reasoning_effort": "high"},
+            {"model": "dup-a", "reasoning_effort": "low"},
+            {"model": "dup-c", "reasoning_effort": "low"},
+        ],
+        "unspecified-high": [
+            {"model": "dup-a", "reasoning_effort": "high"},
+            {"model": "unrouted", "reasoning_effort": "low"},
+            {"model": "dup-c", "reasoning_effort": "low"},
+        ],
     },
 }
 
@@ -81,6 +99,9 @@ ROUTES = {
         "deep-egress": {"provider": "openrouter", "model": "vendor/egress"},
         "quick-head": {"provider": "anthropic", "model": "claude-quick"},
         "quick-next": {"provider": "custom:opengateway", "model": "og/quick-next"},
+        "dup-a": {"provider": "anthropic", "model": "x-a"},
+        "dup-b": {"provider": "anthropic", "model": "x-b"},
+        "dup-c": {"provider": "anthropic", "model": "x-c"},
     },
 }
 
@@ -129,9 +150,8 @@ class FallbackChainTestCase(unittest.TestCase):
         self.write_routing("model-chains.json", CHAINS)
         self.write_routing("model-providers.json", ROUTES)
         self.code_root = _fake_hermes(root / "hermes-agent", honours_entry_effort=self.honours_entry_effort)
-        patcher = mock.patch(
-            "omh.plugin_bundle.omh.tools.delegate_route_tool.host_support",
-            lambda: host_support(self.code_root),
+        patcher = mock.patch.object(
+            delegation_fallback_chain, "host_support", lambda: host_support(self.code_root)
         )
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -428,15 +448,62 @@ class GuardsTest(FallbackChainTestCase):
         super().setUp()
         self.opt_in()
 
-    def test_a_person_editing_the_chain_after_the_route_keeps_their_edit(self) -> None:
+    def test_a_person_editing_omhs_chain_keeps_their_chain_and_gets_the_scalars_back_out(self) -> None:
         self.assertEqual(self.call(action="set", category="deep")["status"], "routed")
         edited = self.config.read_text(encoding="utf-8").replace("'og/last'", "'my-own-last'")
         self.config.write_text(edited, encoding="utf-8")
 
         ended = self.end_turn()
 
-        self.assertEqual(ended["route_restore"]["status"], "foreign_edit", ended)
-        self.assertEqual(self.config.read_text(encoding="utf-8"), edited)
+        self.assertEqual(ended["route_restore"]["status"], "chain_foreign_edit", ended)
+        self.assertEqual(read_delegation_route(self.hermes_home), {})
+        self.assertIn("'my-own-last'", self.config.read_text(encoding="utf-8"))
+        self.assertIsNone(load_route_restore_record(self.omh_home) or None)
+
+    def test_a_person_removing_omhs_chain_mid_turn_still_gets_the_scalars_back_out(self) -> None:
+        self.assertEqual(self.call(action="set", category="deep")["status"], "routed")
+        self.config.write_text(self.config.read_text(encoding="utf-8").replace(DEEP_BLOCK, ""), encoding="utf-8")
+
+        ended = self.end_turn()
+
+        self.assertEqual(ended["route_restore"]["status"], "chain_foreign_edit", ended)
+        self.assertEqual(self.config.read_text(encoding="utf-8"), BASE_CONFIG)
+
+    def test_the_option_turned_off_is_not_undone_by_a_later_dispatch(self) -> None:
+        # A routes with the chain, the person turns the option off, B's set
+        # takes OMH's chain out; A's next dispatch must not write it back.
+        self.assertEqual(self.call("A", "A-t1", action="set", category="deep")["status"], "routed")
+        self.opt_in(False)
+        self.assertEqual(self.call("B", "B-t1", action="set", category="quick")["status"], "routed")
+        self.assertIsNone(self.chain_in_file())
+
+        directive = pre_tool_call(
+            tool_name="delegate_task", args={"goal": "lane"}, session_id="A", task_id="A-t1",
+            tool_call_id="A-call", turn_id="A-turn", **self.homes(),
+        )
+
+        self.assertIsNone(directive)
+        self.assertEqual(read_delegation_route(self.hermes_home)["model"], "claude-head")
+        self.assertIsNone(self.chain_in_file())
+
+    def test_turning_the_option_off_while_a_route_is_live_still_restores_it(self) -> None:
+        self.assertEqual(self.call(action="set", category="deep")["status"], "routed")
+        self.opt_in(False)
+
+        self.assertEqual(self.end_turn()["route_restore"]["status"], "cleared")
+        self.assertEqual(self.config.read_text(encoding="utf-8"), BASE_CONFIG)
+
+    def test_a_session_start_restore_takes_a_killed_sessions_chain_out(self) -> None:
+        self.assertEqual(self.call("killed", "killed-t1", action="set", category="deep")["status"], "routed")
+        path = self.omh_home / "routing" / "route-restore.json"
+        record = json.loads(path.read_text(encoding="utf-8"))
+        self.assertIn(FALLBACK_CHAIN_KEY, record["written"])
+        path.write_text(json.dumps({**record, "written_at": 0.0, "baseline_captured_at": 0.0}), encoding="utf-8")
+
+        started = on_session_start(session_id="fresh", **self.homes())
+
+        self.assertEqual(started["route_restore"]["status"], "cleared", started)
+        self.assertEqual(self.config.read_text(encoding="utf-8"), BASE_CONFIG)
 
     def test_another_sessions_route_is_replaced_by_this_conversations_chain_at_dispatch(self) -> None:
         self.assertEqual(self.call("A", "A-t1", action="set", category="deep")["status"], "routed")
@@ -469,6 +536,49 @@ class GuardsTest(FallbackChainTestCase):
 
         self.assertEqual(result["status"], "error")
         self.assertEqual(self.chain_in_file(), DEEP_CHAIN)
+
+
+class WhatHermesWillTryTest(FallbackChainTestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        self.opt_in()
+
+    def test_writing_stops_at_a_backend_an_earlier_entry_already_has(self) -> None:
+        result = self.call(action="set", category="writing")
+
+        report = result["in_child_fallback"]
+        self.assertEqual([(entry["alias"], entry["position"]) for entry in report["entries"]],
+                         [("dup-b", 1), ("dup-c", 2)])
+        self.assertEqual(report["skipped"],
+                         [{"alias": "dup-b", "provider": "anthropic", "reason": "same_backend_as_earlier"}])
+        provenance = load_delegation_route_provenance(self.omh_home)[-1]
+        self.assertEqual((provenance["fallback_through"], provenance["fallback_through_index"]), ("dup-c", "2"))
+
+    def test_a_position_on_the_heads_own_backend_is_not_written(self) -> None:
+        result = self.call(action="set", category="unspecified-low")
+
+        self.assertEqual(result["in_child_fallback"]["status"], "no_positions")
+        self.assertEqual(result["in_child_fallback"]["skipped"][0]["reason"], "same_backend_as_earlier")
+        self.assertIsNone(self.chain_in_file())
+
+    def test_a_position_with_no_provider_route_ends_the_written_chain(self) -> None:
+        result = self.call(action="set", category="unspecified-high")
+
+        self.assertEqual(result["in_child_fallback"]["status"], "no_positions")
+        self.assertEqual(result["in_child_fallback"]["skipped"],
+                         [{"alias": "unrouted", "provider": "", "reason": "no_provider_route"}])
+
+    def test_fallback_goes_on_at_the_untried_repeat_of_an_alias(self) -> None:
+        # writing: dup-a -> dup-b:low -> dup-c -> dup-b:high. The child walked
+        # dup-b:low and dup-c; dup-b:high is the next position, not dup-b:low.
+        self.assertEqual(self.call(action="set", category="writing")["status"], "routed")
+        self.end_turn()
+
+        result = self.call(task="A-t2", action="fallback")
+
+        self.assertEqual(result["status"], "fell_back", result)
+        self.assertEqual(result["walked_in_child"], ["dup-b", "dup-c"])
+        self.assertEqual((result["applied"]["alias"], result["applied"]["reasoning_effort"]), ("dup-b", "high"))
 
 
 class FallbackAdvancesPastTheChildsWalkTest(FallbackChainTestCase):
@@ -558,6 +668,23 @@ class BlockWriterTest(unittest.TestCase):
         self.assertEqual(result["fallback_chain"], "removed")
         self.assertEqual(self.config.read_text(encoding="utf-8"), "delegation:\n  max_iterations: 5\n")
 
+    def test_a_bare_key_with_nothing_under_it_is_null(self) -> None:
+        self.config.write_text("delegation:\n  fallback_providers:\n  max_iterations: 5\n", encoding="utf-8")
+        chain = encode_fallback_chain([{"provider": "anthropic", "model": "m"}])
+
+        self.assertEqual(read_fallback_chain_state(self.hermes_home), "absent")
+        self.assertEqual(write_delegation_route(self.hermes_home, fallback_providers=chain)["fallback_chain"], "written")
+        self.assertEqual(read_fallback_chain_state(self.hermes_home), "chain")
+
+    def test_an_inline_comment_on_an_entry_makes_the_chain_the_persons(self) -> None:
+        text = "delegation:\n  fallback_providers:\n    - provider: 'anthropic'  # mine\n      model: 'm'\n"
+        self.config.write_text(text, encoding="utf-8")
+
+        self.assertEqual(read_fallback_chain_state(self.hermes_home), "foreign")
+        self.assertEqual(write_delegation_route(self.hermes_home, fallback_providers="")["fallback_chain"],
+                         "kept_person_owned")
+        self.assertEqual(self.config.read_text(encoding="utf-8"), text)
+
     def test_a_comment_inside_the_block_makes_it_the_persons(self) -> None:
         text = "delegation:\n  fallback_providers:\n    # mine\n    - provider: anthropic\n      model: m\n"
         self.config.write_text(text, encoding="utf-8")
@@ -595,6 +722,47 @@ class HostSupportTest(unittest.TestCase):
             support = host_support(newer)
             self.assertTrue(support["supported"])
             self.assertTrue(support["evidence"].endswith("agent/fallback_reasoning.py"))
+
+    def test_a_same_named_function_without_the_entry_read_is_not_the_capability(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = _fake_hermes(Path(temporary), honours_entry_effort=False)
+            (root / "agent" / "fallback_reasoning.py").write_text(
+                "def resolve_fallback_reasoning(agent, cfg):\n    return cfg.get('reasoning_effort')\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(host_support(root)["reason"], "fallback_reasoning_without_entry_effort")
+
+    def test_a_capability_newer_than_the_running_process_is_restart_pending(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = _fake_hermes(Path(temporary), honours_entry_effort=True)
+            module = root / "agent" / "fallback_reasoning.py"
+            os.utime(module, (2000.0, 2000.0))
+            self.assertEqual(host_support(root, started_at=1000.0)["reason"], "restart_pending")
+            self.assertTrue(host_support(root, started_at=3000.0)["supported"])
+            with mock.patch.object(delegation_fallback_chain, "running_hermes_code_root", return_value=root), \
+                    mock.patch.object(delegation_fallback_chain, "PROCESS_LOADED_AT", 1000.0):
+                self.assertEqual(host_support()["reason"], "restart_pending")
+
+    def test_the_capability_loaded_in_this_process_is_support(self) -> None:
+        loaded = mock.Mock(resolve_fallback_reasoning=lambda agent, entry, cfg: None, __file__="loaded.py")
+        with mock.patch.dict(sys.modules, {"agent.fallback_reasoning": loaded}), \
+                mock.patch.object(delegation_fallback_chain, "running_hermes_code_root", return_value=None):
+            self.assertEqual(host_support()["reason"], "capability_loaded")
+
+    def test_the_running_hermes_is_found_without_importing_it(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = _fake_hermes(Path(temporary) / "hermes-agent", honours_entry_effort=True)
+            saved = {name: module for name, module in sys.modules.items() if name == "agent" or name.startswith("agent.")}
+            for name in saved:
+                del sys.modules[name]
+            sys.path.insert(0, str(root))
+            try:
+                found = delegation_fallback_chain.running_hermes_code_root()
+                self.assertNotIn("agent", sys.modules)
+            finally:
+                sys.path.remove(str(root))
+                sys.modules.update(saved)
+            self.assertEqual(Path(os.path.realpath(found)), Path(os.path.realpath(root)))
 
     def test_no_running_hermes_is_not_support(self) -> None:
         with mock.patch.object(delegation_fallback_chain, "running_hermes_code_root", return_value=None):
@@ -646,6 +814,25 @@ class DoctorTest(unittest.TestCase):
         check = _delegate_route_fallback_chain_check(self.paths)
         self.assertEqual(check.severity, "warning")
         self.assertIn("never overwrites", check.message)
+
+    def test_an_empty_list_is_named_as_fallback_off_and_unsetting_it_opts_in(self) -> None:
+        self.opt_in()
+        _fake_hermes(self.install, honours_entry_effort=True)
+        (self.paths.hermes_home / "config.yaml").write_text("delegation:\n  fallback_providers: []\n", encoding="utf-8")
+        check = _delegate_route_fallback_chain_check(self.paths)
+        self.assertIn("turns in-child fallback off", check.message)
+        self.assertIn("to opt in", check.next_action)
+
+    def test_a_capability_newer_than_the_gateway_is_restart_pending(self) -> None:
+        self.opt_in()
+        _fake_hermes(self.install, honours_entry_effort=True)
+        pid = self.paths.hermes_home / "gateway.pid"
+        pid.write_text("1", encoding="utf-8")
+        os.utime(pid, (1000.0, 1000.0))
+        check = _delegate_route_fallback_chain_check(self.paths)
+        self.assertEqual(check.severity, "warning")
+        self.assertIn("changed after this Hermes started", check.message)
+        self.assertIn("restart the Hermes gateway", check.next_action)
 
     def test_a_person_owned_chain_in_omhs_shape_warns(self) -> None:
         self.opt_in()

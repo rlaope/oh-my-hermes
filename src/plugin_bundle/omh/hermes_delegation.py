@@ -1389,7 +1389,7 @@ def _valid_provenance_record(record: object) -> dict[str, Any] | None:
     # person owns) and the alias of its last position, so `fallback` advances
     # past what the child walked. Additive-optional like `session_id`: kept
     # only when non-empty.
-    for field, limit in (("fallback_providers", 4096), ("fallback_through", 160)):
+    for field, limit in (("fallback_providers", 4096), ("fallback_through", 160), ("fallback_through_index", 8)):
         value = record.get(field, "")
         if not isinstance(value, str) or len(value) > limit:
             return None
