@@ -13,7 +13,7 @@
 // Line 1 is the session's name (the person's, the agent's own title, a summary of the first message, else the
 // folder) and line 2 the folder and the agent. Double-click the name, or right-click › Rename, to name it. A TERMINALS
 // row dragged onto the open terminal splits it there (splitDrag.ts).
-import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { getStore, useStore } from "../state/store";
 import { CloseIcon, LiveRing, PlusIcon, Popover, TypingDots } from "../ui";
 import { busyFor, shortTime } from "../app/time";
@@ -699,6 +699,9 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
   const ss = useSessions();
   const sp = useSplit();
   useSplitPrune();
+  // sessions a bot asks to type into: a collapsed folder's amber dot counts only these waits, never a ring
+  const pending = usePendingRequests();
+  const asks = useMemo(() => new Set(pending.map((r) => r.sessionId)), [pending]);
   const [confirm, setConfirm] = useState<string | null>(null);
   const [refocus, setRefocus] = useState<string | null>(null);
   const current = s.ui.view === "session" ? s.ui.session : null;
@@ -852,7 +855,7 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
             index={gi}
             all={all.map((x) => x.cwd)}
             added={added.includes(g.cwd)}
-            summary={{ ...folderSummary(g.rows.map((r) => termStatus(r, ss.unseen[r.id], 0))), running: g.rows.filter((r) => (r.status === "running" || r.status === "starting") && termMarkAgent(r) !== null).length }}
+            summary={{ ...folderSummary(g.rows.map((r) => (asks.has(r.id) ? "bell" : termStatus(r, ss.unseen[r.id], 0)))), running: g.rows.filter((r) => (r.status === "running" || r.status === "starting") && termMarkAgent(r) !== null).length }}
             flowIds={shut ? g.rows.filter((r) => (r.status === "running" || r.status === "starting") && ss.unseen[r.id] !== "bell").map((r) => r.id) : NO_IDS}
           />
           {!shut && g.rows.map((rec) =>
@@ -990,7 +993,7 @@ function FolderHead({ cwd, home, shut, index, all, added, summary: base, flowIds
         </span>
         <span className="tg-n">{name}</span>
         {shut && (
-          <span className="tg-sum" data-testid="term-group-summary" data-busy={summary.busy ? "true" : undefined} data-needs={summary.needs ? "true" : undefined} data-failed={summary.failed ? "true" : undefined}>
+          <span className="tg-sum" data-testid="term-group-summary" data-busy={summary.busy ? "true" : undefined} data-needs={summary.needs ? "true" : undefined} data-news={summary.news ? "true" : undefined} data-failed={summary.failed ? "true" : undefined}>
             {summary.busy && <TermStatusGlyph status="busy" />}
             {summary.running > 0 && (
               <>
@@ -1004,7 +1007,8 @@ function FolderHead({ cwd, home, shut, index, all, added, summary: base, flowIds
             <span className="tg-count" data-testid="term-group-count" data-n={summary.count}>
               {summary.count === 1 ? t("term.folderCount1") : t("term.folderCountN", { n: summary.count })}
             </span>
-            {summary.needs && <span className="tg-dot needs" title={t("ss.mark.bell")} />}
+            {summary.needs && <span className="tg-dot needs" title={t("row.needsAnswer")} />}
+            {summary.news && <span className="tg-dot news" title={t("ss.mark.news")} />}
             {summary.failed && <span className="tg-dot err" title={t("ss.mark.error")} />}
           </span>
         )}
@@ -1095,10 +1099,13 @@ function FolderMenu({ at, cwd, all, added, onDismiss }: { at: { x: number; y: nu
   );
 }
 
-/** The row's status glyph, 12px: an amber arc spinning while output flows (static under reduced motion), the bell's
- *  warning triangle, a green outlined check on exit 0, a red x on a non-zero exit; nothing when idle. */
+/** The row's status glyph, 12px: an amber arc spinning while output flows (static under reduced motion), a small
+ *  accent dot when it rang unseen (news: it may have finished or be waiting), the warning triangle only for a wait
+ *  omher knows (a bot's request to type into it), a green outlined check on exit 0, a red x on a non-zero exit;
+ *  nothing when idle. */
 export function TermStatusGlyph({ status }: { status: TermStatus }) {
-  const label = status === "busy" ? t("term.st.busy") : status === "bell" ? t("ss.mark.bell") : status === "ok" ? t("ss.at.done") : status === "err" ? t("ss.mark.error") : "";
+  const label =
+    status === "busy" ? t("term.st.busy") : status === "news" ? t("ss.mark.news") : status === "bell" ? t("row.needsAnswer") : status === "ok" ? t("ss.at.done") : status === "err" ? t("ss.mark.error") : "";
   return (
     <span className={`tst${status ? ` ${status}` : ""}`} data-testid="term-status" data-status={status ?? "idle"} role={status ? "img" : undefined} aria-label={label || undefined} title={label || undefined}>
       {status === "busy" && (
@@ -1117,6 +1124,7 @@ export function TermStatusGlyph({ status }: { status: TermStatus }) {
           <path d="M3.4 3.4 8.6 8.6M8.6 3.4 3.4 8.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
         </svg>
       )}
+      {status === "news" && <StateSign mark="news" />}
       {status === "bell" && <StateSign mark="needs" />}
     </span>
   );
@@ -1284,8 +1292,15 @@ function NameInput({ initial, auto, onDone }: { initial: string; auto: boolean; 
 const ROW_MENU: RowMenuKit = { items: termMenuItems, act: termRowAct, spot: menuSpot, Menu: SessionMenu, Name: NameInput };
 
 /** The sign before a row's state word: a warning triangle (it waits for you), an exclamation mark (it stopped on an
- *  error), a check (it finished). Three shapes, so the state reads without its colour. */
+ *  error), a small dot (it rang unseen: news, not a warning), a check (it finished). Four shapes, so the state reads
+ *  without its colour. */
 function StateSign({ mark }: { mark: RowMark }) {
+  if (mark === "news")
+    return (
+      <svg width="6" height="6" viewBox="0 0 6 6" aria-hidden="true">
+        <circle cx="3" cy="3" r="3" fill="var(--accent)" />
+      </svg>
+    );
   if (mark === "needs")
     return (
       <svg width="13" height="12" viewBox="0 0 13 12" aria-hidden="true">

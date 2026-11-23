@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Markdown } from "./Markdown";
 import { withLinks } from "./LinkChip";
 import { keepTermLinks } from "./remarkTermLinks";
-import { termLinkState } from "./TermLinkChip";
+import { termChipState, termLinkState } from "./TermLinkChip";
 import { getSessions } from "../../sessions/sessions";
 
 const html = (md: string) => renderToStaticMarkup(<Markdown text={md} />);
@@ -23,6 +23,12 @@ describe("the terminal link chip's state", () => {
     expect(termLinkState({ status: "exited", exitCode: null }, {}, undefined, now)).toBe("ended");
     expect(termLinkState({ status: "failed" }, {}, undefined, now)).toBe("ended");
     expect(termLinkState({ status: "exited", exitCode: null, paused: true }, {}, undefined, now)).toBe("ended");
+  });
+  it("shows a ring nobody saw as news on the chip (the bots' status file still says waiting)", () => {
+    expect(termChipState({ status: "running" }, { lastOut: now - 60_000 }, "bell", now)).toBe("news");
+    expect(termChipState({ status: "running" }, { lastOut: now - 60_000 }, undefined, now)).toBe("waiting");
+    expect(termChipState({ status: "running" }, { lastOut: now - 500 }, undefined, now)).toBe("working");
+    expect(termChipState({ status: "exited", exitCode: 0 }, {}, "bell", now)).toBe("done");
   });
 });
 

@@ -1,6 +1,6 @@
 // An omher terminal link (`omher://terminal/<id>`) wherever omher draws links: an omher chip. The omher face, then the
-// session's CLI mark, its title and a live state dot (working: output flowing; waiting: idle at its prompt or it rang;
-// done: ended with 0; ended: ended otherwise, failed, or paused after a restart). A click opens the session. A link
+// session's CLI mark, its title and a live state dot (working: output flowing; news: it rang unseen, finished or
+// waiting; waiting: idle at its prompt; done: ended with 0; ended: ended otherwise, failed, or paused after a restart). A click opens the session. A link
 // whose session is not in this computer's TERMINALS reads "Terminal not on this computer" and opens nothing.
 import { memo, type MouseEvent } from "react";
 import logo from "../../assets/omher-mark.png";
@@ -13,10 +13,13 @@ import { TermRowMark } from "../../sessions/TermRowMark";
 import { pickTitle } from "../../sessions/titles";
 import { parseTermLink } from "../../sessions/termLink";
 
-export type TermLinkState = "working" | "waiting" | "done" | "ended";
+/** A session's state as its status file tells bots (termShare.ts): an unseen ring stays `waiting` there. */
+export type ShareState = "working" | "waiting" | "done" | "ended";
+/** The chip's dot: the file's states, plus `news` for a ring nobody has seen (it may have finished or be waiting). */
+export type TermLinkState = ShareState | "news";
 
-/** What the chip's dot says of a session at `now` (`progress`/`lastOut` from its terminal's activity). Pure. */
-export function termLinkState(rec: Pick<SessionRec, "status" | "exitCode" | "paused">, act: { lastOut?: number; progress?: boolean }, unseen: Unseen | undefined, now: number): TermLinkState {
+/** What a session's status file says of it at `now` (`progress`/`lastOut` from its terminal's activity). Pure. */
+export function termLinkState(rec: Pick<SessionRec, "status" | "exitCode" | "paused">, act: { lastOut?: number; progress?: boolean }, unseen: Unseen | undefined, now: number): ShareState {
   if (rec.paused) return "ended";
   if (rec.status === "exited") return rec.exitCode === 0 ? "done" : "ended";
   if (rec.status === "failed" || rec.status === "draft") return "ended";
@@ -24,7 +27,13 @@ export function termLinkState(rec: Pick<SessionRec, "status" | "exitCode" | "pau
   return flowing(act, now) ? "working" : "waiting";
 }
 
-const STATE_KEY: Record<TermLinkState, Key> = { working: "tlink.st.working", waiting: "tlink.st.waiting", done: "tlink.st.done", ended: "tlink.st.ended" };
+/** What the chip's dot says: as the status file, but a running session that rang unseen is news, not waiting. Pure. */
+export function termChipState(rec: Pick<SessionRec, "status" | "exitCode" | "paused">, act: { lastOut?: number; progress?: boolean }, unseen: Unseen | undefined, now: number): TermLinkState {
+  const st = termLinkState(rec, act, unseen, now);
+  return st === "waiting" && unseen === "bell" ? "news" : st;
+}
+
+const STATE_KEY: Record<TermLinkState, Key> = { working: "tlink.st.working", news: "tlink.st.news", waiting: "tlink.st.waiting", done: "tlink.st.done", ended: "tlink.st.ended" };
 
 function open(e: MouseEvent<HTMLAnchorElement>, id: string) {
   e.preventDefault();
@@ -36,7 +45,7 @@ const Known = memo(function Known({ url, rec, unseen, label }: { url: string; re
   const ss = useSessions();
   const live = rec.status === "running" || rec.status === "starting";
   const { act, now } = useTermFace(rec.id, rec.startedAt, live);
-  const state = termLinkState(rec, act, unseen, now);
+  const state = termChipState(rec, act, unseen, now);
   const title = pickTitle(rec, termFallbackName(rec, ss.agents)).title;
   const stateText = t(STATE_KEY[state]);
   return (
@@ -52,7 +61,8 @@ const Known = memo(function Known({ url, rec, unseen, label }: { url: string; re
       <img src={logo} alt="" className="lk-term-omh" width={12} height={12} />
       <TermRowMark agent={termMarkAgent(rec)} size={12} />
       <span className="lk-t">{label ?? title}</span>
-      <span className={`lk-term-dot ${state}`} role="img" aria-label={stateText} data-testid="term-link-state" />
+      {/* news takes the accent (links.css colours the other states) */}
+      <span className={`lk-term-dot ${state}`} style={state === "news" ? { background: "var(--accent)" } : undefined} role="img" aria-label={stateText} data-testid="term-link-state" />
     </a>
   );
 });

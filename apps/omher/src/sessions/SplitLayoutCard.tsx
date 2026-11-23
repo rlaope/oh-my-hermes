@@ -1,8 +1,9 @@
 // A TERMINALS split drawn as one card in the sidebar (owner's option A, the layout card): one cell per pane at the
 // pane's real place and proportions, each with its CLI mark, title and last line, laid out for the cell's own size
 // (splitCard.ts cellText). A cell's edge says its state: an accent segment orbits it while output flows, a dashed edge
-// flows while it reports background work, an attention edge blinks while it waits on the person (held on the focused
-// cell), a danger edge after an error. The motion is CSS keyframes on SVG strokes sized from a ResizeObserver: no
+// flows while it reports background work, an attention edge blinks while a bot asks to type into it (held on the
+// focused cell), a soft accent edge breathes slowly when it rang unseen (news, not a warning), a danger edge after an
+// error. The motion is CSS keyframes on SVG strokes sized from a ResizeObserver: no
 // per-frame script, and under reduced motion nothing moves. A grip under the card sets its height, kept with the
 // split (splitState mapH). Ideas from kasaterm's sidebar map (2rami/kasaterm, MIT); written fresh.
 //
@@ -114,6 +115,7 @@ const SplitCell = memo(function SplitCell({ rec, x, y, w, h, focused, agents, un
           ))}
         {state === "bg" && <rect className="sc-dash" {...inRect(w, h, 1)} />}
         {state === "wait" && <rect className="sc-wait" {...inRect(w, h, 0.75)} pathLength={100} />}
+        {state === "news" && <rect className="sc-news" {...inRect(w, h, 0.75)} />}
       </svg>
       {editing ? (
         <div className={`sc-open sc-editing ${text}`}>{body}</div>

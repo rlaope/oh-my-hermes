@@ -32,11 +32,14 @@ export function cellText(w: number, h: number): CellText {
   return "beside";
 }
 
-/** The one state a cell's edge shows: waiting on the person beats working, which beats background work. */
-export type CellState = "work" | "bg" | "wait" | "err" | "ok" | "idle";
+/** The one state a cell's edge shows: a wait omher knows (a bot's request to type, `asked`) beats working, which beats
+ *  background work; a ring seen by no one (`news`: a bell, an OSC 9 message, a progress done) is quiet news, not a
+ *  wait, since it may as well mean the program finished. */
+export type CellState = "work" | "bg" | "wait" | "news" | "err" | "ok" | "idle";
 export function cellState(i: { status: TermStatus; asked: boolean; background?: number }): CellState {
-  if (i.asked || i.status === "bell") return "wait";
+  if (i.asked) return "wait";
   if (i.status === "err") return "err";
+  if (i.status === "news") return "news";
   if (i.status === "busy") return "work";
   if ((i.background ?? 0) > 0) return "bg";
   return i.status === "ok" ? "ok" : "idle";

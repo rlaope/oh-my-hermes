@@ -43,13 +43,19 @@ describe("cell text placement", () => {
 describe("cell state", () => {
   it("puts waiting first, then errors, work, background", () => {
     expect(cellState({ status: "busy", asked: true })).toBe("wait");
-    expect(cellState({ status: "bell", asked: false, background: 2 })).toBe("wait");
+    expect(cellState({ status: "bell", asked: true, background: 2 })).toBe("wait");
     expect(cellState({ status: "err", asked: false, background: 1 })).toBe("err");
     expect(cellState({ status: "busy", asked: false, background: 1 })).toBe("work");
     expect(cellState({ status: "ok", asked: false, background: 1 })).toBe("bg");
     expect(cellState({ status: null, asked: false, background: 1 })).toBe("bg");
     expect(cellState({ status: "ok", asked: false })).toBe("ok");
     expect(cellState({ status: null, asked: false, background: 0 })).toBe("idle");
+  });
+  it("draws a ring nobody saw as news, never the wait: only a bot's request to type is a wait", () => {
+    expect(cellState({ status: "news", asked: false })).toBe("news");
+    expect(cellState({ status: "news", asked: false, background: 2 })).toBe("news");
+    expect(cellState({ status: "news", asked: true })).toBe("wait");
+    expect(cellState({ status: "err", asked: false })).toBe("err");
   });
 });
 

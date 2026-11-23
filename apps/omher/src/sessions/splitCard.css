@@ -154,6 +154,23 @@
     opacity: 0.25;
   }
 }
+/* news: it rang unseen (a bell, an OSC 9 message, a progress done). A soft accent edge breathing slowly, never the
+   attention blink: it may as well mean the program finished (kasaterm's "unseen done") */
+.sc-news {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  opacity: 0.7;
+  animation: sc-breath 2.4s ease-in-out infinite;
+}
+@keyframes sc-breath {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
 @keyframes sc-blink-tint {
   0%,
   100% {
@@ -286,6 +303,7 @@
   .sc-orbit,
   .sc-dash,
   .sc-wait,
+  .sc-news,
   .sc-cell::before {
     animation: none !important;
     transition: none;
@@ -302,5 +320,8 @@
   }
   .sc-wait {
     opacity: 1;
+  }
+  .sc-news {
+    opacity: 0.7;
   }
 }
