@@ -68,6 +68,7 @@ import os
 import re
 import subprocess
 import sys
+from datetime import datetime, time
 from pathlib import Path
 
 EXIT_OK = 0
@@ -225,13 +226,39 @@ def gmail_lines(messages: list) -> list[str]:
     return [f"matched={len(ids)}", *(f"message {message_id}" for message_id in ids)]
 
 
+def strict_fromisoformat(text):
+    # Python 3.14 reads T24:00:00 as the next midnight; 3.11-3.13 refuse it.
+    # Only that reading moves the date past the one the text starts with, so
+    # refusing it here makes every supported interpreter agree.
+    parsed = datetime.fromisoformat(text)
+    if parsed.time() == time(0) and not text.startswith(date_spellings(parsed.date())):
+        raise ValueError("hour must be in 0..23")
+    return parsed
+
+
+def date_spellings(day):
+    week_year, week, weekday = day.isocalendar()
+    spellings = (f"{day.year:04d}-{day.month:02d}-{day.day:02d}", f"{day.year:04d}{day.month:02d}{day.day:02d}",
+                 f"{week_year:04d}-W{week:02d}-{weekday}", f"{week_year:04d}W{week:02d}{weekday}")
+    if weekday == 1:
+        spellings += (f"{week_year:04d}-W{week:02d}", f"{week_year:04d}W{week:02d}")
+    return spellings
+
+
 def _start(value: object) -> dt.datetime | None:
-    """A timed event's start; None for an all-day date or anything unreadable."""
+    """A timed event's start with its offset; None for an all-day date or anything unreadable.
+
+    Google Calendar sends a timed start as RFC 3339 with an offset or `Z`
+    (`2026-11-24T10:00:00+09:00`, `2026-11-24T01:00:00Z`) and an all-day one as
+    a date (`2026-11-24`). `Z` is rewritten to `+00:00` so Python 3.10 reads it,
+    a time without an offset is unreadable (it names no instant), and hour 24 is
+    refused on every Python (3.14 alone would read it as the next midnight).
+    """
     if not isinstance(value, str) or "T" not in value or CONTROL_RE.search(value) or len(value) > 40:
         return None
-    text = value[:-1] + "+00:00" if value.endswith("Z") else value
+    text = value[:-1] + "+00:00" if value.endswith(("Z", "z")) else value
     try:
-        stamp = dt.datetime.fromisoformat(text)
+        stamp = strict_fromisoformat(text)
     except ValueError:
         return None
     return stamp if stamp.tzinfo is not None else None

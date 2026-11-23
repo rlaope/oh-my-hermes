@@ -47,10 +47,11 @@ from _memory_governance_fixtures import _approved_artifact, _evaluate, _iso  # n
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "src"
 RECONCILE = SOURCE / "skills/biomedical_evidence_toolkit/scripts/reconcile.py"
+GOOGLE_WATCH = SOURCE / "skills/monitor_watch_toolkit/scripts/google_watch.py"
 SEARCH_EVIDENCE = SOURCE / "workflows/search_evidence.py"
 # The three hand-kept copies of the guard, the bundle helper first. They must stay
 # one function: `test_the_guard_copies_are_one_function` compares their ASTs.
-GUARD_COPIES = (SOURCE / "plugin_bundle/omh/iso_datetime.py", RECONCILE, SEARCH_EVIDENCE)
+GUARD_COPIES = (SOURCE / "plugin_bundle/omh/iso_datetime.py", RECONCILE, SEARCH_EVIDENCE, GOOGLE_WATCH)
 _SPELLINGS_NAMES = {"_date_spellings": "date_spellings", "date_spellings": "date_spellings"}
 UTC = timezone.utc
 NOON = datetime(2020, 1, 1, 12, tzinfo=UTC)
@@ -64,6 +65,8 @@ GUARD_DEFINITIONS = {
     ("src/plugin_bundle/omh/iso_datetime.py", "strict_fromisoformat"): 1,
     ("src/skills/biomedical_evidence_toolkit/scripts/reconcile.py", "strict_fromisoformat"): 1,
     ("src/workflows/search_evidence.py", "strict_fromisoformat"): 1,
+    # The Gmail and Calendar monitor: a standalone toolkit script on Hermes' interpreter, stdlib only.
+    ("src/skills/monitor_watch_toolkit/scripts/google_watch.py", "strict_fromisoformat"): 1,
 }
 
 # Raw `datetime.fromisoformat` references the audit left in place: how many
@@ -450,6 +453,19 @@ class SiteTests(unittest.TestCase):
                 with self.subTest(site=f"{path}::{function}", case=index):
                     assert_hour_24_refused(self, module, case(module))
 
+    def test_monitor_google_watch_script_refuses_the_3_14_reading_of_hour_24(self) -> None:
+        def outcome(reading: type[datetime], guarded: bool = True) -> object:
+            with mock.patch("datetime.datetime", reading):
+                api = runpy.run_path(str(GOOGLE_WATCH))
+            if not guarded:
+                api["_start"].__globals__["strict_fromisoformat"] = reading.fromisoformat
+            return api["_start"](HOUR_24)  # carries `Z`, which _start rewrites to +00:00
+
+        strict = outcome(Strict)
+        self.assertIsNone(strict)  # an unreadable start: the event is left out, never moved to the next day
+        self.assertEqual(outcome(Lenient), strict)
+        self.assertNotEqual(outcome(Lenient, guarded=False), strict)
+
     def test_biomedical_reconcile_script_refuses_the_3_14_reading_of_hour_24(self) -> None:
         def outcome(reading: type[datetime], call: str, args: tuple[object, ...], guarded: bool = True) -> object:
             with mock.patch("datetime.datetime", reading):
@@ -500,14 +516,18 @@ class SourceGateTests(unittest.TestCase):
     def test_every_guarded_call_has_exactly_its_cases(self) -> None:
         guarded, _raw = fromisoformat_references()
         script = RECONCILE.relative_to(ROOT).as_posix()
+        monitor = GOOGLE_WATCH.relative_to(ROOT).as_posix()
         mismatched = sorted(
             f"{path}::{function} ({count} calls, {len(SITES.get((path, function), ('', []))[1])} cases)"
             for (path, function), count in guarded.items()
-            if path != script and len(SITES.get((path, function), ("", []))[1]) != count
+            if path not in (script, monitor) and len(SITES.get((path, function), ("", []))[1]) != count
         )
         self.assertEqual(mismatched, [])
         self.assertEqual(sorted(key for key in SITES if key not in guarded), [], "SITES names a call that is gone")
         self.assertEqual(sorted(f for p, f in guarded if p == script), ["freshness", "timestamp"])
+        # The monitor script's one guarded call has its case in
+        # test_monitor_google_watch_script_refuses_the_3_14_reading_of_hour_24.
+        self.assertEqual(sorted(f for p, f in guarded if p == monitor), ["_start"])
 
     def test_every_guard_copy_reads_as_the_bundle_helper_does(self) -> None:
         # Each copy runs on the 3.14 reading, whatever the interpreter: on 3.11 and
