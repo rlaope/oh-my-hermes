@@ -17,6 +17,12 @@ import { newer, older, onFirstLine, onLastLine, type Recall, type Step } from ".
 
 const MAX_H = 200;
 
+/** The app's drafts (`ui.draft`) already put into a composer. A draft names one chat key (`draft.bot`: a bot's main
+ *  chat, a thread's `fold:<bot>:<thread>`, a session's key) and each composer takes only its own key; one composer per
+ *  key is mounted at a time (the main column shows the main chat or one thread, never both), so a module-wide set
+ *  marks the draft taken by the one composer it was for. */
+const appliedDrafts = new WeakSet<object>();
+
 /** Autosizing textarea with a + at its left edge for files (menu, drop on the chat, paste). Enter sends,
  * Shift+Enter breaks the line, Stop interrupts. Files go first (`chat.attach`), then
  * the text; if one fails nothing is sent and the chips stay. A "Reply there" chip sits above the text: the
@@ -27,9 +33,6 @@ const MAX_H = 200;
  * when `onNewThread` is given: `./` opens a one-row picker for it, and a send makes a new thread of this bot with the
  * rest of the message as its first message (threadCommand.ts); the token never reaches the bot.
  * ArrowUp on the first line and ArrowDown on the last walk the person's earlier prompts of this chat (promptHistory.ts). */
-/** The app's drafts (`ui.draft`) already put into a composer. */
-const appliedDrafts = new WeakSet<object>();
-
 export function Composer({
   bot,
   running,
