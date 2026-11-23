@@ -37,6 +37,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
+from . import gateway_contract as contract
 from .style import Line, Span
 from .theme import Theme
 from .transcript import Transcript
@@ -119,7 +120,7 @@ def read_refused(wire: str, result: Mapping[str, Any]) -> bool:
     child session, or a lazy resume that names no watch sid."""
     if wire == WIRE_WATCH:
         return not isinstance(result.get("session_id"), str) or not result.get("session_id")
-    return result.get("available") is not True or not result.get("child_session_id")
+    return result.get(contract.TRANSCRIPT_AVAILABLE) is not True or not result.get("child_session_id")
 
 
 def message_rows(rows: object) -> list[dict[str, Any]]:

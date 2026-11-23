@@ -82,9 +82,9 @@ AGENT_LIST_HINTS = (
     AGENT_LIST_HINT, "⏎ view · x stop · s steer · esc back", "⏎ view · x stop · esc back", "x stop · esc back",
 )
 # The dag tree's keys, the same way: each keeps the fold keys, the two action keys and the way back while it fits.
-TREE_HINT = "↑↓ select · ←/→ or space fold · ⏎ log · x interrupt · s steer · esc back"
+TREE_HINT = "↑↓ select · ←/→ or space fold · ⏎ view · x interrupt · s steer · esc back"
 TREE_HINTS = (
-    TREE_HINT, "←/→ fold · ⏎ log · x interrupt · s steer · esc back", "←/→ fold · x interrupt · s steer · esc back",
+    TREE_HINT, "←/→ fold · ⏎ view · x interrupt · s steer · esc back", "←/→ fold · x interrupt · s steer · esc back",
     "←/→ fold · esc back",
 )
 # The fewest rows a tree takes the keys in: its highlight between a count above and one below. Under it Down opens the
