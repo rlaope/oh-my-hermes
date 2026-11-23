@@ -146,6 +146,9 @@ packages = [
   "pr_watch_toolkit/README.md", "pr_watch_toolkit/scripts/pr_watch.py",
   "pr_watch_toolkit/scripts/pr_event_guard.py", "pr_watch_toolkit/examples/pr-watch.json",
   "pr_watch_toolkit/examples/pr-event-guard.json",
+  "monitor_watch_toolkit/README.md", "monitor_watch_toolkit/scripts/api_watch.py",
+  "monitor_watch_toolkit/scripts/google_watch.py", "monitor_watch_toolkit/scripts/vault_watch.py",
+  "monitor_watch_toolkit/examples/*.json",
 ]
 "omh.skins" = ["*.yaml"]
 "omh.tui" = ["frontend/dist/*.js"]

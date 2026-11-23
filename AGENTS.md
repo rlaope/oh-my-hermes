@@ -133,9 +133,10 @@ and evidence obvious to a reviewer reading the PR without the chat history.
     network integration.
   - **The OMH TUI's update notice** (`src/tui/update_notice.py`), a scoped
     network integration.
-  - **Show-reel provider scripts**, the **Channel watch collector**, and the
-    **PR watch monitor and event guard**: inert package data only the user
-    runs.
+  - **Show-reel provider scripts**, the **Channel watch collector**, the
+    **PR watch monitor and event guard**, and the **monitor-recipe scripts**
+    (`api_watch.py`, `google_watch.py`, `vault_watch.py`): inert package data
+    only the user's Hermes runs; they write nothing themselves.
   - **PR delivery grant** (owner-approved, 2026-11-23): per profile, off by
     default, changed only by the person's `omh capability-policy pr-delivery`;
     with it on, an unattended bot may push a branch under its prefix, open a
