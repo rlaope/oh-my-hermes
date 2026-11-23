@@ -1188,6 +1188,7 @@ export const en = {
   "ss.actions": "{name} actions",
   "ss.rename": "Rename",
   "ss.close": "Close session",
+  "ss.closeNamed": "Close {name}",
   "ss.closedToast": "{name} closed",
   "ss.closedLeft": "{n} s",
   "ss.undo": "Undo",

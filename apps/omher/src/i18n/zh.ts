@@ -1186,6 +1186,7 @@ export const zh: Record<Key, string> = {
   "ss.actions": "{name} 的操作",
   "ss.rename": "重命名",
   "ss.close": "关闭会话",
+  "ss.closeNamed": "关闭 {name}",
   "ss.closedToast": "已关闭 {name}",
   "ss.closedLeft": "{n} 秒",
   "ss.undo": "撤销",

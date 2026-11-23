@@ -959,7 +959,7 @@ export function SessionView() {
     if (inSplit) leaveSplit(rec.id);
     else if (!closeLone(rec.id)) askCloseRow(rec.id);
   };
-  const closeTip = inSplit ? tr("split.closePane", { name }) : tr("ss.close");
+  const closeTip = inSplit ? tr("split.closePane", { name }) : tr("ss.closeNamed", { name });
   return (
     <>
       <header className={`head${drags ? " ss-head-drag" : ""}`} data-testid="header" data-drag={drags} onPointerDown={termHead ? grab : undefined}>

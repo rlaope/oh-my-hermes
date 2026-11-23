@@ -1186,6 +1186,7 @@ export const ko: Record<Key, string> = {
   "ss.actions": "{name} 메뉴",
   "ss.rename": "이름 바꾸기",
   "ss.close": "세션 닫기",
+  "ss.closeNamed": "{name} 닫기",
   "ss.closedToast": "{name} 닫힘",
   "ss.closedLeft": "{n}초",
   "ss.undo": "되돌리기",

@@ -104,7 +104,8 @@ export function rowTargetAt(x: number, y: number, drag: string): RowTarget | nul
   const list = getSessions().getState().list;
   const from = list.find((r) => r.id === drag);
   const to = list.find((r) => r.id === at);
-  if (!from || !to || from.cwd !== to.cwd) return null;
+  // one folder however its path is spelled, as the sidebar groups it (and as moveRow checks)
+  if (!from || !to || pathKey(from.cwd) !== pathKey(to.cwd)) return null;
   const box = el.getBoundingClientRect();
   return { at, after: y > box.top + box.height / 2, box };
 }

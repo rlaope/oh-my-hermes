@@ -5,7 +5,7 @@
 // grip. The header's x closes the focused pane (the session stays listed), or the lone session as ⌘W does.
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { mock, openApp, platformIsMac } from "./term-find-helpers";
-import type { Side } from "./split-drag-helpers";
+import { dragRowOnto, type Side } from "./split-drag-helpers";
 
 type Sessions = { startTerminal(a: string, cwd: string): string };
 type Call = { op: string };
@@ -226,8 +226,10 @@ test("the header's x on a lone terminal closes it as ⌘W does: undoable while i
   await openApp(page);
   await graceMs(page, 10_000);
   const [a, b] = await sessions(page, ["/w/a", "/w/a"]);
-  await expect(headX(page)).toHaveAttribute("aria-label", "Close session");
-  await expect(headX(page)).toHaveAttribute("title", "Close session");
+  // named for the session it closes, as the split's x is
+  const title = (await page.getByTestId("session-title").textContent())!;
+  await expect(headX(page)).toHaveAttribute("aria-label", `Close ${title}`);
+  await expect(headX(page)).toHaveAttribute("title", `Close ${title}`);
   // a press on the x carried onto the terminal is no drag, and letting go there closes nothing
   const xb = (await headX(page).boundingBox())!;
   await page.mouse.move(xb.x + xb.width / 2, xb.y + xb.height / 2);
@@ -297,11 +299,12 @@ test("the main column switched under a drag (⌘⇧] / Ctrl+Shift+]): no preview
   expect(await calls(page)).toEqual([]);
 });
 
-test("a paused session's idle view takes the merge too", async ({ page }) => {
+test("a paused session's idle view takes the merge; another session's idle view, switched to mid-drag, takes nothing", async ({ page }) => {
   await openApp(page);
-  const [a, b] = await sessions(page, ["/w/a", "/w/a"]);
-  // after a restart both shells come back paused: their idle views, no terminal
-  await expect.poll(async () => (await page.evaluate(() => JSON.parse(localStorage.getItem("omher.resume") || "null")))?.sessions?.length).toBe(2);
+  const mod = (await platformIsMac(page)) ? "Meta" : "Control";
+  const [a, b] = await sessions(page, ["/w/a", "/w/a", "/w/c"]);
+  // after a restart the shells come back paused: their idle views, no terminal
+  await expect.poll(async () => (await page.evaluate(() => JSON.parse(localStorage.getItem("omher.resume") || "null")))?.sessions?.length).toBe(3);
   await page.evaluate(() => sessionStorage.setItem("__kept", "1"));
   await page.reload();
   await openRow(page, b);
@@ -309,6 +312,22 @@ test("a paused session's idle view takes the merge too", async ({ page }) => {
   await expect(idle).toBeVisible();
   await expect(page.getByTestId("terminal")).toHaveCount(0);
   await expect(header(page)).toHaveAttribute("data-drag", "merge");
+  // the main column steps to another paused session while the button is held: its idle view is no target
+  await pressHeaderOnto(page, idle, "right");
+  await expect(shade(page)).toHaveAttribute("data-session", a);
+  await page.keyboard.press(`${mod}+Shift+BracketRight`);
+  const other = page.locator('[data-testid="session-idle"]');
+  await expect(other).not.toHaveAttribute("data-session", b);
+  const to = await sidePoint(page, other, "left");
+  await page.mouse.move(to.x, to.y, { steps: 6 });
+  await expect(shade(page)).toHaveCount(0);
+  await expect(fill(page)).toHaveCount(0);
+  await page.mouse.up();
+  await expect(split(page)).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem("omher.splits"))).toBeNull();
+  // back on b: a drop on its own idle view merges it with a
+  await openRow(page, b);
+  await expect(idle).toBeVisible();
   await pressHeaderOnto(page, idle, "down");
   await expect(shade(page)).toHaveAttribute("data-session", a);
   await expect(shade(page)).toHaveAttribute("data-side", "down");
@@ -365,4 +384,63 @@ test("a release the page never hears (another app, outside the window) ends the 
   await page.mouse.click(to.x, to.y);
   await expect(split(page)).toHaveCount(0);
   await expect(page.locator("body")).not.toHaveClass(/split-dragging/);
+});
+
+test("a partner that closes or changes under the drag: letting go merges nothing", async ({ page }) => {
+  await openApp(page);
+  const [a, m, b] = await sessions(page, ["/w/a", "/w/a", "/w/a"]);
+  // b is open; its partner is the row under it, m
+  expect(await rows(page, "/w/a")).toEqual([b, m, a]);
+  await pressHeaderOnto(page, term(page, b), "right");
+  await expect(fill(page)).toHaveAttribute("data-session", m);
+  // m closes while the button is held (a test browser has no undo window: it goes at once); a is the partner now,
+  // but the preview named m
+  await page.evaluate((id) => (window as unknown as { __omherSessions: { close(id: string): void } }).__omherSessions.close(id), m);
+  await expect(page.getByTestId(`session-${m}`)).toHaveCount(0);
+  const to = await sidePoint(page, term(page, b), "left");
+  await page.mouse.move(to.x, to.y, { steps: 4 });
+  await page.mouse.up();
+  await expect(split(page)).toHaveCount(0);
+  // a fresh drag names a and merges with it
+  await pressHeaderOnto(page, term(page, b), "right");
+  await expect(fill(page)).toHaveAttribute("data-session", a);
+  await page.mouse.up();
+  expect(await order(page)).toEqual([a, b]);
+});
+
+test("the partner passes over a row in another split and a chat of the same folder", async ({ page }) => {
+  await openApp(page);
+  type Api = { draft(agent: string): string; setDraft(id: string, p: { cwd: string }): void; start(id: string, first: string): Promise<boolean> };
+  const [a, p, x] = await sessions(page, ["/w/a", "/w/a", "/w/x"]);
+  // p goes into a split with x (another folder's session)
+  await page.getByTestId(`session-${x}`).locator(".ss-open").click();
+  await dragRowOnto(page, p, x, "right");
+  await expect(split(page)).toHaveAttribute("data-panes", "2");
+  // a chat session in /w/a (not a TERMINALS row: it has no row there)
+  const chat = await page.evaluate(async () => {
+    const s = (window as unknown as { __omherSessions: Api }).__omherSessions;
+    const id = s.draft("claude");
+    s.setDraft(id, { cwd: "/w/a" });
+    await s.start(id, "/status");
+    return id;
+  });
+  type Rec = { id: string; status: string; cwd: string };
+  const list = () => page.evaluate(() => (window as unknown as { __omherSessions: { getState(): { list: Rec[] } } }).__omherSessions.getState().list.map((r) => ({ id: r.id, status: r.status, cwd: r.cwd })));
+  await expect.poll(async () => (await list()).find((r) => r.id === chat)?.status).toBe("running");
+  await expect(page.getByTestId(`session-${chat}`)).toHaveCount(0);
+  const [b] = await sessions(page, ["/w/a"]);
+  // /w/a lists b, p (in the other split) and a; the chat of /w/a sits between b and a in the session list
+  expect(await rows(page, "/w/a")).toEqual([b, p, a]);
+  const ids = (await list()).filter((r) => r.cwd === "/w/a").map((r) => r.id);
+  expect(ids.indexOf(chat)).toBeGreaterThan(ids.indexOf(b));
+  expect(ids.indexOf(chat)).toBeLessThan(ids.indexOf(a));
+  await pressHeaderOnto(page, term(page, b), "down");
+  await expect(fill(page)).toHaveAttribute("data-session", a);
+  await page.mouse.up();
+  await expect(split(page)).toHaveAttribute("data-panes", "2");
+  await expect(pane(page, a)).toHaveCount(1);
+  // p's own split with x is as it was
+  await openRow(page, x);
+  await expect(split(page)).toHaveAttribute("data-panes", "2");
+  expect(await order(page)).toEqual([x, p]);
 });

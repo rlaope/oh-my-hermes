@@ -1186,6 +1186,7 @@ export const ja: Record<Key, string> = {
   "ss.actions": "{name} の操作",
   "ss.rename": "名前を変更",
   "ss.close": "セッションを閉じる",
+  "ss.closeNamed": "{name} を閉じる",
   "ss.closedToast": "{name} を閉じました",
   "ss.closedLeft": "{n} 秒",
   "ss.undo": "元に戻す",

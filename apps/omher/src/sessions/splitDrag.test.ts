@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Layout } from "../terminal/layout";
-import type { SessionRec } from "./agents";
+import type { AgentInfo, SessionRec } from "./agents";
 import { mergePartner, sideAt } from "./splitDrag";
 import type { SplitGroup } from "./splitState";
 
@@ -55,6 +55,14 @@ describe("a header merge's partner", () => {
     expect(mergePartner(four, null, full, "s6")).toBe("s1");
     // every other row of the folder is in a split: none
     expect(mergePartner([T("s1", "/w/a"), T("s2", "/w/a")], null, two, "s1")).toBeNull();
+  });
+
+  it("asks the agents list whether a row is a terminal (an agent that opens as a chat counts only opened as a terminal)", () => {
+    const agents: AgentInfo[] = [{ id: "claude", label: "Claude Code", mode: "chat", path: "/bin/claude" }];
+    const rows = [T("s1", "/w/a"), T("s2", "/w/a", { agent: "claude", view: "chat" }), T("s3", "/w/a", { agent: "claude", open: "terminal" })];
+    expect(mergePartner(rows, agents, [], "s1")).toBe("s3");
+    // the same agent listed as a terminal agent: its row counts however it was opened
+    expect(mergePartner(rows, [{ ...agents[0], mode: "terminal" }], [], "s1")).toBe("s2");
   });
 
   it("is none for a session already in a split (its header moves its pane instead)", () => {
