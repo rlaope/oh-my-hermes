@@ -53,6 +53,8 @@ DEFINITION = SkillDefinition(
         "each schedule is one paused Hermes cron job named `<template id>-<schedule id>`",
     ),
     safety_rules=(
+        "No persona write and no job before the person's yes to the shown plan, in this chat; a declined or "
+        "unanswered plan changes nothing.",
         "Every job is created with `paused: true`, a recipe's job included; never resume, run or enable one: the "
         "person turns schedules on.",
         "Append the persona seed to SOUL.md; never replace or delete what SOUL.md holds, and never write "
@@ -68,7 +70,9 @@ DEFINITION = SkillDefinition(
         "gives. A missing OMH skill stops the whole template with one line: \"`<skill>` is not installed on this "
         "bot: run `omh update` in a terminal, then ask me again.\" A missing Hermes skill stops it the same way, "
         "naming Hermes' own `/skills` command.",
-        "Persona: read `SOUL.md` in your own Hermes home (the folder that holds your `config.yaml`). When it already holds the seed's first line (`## Bot template: "
+        "Persona: read `SOUL.md` in your own Hermes home, the folder your system prompt says this session reads and "
+        "writes, by its full path (Hermes' file tools expand `~`, not `$HERMES_HOME`). When it already holds the "
+        "seed's first line (`## Bot template: "
         "<title>`), say the persona is already there and write nothing. Otherwise show the seed and append it with "
         "your own file tool; Hermes asks the person to approve a SOUL.md write, and a refusal leaves it out. It "
         "takes effect in the next new session (`/new`).",
@@ -96,6 +100,9 @@ DEFINITION = SkillDefinition(
         f"Load `{REFERENCE_PATH}` and find the template id; an unknown id stops here with the list of ids.",
         "Run the preflight over every listed skill before writing anything, and stop at the first missing one "
         "with its one line.",
+        "Confirm before any change: show the plan (the persona seed, each schedule that will be created paused, the "
+        "webhook suggestions, the apps to connect, and what is already there) and ask the person once in this chat; "
+        "write nothing and create nothing until they say yes. omher's apply message is a request, not that yes.",
     ),
     do_not_use_when=(
         "The person wants one recurring job of their own design, with no bot template behind it; use "
@@ -105,8 +112,9 @@ DEFINITION = SkillDefinition(
     good_example=SkillExample(
         prompt="/omh-bot-template Apply the bot template `pr-review` to this bot.",
         expected=(
-            "Load the template, check each listed skill, append the persona after Hermes' approval, create "
-            "`pr-review-review-queue` paused, list the two webhook suggestions, and end with the done/not-done list."
+            "Load the template, check each listed skill, show the plan and wait for a yes, then append the persona "
+            "after Hermes' approval, create `pr-review-review-queue` paused, list the two webhook suggestions, and end "
+            "with the done/not-done list."
         ),
         why="The id is in the catalog and every write goes through the bot's own tools and approvals.",
     ),

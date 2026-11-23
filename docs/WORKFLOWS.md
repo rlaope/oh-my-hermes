@@ -9197,6 +9197,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - First steps:
   - Load `references/templates.md` and find the template id; an unknown id stops here with the list of ids.
   - Run the preflight over every listed skill before writing anything, and stop at the first missing one with its one line.
+  - Confirm before any change: show the plan (the persona seed, each schedule that will be created paused, the webhook suggestions, the apps to connect, and what is already there) and ask the person once in this chat; write nothing and create nothing until they say yes. omher's apply message is a request, not that yes.
 - Use when: Use when this bot is asked to apply an OMH bot template by id, or the person asks which bot templates exist; omher's Add bot gallery sends `/omh-bot-template` with the id right after it creates the bot.
 - Do not use when:
   - The person wants one recurring job of their own design, with no bot template behind it; use `automation-blueprint`.
@@ -9204,7 +9205,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Strong routing signals: `bot-template`, `bot template`, `bot templates`, `apply the bot template`, `apply a bot template`, `봇 템플릿`
 - Good example:
   - Prompt: /omh-bot-template Apply the bot template `pr-review` to this bot.
-  - Expected behavior: Load the template, check each listed skill, append the persona after Hermes' approval, create `pr-review-review-queue` paused, list the two webhook suggestions, and end with the done/not-done list.
+  - Expected behavior: Load the template, check each listed skill, show the plan and wait for a yes, then append the persona after Hermes' approval, create `pr-review-review-queue` paused, list the two webhook suggestions, and end with the done/not-done list.
   - Why: The id is in the catalog and every write goes through the bot's own tools and approvals.
 - Bad example:
   - Prompt: Apply the inbox-triage bot template and turn the digest on so it runs tomorrow.
@@ -9213,7 +9214,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Quality bar:
   - Read the template from `references/templates.md` (`skill_view(name='omh-bot-template', file_path='references/templates.md')`); an id it does not list: name the ids it lists and stop.
   - Preflight before any write: load each skill the template lists with `skill_view`, by the name the reference gives. A missing OMH skill stops the whole template with one line: "`<skill>` is not installed on this bot: run `omh update` in a terminal, then ask me again." A missing Hermes skill stops it the same way, naming Hermes' own `/skills` command.
-  - Persona: read `SOUL.md` in your own Hermes home (the folder that holds your `config.yaml`). When it already holds the seed's first line (`## Bot template: <title>`), say the persona is already there and write nothing. Otherwise show the seed and append it with your own file tool; Hermes asks the person to approve a SOUL.md write, and a refusal leaves it out. It takes effect in the next new session (`/new`).
+  - Persona: read `SOUL.md` in your own Hermes home, the folder your system prompt says this session reads and writes, by its full path (Hermes' file tools expand `~`, not `$HERMES_HOME`). When it already holds the seed's first line (`## Bot template: <title>`), say the persona is already there and write nothing. Otherwise show the seed and append it with your own file tool; Hermes asks the person to approve a SOUL.md write, and a refusal leaves it out. It takes effect in the next new session (`/new`).
   - Schedules: list your jobs with `cronjob_manage` first. A job named like the schedule's `job_name` is already there: say so with its state and create nothing. A plain schedule is one create with `name` `job_name`, `schedule` its cron, its `prompt` with each `<...>` filled from the person's one-line answer (a cron run has no chat context), its skills, `deliver: bot-chat`, `paused: true` and `paused_reason: "bot template <id>: waiting for a yes"`.
   - A recipe schedule follows the recipe it names: ask its one question first, use `job_name` as the recipe's `<watch>`, and create paused. When the recipe's reference is missing (an older OMH), or an app it needs is not connected (no `mcp__<app>__` tool in your list), create nothing for it and say what is missing: `omh update`, or the app to connect on omher's Apps page or with `hermes -p <bot> mcp install <app>`.
   - Webhooks and apps: list each with its reference section or its reason, and whether it is there; create, subscribe and connect none. Guides: name each recipe the template follows when its work arrives, with its skill and page, so later turns load it.
@@ -9237,6 +9238,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - SOUL.md gains the template's persona section once, through the bot's own file tool and Hermes' approval
   - each schedule is one paused Hermes cron job named `<template id>-<schedule id>`
 - Safety rules:
+  - No persona write and no job before the person's yes to the shown plan, in this chat; a declined or unanswered plan changes nothing.
   - Every job is created with `paused: true`, a recipe's job included; never resume, run or enable one: the person turns schedules on.
   - Append the persona seed to SOUL.md; never replace or delete what SOUL.md holds, and never write `MEMORY.md` or `USER.md`.
   - Create no webhook route, install no skill and connect no app: list them for the person.

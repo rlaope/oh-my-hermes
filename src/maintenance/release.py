@@ -1129,9 +1129,9 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 64019
 # preferred usage included) plus its separator (+4249); the operating-rhythm, wiki and frontend rows
 # did not move (their new lines sit past the first-four slice). Measured per row from the producer.
 # No headroom.
-# 554000 -> 558304: one `bot-template` capability row (4302) plus its separator
-# (+4304); dropping only that row reproduces 554000. Measured from the producer.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 558304
+# 554000 -> 558410: one `bot-template` capability row (4408) plus its separator
+# (+4410); dropping only that row reproduces 554000. Measured from the producer.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 558410
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three

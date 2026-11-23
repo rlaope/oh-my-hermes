@@ -261,6 +261,15 @@ class BotTemplateSkillTests(unittest.TestCase):
             self.assertIn(required, body)
         # the unattended rule is the shared one, not a restatement
         self.assertIn(_UNATTENDED_GATE, body)
+        # a plan and one yes before any change, omher's apply message included: what bounds a mis-route
+        self.assertIn("Confirm before any change: show the plan", body)
+        self.assertIn("write nothing and create nothing until they say yes", body)
+        self.assertIn("omher's apply message is a request, not that yes", body)
+        self.assertIn("No persona write and no job before the person's yes to the shown plan", body)
+        first_steps = body.split("## First Steps", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("Confirm before any change", first_steps)
+        # file tools expand `~`, not environment variables: the skill names the home by its full path
+        self.assertNotIn("$HERMES_HOME/SOUL.md", body)
 
     def test_hermes_only_and_absent_from_the_portable_projection(self) -> None:
         from omh.skills.catalog_portable import PORTABILITY_HERMES_ONLY, skill_portability
@@ -284,8 +293,10 @@ class BotTemplateRoutingTests(unittest.TestCase):
         for message in ("apply the pr-review bot template", "list the bot templates", "bot template"):
             with self.subTest(message=message):
                 self.assertFalse(everyday_sense_phrase_unanchored(SKILL, normalized_phrase(message)))
-        self.assertTrue(bot_template_names_the_job(normalized_phrase("apply the release-notes template")))
+        self.assertTrue(bot_template_names_the_job(normalized_phrase("apply the release-notes template to this bot")))
         self.assertTrue(bot_template_names_the_job(normalized_phrase("add the pr-review template to this bot")))
+        # the bot sense is required: an id beside "template" alone does not say which template
+        self.assertFalse(bot_template_names_the_job(normalized_phrase("apply the release-notes template")))
         self.assertFalse(bot_template_names_the_job(normalized_phrase("release notes template for the changelog")))
         # an id is also a file name: a repository's own template is edited, not applied, and a bare id is not enough
         for message in (

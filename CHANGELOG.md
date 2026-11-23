@@ -283,11 +283,12 @@ All notable changes will be documented here.
   and alert-to-fix recipes of `app-work-intake` and `operating-rhythm`'s meeting-to-issues line, a team profile pack
   role and playbooks. `omh profile bot-templates --json` lists them (`bot_template_catalog/v1`). Asking a bot to
   apply one ("apply the pr-review bot template", "봇 템플릿 적용해줘", or omher's `/omh-bot-template` line) loads the
-  new `omh-bot-template` skill: it stops at the first skill the bot lacks with the line that adds it, appends the
+  new `omh-bot-template` skill: it stops at the first skill the bot lacks with the line that adds it, shows the plan
+  and waits for the person's yes before any change, appends the
   persona seed to the bot's `SOUL.md` only through Hermes' own approval for that write, creates every schedule paused,
   lists webhooks and apps without creating or connecting any, and on a second run says what is already there. A
-  Discord, Slack or Telegram bot template in code, a PR template, an email, Jinja or prompt template keep their old
-  routes. (`src/catalogs/bot_templates.py`, `src/skills/bot_template_skill.py`, `src/routing/bot_template_cues.py`)
+  Discord, Slack or Telegram bot template in code, a repository's own release-notes or PR-review template file, a PR
+  template, an email, Jinja or prompt template keep their old routes. (`src/catalogs/bot_templates.py`, `src/skills/bot_template_skill.py`, `src/routing/bot_template_cues.py`)
 - **automation-blueprint: be told when something happens on a platform that sends no webhook.** Asking Hermes to
   be told when new mail matches a filter, a calendar event is about to start, a Notion page or database changes, a
   Linear or Jira issue is assigned, an Obsidian vault folder changes, or a Sentry issue opens ("tell me when a mail
@@ -514,13 +515,14 @@ All notable changes will be documented here.
   template; you pick one, type a name and press Create. omher checks the name against Hermes' own rule (lowercase
   letters, numbers, `-` or `_`, up to 64, not a name Hermes keeps such as `default`) and refuses one that is already on
   this computer, then runs Hermes' own `hermes -p default profile create <name> --no-alias` (no shell, nothing on stdin,
-  at most 330 seconds, past the 300 Hermes gives a create through its gateway) and counts it done only when Hermes
-  finished and the new profile's folder is there; a folder Hermes did not finish setting up is shown as partly made
-  and gets no template, and otherwise Hermes' own words show. The page says before Create that the new bot uses the
-  main bot's API keys, sign-ins and model, as Hermes does by default; no alias is written, and the page shows
+  at most 330 seconds, Hermes' own 300 for a create through its gateway plus 30) and counts it done only when Hermes
+  said it finished and the new profile's folder is there. A stopped run, or one that left a folder without that
+  finish, is shown as not confirmed, with what may exist and `hermes profile list` to check, and nothing is listed or
+  sent; otherwise Hermes' own words show. The page says before Create that the new bot copies the main profile's API
+  keys and model and shares its logins, as Hermes does by default; no alias is written, and the page shows
   `hermes profile alias <name>` for one. With a template, the new bot's main chat gets one
-  message, ``/omh-bot-template Apply the bot template `<id>` to this bot.``, and the bot applies it with its own
-  approvals, every schedule paused. A new profile gets oh-my-hermes' skills on the next `omh update`, so until then
+  message, ``/omh-bot-template Apply the bot template `<id>` to this bot.``; the bot shows its plan, changes nothing
+  until you say yes, then applies it with its own approvals, every schedule paused. A new profile gets oh-my-hermes' skills on the next `omh update`, so until then
   the gallery says so and sends nothing until you press Apply template, there or later on the bot's page. The
   templates come from `omh --hermes-home <root> profile bot-templates --json` through the same `omh` runner as the
   messaging platforms; without `omh`, or with one from before bot templates, the gallery says so and an empty bot still

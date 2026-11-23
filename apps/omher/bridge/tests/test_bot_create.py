@@ -119,28 +119,51 @@ class Create(unittest.TestCase):
         self.assertEqual(self.runs, [("/stub/hermes", "pr-bot", self.home, ob.PROFILE_CREATE_TIMEOUT)])
         self.assertIn("pr-bot", [b["name"] for b in ob.discover_bots(self.home)])
 
-    def test_a_folder_hermes_left_half_set_up_is_partial_and_applies_nothing(self):
-        # stopped (gateway path past its time, or a kill while Hermes seeds skills) or failed after the folder was
-        # published: the bot is there but may have no keys, model or skills
+    def test_a_create_is_confirmed_only_by_hermes_own_finish(self):
+        # exit 0 and the folder, but no `Profile '<name>' created at` line: Hermes did not say it finished
+        def quiet(name):
+            write(self.home / "profiles" / name / "config.yaml", "model: x\n")
+            return 0, ""
+        self.effect = quiet
+        got = self.op(name="quiet-bot")
+        self.assertEqual(got["outcome"], "unconfirmed")
+        self.assertNotIn("bot", got)
+        self.assertIn("could not confirm that Hermes finished making quiet-bot", got["line"])
+        self.assertIn("It may have left profiles/quiet-bot.", got["line"])
+        self.assertIn("`hermes profile list`", got["line"])
+
+    def test_a_folder_hermes_left_half_set_up_is_unconfirmed_and_sends_nothing(self):
+        # stopped or failed after the folder was published (Hermes copies keys, model and skills after that)
         for code, said in ((None, ""), (1, "Error: skill seeding failed\n")):
             with self.subTest(code=code):
-                def half(name, code=code, said=said):
-                    write(self.home / "profiles" / name / "config.yaml", "model: x\n")
+                name = f"half{1 if code else 0}"
+
+                def half(n, code=code, said=said):
+                    write(self.home / "profiles" / n / "config.yaml", "model: x\n")
                     return code, said
                 self.effect = half
-                name = f"half{1 if code else 0}"
                 got = self.op(name=name)
-                self.assertEqual((got["outcome"], got["bot"]), ("partial", name))
-                self.assertIn(f"Hermes made {name} but did not finish setting it up", got["line"])
+                self.assertEqual(got["outcome"], "unconfirmed")
+                self.assertNotIn("bot", got)
+                self.assertIn(f"It may have left profiles/{name}.", got["line"])
 
-    def test_a_stopped_run_with_no_folder_says_the_gateway_may_still_be_making_it(self):
+    def test_a_staging_leftover_is_named(self):
+        def cut(name):
+            (self.home / "profiles" / f".{name}.staging-4242").mkdir(parents=True)
+            return 1, "Error: interrupted\n"
+        self.effect = cut
+        got = self.op(name="cut-bot")
+        self.assertEqual(got["outcome"], "unconfirmed")
+        self.assertIn("It may have left profiles/.cut-bot.staging-4242.", got["line"])
+
+    def test_a_stopped_run_with_nothing_on_disk_says_the_gateway_may_still_be_making_it(self):
         self.effect = lambda name: (None, "")
         got = self.op(name="pr-bot")
-        self.assertEqual(got["outcome"], "failed")
-        self.assertIn(f"Hermes did not finish in {int(ob.PROFILE_CREATE_TIMEOUT)} seconds.", got["line"])
-        self.assertIn("It may still be making pr-bot through the running gateway", got["line"])
-        # longer than Hermes' own 300 s for a create through the gateway
-        self.assertGreater(ob.PROFILE_CREATE_TIMEOUT, 300.0)
+        self.assertEqual(got["outcome"], "unconfirmed")
+        self.assertIn("It may still be making pr-bot through the running gateway.", got["line"])
+        self.assertIn("`hermes profile list`", got["line"])
+        # Hermes' own 300 s for a create through the gateway (profile_provision_gateway.py CREATE_RPC_TIMEOUT), plus 30
+        self.assertEqual(ob.PROFILE_CREATE_TIMEOUT, 330.0)
 
     def test_exit_zero_without_the_folder_is_a_failure_in_hermes_words(self):
         self.effect = lambda name: (0, "  ⚠ Skills could not be seeded.\nnothing else\n")

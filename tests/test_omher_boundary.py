@@ -178,24 +178,25 @@ RULES = (
     "With `--no-alias` no alias is written, so the press writes nothing outside Hermes' home; the page shows Hermes' own"
     " `hermes profile alias <name>` for the person to run if they want one.",
     "The name is checked against Hermes' own rule (`validate_profile_name`: the page trims and lowercases it, then"
-    " `^[a-z0-9][a-z0-9_-]{0,63}$`, and not `hermes`, `default`, `test`, `tmp`, `root` or `sudo`), not `omh-tui`"
-    " (oh-my-hermes' own TUI profile, which `omh update` never gives OMH's skills), and refused when anything of that"
-    " name is already under `profiles/`, before anything runs; it is one argument.",
-    "one at a time, stopped with that group after 330 seconds, longer than the 300 seconds Hermes gives a create it"
-    " runs through the default profile's gateway; that stop does not reach a create the gateway is running,",
-    "above Create the page says the new bot uses the main bot's API keys, sign-ins and model.",
-    "omher counts the bot made only when Hermes ended without an error and `profiles/<name>/` is then a real folder (not"
-    " a link) holding its `config.yaml`. When the folder is there but Hermes stopped or failed (it publishes the folder"
-    " before it copies keys, sets the model and seeds skills), the page says the bot is only partly set up and applies"
-    " no template;",
+    " `^[a-z0-9][a-z0-9_-]{0,63}$`, and not `hermes`, `default`, `test`, `tmp`, `root` or `sudo`), not a profile"
+    " `omh update` skips (`omh-tui`, oh-my-hermes' own TUI profile, which never gets OMH's skills), and refused when"
+    " anything of that name is already under `profiles/`, before anything runs; it is one argument.",
+    "one at a time, stopped with that group after 330 seconds, Hermes' own 300 seconds for a create it runs through"
+    " the default profile's gateway plus 30; that stop does not reach a create the gateway is running.",
+    "above Create the page says the new bot copies the main profile's API keys and model and shares its logins.",
+    "omher counts the bot made only when Hermes exited 0, printed its own `Profile '<name>' created at` line",
+    "A run that was stopped, or that left the folder or a `profiles/.<name>.staging-<pid>` folder without that finish,"
+    " is could not confirm: the page names what may exist and the command to check, `hermes profile list` (never run by"
+    " omher), and lists, applies and sends nothing.",
     "omher writes no file in the profile.",
     "For the gallery this rule allows rule 43's `OMH_READS` table one more entry, `omh --hermes-home <Hermes root> profile"
     " bot-templates --json` (`bots.templates`), run only through `run_omh_read` under rule 43's limits, only when the"
     " person opens New bot;",
     "built from the template id alone, and only once rule 19's skill read shows that bot has the `omh-bot-template` skill;",
     "the page says so and sends nothing until the person presses Apply template, which the bot's page also offers later.",
-    "The bot applies the template with its own tools and approvals, every schedule paused; omher writes no persona,"
-    " creates no job and connects no app for it. A bot on another computer is never made this way.",
+    "The bot first shows its plan for the template and changes nothing until the person says yes in that chat, then"
+    " applies it with its own tools and approvals, every schedule paused; omher writes no persona, creates no job and"
+    " connects no app for it. A bot on another computer is never made this way.",
     "omher never commits, checks out, pushes or edits a repository.",
     "and OmO's subagent records (`~/.omo/agent/projects/*/senpi-task/tasks/st_*.json`, never the subagents' own"
     " transcripts under `children/`).",
@@ -3618,7 +3619,16 @@ class NewBotThroughHermesOwnCreate(unittest.TestCase):
         self.assertEqual(self._callers("run_hermes_profile_create"), ["op_bots_create"])
         # above Hermes' 300 s gateway create (profile_provision_gateway.py CREATE_RPC_TIMEOUT)
         self.assertEqual(ast.literal_eval(self._const("PROFILE_CREATE_TIMEOUT")), 330.0)
-        self.assertEqual(ast.literal_eval(self._const("OMH_PROFILES").args[0]), {"omh-tui"})
+        # the profiles `omh update` skips, read from OMH's own install code (src/install/skill_registration.py
+        # `hermes_profile_dirs` leaves out TUI_PROFILE): a name there never gets OMH's skills
+        from _local_package import load_local_package
+
+        load_local_package()
+        from omh.skin_pack import TUI_PROFILE
+
+        self.assertEqual(ast.literal_eval(self._const("OMH_PROFILES").args[0]), {TUI_PROFILE})
+        self.assertIn("if entry.name != TUI_PROFILE",
+                      (ROOT / "src" / "install" / "skill_registration.py").read_text(encoding="utf-8"))
         for flag in ("--clone", "--clone-all", "--clone-from", "--no-skills", "--clone-channels", "--yes"):
             self.assertNotIn(f"'{flag}'", ast.unparse(self.fns["profile_create_argv"]), flag)
 
@@ -3627,16 +3637,19 @@ class NewBotThroughHermesOwnCreate(unittest.TestCase):
         order = ["refusal = await asyncio.to_thread(new_profile_refusal, self.home, name)", "raise BridgeError(*refusal)",
                  "if self._creating:", "hermes = hermes_path()",
                  "run_hermes_profile_create, hermes, name, self.home, PROFILE_CREATE_TIMEOUT",
-                 "made = await asyncio.to_thread(new_profile_made, self.home, name)"]
+                 "if await asyncio.to_thread(new_profile_confirmed, self.home, name, code, output):"]
         at = [body.index(part) for part in order]
         self.assertEqual(at, sorted(at))
         refusal = self._body("new_profile_refusal")
         self.assertIn("os.path.lexists(home / 'profiles' / name)", refusal)
         made = self._body("new_profile_made")
         self.assertIn("not path.is_symlink() and path.is_dir() and (path / 'config.yaml').is_file()", made)
-        # ok only when Hermes finished; a folder without a clean finish is partial and gets no template
-        self.assertIn("if made and code == 0:", body)
-        self.assertIn("'outcome': 'partial'", body)
+        # ok only when Hermes said it finished; anything else on disk or a stop is unconfirmed and sends nothing
+        self.assertIn("if await asyncio.to_thread(new_profile_confirmed, self.home, name, code, output):", body)
+        self.assertIn("'outcome': 'unconfirmed'", body)
+        confirmed = self._body("new_profile_confirmed")
+        self.assertIn("code == 0 and f\"Profile '{name}' created at\" in (output or '') and new_profile_made(home, name)",
+                      confirmed)
         # rule 44's ops stay on this computer: never forwarded to another computer's bridge
         forward = self._const("PEER_FORWARD")
         names = {c.value for c in ast.walk(forward) if isinstance(c, ast.Constant)}
@@ -3679,7 +3692,7 @@ class NewBotThroughHermesOwnCreate(unittest.TestCase):
         self.assertIn('export const OMH_PROFILES: readonly string[] = ["omh-tui"];', ts)
         # the page says, before Create, that the new bot takes the main bot's keys, sign-ins and model
         en = (ROOT / "apps" / "omher" / "src" / "i18n" / "en.ts").read_text(encoding="utf-8")
-        self.assertIn('"ab.mirror": "The new bot uses this computer\'s main bot\'s API keys, sign-ins and model (Hermes\' default).",', en)
+        self.assertIn('"ab.mirror": "The new bot copies the main profile\'s API keys and model and shares its logins (Hermes\' default).",', en)
         self.assertIn('{t("ab.mirror")}', (self.ADDBOT / "NewBot.tsx").read_text(encoding="utf-8"))
         # one send in the whole Add bot code, in applyTemplate, only after rule 19's skill read shows the skill
         sends = {p.name: p.read_text(encoding="utf-8").count("sendTo(") for p in self.ADDBOT.glob("*.ts*")

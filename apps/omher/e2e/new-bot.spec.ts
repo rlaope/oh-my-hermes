@@ -57,7 +57,7 @@ test("the gallery lists OMH's templates beside No template, and the name follows
   await expect(create).toBeDisabled();
   await name.fill("omh-tui");
   await expect(page.getByTestId("addbot-name-error")).toContainText("omh-tui is oh-my-hermes' own TUI profile");
-  await expect(page.getByTestId("addbot-mirror")).toContainText("uses this computer's main bot's API keys, sign-ins and model");
+  await expect(page.getByTestId("addbot-mirror")).toContainText("copies the main profile's API keys and model and shares its logins");
   await name.fill("  PR-Bot ");
   await expect(page.getByTestId("addbot-name-error")).toHaveCount(0);
   await expect(create).toBeEnabled();
@@ -143,21 +143,22 @@ test("without oh-my-hermes, or one that gives no templates, the gallery says so 
   await expect(page.getByTestId("bot-plain")).toHaveAttribute("aria-current", "true");
 });
 
-test("a bot Hermes made but did not finish setting up is listed, says so, and gets no template", async ({ page }) => {
+test("a create omher cannot confirm lists nothing, sends nothing, and points at hermes profile list", async ({ page }) => {
   await mock("mock.skills", { add: [APPLY], after: 0 });
-  await mock("mock.createNext", { line: "Hermes made half-bot but did not finish setting it up: its keys, model or skills may be missing.", partial: true });
+  await mock("mock.createNext", {
+    line: "omher could not confirm that Hermes finished making half-bot. It may have left profiles/half-bot. Check with `hermes profile list` in a terminal.",
+    unconfirmed: true,
+  });
   await openNewBot(page);
   await page.getByTestId("addbot-template-pr-review").click();
   await page.getByTestId("addbot-name").fill("half-bot");
   // a double click starts one create
   await page.getByTestId("addbot-create").dblclick();
-  await expect(page.getByTestId("addbot-partial")).toContainText("did not finish setting it up");
-  await expect(page.getByTestId("bot-half-bot")).toBeVisible();
+  const box = page.getByTestId("addbot-unconfirmed");
+  await expect(box).toContainText("could not confirm that Hermes finished making half-bot");
+  await expect(box.locator("code")).toHaveText("hermes profile list");
   expect((await calls("bots.create")).length).toBe(1);
+  await expect(page.getByTestId("bot-half-bot")).toHaveCount(0);
   expect(await calls("chat.send")).toEqual([]);
-  // its template waits on its page
-  await page.keyboard.press("Escape");
-  await page.getByTestId("bot-half-bot").click({ button: "right" });
-  await page.getByTestId("row-menu").getByRole("menuitem", { name: "Edit bot" }).click();
-  await expect(page.getByTestId("bp-template")).toContainText("Bot template pr-review waits to be applied.");
+  expect(await calls("skills.list").then((c) => c.filter((x) => x.params.bot === "half-bot"))).toEqual([]);
 });

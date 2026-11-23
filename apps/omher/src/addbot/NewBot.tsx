@@ -10,17 +10,20 @@ import { t, tx, type Key } from "../i18n";
 import { Spinner } from "../ui";
 import { addToList, withBridge } from "./bots";
 import { applyMessage, checkName, normalizeName, type NameCheck } from "./templates";
-import { applyTemplate, hasApplySkill, setPendingTemplate } from "./pending";
+import { applyTemplate, hasApplySkill } from "./pending";
 
 const CREATE_CMD = "hermes profile create";
 const UPDATE_CMD = "omh update";
+/** Hermes' own listing, for the person to check an unconfirmed create (omher never runs it). */
+const LIST_CMD = "hermes profile list";
 /** Hermes' own command for the `<name>` wrapper `--no-alias` left out (hermes_cli/subcommands/profile.py `alias`). */
 const aliasCmd = (bot: string) => `hermes profile alias ${bot}`;
 
 type Step =
   | { kind: "form"; line?: string }
   | { kind: "creating" }
-  | { kind: "done"; bot: string; applied: boolean; partial?: string }
+  | { kind: "done"; bot: string; applied: boolean }
+  | { kind: "unconfirmed"; line: string }
   | { kind: "waiting"; bot: string; template: string; again?: boolean };
 
 const NAME_LINE: Record<Exclude<NameCheck, "ok" | "empty">, Key> = {
@@ -63,11 +66,9 @@ export function NewBot({ onBack, onDone }: { onBack: () => void; onDone: () => v
     setStep({ kind: "creating" });
     try {
       const r = await withBridge((b) => b.request("bots.create", { name }));
-      if (r.outcome === "partial" && r.bot) {
-        // made but not set up: listed, and its template (if any) waits for the person on its page, never applied here
-        if (template) setPendingTemplate(r.bot, template);
-        await addToList(getStore(), r.bot);
-        setStep({ kind: "done", bot: r.bot, applied: false, partial: r.line || t("ab.createFailed") });
+      if (r.outcome === "unconfirmed") {
+        // Hermes did not say it finished: nothing is listed, applied or sent; the person checks with Hermes
+        setStep({ kind: "unconfirmed", line: r.line || t("ab.createFailed") });
         return;
       }
       if (r.outcome !== "ok" || !r.bot) {
@@ -106,17 +107,26 @@ export function NewBot({ onBack, onDone }: { onBack: () => void; onDone: () => v
     </div>
   );
 
+  if (step.kind === "unconfirmed") {
+    return (
+      <div className="ab-new" data-testid="addbot-unconfirmed">
+        <div className="ab-h">{t("ab.new")}</div>
+        <div className="ab-err">{step.line}</div>
+        <div className="ab-hint">{tx("ab.checkList", { cmd: <code>{LIST_CMD}</code> })}</div>
+        <div className="ab-actions">
+          <button type="button" className="ab-btn ab-primary" data-testid="addbot-close" onClick={onDone}>
+            {t("ab.close")}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (step.kind === "done") {
     return (
       <div className="ab-new" data-testid="addbot-done">
         <div className="ab-h">{t("ab.new")}</div>
-        {step.partial ? (
-          <div className="ab-err" data-testid="addbot-partial">
-            {step.partial}
-          </div>
-        ) : (
-          <div className="ab-line">{t(step.applied ? "ab.createdApplied" : "ab.created", { name: step.bot })}</div>
-        )}
+        <div className="ab-line">{t(step.applied ? "ab.createdApplied" : "ab.created", { name: step.bot })}</div>
         {alias(step.bot)}
         <div className="ab-actions">
           <button type="button" className="ab-btn ab-primary" data-testid="addbot-close" onClick={onDone}>

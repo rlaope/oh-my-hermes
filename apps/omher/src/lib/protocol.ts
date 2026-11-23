@@ -351,10 +351,11 @@ export interface BotTemplates {
   templates: BotTemplate[];
 }
 
-/** `bots.create`: `ok` once Hermes finished and its new profile folder is there; `partial` when the folder is there
- *  but Hermes stopped or failed before setting it up (no template is applied); otherwise Hermes' own words. */
+/** `bots.create`: `ok` once Hermes said it finished and the new profile folder is there; `unconfirmed` when it was
+ *  stopped or left something without saying so (the line names what may exist; nothing is listed, applied or sent);
+ *  otherwise Hermes' own words. */
 export interface BotCreate {
-  outcome: "ok" | "partial" | "failed";
+  outcome: "ok" | "unconfirmed" | "failed";
   bot?: string;
   line?: string;
 }

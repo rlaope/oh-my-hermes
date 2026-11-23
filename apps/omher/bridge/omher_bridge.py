@@ -3116,6 +3116,26 @@ def new_profile_refusal(home: Path, name: object) -> tuple[str, str] | None:
     return None
 
 
+def new_profile_confirmed(home: Path, name: str, code: int | None, output: str) -> bool:
+    """Whether Hermes finished the create: it exited 0, printed its own `Profile '<name>' created at` line (hermes_cli/
+    profile_cmd.py `_profile_create` prints it only after `provision_profile` returned, past the publish, the key and
+    model copy and the skill seeding, through the gateway or locally), and the folder is there. Hermes writes no
+    completion marker file, so this is the one signal it gives."""
+    return code == 0 and f"Profile '{name}' created at" in (output or "") and new_profile_made(home, name)
+
+
+def new_profile_leftovers(home: Path, name: str) -> list[str]:
+    """What a create that omher could not confirm may have left under `profiles/`: the profile folder itself and
+    Hermes' staging folders (`.<name>.staging-<pid>`, profiles_initialization.py), by name, read-only."""
+    root = home / "profiles"
+    found = [f"profiles/{name}"] if os.path.lexists(root / name) else []
+    try:
+        found += sorted(f"profiles/{e.name}" for e in root.iterdir() if e.name.startswith(f".{name}.staging-"))
+    except OSError:
+        pass
+    return found[:4]
+
+
 def new_profile_made(home: Path, name: str) -> bool:
     """Whether Hermes made the bot: `profiles/<name>/` is a real folder (not a link) holding its config.yaml, the
     file omher lists a bot by (discover_bots)."""
@@ -8538,23 +8558,20 @@ class Bridge:
             code, output = await asyncio.to_thread(run_hermes_profile_create, hermes, name, self.home, PROFILE_CREATE_TIMEOUT)
         finally:
             self._creating = False
-        made = await asyncio.to_thread(new_profile_made, self.home, name)
-        if made and code == 0:
+        if await asyncio.to_thread(new_profile_confirmed, self.home, name, code, output):
             return {"outcome": "ok", "bot": name}
         said = hermes_said(output)
-        if made:
-            # Hermes publishes the folder before it copies keys, sets the model and seeds skills: a run stopped or
-            # failed after that left a bot that may not answer, so no template is applied to it
-            line = (f"Hermes made {name} but did not finish setting it up: its keys, model or skills may be missing."
-                    + (f"\n{said}" if said else ""))
-            return {"outcome": "partial", "bot": name, "line": line}
-        if code is None:
-            # a create through the default profile's running gateway goes on there after this run is stopped
-            line = (f"Hermes did not finish in {int(PROFILE_CREATE_TIMEOUT)} seconds. It may still be making {name} "
-                    "through the running gateway; it shows up in Add a bot when it is done." + (f"\n{said}" if said else ""))
-        else:
-            line = said or f"Hermes exited with code {code}."
-        return {"outcome": "failed", "line": line}
+        leftovers = await asyncio.to_thread(new_profile_leftovers, self.home, name)
+        if code is None or leftovers:
+            # stopped, or something is on disk without Hermes' own finish: Hermes publishes the folder before it
+            # copies keys, sets the model and seeds skills, and a create through the default profile's gateway goes on
+            # after this run is stopped. Nothing is listed, applied or sent; the person checks with Hermes.
+            what = (f"It may have left {', '.join(leftovers)}." if leftovers
+                    else f"It may still be making {name} through the running gateway.")
+            line = (f"omher could not confirm that Hermes finished making {name}. {what} "
+                    "Check with `hermes profile list` in a terminal." + (f"\n{said}" if said else ""))
+            return {"outcome": "unconfirmed", "line": line}
+        return {"outcome": "failed", "line": said or f"Hermes exited with code {code}."}
 
     async def op_tasks_linear(self, p) -> dict:
         """Tasks › Linear: whether the bot has a Linear MCP server in its config (rule 33). Hermes' gateway offers no
