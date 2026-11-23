@@ -125,6 +125,13 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
 - **While it answers** (Settings › General): a message sent while a bot is answering waits in the steer queue until
   the turn ends (the default), or, set to Steer, is steered into the running answer at once, as its Steer button
   would; a message behind another held one still waits its turn (`e2e/steer-queue.spec.ts`).
+- **Link chips** (`src/chat/parts/linkKinds.ts`, `e2e/links.spec.ts`): a link in a message shows as the service's mark
+  and what it points at, read from the address alone (nothing is fetched): GitHub, Slack, Discord, Google (Docs,
+  Sheets, Slides, Forms, Drive, Calendar events and booking pages, Meet, Gmail, Maps, Search), X, LinkedIn, YouTube,
+  Notion, Linear, Figma, npm, Jira and Confluence Cloud (`*.atlassian.net`), Sentry, Asana, Todoist, ClickUp and
+  GitLab (`gitlab.com`); another page on an Atlassian site is a generic Atlassian chip. A self-hosted Jira or GitLab,
+  or a lookalike host, stays a plain link named by its real host.
+  An `obsidian://` note link is named the same way but is text: omher opens only web links and messenger threads.
 - **Remote machines over SSH** (`src-tauri/src/peers.rs`, `src/peers/`): the sidebar `+` › Connect over SSH (or the
   chip under a bot's `omher-peer` reply, or Settings › Remote machines) takes a host from `~/.ssh/config` or
   `user@host`, checks it and shows the exact `ssh` command, the Hermes found there and its bots; only Connect saves it
@@ -146,7 +153,14 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   an agent starts it at once. Rows are grouped by folder under its git branch; each card shows its status (a spinner
   while output flows, a check or an x when the program ends), the mark of the CLI in the foreground (a Shell running
   `codex` shows Codex's), its name and age, and on its second line the CLI and the last line it printed. ⌘⇧] and ⌘⇧[
-  step through the terminals, and BOTS and TERMINALS scroll on their own. A session ends with its program and comes
+  step through the terminals, and BOTS and TERMINALS scroll on their own. Up to four sessions share the view as a
+  split: ⌘D / ⌘⇧D (Ctrl+Shift+D / Alt+Shift+D off macOS) splits with a new Shell, a row dragged onto the terminal
+  goes on the side it is dropped, and a pane's grip moves it. The header drags too: a session on its own, dragged by
+  its header onto its terminal, merges with the next session of its folder in the sidebar's order (the one before it
+  when it is the last; a row a search or a collapsed folder hides counts too), the preview naming that session; back
+  onto the header, or Escape, changes nothing. In a split the header moves the focused pane (not while zoomed). The
+  header's x closes the focused pane (the session stays listed), or a lone session as its row's x does: undoable
+  while it runs, else after the row's Stop? question. A session ends with its program and comes
   back after a restart waiting for Resume. DSH has no terminal view and is not offered there. The program runs in a
   pseudo-terminal (`portable-pty`: a Unix PTY on macOS, ConPTY on
   Windows) drawn with xterm.js. Settings › Terminal picks how every session terminal looks: a theme for the dark app
