@@ -108,6 +108,17 @@ test("changing reasoning and model calls chat.set_model and updates the pill", a
   await expect(page.getByTestId("model-note")).toHaveCount(0);
 });
 
+test("a level the route clamps reads the same on the bot's Settings page as in the pill", async ({ page }) => {
+  await open(page);
+  await page.getByTestId("model-pill").click();
+  const pop = page.getByTestId("model-pop");
+  await pop.getByRole("radio", { name: "ultra", exact: true }).click();
+  await expect(page.getByTestId("reasoning-label")).toHaveText("ultra · sends max");
+  await page.getByRole("button", { name: "Bot settings" }).click();
+  const body = page.getByTestId("settings-page-bot-kami");
+  await expect(body.locator(".st-row").filter({ hasText: /^Reasoning/ })).toContainText("ultra · sends max");
+});
+
 test("unsupported: one gray note, the old value stays", async ({ page }) => {
   // The mock always accepts chat.set_model; answer it `unsupported` in the page's socket instead.
   await page.routeWebSocket(/127\.0\.0\.1/, (ws) => {

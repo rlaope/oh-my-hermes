@@ -11,7 +11,7 @@ import { appSounds, setSoundsEnabled, soundsEnabled } from "../lib/sounds";
 import { LANG_NAMES, LANGS, t, type Key, type Lang } from "../i18n";
 import { Avatar, GridIcon, ModelIcon, SourceIcon } from "../ui";
 import { Seg } from "../chat/model/Seg";
-import { reasoningLabel } from "../chat/model/levels";
+import { reasoningPill } from "../chat/model/levels";
 import { Appearance } from "./Appearance";
 import { AccountsPage } from "./accounts/AccountsPage";
 import { ProvidersPage } from "./providers/ProvidersPage";
@@ -165,6 +165,8 @@ function BotPage({ bot }: { bot: Bot }) {
   const model = chat?.model || opts?.current.model || bot.model;
   const provider = chat?.provider || opts?.current.provider || bot.provider;
   const reasoning = chat?.reasoning || opts?.current.reasoning || "";
+  // what the route sends for that level, from the same source as the level itself (as the model picker's pill)
+  const wire = chat?.reasoning ? chat.reasoningWire : opts?.current.reasoning_wire;
   const offline = bot.status === "offline";
   const info = useBotInfo(bot);
   const picture = usePictureEditor(bot);
@@ -216,7 +218,7 @@ function BotPage({ bot }: { bot: Bot }) {
           </Value>
         </Row>
         <Row title={t("set.reasoning")} hint={t("set.reasoningHint")}>
-          <Value>{reasoning ? reasoningLabel(reasoning) : "—"}</Value>
+          <Value>{reasoning ? reasoningPill(reasoning, wire) : "—"}</Value>
         </Row>
         <Row title={t("set.change")} hint={t("set.changeHint")}>
           <button type="button" className="st-btn" onClick={() => void s.selectBot(bot.name)} disabled={offline}>
