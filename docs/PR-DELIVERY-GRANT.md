@@ -19,10 +19,11 @@ driving a terminal to flip the grant, or by writing its own forge client.
 Hermes' approval policy and the forge's own branch protection are the
 controls for that. Turn on branch protection for the default branch of every
 repository a granted bot can reach: require a pull request and a review, and
-refuse force pushes. Also restrict what workflows on bot branches may do:
-require approval for workflow runs and for workflow changes, and keep secrets
-out of `pull_request` runs (see the list below). The gate refuses the obvious self-grant spellings, but
-that list is not complete.
+refuse force pushes, with a ruleset nothing bypasses (GitHub Actions
+included). Also bound what a workflow on a bot branch can reach: set the
+default `GITHUB_TOKEN` permissions to read-only and put deploy and other
+secrets behind environments with required reviewers (see the list below). The
+gate refuses the obvious self-grant spellings, but that list is not complete.
 
 **What changes when this ships.** In a cron job (a PR watch included), a
 webhook or `api_server` run, a `hermes chat -q` run or a delegated child:
@@ -184,11 +185,17 @@ the forge without passing the gate:
 - a workflow file under `.github/workflows/` committed on a bot branch: it
   runs on the forge with the repository's token, and whatever secrets the
   repository exposes to such runs, as soon as the branch is pushed or the PR
-  opens. The gate does not look inside a push for this. Bound it on the forge:
-  protect the default branch, require approval before workflows run for
-  changes from bots or outside contributors, require review for changes under
-  `.github/workflows/` (a CODEOWNERS entry), and keep secrets out of
-  `pull_request` runs;
+  opens. The gate does not look inside a push for this. The bot pushes with
+  the person's own login to a branch of the same repository, so GitHub's
+  approval setting for workflow runs (which covers fork pull requests from
+  outside or first-time contributors) does not apply, and a same-repository
+  `pull_request` run receives the repository's secrets. Bound it on the forge:
+  set the default `GITHUB_TOKEN` permissions to read-only; put deploy and
+  other secrets behind environments with required reviewers; protect the
+  default branch with a ruleset nothing bypasses, GitHub Actions included;
+  where the plan offers push rulesets, block changes to `.github/workflows/**`
+  on bot branches. A CODEOWNERS entry for `.github/workflows/` gates the merge,
+  not the run;
 - a local-path or `insteadOf` remote set up before the grant applied, and a
   `cd` into another checkout before `git push origin ...` (`git -C`,
   `--git-dir` and `--work-tree` on a push are refused);
