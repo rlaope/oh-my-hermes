@@ -2684,6 +2684,131 @@
    "class": "local",
    "verdict": "allowed",
    "why_allowed": "local: a plain read of a protected path is not a write"
+  },
+  {
+   "command": "EDITOR='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env EDITOR='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "VISUAL='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env VISUAL='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "PAGER='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env PAGER='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "MANPAGER='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env MANPAGER='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "LESS='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env LESS='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "LESSOPEN='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env LESSOPEN='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "LESSCLOSE='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env LESSCLOSE='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "SSH_ASKPASS='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env SSH_ASKPASS='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "BROWSER='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env BROWSER='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "GIT_SEQUENCE_EDITOR='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env GIT_SEQUENCE_EDITOR='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "GIT_ASKPASS='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env GIT_ASKPASS='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "export EDITOR='gh pr merge 42'; git commit -m x",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "VISUAL='git push -f origin HEAD:main' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "EDITOR=x git rebase -i HEAD~2",
+   "class": "unclassified",
+   "verdict": "refused"
   }
  ]
 }

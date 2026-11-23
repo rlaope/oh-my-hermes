@@ -716,6 +716,17 @@ class UnattendedMatrixTests(_Home):
         self.assertEqual(directive["action"], "block")
         self.assertIsNone(self.pre("write_file", {"path": "src/app.py", "content": "x = 1\n"}))
 
+    def test_variables_that_name_a_program_are_refused_beside_git_and_gh(self):
+        names = ("EDITOR", "VISUAL", "GIT_EDITOR", "GIT_SEQUENCE_EDITOR", "PAGER", "GIT_PAGER", "GH_PAGER",
+                 "MANPAGER", "LESS", "LESSOPEN", "LESSCLOSE", "LESSKEYIN", "SSH_ASKPASS", "GIT_ASKPASS",
+                 "BROWSER", "GH_BROWSER", "GH_EDITOR", "GIT_EXTERNAL_DIFF", "GIT_PROXY_COMMAND")
+        for name in names:
+            for command in (f"{name}='gh pr merge 42' git commit", f"env {name}='gh pr merge 42' git commit",
+                            f"export {name}='gh pr merge 42'; git commit -m x"):
+                with self.subTest(command=command):
+                    self.assertEqual(gate.classify_command(command, prefix="bot/"), gate.UNCLASSIFIED)
+                    self.assertEqual(self.terminal(command)["action"], "block")
+
     def test_making_a_link_to_git_config_is_held(self):
         for command in ("ln -s .git g", "ln -s ../.git/hooks h", "mklink /J g .git", "cmd /c mklink /J g .git",
                         "New-Item -ItemType Junction -Path g -Target .git", "cp evil.sh .git/hooks/pre-push",

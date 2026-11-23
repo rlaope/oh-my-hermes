@@ -125,13 +125,21 @@ _UNREADABLE_WRAPPER_OPTIONS: Final = frozenset({"-S", "--split-string"})
 _ASSIGNMENT: Final = re.compile(r"^([A-Za-z_][A-Za-z_0-9]*)\+?=")
 # Variables that redirect or reprogram git or gh: their `-c`, `--repo` and
 # `--exec-path` in another spelling.
-_FORGE_ENV: Final = re.compile(r"^(?:GIT_|GH_|GITHUB_|PATH$|HOME$|XDG_CONFIG_HOME$)", re.IGNORECASE)
+# Plus the variables git, gh or a pager they start read as a program to run
+# (git(1) ENVIRONMENT and git-var(1): EDITOR, VISUAL, PAGER, SSH_ASKPASS, the
+# GIT_* family incl. GIT_EDITOR, GIT_SEQUENCE_EDITOR, GIT_ASKPASS, GIT_SSH,
+# GIT_SSH_COMMAND, GIT_PAGER, GIT_EXTERNAL_DIFF, GIT_PROXY_COMMAND; gh's
+# environment help: GH_EDITOR, GH_BROWSER, GH_PAGER, BROWSER; less(1):
+# LESS, LESSOPEN, LESSCLOSE, LESSKEY*; man(1): MANPAGER).
+_ENV_NAMES: Final = (r"GIT_\w*|GH_\w*|GITHUB_\w*|PATH|HOME|XDG_CONFIG_HOME|EDITOR|VISUAL|PAGER|MANPAGER|LESS\w*|"
+                     r"SSH_ASKPASS|BROWSER")
+_FORGE_ENV: Final = re.compile(rf"^(?:{_ENV_NAMES})$", re.IGNORECASE)
 _DECLARERS: Final = frozenset({"export", "declare", "typeset", "readonly", "local", "set", "setx"})
 # Marks in a command word that a shell resolves before it runs it: POSIX
 # expansion and quoting, cmd.exe's `^` escape and `%VAR%`, PowerShell's backtick.
 _HIDING_MARKS: Final = "$\\'\"^%`"
 # PowerShell's environment assignment (`$env:GH_REPO = ...`), the twin of `GH_REPO=...`.
-_POWERSHELL_ENV: Final = re.compile(r"^\$?env:(?:GIT_|GH_|GITHUB_|PATH\b|HOME\b|XDG_CONFIG_HOME\b)", re.IGNORECASE)
+_POWERSHELL_ENV: Final = re.compile(rf"^\$?env:(?:{_ENV_NAMES})\b", re.IGNORECASE)
 _WINDOWS_EXECUTABLE: Final = re.compile(r"\.(?:exe|cmd|bat|com)$", re.IGNORECASE)
 # A backslash before a letter or digit: a Windows path, which the POSIX lexer
 # would read as escapes (`C:\Program Files\Git\cmd\git.exe` loses every one).
