@@ -391,6 +391,8 @@ class PerBot(unittest.TestCase):
             "code=" + "c3" * 15: "code=<redacted>",
             "api_key: " + "q8" * 10: "api_key: <redacted>",
             "password=hunter22": "password=<redacted>",
+            "key=" + "AKIAIOSFODNN7EXAMPLE": "key=<redacted>",
+            "token: " + "QWERTYUIOPASDFGHJKL1": "token: <redacted>",
             "secret " + "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY": "secret <redacted>",
             "blob " + "2Xz++nd6e08VJBq/" + "Aa1" * 8 + "==": "blob <redacted>",
             "twilio " + "f" * 16 + "0" * 16: "twilio <redacted>",
@@ -401,9 +403,16 @@ class PerBot(unittest.TestCase):
         for words in ("discord_websocket_health_stale_reconnect_timeout_exceeded",
                       "Hermes is requesting: - Message Content Intent - Server Members Intent (required for username "
                       "allowlists and/or DISCORD_ALLOWED_ROLES)",
-                      "Enable it on the Bot page, Privileged Gateway Intents", "error code: 4014"):
+                      "Enable it on the Bot page, Privileged Gateway Intents", "error code: 4014",
+                      "403 Forbidden (error code: 50001): Missing Access", "missing key: DISCORD_BOT_TOKEN",
+                      "no token: DISCORD_BOT_TOKEN is unset", "Close code: 4014"):
             with self.subTest(words=words[:24]):
                 self.assertEqual(bounded_reason(words, 600), words)
+
+    def test_a_path_with_a_digit_in_a_long_run_goes_as_the_price_of_base64(self) -> None:
+        self.assertEqual(bounded_reason("see https://discord.com/developers/applications"),
+                         "see https://discord.com/developers/applications")  # Hermes' own links: no digit, kept
+        self.assertEqual(bounded_reason("at /home/user2024/projects/demo-bot/logs"), "at <redacted>")
 
     def test_escapes_control_and_bidi_characters_never_leave_the_producer(self) -> None:
         raw = "\x1b[31mred\x1b[0m \x1b]8;;http://evil.invalid\x07click\x1b]8;;\x07 \u202eevil\u202c \x9b2J nul\x00bel\x07 end"

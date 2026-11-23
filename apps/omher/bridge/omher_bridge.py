@@ -1029,7 +1029,8 @@ def omh_path(which=None, environ=None, windows: bool | None = None) -> str | Non
     found = which("omh")
     # only an absolute path outside the bridge's own folder: a relative PATH entry, or Windows looking in the current
     # folder first, must not pick an `omh` that happens to sit there
-    if found and os.path.isabs(found) and os.path.dirname(os.path.abspath(found)) != os.getcwd() \
+    if found and os.path.isabs(found) \
+            and os.path.normcase(os.path.dirname(os.path.abspath(found))) != os.path.normcase(os.getcwd()) \
             and (not windows or found.lower().endswith(".exe")):
         return found
     home = Path.home()

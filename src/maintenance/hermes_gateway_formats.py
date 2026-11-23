@@ -175,9 +175,15 @@ _SCRUBS = (
     # (`token=`, `api_key:`, `password=`, an OAuth `code=` …): the label stays, the value goes.
     (re.compile(r"(?i)\b((?:authorization:\s*)?(?:bearer|basic)\s+)[A-Za-z0-9._~+/=-]{16,}"), r"\1<redacted>"),
     (re.compile(r"(?i)\b(bot\s+)(?=[A-Za-z0-9._~+/=-]*\d)[A-Za-z0-9._~+/=-]{16,}"), r"\1<redacted>"),
-    (re.compile(r"(?i)\b(token|access_token|refresh_token|api[_-]?key|apikey|client_secret|secret|password|passwd|pwd"
-                r"|code|key)(\s*[:=]\s*)[^\s,;'\"&]{6,}"), r"\1\2<redacted>"),
+    # Not when what follows is an environment variable's name (`missing key: DISCORD_BOT_TOKEN`), and for `code` and
+    # `key` only a value with a letter and a digit, or 16 characters: discord.py's `(error code: 50001)` stays.
+    (re.compile(r"(?i)\b(token|access_token|refresh_token|api[_-]?key|apikey|client_secret|secret|password|passwd|pwd)"
+                r"(\s*[:=]\s*)(?-i:(?![A-Z][A-Z_]*(?![\w])))[^\s,;'\"&)]{6,}"), r"\1\2<redacted>"),
+    (re.compile(r"(?i)\b(code|key)(\s*[:=]\s*)(?-i:(?![A-Z][A-Z_]*(?![\w])))"
+                r"(?:(?=[^\s,;'\"&)]*[A-Za-z])(?=[^\s,;'\"&)]*\d)[^\s,;'\"&)]{6,}|[^\s,;'\"&)]{16,})"), r"\1\2<redacted>"),
     # Any other opaque run of 32 or more key characters holding both a letter and a digit: hex, base64 and the rest.
+    # `/` is a base64 character, so a URL path or file path with a digit in a 32-character run goes too (Hermes' own
+    # guidance links hold none); that is the price of never keeping a base64 secret's tail.
     (re.compile(r"(?<![\w+/=-])(?=[A-Za-z0-9+/=_-]*[0-9])(?=[A-Za-z0-9+/=_-]*[A-Za-z])[A-Za-z0-9+/=_-]{32,}"),
      "<redacted>"),
     (re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+"), "<email>"),
