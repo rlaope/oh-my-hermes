@@ -364,6 +364,8 @@ class Run:
 class AppTestCase(unittest.TestCase):
     def prepare(self, scenario: Scenario, *, rows: int = 24, cols: int = 80, env: dict | None = None) -> Run:
         root = Path(self.enterContext(make_test_tempdir("omh-tui-app-")))
+        # `main` builds the App itself: a Ctrl+V that finds no image never reads the machine's real clipboard here.
+        self.enterContext(patch("omh.tui.app.clipboard_text", lambda *args, **kwargs: None))
         materialize(root, scenario)
         environ = {
             **replay_env(root),

@@ -314,7 +314,8 @@ PROCESS_SPAWN_ALLOWLIST: dict[str, str] = {
         "`tmux show-environment SSH_CONNECTION` with a one-second timeout; and, for a Ctrl+V that Hermes found no image "
         "for, the clipboard's text read only when no SSH variable is set: one fixed `pbpaste` on a Mac, or on Linux "
         "the first of `wl-paste --no-newline --type text`, `xclip -selection clipboard -out` and `xsel --clipboard "
-        "--output` that answers, each with a one-second timeout (Windows reads it in process); nothing else spawns "
+        "--output` that answers, each with a one-second timeout (the first that runs past it ends the search) and at most "
+        "4 MiB and a byte read from it (Windows reads it in process); nothing else spawns "
         "from it, and it is never reached from a prepared-handoff path."
     ),
     "src/tui/git_status.py": (

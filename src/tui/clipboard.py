@@ -41,8 +41,12 @@ Windows it reads `CF_UNICODETEXT` through the Win32 clipboard API (no
 process); on a Mac one fixed `pbpaste`; on Linux one fixed `wl-paste
 --no-newline --type text` under Wayland, else `xclip -selection clipboard
 -out`, else `xsel --clipboard --output` under X11, each with a one-second
-timeout and at most CLIPBOARD_TEXT_BYTES of text taken. Nothing it reads goes
-anywhere but the composer, as a paste.
+timeout (one that runs past it ends the search) and never more than
+CLIPBOARD_TEXT_BYTES and one byte read from it; on Windows the clipboard
+block's size is checked before its text is read. Text past
+CLIPBOARD_TEXT_BYTES as UTF-8 counts as none. Nothing it reads goes anywhere
+but the composer, as a paste; a submit the person already sent is never
+changed by it.
 """
 
 from __future__ import annotations
@@ -50,6 +54,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 import ctypes
 import subprocess
+import threading
 import time
 
 from .terminal import terminal_name
@@ -151,8 +156,9 @@ def text_readers(environ: Mapping[str, str], platform: str) -> tuple[tuple[str, 
     return tuple(readers)
 
 
-def windows_clipboard_text() -> str | None:
-    """The Windows clipboard's text (`CF_UNICODETEXT`), or None when it holds none or could not be opened."""
+def windows_clipboard_text(limit: int = CLIPBOARD_TEXT_BYTES) -> str | None:
+    """The Windows clipboard's text (`CF_UNICODETEXT`), or None when it holds none, could not be opened, or holds more
+    than `limit` bytes of it (the size is read before the text is)."""
     try:
         user32 = ctypes.WinDLL("user32", use_last_error=True)  # type: ignore[attr-defined]
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
@@ -162,6 +168,7 @@ def windows_clipboard_text() -> str | None:
     user32.OpenClipboard.argtypes, user32.OpenClipboard.restype = (handle,), bool_
     user32.CloseClipboard.argtypes, user32.CloseClipboard.restype = (), bool_
     user32.GetClipboardData.argtypes, user32.GetClipboardData.restype = (ctypes.c_uint,), handle
+    kernel32.GlobalSize.argtypes, kernel32.GlobalSize.restype = (handle,), ctypes.c_size_t
     kernel32.GlobalLock.argtypes, kernel32.GlobalLock.restype = (handle,), handle
     kernel32.GlobalUnlock.argtypes, kernel32.GlobalUnlock.restype = (handle,), bool_
     for attempt in range(OPEN_CLIPBOARD_TRIES):
@@ -175,40 +182,83 @@ def windows_clipboard_text() -> str | None:
         data = user32.GetClipboardData(CF_UNICODETEXT)
         if not data:
             return None
+        size = kernel32.GlobalSize(data)  # UTF-16, so at most twice the bytes the text takes as UTF-8 here
+        if not size or size > 2 * limit + 2:
+            return None
         locked = kernel32.GlobalLock(data)
         if not locked:
             return None
         try:
-            return ctypes.wstring_at(locked)
+            # never past the block: a text without its terminating NUL ends at the block's end
+            return ctypes.wstring_at(locked, size // 2).split("\0", 1)[0]
         finally:
             kernel32.GlobalUnlock(data)
     finally:
         user32.CloseClipboard()
 
 
+READ_OK, READ_FAILED, READ_TIMED_OUT = "ok", "failed", "timed-out"
+
+
+def read_bounded(argv: list[str], env: Mapping[str, str], timeout: float, limit: int) -> tuple[str, bytes]:
+    """Run `argv` and keep at most `limit` + 1 bytes of what it prints: (READ_OK, bytes) for a zero exit,
+    (READ_FAILED, b"") when it could not start or failed, (READ_TIMED_OUT, b"") when it ran past `timeout` (killed)."""
+    try:
+        process = subprocess.Popen(
+            argv, env=dict(env), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        )
+    except (OSError, ValueError):
+        return READ_FAILED, b""
+    timed_out = threading.Event()
+
+    def kill() -> None:
+        timed_out.set()
+        try:
+            process.kill()
+        except OSError:
+            pass  # it ended meanwhile
+
+    timer = threading.Timer(timeout, kill)
+    timer.start()
+    try:
+        data = process.stdout.read(limit + 1) if process.stdout is not None else b""
+        if len(data) > limit:
+            try:
+                process.kill()  # more than is taken: what is left is never read
+            except OSError:
+                pass
+        if process.stdout is not None:
+            process.stdout.close()
+        code = process.wait()
+    finally:
+        timer.cancel()
+    if timed_out.is_set():
+        return READ_TIMED_OUT, b""
+    if len(data) > limit:
+        return READ_OK, data
+    return (READ_OK, data) if code == 0 else (READ_FAILED, b"")
+
+
 def clipboard_text(
     environ: Mapping[str, str], platform: str, tmux_over_ssh: Callable[[Mapping[str, str]], bool] = tmux_client_over_ssh,
-    run: Callable[..., subprocess.CompletedProcess[bytes]] = subprocess.run,
+    read: Callable[[list[str], Mapping[str, str], float, int], tuple[str, bytes]] = read_bounded,
     windows_text: Callable[[], str | None] = windows_clipboard_text,
 ) -> str | None:
-    """The clipboard's text where the TUI runs, for a Ctrl+V that found no image; None when there is none, it could
-    not be read, or the screen is on another machine (an SSH variable, or tmux's last client over SSH)."""
+    """The clipboard's text where the TUI runs, for a Ctrl+V that found no image; None when there is none, it is more
+    than CLIPBOARD_TEXT_BYTES as UTF-8, it could not be read, or the screen is on another machine (an SSH variable, or
+    tmux's last client over SSH). A reader that runs past PASTE_READ_SECONDS ends the search: the next would wait too."""
     if any(environ.get(name) for name in SSH_VARIABLES) or (environ.get("TMUX") and tmux_over_ssh(environ)):
         return None
     if platform == "win32":
         text = windows_text()
-        return text if text and len(text) <= CLIPBOARD_TEXT_BYTES else None
+        return text if text and len(text.encode("utf-8", "replace")) <= CLIPBOARD_TEXT_BYTES else None
     for argv in text_readers(environ, platform):
-        try:
-            done = run(
-                list(argv), env={**environ, "LC_ALL": "en_US.UTF-8"}, stdin=subprocess.DEVNULL, capture_output=True,
-                timeout=PASTE_READ_SECONDS, check=False,
-            )
-        except (OSError, subprocess.SubprocessError):
-            continue
-        if done.returncode != 0:
-            continue
-        if not done.stdout or len(done.stdout) > CLIPBOARD_TEXT_BYTES:
+        status, data = read(list(argv), {**environ, "LC_ALL": "en_US.UTF-8"}, PASTE_READ_SECONDS, CLIPBOARD_TEXT_BYTES)
+        if status == READ_TIMED_OUT:
             return None
-        return done.stdout.decode("utf-8", "replace")
+        if status != READ_OK:
+            continue
+        if not data or len(data) > CLIPBOARD_TEXT_BYTES:
+            return None
+        return data.decode("utf-8", "replace")
     return None

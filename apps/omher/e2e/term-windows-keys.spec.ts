@@ -120,10 +120,27 @@ test("Ctrl+Shift+C, Ctrl+Insert copy and Ctrl+Shift+V pastes once; the selection
   expect(await sentSince(page, before)).toBe("from-ctrl-shift-v");
 });
 
-test("AltGr (Ctrl+Alt) with C or V neither copies nor pastes", async ({ page }) => {
+test("AltGr (Ctrl+Alt) with C or V neither copies nor pastes, and the key is left to type its character", async ({ page }) => {
   await openWindows(page, { text: "never-pasted" });
   await feed(page, "\r\naltgr-text-1207\r\n");
   await selectAll(page);
+  // what the app does with the keys itself: a clipboard read, or a key it cancelled (an AltGr key must stay
+  // uncancelled, or its character is never typed). WebView2 itself pastes on Ctrl+V only with no other modifier, as
+  // the stand-in does, so a paste here could only be the app's own.
+  await page.evaluate(() => {
+    const w = window as unknown as { __reads: number; __cancelled: string[] };
+    w.__reads = 0;
+    w.__cancelled = [];
+    const clip = navigator.clipboard as unknown as { readText: () => Promise<string> };
+    const read = clip.readText.bind(clip);
+    clip.readText = () => {
+      w.__reads++;
+      return read();
+    };
+    window.addEventListener("keydown", (e) => {
+      if (e.altKey && e.defaultPrevented) w.__cancelled.push(e.code);
+    });
+  });
   const before = await typed(page);
   await page.keyboard.press("Control+Alt+KeyC");
   await page.keyboard.press("Control+Alt+KeyV");
@@ -131,6 +148,77 @@ test("AltGr (Ctrl+Alt) with C or V neither copies nor pastes", async ({ page }) 
   expect(await clipWrites(page)).toEqual([]);
   expect(await hasSelection(page)).toBe(true);
   expect(await sentSince(page, before)).not.toContain("never-pasted");
+  expect(await page.evaluate(() => (window as unknown as { __reads: number }).__reads)).toBe(0);
+  expect(await page.evaluate(() => (window as unknown as { __cancelled: string[] }).__cancelled)).toEqual([]);
+});
+
+test("a key pressed while a copying Ctrl+C is held lets no C through; a copy the clipboard refused keeps the selection", async ({ page }) => {
+  await openWindows(page);
+  await feed(page, "\r\nheld-copy-4410\r\n");
+  // the program asked for the Kitty protocol with key-release events (flags 1|2): a C key-up let through would reach
+  // it as CSI 99;5:3 u
+  await feed(page, "\x1b[>3u");
+  await selectAll(page);
+  let before = await typed(page);
+  // Ctrl+C copies (the selection goes); Shift pressed and let go meanwhile; then C and Ctrl let go
+  await page.keyboard.down("Control");
+  await page.keyboard.down("KeyC");
+  await expect.poll(() => hasSelection(page)).toBe(false);
+  await page.keyboard.down("Shift");
+  await page.keyboard.up("Shift");
+  await page.keyboard.up("KeyC");
+  await page.keyboard.up("Control");
+  await settle(page);
+  expect(await clipWrites(page)).toEqual([expect.stringContaining("held-copy-4410")]);
+  expect(await sentSince(page, before)).not.toMatch(/\x03|\x1b\[99;5/);
+  // the clipboard refuses the next copy: the selection stays, so nothing is lost and the next Ctrl+C tries again
+  await page.evaluate(() => {
+    (navigator.clipboard as unknown as { writeText: () => Promise<void> }).writeText = () => Promise.reject(new Error("denied"));
+  });
+  await selectAll(page);
+  before = await typed(page);
+  await page.keyboard.press("Control+C");
+  await settle(page);
+  expect(await hasSelection(page)).toBe(true);
+  expect(await sentSince(page, before)).not.toMatch(/\x03|\x1b\[99;5u/);
+});
+
+test("Ctrl+Up / Ctrl+Down jump between prompts at the shell's prompt, and stay a running program's", async ({ page }) => {
+  await openWindows(page);
+  const OSC = (b: string) => `\x1b]${b}\x07`;
+  const round = (name: string) =>
+    `${OSC("133;A")}${name}$ ${OSC("133;B")}run ${name}\r\n${OSC("133;C")}${Array.from({ length: 40 }, (_, i) => `${name} out ${i}\r\n`).join("")}${OSC("133;D;0")}`;
+  await feed(page, `\r\n${round("p1")}${round("p2")}${OSC("133;A")}p3$ ${OSC("133;B")}`);
+  const view = () =>
+    page.evaluate(() => {
+      const w = window as unknown as { __omherTerms: Set<{ element?: HTMLElement; buffer: { active: { viewportY: number; baseY: number } } }> };
+      const host = document.querySelector('[data-testid="terminal"] .xterm');
+      const b = [...w.__omherTerms].find((x) => x.element === host)!.buffer.active;
+      return { y: b.viewportY, base: b.baseY };
+    });
+  const bottom = await view();
+  expect(bottom.y).toBe(bottom.base);
+  let before = await typed(page);
+  // at the bottom, Ctrl+Down has nowhere to go: the shell gets it
+  await page.keyboard.press("Control+ArrowDown");
+  await expect.poll(async () => (await typed(page)).slice(before.length)).toBe("\x1b[1;5B");
+  // at the prompt, Ctrl+Up goes to the previous prompt and the shell gets nothing
+  before = await typed(page);
+  await page.keyboard.press("Control+ArrowUp");
+  await expect.poll(async () => (await view()).y).toBeLessThan(bottom.base);
+  // Ctrl+Down: the next prompt is the live one, on the bottom screen, so the view goes back to the bottom
+  await page.keyboard.press("Control+ArrowDown");
+  await expect.poll(async () => (await view()).y).toBe(bottom.base);
+  await settle(page);
+  expect((await typed(page)).slice(before.length)).toBe("");
+  // a command runs (C without D), an inline program such as the OMH TUI: Ctrl+Up is its key
+  // it printed enough that the earlier prompts are all above the screen: without the rule, Ctrl+Up would jump there
+  await feed(page, `run p3\r\n${OSC("133;C")}${Array.from({ length: 40 }, (_, i) => `p3 out ${i}\r\n`).join("")}`);
+  before = await typed(page);
+  const running = await view();
+  await page.keyboard.press("Control+ArrowUp");
+  await expect.poll(async () => (await typed(page)).slice(before.length)).toBe("\x1b[1;5A");
+  expect((await view()).y).toBe(running.y);
 });
 
 test("Ctrl+Shift+A selects the whole terminal and Ctrl+Shift+K clears it; the program gets neither, plain Ctrl+A stays its own", async ({ page }) => {

@@ -27,6 +27,7 @@ from test_tui_app import info_row_of
 from test_tui_modes import SID, RecordingClient, drawn, make_app, notices, type_text
 from omh.tui import gateway_contract as contract
 from omh.tui.app import (
+    CLIPBOARD_TEXT_HELD_NOTICE,
     EXIT_HINT,
     IMAGE_NOT_SENT_NOTICE,
     IMAGE_WAIT_LINE,
@@ -588,6 +589,24 @@ class GateTests(ImageTestCase):
         self.hermes.answered = len(self.client.calls)
         self.app._on_response(Response(paste + 1, {"attached": False, "message": "No image found in clipboard"}, None))
         self.assertEqual(self.client.calls[-1], ("session.redirect", {"session_id": SID, "text": "look at b"}))
+
+    def test_clipboard_text_never_joins_a_submit_the_person_already_sent(self) -> None:
+        """#3131 review: Ctrl+V meant an image, Enter went before Hermes answered, and the clipboard held text instead
+        (a password, a token): the held prompt goes as typed, the text waits in the composer, and a notice says so."""
+        reads: list[str] = []
+        self.app.read_clipboard_text = lambda: reads.append("read") or "s3cret-token"
+        self.app.transcript.running = True
+        type_text(self.app, "look at b")
+        self.app._on_input(CTRL_V)
+        self.app._on_input(Key(ENTER, ctrl=True))
+        (paste,) = [index for index, (method, _params) in enumerate(self.client.calls) if method == "clipboard.paste"]
+        self.hermes.answered = len(self.client.calls)
+        self.app._on_response(Response(paste + 1, {"attached": False, "message": "No image found in clipboard"}, None))
+        self.assertEqual(reads, ["read"])
+        self.assertEqual(self.client.calls[-1], ("session.redirect", {"session_id": SID, "text": "look at b"}))
+        self.assertNotIn("s3cret-token", repr(self.client.calls))
+        self.assertEqual(self.app.composer.text, "s3cret-token")
+        self.assertIn(CLIPBOARD_TEXT_HELD_NOTICE, notices(self.app))
 
     def test_a_prompt_waiting_on_a_paste_says_so_under_the_queue_with_the_time_once_it_is_long(self) -> None:
         now = [100.0]

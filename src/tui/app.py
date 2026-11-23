@@ -1248,6 +1248,8 @@ SESSION_ID_SHAPE = re.compile(r"\d{8}_\d{6}_[0-9a-f]+|local-[0-9a-f]{16,}")
 PATH_COMPLETE_DEBOUNCE_SECONDS = 0.12
 # An image Hermes queued for a session the TUI has since left: the gateway holds it there, so no chip shows here.
 ATTACH_LEFT_NOTICE = "Hermes queued {name} in the session you left, so it is not attached here."
+# Ctrl+V found no image while the person had already sent: what they sent goes unchanged, the clipboard's text waits
+CLIPBOARD_TEXT_HELD_NOTICE = "No image on the clipboard: its text is in the composer, not in what you sent."
 # The most bytes of one image the TUI keeps for its token: what the gateway child stages at most (`gateway_attach`).
 IMAGE_KEEP_BYTES = 20 * 1024 * 1024
 # How long the echo of a prompt sent with images waits out of scrollback for their previews (`App._request_preview`)
@@ -2280,6 +2282,7 @@ class App(ModesMixin, AgentViewMixin):
         git: GitWatcher | None = None,
         fetch_latest: Callable[[], str] = fetch_latest,
         contain_faults: bool = False,
+        read_clipboard_text: Callable[[], str | None] | None = None,
     ) -> None:
         self.terminal = terminal
         # The launched TUI's (`main`, `_run`): a part of the frame that raises is one warn row (`_drawn`), and while `run`
@@ -2526,9 +2529,9 @@ class App(ModesMixin, AgentViewMixin):
         self.platform = sys.platform  # where `copy_route` looks for `pbcopy`
         self.pbcopy: Callable[[str], bool] = partial(pbcopy, environ=environ)
         self.tmux_over_ssh: Callable[[Mapping[str, str]], bool] = tmux_client_over_ssh  # `copy_route`'s tmux question
-        # The clipboard's text a Ctrl+V pastes when Hermes found no image there (`clipboard_text`)
-        self.read_clipboard_text: Callable[[], str | None] = lambda: clipboard_text(
-            self.environ, self.platform, lambda env: self.tmux_over_ssh(env))
+        # The clipboard's text a Ctrl+V pastes when Hermes found no image there (`clipboard_text`); tests pass their own
+        self.read_clipboard_text: Callable[[], str | None] = read_clipboard_text or (lambda: clipboard_text(
+            self.environ, self.platform, lambda env: self.tmux_over_ssh(env)))
         self.question_view: Pager | None = None  # the pager Ctrl+O opened over the open question, while it is open
         # What reads the bot board (Ctrl+S, `/bots`) off this thread: made when it first opens, kept for the session
         # and paused while the board is closed, so a read stuck on a stalled file system never adds a thread.
@@ -8683,10 +8686,17 @@ class App(ModesMixin, AgentViewMixin):
         )
 
     def _paste_clipboard_text(self) -> bool:
-        """The clipboard's text into the draft (or the submit held for it) as a paste; False when there is none."""
+        """The clipboard's text into the draft as a paste; False when there is none. A submit the person sent while the
+        Ctrl+V was out goes as it was: text they never saw is not added to it, it waits in the draft, and a notice says
+        so."""
         text = self.read_clipboard_text()
         if not text:
             return False
+        held = self.intake_answering.held if self.intake_answering is not None else None
+        if held is not None and not held.cancelled and held in self.held_submits:
+            self._draft().handle(Paste(text))
+            self.transcript.add_notice(CLIPBOARD_TEXT_HELD_NOTICE)
+            return True
         self._paste_back(text)
         return True
 

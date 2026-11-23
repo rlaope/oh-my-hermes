@@ -167,14 +167,23 @@ export function attachInput(term: Terminal, host: HTMLElement, onFind: () => voi
   const os = keyOs();
   const mac = os === "mac";
   const linux = !mac && typeof navigator !== "undefined" && /Linux/.test(navigator.platform);
-  // a Ctrl+C that copied (Windows): its repeats and its key-up are not the program's either, though the selection is gone
+  // a Ctrl+C that copied (Windows): its repeats and its key-up are not the program's either, though the selection may
+  // be gone. Only that key's own key-up (or the terminal losing the keyboard) ends it: another key pressed meanwhile
+  // does not, so the C's key-up never reaches the program alone.
   let copyHeld = false;
+  const letGo = () => {
+    copyHeld = false;
+  };
+  host.addEventListener("focusout", letGo);
   // find: xterm asks first; `false` keeps the key from the program
   term.attachCustomKeyEventHandler((e) => {
-    if (e.type === "keydown" && !e.repeat) copyHeld = false;
-    else if (copyHeld && isKey(e, "c")) {
-      if (e.type === "keyup") copyHeld = false;
-      return false;
+    if (copyHeld && isKey(e, "c")) {
+      if (e.type === "keyup") {
+        copyHeld = false;
+        return false;
+      }
+      if (e.type !== "keydown" || e.repeat) return false;
+      copyHeld = false; // a new press: the last one's key-up never came
     }
     const font = fontKey(e, mac);
     if (font) {
@@ -207,11 +216,17 @@ export function attachInput(term: Terminal, host: HTMLElement, onFind: () => voi
       if (e.type === "keydown") {
         e.preventDefault();
         const text = term.hasSelection() ? term.getSelection() : "";
-        if (text) void navigator.clipboard?.writeText(text).catch(() => undefined);
-        // plain Ctrl+C (Windows) clears what it copied, as Windows Terminal does
-        if (!e.shiftKey && e.key !== "Insert") {
-          term.clearSelection();
-          copyHeld = true;
+        // plain Ctrl+C (Windows) clears what it copied, as Windows Terminal does, once the clipboard took it: a copy
+        // that failed keeps the selection, so the next Ctrl+C copies again instead of interrupting the program
+        const clears = !e.shiftKey && e.key !== "Insert";
+        if (clears) copyHeld = true;
+        if (text && navigator.clipboard?.writeText) {
+          void navigator.clipboard
+            .writeText(text)
+            .then(() => {
+              if (clears && term.getSelection() === text) term.clearSelection();
+            })
+            .catch(() => undefined);
         }
       }
       return false;
@@ -324,6 +339,7 @@ export function attachInput(term: Terminal, host: HTMLElement, onFind: () => voi
 
   return () => {
     undoPaste();
+    host.removeEventListener("focusout", letGo);
     host.removeEventListener("mousedown", down);
     document.removeEventListener("mouseup", up);
     host.removeEventListener("mousedown", press, true);

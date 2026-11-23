@@ -1,6 +1,6 @@
 // engine-marks.ts: what is read from OSC 133 marks, OSC 7 folders and OSC 9;4 progress, and where a prompt jump goes.
 import { describe, expect, it } from "vitest";
-import { nextPrompt, parse133, parseOsc7, parseProgress, promptKey } from "./engine-marks";
+import { nextPrompt, parse133, parseOsc7, parseProgress, promptKey, takesPromptKey } from "./engine-marks";
 
 describe("parse133", () => {
   it("reads the four marks and a finished command's exit code", () => {
@@ -116,5 +116,14 @@ describe("promptKey", () => {
     expect(promptKey(k("ArrowUp", { ctrlKey: true, altKey: true }), false)).toBe(0);
     expect(promptKey(k("ArrowUp", { metaKey: true }), false)).toBe(0);
     expect(promptKey(k("ArrowUp"), false)).toBe(0);
+  });
+});
+
+describe("takesPromptKey", () => {
+  it("off macOS takes Ctrl+Up / Ctrl+Down only at the prompt or with the view scrolled up; macOS always", () => {
+    expect(takesPromptKey(false, false, false)).toBe(true); // at the prompt
+    expect(takesPromptKey(false, true, false)).toBe(false); // a program runs (C without D): its keys
+    expect(takesPromptKey(false, true, true)).toBe(true); // scrolled up while it runs: the person is reading back
+    expect(takesPromptKey(true, true, false)).toBe(true); // Cmd is never a program's
   });
 });

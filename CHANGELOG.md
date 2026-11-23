@@ -11,16 +11,19 @@ All notable changes will be documented here.
   Ctrl+Shift+C / Ctrl+Shift+V and Ctrl+Insert / Shift+Insert still work. Linux keeps the GNOME Terminal keys: plain
   Ctrl+C and Ctrl+V stay the program's there. Three Mac terminal keys that had no Windows or Linux key now have one:
   Ctrl+Shift+A selects the whole terminal (Cmd+A), Ctrl+Shift+K clears it (Cmd+K), and Ctrl+Up / Ctrl+Down go to the
-  previous or next prompt (Cmd+Up / Cmd+Down; Ctrl+Up and Ctrl+Down go to the program while a full-screen program is
-  open or the shell sent no prompt marks). The terminal's right-click menu and Settings › Keyboard show these keys on
-  Windows and Linux, with no ⌘. None of these keys acts while AltGr is held. (#3131; `docs/OMHER-BOUNDARY.md` rule 11)
+  previous or next prompt (Cmd+Up / Cmd+Down). Ctrl+Up and Ctrl+Down still go to the program while a command runs (an
+  inline program such as the OMH TUI or Claude Code), in a full-screen program, when the shell sent no prompt marks,
+  or when the view is already at the bottom with nowhere to go. A Ctrl+C whose copy the clipboard refused keeps the
+  selection. The terminal's right-click menu and Settings › Keyboard show these keys on Windows and Linux, with no ⌘.
+  None of these keys acts while AltGr is held. (#3131; `docs/OMHER-BOUNDARY.md` rule 11)
 - **The OMH TUI's Ctrl+V pastes the clipboard's text when there is no image.** Ctrl+V asked Hermes only for a
   clipboard image, and with text on the clipboard said "No image found in clipboard" and inserted nothing. That is
   what a terminal that sends Ctrl+V on as ^V (instead of pasting) got. Now, when Hermes finds no image, the TUI pastes
   the clipboard's text into the composer as a paste. An image on the clipboard still attaches as an `[Image #N]`
-  token, and `/paste` stays image only. The text is read only when the screen is this machine's (no SSH, and inside
-  tmux not over SSH): through the Win32 clipboard on Windows, `pbpaste` on a Mac, and `wl-paste`, `xclip` or `xsel`
-  on Linux. (#3131; `docs/OMH-TUI-BOUNDARY.md`)
+  token, and `/paste` stays image only. A prompt sent before Hermes answered goes exactly as typed: the clipboard's
+  text is never added to it, waits in the composer instead, and a notice says so. The text is read only when the
+  screen is this machine's (no SSH, and inside tmux not over SSH): through the Win32 clipboard on Windows, `pbpaste`
+  on a Mac, and `wl-paste`, `xclip` or `xsel` on Linux. (#3131; `docs/OMH-TUI-BOUNDARY.md`)
 - **`omh_delegate_route` can hand a child the rest of its chain, each step at its own effort (opt-in).** With
   `{"schema_version": "delegate_route_options/v1", "write_fallback_providers": true}` in
   `~/.omh/routing/delegate-route.json`, `set` also writes the positions after the head into
