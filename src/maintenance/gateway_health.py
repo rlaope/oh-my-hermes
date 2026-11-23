@@ -22,14 +22,17 @@ from what was read, and each absence said as one:
    bounded, as unrecognized.
 
 The remedy is always Hermes' own command; OMH runs none of it. The readers
-live here and in `hermes_gateway_formats`, not in the doctor command, so the
-TUI bot board can show the same report later.
+live here and in `hermes_gateway_formats`, not in the doctor command, so every
+surface reads the same answer: `bot_platforms` is question 3 alone, per bot,
+for the TUI bot board and for `omh hermes platforms` (which omher runs). It
+carries only classified states, Hermes' bounded and cleaned reason and
+guidance text, and the fix; never a log line.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 import os
 from pathlib import Path
 import time
@@ -38,7 +41,20 @@ from ..install.skill_registration import hermes_profile_dirs
 from ..skin_pack import TUI_PROFILE
 from ..system.hermes_install import hermes_install_dir
 from ..system.process_listing import LAUNCH_SHAPES, GatewayListing, hermes_gateway_processes
-from ..tui.bot_board import ON_POSIX, Gateway, Platform, process_facts, read_gateway, started_at
+from ..tui.bot_board import (
+    ON_POSIX,
+    PLATFORM_DISCONNECTED,
+    PLATFORM_FAILED,
+    PLATFORM_RECONNECTING,
+    PLATFORM_UNKNOWN,
+    BotPlatforms,
+    Gateway,
+    Platform,
+    PlatformStatus,
+    process_facts,
+    read_gateway,
+    started_at,
+)
 from .hermes_gateway_formats import (
     GATEWAY_LOG_RELATIVE,
     GATEWAY_LOG_TAIL_BYTES,
@@ -49,6 +65,8 @@ from .hermes_gateway_formats import (
     STATE_CONNECTED,
     STATE_DEGRADED,
     STATE_DISCONNECTED,
+    STATE_FAILED,
+    STATE_FATAL,
     STATE_RETRYING,
     STATUS_MISSING,
     STATUS_READ,
@@ -68,6 +86,7 @@ from .hermes_gateway_formats import (
 )
 
 GATEWAY_HEALTH_SCHEMA = "omh_gateway_health/v1"
+BOT_PLATFORMS_SCHEMA = "omh_bot_platforms/v1"
 DEFAULT_PROFILE = "default"
 BUILD_CURRENT = "current"
 BUILD_BEFORE = "started_before_build"
@@ -97,6 +116,14 @@ RESTART_NOTE = (
     "and interrupts them only with `--yes`; OMH restarts nothing"
 )
 PORTAL_PATH = "the Discord Developer Portal, your application's Bot page, Privileged Gateway Intents"
+# Discord's privileged intents, as Hermes' record names them (`… - Message Content Intent - Server Members Intent`).
+PRIVILEGED_INTENTS = ("Message Content", "Server Members", "Presence")
+GUIDANCE_CHARS = 600  # Hermes' guidance in a record entry runs longer than a log reason
+# Why a platform's state is unknown now (`PlatformStatus.unknown_why`).
+UNKNOWN_EARLIER_RUN = "earlier_run"  # its newest line predates the start of the gateway serving it
+UNKNOWN_NOT_SERVED = "not_served"  # no running gateway serves its profile
+UNKNOWN_AMBIGUOUS = "ambiguous"  # a failure the log cannot give to one of several profiles
+UNKNOWN_STATE = "unknown_state"  # a record state this check does not know
 
 
 @dataclass(frozen=True)
@@ -128,6 +155,10 @@ class AdapterState:
     last_state: str = ""  # for STATE_STALE and STATE_UNSERVED: what the newest (older) line said
     gateway_started: str = ""  # when the gateway serving the profile started
     logged_as_written: str = ""  # the same line's stamp as Hermes wrote it, in the writing process's local time
+    since: str = ""  # for a state that is not connected: the first line of this run saying so, none connected after
+    restart: str = ""  # Hermes' command that restarts the gateway serving the profile ("" when none serves it)
+    guidance: str = ""  # Hermes' own guidance in the serving gateway's record entry, bounded and cleaned
+    intents: tuple[str, ...] = ()  # a privileged-intents refusal: the intents that guidance names
 
 
 @dataclass(frozen=True)
@@ -217,6 +248,82 @@ def gateway_health(
     )
 
 
+def bot_platforms(
+    hermes_home: Path,
+    *,
+    gateway_reader: Callable[[Path], Gateway] = read_gateway,
+    log_tail_bytes: int = GATEWAY_LOG_TAIL_BYTES,
+) -> tuple[BotPlatforms, ...]:
+    """Question 3 alone, per bot: each profile's messaging platforms as `gateway_health` judges them, for the TUI bot
+    board and `omh hermes platforms`. It reads the gateway records and the gateway log tails only (no process listing,
+    no build stamp), and each platform comes back as one status with its reason and fix, never a log line.
+
+    A platform the log cannot give to one of several profiles is `unknown` for each of them that has no state of its
+    own; one whose every candidate's record says it is up is history and not listed. A profile with no platform in its
+    serving gateway's record and no adapter line has an empty list: nothing to show, which is not "connected".
+    """
+    root = hermes_root(hermes_home)
+    homes = gateway_homes(root)
+    _recorded, _unverified, serving = _recorded_gateways(homes, gateway_reader, BuildStamp(STATUS_MISSING, ""))
+    logs, adapters = _adapter_states(homes, serving, log_tail_bytes)
+    by_profile: dict[str, dict[str, PlatformStatus]] = {label: {} for label, _home in homes}
+    unowned: list[AdapterState] = []
+    for state in adapters:
+        if state.last_state == AMBIGUOUS_PROFILE:
+            unowned.append(state)
+        else:
+            by_profile.setdefault(state.profile, {})[state.platform] = _platform_status(state)
+    for state in unowned:
+        if state.source == SOURCE_RECORD:
+            continue  # every candidate's own record says it is up now
+        for name in state.profile.split("/"):
+            by_profile.setdefault(name, {}).setdefault(state.platform, _platform_status(state))
+    log_status = {label: log.status for (label, _home), log in zip(homes, logs, strict=True)}
+    return tuple(
+        BotPlatforms(name, log_status.get(name, STATUS_MISSING), tuple(platforms[key] for key in sorted(platforms)))
+        for name, platforms in by_profile.items()
+    )
+
+
+def bot_platforms_payload(hermes_home: Path) -> dict[str, object]:
+    """`omh hermes platforms`: `bot_platforms` as `omh_bot_platforms/v1` JSON."""
+    return {"schema_version": BOT_PLATFORMS_SCHEMA, "bots": [asdict(bot) for bot in bot_platforms(hermes_home)]}
+
+
+def _platform_status(state: AdapterState) -> PlatformStatus:
+    """One adapter state as a surface shows it. Not connected only when known so; every state this check cannot
+    place now (an earlier run's line, an unserved profile, an unattributable failure, a record state it does not
+    know) is `unknown`, never connected and never disconnected."""
+    unknown_why = ""
+    if state.last_state == AMBIGUOUS_PROFILE:
+        status, unknown_why = PLATFORM_UNKNOWN, UNKNOWN_AMBIGUOUS
+    elif state.state == STATE_STALE:
+        status, unknown_why = PLATFORM_UNKNOWN, UNKNOWN_EARLIER_RUN
+    elif state.state == STATE_UNSERVED:
+        status, unknown_why = PLATFORM_UNKNOWN, UNKNOWN_NOT_SERVED
+    elif state.source == SOURCE_RECORD and state.state in RECORD_CONNECTING:
+        status = "connecting"
+    elif state.source == SOURCE_RECORD and state.state == RECORD_DISABLED:
+        status = "disabled"
+    elif state.source == SOURCE_RECORD and state.state not in RECORD_KNOWN:
+        status, unknown_why = PLATFORM_UNKNOWN, UNKNOWN_STATE
+    elif state.state in {STATE_CONNECTED, STATE_DEGRADED}:
+        status = state.state
+    elif state.state == STATE_RETRYING or (state.reason_kind == REASON_TRANSIENT and not state.needs_attention):
+        status = PLATFORM_RECONNECTING
+    elif state.state == STATE_FAILED:
+        status = PLATFORM_FAILED
+    elif state.state in {STATE_FATAL, STATE_DISCONNECTED}:
+        status = PLATFORM_DISCONNECTED
+    else:
+        status, unknown_why = PLATFORM_UNKNOWN, UNKNOWN_STATE
+    up = status in {STATE_CONNECTED, STATE_DEGRADED}
+    return PlatformStatus(
+        state.platform, status, _adapter_down(state) and not unknown_why, "" if up else state.since, state.logged,
+        state.reason_kind, state.reason, state.guidance, state.fix, state.restart, state.intents, unknown_why,
+    )
+
+
 def _recorded_gateways(
     homes: list[tuple[str, Path]], gateway_reader: Callable[[Path], Gateway], build: BuildStamp
 ) -> tuple[list[GatewayProcess], list[str], dict[str, _Serving]]:
@@ -272,55 +379,69 @@ def _adapter_states(
     this gateway run. A line from before the serving gateway started, or for a profile no running gateway serves, is
     said as such and never as the state now."""
     logs: list[LogRead] = []
-    latest: dict[tuple[str, str], tuple[AdapterEvent, str]] = {}
+    latest: dict[tuple[str, str], tuple[AdapterEvent, str, AdapterEvent | None]] = {}
     ambiguous: list[AdapterState] = []
     for label, home in homes:
         log = read_gateway_log(home / GATEWAY_LOG_RELATIVE, tail_bytes=tail_bytes)
         logs.append(log)
         newest_here: dict[tuple[str, str], AdapterEvent] = {}
+        outage_here: dict[tuple[str, str], AdapterEvent] = {}  # the first line of this run not followed by a connect
         unowned: dict[str, AdapterEvent] = {}
         for event in log.events:  # within one log, the line written last wins, whatever its stamp says
             if event.profile == AMBIGUOUS_PROFILE:
                 unowned[event.platform] = event
                 continue
-            newest_here[(event.profile or label, event.platform)] = event
+            key = (event.profile or label, event.platform)
+            newest_here[key] = event
+            if event.state in {STATE_CONNECTED, STATE_DEGRADED}:
+                outage_here.pop(key, None)
+            elif _in_run(event, serving.get(key[0])):
+                outage_here.setdefault(key, event)
         ambiguous.extend(_ambiguous_state(event, log.path, serving) for event in unowned.values())
         for key, event in newest_here.items():  # across logs, the stamps decide
             held = latest.get(key)
             if held is None or (event.epoch or 0.0) >= (held[0].epoch or 0.0):
-                latest[key] = (event, log.path)
+                latest[key] = (event, log.path, outage_here.get(key))
     keys = set(latest)
     for info in serving.values():
         keys.update(tuple(key.split(":", 1)) for key in info.platforms)  # type: ignore[misc]
     states = []
     for profile, platform in sorted(keys):
         info = serving.get(profile)
-        event, log_path = latest.get((profile, platform), (None, ""))
+        event, log_path, first = latest.get((profile, platform), (None, "", None))
         if info is None:
             if event is not None:
                 states.append(AdapterState(profile, platform, STATE_UNSERVED, _utc(event), log_path,
                                            last_state=event.state, logged_as_written=event.logged))
             continue
         record = info.platforms.get(f"{profile}:{platform}")
-        this_run = event is not None and (info.started is None or event.epoch is None or event.epoch >= info.started - 1)
+        this_run = event is not None and _in_run(event, info)
         restart = _restart_command(info.gateway_profile)
         started = iso_utc(info.started)
         if record is None and not this_run:
             if event is not None:
                 states.append(AdapterState(profile, platform, STATE_STALE, _utc(event), log_path,
                                            last_state=event.state, gateway_started=started,
-                                           logged_as_written=event.logged))
+                                           logged_as_written=event.logged, restart=restart))
             continue
         current = event if this_run else None
-        states.append(_adapter_state(profile, platform, current, log_path, record, restart, started))
+        state = _adapter_state(profile, platform, current, log_path, record, restart, started)
+        if state.state not in {STATE_CONNECTED, STATE_DEGRADED} and first is not None and current is not None:
+            state = replace(state, since=_utc(first))
+        states.append(state)
     return logs, states + [state for state in ambiguous if state.reason_kind or state.source == SOURCE_RECORD]
+
+
+def _in_run(event: AdapterEvent, info: _Serving | None) -> bool:
+    """Whether a line falls in the run of the gateway serving its profile (a line with no readable stamp does)."""
+    return info is not None and (info.started is None or event.epoch is None or event.epoch >= info.started - 1)
 
 
 def _ambiguous_state(event: AdapterEvent, log_path: str, serving: dict[str, _Serving]) -> AdapterState:
     """A reason the log cannot give one profile: said for the platform, naming the candidates; judged only when it
     falls in the run of a gateway serving them (else it says nothing about now and is left out)."""
     info = next((serving[name] for name in event.candidates if name in serving), None)
-    this_run = info is not None and (info.started is None or event.epoch is None or event.epoch >= info.started - 1)
+    this_run = _in_run(event, info)
     entries = [serving[name].platforms.get(f"{name}:{event.platform}") if name in serving else None
                for name in event.candidates]
     # Every candidate's own current record entry says it is up: the line is history, not a finding.
@@ -331,7 +452,7 @@ def _ambiguous_state(event: AdapterEvent, log_path: str, serving: dict[str, _Ser
     return AdapterState(
         "/".join(event.candidates), event.platform, event.state, _utc(event), log_path, event.reason, event.code,
         kind, fix, SOURCE_RECORD if this_run and all_up else SOURCE_LOG, logged_as_written=event.logged,
-        last_state=AMBIGUOUS_PROFILE,
+        last_state=AMBIGUOUS_PROFILE, since=_utc(event), restart=restart if info is not None else "",
     )
 
 
@@ -355,12 +476,16 @@ def _adapter_state(
         down = state not in _NOT_DOWN
     probe = AdapterEvent(profile, platform, state, logged, None, reason, code)
     kind = classify_reason(probe) if down else ""
-    fix = _adapter_fix(kind, probe, log_path, restart, record.error if record else "",
+    record_error = record.error if record else ""
+    fix = _adapter_fix(kind, probe, log_path, restart, record_error,
                        record is not None and record.needs_attention) if kind else ""
+    intents = tuple(name for name in PRIVILEGED_INTENTS if f"{name} Intent" in record_error) \
+        if kind == REASON_PRIVILEGED_INTENTS else ()
     return AdapterState(
         profile, platform, state, _utc(event) if event is not None else "", log_path, reason, code, kind, fix,
         SOURCE_RECORD if record is not None else SOURCE_LOG, record is not None and record.needs_attention,
-        gateway_started=started, logged_as_written=logged,
+        gateway_started=started, logged_as_written=logged, restart=restart,
+        guidance=bounded_reason(record_error, GUIDANCE_CHARS) if record_error else "", intents=intents,
     )
 
 
@@ -369,7 +494,10 @@ def _utc(event: AdapterEvent) -> str:
 
 
 def _restart_command(gateway_profile: str) -> str:
-    return "hermes gateway restart" if gateway_profile == DEFAULT_PROFILE else f"hermes --profile {gateway_profile} gateway restart"
+    """Hermes' restart of one gateway process, its profile always named: a bare `hermes gateway restart` follows
+    Hermes' sticky active profile (`hermes profile use`), which may name a served bot rather than the host. omher's
+    Restart (BOUNDARY rule 29) names it the same way."""
+    return f"hermes -p {gateway_profile} gateway restart"
 
 
 def _adapter_fix(

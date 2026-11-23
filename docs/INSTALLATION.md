@@ -4303,8 +4303,10 @@ answers three questions for the root Hermes home and every profile under it
   record (the host obligation file in Hermes' host state directory, or a
   home's `fleet_restart_pending` marker) and its latest update receipt
   (`logs/update_receipts/latest.json`, an incomplete gateway restart or a
-  fleet row marked stale). The remedy is Hermes' `hermes gateway restart`
-  (`hermes --profile <name> gateway restart` for a standalone profile): while
+  fleet row marked stale). The remedy is Hermes' own restart with the
+  gateway's profile named, `hermes -p default gateway restart` for the host
+  (`hermes -p <name> gateway restart` for a standalone profile), since a bare
+  `hermes gateway restart` follows Hermes' sticky active profile: while
   turns are live Hermes asks first, refuses with no terminal to ask on, and
   interrupts them only with `--yes`.
 - **Fleet shape.** A gateway process no record under this Hermes root names
@@ -4341,7 +4343,19 @@ answers three questions for the root Hermes home and every profile under it
   where to enable them: the Discord Developer Portal, the application's Bot
   page, Privileged Gateway Intents. Hermes does not retry that failure on its
   own, so the gateway needs a restart afterwards. A rejected token is named
-  too; any other reason is shown, bounded, as unrecognized.
+  too; any other reason is shown, bounded, as unrecognized. Hermes' reason
+  text never keeps a bot token, a webhook's credential path, a long key, an
+  id, an email address or a URL's query.
+
+The same adapter states, per bot, are what `omh hermes platforms` prints
+(read-only JSON, `omh_bot_platforms/v1`): each platform's status (connected,
+degraded, connecting, turned off, failed, disconnected, reconnecting, or
+unknown when nothing read says what it is now), whether a person must act,
+since when it is not connected, the reason and Hermes' own guidance, the fix
+and the restart command for the gateway that serves it. The OMH TUI bot board
+(`/bots`, Ctrl+S) draws them on each bot's card and box, and omher's sidebar
+and bot page show them by running that command (its boundary rule 43).
+Nothing on any of them restarts or changes anything.
 
 Missing evidence is said as missing: no Hermes install, no build stamp, no
 receipt, no running gateway, a log that is absent, unreadable or not in

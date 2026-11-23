@@ -267,6 +267,14 @@ def cmd_hermes_readiness(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_hermes_platforms(args: argparse.Namespace) -> int:
+    """Each Hermes bot's messaging platforms, read-only (`gateway_health.bot_platforms`): what omher shows per bot."""
+    from ..maintenance.gateway_health import bot_platforms_payload
+
+    _print_json(bot_platforms_payload(_paths(args).hermes_home))
+    return 0
+
+
 def cmd_hermes_retained_context(args: argparse.Namespace) -> int:
     try:
         payload = build_hermes_retained_context(_paths(args))
@@ -332,6 +340,12 @@ def _add_hermes_commands(sub) -> None:
         help="Inspect Hermes Agent runtime surfaces and OMH reinforcement coverage.",
     )
     readiness.set_defaults(func=cmd_hermes_readiness)
+
+    platforms = hermes_sub.add_parser(
+        "platforms",
+        help="Print each Hermes bot's messaging platform states as JSON (read-only: gateway records and log tails).",
+    )
+    platforms.set_defaults(func=cmd_hermes_platforms)
 
     retained_context = hermes_sub.add_parser(
         "retained-context",

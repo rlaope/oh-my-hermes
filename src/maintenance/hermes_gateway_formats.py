@@ -146,11 +146,17 @@ _SECONDARY_RETRY = re.compile(_RUN + "Secondary " + _PLATFORM + r" reconnect ret
 _ADAPTER_REASON = re.compile(
     _STAMP + r"hermes_plugins\.platforms__" + _PLATFORM + r"\.adapter: \[[^\]]+\] Failed to connect to [^:]+: (?P<reason>.+)$"
 )
-# What a reason text never keeps, replaced in this order: credentials first, then ids, addresses and queries.
+# What a reason text never keeps, replaced in this order: credentials first (tokens, a webhook's path, any long
+# opaque run), then ids, addresses and queries.
 _SCRUBS = (
     (re.compile(r"[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{20,}"), "<redacted>"),  # Discord bot token
     (re.compile(r"xox[a-z]-[A-Za-z0-9-]{10,}"), "<redacted>"),  # Slack token
     (re.compile(r"\b\d{6,}:[A-Za-z0-9_-]{30,}\b"), "<redacted>"),  # Telegram bot token
+    # A webhook address carries its credential in the path: everything after `webhooks/` (Discord) or `services/`
+    # (Slack) goes.
+    (re.compile(r"(https?://(?:[\w-]+\.)*(?:discord(?:app)?\.com/api(?:/v\d+)?/webhooks|hooks\.slack\.com/services)/)\S+"),
+     r"\1<redacted>"),
+    (re.compile(r"(?<![\w-])[A-Za-z0-9_-]{40,}(?![\w-])"), "<redacted>"),  # any other long opaque run: a key or a hash
     (re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+"), "<email>"),
     (re.compile(r"(https?://[^\s?#]+)[?#]\S*"), r"\1?<redacted>"),  # a URL's query or fragment
     (re.compile(r"\b[UCWTGBDE](?=[A-Z0-9]*\d)[A-Z0-9]{8,}\b"), "<id>"),  # Slack team, user and channel ids
@@ -366,13 +372,14 @@ def classify_reason(event: AdapterEvent) -> str:
     return REASON_UNRECOGNIZED
 
 
-def bounded_reason(text: str) -> str:
-    """Hermes' reason text on one line, at most `REASON_CHARS`, without Discord, Slack or Telegram bot tokens, Discord
-    and Slack ids, email addresses, or a URL's query (`_SCRUBS`)."""
+def bounded_reason(text: str, limit: int = REASON_CHARS) -> str:
+    """Hermes' reason text on one line, at most `limit` characters (`REASON_CHARS` unless said), without Discord, Slack
+    or Telegram bot tokens, a Discord or Slack webhook's credential path, any other run of 40 or more key characters,
+    Discord and Slack ids, email addresses, or a URL's query (`_SCRUBS`)."""
     cleaned = " ".join(text.split())
     for pattern, replacement in _SCRUBS:
         cleaned = pattern.sub(replacement, cleaned)
-    return cleaned if len(cleaned) <= REASON_CHARS else cleaned[: REASON_CHARS - 1].rstrip() + "…"
+    return cleaned if len(cleaned) <= limit else cleaned[: limit - 1].rstrip() + "…"
 
 
 def iso_utc(epoch: float | None) -> str:
