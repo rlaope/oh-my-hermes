@@ -2066,7 +2066,7 @@ PR_STATES = ("open", "merged", "closed", "draft", "unknown")
 PR_CHECKS = ("passing", "failing", "running", "none")
 PR_HEAD = re.compile(r"^[0-9a-f]{40}$")
 PR_ROLLUP_MAX = 500     # rollup entries looked at
-# A thread's PR: a full link in one of the bot's own answers, stricter than PR_URL (BOUNDARY rule 21): https only, the
+# A thread's PR: a full link in one of the bot's own answers, stricter than PR_URL (BOUNDARY rule 40): https only, the
 # host exactly `github.com`, nothing glued before it, a number with no leading zero, and no further path segment.
 THREAD_PR_URL = re.compile(r"(?<![A-Za-z0-9.@/-])https://github\.com/([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))/"
                            r"([A-Za-z0-9_.-]{1,100})/pull/([1-9][0-9]{0,6})(?![A-Za-z0-9_/])")
@@ -4779,6 +4779,43 @@ def read_session_cwds(profile_dir: Path, ids: list[str]) -> dict[str, str]:
     return {str(sid): str(cwd) for sid, cwd in rows if isinstance(cwd, str) and cwd}
 
 
+THREAD_ROWS_MAX = 2000  # a thread's newest user and assistant rows read for its PR links
+
+
+def read_thread_rows(profile_dir: Path, session_id: str) -> list[dict]:
+    """One thread's saved user and assistant rows (`messages`: id, role, content, timestamp, and display_kind where the
+    column exists), oldest first, the newest THREAD_ROWS_MAX, from the profile's state.db opened read-only; [] when it
+    has none (or no state.db). Never a tool row, reasoning or any other column. Nothing is written."""
+    import sqlite3
+    db = profile_dir / "state.db"
+    if not session_id or not db.is_file():
+        return []
+    cols = ("id", "role", "content", "timestamp", "display_kind")
+    try:
+        con = sqlite3.connect(ro_uri(db), uri=True, timeout=1.0)
+        try:
+            for use in (cols, cols[:4]):  # an older state.db has no display_kind
+                try:
+                    got = con.execute(f"SELECT {', '.join(use)} FROM messages WHERE session_id = ? AND role IN"
+                                      " ('user', 'assistant') ORDER BY id DESC LIMIT ?",
+                                      (session_id, THREAD_ROWS_MAX)).fetchall()
+                    break
+                except sqlite3.OperationalError:
+                    if use is not cols:
+                        raise
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return []
+    out = []
+    for r in reversed(got):
+        row = {"row_id": r[0], "role": r[1], "content": r[2] if isinstance(r[2], str) else "", "timestamp": r[3]}
+        if len(r) > 4 and isinstance(r[4], str):
+            row["display_kind"] = r[4]
+        out.append(row)
+    return out
+
+
 def read_session_title(profile_dir: Path, session_id: str) -> tuple[str, str] | None:
     """One session's saved title and folder (`sessions.title`, `sessions.cwd`) from the profile's state.db, opened
     read-only; None when it has no such row (or no state.db). Nothing is written."""
@@ -7239,16 +7276,17 @@ class Bridge:
         return Reply(result, replay if prompts or asks else None)
 
     async def op_thread_prs(self, p) -> dict:
-        """The PRs a thread's bot named and GitHub's word on each (BOUNDARY rule 21): the thread's own saved
-        messages read through Hermes' ``session.history`` (read only: never resumed), the full PR links in the bot's
-        answers there (thread_pr_refs: newest first, at most PR_THREAD_MAX), then each one's state and checks through
-        the shared PrStates (its cache, pool and per-minute cap). ``fresh``: the person asked for a refresh.
-        {prs: [{number, repo, url, state, checks, head?}]}. Only a thread this bridge created or listed."""
+        """The PRs a thread's bot named and GitHub's word on each (BOUNDARY rules 21 and 40): the thread's saved
+        messages read, never written, from the bot's own state.db (read_thread_rows; no gateway call, so a thread not
+        attached in this bridge is never resumed for it), the full PR links in the bot's answers there (thread_pr_refs:
+        newest first, at most PR_THREAD_MAX), then each one's state and checks through the shared PrStates (its cache,
+        pool and per-minute cap). ``fresh``: the person asked for a refresh. {prs: [{number, repo, url, state, checks,
+        head?}]}. Only a thread this bridge created or listed."""
         conn = await self._conn(p.get("bot"))
         tid = self._thread_known(conn, p.get("thread"))
         chat = conn.folders.get(tid)
-        res = await self._call(conn, "session.history", session_id=chat.stored_id if chat else tid)
-        refs = thread_pr_refs(chat_messages(res.get("messages"), running=bool(chat and chat.in_turn)))
+        rows = await asyncio.to_thread(read_thread_rows, conn.bot["path"], chat.stored_id if chat else tid)
+        refs = thread_pr_refs(chat_messages(rows, running=bool(chat and chat.in_turn)))
         return {"prs": await asyncio.to_thread(self.prs.thread, refs, p.get("fresh") is True) if refs else []}
 
     def _hint_rows(self, conn: Conn) -> list[dict]:

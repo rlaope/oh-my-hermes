@@ -2034,7 +2034,7 @@ export interface Actions {
   runsGet(bot: string, run: string): Promise<RunDetail>;
   /** The GitHub state of the PRs a run's nodes name (the bridge asks `gh`, apart from `runsGet`). */
   runsPrs(bot: string, run: string): Promise<{ prs: Record<string, NodePr> }>;
-  /** The PRs a thread's bot named and GitHub's state and checks for each (the bridge's `thread.prs`, rule 21). */
+  /** The PRs a thread's bot named and GitHub's state and checks for each (the bridge's `thread.prs`, rule 40). */
   threadPrs(bot: string, thread: string, fresh: boolean): Promise<ThreadOps["thread.prs"]["result"]>;
   runsCli(params?: { agent?: CliAgent; cwd?: string; since?: number }): Promise<{ runs: AgentRunSummary[] }>;
   /** A SESSIONS chat's title from the agent's own session files (`cli.title`). */

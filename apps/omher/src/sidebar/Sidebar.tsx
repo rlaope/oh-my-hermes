@@ -58,7 +58,7 @@ export function Sidebar() {
     ? listed.filter((b) => b.display_name.toLowerCase().includes(needle) || b.name.toLowerCase().includes(needle))
     : listed;
   const asks = selectAsks(s);
-  // threads whose pull request is open with failing checks, still listed (rule 21: shown, never acted on)
+  // threads whose pull request is open with failing checks, still listed (rule 40: shown, never acted on)
   const failing = useThreadPrs()
     .failing()
     .filter((f) => (s.threads[f.bot] ?? []).some((r) => r.thread === f.thread));

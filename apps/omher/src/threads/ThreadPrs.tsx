@@ -1,4 +1,4 @@
-// A thread's pull requests on screen (rule 21; the logic is prs.ts): the compact mark on its sidebar row, the card
+// A thread's pull requests on screen (rule 40; the logic is prs.ts): the compact mark on its sidebar row, the card
 // under the answer that named each one, and the app's one reader of `thread.prs`. A card opens the PR's page only on
 // the person's click, through the app's one external opener (rule 22). Everything GitHub said is shown as a fixed
 // word from this app's own dictionary; the repository and number come from the validated link, as plain text.

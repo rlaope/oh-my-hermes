@@ -24,7 +24,7 @@ export function ThreadChat({ bot, thread }: { bot: Bot; thread: string }) {
   const away = s.conn !== "open";
   // the thread's chat stands in for a bot in the timeline and composer (its key, the bot's own picture and model)
   const as: Bot = { ...bot, name: key, model: chat?.model || bot.model, running: !!chat?.turn };
-  // the pull requests its bot named (rule 21): read when the thread opens; a card under the answer that last named each
+  // the pull requests its bot named (rule 40): read when the thread opens; a card under the answer that last named each
   const prs = useThreadPrs();
   useEffect(() => prs.read(bot.name, thread, "open"), [prs, bot.name, thread]);
   const cards = withState(namedPrs(chat?.items ?? []), prs.get(bot.name, thread)?.prs);

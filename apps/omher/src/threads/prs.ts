@@ -1,4 +1,4 @@
-// The pull requests a thread produced (BOUNDARY rule 21): the bridge finds the full PR links in the bot's own answers
+// The pull requests a thread produced (BOUNDARY rule 40): the bridge finds the full PR links in the bot's own answers
 // of a thread and asks the person's own `gh` for each one's state and checks (`thread.prs`); this file decides when
 // to ask, keeps the answers, and says which thread waits on failing checks. It only shows: it never changes a
 // thread's run state and never starts, steers or stops anything.

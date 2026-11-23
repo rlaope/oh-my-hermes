@@ -11,13 +11,14 @@ All notable changes will be documented here.
   shows a card under the answer that named each one (the newest three), with the repository; a click opens the PR on
   GitHub, Refresh asks again. An open PR with failing checks puts its thread in Needs you ("checks failing on #n")
   until the checks pass or it is merged or closed, and raises one system notification per failing head commit. Only
-  full PR links in the bot's own answers count, never the person's words or a tool's output. The state comes from
+  full PR links in the bot's own answers count, never the person's words or a tool's output; they are read from the
+  thread's saved rows in the bot's `state.db`, with no gateway call, so a thread is never resumed for it. The state comes from
   the same one `gh pr view` the Plans graph uses, now with `statusCheckRollup` and `headRefOid`, reduced to one word
   from the checks' status fields (a check's name is never read); answers are kept 5 minutes, at most 4 calls run at
   once and 30 a minute for plans and threads together, and a row in view is read again every 5 minutes at the
   soonest, only while its PR may still change, with a doubling wait after a failed read. Without `gh`, a login or
   the network, and for a bot on another computer, the mark shows the number with no state. This is a display: it
-  never changes a thread's state and starts, steers or stops nothing. (`docs/OMHER-BOUNDARY.md` rule 21)
+  never changes a thread's state and starts, steers or stops nothing. (`docs/OMHER-BOUNDARY.md` rules 21 and 40)
 - **`omh_delegate_route` can hand a child the rest of its chain, each step at its own effort (opt-in).** With
   `{"schema_version": "delegate_route_options/v1", "write_fallback_providers": true}` in
   `~/.omh/routing/delegate-route.json`, `set` also writes the positions after the head into

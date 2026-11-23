@@ -91,7 +91,7 @@ export function ThreadTree({ bot, id }: { bot: string; id: string }) {
   const openThread = s.ui.view === "chat" && s.selectedBot === bot ? s.ui.thread : null;
   // the open thread stays in view even when it is past the first five
   const shown = all || rows.length <= THREADS_SHOWN ? rows : rows.filter((r, i) => i < THREADS_SHOWN || r.thread === openThread);
-  // the pull request each thread produced (rule 21): rows in view are read, and their mark follows the answers
+  // the pull request each thread produced (rule 40): rows in view are read, and their mark follows the answers
   const tree = useRef<HTMLUListElement>(null);
   const prs = useThreadPrs();
   useRowsInView(tree, bot, shown.map((r) => r.thread).join("\n"));

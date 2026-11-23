@@ -233,18 +233,12 @@ RULES = (
     "omher updates itself only through Tauri's updater, and only from one fixed address:",
     "It installs a build only when its signature matches the public key pinned in `tauri.conf.json`,"
     " and only after the person presses the update button and confirms the restart; then it restarts omher.",
-    "For the Plans graph and for a bot's threads the bridge asks the person's own GitHub CLI for the state and check"
-    " result of a pull request, with one fixed read:"
-    " `gh pr view <number> -R <owner>/<repo> --json state,isDraft,mergedAt,url,statusCheckRollup,headRefOid`.",
-    "It reads a pull request from two sources only.",
-    "A thread's is one the bot named in its own answer in that thread, never in the person's message or a tool's output:",
-    "the bridge reads that thread's saved messages through Hermes' own `session.history` (read only, never resumed)",
-    "the host exactly `github.com`, no further path segment, a number of one to seven digits, the newest three of a thread.",
+    "For the Plans graph the bridge asks the person's own GitHub CLI for the state and check result of a pull request a"
+    " plan node names",
+    "with one fixed read: `gh pr view <number> -R <owner>/<repo> --json state,isDraft,mergedAt,url,statusCheckRollup,headRefOid`.",
+    "This is the bridge's only `gh` argv; rule 40 uses the same read for threads.",
     "it never asks for a title, a body or an author, and never reads a check's name.",
     "at most 4 calls run at once and at most 30 start in any minute, for plans and threads together",
-    "The threads of a bot on another computer (rule 31) are not read this way: their numbers show with no state.",
-    "raises at most one system notification for each failing head commit",
-    "this changes no thread's state and starts, steers or stops nothing.",
     "Tasks (the sidebar's Tasks row and the Tasks page) list open issues and pull or merge requests read-only,"
     " through the person's own GitHub CLI (`gh`) and GitLab CLI (`glab`) under their own logins:",
     "The only argv are `auth status` (only its exit code is read; its output, which can name a token, goes nowhere:"
@@ -300,7 +294,7 @@ RULES = (
     "This is the one exception to rules 5 and 10: the request is `gh`'s own, under its own login; omher passes no token,"
     " reads none and changes nothing on GitHub.",
     "An answer is kept 5 minutes, a call is stopped after 3 seconds,",
-    "The app opens such a pull request's page in the browser only when the person clicks its number or its card.",
+    "The app opens such a pull request's page in the browser only when the person clicks its number.",
     "omher draws a link in a message as a link chip from its address alone: it fetches nothing from a link"
     " (no preview, title or oEmbed request).",
     "of the bot's own messenger sessions in its `state.db` (`links.places`), never a message.",
@@ -572,8 +566,7 @@ class DocPins(unittest.TestCase):
         # rule 12 (the one installer), rule 13 (media.read), rules 14-16 (Plans: dag records, delegation and
         # route reads, CLI agents' session files), rule 17 (CLI usage records), rule 18 (accounts), rule 19
         # (skills.list for the $ picker), rule 20 (the signed self-update), rule 21 (a plan node's PR state
-        # through the person's own `gh`; amended in place, not a new rule, for a thread's PRs and their checks, since
-        # both read the same one fixed argv), rule 22 (link chips: channel names read, web links opened on a
+        # through the person's own `gh`), rule 22 (link chips: channel names read, web links opened on a
         # click), rule 23 (Providers "Add key": the system terminal runs `hermes auth add`, omher never sees
         # the key), rule 24 (Automations: a bot's jobs changed only through its own `cron.manage`) and rule 25
         # (Plugins: only through its own `plugins.manage`, catalog installs after an inspect) each widened the
@@ -594,9 +587,12 @@ class DocPins(unittest.TestCase):
         # awake: one idle-sleep assertion while agents work); 38: rule 38 (a program's OSC 52 copy to the clipboard,
         # copy only, never a read, off in Settings › Terminal); 39: rule 39 (a bot whose gateway went away without
         # omher restarting it is looked for through Hermes' own discovery, which starts nothing, and attached again
-        # once ready). The rules stay numbered 1..n with no gap or repeat.
+        # once ready); 40: rule 40 (a thread's PRs: links in the bot's own answers read from its state.db, their
+        # state and checks through rule 21's one `gh pr view`, now with statusCheckRollup and headRefOid, on open,
+        # turn end, Refresh and a visible row's bounded tick; Needs you and one notification per failing head).
+        # The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 39, len(rules))
+        self.assertTrue(6 <= len(rules) <= 40, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -1206,30 +1202,6 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
                                for c in ast.walk(f)))
         self.assertEqual(users, ["__init__", "op_runs_prs", "op_thread_prs"])  # __init__: the one shared PrStates
 
-    def test_a_threads_pr_comes_from_the_bots_own_answers_only(self) -> None:
-        """Rule 21's second source: a thread's PR is a full link in one of the bot's own answers of that thread, read
-        from Hermes' own history (never resumed), only for a thread this bridge created or listed; the link is checked
-        strictly before any call; a check's name is never read."""
-        fns = {f.name: f for f in ast.walk(self.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))}
-        op = ast.unparse(fns["op_thread_prs"])
-        self.assertIn("tid = self._thread_known(conn, p.get('thread'))", op)
-        self.assertIn("await self._call(conn, 'session.history', session_id=chat.stored_id if chat else tid)", op)
-        self.assertIn("thread_pr_refs(chat_messages(res.get('messages')", op)
-        self.assertNotIn("session.resume", op)
-        refs = ast.unparse(fns["thread_pr_refs"])
-        self.assertIn("m.get('role') != 'assistant'", refs)
-        self.assertIn("THREAD_PR_URL.finditer", refs)
-        url = re.search(r'THREAD_PR_URL = re\.compile\((.*?)\)\n', self.source, re.S).group(1)
-        self.assertIn(r"https://github\.com/", url)
-        self.assertIn("[1-9][0-9]{0,6}", url)
-        self.assertIn("(?![A-Za-z0-9_/])", url)
-        checks = ast.unparse(fns["pr_checks_of"])
-        for word in ("'name'", "'context'", "'description'", "'detailsUrl'", "'targetUrl'", "'workflowName'"):
-            self.assertNotIn(word, checks)
-        # thread ops never cross to a peer: a peer bot's threads are not read (rule 31)
-        forward = re.search(r"PEER_FORWARD = frozenset\(\{(.*?)\}\)", self.source, re.S).group(1)
-        self.assertNotIn('"thread.', forward)
-
     def test_no_gh_verb_that_changes_github(self) -> None:
         """Rules 21 and 33: nothing in the bridge or the desktop shell asks `gh` (or `glab`) to merge, close, comment,
         edit, review or otherwise write: no such argv word appears outside comments and tests."""
@@ -1283,6 +1255,68 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
             if isinstance(call, ast.Call):
                 self.assertFalse(any(isinstance(a, ast.Constant) and a.value in {"send_message", "send.message"}
                                      for a in call.args), ast.unparse(call))
+
+
+class ThreadPullRequests(unittest.TestCase):
+    """Rule 40: a thread's PRs. The links come from the bot's own answers of a thread the bridge created or listed, read
+    from its state.db with no gateway call; their state comes only through rule 21's one `gh pr view`; a check's name is
+    never read; a peer bot's threads are never read."""
+
+    RULE_40 = (
+        "40. A bot's thread shows the pull requests its bot named there, through rule 21's one fixed `gh pr view` read,"
+        " under its cache and limits.",
+        "A thread's pull request is one the bot named in its own answer in that thread, never in the person's message or"
+        " a tool's output.",
+        "read only and only for a thread it created or listed, and makes no gateway call for it, so a thread that is not"
+        " open in omher is never resumed or attached to be read.",
+        "the host exactly `github.com`, no further path segment, a number of one to seven digits, the newest three of a"
+        " thread, and keeps neither the rows nor anything else from them.",
+        "at most two threads are read at a time.",
+        "A Refresh asks GitHub again only once the kept answer is 10 seconds old.",
+        "The threads of a bot on another computer (rule 31) are not read this way: their numbers show with no state.",
+        "raises at most one system notification for each failing head commit",
+        "in this computer's storage for the app (`omher.prNotified`), and nothing else.",
+        "This changes no thread's state and starts, steers or stops nothing.",
+    )
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.source = BRIDGE.read_text(encoding="utf-8")
+        cls.tree = ast.parse(cls.source)
+
+    def test_the_doc_states_rule_40(self) -> None:
+        text = _flat(DOC.read_text(encoding="utf-8"))
+        for sentence in self.RULE_40:
+            self.assertIn(_flat(sentence), text)
+
+    def test_a_threads_pr_comes_from_the_bots_own_answers_only(self) -> None:
+        """Rule 40: a thread's PR is a full link in one of the bot's own answers of that thread, read from its state.db
+        with no gateway call (never resumed), only for a thread this bridge created or listed; the link is checked
+        strictly before any call; a check's name is never read."""
+        fns = {f.name: f for f in ast.walk(self.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))}
+        op = ast.unparse(fns["op_thread_prs"])
+        self.assertIn("tid = self._thread_known(conn, p.get('thread'))", op)
+        self.assertIn("await asyncio.to_thread(read_thread_rows, conn.bot['path'], chat.stored_id if chat else tid)", op)
+        self.assertIn("thread_pr_refs(chat_messages(rows", op)
+        self.assertNotIn("self._call(", op)  # no gateway call: never a history read of a stored id, never a resume
+        rows = ast.unparse(ast.Module(body=fns["read_thread_rows"].body[1:], type_ignores=[]))  # without its docstring
+        self.assertIn("ro_uri(db)", rows)  # read-only
+        self.assertIn("role IN ('user', 'assistant')", rows)
+        for word in ("INSERT", "UPDATE", "DELETE", "reasoning", "tool_calls", "api_content"):
+            self.assertNotIn(word, rows)
+        refs = ast.unparse(fns["thread_pr_refs"])
+        self.assertIn("m.get('role') != 'assistant'", refs)
+        self.assertIn("THREAD_PR_URL.finditer", refs)
+        url = re.search(r'THREAD_PR_URL = re\.compile\((.*?)\)\n', self.source, re.S).group(1)
+        self.assertIn(r"https://github\.com/", url)
+        self.assertIn("[1-9][0-9]{0,6}", url)
+        self.assertIn("(?![A-Za-z0-9_/])", url)
+        checks = ast.unparse(fns["pr_checks_of"])
+        for word in ("'name'", "'context'", "'description'", "'detailsUrl'", "'targetUrl'", "'workflowName'"):
+            self.assertNotIn(word, checks)
+        # thread ops never cross to a peer: a peer bot's threads are not read (rule 31)
+        forward = re.search(r"PEER_FORWARD = frozenset\(\{(.*?)\}\)", self.source, re.S).group(1)
+        self.assertNotIn('"thread.', forward)
 
 
 class AccountsNeverCarryAToken(unittest.TestCase):

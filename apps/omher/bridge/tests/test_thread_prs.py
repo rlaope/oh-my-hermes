@@ -224,20 +224,71 @@ class Limits(unittest.TestCase):
         self.assertNotIn("thread.list", ob.PEER_FORWARD)
 
 
+def save_rows(profile: Path, sid: str, rows: list[tuple], display_kind: bool = True) -> None:
+    """The thread's rows as Hermes saves them in the profile's state.db: (role, content[, display_kind])."""
+    import sqlite3
+    con = sqlite3.connect(profile / "state.db")
+    cols = "id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, role TEXT, content TEXT, tool_calls TEXT, timestamp REAL"
+    con.execute(f"CREATE TABLE IF NOT EXISTS messages ({cols}{', display_kind TEXT' if display_kind else ''})")
+    for i, r in enumerate(rows):
+        if display_kind:
+            con.execute("INSERT INTO messages (session_id, role, content, timestamp, display_kind) VALUES (?, ?, ?, ?, ?)",
+                        (sid, r[0], r[1], 1000.0 + i, r[2] if len(r) > 2 else None))
+        else:
+            con.execute("INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, ?, ?, ?)",
+                        (sid, r[0], r[1], 1000.0 + i))
+    con.commit()
+    con.close()
+
+
+ROWS = [
+    ("user", "fix it; the old one was https://github.com/o/r/pull/1"),
+    ("assistant", "Now I'll open https://github.com/o/r/pull/2"),  # commentary beside a tool call: not the answer
+    ("tool", "created https://github.com/o/r/pull/3"),
+    ("assistant", "Opened https://github.com/o/r/pull/4 (checks running)."),
+    ("user", "and the docs?"),
+    ("assistant", "https://github.com/o/r/pull/5", "hidden"),
+    ("assistant", "Docs are in the same PR."),
+]
+
+
+class ReadThreadRows(unittest.TestCase):
+    def test_reads_only_that_threads_user_and_assistant_rows_read_only(self):
+        import os
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            prof = Path(d)
+            self.assertEqual(ob.read_thread_rows(prof, "th-1"), [])  # no state.db
+            save_rows(prof, "th-1", ROWS)
+            save_rows(prof, "other", [("assistant", "https://github.com/x/y/pull/9")])
+            before = os.stat(prof / "state.db").st_mtime_ns
+            rows = ob.read_thread_rows(prof, "th-1")
+            self.assertEqual([r["role"] for r in rows], ["user", "assistant", "assistant", "user", "assistant", "assistant"])
+            self.assertEqual(rows[4]["display_kind"], "hidden")
+            refs = ob.thread_pr_refs(ob.chat_messages(rows))
+            self.assertEqual([r["number"] for r in refs], [4])  # never the person's, a tool's, commentary or a hidden row
+            self.assertEqual(os.stat(prof / "state.db").st_mtime_ns, before)
+            with mock.patch.object(ob, "THREAD_ROWS_MAX", 2):
+                self.assertEqual([r["content"] for r in ob.read_thread_rows(prof, "th-1")],
+                                 ["https://github.com/o/r/pull/5", "Docs are in the same PR."])
+
+    def test_an_older_state_db_without_display_kind(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            save_rows(Path(d), "th-1", [("assistant", "Opened https://github.com/o/r/pull/6")], display_kind=False)
+            rows = ob.read_thread_rows(Path(d), "th-1")
+            self.assertEqual([(r["role"], r["content"]) for r in rows], [("assistant", "Opened https://github.com/o/r/pull/6")])
+            (Path(d) / "state.db").write_bytes(b"not a database")
+            self.assertEqual(ob.read_thread_rows(Path(d), "th-1"), [])
+
+
 class ThreadPrsOp(BridgeCase):
     async def open(self, env):
         s = await super().open(env)
         ok(await s.req("chat.open", bot="kami"))
         return s
 
-    HISTORY = [
-        {"role": "user", "text": "fix it; the old one was https://github.com/o/r/pull/1", "row_id": 1},
-        {"role": "assistant", "text": "Now I'll open https://github.com/o/r/pull/2", "row_id": 2},  # commentary
-        {"role": "tool", "text": "created https://github.com/o/r/pull/3", "row_id": 3},
-        {"role": "assistant", "text": "Opened https://github.com/o/r/pull/4 (checks running).", "row_id": 4},
-    ]
-
-    async def test_thread_prs_reads_the_threads_own_history_and_asks_gh_for_its_bots_links(self):
+    async def test_thread_prs_reads_the_saved_rows_and_asks_gh_for_its_bots_links(self):
         store = HermesStore()
         asked = []
 
@@ -250,14 +301,14 @@ class ThreadPrsOp(BridgeCase):
             env.bridge.prs = ob.PrStates(view=view)
             s = await self.open(env)
             tid = ok(await s.req("thread.create", bot="kami"))["thread"]
+            save_rows(env.home / "profiles" / "kami", tid, ROWS)
             c = env.clients["kami"]
-            c.history[tid] = self.HISTORY
+            before = len(c.calls)
             got = ok(await s.req("thread.prs", bot="kami", thread=tid))
             self.assertEqual(got, {"prs": [{"number": 4, "repo": "o/r", "url": "https://github.com/o/r/pull/4",
                                             "state": "open", "checks": "failing", "head": SHA}]})
             self.assertEqual(asked, [("o/r", 4)])
-            self.assertEqual([p["session_id"] for p in c.find("session.history")], [tid])  # read, never resumed
-            self.assertEqual([x for x in c.find("session.resume") if x["session_id"] == tid], [])
+            self.assertEqual(c.calls[before:], [])  # no gateway call at all: no history read, no resume
             # nothing named yet: no gh call at all
             other = ok(await s.req("thread.create", bot="kami"))["thread"]
             self.assertEqual(ok(await s.req("thread.prs", bot="kami", thread=other)), {"prs": []})
@@ -268,7 +319,7 @@ class ThreadPrsOp(BridgeCase):
             self.assertEqual((await s.req("thread.prs", bot="kami", thread="stored-th-99"))["error"]["code"], "not_found")
             self.assertEqual((await s.req("thread.prs", bot="kami"))["error"]["code"], "bad_request")
 
-    async def test_a_listed_thread_not_attached_is_read_by_its_stored_id(self):
+    async def test_a_listed_thread_not_attached_is_read_without_attaching_it(self):
         store = HermesStore()
         async with ThreadEnv(store) as env:
             s = await self.open(env)
@@ -278,11 +329,14 @@ class ThreadPrsOp(BridgeCase):
             env2.bridge.prs = ob.PrStates(view=lambda repo, n: None)  # gh missing, signed out or offline
             s2 = await self.open(env2)
             ok(await s2.req("thread.list", bot="kami"))
-            env2.clients["kami"].history[tid] = self.HISTORY
+            save_rows(env2.home / "profiles" / "kami", tid, ROWS)
+            c = env2.clients["kami"]
+            before = len(c.calls)
             got = ok(await s2.req("thread.prs", bot="kami", thread=tid, fresh=True))
             self.assertEqual(got, {"prs": [{"number": 4, "repo": "o/r", "url": "https://github.com/o/r/pull/4",
                                             "state": "unknown", "checks": "none"}]})
-            self.assertEqual([x for x in env2.clients["kami"].find("session.resume") if x["session_id"] == tid], [])
+            self.assertEqual(c.calls[before:], [])
+            self.assertNotIn(tid, env2.bridge.conns["kami"].folders)  # still not attached
 
 
 if __name__ == "__main__":

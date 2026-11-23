@@ -1,4 +1,4 @@
-// A thread's pull requests (src/threads/prs.ts, ThreadPrs.tsx; BOUNDARY rule 21), against the mock bridge:
+// A thread's pull requests (src/threads/prs.ts, ThreadPrs.tsx; BOUNDARY rule 40), against the mock bridge:
 // 1. each thread row shows its newest PR's mark: the number, GitHub's state and the checks (open/draft only);
 //    a PR gh cannot say anything about shows the number alone;
 // 2. the transcript shows a card under the answer that named each PR (never under the person's own link), with the

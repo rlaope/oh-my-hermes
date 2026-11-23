@@ -31,7 +31,7 @@
 // Threads under a bot: thread.create / thread.list / thread.open / thread.remove as the bridge answers them (a thread
 // is a folder entry with `thread: true`, so chat.send / interrupt / approval take `session=<thread>` as for a folder
 // chat); mock.threads {bot, threads: [{title, ago?}]} seeds a bot's threads (listed newest first).
-// A thread's pull requests (rule 21): thread.prs reads the full PR links in the thread's assistant rows (newest first,
+// A thread's pull requests (rule 40): thread.prs reads the full PR links in the thread's assistant rows (newest first,
 // three at most) and answers each one's state from mock.prs {prs: {"<owner>/<repo>#<n>": {state, checks, head?}}}
 // (a PR it has not been told about reads `unknown` with no checks, as without gh); a peer bot is refused, as the real
 // bridge refuses every thread op for one. mock.threadAnswer {bot, thread, text} is a bot answer in that thread: saved

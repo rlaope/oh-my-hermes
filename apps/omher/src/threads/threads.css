@@ -376,7 +376,7 @@
   word-break: keep-all;
 }
 
-/* ---- a thread's pull request (rule 21): the row's mark and the transcript's card ----------------------------- */
+/* ---- a thread's pull request (rule 40): the row's mark and the transcript's card ----------------------------- */
 /* the row: the newest PR on the second line's right, where the › shows on hover (the mark keeps its place) */
 .th-pr {
   grid-column: 3;
