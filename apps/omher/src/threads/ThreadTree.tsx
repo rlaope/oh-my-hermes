@@ -6,7 +6,7 @@
 // Two levels only: bot > thread. Hover shows x, which asks first (ConfirmRemove), then stops and archives the thread.
 // No "+ New thread" line under the cards (owner, 2026-11-19: a line that is always there under the bot is too much;
 // it reversed 2026-11-18). A new thread opens from the bot row's + on hover, its right-click menu, or ./thread.
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { askText, selectAsks, useStore, type AppState } from "../state/store";
 import { busyFor, shortTime } from "../app/time";
 import { useNow } from "../elsewhere/useNow";
@@ -19,6 +19,7 @@ import { ConfirmRemove } from "./ConfirmRemove";
 import { HarnessStack } from "../harness/HarnessMark";
 import type { HarnessFacts } from "../harness/registry";
 import { subagentEnded, type Chat } from "../state/store";
+import { PrMark, prMarkText, shownPrs, useRowsInView, useThreadPrs } from "./ThreadPrs";
 import "./threads.css";
 
 /** A thread's state from what the store holds: its chat (turn, last turn, open asks) and the bridge's list row. */
@@ -86,20 +87,26 @@ export function ThreadTree({ bot, id }: { bot: string; id: string }) {
   // a working thread's "· 2m" moves on (read before any return: the tree stays mounted from 0 threads to 1)
   const nowMs = useNow(rows.some((r) => !!s.chats[threadKey(bot, r.thread)]?.turn), 10_000);
   const name = s.bots.find((b) => b.name === bot)?.display_name ?? bot;
-  if (!rows.length) return null;
+  const remote = !!s.bots.find((b) => b.name === bot)?.host;
   const openThread = s.ui.view === "chat" && s.selectedBot === bot ? s.ui.thread : null;
   // the open thread stays in view even when it is past the first five
   const shown = all || rows.length <= THREADS_SHOWN ? rows : rows.filter((r, i) => i < THREADS_SHOWN || r.thread === openThread);
+  // the pull request each thread produced (rule 21): rows in view are read, and their mark follows the answers
+  const tree = useRef<HTMLUListElement>(null);
+  const prs = useThreadPrs();
+  useRowsInView(tree, bot, shown.map((r) => r.thread).join("\n"));
+  if (!rows.length) return null;
   const hidden = rows.length - shown.length;
   const more = hidden > 0 || (all && rows.length > THREADS_SHOWN);
   return (
-    <ul className="th-tree" role="group" id={id} aria-label={t("thread.list", { name })} data-testid={`threads-${bot}`}>
+    <ul ref={tree} className="th-tree" role="group" id={id} aria-label={t("thread.list", { name })} data-testid={`threads-${bot}`}>
       {shown.map((r, i) => {
         const st = rowStatus(s, bot, r);
         const title = r.title || t("thread.untitled");
         const last = i === shown.length - 1 && !more;
         const pv = rowPreview(s, bot, r, nowMs);
         const ts = pv.ts;
+        const pr = shownPrs(s.chats[threadKey(bot, r.thread)]?.items, prs.get(bot, r.thread))[0];
         return (
           <li
             key={r.thread}
@@ -116,7 +123,7 @@ export function ThreadTree({ bot, id }: { bot: string; id: string }) {
               type="button"
               className="th-open"
               onClick={() => void s.openThread(bot, r.thread)}
-              aria-label={t("thread.linkOpen", { title })}
+              aria-label={pr ? `${t("thread.linkOpen", { title })} · ${prMarkText(pr)}` : t("thread.linkOpen", { title })}
               title={title}
               data-testid="thread-open"
             >
@@ -138,6 +145,7 @@ export function ThreadTree({ bot, id }: { bot: string; id: string }) {
               <span className={`th-sub th-sub-${pv.kind}`} data-testid="thread-sub">
                 {pv.text}
               </span>
+              {pr && <PrMark pr={pr} remote={remote} />}
               <span className="th-go" aria-hidden="true" data-testid="thread-go">
                 <svg width="10" height="10" viewBox="0 0 10 10">
                   <path d="M3.8 2.2 6.6 5 3.8 7.8" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />

@@ -4,12 +4,16 @@
 // item opens that bot's chat with the card scrolled into view and focused. ⌘J does the same for the next ask. Esc
 // or a click outside closes the list. Past three asks the list ends on the third, whole, and a "+2 more" row shows
 // the rest (then the list scrolls).
+// A thread whose pull request is open with failing checks is listed too, after the asks, with its own reason
+// ("checks failing on #12", tag Checks); its item opens the thread. It is a display only: the thread's own state is
+// untouched, and ⌘J still steps through the asks alone. It leaves when the checks pass or the PR is merged or closed.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNow } from "../elsewhere/useNow";
 import { t } from "../i18n";
 import { askFrom, askText, isSessionChat, useStore, type Ask } from "../state/store";
 import { SessionFace } from "../sessions/SessionFace";
 import { Avatar, ChevronDown } from "../ui";
+import type { FailingThread } from "../threads/prs";
 
 /** An ask as one plain line, with `code` spans set in mono instead of showing raw backticks. */
 export function AskLine({ text }: { text: string }) {
@@ -49,12 +53,21 @@ export function glued(text: string): ReactNode[] {
 /** Asks the list shows before its "+N more" row: three two-line entries fit without cutting one. */
 const SHOW = 3;
 
-export function NeedsStrip({ asks }: { asks: Ask[] }) {
+/** A failing pull request's line in the strip and the list: "checks failing on #12". */
+export const prReason = (f: Pick<FailingThread, "pr">) => t("needs.prFailing", { n: f.pr.number });
+
+/** Who a failing pull request's entry names: the thread's title, else the bot's name. */
+export function prWho(s: { threads: Record<string, { thread: string; title: string }[]> }, f: Pick<FailingThread, "bot" | "thread">, botName: string): string {
+  return (s.threads[f.bot] ?? []).find((r) => r.thread === f.thread)?.title || botName;
+}
+
+export function NeedsStrip({ asks, prs = [] }: { asks: Ask[]; prs?: FailingThread[] }) {
   const s = useStore();
   const [open, setOpen] = useState(false);
   const [all, setAll] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const now = useNow(asks.length > 0, 5_000);
+  const total = asks.length + prs.length;
   useEffect(() => {
     if (!open) setAll(false);
   }, [open]);
@@ -71,15 +84,17 @@ export function NeedsStrip({ asks }: { asks: Ask[] }) {
     return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
   useEffect(() => {
-    if (!asks.length) setOpen(false);
-  }, [asks.length]);
-  if (!asks.length) return null;
+    if (!total) setOpen(false);
+  }, [total]);
+  if (!total) return null;
   const name = (bot: string) => askFrom(s, bot);
-  const n = asks.length;
-  const shown = all || n <= SHOW ? asks : asks.slice(0, SHOW);
-  // asks are oldest first: the strip names the newest
-  const newest = asks[n - 1];
-  const line = stripText(n, name(newest.bot), askText(newest.item));
+  const n = total;
+  const shown = all || asks.length <= SHOW ? asks : asks.slice(0, SHOW);
+  const shownPrs = all || asks.length + prs.length <= SHOW ? prs : prs.slice(0, Math.max(0, SHOW - shown.length));
+  // asks are oldest first: the strip names the newest; with no ask, the newest failing pull request
+  const newest = asks[asks.length - 1];
+  const lastPr = prs[prs.length - 1];
+  const line = newest ? stripText(n, name(newest.bot), askText(newest.item)) : stripText(n, prWho(s, lastPr, name(lastPr.bot)), prReason(lastPr));
   return (
     <div
       className={`needs-w${open ? " open" : ""}`}
@@ -145,9 +160,36 @@ export function NeedsStrip({ asks }: { asks: Ask[] }) {
               </span>
             </button>
           ))}
-          {shown.length < n && (
+          {shownPrs.map((f) => (
+            <button
+              key={`pr:${f.bot}:${f.thread}`}
+              type="button"
+              role="listitem"
+              className="needs-item"
+              data-testid="needs-pr"
+              data-thread={f.thread}
+              onClick={() => {
+                setOpen(false);
+                void s.openThread(f.bot, f.thread);
+              }}
+            >
+              <Avatar bot={f.bot} size={20} />
+              <span className="needs-m">
+                <span className="needs-r1">
+                  <span className="needs-b">{prWho(s, f, name(f.bot))}</span>
+                  <span className="needs-tag needs-tag-pr" data-testid="needs-tag">
+                    {t("needs.checks")}
+                  </span>
+                </span>
+                <span className="needs-q" title={prReason(f)}>
+                  {prReason(f)}
+                </span>
+              </span>
+            </button>
+          ))}
+          {shown.length + shownPrs.length < n && (
             <button type="button" className="needs-more" onClick={() => setAll(true)} data-testid="needs-more">
-              {t("needs.more", { n: n - shown.length })}
+              {t("needs.more", { n: n - shown.length - shownPrs.length })}
             </button>
           )}
         </div>

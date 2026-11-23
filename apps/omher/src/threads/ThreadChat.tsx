@@ -1,5 +1,6 @@
 // A thread of a bot in the main column: the bot's own header, timeline and composer, fed by the thread's chat
 // (`fold:<bot>:<thread>`). Same Chat parts as the main chat; only where the words go differs.
+import { useEffect } from "react";
 import { selectAsks, useStore } from "../state/store";
 import type { Bot } from "../lib/protocol";
 import { Timeline } from "../chat/parts/Timeline";
@@ -11,6 +12,8 @@ import { t } from "../i18n";
 import { threadKey } from "./types";
 import { rowStatus } from "./ThreadTree";
 import { StatusGlyph } from "./StatusGlyph";
+import { ThreadPrCard, useThreadPrs } from "./ThreadPrs";
+import { namedPrs, withState } from "./prs";
 
 export function ThreadChat({ bot, thread }: { bot: Bot; thread: string }) {
   const s = useStore();
@@ -21,6 +24,12 @@ export function ThreadChat({ bot, thread }: { bot: Bot; thread: string }) {
   const away = s.conn !== "open";
   // the thread's chat stands in for a bot in the timeline and composer (its key, the bot's own picture and model)
   const as: Bot = { ...bot, name: key, model: chat?.model || bot.model, running: !!chat?.turn };
+  // the pull requests its bot named (rule 21): read when the thread opens; a card under the answer that last named each
+  const prs = useThreadPrs();
+  useEffect(() => prs.read(bot.name, thread, "open"), [prs, bot.name, thread]);
+  const cards = withState(namedPrs(chat?.items ?? []), prs.get(bot.name, thread)?.prs);
+  const remote = !!bot.host;
+  const busy = prs.busy(bot.name, thread);
   return (
     <>
       <header className="head th-head" data-testid="thread-header">
@@ -41,6 +50,11 @@ export function ThreadChat({ bot, thread }: { bot: Bot; thread: string }) {
           bot={as}
           face={<Avatar bot={bot.name} size={28} />}
           connectionNotice={false}
+          afterAnswer={(it) =>
+            cards
+              .filter((c) => c.at === it.id)
+              .map((c) => <ThreadPrCard key={c.url} pr={c} remote={remote} busy={busy} onRefresh={() => prs.read(bot.name, thread, "refresh")} />)
+          }
           emptyHint={
             !chat?.turn && (
               <div className="th-empty" data-testid="thread-empty">
