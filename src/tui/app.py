@@ -4812,6 +4812,8 @@ class App(ModesMixin, AgentViewMixin):
         if self.slot is not None:
             self.waiting_requests.append(request)
             return
+        if self.viewing is not None and self._request_owner(request.params) == self.sid:
+            self._leave_view()  # main's question is answered on main's screen, the drafts as they were (D4)
         if self.pager is not None:
             self._leave_pager()
         if self.chains_open:
@@ -4833,9 +4835,16 @@ class App(ModesMixin, AgentViewMixin):
             # An answer to Hermes is typed into a composer of its own, which records no history.
             self.slot_draft, self.composer = self.composer, Composer(masked=opened.masked, records_history=False)
 
+    def _request_owner(self, params: Mapping[str, Any]) -> str:
+        """The session a server request came from: its `session_id`, main's when it names none."""
+        return as_text(params.get("session_id")) or self.sid
+
     def _answer(self, answer: Answer) -> None:
+        owner = self._request_owner(self.slot.params) if self.slot is not None else self.sid
         self._respond(answer)
-        if answer.stops and self._busy():
+        if answer.stops and owner != self.sid:  # a continued child's own question: its deny stops that child only
+            self._request("session.interrupt", {"session_id": owner}, lambda result: None, lambda error: True)
+        elif answer.stops and self._busy():
             self._interrupt()  # after the deny, so the tool Hermes holds wakes up denied before the turn stops
         self._note_approval(answer)
         self._note_question(answer)
@@ -5460,7 +5469,9 @@ class App(ModesMixin, AgentViewMixin):
             self._effort_key(Key(CHAR, "t", ctrl=True))
         elif self._leader_matches(event, "c"):
             self.escape_armed = None
-            if self._busy():
+            if self.viewing is not None:
+                pass  # main's stop key: main's turn stops from the main screen only
+            elif self._busy():
                 self._interrupt()
             elif self.composer.text:
                 self.composer.record(self.composer.expanded(), sent=False)

@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import unittest
 
-from test_tui_agent_session_view import BRIEF, FIRST, SECOND, entered, lazy_answer, viewing
+from test_tui_agent_session_view import BRIEF, FIRST, SECOND, WATCH, entered, lazy_answer, viewing
 from test_tui_modes import SID, answer, call_id, queue, type_text
 from omh.tui import app as app_module
-from omh.tui.gateway import Event, Response
+from omh.tui.gateway import Event, Response, ServerRequest
 from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, UP, Key
 
 
@@ -140,6 +140,50 @@ class ExplicitTargetTests(unittest.TestCase):
         app._on_input(Key(CHAR, "s"))
         submit(app, "for second")
         self.assertEqual([call["subagent_id"] for call in client.named("subagent.steer")], [SECOND])
+
+
+def approval(origin: str) -> ServerRequest:
+    return ServerRequest("approval", "approval", {"session_id": origin, "command": "printf ok",
+                                                  "description": "approval marker", "choices": ["once", "session", "deny"]})
+
+
+class StopOwnerTests(unittest.TestCase):
+    """D4: a stop stays with its owner; main's questions are answered on main's screen; main's stop keys do nothing
+    in a view."""
+
+    def test_a_continued_childs_approval_denied_interrupts_that_child_not_main(self) -> None:
+        app, client, now = viewing(result=lazy_answer([BRIEF], running=False))
+        app._on_event(Event("message.start", WATCH, {}))  # a turn continued on the watch sid
+        app._on_server_request(approval(WATCH))
+        self.assertIsNotNone(app.viewing, "the child's own question stays in its view")
+        now[0] += 1
+        app._on_input(Key(CHAR, "c", ctrl=True))
+        self.assertEqual(client.answers[-1][1]["result"]["choice"], "deny")
+        self.assertEqual(client.named("session.interrupt"), [{"session_id": WATCH}])
+
+    def test_a_main_approval_leaves_the_view_first_with_the_drafts_restored(self) -> None:
+        app, client, now = entered()
+        app._on_input(Key(ESCAPE))
+        type_text(app, "main draft")
+        answer(app, client, lazy_answer([BRIEF]))
+        type_text(app, "child draft")
+        app._on_server_request(approval(SID))
+        self.assertIsNone(app.viewing)
+        self.assertEqual(app.child_drafts[FIRST].text, "child draft")
+        now[0] += 1
+        app._on_input(Key(CHAR, "c", ctrl=True))  # denied on main's screen: main's turn stops
+        self.assertEqual(client.named("session.interrupt"), [{"session_id": SID}])
+        self.assertEqual(app.composer.text, "main draft")
+
+    def test_vim_space_c_does_nothing_in_a_view(self) -> None:
+        app, client, _ = viewing()
+        app.composer.set_vim(True)
+        app._on_input(Key(ESCAPE))  # INSERT's first Esc leaves INSERT (NB1)
+        self.assertIsNotNone(app.viewing)
+        app._on_input(Key(CHAR, " "))
+        app._on_input(Key(CHAR, "c"))
+        self.assertEqual(client.named("session.interrupt"), [])
+        self.assertIsNotNone(app.viewing)
 
 
 if __name__ == "__main__":
