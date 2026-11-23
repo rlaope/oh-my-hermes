@@ -76,6 +76,8 @@ class ParityTests(unittest.TestCase):
         # Onboarded 2026-11-06, access-gated (Daybreak Red), so never chained:
         # GPT-6 Cyber follows Mythos 5.1.
         "gpt-6-cyber": ("openai-codex", "openai"),
+        # Onboarded 2026-11-23 as a provider row only; in no shipped chain.
+        "glm-5.4": ("zai",),
         # Onboarded 2026-11-06; a legal specialist, in no shipped chain.
         "glm-5.3-flashx-legal": ("zai",),
         # Onboarded 2026-10-24; no shipped chain names the Highspeed tier.

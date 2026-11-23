@@ -14,6 +14,9 @@ All notable changes will be documented here.
   person's to click.
   (`apps/omher/src/elsewhere/PanelTabs.tsx`, `apps/omher/src/elsewhere/rowMotion.ts`; e2e `panel-max.spec.ts`, seen
   on macOS CI)
+- **GLM 5.4 is mapped to Z.ai.** `glm-5.4` (opened to every GLM Coding Plan user on 2026-11-23) now resolves to the
+  `zai` provider family, so a chain or override that names it routes to Z.ai. It joins no shipped chain, and it has
+  no contract or price row until Z.ai publishes a model page and list price.
 - **A large workspace no longer logs a warning after every shell command.** When the shell round end re-indexes a
   workspace past its entry or time budget, that designed skip is now logged at debug (`shell_changed skipped=`)
   instead of warning on nearly every `terminal` / `execute_code` call (~700 lines a day in one workspace). A real
