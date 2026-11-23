@@ -27,6 +27,7 @@ from unittest.mock import patch
 from _module_patch import patch_modules
 from _test_temp_root import make_test_tempdir
 from five_issue_process_fixture import fixture_system_environment
+from omh.tui import gateway_contract as contract
 from omh.tui.attach import gateway_attach as attach
 from omh.tui.attach.gateway_attach import TO_CLIENT, TO_OWNER, Adapter, LocalImage
 from omh.tui.gateway import GATEWAY_SCRIPT, GatewayClient, GatewayUnavailable, ServerRequest, gateway_spawn
@@ -241,6 +242,55 @@ class SessionTranslationTests(AdapterCase):
         [(_, answer)] = adapter.from_owner(_answer(6, {"session_id": SID, "subscription_id": "sub-1", "detached": True}))
         self.assertEqual(answer, _answer(6, {}))
         self.assertNotIn(SID, adapter.sessions)
+
+    def test_a_lazy_resume_is_refused_here_and_moves_nothing(self) -> None:
+        # The owner refuses `lazy`, and a plain resume would mount the child read-only and move `current`: the
+        # subagent session view's watch is answered with a refusal it falls back on to `session.transcript`.
+        adapter = self.adapter()
+        self.opened(adapter)
+        actions = adapter.from_client(_call(8, "session.resume", {"session_id": "child-1", "lazy": True, "cols": 80}))
+        self.assertEqual(actions, [(TO_CLIENT, {"jsonrpc": "2.0", "id": 8, "error": {
+            "code": attach.REFUSED, "message": attach.LAZY_WATCH_UNSUPPORTED,
+            "data": {"reason": "lazy_watch_unsupported"}}})])
+        self.assertEqual((adapter.current, list(adapter.sessions), adapter.calls), (SID, [SID], {}))
+        self.assertEqual((attach.REFUSED, attach.LAZY_WATCH_UNSUPPORTED),
+                         (contract.RESUME_LAZY_REFUSED, contract.LAZY_WATCH_UNSUPPORTED))
+        # Negative: a resume without `lazy` still goes to the owner and still moves `current` once answered.
+        [(target, resume)] = adapter.from_client(_call(9, "session.resume", {"session_id": "local-other"}))
+        self.assertEqual((target, resume["params"]), (TO_OWNER, {"session_id": "local-other", "display_projection": True}))
+        adapter.from_owner(_answer(9, {"session_id": "local-other", "messages": [], "subscription_id": "sub-2"}))
+        self.assertEqual(adapter.current, "local-other")
+
+    def test_a_subagent_transcript_read_passes_through_as_sent(self) -> None:
+        adapter = self.adapter()
+        self.opened(adapter)
+        params = {"session_id": SID, "subagent_id": "sa-1", "order": "oldest", "limit": 200, "cursor": "c0"}
+        call = _call(10, "session.transcript", params)
+        self.assertEqual(adapter.from_client(call), [(TO_OWNER, call)])
+        rows = {"session_id": SID, "rows": [{"role": "user", "text": "brief"}], "next_cursor": "c1", "reset": False,
+                "running": True, "available": True, "child_session_id": "child-1"}
+        self.assertEqual(adapter.from_owner(_answer(10, rows)), [(TO_CLIENT, _answer(10, rows))])
+        self.assertEqual((adapter.current, adapter.calls), (SID, {}))  # a read: not a view, nothing moves
+        # Negative: a resume is translated (display rows asked), so it is not taken for a pass-through read.
+        [(_, resume)] = adapter.from_client(_call(11, "session.resume", {"session_id": SID}))
+        self.assertIn("display_projection", resume["params"])
+
+    def test_closing_a_watch_session_detaches_only_it(self) -> None:
+        adapter = self.adapter()
+        self.opened(adapter)
+        adapter.from_client(_call(2, "session.resume", {"session_id": "child-1"}))
+        adapter.from_owner(_answer(2, {"session_id": "child-1", "messages": [], "subscription_id": "sub-c"}))
+        adapter.current = SID  # the view reopened main; the child's view is still held here
+        [(_, detach)] = adapter.from_client(_call(3, "session.close", {"session_id": "child-1"}))
+        self.assertEqual(detach["params"], {"session_id": "child-1", "subscription_id": "sub-c",
+                                            "end_reason": attach.CLOSE_END_REASON})
+        adapter.from_owner(_answer(3, {"session_id": "child-1", "subscription_id": "sub-c", "detached": True}))
+        self.assertEqual((adapter.current, list(adapter.sessions)), (SID, [SID]))
+        self.assertEqual(adapter.sessions[SID].subscription_id, "sub-1")
+        # Negative: a watch this connection never held (the refused lazy resume) is answered here, main untouched.
+        self.assertEqual(adapter.from_client(_call(4, "session.close", {"session_id": "child-2"})),
+                         [(TO_CLIENT, _answer(4, {}))])
+        self.assertEqual((adapter.current, list(adapter.sessions)), (SID, [SID]))
 
     def test_a_closed_session_withdraws_its_open_prompts(self) -> None:
         # Detached, the owner sends this connection no `.settled` for that session: a prompt left open here would
