@@ -463,7 +463,11 @@ export function WorktreesTab({ bot, onOpenDiff }: { bot: Bot; onOpenDiff: (path:
           onContextMenu={(e) => {
             if (!canHand()) return;
             e.preventDefault();
-            setMenu({ x: Math.max(6, Math.min(e.clientX, window.innerWidth - MENU_W_PX - 6)), y: Math.max(6, Math.min(e.clientY, window.innerHeight - menuHeight(1) - 6)), w });
+            // the ContextMenu key or Shift+F10 reports no pointer (0, 0): the menu opens under the row instead
+            const r = e.currentTarget.getBoundingClientRect();
+            const px = e.clientX || e.clientY ? e.clientX : r.left + 12;
+            const py = e.clientX || e.clientY ? e.clientY : r.bottom;
+            setMenu({ x: Math.max(6, Math.min(px, window.innerWidth - MENU_W_PX - 6)), y: Math.max(6, Math.min(py, window.innerHeight - menuHeight(1) - 6)), w });
           }}
           data-testid="panel-tree"
           title={w.path}

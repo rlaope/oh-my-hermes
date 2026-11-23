@@ -8,7 +8,9 @@
 //    card's default) and sent to the bot picked on the card;
 // 4. a removed worktree: the card says it is gone and sends nothing;
 // 5. no Hand where nothing may be sent: a bot over SSH (its rows are folders on another computer), and no bot of this
-//    computer online (no menu, and no read).
+//    computer online (no menu, and no read);
+// 6. one bot of this computer online: the item names it and the card has no picker; with several, Escape in the bot
+//    list closes only the list; the keyboard's context-menu key opens a Worktrees row's menu at the row.
 import { expect, test, type Page } from "@playwright/test";
 
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
@@ -249,4 +251,48 @@ test("with no bot of this computer online, no Hand is offered and nothing is rea
   await expect(menu.getByTestId("session-hand")).toHaveCount(0);
   await page.keyboard.press("Escape");
   expect(await calls("panel.diff")).toHaveLength(0);
+});
+
+test("with one bot of this computer online the item names it and the card has no picker", async ({ page }) => {
+  await open(page, "/w/gateway-keepalive");
+  const id = await newShell(page);
+  for (const bot of ["friren", "default", "omh-tui"]) await mock("mock.botStatus", { bot, status: "offline" });
+  await expect(page.getByTestId("bot-friren").getByTestId("bot-sub")).toHaveText("Not connected");
+  await page.getByTestId(`session-${id}`).click({ button: "right" });
+  await expect(page.getByTestId("session-hand")).toHaveText("Hand to Kami…");
+  await page.getByTestId("session-hand").click();
+  const card = page.getByTestId("handover");
+  await expect(card.locator(".ho-head")).toHaveText("Hand to Kami");
+  await expect(page.getByTestId("handover-bot")).toHaveCount(0);
+  await expect(card.getByTestId("handover-preview")).toContainText("- Branch: `fix/keepalive`");
+});
+
+test("Escape in the bot list closes only the list; the next Escape closes the card", async ({ page }) => {
+  await open(page, "/home/you/code/web-app");
+  const id = await newShell(page);
+  await page.getByTestId(`session-${id}`).click({ button: "right" });
+  await page.getByTestId("session-hand").click();
+  await expect(page.getByTestId("handover-preview")).toBeVisible();
+  await page.getByTestId("handover-bot").click();
+  await expect(page.getByTestId("handover-bot-friren")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("handover-bot-friren")).toHaveCount(0);
+  await expect(page.getByTestId("handover")).toBeVisible();
+  await page.getByTestId("handover-goal").press("Escape");
+  await expect(page.getByTestId("handover")).toHaveCount(0);
+  expect(await calls("thread.create")).toHaveLength(0);
+});
+
+test("the context-menu key opens a Worktrees row's menu at the row, not in the corner", async ({ page }) => {
+  await open(page, "/home/you/code/web-app");
+  await openWorktrees(page);
+  const row = page.getByTestId("panel-tree").nth(1);
+  await row.focus();
+  await row.dispatchEvent("contextmenu", { clientX: 0, clientY: 0, button: 0 });
+  const menu = page.getByTestId("session-row-menu");
+  await expect(menu).toBeVisible();
+  const r = (await row.boundingBox())!;
+  const m = (await menu.boundingBox())!;
+  expect(Math.abs(m.y - (r.y + r.height))).toBeLessThan(8);
+  expect(m.x).toBeGreaterThan(r.x);
 });

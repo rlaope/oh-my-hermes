@@ -117,7 +117,8 @@ export function HandoverCard({ at, from, onClose }: { at: { x: number; y: number
       onDoubleClick={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => {
-        if (e.key === "Escape") {
+        // Escape with the bot list open closes only the list (its own listener); the next one closes the card
+        if (e.key === "Escape" && !ref.current?.querySelector('[aria-expanded="true"]')) {
           e.preventDefault();
           e.stopPropagation();
           onClose();

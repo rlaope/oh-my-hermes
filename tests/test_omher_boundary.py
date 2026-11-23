@@ -469,7 +469,7 @@ RULES = (
     "It is offered only on a Worktrees row of a bot of this computer (never a bot over SSH, whose folders are on another"
     " computer) and only while a bot of this computer is online to take it; with none, nothing is read.",
     "so nothing read from a repository can add a line to the message; a worktree the bridge no longer finds is said to"
-    " be gone and nothing is sent.",
+    " be gone and nothing is sent.",    "\"Hand to <bot>\" (rule 10) starts its thread the same way;",
 )
 TAURI_CONF = ROOT / "apps" / "omher" / "src-tauri" / "tauri.conf.json"
 CAPABILITIES = ROOT / "apps" / "omher" / "src-tauri" / "capabilities" / "default.json"
