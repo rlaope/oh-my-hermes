@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher on Windows: "Reply there" no longer draws over the row's time, and the app names Windows' own fonts.** In
+  the side panel's "Where your bot is", hovering a Slack or Discord row showed "거기에 답장" on top of the row's time
+  ("거기에답장일"): the button floated over the time and its hover fill was see-through. Now the time gives way while
+  the button shows, the row keeps room for the button in its own layout (so the title stops before it in every language
+  and font), and the fill is opaque. The font list names Segoe UI, Malgun Gothic, Yu Gothic UI / Meiryo and Microsoft
+  YaHei UI and puts the UI language's own CJK fonts first, so Windows no longer falls back to older fonts or draws
+  Japanese kanji in a Chinese face; code text names Cascadia Mono and Consolas. Segmented controls and fixed-height
+  buttons keep their label on one line and grow with it instead of wrapping inside the box, and a split terminal's
+  corner buttons sit on an opaque fill.
 - **omher on Windows: a terminal running oh-my-hermes reads oh-my-hermes, not Hermes.** Windows has no terminal
   foreground process group, so omher looks through the processes under the terminal for a known agent CLI. It took
   the newest one, and `omh.exe` starts `hermes.exe` beneath itself, so the row read "Hermes" with the Hermes mark and

@@ -156,6 +156,7 @@
   letter-spacing: 0;
   text-transform: none;
   color: var(--muted);
+  white-space: nowrap;
 }
 /* the Plans section's header row: "KAMI'S PLANS" 11px caps, the plan list toggle and refresh in one grey family;
    12px down to the plan */
@@ -181,13 +182,15 @@
   padding-top: 10px;
   border-top: 1px solid var(--line-soft);
 }
-/* the agent's mark and name, as text: one width for "Claude" and "Codex", so the plans after it line up */
+/* the agent's mark and name, as text: one width for "Claude" and "Codex", so the plans after it line up; a wider
+   system font (Segoe UI) widens it instead of wrapping the name */
 .rn-agent {
   flex: none;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  width: 52px;
+  min-width: 52px;
+  white-space: nowrap;
   color: var(--muted);
   font-size: 11px;
 }
@@ -1068,6 +1071,7 @@
   border-radius: var(--r-sm);
   font-size: 11.5px;
   color: var(--body);
+  white-space: nowrap;
 }
 .rn-askb:hover {
   background: var(--hover);
