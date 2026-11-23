@@ -4,6 +4,10 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A large workspace no longer logs a warning after every shell command.** When the shell round end re-indexes a
+  workspace past its entry or time budget, that designed skip is now logged at debug (`shell_changed skipped=`)
+  instead of warning on nearly every `terminal` / `execute_code` call (~700 lines a day in one workspace). A real
+  fault inside the walk still warns (`shell_changed failed=`). (#3140, carried; thanks @probepark)
 - **`omh_delegate_route` can hand a child the rest of its chain, each step at its own effort (opt-in).** With
   `{"schema_version": "delegate_route_options/v1", "write_fallback_providers": true}` in
   `~/.omh/routing/delegate-route.json`, `set` also writes the positions after the head into

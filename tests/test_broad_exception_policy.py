@@ -954,7 +954,9 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "Runs in transform_tool_result after a terminal / execute_code call and must never fail or alter that "
         "result. A failure is logged as a warning naming the exception class (`consistency_trigger "
         "shell_changed failed=`) and reports no changed file, so the call's result goes out as it did before "
-        "the shell round end existed.",
+        "the shell round end existed. A `_Budget` walk (past `MAX_SCAN_ENTRIES` or the deadline) is the "
+        "designed undecidable case, not a fault: it is logged at debug as `shell_changed skipped=` so a "
+        "large workspace does not warn on every command.",
     ),
     ClassifiedSite(
         "src/plugin_bundle/omh/lsp_nav.py",
