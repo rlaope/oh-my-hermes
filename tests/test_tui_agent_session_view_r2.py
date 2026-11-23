@@ -115,6 +115,8 @@ class ChildTextMergeTests(unittest.TestCase):
         app._open_agent(FIRST)
         answer(app, client, lazy_answer([BRIEF]))
         app._on_response(Response(steer, {"status": "rejected"}, None))
+        self.assertEqual(app.composer.text, "first rejected message")  # the view of A shown now takes it at once
+        self.assertNotIn(FIRST, app.child_drafts)
         type_text(app, "second draft")
         press(app, ESCAPE)
         app._open_agent(FIRST)
