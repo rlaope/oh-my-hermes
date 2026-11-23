@@ -1,5 +1,5 @@
-// The bot page's sections under its picture and name: Persona (`SOUL.md`), Memory (Hermes' built-in targets), its
-// Automations, where else it is talking, and its open threads. Persona and memory are files of the bot's own profile,
+// The bot page's sections under its picture and name: its messaging platforms (BOUNDARY rule 43), Persona
+// (`SOUL.md`), Memory (Hermes' built-in targets), its Automations, where else it is talking, and its open threads. Persona and memory are files of the bot's own profile,
 // read through `bots.page` when the page opens and on Read again (BOUNDARY rule 42); a bot on another computer is read
 // there by its own bridge. Nothing here writes: Edit opens the bot's main chat with a request in the composer, and
 // only the person sends it. File text is shown as plain text, never as HTML.
@@ -18,6 +18,8 @@ import { errorLine } from "../pages/kit";
 import { rowStatus } from "../threads/ThreadTree";
 import { StatusGlyph } from "../threads/StatusGlyph";
 import { botAutomations, botElsewhere, editDraft, fileProblem, memoryUse, type DraftKind } from "./botPage";
+import { PlatformsSection } from "../platforms/PlatformSection";
+import { PendingTemplate } from "../addbot/PendingTemplate";
 
 const AUTO_STATUS = { ok: "bp.autoOk", failed: "bp.autoFailed", never: "bp.autoNever", paused: "bp.autoPaused" } as const;
 
@@ -43,6 +45,7 @@ export function BotSections({ bot }: { bot: Bot }) {
     );
     void s.loadElsewhere(bot.name);
     void s.loadAutomations();
+    if (!remote) void s.loadPlatforms(seq > 0);
     if (!remote) void s.loadThreads(bot.name);
     return () => {
       live = false;
@@ -60,6 +63,10 @@ export function BotSections({ bot }: { bot: Bot }) {
           {t("bp.refresh")}
         </button>
       </div>
+
+      <PendingTemplate bot={bot} />
+
+      <PlatformsSection bot={bot} />
 
       <Head title={t("bp.persona")} onEdit={page ? () => edit("soul") : undefined} testId="bp-edit-soul" />
       <div className="st-grp bp-grp" data-testid="bp-persona">

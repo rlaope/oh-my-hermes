@@ -1,6 +1,6 @@
-"""Add bot › Create and its template gallery (BOUNDARY rule 43): one fixed `hermes -p default profile create <name>`
-through the shared Hermes runner, the name checked against Hermes' own rule and the disk first, the outcome read from
-the folder Hermes made; and one fixed `omh profile bot-templates --json` read for the gallery. Every test uses a temp
+"""Add bot › Create and its template gallery (BOUNDARY rule 44): one fixed `hermes -p default profile create <name>
+--no-alias` through the shared Hermes runner, the name checked against Hermes' own rule and the disk first, the outcome
+read from the folder Hermes made; and one more entry in rule 43's `OMH_READS` table for the gallery. Every test uses a temp
 Hermes home and fake runners: no real profile, no real `hermes`, no real `omh`."""
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ def write(path: Path, text: str) -> Path:
 
 class Argv(unittest.TestCase):
     def test_the_one_argv_names_the_main_profile_and_the_new_name_as_one_element(self):
-        self.assertEqual(ob.profile_create_argv("/h/hermes", "pr-bot"), ["/h/hermes", "-p", "default", "profile", "create", "pr-bot"])
+        self.assertEqual(ob.profile_create_argv("/h/hermes", "pr-bot"), ["/h/hermes", "-p", "default", "profile", "create", "pr-bot", "--no-alias"])
 
     def test_hermes_own_rule_refuses_every_other_name(self):
         # hermes_cli/profiles.py validate_profile_name: PROFILE_ID_RE, not a reserved name, never `default`
@@ -36,8 +36,8 @@ class Argv(unittest.TestCase):
                      "hermes", "default", "test", "tmp", "root", "sudo"):
             with self.assertRaises(ValueError, msg=name):
                 ob.profile_create_argv("/h/hermes", name)
-        self.assertEqual(ob.profile_create_argv("h", "a" * 64)[-1], "a" * 64)
-        self.assertEqual(ob.profile_create_argv("h", "9to5_bot")[-1], "9to5_bot")
+        self.assertEqual(ob.profile_create_argv("h", "a" * 64)[-2], "a" * 64)
+        self.assertEqual(ob.profile_create_argv("h", "9to5_bot")[-2], "9to5_bot")
 
     def test_the_shared_runner_runs_it_like_rule_41s_runs(self):
         seen: dict = {}
@@ -57,7 +57,7 @@ class Argv(unittest.TestCase):
         with mock.patch.object(ob.subprocess, "Popen", Proc), mock.patch.dict(os.environ, env):
             code, out = ob.run_hermes_profile_create("/h/hermes", "pr-bot", Path("/home/h"), 120.0)
         self.assertEqual((code, out), (0, "Profile 'pr-bot' created\n"))
-        self.assertEqual(seen["argv"], ["/h/hermes", "-p", "default", "profile", "create", "pr-bot"])
+        self.assertEqual(seen["argv"], ["/h/hermes", "-p", "default", "profile", "create", "pr-bot", "--no-alias"])
         self.assertIs(seen["stdin"], subprocess.DEVNULL)
         self.assertNotIn("shell", seen)
         self.assertEqual(seen["timeout"], 120.0)
@@ -178,9 +178,10 @@ class Templates(unittest.TestCase):
     CATALOG = {
         "schema_version": "bot_template_catalog/v1",
         "templates": [
-            {"id": "pr-review", "title": "PR reviewer", "summary": "Reviews pull requests.",
+            {"id": "pr-review", "title": "PR\x1b[31m reviewer", "summary": "Reviews pull requests.",
              "skills": ["code-review", "github-event-ops", "Bad Skill"],
-             "schedules": [{"job_name": "pr-review-review-queue", "title": "Weekday review queue", "prompt": "secret"}],
+             "schedules": [{"job_name": "pr-review-review-queue", "title": "Weekday review queue", "prompt": "secret"},
+                           {"job_name": "../x", "title": "bad"}],
              "webhooks": [{"title": "Pull request events"}], "apps": [{"name": "sentry", "need": "optional"}, {"name": "-x"}],
              "persona_seed": "## Bot template: PR reviewer\n\nYou review pull requests.",
              "apply_message": "/omh-bot-template Apply the bot template `pr-review` to this bot."},
@@ -189,63 +190,51 @@ class Templates(unittest.TestCase):
         ],
     }
 
-    def run_omh(self, code=0, stdout=b"", exc=None):
-        seen: dict = {}
+    def test_one_more_fixed_entry_in_rule_43s_table(self):
+        home = Path("/h") / ".hermes"
+        self.assertEqual(ob.OMH_READS["bot_templates"], ("profile", "bot-templates", "--json"))
+        self.assertEqual(ob.omh_read_argv("/x/omh", home, "bot_templates"),
+                         ["/x/omh", "--hermes-home", str(home), "profile", "bot-templates", "--json"])
 
-        def fake(argv, **kw):
-            seen.update(argv=argv, **kw)
-            if exc:
-                raise exc
-            return subprocess.CompletedProcess(argv, code, stdout, b"")
-
-        with mock.patch.object(ob.subprocess, "run", fake):
-            got = ob.read_bot_templates("/u/bin/omh", 5.0)
-        return got, seen
-
-    def test_one_fixed_read_and_only_what_the_gallery_shows(self):
-        got, seen = self.run_omh(stdout=json.dumps(self.CATALOG).encode())
-        self.assertEqual(seen["argv"], ["/u/bin/omh", "profile", "bot-templates", "--json"])
-        self.assertIs(seen["stdin"], subprocess.DEVNULL)
-        self.assertNotIn("shell", seen)
-        self.assertEqual(seen["timeout"], 5.0)
-        self.assertEqual(got["omh"], "ok")
-        self.assertEqual(got["templates"], [{
+    def test_only_what_the_gallery_shows_is_kept(self):
+        rows = ob.bot_template_rows(json.dumps(self.CATALOG))
+        self.assertEqual(rows, [{
             "id": "pr-review", "title": "PR reviewer", "summary": "Reviews pull requests.",
             "skills": ["code-review", "github-event-ops"],
             "schedules": [{"name": "pr-review-review-queue", "title": "Weekday review queue"}],
             "webhooks": ["Pull request events"], "apps": [{"name": "sentry", "need": "optional"}],
         }])
         # no prompt, persona or message text from omh reaches the page
-        self.assertNotIn("secret", json.dumps(got))
-        self.assertNotIn("apply_message", json.dumps(got))
+        self.assertNotIn("secret", json.dumps(rows))
+        self.assertNotIn("apply_message", json.dumps(rows))
 
-    def test_missing_old_and_failed_omh(self):
-        self.assertEqual(ob.read_bot_templates(None), {"omh": "missing", "templates": []})
-        # an omh from before bot templates: argparse refuses the command (exit 2)
-        self.assertEqual(self.run_omh(code=2)[0], {"omh": "old", "templates": []})
-        self.assertEqual(self.run_omh(stdout=b"not json")[0]["omh"], "old")
-        self.assertEqual(self.run_omh(stdout=json.dumps({"schema_version": "x/v9"}).encode())[0]["omh"], "old")
-        got = self.run_omh(exc=subprocess.TimeoutExpired("omh", 5.0))[0]
-        self.assertEqual((got["omh"], got["templates"]), ("failed", []))
-        self.assertIn("did not answer", got["line"])
-        self.assertEqual(self.run_omh(exc=FileNotFoundError(2, "No such file"))[0]["omh"], "failed")
+    def test_anything_but_the_catalog_is_no_answer(self):
+        for out in (None, "", "not json", json.dumps({"schema_version": "x/v9", "templates": []}),
+                    json.dumps({"schema_version": "bot_template_catalog/v1"}), "x" * (ob.OMH_READ_OUTPUT_MAX + 1)):
+            self.assertIsNone(ob.bot_template_rows(out), str(out)[:40])
 
-    def test_omh_is_found_on_path_or_where_its_installer_puts_it(self):
-        self.assertEqual(ob.omh_path(which=lambda n: "/opt/omh"), "/opt/omh")
-        with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp)
-            self.assertIsNone(ob.omh_path(which=lambda n: None, environ={"HOME": tmp, "USERPROFILE": tmp}))
-            if os.name == "nt":
-                launcher = write(home / ".local" / "bin" / "omh.cmd", "@echo off\n")
-            else:
-                launcher = write(home / ".local" / "bin" / "omh", "#!/bin/sh\n")
-                launcher.chmod(0o755)
-            self.assertEqual(ob.omh_path(which=lambda n: None, environ={"HOME": tmp, "USERPROFILE": tmp}), str(launcher))
+    def bridge(self):
+        return ob.Bridge(token="t", hermes_home=Path(tempfile.gettempdir()))
 
-    def test_the_op_reads_through_omh_path(self):
-        bridge = ob.Bridge(token="t", hermes_home=Path(tempfile.gettempdir()))
+    def test_the_op_reads_through_rule_43s_runner(self):
+        seen = []
+
+        def read(omh, home, key, timeout=None):
+            seen.append((omh, key))
+            return json.dumps(self.CATALOG)
+
+        with mock.patch.object(ob, "omh_path", lambda *a, **k: "/u/bin/omh"), mock.patch.object(ob, "run_omh_read", read):
+            got = asyncio.run(self.bridge().op_bots_templates({}))
+        self.assertEqual(seen, [("/u/bin/omh", "bot_templates")])
+        self.assertEqual((got["omh"], [t["id"] for t in got["templates"]]), ("ok", ["pr-review"]))
+
+    def test_missing_and_unavailable_omh(self):
         with mock.patch.object(ob, "omh_path", lambda *a, **k: None):
-            self.assertEqual(asyncio.run(bridge.op_bots_templates({})), {"omh": "missing", "templates": []})
+            self.assertEqual(asyncio.run(self.bridge().op_bots_templates({})), {"omh": "missing", "templates": []})
+        # an omh from before bot templates exits non-zero (argparse), which run_omh_read answers as None
+        with mock.patch.object(ob, "omh_path", lambda *a, **k: "/u/bin/omh"), \
+                mock.patch.object(ob, "run_omh_read", lambda *a, **k: None):
+            self.assertEqual(asyncio.run(self.bridge().op_bots_templates({})), {"omh": "unavailable", "templates": []})
 
 
 if __name__ == "__main__":

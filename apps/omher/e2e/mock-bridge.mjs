@@ -51,7 +51,9 @@
 // signIn: the strict check for that provider passes, as after `hermes auth add <id>`, and its models show in
 // models.options),
 // mock.botPageFail {bot, on} (the bot page's bots.page read fails for that bot until turned off),
-// Add bot › New bot (rule 43): bots.templates answers OMH's catalog (TEMPLATE_SEED) or `missing`/`old`
+// mock.platforms {available?, bots?} (what bots.platforms answers: OMH's `omh hermes platforms`, rule 43; by default
+// every listed platform is connected),
+// Add bot › New bot (rule 44): bots.templates answers OMH's catalog (TEMPLATE_SEED) or `missing`/`unavailable`
 // (mock.templates {omh}); bots.create {name} checks Hermes' name rule and the bots here as the bridge does, then makes
 // the bot as `hermes profile create` would (no oh-my-hermes skills yet: mock.skills adds `omh-bot-template`), or fails
 // with Hermes' text once (mock.createNext {line}).
@@ -655,6 +657,22 @@ let lostQueue = new Map();
 let noSkills;
 // Bots whose bots.page read fails (mock.botPageFail {bot, on}), as a peer whose link dropped answers.
 let botPageFail;
+// Each bot's messaging platforms as the bridge's PlatformStates answers (mock.platforms {available?, bots?}).
+let platformsRead;
+// As OMH reports them: every profile of the Hermes home, most with no messaging platform.
+const PLATFORMS_NONE = () => Object.fromEntries(BOT_SEED.map((b) => [b.name, { log: "read", platforms: [] }]));
+const PLATFORMS_SEED = () => ({
+  available: true,
+  bots: {
+    ...PLATFORMS_NONE(),
+    default: {
+      log: "read",
+      platforms: [
+        { platform: "discord", status: "connected", attention: false, since: "", logged: "2020-01-02T03:04:05Z", reason_kind: "", unknown_why: "", reason: "", guidance: "", restart: "hermes -p default gateway restart", intents: [] },
+      ],
+    },
+  },
+});
 // Tasks › Linear: the bots whose config names a Linear MCP server (mock.linear {bot, server|null})
 let linearMcp;
 // Apps (apps.*, BOUNDARY rule 41): Hermes' MCP catalog (APP_CATALOG) and each bot's state per entry (`<bot>:<name>` ->
@@ -682,7 +700,7 @@ const APP_SKILL_SEED = {
   ],
 };
 let notReady = new Map();
-// Add bot › New bot (rule 43): what `omh profile bot-templates --json` answers, and the next create's failure line.
+// Add bot › New bot (rule 44): what `omh --hermes-home <root> profile bot-templates --json` answers, and the next create's failure line.
 let templatesOmh = "ok";
 let createNext = null;
 const TEMPLATE_SEED = [
@@ -929,6 +947,7 @@ function reset() {
   templatesOmh = "ok";
   createNext = null;
   botPageFail = new Set();
+  platformsRead = PLATFORMS_SEED();
   linearMcp = new Map();
   appState = new Map([["kami:linear", "installed"], ["kami:figma", "needs_signin"], ["kami:datadog", "disabled"]]);
   appsNext = {};
@@ -1624,6 +1643,7 @@ const OPS = {
       routines: (ROUTINE_SEED[b.name] ?? []).length,
     };
   },
+  "bots.platforms": () => structuredClone(platformsRead),
   "bots.page": (p) => {
     const b = needBotAny(p);
     if (botPageFail.has(b.name)) throw new OpError("bot_offline", `${b.name} is offline`);
@@ -2257,6 +2277,10 @@ const OPS = {
     const b = needBot(p);
     if (p.server) linearMcp.set(b.name, String(p.server));
     else linearMcp.delete(b.name);
+    return {};
+  },
+  "mock.platforms": (p) => {
+    platformsRead = { available: p.available !== false, bots: { ...PLATFORMS_NONE(), ...(p.bots ?? {}) } };
     return {};
   },
   "mock.botPageFail": (p) => {

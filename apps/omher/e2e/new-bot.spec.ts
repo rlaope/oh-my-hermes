@@ -1,4 +1,4 @@
-// Add bot › New bot (BOUNDARY rule 43), against the mock bridge: the gallery lists OMH's bot templates from
+// Add bot › New bot (BOUNDARY rule 44), against the mock bridge: the gallery lists OMH's bot templates from
 // `bots.templates`, the name follows Hermes' own rule, Create sends `bots.create` with the name only, and with a
 // template the new bot's main chat gets exactly one message, the template's `/omh-bot-template` line. A bot that has no
 // oh-my-hermes skills yet waits for Apply template; no template, or no oh-my-hermes, still makes a bot.
@@ -67,15 +67,20 @@ test("Create with a template makes the bot, opens its chat and sends exactly the
   await page.getByTestId("addbot-template-pr-review").click();
   await page.getByTestId("addbot-name").fill("pr-bot");
   await page.getByTestId("addbot-create").click();
-  await expect(page.getByTestId("addbot")).toHaveCount(0);
+  const done = page.getByTestId("addbot-done");
+  await expect(done).toContainText("pr-bot is made; its chat is open and it is applying the template");
+  // --no-alias left Hermes' wrapper out: the page names Hermes' own command for it
+  await expect(page.getByTestId("addbot-alias").locator("code")).toHaveText("hermes profile alias pr-bot");
   await expect(page.getByTestId("bot-pr-bot")).toHaveAttribute("aria-current", "true");
   expect((await calls("bots.create")).map((c) => c.params)).toEqual([{ name: "pr-bot" }]);
   await expect.poll(async () => (await calls("chat.send")).map((c) => [c.params.bot, c.params.text])).toEqual([
     ["pr-bot", "/omh-bot-template Apply the bot template `pr-review` to this bot."],
   ]);
+  await page.getByTestId("addbot-close").click();
+  await expect(page.getByTestId("addbot")).toHaveCount(0);
 });
 
-test("a new bot without oh-my-hermes' skills waits for Apply template, and sends nothing until it can", async ({ page }) => {
+test("a new bot without oh-my-hermes' skills waits for Apply template, here or on its page, and sends nothing until it can", async ({ page }) => {
   await openNewBot(page);
   await page.getByTestId("addbot-template-inbox-triage").click();
   await page.getByTestId("addbot-name").fill("mail-bot");
@@ -88,9 +93,19 @@ test("a new bot without oh-my-hermes' skills waits for Apply template, and sends
   await page.getByTestId("addbot-apply").click();
   await expect(waiting).toContainText("mail-bot still has no oh-my-hermes skills.");
   expect(await calls("chat.send")).toEqual([]);
-  await mock("mock.skills", { add: [APPLY], after: 0 });
-  await page.getByTestId("addbot-apply").click();
+  // close it and come back later from the bot's page
+  await page.keyboard.press("Escape");
   await expect(page.getByTestId("addbot")).toHaveCount(0);
+  await page.getByTestId("bot-mail-bot").click({ button: "right" });
+  await page.getByTestId("row-menu").getByRole("menuitem", { name: "Edit bot" }).click();
+  const pending = page.getByTestId("bp-template");
+  await expect(pending).toContainText("Bot template inbox-triage waits to be applied.");
+  await page.getByTestId("bp-template-apply").click();
+  await expect(pending).toContainText("mail-bot still has no oh-my-hermes skills.");
+  expect(await calls("chat.send")).toEqual([]);
+  await mock("mock.skills", { add: [APPLY], after: 0 });
+  await page.getByTestId("bp-template-apply").click();
+  await expect(page.getByTestId("bp-template")).toHaveCount(0);
   await expect.poll(async () => (await calls("chat.send")).map((c) => [c.params.bot, c.params.text])).toEqual([
     ["mail-bot", "/omh-bot-template Apply the bot template `inbox-triage` to this bot."],
   ]);
@@ -106,20 +121,20 @@ test("No template makes an empty bot and sends nothing; Hermes' own words show w
   );
   await expect(page.getByTestId("bot-empty-bot")).toHaveCount(0);
   await page.getByTestId("addbot-create").click();
-  await expect(page.getByTestId("addbot")).toHaveCount(0);
+  await expect(page.getByTestId("addbot-done")).toContainText("empty-bot is made and its chat is open.");
   await expect(page.getByTestId("bot-empty-bot")).toHaveAttribute("aria-current", "true");
   expect(await calls("chat.send")).toEqual([]);
 });
 
-test("without oh-my-hermes, or with one from before bot templates, the gallery says so and a plain bot still works", async ({ page }) => {
+test("without oh-my-hermes, or one that gives no templates, the gallery says so and a plain bot still works", async ({ page }) => {
   await mock("mock.templates", { omh: "missing" });
   await openNewBot(page);
   await expect(page.getByTestId("addbot-omh-missing")).toContainText("oh-my-hermes is not on this computer");
   await expect(page.getByTestId("addbot-gallery").getByRole("radio")).toHaveCount(1);
-  await mock("mock.templates", { omh: "old" });
+  await mock("mock.templates", { omh: "unavailable" });
   await page.getByTestId("addbot-new").getByRole("button", { name: "Back" }).click();
   await page.getByTestId("addbot-new-open").click();
-  await expect(page.getByTestId("addbot-omh-old")).toContainText("has no bot templates yet");
+  await expect(page.getByTestId("addbot-omh-unavailable")).toContainText("oh-my-hermes gave no bot templates");
   await page.getByTestId("addbot-name").fill("plain");
   await page.getByTestId("addbot-create").click();
   await expect(page.getByTestId("bot-plain")).toHaveAttribute("aria-current", "true");

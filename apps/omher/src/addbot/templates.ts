@@ -1,5 +1,6 @@
-// Add bot › New bot: the name rule and the one message a template sends (BOUNDARY rule 43). The bridge checks the
-// name again and runs Hermes' own `hermes -p default profile create <name>`; the page only shapes what it sends.
+// Add bot › New bot: the name rule and the one message a template sends (BOUNDARY rule 44). The bridge checks the
+// name again and runs Hermes' own `hermes -p default profile create <name> --no-alias`; the page only shapes what it
+// sends.
 
 /** Hermes' profile id grammar (`hermes_constants.PROFILE_ID_RE`), the one `validate_profile_name` checks. */
 export const PROFILE_NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/;

@@ -12,6 +12,7 @@ import { getDraft } from "../app/drafts";
 import { moveInSidebar } from "./order";
 import { LANG_KEY, readLang, setLang, t as tr, type Key, type Lang } from "../i18n";
 import type {
+  PlatformsRead,
   Away,
   LinkPlaces,
   ApprovalChoice,
@@ -437,6 +438,8 @@ export interface AppState {
   routines: Record<string, Routine[]>;
   /** Every bot's automations (`automations.list`, read from each profile's cron/jobs.json); null until read. */
   automations: Automation[] | null;
+  /** Every local bot's messaging platforms (`bots.platforms`, OMH's read-only reader); null until read. */
+  platforms: PlatformsRead | null;
   models: Record<string, ModelOptions>;
   /** Per bot: the composer's "Reply there" chip, if any. */
   replyTo: Record<string, ReplyChip | null>;
@@ -622,6 +625,7 @@ export function initialState(): AppState {
     peeks: {},
     routines: {},
     automations: null,
+    platforms: null,
     models: {},
     replyTo: {},
     threads: {},
@@ -965,6 +969,7 @@ export type Action =
   | { type: "peek.failed"; id: string; error: string }
   | { type: "routines"; bot: string; routines: Routine[] }
   | { type: "automations"; automations: Automation[] }
+  | { type: "platforms"; platforms: PlatformsRead }
   | { type: "ui.automations"; job?: string | null; bot?: string | null }
   | { type: "ui.plugins"; bot?: string | null }
   | { type: "ui.apps"; bot?: string | null }
@@ -1532,6 +1537,8 @@ export function reduce(state: AppState, a: Action): AppState {
       return { ...state, routines: { ...state.routines, [a.bot]: a.routines } };
     case "automations":
       return { ...state, automations: a.automations };
+    case "platforms":
+      return { ...state, platforms: a.platforms };
     case "ui.automations":
       return {
         ...state,
@@ -1958,6 +1965,8 @@ export interface Actions {
   loadRoutines(bot?: string): Promise<void>;
   /** Re-read every bot's automations (files only; no gateway). */
   loadAutomations(): Promise<void>;
+  /** Re-read every bot's messaging platforms (OMH's read-only reader; `fresh`: the bot page's Read again). */
+  loadPlatforms(fresh?: boolean): Promise<void>;
   /** Open the Automations page, on one job (`<bot>:<id>`) when given, its list filtered to `bot` when given. */
   openAutomations(job?: string | null, bot?: string | null): void;
   /** Open the Plugins page, scoped to `bot` when given (else the last one, else the selected bot). */
@@ -2377,6 +2386,13 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       fail(e);
     }
   };
+  const loadPlatforms = async (fresh?: boolean) => {
+    try {
+      dispatch({ type: "platforms", platforms: await bridge.request("bots.platforms", fresh ? { fresh: true } : {}) });
+    } catch {
+      /* an older bridge without the op, or a failed ask: what was last read stays */
+    }
+  };
   const loadAutomations = async () => {
     try {
       dispatch({ type: "automations", automations: (await bridge.request("automations.list", {})).automations });
@@ -2476,6 +2492,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       loadElsewhere(),
       loadRoutines(),
       loadAutomations(),
+      loadPlatforms(),
     ]);
   };
   /** `bot`'s threads whose chat was read (opened in this run). */
@@ -2629,6 +2646,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
               ? back.bot
               : listed[0];
         void loadAutomations();
+        void loadPlatforms();
         // the panel and view come back as the bot is selected, before its chat and lists load: put back only once
         // those reads ended, a click on the panel in the meantime (the places chip, ⌘.) was undone by it
         const loading = first ? selectBot(first) : Promise.resolve();
@@ -2825,6 +2843,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     loadElsewhere,
     loadRoutines,
     loadAutomations,
+    loadPlatforms,
     loadModels,
     openAutomations: (job, bot) => {
       dispatch({ type: "ui.automations", job, bot });

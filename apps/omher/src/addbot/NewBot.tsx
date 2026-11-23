@@ -1,22 +1,26 @@
-// Add bot › New bot (BOUNDARY rule 43): pick one of OMH's bot templates (or none), name the bot, press Create. The
-// bridge runs Hermes' own `hermes -p default profile create <name>` and reads back the folder Hermes made; omher writes
-// nothing in the profile. With a template, the new bot's main chat gets one message (applyMessage) and the bot applies
-// it with its own tools and approvals, every schedule paused. A bot that cannot see the template skill yet (OMH reaches
-// a new profile on the next `omh update`) waits for the person's Apply template.
+// Add bot › New bot (BOUNDARY rule 44): pick one of OMH's bot templates (or none), name the bot, press Create. The
+// bridge runs Hermes' own `hermes -p default profile create <name> --no-alias` and reads back the folder Hermes made;
+// omher writes nothing in the profile. With a template, the new bot's main chat gets one message (applyMessage) and the
+// bot applies it with its own tools and approvals, every schedule paused. A bot that cannot see the template skill yet
+// (OMH reaches a new profile on the next `omh update`) waits for the person's Apply template, here or on its page.
 import { useEffect, useState } from "react";
 import type { BotTemplate, BotTemplates } from "../lib/protocol";
 import { getStore, useStore } from "../state/store";
 import { t, tx, type Key } from "../i18n";
 import { Spinner } from "../ui";
 import { addToList, withBridge } from "./bots";
-import { APPLY_SKILL, applyMessage, checkName, normalizeName, type NameCheck } from "./templates";
+import { applyMessage, checkName, normalizeName, type NameCheck } from "./templates";
+import { applyTemplate, hasApplySkill } from "./pending";
 
 const CREATE_CMD = "hermes profile create";
 const UPDATE_CMD = "omh update";
+/** Hermes' own command for the `<name>` wrapper `--no-alias` left out (hermes_cli/subcommands/profile.py `alias`). */
+const aliasCmd = (bot: string) => `hermes profile alias ${bot}`;
 
 type Step =
   | { kind: "form"; line?: string }
   | { kind: "creating" }
+  | { kind: "done"; bot: string; applied: boolean }
   | { kind: "waiting"; bot: string; template: string; again?: boolean };
 
 const NAME_LINE: Record<Exclude<NameCheck, "ok" | "empty">, Key> = {
@@ -24,12 +28,6 @@ const NAME_LINE: Record<Exclude<NameCheck, "ok" | "empty">, Key> = {
   reserved: "ab.nameReserved",
   taken: "ab.nameTaken",
 };
-
-/** Whether the bot's own skill folders hold the template skill (rule 19's read, `skills.list`). */
-async function hasApplySkill(bot: string): Promise<boolean> {
-  const { skills } = await withBridge((b) => b.request("skills.list", { bot }));
-  return skills.some((s) => s.name === APPLY_SKILL);
-}
 
 export function NewBot({ onBack, onDone }: { onBack: () => void; onDone: () => void }) {
   const s = useStore();
@@ -42,7 +40,7 @@ export function NewBot({ onBack, onDone }: { onBack: () => void; onDone: () => v
     let live = true;
     withBridge((b) => b.request("bots.templates", {}))
       .then((r) => live && setList(r))
-      .catch(() => live && setList({ omh: "failed", templates: [] }));
+      .catch(() => live && setList({ omh: "unavailable", templates: [] }));
     return () => {
       live = false;
     };
@@ -52,11 +50,6 @@ export function NewBot({ onBack, onDone }: { onBack: () => void; onDone: () => v
   const taken = s.bots.filter((b) => !b.host).map((b) => b.name);
   const check = checkName(name, taken);
   const busy = step.kind === "creating";
-
-  const send = async (bot: string, template: string) => {
-    await getStore().actions.sendTo(bot, applyMessage(template));
-    onDone();
-  };
 
   const create = async () => {
     if (check !== "ok" || busy) return;
@@ -69,14 +62,10 @@ export function NewBot({ onBack, onDone }: { onBack: () => void; onDone: () => v
         return;
       }
       const bot = r.bot;
-      if (!template) {
-        await addToList(getStore(), bot);
-        onDone();
-        return;
-      }
-      const ready = await hasApplySkill(bot).catch(() => false);
-      await addToList(getStore(), bot, { open: ready });
-      if (ready) await send(bot, template);
+      const ready = !!template && (await hasApplySkill(bot).catch(() => false));
+      await addToList(getStore(), bot, { open: !template || ready });
+      if (!template) setStep({ kind: "done", bot, applied: false });
+      else if (await applyTemplate(bot, template)) setStep({ kind: "done", bot, applied: true });
       else setStep({ kind: "waiting", bot, template });
     } catch (e) {
       setStep({ kind: "form", line: (e as { message?: string })?.message || t("ab.createFailed") });
@@ -84,10 +73,30 @@ export function NewBot({ onBack, onDone }: { onBack: () => void; onDone: () => v
   };
 
   const applyNow = async (bot: string, template: string) => {
-    const ready = await hasApplySkill(bot).catch(() => false);
-    if (ready) await send(bot, template);
+    if (await applyTemplate(bot, template)) onDone();
     else setStep({ kind: "waiting", bot, template, again: true });
   };
+
+  const alias = (bot: string) => (
+    <div className="ab-hint" data-testid="addbot-alias">
+      {tx("ab.alias", { cmd: <code>{aliasCmd(bot)}</code> })}
+    </div>
+  );
+
+  if (step.kind === "done") {
+    return (
+      <div className="ab-new" data-testid="addbot-done">
+        <div className="ab-h">{t("ab.new")}</div>
+        <div className="ab-line">{t(step.applied ? "ab.createdApplied" : "ab.created", { name: step.bot })}</div>
+        {alias(step.bot)}
+        <div className="ab-actions">
+          <button type="button" className="ab-btn ab-primary" data-testid="addbot-close" onClick={onDone}>
+            {t("ab.close")}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (step.kind === "waiting") {
     const { bot, template } = step;
@@ -97,7 +106,9 @@ export function NewBot({ onBack, onDone }: { onBack: () => void; onDone: () => v
         <div className="ab-line">
           {tx(step.again ? "ab.stillNoSkill" : "ab.needOmh", { name: bot, cmd: <code>{UPDATE_CMD}</code> })}
         </div>
+        <div className="ab-hint">{t("ab.later")}</div>
         <div className="ab-hint">{tx("ab.orSend", { msg: <code>{applyMessage(template)}</code> })}</div>
+        {alias(bot)}
         <div className="ab-actions">
           <button type="button" className="ab-btn" onClick={() => void (getStore().actions.selectBot(bot), onDone())}>
             {t("ab.openChat")}
@@ -140,11 +151,7 @@ export function NewBot({ onBack, onDone }: { onBack: () => void; onDone: () => v
         )}
         {list && list.omh !== "ok" && (
           <div className="ab-hint" data-testid={`addbot-omh-${list.omh}`}>
-            {list.omh === "missing"
-              ? t("ab.omhMissing")
-              : list.omh === "old"
-                ? tx("ab.omhOld", { cmd: <code>{UPDATE_CMD}</code> })
-                : t("ab.omhFailed", { line: list.line ?? "" })}
+            {list.omh === "missing" ? t("ab.omhMissing") : tx("ab.omhUnavailable", { cmd: <code>{UPDATE_CMD}</code> })}
           </div>
         )}
       </div>

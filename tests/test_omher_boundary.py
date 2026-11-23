@@ -165,23 +165,29 @@ RULES = (
     "The browser sign-in happens inside the CLI: omher never asks for, accepts, reads, copies or shows a token or key.",
     "deletes only `~/.omher/accounts/<cli>/<id>/`. An account switch never stops a running session.",
     "Besides rule 21's one GitHub CLI read, rule 24's one `hermes -p <bot> cron create` for the briefing, the Hermes"
-    " commands of rules 29 and 41, and rule 43's `hermes -p default profile create <name>` and `omh profile bot-templates"
-    " --json`, the only program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`, `diff`, `log`,",
-    # rule 43: a new bot through Hermes' own profile create, on a press, the name by Hermes' rule, and OMH's templates
+    " commands of rules 29, 41 and 44 (`hermes -p default profile create <name> --no-alias`), and the read-only `omh` of"
+    " rules 43 and 44, the only program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`,",
+    # rule 44: a new bot through Hermes' own profile create, on a press, the name by Hermes' rule, and OMH's templates
     "omher makes a new bot only when the person presses Create under the sidebar `+` › New bot, and only through Hermes'"
-    " own command: one fixed argv, `hermes -p default profile create <name>`,",
+    " own command: one fixed argv, `hermes -p default profile create <name> --no-alias`,",
     "This follows the owner's answer (D1, 2026-11-23) that omher may create a Hermes profile on a button press.",
-    "`-p default` makes the main profile the one the new bot takes its keys and model from, as Hermes does by default,"
-    " whatever Hermes' sticky `active_profile` names.",
+    "`-p default` makes the main profile the one Hermes creates from, whatever Hermes' sticky `active_profile` names.",
+    "What Hermes itself does on that create: the new profile copies the default profile's keys and model (Hermes'"
+    " default, `mirror_launch_credentials`), Hermes may make it through the default profile's running gateway instead of"
+    " in its own process, and it seeds its bundled skills;",
+    "`--no-alias` keeps it from writing a `~/.local/bin/<name>` wrapper, so the press writes nothing outside Hermes'"
+    " home, and the page shows Hermes' own `hermes profile alias <name>` for the person to run if they want one.",
     "The name is checked against Hermes' own rule (`validate_profile_name`: the page trims and lowercases it, then"
     " `^[a-z0-9][a-z0-9_-]{0,63}$`, and not `hermes`, `default`, `test`, `tmp`, `root` or `sudo`) and refused when"
     " anything of that name is already under `profiles/`, before anything runs; it is one argument.",
     "omher counts the bot made only when `profiles/<name>/` is then a real folder (not a link) holding its `config.yaml`,"
     " never from the exit code alone, and otherwise shows Hermes' own words.",
     "omher writes no file in the profile.",
-    "For the gallery the bridge runs one more fixed argv, `omh profile bot-templates --json`",
-    "with no shell, nothing on stdin and at most 30 seconds, only when the person opens New bot,",
+    "For the gallery this rule allows rule 43's `OMH_READS` table one more entry, `omh --hermes-home <Hermes root> profile"
+    " bot-templates --json` (`bots.templates`), run only through `run_omh_read` under rule 43's limits, only when the"
+    " person opens New bot;",
     "built from the template id alone, and only once rule 19's skill read shows that bot has the `omh-bot-template` skill;",
+    "the page says so and sends nothing until the person presses Apply template, which the bot's page also offers later.",
     "The bot applies the template with its own tools and approvals, every schedule paused; omher writes no persona,"
     " creates no job and connects no app for it. A bot on another computer is never made this way.",
     "omher never commits, checks out, pushes or edits a repository.",
@@ -370,11 +376,12 @@ RULES = (
     "never runs this in its own pseudo-terminal, so no keystroke passes through omher.",
     "There are four exceptions. The first two are a bot's automations and plugins, which omher changes only by asking"
     " that bot's own gateway (rules 24 and 25); omher writes no file of either itself, with one exception of its own:",
-    "never signals a process (the one exception is the stop of its own `hermes mcp` run (rule 41) or `hermes profile"
-    " create` run (rule 43) past its time), never calls a service manager",
-    "The fourth is a new bot (rule 43): on the person's press, Hermes' own `hermes -p default profile create <name>`"
-    " makes a new profile with its folder and files; omher writes none of them, and it changes no profile that already"
-    " exists.",
+    "never signals a process (the exceptions are rule 41's stop of its own `hermes mcp` run past its time, rule 43's"
+    " stop of its own `omh` read past its time and rule 44's stop of its own `hermes profile create` run past its time,"
+    " all through `_stop_run`), never calls a service manager",
+    "The fourth is a new bot (rule 44): on the person's press, Hermes' own `hermes -p default profile create <name>"
+    " --no-alias` makes a new profile with its folder and files; omher writes none of them, and it changes no profile"
+    " that already exists.",
     "The third is a bot's MCP apps (rule 41): on the person's press, Hermes' own `hermes -p <bot> mcp"
     " install|login|remove <name>` writes that profile's `config.yaml` `mcp_servers`, its `.env` and its `mcp-tokens/`;"
     " omher itself writes none of them.",
@@ -394,7 +401,7 @@ RULES = (
     " folder) and never sets it up again.",
     "omher sets up exactly one briefing job by itself (rule 24), writing only the collector copy"
     " `scripts/channel_watch_omher-brief.py` and its config `channel_watch/omher-brief.json`",
-    "rule 24's one `hermes -p <bot> cron create` for the briefing, the Hermes commands of rules 29 and 41,",
+    "rule 24's one `hermes -p <bot> cron create` for the briefing, the Hermes commands of rules 29, 41 and 44",
     "omher changes a bot's plugins only through Hermes' own `plugins.manage` on that bot's gateway (`list`, `toggle`,"
     " `inspect`, `install` from the curated catalog by name, `update`, `remove`), only when the person presses a button,",
     "`install` carries the pin `inspect` returned.",
@@ -659,12 +666,15 @@ class DocPins(unittest.TestCase):
         # 41: rule 41 (the Apps page: three fixed `hermes -p <bot> mcp install|login|remove <name>` argvs on a press,
         # the catalog and the bot's MCP state read from files); 42: rule 42 (a bot's page reads its persona `SOUL.md`
         # and Hermes' memory files read-only, bounded, on the person's opening, only the fixed paths and never through a
-        # link, never writes them, keeps them in the app; a bot on another computer is read there); 43: rule 43 (a new
-        # bot through Hermes' own `hermes -p default profile create <name>` on a press, the name by Hermes' rule, the
-        # outcome from the folder Hermes made; the gallery's one `omh profile bot-templates --json` read; one apply
-        # message once the bot has the template skill). The rules stay numbered 1..n with no gap or repeat.
+        # link, never writes them, keeps them in the app; a bot on another computer is read there); 43: rule 43 (each
+        # bot's messaging platforms through OMH's own read-only `omh hermes platforms`, one fixed argv; its gateway
+        # records and log tails read there, never a log line kept; shown, with a restart command to copy, never run);
+        # 44: rule 44 (a new bot through Hermes' own `hermes -p default profile create <name> --no-alias` on a press,
+        # the name by Hermes' rule, the outcome from the folder Hermes made; one more `OMH_READS` entry for the
+        # gallery's `profile bot-templates --json`; one apply message once the bot has the template skill). The rules
+        # stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 43, len(rules))
+        self.assertTrue(6 <= len(rules) <= 44, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -1246,11 +1256,9 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         fns = {f.name: f for f in ast.walk(self.tree) if isinstance(f, ast.FunctionDef)}
         calls = [(fn.name, c) for fn in fns.values() for c in ast.walk(fn)
                  if isinstance(c, ast.Call) and ast.unparse(c.func) == "subprocess.run"]
-        # _hermes_run: rule 24's one `hermes -p <bot> cron create` for the briefing (rule 41's and rule 43's shared
-        # runner is a Popen, pinned in AppsThroughTheBotsOwnHermes); read_bot_templates: rule 43's one
-        # `omh profile bot-templates --json` (NewBotThroughHermesOwnCreate)
-        self.assertEqual(sorted(name for name, _ in calls),
-                         ["_git", "_hermes_run", "gh_pr_view", "read_bot_templates", "run_hermes_restart"])
+        # _hermes_run: rule 24's one `hermes -p <bot> cron create` for the briefing (rule 41's run_hermes_mcp is a
+        # Popen, pinned in AppsThroughTheBotsOwnHermes, as is rule 43's run_omh_read in MessagingPlatformsThroughOmh)
+        self.assertEqual(sorted(name for name, _ in calls), ["_git", "_hermes_run", "gh_pr_view", "run_hermes_restart"])
         fn = fns["gh_pr_view"]
         body = ast.unparse(ast.Module(body=fn.body[1:], type_ignores=[]))  # the code, without its docstring
         self.assertIn("timeout=timeout", body)
@@ -1320,11 +1328,10 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         self.assertEqual(sorted(ast.unparse(c.args[0]) for c in runs),
                          ["['git', *pre, *args]",
                           "[gh, 'pr', 'view', str(number), '-R', repo, '--json', 'state,isDraft,mergedAt,url,statusCheckRollup,headRefOid']",
-                          "[omh, *OMH_TEMPLATES_ARGV]",
-                          "argv", "argv", "argv"])  # argv: rule 29's restart_argv (RestartOneBotOnAPress), rule 24's
-        # brief_create_argv (`hermes -p <bot> cron create`, pinned in bridge/tests/test_brief_setup.py) and the shared
-        # runner of rule 41's mcp_argv and rule 43's profile_create_argv (AppsThroughTheBotsOwnHermes,
-        # NewBotThroughHermesOwnCreate); `[omh, *OMH_TEMPLATES_ARGV]`: rule 43's one template read
+                          "argv", "argv", "argv", "argv"])  # argv: rule 29's restart_argv (RestartOneBotOnAPress),
+        # rule 24's brief_create_argv (`hermes -p <bot> cron create`, pinned in bridge/tests/test_brief_setup.py), rule
+        # 41's mcp_argv (AppsThroughTheBotsOwnHermes) and rule 43's omh_read_argv over OMH_READS
+        # (MessagingPlatformsThroughOmh)
         for host in ("slack.com/api", "discord.com/api", "api.telegram.org", "hooks.slack.com"):
             self.assertNotIn(host, self.source)
         hermes_send = [fn.name for fn in ast.walk(self.tree) if isinstance(fn, ast.FunctionDef)
@@ -2471,15 +2478,17 @@ class RestartOneBotOnAPress(unittest.TestCase):
         self.assertIn("argv = restart_argv(hermes, bot, interrupt)", body)
         self.assertIn("subprocess.run(argv, stdin=subprocess.DEVNULL", body)
         self.assertNotIn("shell=True", self.src)
-        # the bridge's own SIGTERM handler (it stops itself) is not a signal sent to anything; the one signal is the
-        # stop of its own rule 41 or rule 43 Hermes run past its time (`_stop_run`), started by `_run_hermes_argv` alone
+        # the bridge's own SIGTERM handler (it stops itself) is not a signal sent to anything; the one signal is
+        # `_stop_run`: the stop of its own rule 41 or rule 44 Hermes run past its time (`_run_hermes_argv`) and rule
+        # 43's of its own `omh` read (`run_omh_read`)
         rest = self.src
-        for own in ("_run_hermes_argv", "_stop_run"):
+        for own in ("_run_hermes_argv", "run_omh_read", "_stop_run"):
             rest = rest.replace(ast.get_source_segment(self.src, self.fns[own]), "")
         for word in ("Popen", "os.kill", "send_signal", "killpg", "launchctl", "systemctl", "schtasks", "os.system"):
             self.assertNotIn(word, rest, word)
         self.assertNotIn("Popen", ast.get_source_segment(self.src, self.fns["_stop_run"]))
-        self.assertNotIn("kill", ast.get_source_segment(self.src, self.fns["_run_hermes_argv"]).replace("_stop_run", ""))
+        for own in ("_run_hermes_argv", "run_omh_read"):
+            self.assertNotIn("kill", ast.get_source_segment(self.src, self.fns[own]).replace("_stop_run", ""), own)
         callers = [n for n, f in self.fns.items() if n != "run_hermes_restart"
                    and any(isinstance(c, ast.Name) and c.id == "run_hermes_restart" for c in ast.walk(f))]
         self.assertEqual(callers, ["op_bots_restart"])
@@ -3231,7 +3240,7 @@ class AppsThroughTheBotsOwnHermes(unittest.TestCase):
         stop = self._body("_stop_run")
         self.assertIn("os.killpg(proc.pid, signal.SIGKILL)", stop)
         self.assertIn("proc.wait(timeout=MCP_STOP_WAIT)", stop)
-        self.assertEqual(self._callers("_stop_run"), ["_run_hermes_argv"])
+        self.assertEqual(sorted(self._callers("_stop_run")), ["_run_hermes_argv", "run_omh_read"])  # rules 41/44 and 43
         self.assertEqual(ast.literal_eval(self._const("MCP_TIMEOUT")), {"install": 300.0, "login": 330.0, "remove": 60.0})
         self.assertEqual(self._callers("run_hermes_mcp"), ["_apps_run"])
 
@@ -3411,11 +3420,159 @@ class BotPageReadsPersonaAndMemoryOnly(unittest.TestCase):
         self.assertEqual(sorted(hits), ["lib/protocol.ts", "state/store.ts"])
 
 
+class MessagingPlatformsThroughOmh(unittest.TestCase):
+    """Rule 43: `bots.platforms` runs OMH's own read-only `omh --hermes-home <root> hermes platforms`, one fixed argv,
+    and keeps only checked, clipped fields of its answer; the bridge opens no Hermes log; the page shows a restart
+    command to copy and runs nothing; the OMH producer behind it carries no log line, token or webhook path."""
+
+    RULE_43 = (
+        "43. To show whether each bot's messaging platform (Discord, Slack and the others) is connected, the bridge"
+        " runs one more program, OMH's own read-only reader: `omh --hermes-home <Hermes root> hermes platforms`"
+        " (`bots.platforms`). This is the one exception to rule 10 for it.",
+        "The bridge runs `omh` only through `run_omh_read`, with an argv from one fixed table (`OMH_READS`), and this"
+        " rule allows that table exactly this one entry (rule 44 adds the one for bot templates).",
+        "the argv is fixed and takes nothing from the page, with no shell, nothing on stdin, its stderr dropped, started"
+        " in the home folder without any `PYTHON*` variable of the Hermes interpreter, and at most 1 MB of what it prints"
+        " read (a longer answer is refused).",
+        "A read still running after 20 seconds is stopped by `_stop_run`, the same stop rule 41 uses: on POSIX with its"
+        " process group, on Windows the process; nothing else is signalled.",
+        "and when Hermes is reconnecting it only once Hermes flags that as needing the person or it has gone on for 10"
+        " minutes (`ROW_RECONNECT_MS`);",
+        "That command reads, never writes, the gateway record (`gateway_state.json`) of the Hermes root and of each"
+        " profile and the tail of each one's `logs/gateway.log` (at most 1 MB, with the rotated `gateway.log.1` before it"
+        " when the log is shorter); it runs no Hermes command, signals no process and sends nothing anywhere, and omher"
+        " itself opens no Hermes log.",
+        "the fix in OMH's words, and Hermes' restart command for the gateway that serves the bot; never a log line. The"
+        " bridge keeps only those fields but the fix (it can name a log file's path; the page words its own),",
+        "is shown as not known, never as connected or as not connected, and with no answer from `omh` nothing is shown"
+        " as connected.",
+        "shown to copy and never run by omher (rule 29's Restart stays the one way omher restarts a gateway). A bot on"
+        " another computer (rule 31) is not read, and `bots.platforms` is never forwarded to that computer's bridge.",
+    )
+
+    def setUp(self) -> None:
+        self.source = BRIDGE.read_text(encoding="utf-8")
+        self.tree = ast.parse(self.source)
+        self.fns = {n.name: n for n in ast.walk(self.tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+    def _bridge(self):
+        import importlib.util
+        import sys
+
+        spec = importlib.util.spec_from_file_location("omher_bridge_platforms", BRIDGE)
+        ob = importlib.util.module_from_spec(spec)
+        sys.modules["omher_bridge_platforms"] = ob
+        spec.loader.exec_module(ob)
+        return ob
+
+    def test_the_doc_states_rule_43(self) -> None:
+        text = _flat(DOC.read_text(encoding="utf-8"))
+        for sentence in self.RULE_43:
+            self.assertIn(_flat(sentence), text)
+
+    def test_one_table_of_fixed_reads_no_shell_no_stdin_bounded(self) -> None:
+        table = next(n.value for n in self.tree.body if isinstance(n, ast.Assign)
+                     and any(isinstance(t, ast.Name) and t.id == "OMH_READS" for t in n.targets))
+        # the whole list of `omh` argvs the bridge may run; a new entry needs a rule of its own
+        self.assertEqual(ast.literal_eval(table), {"platforms": ("hermes", "platforms"),
+                                                   "bot_templates": ("profile", "bot-templates", "--json")})  # rule 44
+        argv = ast.unparse(self.fns["omh_read_argv"].body[-1])
+        self.assertEqual(argv, "return [omh, '--hermes-home', str(home), *OMH_READS[read]]")
+        run = ast.unparse(self.fns["run_omh_read"])
+        self.assertIn("argv = omh_read_argv(omh, home, read)", run)
+        self.assertIn("proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.DEVNULL,"
+                      " env=env, cwd=str(Path.home()), **kw)", run)
+        self.assertIn("code = proc.wait(timeout=timeout)", run)
+        self.assertIn("_stop_run(proc)", run)
+        self.assertIn("kw = {'start_new_session': True}", run)
+        self.assertIn("kw = {'creationflags': 134217728 | 512}", run)
+        self.assertIn("if not k.startswith('PYTHON') and k not in _GATEWAY_MARKERS", run)
+        self.assertIn("out.seek(0, os.SEEK_END) > OMH_READ_OUTPUT_MAX", run)
+        self.assertNotIn("shell=", run)
+        self.assertNotIn("PIPE", run)
+        self.assertIn("OMH_READ_TIMEOUT = 20.0", self.source)
+        self.assertIn("OMH_READ_OUTPUT_MAX = 1 << 20", self.source)
+        self.assertIn("PLATFORMS_TTL = 30.0", self.source)
+        self.assertIn("PLATFORMS_TTL_MISS = 120.0", self.source)
+        # only run_omh_read builds an `omh` argv; PlatformStates runs it (its default runner) for `platforms`, and rule
+        # 44's op_bots_templates for `bot_templates`, nothing else
+        builders = [n for n, f in self.fns.items() if n != "omh_read_argv"
+                    and any(isinstance(c, ast.Name) and c.id == "omh_read_argv" for c in ast.walk(f))]
+        self.assertEqual(builders, ["run_omh_read"])
+        states = next(c for c in ast.walk(self.tree) if isinstance(c, ast.ClassDef) and c.name == "PlatformStates")
+        refs = [c for c in ast.walk(self.tree) if isinstance(c, ast.Name) and c.id == "run_omh_read"]
+        self.assertEqual(len(refs), 2)
+        self.assertIn(refs[0], list(ast.walk(states)))
+        self.assertIn(refs[1], list(ast.walk(self.fns["op_bots_templates"])))
+        self.assertIn("asyncio.to_thread(run_omh_read, omh, self.home, 'bot_templates')",
+                      ast.unparse(self.fns["op_bots_templates"]))
+        self.assertIn("self._run(omh, self.home, 'platforms')", ast.unparse(states))
+        op = ast.unparse(self.fns["op_bots_platforms"])
+        self.assertIn("asyncio.to_thread(self.platforms.read, p.get('fresh') is True)", op)
+        self.assertNotIn("conn", op)  # no gateway call
+        forward = next(n.value for n in self.tree.body if isinstance(n, ast.Assign)
+                       and any(isinstance(t, ast.Name) and t.id == "PEER_FORWARD" for t in n.targets))
+        self.assertNotIn("bots.platforms", {c.value for c in ast.walk(forward) if isinstance(c, ast.Constant)})
+
+    def test_the_bridge_opens_no_hermes_log(self) -> None:
+        for name in ("gateway.log", "gateway.error.log", "logs/gateway", "\"logs\""):
+            self.assertNotIn(name, self.source, name)
+
+    def test_the_producers_answer_reaches_the_page_without_a_log_line_or_a_credential(self) -> None:
+        import json
+        import tempfile
+
+        from omh.maintenance.gateway_health import bot_platforms_payload
+
+        ob = self._bridge()
+        token = ".".join(("x" * 24, "y" * 6, "z" * 27))
+        hook = "https://discord.com/api/webhooks/" + "1" * 18 + "/" + "w" * 40
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / ".hermes"
+            (root / "profiles" / "demo-bot").mkdir(parents=True)
+            (root / "profiles" / "demo-bot" / "config.yaml").write_text("model: {}\n", encoding="utf-8")
+            log = root / "profiles" / "demo-bot" / "logs" / "gateway.log"
+            log.parent.mkdir()
+            log.write_text(
+                "2020-01-02 03:04:05,000 ERROR hermes_plugins.platforms__discord.adapter: [Discord] Failed to connect to"
+                f" Discord: LoginFailure: Improper token has been passed. {token} {hook}\n"
+                "Traceback (most recent call last):\n"
+                "2020-01-02 03:04:05,100 WARNING gateway.run: ✗ discord failed to connect\n", encoding="utf-8")
+            out = json.dumps(bot_platforms_payload(root))
+        bots = ob.platform_rows(out)
+        self.assertIsNotNone(bots)
+        kept = json.dumps(bots)
+        # no gateway record serves it here, so the line is said as not served: not known, never failed
+        self.assertEqual([(p["platform"], p["status"]) for p in bots["demo-bot"]["platforms"]], [("discord", "unknown")])
+        for secret in (token, "w" * 40, "Traceback", "gateway.run:", "hermes_plugins"):
+            self.assertNotIn(secret, kept, secret)
+        self.assertEqual(set(bots["demo-bot"]["platforms"][0]),
+                         {"platform", "status", "attention", "since", "logged", "reason_kind", "unknown_why", "reason",
+                          "guidance", "restart", "intents"})  # no `fix`: it can name a log file's path
+
+    def test_the_page_runs_nothing_and_shows_the_restart_to_copy(self) -> None:
+        store = (UI_SRC / "state" / "store.ts").read_text(encoding="utf-8")
+        self.assertEqual(store.count('"bots.platforms"'), 1)
+        section = (UI_SRC / "platforms" / "PlatformSection.tsx").read_text(encoding="utf-8")
+        helpers = (UI_SRC / "platforms" / "platforms.ts").read_text(encoding="utf-8")
+        self.assertIn("<CopyButton text={() => step.command}", section)
+        self.assertIn("openExternal(DISCORD_PORTAL)", section)
+        self.assertIn('DISCORD_PORTAL = "https://discord.com/developers/applications"', helpers)
+        self.assertIn("export const ROW_RECONNECT_MS = 10 * 60_000;", helpers)
+        for text in (section, helpers):
+            for bad in ("bridge.request", "restartBot", "bots.restart", "getRestarts", "draftTo", "send(", "localStorage",
+                        "console.", "dangerouslySetInnerHTML"):
+                self.assertNotIn(bad, text, bad)
+        hits = [p.relative_to(UI_SRC).as_posix() for p in UI_SRC.rglob("*.ts*")
+                if ".test." not in p.name and '"bots.platforms"' in p.read_text(encoding="utf-8")]
+        self.assertEqual(sorted(hits), ["lib/protocol.ts", "state/store.ts"])
+
+
 class NewBotThroughHermesOwnCreate(unittest.TestCase):
-    """Rule 43: Add bot › New bot makes a profile only through one fixed `hermes -p default profile create <name>` on a
-    press, the name checked by Hermes' own rule and the disk first and the outcome read from the folder Hermes made; the
-    gallery reads OMH's templates through one fixed `omh profile bot-templates --json`; a template reaches the new bot
-    as one message built from its id."""
+    """Rule 44: Add bot › New bot makes a profile only through one fixed `hermes -p default profile create <name>
+    --no-alias` on a press, the name checked by Hermes' own rule and the disk first and the outcome read from the folder
+    Hermes made; the gallery reads OMH's templates through one more entry of rule 43's `OMH_READS` table; a template
+    reaches the new bot as one message built from its id."""
 
     ADDBOT = ROOT / "apps" / "omher" / "src" / "addbot"
 
@@ -3440,7 +3597,7 @@ class NewBotThroughHermesOwnCreate(unittest.TestCase):
     def test_one_fixed_argv_with_hermes_own_name_rule(self) -> None:
         body = self._body("profile_create_argv")
         self.assertIn("not PROFILE_ID.fullmatch(name) or name in PROFILE_RESERVED", body)
-        self.assertIn("return [hermes, '-p', 'default', 'profile', 'create', name]", body)
+        self.assertIn("return [hermes, '-p', 'default', 'profile', 'create', name, '--no-alias']", body)
         # hermes_cli/profiles.py `_RESERVED_NAMES`; `default` is the main profile and can never be created
         self.assertEqual(ast.literal_eval(self._const("PROFILE_RESERVED").args[0]),
                          {"hermes", "default", "test", "tmp", "root", "sudo"})
@@ -3472,20 +3629,20 @@ class NewBotThroughHermesOwnCreate(unittest.TestCase):
         # the bridge takes the name and nothing else: no flag, clone source or path reaches Hermes
         self.assertEqual(re.findall(r"p\.get\('(\w+)'\)", body), ["name"])
 
-    def test_the_gallery_reads_omh_through_one_fixed_argv(self) -> None:
-        self.assertEqual(ast.literal_eval(self._const("OMH_TEMPLATES_ARGV")), ("profile", "bot-templates", "--json"))
-        self.assertEqual(ast.literal_eval(self._const("OMH_TEMPLATES_TIMEOUT")), 30.0)
-        body = self._body("read_bot_templates")
-        self.assertIn("subprocess.run([omh, *OMH_TEMPLATES_ARGV], capture_output=True, timeout=timeout, stdin=subprocess.DEVNULL", body)
-        self.assertNotIn("shell=", body)
-        self.assertEqual(self._callers("read_bot_templates"), ["op_bots_templates"])
-        # what OMH answers is the catalog the core CLI prints for exactly that argv
+    def test_the_gallery_reads_omh_through_rule_43s_runner(self) -> None:
+        table = ast.literal_eval(self._const("OMH_READS"))
+        self.assertEqual(table["bot_templates"], ("profile", "bot-templates", "--json"))
+        body = self._body("op_bots_templates")
+        self.assertIn("omh = omh_path()", body)
+        self.assertIn("bot_template_rows(await asyncio.to_thread(run_omh_read, omh, self.home, 'bot_templates'))", body)
+        self.assertEqual(self._callers("bot_template_rows"), ["op_bots_templates"])
+        # what OMH answers is the catalog the core CLI prints for exactly that argv, after `--hermes-home <root>`
         from _local_package import load_local_package
 
         load_local_package()
         from omh.commands.main import build_parser
 
-        args = build_parser().parse_args(list(ast.literal_eval(self._const("OMH_TEMPLATES_ARGV"))))
+        args = build_parser().parse_args(["--hermes-home", "/tmp/h", *table["bot_templates"]])
         self.assertEqual(args.func.__name__, "cmd_profile_bot_templates")
         self.assertIn("BOT_TEMPLATE_CATALOG = 'bot_template_catalog/v1'", ast.unparse(self.tree))
         # no prompt, persona or message text from OMH is kept: the page builds the one message itself
@@ -3503,9 +3660,13 @@ class NewBotThroughHermesOwnCreate(unittest.TestCase):
         self.assertEqual(rendered, apply_message("pr-review"))
         self.assertIn("export const PROFILE_NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/;", ts)
         self.assertIn('["hermes", "default", "test", "tmp", "root", "sudo"]', ts)
-        page = (self.ADDBOT / "NewBot.tsx").read_text(encoding="utf-8")
-        self.assertEqual(re.findall(r"sendTo\(([^)]*\))\)", page), ["bot, applyMessage(template)"])
-        self.assertEqual(page.count("sendTo("), 1)
-        # it sends only once rule 19's skill read shows the template skill
-        self.assertIn('b.request("skills.list", { bot })', page)
-        self.assertIn("skills.some((s) => s.name === APPLY_SKILL)", page)
+        # one send in the whole Add bot code, in applyTemplate, only after rule 19's skill read shows the skill
+        sends = {p.name: p.read_text(encoding="utf-8").count("sendTo(") for p in self.ADDBOT.glob("*.ts*")
+                 if ".test." not in p.name}
+        self.assertEqual({k: v for k, v in sends.items() if v}, {"pending.ts": 1})
+        pending = (self.ADDBOT / "pending.ts").read_text(encoding="utf-8")
+        self.assertIn("await getStore().actions.sendTo(bot, applyMessage(template));", pending)
+        self.assertIn('b.request("skills.list", { bot })', pending)
+        self.assertIn("skills.some((s) => s.name === APPLY_SKILL)", pending)
+        at = [pending.index(x) for x in ("if (!(await hasApplySkill(bot)", "actions.sendTo(bot, applyMessage(template))")]
+        self.assertEqual(at, sorted(at))

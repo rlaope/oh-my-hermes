@@ -1,7 +1,8 @@
 // Add-a-bot popover from the sidebar `+`. It lists the Hermes profiles on this computer that are not in the sidebar
 // yet (the roster, store.ts), each with one Add: the bot joins the list, its chat opens and its gateway is attached
 // (addToList in bots.ts). New bot opens the template gallery (NewBot.tsx): Create runs Hermes' own
-// `hermes -p default profile create <name>` (BOUNDARY rule 43); nothing else is copied, created or deleted on disk.
+// `hermes -p default profile create <name> --no-alias` (BOUNDARY rule 44); nothing else is copied, created or
+// deleted on disk.
 import { useEffect, useState } from "react";
 import "./addbot.css";
 import type { SlotProps } from "../features";
