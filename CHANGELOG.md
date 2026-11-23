@@ -266,6 +266,18 @@ All notable changes will be documented here.
   turn and sends the prompt without an `Interrupted.` notice, like Claude Code's send-now; Hermes' "Operation
   interrupted: waiting for model response (…)" line never shows as the reply, while it streams, at the end, or in a
   resumed conversation. Esc and `/stop` still say `Interrupted.`.
+- **omher: link chips for Jira, Confluence, Sentry, Asana, Todoist, ClickUp, GitLab and Obsidian.** Links to these
+  showed as plain web links. They now show the service's mark and what the link is, read from the address alone:
+  a Jira issue as `ACME-123`, a board or project; a Confluence page by its title, or a space; a Sentry issue, project
+  or release; an Asana or Todoist task or project (Todoist with the task's name); a ClickUp task, list, space or
+  folder; a GitLab merge request as `group/project!42`, an issue, pipeline or commit, nested groups shortened to
+  `group/…/project`. Only the cloud hosts count (`*.atlassian.net`, `gitlab.com`): a self-hosted Jira or GitLab, or
+  a lookalike host, stays a plain link; another page on an Atlassian site (Compass, the site's home) is a generic
+  Atlassian chip. Google Calendar booking pages and Figma Make and Sites files get chips too.
+  An `obsidian://` link (open, search, new, vault; bare, written as a link or as a reference) shows the note's name
+  as text that opens nothing, because omher opens only web links and messenger threads; a screen reader reads its
+  address. Every label is bounded and has no control or bidi characters, and a title's escaped `+` (`%2B`) stays a
+  plus in Confluence, Notion, Figma and Google Maps chips.
 
 - **omher: the Slack briefing opens with a greeting and what it is about.** A brief could open with what the bot did
   or could not do ("could not open the log...") with nothing saying which alert or thread it meant, so the person had
