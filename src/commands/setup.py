@@ -3353,6 +3353,16 @@ def _list_catalog_context(skills: list[dict[str, object]]) -> dict[str, object]:
     }
 
 
+def _doctor_pr_delivery(paths) -> dict[str, object]:
+    from ..plugin_bundle.omh import pr_delivery
+
+    return {
+        "schema_version": "omh_pr_delivery_doctor/v1",
+        "this_profile": pr_delivery.read_grant(paths.omh_home, paths.hermes_home),
+        "profiles": pr_delivery.recorded_grants(paths.omh_home),
+    }
+
+
 def _doctor_result(args: argparse.Namespace) -> dict[str, object]:
     paths = _paths(args)
     # Both default to today's behaviour; each flag turns off one thing only.
@@ -3391,6 +3401,10 @@ def _doctor_result(args: argparse.Namespace) -> dict[str, object]:
         # not move the doctor status, the issue counts, or the exit code.
         "build_identity": probe_build_identity(),
         "language": _resolve_language(args),
+        # Which profiles' bots may push and open their own PRs unattended
+        # (owner-approved, 2026-11-23). Not a check: a grant is the person's
+        # choice, not a health fault, so it never moves the doctor status.
+        "pr_delivery": _doctor_pr_delivery(paths),
     }
     # Only when a control is on, so a default run's payload keeps its shape.
     if not (personal_files and state_write):
@@ -5739,6 +5753,15 @@ def _print_doctor_summary(payload: dict[str, object], *, language: str = "en") -
     build_identity = payload.get("build_identity", {})
     if isinstance(build_identity, dict) and build_identity.get("summary"):
         print(f"  {tr(language, 'doctor_build_identity', identity=build_identity['summary'])}")
+    delivery = payload.get("pr_delivery", {})
+    granted = [row for row in (delivery.get("profiles", []) if isinstance(delivery, dict) else [])
+               if isinstance(row, dict) and row.get("state") == "on"]
+    for row in granted:
+        line = tr(language, "doctor_pr_delivery_on", profile=row.get("hermes_home", ""),
+                  prefix=row.get("branch_prefix", ""), since=row.get("granted_at", ""))
+        print(f"  {line}")
+    if isinstance(delivery, dict) and not granted:
+        print(f"  {tr(language, 'doctor_pr_delivery_off')}")
     groups = summary.get("groups", [])
     if isinstance(groups, list):
         for group in groups:
@@ -7458,6 +7481,9 @@ def _add_top_level_commands(sub) -> None:
     )
     capability_policy_enable.add_argument("--json", action="store_true", help="Print the full machine-readable change payload.")
     capability_policy_enable.set_defaults(func=cmd_capability_policy_enable)
+    from .pr_delivery import add_pr_delivery_commands
+
+    add_pr_delivery_commands(capability_policy_sub)
 
     doctor = sub.add_parser("doctor", help="Check local OMH install health and Hermes skill registration.")
     doctor.add_argument("--json", action="store_true", help="Print the full machine-readable doctor payload.")

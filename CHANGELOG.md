@@ -217,6 +217,15 @@ All notable changes will be documented here.
   channel or thread, what happened and whether they need to do anything. The automation-blueprint reference quotes
   the same prompt, and a bridge test keeps the two identical. Applies to briefings omher sets up from now on; an
   existing `omher-brief` job keeps its prompt until it is edited.
+- **A bot can push its own branch and open its own PR unattended, once you grant it.** Off by default for every
+  profile, and only you change it, at your own terminal: `omh capability-policy pr-delivery on` (`show`, `off`,
+  `--json`). With it on, a webhook, one-shot or scheduled run may push a branch under the grant's prefix (`bot/`
+  by default), open a PR from it, and push fixes to and comment on a PR it opened, nothing else. It never merges,
+  force-pushes, pushes to the default branch, or touches a PR it did not open. Where OMH can tell nobody can answer
+  (a webhook or `api_server` run, `hermes chat -q`, a delegated child), its tool hook refuses those whatever the
+  grant says, and refuses the allowed ones while the grant is off. A scheduled run cannot be told apart, so there
+  the skill text, the PR watch's two-round cap and Hermes' own approvals are the bounds. `omh doctor` lists the
+  profiles whose grant is on. See [PR Delivery Grant](docs/PR-DELIVERY-GRANT.md).
 - **omher keeps every TERMINALS row over a restart, types European Option signs, and gives the keyboard back.**
   - **Restart:** every TERMINALS row comes back, however many there are. Before, only the newest 20 were saved and the
     next start deleted the older rows' history and files, even for a running Claude. Only the newest 20 keep their
