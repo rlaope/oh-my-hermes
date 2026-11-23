@@ -10,6 +10,7 @@ describe("new bot name", () => {
     expect(checkName("", [])).toBe("empty");
     for (const bad of ["a b", "-p", "_x", "pr.bot", "x;y", "봇", "a".repeat(65)]) expect(checkName(bad, []), bad).toBe("rule");
     for (const r of ["hermes", "default", "test", "tmp", "root", "sudo"]) expect(checkName(r, []), r).toBe("reserved");
+    expect(checkName("omh-tui", [])).toBe("omh");
     expect(checkName("kami", ["kami", "friren"])).toBe("taken");
     expect(checkName("pr-bot", ["kami"])).toBe("ok");
     expect(checkName("9to5_bot", [])).toBe("ok");

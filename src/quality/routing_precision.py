@@ -10787,6 +10787,24 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "ko-prompt-template-is-not-bot-template", "A Korean prompt template is not a bot template",
         "프롬프트 템플릿 정리해줘", "answer_clarification", "", "bot-template",
     ),
+    # A template id is also a file name: a repository's own release-notes or PR-review markdown template is edited,
+    # not applied to a bot.
+    RoutingPrecisionCase(
+        "release-notes-template-in-github-is-not-bot-template", "Updating a repo's release-notes template is a file edit",
+        "update the release-notes template in .github", "answer_clarification", "", "bot-template",
+    ),
+    RoutingPrecisionCase(
+        "pr-review-template-in-repo-is-not-bot-template", "A repo's pr-review template needing a checklist is a file",
+        "our pr-review template in the repo needs a checklist", "answer_clarification", "", "bot-template",
+    ),
+    RoutingPrecisionCase(
+        "pr-review-template-markdown-section-is-not-bot-template", "A section in the pr-review template markdown is a file",
+        "add a section to the pr-review template markdown", "answer_clarification", "", "bot-template",
+    ),
+    RoutingPrecisionCase(
+        "release-notes-template-for-changelog-is-not-bot-template", "A release-notes template for a changelog generator is a file",
+        "the release-notes template for the changelog generator", "answer_clarification", "", "bot-template",
+    ),
 )
 
 
@@ -22026,6 +22044,8 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     RoutingInterventionCase("ko-bot-template-which", "A Korean ask for which bot templates exist reaches it", "어떤 봇 템플릿 있어?", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
     RoutingInterventionCase("pr-template-keeps-commit-pr-authoring", "A PR template for a repository stays with commit and PR authoring", "write a PR template for this repo", "dispatch", "commit-pr-authoring", "prepare_commit_pr_text", "commit_pr_draft"),
     RoutingInterventionCase("release-notes-template-keeps-content-operator", "A release notes template stays with the content operator", "release notes template for the changelog", "dispatch", "content-operator", "prepare_content_operator_card", "content_operator"),
+    RoutingInterventionCase("ko-release-notes-template-file-keeps-content-operator", "A Korean edit of a release-notes template file keeps the content operator", "릴리즈 release-notes 템플릿 파일 수정해줘", "dispatch", "content-operator", "prepare_content_operator_card", "content_operator"),
+    RoutingInterventionCase("ko-bot-template-recommend", "A Korean ask to recommend a bot template reaches it", "봇 템플릿 추천해줘", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
     RoutingInterventionCase("github-issue-template-keeps-github-event-ops", "A GitHub issue template stays with GitHub event ops", "github issue template for feature requests", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
 )
 

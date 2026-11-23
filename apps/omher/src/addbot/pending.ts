@@ -55,7 +55,23 @@ export async function applyTemplate(bot: string, template: string): Promise<bool
     setPendingTemplate(bot, template);
     return false;
   }
+  const store = getStore();
+  const text = applyMessage(template);
+  let failed = false;
+  try {
+    await store.actions.sendTo(bot, text);
+    // `send` keeps a failed send in the chat with its error rather than throwing
+    const items = store.getState().chats[bot]?.items ?? [];
+    const mine = [...items].reverse().find((i) => i.kind === "user" && i.text === text);
+    failed = !!mine && "error" in mine && !!mine.error;
+  } catch {
+    failed = true;
+  }
+  if (failed) {
+    // it did not go out: it stays pending, and the page offers Apply template again
+    setPendingTemplate(bot, template);
+    return false;
+  }
   clearPendingTemplate(bot);
-  await getStore().actions.sendTo(bot, applyMessage(template));
   return true;
 }

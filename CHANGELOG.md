@@ -504,9 +504,11 @@ All notable changes will be documented here.
   template; you pick one, type a name and press Create. omher checks the name against Hermes' own rule (lowercase
   letters, numbers, `-` or `_`, up to 64, not a name Hermes keeps such as `default`) and refuses one that is already on
   this computer, then runs Hermes' own `hermes -p default profile create <name> --no-alias` (no shell, nothing on stdin,
-  at most 120 seconds) and counts it done only when the new profile's folder is there, showing Hermes' own words
-  otherwise. Hermes copies the main profile's keys and model into it, as it always does; no `~/.local/bin` wrapper is
-  written, and the page shows `hermes profile alias <name>` for one. With a template, the new bot's main chat gets one
+  at most 330 seconds, past the 300 Hermes gives a create through its gateway) and counts it done only when Hermes
+  finished and the new profile's folder is there; a folder Hermes did not finish setting up is shown as partly made
+  and gets no template, and otherwise Hermes' own words show. The page says before Create that the new bot uses the
+  main bot's API keys, sign-ins and model, as Hermes does by default; no alias is written, and the page shows
+  `hermes profile alias <name>` for one. With a template, the new bot's main chat gets one
   message, ``/omh-bot-template Apply the bot template `<id>` to this bot.``, and the bot applies it with its own
   approvals, every schedule paused. A new profile gets oh-my-hermes' skills on the next `omh update`, so until then
   the gallery says so and sends nothing until you press Apply template, there or later on the bot's page. The

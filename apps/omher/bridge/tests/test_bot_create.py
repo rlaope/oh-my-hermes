@@ -33,7 +33,7 @@ class Argv(unittest.TestCase):
     def test_hermes_own_rule_refuses_every_other_name(self):
         # hermes_cli/profiles.py validate_profile_name: PROFILE_ID_RE, not a reserved name, never `default`
         for name in ("PR-Bot", "a b", "x;y", "../x", "-p", "--clone-all", "_x", "", "a" * 65, "pr.bot", "봇", None, 7,
-                     "hermes", "default", "test", "tmp", "root", "sudo"):
+                     "hermes", "default", "test", "tmp", "root", "sudo", "omh-tui"):
             with self.assertRaises(ValueError, msg=name):
                 ob.profile_create_argv("/h/hermes", name)
         self.assertEqual(ob.profile_create_argv("h", "a" * 64)[-2], "a" * 64)
@@ -119,6 +119,29 @@ class Create(unittest.TestCase):
         self.assertEqual(self.runs, [("/stub/hermes", "pr-bot", self.home, ob.PROFILE_CREATE_TIMEOUT)])
         self.assertIn("pr-bot", [b["name"] for b in ob.discover_bots(self.home)])
 
+    def test_a_folder_hermes_left_half_set_up_is_partial_and_applies_nothing(self):
+        # stopped (gateway path past its time, or a kill while Hermes seeds skills) or failed after the folder was
+        # published: the bot is there but may have no keys, model or skills
+        for code, said in ((None, ""), (1, "Error: skill seeding failed\n")):
+            with self.subTest(code=code):
+                def half(name, code=code, said=said):
+                    write(self.home / "profiles" / name / "config.yaml", "model: x\n")
+                    return code, said
+                self.effect = half
+                name = f"half{1 if code else 0}"
+                got = self.op(name=name)
+                self.assertEqual((got["outcome"], got["bot"]), ("partial", name))
+                self.assertIn(f"Hermes made {name} but did not finish setting it up", got["line"])
+
+    def test_a_stopped_run_with_no_folder_says_the_gateway_may_still_be_making_it(self):
+        self.effect = lambda name: (None, "")
+        got = self.op(name="pr-bot")
+        self.assertEqual(got["outcome"], "failed")
+        self.assertIn(f"Hermes did not finish in {int(ob.PROFILE_CREATE_TIMEOUT)} seconds.", got["line"])
+        self.assertIn("It may still be making pr-bot through the running gateway", got["line"])
+        # longer than Hermes' own 300 s for a create through the gateway
+        self.assertGreater(ob.PROFILE_CREATE_TIMEOUT, 300.0)
+
     def test_exit_zero_without_the_folder_is_a_failure_in_hermes_words(self):
         self.effect = lambda name: (0, "  ⚠ Skills could not be seeded.\nnothing else\n")
         got = self.op(name="pr-bot")
@@ -130,17 +153,13 @@ class Create(unittest.TestCase):
         self.assertEqual(self.op(name="pr-bot"), {"outcome": "failed",
                                                   "line": "Error: Cannot create profile 'pr-bot': a running gateway still owns it"})
 
-    def test_a_run_past_its_time_says_so(self):
-        self.effect = lambda name: (None, "")
-        got = self.op(name="pr-bot")
-        self.assertEqual(got, {"outcome": "failed", "line": f"Hermes did not finish in {int(ob.PROFILE_CREATE_TIMEOUT)} seconds."})
-
     def test_a_name_hermes_refuses_or_one_on_disk_runs_nothing(self):
         for bad in ("PR-Bot", "a b", "-p", "x;y", "", None, 7, ["x"], "a" * 65):
             self.refused("bad_request", name=bad)
         for reserved in ("default", "hermes", "root", "sudo", "test", "tmp"):
             self.assertIn("keeps for itself", self.refused("bad_request", name=reserved))
-        self.assertIn("already", self.refused("exists", name="old-bot"))
+        self.assertIn("oh-my-hermes' own TUI profile", self.refused("bad_request", name="omh-tui"))
+        self.assertEqual(self.refused("exists", name="old-bot"), "A folder named old-bot is already under Hermes' profiles.")
         # a folder Hermes does not list as a profile (no config) and a stray file are refused too, as Hermes refuses
         (self.home / "profiles" / "shell").mkdir(parents=True)
         write(self.home / "profiles" / "stray", "x")
@@ -179,7 +198,7 @@ class Templates(unittest.TestCase):
         "schema_version": "bot_template_catalog/v1",
         "templates": [
             {"id": "pr-review", "title": "PR\x1b[31m reviewer", "summary": "Reviews pull requests.",
-             "skills": ["code-review", "github-event-ops", "Bad Skill"],
+             "skills": ["code-review", "github-event-ops", "Bad Skill", "code-review", "code-review"],
              "schedules": [{"job_name": "pr-review-review-queue", "title": "Weekday review queue", "prompt": "secret"},
                            {"job_name": "../x", "title": "bad"}],
              "webhooks": [{"title": "Pull request events"}], "apps": [{"name": "sentry", "need": "optional"}, {"name": "-x"}],

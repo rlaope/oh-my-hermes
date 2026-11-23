@@ -759,6 +759,8 @@ export const en = {
   "ab.nameRule": "Use lowercase letters, numbers, - or _, starting with a letter or number, up to 64 characters.",
   "ab.nameReserved": "{name} is a name Hermes keeps for itself.",
   "ab.nameTaken": "A bot named {name} is already on this computer.",
+  "ab.nameOmh": "{name} is oh-my-hermes' own TUI profile; pick another name.",
+  "ab.mirror": "The new bot uses this computer's main bot's API keys, sign-ins and model (Hermes' default).",
   "ab.createWhat": "Create runs Hermes' own {cmd}. A template is applied by the bot in its own chat, with its approvals; nothing is turned on.",
   "ab.create": "Create",
   "ab.creating": "Making {name}…",

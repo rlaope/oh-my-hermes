@@ -3085,14 +3085,18 @@ def _run_hermes_argv(argv: list[str], home: Path, timeout: float) -> tuple[int |
 # hermes_constants.py, not one of `_RESERVED_NAMES`, never `default`), and a name that is already a folder under
 # `profiles/` is refused before anything runs. The outcome is read from the folder Hermes made, not its exit code.
 PROFILE_RESERVED = frozenset({"hermes", "default", "test", "tmp", "root", "sudo"})
-PROFILE_CREATE_TIMEOUT = 120.0  # seconds: Hermes copies its bundled skills into the new profile
+# OMH's own TUI runtime profile (src/omh/skin_pack.py TUI_PROFILE): `omh update` never gives it OMH's skills.
+OMH_PROFILES = frozenset({"omh-tui"})
+# seconds: above Hermes' own 300 s for a create run through the default profile's gateway (profile_provision_gateway.py
+# CREATE_RPC_TIMEOUT), so a stop here never cuts a create that gateway is still finishing
+PROFILE_CREATE_TIMEOUT = 330.0
 
 
 def profile_create_argv(hermes: str, name: str) -> list[str]:
     """`hermes -p default profile create <name> --no-alias`: the name is checked here as one argv element; nothing else
     varies. `--no-alias` (hermes_cli/subcommands/profile.py) keeps Hermes from writing a `~/.local/bin/<name>` wrapper,
     so the press writes nothing outside Hermes' home; `hermes profile alias <name>` adds one later."""
-    if not isinstance(name, str) or not PROFILE_ID.fullmatch(name) or name in PROFILE_RESERVED:
+    if not isinstance(name, str) or not PROFILE_ID.fullmatch(name) or name in PROFILE_RESERVED or name in OMH_PROFILES:
         raise ValueError(f"not a new profile name Hermes accepts: {name!r}")
     return [hermes, "-p", "default", "profile", "create", name, "--no-alias"]
 
@@ -3105,8 +3109,10 @@ def new_profile_refusal(home: Path, name: object) -> tuple[str, str] | None:
         return "bad_request", "Use lowercase letters, numbers, '-' or '_', starting with a letter or number, up to 64 characters."
     if name in PROFILE_RESERVED:
         return "bad_request", f"{name} is a name Hermes keeps for itself."
+    if name in OMH_PROFILES:
+        return "bad_request", f"{name} is oh-my-hermes' own TUI profile."
     if os.path.lexists(home / "profiles" / name):
-        return "exists", f"A bot named {name} is already on this computer."
+        return "exists", f"A folder named {name} is already under Hermes' profiles."
     return None
 
 
@@ -3140,7 +3146,8 @@ def _template_row(t: object) -> dict | None:
         "id": t["id"],
         "title": text(t.get("title"), 80) or t["id"],
         "summary": text(t.get("summary"), 300),
-        "skills": [s for s in t.get("skills") or [] if isinstance(s, str) and TEMPLATE_ID.fullmatch(s)][:16],
+        # each name once, in the listing's order
+        "skills": list(dict.fromkeys(s for s in t.get("skills") or [] if isinstance(s, str) and TEMPLATE_ID.fullmatch(s)))[:16],
         "schedules": [{"name": r["job_name"], "title": text(r.get("title"), 80)} for r in rows(t.get("schedules"))
                       if isinstance(r.get("job_name"), str) and PROFILE_ID.fullmatch(r["job_name"])],
         "webhooks": [text(r.get("title"), 120) for r in rows(t.get("webhooks"))],
@@ -8531,11 +8538,20 @@ class Bridge:
             code, output = await asyncio.to_thread(run_hermes_profile_create, hermes, name, self.home, PROFILE_CREATE_TIMEOUT)
         finally:
             self._creating = False
-        if await asyncio.to_thread(new_profile_made, self.home, name):
+        made = await asyncio.to_thread(new_profile_made, self.home, name)
+        if made and code == 0:
             return {"outcome": "ok", "bot": name}
         said = hermes_said(output)
+        if made:
+            # Hermes publishes the folder before it copies keys, sets the model and seeds skills: a run stopped or
+            # failed after that left a bot that may not answer, so no template is applied to it
+            line = (f"Hermes made {name} but did not finish setting it up: its keys, model or skills may be missing."
+                    + (f"\n{said}" if said else ""))
+            return {"outcome": "partial", "bot": name, "line": line}
         if code is None:
-            line = f"Hermes did not finish in {int(PROFILE_CREATE_TIMEOUT)} seconds." + (f"\n{said}" if said else "")
+            # a create through the default profile's running gateway goes on there after this run is stopped
+            line = (f"Hermes did not finish in {int(PROFILE_CREATE_TIMEOUT)} seconds. It may still be making {name} "
+                    "through the running gateway; it shows up in Add a bot when it is done." + (f"\n{said}" if said else ""))
         else:
             line = said or f"Hermes exited with code {code}."
         return {"outcome": "failed", "line": line}

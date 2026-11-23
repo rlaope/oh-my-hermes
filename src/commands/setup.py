@@ -7127,7 +7127,7 @@ def cmd_profile_bot_templates(args: argparse.Namespace) -> int:
         print(f"{template['id']}: {template['title']}")
         print(f"  {template['summary']}")
         print(f"  skills: {', '.join(template['skills'])}; paused schedules: {jobs}")
-    print(f"Apply one in the bot's own chat: {apply_message('<id>')}")
+    print(f"Apply {'it' if args.id else 'one'} in the bot's own chat: {apply_message(args.id or '<id>')}")
     return 0
 
 

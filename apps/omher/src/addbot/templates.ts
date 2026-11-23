@@ -6,6 +6,8 @@
 export const PROFILE_NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 /** Names Hermes keeps for itself (`hermes_cli/profiles.py` `_RESERVED_NAMES`); `default` is the main profile. */
 export const PROFILE_RESERVED: readonly string[] = ["hermes", "default", "test", "tmp", "root", "sudo"];
+/** OMH's own TUI runtime profile (`TUI_PROFILE`): `omh update` never gives it OMH's skills. */
+export const OMH_PROFILES: readonly string[] = ["omh-tui"];
 /** The skill that applies a template, as the `/command` Hermes registers for it. */
 export const APPLY_SKILL = "omh-bot-template";
 /** A template id as OMH's catalog writes it. */
@@ -16,13 +18,14 @@ export function normalizeName(raw: string): string {
   return raw.trim().toLowerCase();
 }
 
-export type NameCheck = "ok" | "empty" | "rule" | "reserved" | "taken";
+export type NameCheck = "ok" | "empty" | "rule" | "reserved" | "omh" | "taken";
 
 /** Whether `name` (already normalized) can be a new bot: Hermes' own rule, then the bots this computer has. */
 export function checkName(name: string, taken: Iterable<string>): NameCheck {
   if (!name) return "empty";
   if (!PROFILE_NAME.test(name)) return "rule";
   if (PROFILE_RESERVED.includes(name)) return "reserved";
+  if (OMH_PROFILES.includes(name)) return "omh";
   for (const t of taken) if (t === name) return "taken";
   return "ok";
 }

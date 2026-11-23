@@ -756,6 +756,8 @@ export const ko: Record<Key, string> = {
   "ab.nameRule": "소문자, 숫자, - 또는 _만 쓰고, 소문자나 숫자로 시작해 64자까지예요.",
   "ab.nameReserved": "{name}은 Hermes가 쓰는 이름이에요.",
   "ab.nameTaken": "이 컴퓨터에 {name} 봇이 이미 있어요.",
+  "ab.nameOmh": "{name}은 oh-my-hermes TUI가 쓰는 프로필이에요. 다른 이름을 골라요.",
+  "ab.mirror": "새 봇은 이 컴퓨터의 기본 봇이 쓰는 API 키, 로그인, 모델을 그대로 써요(Hermes 기본값).",
   "ab.createWhat": "만들기는 Hermes의 {cmd}를 실행해요. 템플릿은 봇이 자기 채팅에서 승인을 받아 적용하고, 켜지는 건 없어요.",
   "ab.create": "만들기",
   "ab.creating": "{name} 만드는 중…",

@@ -225,6 +225,11 @@ class BotTemplateCommandTests(unittest.TestCase):
         for template_id in bot_template_ids():
             self.assertIn(f"{template_id}: ", out)
         self.assertIn("/omh-bot-template", out)
+        # one template by id prints its own apply line
+        code, out = _run("pr-review")
+        self.assertEqual(code, 0)
+        self.assertIn(f"Apply it in the bot's own chat: {apply_message('pr-review')}", out)
+        self.assertNotIn("<id>", out)
 
 
 class BotTemplateSkillTests(unittest.TestCase):
@@ -280,12 +285,25 @@ class BotTemplateRoutingTests(unittest.TestCase):
             with self.subTest(message=message):
                 self.assertFalse(everyday_sense_phrase_unanchored(SKILL, normalized_phrase(message)))
         self.assertTrue(bot_template_names_the_job(normalized_phrase("apply the release-notes template")))
+        self.assertTrue(bot_template_names_the_job(normalized_phrase("add the pr-review template to this bot")))
         self.assertFalse(bot_template_names_the_job(normalized_phrase("release notes template for the changelog")))
+        # an id is also a file name: a repository's own template is edited, not applied, and a bare id is not enough
+        for message in (
+            "update the release-notes template in .github",
+            "our pr-review template in the repo needs a checklist",
+            "add a section to the pr-review template markdown",
+            "the release-notes template for the changelog generator",
+            "릴리즈 release-notes 템플릿 파일 수정해줘",
+            "the pr-review template",
+        ):
+            with self.subTest(message=message):
+                self.assertFalse(bot_template_names_the_job(normalized_phrase(message)))
 
     def test_korean_counts_alone_or_anchored_and_never_as_code(self) -> None:
         for message, expected in (
             ("봇 템플릿", True),
             ("봇 템플릿 적용해줘", True),
+            ("봇 템플릿 추천해줘", True),
             ("어떤 봇 템플릿 있어?", True),
             ("이 봇에 pr-review 봇 템플릿 적용해줘", True),
             ("봇 템플릿 만들어줘", False),

@@ -216,11 +216,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # 546679 -> 550928 and the digests re-derived: app-work-intake adds one row to each producer (+4249 and
             # +952 with separators); dropping only that row reproduces 8e3f5c83...d898 at 546679 and
             # 7bf53703...578d at 146420.
-            # 550928 -> 555178 and 147372 -> 148315, the digests re-derived: bot-template then adds one row to each
-            # producer (+4250 and +943 with separators); dropping only that row reproduces 2fec48bb...cbd1 and
+            # 550928 -> 555232 and 147372 -> 148315, the digests re-derived: bot-template then adds one row to each
+            # producer (+4304 and +943 with separators); dropping only that row reproduces 2fec48bb...cbd1 and
             # adad03a4...9d4b.
-            (skill_capabilities, 555178, FULL_ROW_DELTA_CAP,
-             '5c2d26f5c3a6bee9ae505c9b098ed91747d246773abfb14783d1ca8da489a0ab',
+            (skill_capabilities, 555232, FULL_ROW_DELTA_CAP,
+             '9d3cba5b13285f2f78a6a2fa439a8775e77889e6068ab84eb472aa4f348db19a',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 148315, STANDALONE_ROW_DELTA_CAP,
              'b8cefdf3ebb50457f29264250068856d9302bffc0748290527bbcf0629fe7bf4',
@@ -600,7 +600,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # the pin before it was ba130d2d...7694.
         # bot-template's body then joins the legacy set; no existing body moves, and the pin before it was
         # 2f25c65f...7a09.
-        self.assertEqual(_digest(legacy_hashes), 'b3aaad841a660d051b835cec5460446a838bc7c5e645157b0de870c81e28ad73')
+        self.assertEqual(_digest(legacy_hashes), 'c17e7906d62e58dd6f3f832eefc22b2d5a06f42a5aeed09c32442a51b36909f5')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

@@ -6,8 +6,14 @@ for setting up a Hermes bot. The English phrases below therefore keep
 `bot-template` only alone or beside an anchor (a template id, or a word that
 applies, lists or shows one) through `EVERYDAY_SENSE_PHRASES` in policy.py, and
 `bot_template_code_sense` keeps them off whenever the message names code, a
-language or a repository, anchor or not. The Korean phrase counts only through
+language, a repository or a messenger (unless it names a template id) or a file
+being edited (always). The Korean phrase counts only through
 `bot_template_korean_match`.
+
+A template id is also a file name: "update the release-notes template in
+.github" and "our pr-review template in the repo" edit a repository's own
+markdown template. So "<id> template" counts only beside a word that applies,
+lists, shows or uses a template or names a bot, and never beside a file word.
 """
 from __future__ import annotations
 
@@ -22,8 +28,8 @@ BOT_TEMPLATE_SHARED_PHRASES = (
     "apply a bot template",
 )
 
-# Named by the job: a template id followed by "template" ("apply the pr-review template"). Hyphenated ids are never
-# everyday words ("release notes template" is not "release-notes template"), so these count wherever they are said.
+# Named by the job: a template id followed by "template" ("apply the pr-review template"). They count only beside a
+# `_JOB_ANCHORS` word and never in a file sense (`bot_template_names_the_job`).
 BOT_TEMPLATE_JOB_PHRASES = (
     "bot-template",
     *(f"{template_id} template" for template_id in bot_template_ids()),
@@ -66,22 +72,52 @@ _CODE_TOKENS = frozenset(
     )
 )
 
+# A repository's own template file being edited: these keep every phrase off, a template id or not. "add" is left
+# out on purpose: "add the pr-review template to this bot" applies one, and every file-sense sentence seen with it
+# also says file, section, markdown, repo or changelog.
+_FILE_TOKENS = frozenset(
+    {"file", "files", "markdown", "md", "section", "changelog", "edit", "update", "rename", "readme", "repo",
+     "repository", "github", "gitlab", "pull_request_template", "issue_template"}
+)
+# Korean stems, normalized like the query (decomposed jamo): 파일, 수정, 레포, 깃허브, 마크다운, 섹션.
+_KOREAN_FILE_STEMS = tuple(normalized_phrase(p) for p in ("파일", "수정", "레포", "깃허브", "마크다운", "섹션"))
+# The words that make "<id> template" a bot template: applying, listing, showing or using one, or naming a bot.
+_JOB_ANCHORS = frozenset({"apply", "applying", "applied", "use", "set", "list", "show", "which", "bot", "bots"})
+_KOREAN_JOB_STEMS = tuple(normalized_phrase(p) for p in ("적용", "목록", "보여", "어떤", "설정", "추천", "시작", "봇"))
+
 _KOREAN_PHRASES = tuple(normalized_phrase(p) for p in ("봇 템플릿",))
 # Korean words are matched as stems: "적용해줘" and "적용하기" both start with "적용".
 # `normalized_phrase` writes Hangul as decomposed jamo, so the stems are normalized the same way.
-_KOREAN_ANCHOR_STEMS = tuple(normalized_phrase(p) for p in ("적용", "목록", "보여", "어떤", "설정", "omh", "omher"))
+_KOREAN_ANCHOR_STEMS = tuple(
+    normalized_phrase(p) for p in ("적용", "목록", "보여", "어떤", "설정", "추천", "시작", "omh", "omher")
+)
 _KOREAN_FILLER = frozenset(routing_tokens(normalized_phrase("좀 해줘 해주세요 부탁해 부탁해요 이 봇 봇에 이 봇에")))
 
 
+def bot_template_file_sense(normalized_query: str) -> bool:
+    """The message edits a repository's own template file: a file word, in English or Korean."""
+    tokens = routing_tokens(normalized_query)
+    return bool(tokens & _FILE_TOKENS) or any(token.startswith(_KOREAN_FILE_STEMS) for token in tokens)
+
+
 def bot_template_code_sense(normalized_query: str) -> bool:
-    """The message names code, a language, a repository or a messenger and no template id: a starter project."""
+    """A starter project or a template file: code, a language, a repository or a messenger with no template id, or a
+    file being edited whatever it names."""
+    if bot_template_file_sense(normalized_query):
+        return True
     tokens = routing_tokens(normalized_query)
     return bool(tokens & _CODE_TOKENS) and not tokens & frozenset(bot_template_ids())
 
 
 def bot_template_names_the_job(normalized_query: str) -> bool:
-    """A job phrase ("bot-template", "<template id> template") is spoken."""
-    return any(phrase_is_spoken(normalized_query, normalized_phrase(p)) for p in BOT_TEMPLATE_JOB_PHRASES)
+    """A job phrase ("bot-template", "<template id> template") spoken beside a word that applies, lists, shows or uses
+    one or names a bot, and not about a file."""
+    if not any(phrase_is_spoken(normalized_query, normalized_phrase(p)) for p in BOT_TEMPLATE_JOB_PHRASES):
+        return False
+    if bot_template_file_sense(normalized_query):
+        return False
+    tokens = routing_tokens(normalized_query)
+    return bool(tokens & _JOB_ANCHORS) or any(token.startswith(_KOREAN_JOB_STEMS) for token in tokens)
 
 
 def bot_template_phrase_spoken(normalized_query: str) -> bool:

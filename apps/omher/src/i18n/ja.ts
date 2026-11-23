@@ -756,6 +756,8 @@ export const ja: Record<Key, string> = {
   "ab.nameRule": "小文字、数字、- または _ を使い、小文字か数字で始めて 64 文字までにしてください。",
   "ab.nameReserved": "{name} は Hermes が使う名前です。",
   "ab.nameTaken": "このコンピューターには {name} というボットがすでにあります。",
+  "ab.nameOmh": "{name} は oh-my-hermes の TUI 用プロファイルです。別の名前にしてください。",
+  "ab.mirror": "新しいボットは、このコンピューターのメインのボットの API キー、サインイン、モデルを使います（Hermes の既定）。",
   "ab.createWhat": "作成すると Hermes の {cmd} を実行します。テンプレートはボットが自分のチャットで承認を得て適用し、何もオンにはなりません。",
   "ab.create": "作成",
   "ab.creating": "{name} を作成中…",

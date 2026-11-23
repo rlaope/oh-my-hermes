@@ -24,8 +24,6 @@ BOT_TEMPLATE_SCHEMA_VERSION = "bot_template/v1"
 BOT_TEMPLATE_CATALOG_SCHEMA_VERSION = "bot_template_catalog/v1"
 # The skill that applies a template, by its canonical name; Hermes loads it as `omh-bot-template`.
 APPLY_SKILL = "bot-template"
-# The job name a template's schedule gets in the bot: `<template id>-<schedule id>`, under Hermes' own job-name
-# length and in the bot's own Automations list, so applying twice finds what it made the first time.
 BOT_TEMPLATE_CLAIM_BOUNDARY = (
     "A bot template is prepared guidance. Listing or applying one does not prove a profile exists, a persona was "
     "written, a skill or app is installed, or a cron job or webhook route was created or ran; read those back from "
@@ -80,6 +78,8 @@ class TemplateSchedule:
     def to_dict(self, template_id: str) -> dict[str, object]:
         row: dict[str, object] = {
             "id": self.id,
+            # `<template id>-<schedule id>`: the name the job gets in the bot's own Automations list, so applying
+            # twice finds what it made the first time
             "job_name": f"{template_id}-{self.id}",
             "title": self.title,
             "paused": True,

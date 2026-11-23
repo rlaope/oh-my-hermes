@@ -68,7 +68,7 @@ DEFINITION = SkillDefinition(
         "gives. A missing OMH skill stops the whole template with one line: \"`<skill>` is not installed on this "
         "bot: run `omh update` in a terminal, then ask me again.\" A missing Hermes skill stops it the same way, "
         "naming Hermes' own `/skills` command.",
-        "Persona: read `$HERMES_HOME/SOUL.md`. When it already holds the seed's first line (`## Bot template: "
+        "Persona: read `SOUL.md` in your own Hermes home (the folder that holds your `config.yaml`). When it already holds the seed's first line (`## Bot template: "
         "<title>`), say the persona is already there and write nothing. Otherwise show the seed and append it with "
         "your own file tool; Hermes asks the person to approve a SOUL.md write, and a refusal leaves it out. It "
         "takes effect in the next new session (`/new`).",
