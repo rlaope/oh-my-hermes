@@ -69,7 +69,9 @@ naming the rule. The prompt's key is `omh-toolcall-rule:<name>`, so answering
 `[a]lways` allows that rule's calls from then on and no other rule's. An ask
 never overrides OMH's own refusals: a write into OMH's evidence stores, an
 edit to a skill OMH installed, a dag-ulw child's write outside its node's
-scope, or any other call OMH refuses is still blocked, and no prompt is shown.
+scope, a forge command an unattended run may not run
+([PR Delivery Grant](PR-DELIVERY-GRANT.md)), or any other call OMH refuses is
+still blocked, and no prompt is shown.
 
 Asking needs someone to answer. In a delegated child, a single-query
 `hermes chat -q` process, or a programmatic platform (`webhook`,

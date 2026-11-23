@@ -43,7 +43,7 @@ Bad example:
 
 - Provider, target object, allowed action, authority, confirmation policy, and stop condition are explicit; the confirmation shows the exact payload (recipients with cc/bcc, channel, subject, full body, attachments, attendees).
 - Credentials, missing connector setup, external writes, sends, ticket mutations, calendar invites, CRM updates, and webhook delivery are gated, or marked missing and not run.
-- With nobody to answer the confirmation (a scheduled job, a one-shot run, a webhook run), an irreversible or externally visible action is not run: it is handed to a person's turn and its confirmation is recorded as missing.
+- With nobody to answer the confirmation (a scheduled job, a one-shot run, a webhook run), an irreversible or externally visible action is not run: it is handed to a person's turn and its confirmation is recorded as missing. The one exception is a bot whose person turned on its PR delivery grant (`omh capability-policy pr-delivery on`, which only the person runs; the bot only tells them the command): it may push a new branch under the grant's branch prefix, open a pull request from that branch, and push fix commits to and comment on a pull request it opened, and nothing else. Merging, force-pushing, pushing to the default branch, and anything on a pull request it did not open stay a person's, grant or no grant.
 - Message ids, ticket ids, provider responses, delivery receipts, and API effects are reported only from observed connector evidence.
 
 ## Recovery Notes

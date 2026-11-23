@@ -28,11 +28,32 @@ from .catalog_types import (
 
 # A run with nobody to answer the chat confirmation cannot satisfy it, so the
 # gated action does not run there; "marked missing" never means "ran without
-# it". One sentence, stated in the completion checklist of the four operator
-# skills that act for the person: browser, workspace file, command, connector.
+# it". Stated in the completion checklist of the four operator skills that act
+# for the person: browser, workspace file, command, connector. Its one named
+# exception is the PR delivery grant (owner-approved, 2026-11-23): four
+# actions, only with the person's grant, and the four that stay a person's.
 _UNATTENDED_GATE = (
     "With nobody to answer the confirmation (a scheduled job, a one-shot run, a webhook run), an irreversible or "
-    "externally visible action is not run: it is handed to a person's turn and its confirmation is recorded as missing."
+    "externally visible action is not run: it is handed to a person's turn and its confirmation is recorded as missing. "
+    "The one exception is a bot whose person turned on its PR delivery grant (`omh capability-policy pr-delivery on`, "
+    "which only the person runs; the bot only tells them the command): it may push a new branch under the grant's "
+    "branch prefix, open a pull request from that branch, and push fix commits to and comment on a pull request it "
+    "opened, and nothing else. Merging, force-pushing, pushing to the default branch, and anything on a pull request "
+    "it did not open stay a person's, grant or no grant."
+)
+# How a run delivers its own PR under the grant, and the read-back each step
+# needs before it is reported as observed. Shared by `github-event-ops` and the
+# PR watch reference so the two cannot drift.
+_PR_DELIVERY_STEPS = (
+    "push the work branch with a named destination and no force (`git push origin HEAD:refs/heads/<prefix><topic>`), "
+    "open the PR from it (`gh pr create --head <prefix><topic>`, without `--repo`), then start the bounded PR watch "
+    "(two fix rounds, then a person); a fix round pushes to the same branch the same way, and a comment names the PR "
+    "by its URL (`gh pr comment <PR URL>`)"
+)
+_PR_DELIVERY_EVIDENCE = (
+    "A push is reported as observed only with its read-back (`git ls-remote origin refs/heads/<branch>` naming the "
+    "pushed sha) and a pull request only with its URL read back (`gh pr view <URL> --json url,headRefName,state`); "
+    "anything not read back is listed as prepared."
 )
 
 # Hermes' skill audit ledger as `instinct-ledger`, `skill-health`, and
@@ -94,6 +115,20 @@ _FEATURE_SURFACE_SKILLS = (
                 "Wait on an open PR with one Hermes monitor job for that PR, never a model polling loop: follow `references/pr-watch.md`, which installs `toolkit/scripts/pr_watch.py` (config, output and exit codes: `skill_view(name='omh-github-event-ops', file_path='toolkit/README.md')`) as the job's monitor script (every 5 minutes, `repeat` 24, a `deadline` two hours out), so the agent wakes only when the PR's settled state changes (checks finished, a conflict, a review, merged or closed). The person or Hermes creates the job, and the recipe is not evidence that it exists or ran until the job list shows it.",
                 "references/pr-watch.md",
             ),
+            PortableLine(
+                "Unattended delivery of the bot's own work needs the PR delivery grant, which is off by default and "
+                "which only the person turns on (`omh capability-policy pr-delivery on`; the bot only tells them the "
+                "command). Read its state from `omh_status` (`pr_delivery_grant`). With it on, an unattended run may "
+                f"{_PR_DELIVERY_STEPS}. With it off, the push and the PR are handed to a person's turn with the "
+                "prepared branch, commits and PR text. Never merge, force-push, push to the default branch, or act on "
+                "a PR the bot did not open. In a webhook or one-shot run OMH's tool hook refuses those, and refuses a "
+                "push or PR that does not name its destination; a refused command is handed to a person's turn, "
+                "never rephrased through a shell wrapper, an alias or code.",
+                "Unattended delivery of the bot's own work needs a PR delivery grant the person gave this bot; without "
+                f"one, the push and the PR are handed to a person's turn. With it, an unattended run may "
+                f"{_PR_DELIVERY_STEPS}. Never merge, force-push, push to the default branch, or act on a PR the bot "
+                "did not open.",
+            ),
             "On a failed check a bot takes at most two fix rounds on one PR, counted from evidence, never memory: after the first head whose checks settled failed, each new head pushed to the PR (an amend and force-push included) and each further commit in the PR's own commit list is one round used; the count never goes down and is kept per PR across watches, and when the commit list cannot be read for it (history rewritten, or a list that does not end at the head) a failed check goes to a person. After the second round fails, or when a reviewer requested changes, stop and hand the fix to a person's turn with the first failed head, the failing check names, and each round's commit sha.",
             PortableLine(
                 "An event on a PR the bot's own runs opened (its author is the bot's login, or its head branch is under the bot's branch prefix), or one that the bot's own push, comment, or review caused, starts no new review or fix run; on its own PR only its PR watch wakes it.",
@@ -109,6 +144,7 @@ _FEATURE_SURFACE_SKILLS = (
             "The state was re-read from the repository, and for a pull-request or check event its head sha is recorded beside the payload's.",
             "The chosen path (review, triage, or fix hand-off) is named with the event fields that decided it.",
             "Any label, comment, or rerun is listed as prepared, or as observed with its read-back.",
+            _PR_DELIVERY_EVIDENCE,
             "A PR the run waits on names its watch job as read back from the host's job list, or lists the watch as prepared.",
             "A fix round names its number as counted from the PR's commit list; past the cap the fix is handed to a person's turn with that evidence, and an event dropped as the bot's own or over the burst cap is reported as dropped with its reason.",
         ),

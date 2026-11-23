@@ -136,6 +136,12 @@ and evidence obvious to a reviewer reading the PR without the chat history.
   - **Show-reel provider scripts**, the **Channel watch collector**, and the
     **PR watch monitor and event guard**: inert package data only the user
     runs.
+  - **PR delivery grant** (owner-approved, 2026-11-23): per profile, off by
+    default, changed only by the person's `omh capability-policy pr-delivery`;
+    with it on, an unattended bot may push a branch under its prefix, open a
+    PR from it, and push fixes to and comment on a PR it opened, never merge,
+    force-push, push to the default branch, or touch a PR it did not open.
+    `omh` runs no forge command; INVARIANT 3 is unchanged.
   - **The OMH TUI** (bare `omh`) and its gateway child: a foreground frontend over
     Hermes' own gateway; read
     [`docs/OMH-TUI-BOUNDARY.md`](docs/OMH-TUI-BOUNDARY.md) before touching

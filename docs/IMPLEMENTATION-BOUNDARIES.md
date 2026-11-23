@@ -136,6 +136,32 @@ stays in `AGENTS.md`, where `tests/test_paired_run_arm_home.py` reads it.
   anything on the forge. Config, output and exit codes are in their
   `README.md`; `tests/test_pr_watch_toolkit.py` runs both on fixture payloads,
   hostile ones included, and the monitor against a fake `gh`.
+- **PR delivery grant** (owner-approved, 2026-11-23): a per-profile setting,
+  off by default, that only the person turns on or off at their own terminal
+  (`omh capability-policy pr-delivery on|off`, which refuses to run inside a
+  Hermes session). With it on, that profile's bot, in a run nobody can answer,
+  may push a new branch under the grant's branch prefix, open a pull request
+  from that branch, and push fix commits to and comment on a pull request it
+  opened; nothing else. Merging, force-pushing, pushing to the default branch,
+  and anything on a pull request the bot did not open stay a person's, grant or
+  no grant. `omh` itself runs no forge command and INVARIANT 3 is unchanged:
+  the bot (Hermes, or the coding owner it handed to) runs `git` and `gh` with
+  the person's own login. The grant is a file under the OMH home naming the
+  profile's Hermes home (`src/plugin_bundle/omh/pr_delivery.py`); an
+  unreadable, malformed or foreign file reads as off, a delegated child does
+  not carry it, and its only writer is the CLI. OMH's `pre_tool_call` hook
+  (`src/plugin_bundle/omh/pr_delivery_gate.py`) refuses a command that would
+  change the grant in every session, and in a session where
+  `session_attendance` can tell nobody can answer (a programmatic platform, a
+  single-query process, a delegated child) refuses the never-allowed classes
+  whatever the grant says, the allowed ones while it is off, a push or PR that
+  does not name its destination, and a command it cannot classify. A cron
+  turn cannot be told apart by a plugin, so there the skill text, the PR
+  watch's fix-round cap and Hermes' own `approvals.cron_mode` bound the run.
+  "A PR this bot opened" is OMH's record of the URL a grant-allowed `gh pr
+  create` printed, never the model's word. The matrix and its residuals are in
+  [`docs/PR-DELIVERY-GRANT.md`](PR-DELIVERY-GRANT.md);
+  `tests/test_pr_delivery_grant.py` holds it.
 - **The OMH TUI** (bare `omh`) is a foreground frontend over Hermes' own
   gateway, not an execution surface: it relays only what the person types,
   answers no request on their behalf, and makes no model call; the one switch
