@@ -39,6 +39,9 @@ export interface ThreadOps {
   "thread.list": { params: { bot: string }; result: { threads: ThreadRow[] } };
   "thread.open": { params: { bot: string; thread: string }; result: ThreadOpenResult };
   "thread.remove": { params: { bot: string; thread: string }; result: { thread: string; archived: boolean } };
+  /** The PRs the bot named in its answers in this thread, newest first (at most three), with GitHub's word on each
+   *  through the person's own `gh` (BOUNDARY rules 21 and 40). `fresh`: the person pressed Refresh. */
+  "thread.prs": { params: { bot: string; thread: string; fresh?: boolean }; result: { prs: unknown[] } };
 }
 
 export type ThreadEvent =
