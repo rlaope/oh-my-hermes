@@ -71,7 +71,7 @@ test("Create with a template makes the bot, opens its chat and sends exactly the
   await page.getByTestId("addbot-name").fill("pr-bot");
   await page.getByTestId("addbot-create").click();
   const done = page.getByTestId("addbot-done");
-  await expect(done).toContainText("pr-bot is made; its chat is open and it is applying the template");
+  await expect(done).toContainText("pr-bot is made and its chat is open; it shows its plan for the template and changes nothing until you say yes.");
   // --no-alias left Hermes' wrapper out: the page names Hermes' own command for it
   await expect(page.getByTestId("addbot-alias").locator("code")).toHaveText("hermes profile alias pr-bot");
   await expect(page.getByTestId("bot-pr-bot")).toHaveAttribute("aria-current", "true");
@@ -161,4 +161,22 @@ test("a create omher cannot confirm lists nothing, sends nothing, and points at 
   await expect(page.getByTestId("bot-half-bot")).toHaveCount(0);
   expect(await calls("chat.send")).toEqual([]);
   expect(await calls("skills.list").then((c) => c.filter((x) => x.params.bot === "half-bot"))).toEqual([]);
+});
+
+test("a finished create whose setup step failed shows Hermes' warning and holds the template", async ({ page }) => {
+  await mock("mock.skills", { add: [APPLY], after: 0 });
+  await mock("mock.createNext", { line: "\u26a0 Skills could not be seeded. Run `held-bot update` to retry.", incomplete: true });
+  await openNewBot(page);
+  await page.getByTestId("addbot-template-pr-review").click();
+  await page.getByTestId("addbot-name").fill("held-bot");
+  await page.getByTestId("addbot-create").click();
+  const done = page.getByTestId("addbot-done");
+  await expect(done).toContainText("held-bot is made, but Hermes did not finish setting it up");
+  await expect(page.getByTestId("addbot-notes")).toContainText("Skills could not be seeded");
+  await expect(page.getByTestId("bot-held-bot")).toBeVisible();
+  expect(await calls("chat.send")).toEqual([]);
+  await page.getByTestId("addbot-close").click();
+  await page.getByTestId("bot-held-bot").click({ button: "right" });
+  await page.getByTestId("row-menu").getByRole("menuitem", { name: "Edit bot" }).click();
+  await expect(page.getByTestId("bp-template")).toContainText("Bot template pr-review waits to be applied.");
 });

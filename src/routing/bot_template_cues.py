@@ -83,6 +83,18 @@ _FILE_TOKENS = frozenset(
 )
 # Korean stems, normalized like the query (decomposed jamo): 파일, 수정, 레포, 깃허브, 마크다운, 섹션, 문서.
 _KOREAN_FILE_STEMS = tuple(normalized_phrase(p) for p in ("파일", "수정", "레포", "깃허브", "마크다운", "섹션", "문서"))
+# Another action on a template than applying it: removing it or exporting its data. Any one keeps every phrase off,
+# a template id or not: the skill applies and removes nothing, so "delete the inbox-triage bot template" must not reach
+# a skill that answers with an apply plan.
+_OTHER_ACTION_TOKENS = frozenset(
+    {"delete", "deleting", "remove", "removing", "uninstall", "drop", "export", "exporting", "json", "yaml", "csv"}
+)
+_KOREAN_OTHER_ACTION_STEMS = tuple(normalized_phrase(p) for p in ("삭제", "제거", "지워", "지우", "내보내"))
+# A language or code word: it stands a job phrase down even beside a template id ("build a bot from the
+# release-notes template in python"). The messengers are left out: a channel watch names Slack or Discord.
+_LANGUAGE_TOKENS = _CODE_TOKENS - frozenset({"discord", "telegram", "slack", "whatsapp", "chatbot"}) - routing_tokens(
+    normalized_phrase("디스코드 텔레그램 슬랙")
+)
 # The bot sense of "<id> template": the message names a bot ("to this bot", "이 봇에").
 _JOB_ANCHORS = frozenset({"bot", "bots"})
 _KOREAN_JOB_STEMS = tuple(normalized_phrase(p) for p in ("봇",))
@@ -102,10 +114,16 @@ def bot_template_file_sense(normalized_query: str) -> bool:
     return bool(tokens & _FILE_TOKENS) or any(token.startswith(_KOREAN_FILE_STEMS) for token in tokens)
 
 
+def bot_template_other_action(normalized_query: str) -> bool:
+    """The message removes or exports a template rather than applying it, in English or Korean."""
+    tokens = routing_tokens(normalized_query)
+    return bool(tokens & _OTHER_ACTION_TOKENS) or any(token.startswith(_KOREAN_OTHER_ACTION_STEMS) for token in tokens)
+
+
 def bot_template_code_sense(normalized_query: str) -> bool:
-    """A starter project or a template file: code, a language, a repository or a messenger with no template id, or a
-    file being edited whatever it names."""
-    if bot_template_file_sense(normalized_query):
+    """Not an apply: a starter project (code, a language, a repository or a messenger with no template id), a file
+    being edited, or a template removed or exported, whatever it names."""
+    if bot_template_file_sense(normalized_query) or bot_template_other_action(normalized_query):
         return True
     tokens = routing_tokens(normalized_query)
     return bool(tokens & _CODE_TOKENS) and not tokens & frozenset(bot_template_ids())
@@ -113,12 +131,14 @@ def bot_template_code_sense(normalized_query: str) -> bool:
 
 def bot_template_names_the_job(normalized_query: str) -> bool:
     """A job phrase ("bot-template", "<template id> template") spoken in the bot sense (beside the word bot or 봇) and
-    not about a file, a repository, code or a document."""
+    not about a file, a repository, code, a language or a document, nor removing or exporting a template."""
     if not any(phrase_is_spoken(normalized_query, normalized_phrase(p)) for p in BOT_TEMPLATE_JOB_PHRASES):
         return False
-    if bot_template_file_sense(normalized_query):
+    if bot_template_file_sense(normalized_query) or bot_template_other_action(normalized_query):
         return False
     tokens = routing_tokens(normalized_query)
+    if tokens & _LANGUAGE_TOKENS:
+        return False
     return bool(tokens & _JOB_ANCHORS) or any(token.startswith(_KOREAN_JOB_STEMS) for token in tokens)
 
 

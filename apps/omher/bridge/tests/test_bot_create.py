@@ -115,9 +115,29 @@ class Create(unittest.TestCase):
         return cm.exception.message
 
     def test_create_runs_the_one_argv_and_reads_the_folder_back(self):
-        self.assertEqual(self.op(name="pr-bot"), {"outcome": "ok", "bot": "pr-bot"})
+        self.assertEqual(self.op(name="pr-bot"), {"outcome": "ok", "bot": "pr-bot", "notes": [], "incomplete": False})
         self.assertEqual(self.runs, [("/stub/hermes", "pr-bot", self.home, ob.PROFILE_CREATE_TIMEOUT)])
         self.assertIn("pr-bot", [b["name"] for b in ob.discover_bots(self.home)])
+
+    def test_hermes_warnings_on_a_finished_create_are_shown_and_a_failed_setup_holds_the_template(self):
+        def warned(name, lines):
+            self.make(name)
+            return 0, f"\nProfile '{name}' created at /h/{name}\n" + "".join(f"\u26a0 {ln}\n" for ln in lines)
+        # an informational note: shown, the template goes ahead
+        self.effect = lambda name: warned(name, ["subscription logins not carried over (nous): the profile uses the default profile's",
+                                                 "A newer Hermes is available: run `hermes update`"])
+        got = self.op(name="note-bot")
+        self.assertEqual((got["outcome"], got["incomplete"]), ("ok", False))
+        self.assertEqual(got["notes"], ["\u26a0 subscription logins not carried over (nous): the profile uses the default profile's"])
+        # skills not seeded, keys not copied, model not set: shown, and the page holds the template
+        for line in ("Skills could not be seeded. Run `x update` to retry.", "launch credentials: permission denied",
+                     "bundled skills: timed out", "model inherit: no model"):
+            with self.subTest(line=line):
+                name = "w" + str(abs(hash(line)) % 10000)
+                self.effect = lambda n, line=line: warned(n, [line])
+                got = self.op(name=name)
+                self.assertEqual((got["outcome"], got["incomplete"]), ("ok", True))
+                self.assertEqual(got["notes"], [f"\u26a0 {line}"])
 
     def test_a_create_is_confirmed_only_by_hermes_own_finish(self):
         # exit 0 and the folder, but no `Profile '<name>' created at` line: Hermes did not say it finished

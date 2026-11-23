@@ -1036,8 +1036,9 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # Merged with monitor recipes: 1584 (#3153) + 17 cross-platform cases = 1601, re-derived from the producer.
             # bot-template: a bot template coded for Discord, Slack or Telegram, in Python, in Korean, and a
             # Jinja and two prompt templates stay off it (+8). Its review round: four repository template files
-            # named like a template id (release-notes, pr-review) stay off it (+4).
-            expected=1613,
+            # named like a template id (release-notes, pr-review) stay off it (+4). Its verification round: deleting,
+            # removing, exporting a template and building one in Python stay off it (+4).
+            expected=1617,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
@@ -1678,7 +1679,8 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # bot-template: eight applies and lists (five English including omher's apply message, three
             # Korean) reach it, and a PR, a release notes and an issue template keep their owners (+11). Its review
             # round: a Korean template file edit keeps content-operator and a Korean ask to recommend one reaches it (+2).
-            expected=1443,
+            # Its verification round: a Korean ask to delete a template keeps code-review (+1).
+            expected=1444,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

@@ -3124,6 +3124,21 @@ def new_profile_confirmed(home: Path, name: str, code: int | None, output: str) 
     return code == 0 and f"Profile '{name}' created at" in (output or "") and new_profile_made(home, name)
 
 
+# A `⚠` line Hermes' create prints when a setup step after the publish failed: `_profile_create` prints
+# "Skills could not be seeded" and each `provision_profile` warning as `<step>: <error>` (profile_provision.py `step`).
+# These steps leave the bot without its skills, keys or model, so no template is applied to it.
+SETUP_FAILED = re.compile(r"^⚠ (?:Skills could not be seeded|bundled skills:|launch credentials:|model inherit:|model:)")
+
+
+def hermes_warnings(output: str) -> list[str]:
+    """Hermes' own `⚠` lines of a create, without colour codes, trimmed and clipped; a start-up note about Hermes' own
+    update says nothing about this run and is left out (as in `hermes_said`)."""
+    lines = [ln.strip() for ln in _ANSI.sub("", output or "").splitlines()]
+    keep = [ln for ln in lines if ln.startswith("⚠")
+            and (SETUP_FAILED.match(ln) or not re.search(r"\bupdate\b", ln, re.IGNORECASE))]
+    return [_clip(ln, 300) for ln in keep][:8]
+
+
 def new_profile_leftovers(home: Path, name: str) -> list[str]:
     """What a create that omher could not confirm may have left under `profiles/`: the profile folder itself and
     Hermes' staging folders (`.<name>.staging-<pid>`, profiles_initialization.py), by name, read-only."""
@@ -8559,7 +8574,11 @@ class Bridge:
         finally:
             self._creating = False
         if await asyncio.to_thread(new_profile_confirmed, self.home, name, code, output):
-            return {"outcome": "ok", "bot": name}
+            # Hermes' setup steps never fail the create: they print `⚠`. The page shows them, and one that left the
+            # skills, keys or model unset holds the template back.
+            notes = hermes_warnings(output)
+            return {"outcome": "ok", "bot": name, "notes": notes,
+                    "incomplete": any(SETUP_FAILED.match(n) for n in notes)}
         said = hermes_said(output)
         leftovers = await asyncio.to_thread(new_profile_leftovers, self.home, name)
         if code is None or leftovers:

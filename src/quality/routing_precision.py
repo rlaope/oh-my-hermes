@@ -10801,6 +10801,23 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "pr-review-template-markdown-section-is-not-bot-template", "A section in the pr-review template markdown is a file",
         "add a section to the pr-review template markdown", "answer_clarification", "", "bot-template",
     ),
+    # Removing, exporting or coding a template is not applying it: the apply skill would answer with an apply plan.
+    RoutingPrecisionCase(
+        "delete-bot-template-is-not-bot-template", "Deleting a bot template is not applying one",
+        "delete the inbox-triage bot template", "answer_clarification", "", "bot-template",
+    ),
+    RoutingPrecisionCase(
+        "remove-template-from-bot-is-not-bot-template", "Removing a template from this bot is not applying one",
+        "remove the pr-review template from this bot", "answer_clarification", "", "bot-template",
+    ),
+    RoutingPrecisionCase(
+        "bot-from-template-in-python-is-not-bot-template", "Building a bot from a template in Python is code",
+        "build a bot from the release-notes template in python", "answer_clarification", "", "bot-template",
+    ),
+    RoutingPrecisionCase(
+        "export-bot-template-json-is-not-bot-template", "Exporting a bot template as JSON reads catalog data",
+        "export the research-vault bot template as json", "answer_clarification", "", "bot-template",
+    ),
     RoutingPrecisionCase(
         "release-notes-template-for-changelog-is-not-bot-template", "A release-notes template for a changelog generator is a file",
         "the release-notes template for the changelog generator", "answer_clarification", "", "bot-template",
@@ -22045,6 +22062,7 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     RoutingInterventionCase("pr-template-keeps-commit-pr-authoring", "A PR template for a repository stays with commit and PR authoring", "write a PR template for this repo", "dispatch", "commit-pr-authoring", "prepare_commit_pr_text", "commit_pr_draft"),
     RoutingInterventionCase("release-notes-template-keeps-content-operator", "A release notes template stays with the content operator", "release notes template for the changelog", "dispatch", "content-operator", "prepare_content_operator_card", "content_operator"),
     RoutingInterventionCase("ko-release-notes-template-file-keeps-content-operator", "A Korean edit of a release-notes template file keeps the content operator", "릴리즈 release-notes 템플릿 파일 수정해줘", "dispatch", "content-operator", "prepare_content_operator_card", "content_operator"),
+    RoutingInterventionCase("ko-bot-template-delete-keeps-code-review", "A Korean ask to delete a bot template keeps its earlier route, not the apply skill", "pr-review 봇 템플릿 삭제해줘", "dispatch", "code-review", "prepare_review_or_followup_handoff", "review_check"),
     RoutingInterventionCase("ko-bot-template-recommend", "A Korean ask to recommend a bot template reaches it", "봇 템플릿 추천해줘", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
     RoutingInterventionCase("github-issue-template-keeps-github-event-ops", "A GitHub issue template stays with GitHub event ops", "github issue template for feature requests", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
 )

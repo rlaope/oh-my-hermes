@@ -10,7 +10,7 @@ import { t, tx, type Key } from "../i18n";
 import { Spinner } from "../ui";
 import { addToList, withBridge } from "./bots";
 import { applyMessage, checkName, normalizeName, type NameCheck } from "./templates";
-import { applyTemplate, hasApplySkill } from "./pending";
+import { applyTemplate, hasApplySkill, setPendingTemplate } from "./pending";
 
 const CREATE_CMD = "hermes profile create";
 const UPDATE_CMD = "omh update";
@@ -22,7 +22,7 @@ const aliasCmd = (bot: string) => `hermes profile alias ${bot}`;
 type Step =
   | { kind: "form"; line?: string }
   | { kind: "creating" }
-  | { kind: "done"; bot: string; applied: boolean }
+  | { kind: "done"; bot: string; applied: boolean; notes: string[]; held?: boolean }
   | { kind: "unconfirmed"; line: string }
   | { kind: "waiting"; bot: string; template: string; again?: boolean };
 
@@ -76,10 +76,18 @@ export function NewBot({ onBack, onDone }: { onBack: () => void; onDone: () => v
         return;
       }
       const bot = r.bot;
+      const notes = r.notes ?? [];
+      if (template && r.incomplete) {
+        // Hermes made it but a setup step failed (its words below): the template waits on the bot's page
+        setPendingTemplate(bot, template);
+        await addToList(getStore(), bot);
+        setStep({ kind: "done", bot, applied: false, notes, held: true });
+        return;
+      }
       const ready = !!template && (await hasApplySkill(bot).catch(() => false));
       await addToList(getStore(), bot, { open: !template || ready });
-      if (!template) setStep({ kind: "done", bot, applied: false });
-      else if (await applyTemplate(bot, template)) setStep({ kind: "done", bot, applied: true });
+      if (!template) setStep({ kind: "done", bot, applied: false, notes });
+      else if (await applyTemplate(bot, template)) setStep({ kind: "done", bot, applied: true, notes });
       else setStep({ kind: "waiting", bot, template });
     } catch (e) {
       setStep({ kind: "form", line: (e as { message?: string })?.message || t("ab.createFailed") });
@@ -126,7 +134,14 @@ export function NewBot({ onBack, onDone }: { onBack: () => void; onDone: () => v
     return (
       <div className="ab-new" data-testid="addbot-done">
         <div className="ab-h">{t("ab.new")}</div>
-        <div className="ab-line">{t(step.applied ? "ab.createdApplied" : "ab.created", { name: step.bot })}</div>
+        <div className="ab-line">
+          {t(step.held ? "ab.held" : step.applied ? "ab.createdApplied" : "ab.created", { name: step.bot })}
+        </div>
+        {step.notes.length > 0 && (
+          <div className="ab-err" data-testid="addbot-notes">
+            {step.notes.join("\n")}
+          </div>
+        )}
         {alias(step.bot)}
         <div className="ab-actions">
           <button type="button" className="ab-btn ab-primary" data-testid="addbot-close" onClick={onDone}>

@@ -266,6 +266,12 @@ class BotTemplateSkillTests(unittest.TestCase):
         self.assertIn("write nothing and create nothing until they say yes", body)
         self.assertIn("omher's apply message is a request, not that yes", body)
         self.assertIn("No persona write and no job before the person's yes to the shown plan", body)
+        self.assertIn("This skill removes nothing.", body)
+        # no example reads as apply-immediately: each one that applies shows the plan first
+        examples = body.split("## Examples", 1)[1].split("\n## ", 1)[0]
+        for line in examples.split("\n"):
+            if line.startswith("- Expected behavior:") and "apply" in line.lower():
+                self.assertRegex(line, r"(?i)plan", line)
         first_steps = body.split("## First Steps", 1)[1].split("\n## ", 1)[0]
         self.assertIn("Confirm before any change", first_steps)
         # file tools expand `~`, not environment variables: the skill names the home by its full path
@@ -306,6 +312,11 @@ class BotTemplateRoutingTests(unittest.TestCase):
             "the release-notes template for the changelog generator",
             "릴리즈 release-notes 템플릿 파일 수정해줘",
             "the pr-review template",
+            "delete the inbox-triage bot template",
+            "remove the pr-review template from this bot",
+            "pr-review 봇 템플릿 삭제해줘",
+            "build a bot from the release-notes template in python",
+            "export the research-vault bot template as json",
         ):
             with self.subTest(message=message):
                 self.assertFalse(bot_template_names_the_job(normalized_phrase(message)))

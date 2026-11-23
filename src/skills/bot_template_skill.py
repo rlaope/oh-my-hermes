@@ -60,6 +60,9 @@ DEFINITION = SkillDefinition(
         "Append the persona seed to SOUL.md; never replace or delete what SOUL.md holds, and never write "
         "`MEMORY.md` or `USER.md`.",
         "Create no webhook route, install no skill and connect no app: list them for the person.",
+        "This skill removes nothing. Asked to remove a template, say where that happens: its jobs are paused or "
+        f"removed on the bot's Automations page or with `{NATIVE_CRON_TOOL}` when the person asks for each one, and "
+        "its persona section is taken out of SOUL.md by the person.",
         f"Every schedule and webhook run of an applied template is unattended: {_UNATTENDED_GATE}",
         BOT_TEMPLATE_CLAIM_BOUNDARY,
     ),
@@ -121,8 +124,9 @@ DEFINITION = SkillDefinition(
     bad_example=SkillExample(
         prompt="Apply the inbox-triage bot template and turn the digest on so it runs tomorrow.",
         expected=(
-            "Apply the template with every job paused, then say turning the digest on is the person's: resume it "
-            "on the Automations page or ask me to resume `inbox-triage-morning-digest` as its own request."
+            "Show the plan and, after the person's yes, apply it with every job paused; then say turning the digest on "
+            "is the person's: resume it on the Automations page or ask me to resume `inbox-triage-morning-digest` as "
+            "its own request."
         ),
         why="Applying a template never turns a schedule on; resuming is a separate yes from the person.",
     ),

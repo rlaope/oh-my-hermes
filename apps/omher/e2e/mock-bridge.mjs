@@ -57,7 +57,8 @@
 // (mock.templates {omh}); bots.create {name} checks Hermes' name rule and the bots here as the bridge does, then makes
 // the bot as `hermes profile create` would (no oh-my-hermes skills yet: mock.skills adds `omh-bot-template`), or fails
 // with Hermes' text once (mock.createNext {line}), or answers that the create could not be confirmed
-// (mock.createNext {line, unconfirmed: true}).
+// (mock.createNext {line, unconfirmed: true}), or finishes with a failed setup step (mock.createNext {line, incomplete:
+// true}: `ok` with that `⚠` line and `incomplete`).
 // mock.move {on} (the bridge died and came back on a new port: answers `{port}` once a second listener is up, then drops
 // every connection to the first port, which refuses WebSockets until `mock.move {on: false}` or mock.reset).
 import http from "node:http";
@@ -1663,12 +1664,12 @@ const OPS = {
     const next = createNext;
     createNext = null;
     if (next?.unconfirmed) return { outcome: "unconfirmed", line: next.line };
-    if (next) return { outcome: "failed", line: next.line };
+    if (next && !next.incomplete) return { outcome: "failed", line: next.line };
     bots[name] = { name, display_name: name.charAt(0).toUpperCase() + name.slice(1), is_default: false, model: "Haiku 5",
       provider: "claude-proxy", description: "", status: "online", running: false, reasoning: "low" };
     models[name] = { model: "Haiku 5", provider: "claude-proxy", reasoning: "low" };
     history[name] = [];
-    return { outcome: "ok", bot: name };
+    return next ? { outcome: "ok", bot: name, notes: [next.line], incomplete: true } : { outcome: "ok", bot: name, notes: [], incomplete: false };
   },
   "skills.list": (p) => {
     needBot(p);
@@ -1986,7 +1987,7 @@ const OPS = {
     return {};
   },
   "mock.createNext": (p) => {
-    createNext = { line: needStr(p, "line"), unconfirmed: p.unconfirmed === true };
+    createNext = { line: needStr(p, "line"), unconfirmed: p.unconfirmed === true, incomplete: p.incomplete === true };
     return {};
   },
   "mock.skills": (p) => {

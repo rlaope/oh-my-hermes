@@ -194,6 +194,8 @@ RULES = (
     " person opens New bot;",
     "built from the template id alone, and only once rule 19's skill read shows that bot has the `omh-bot-template` skill;",
     "the page says so and sends nothing until the person presses Apply template, which the bot's page also offers later.",
+    "A confirmed create still shows Hermes' own `⚠` lines; when one says a setup step failed (skills not seeded, keys"
+    " or model not copied), the template waits on the bot's page and nothing is sent.",
     "The bot first shows its plan for the template and changes nothing until the person says yes in that chat, then"
     " applies it with its own tools and approvals, every schedule paused; omher writes no persona, creates no job and"
     " connects no app for it. A bot on another computer is never made this way.",

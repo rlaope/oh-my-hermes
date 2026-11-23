@@ -358,6 +358,10 @@ export interface BotCreate {
   outcome: "ok" | "unconfirmed" | "failed";
   bot?: string;
   line?: string;
+  /** `ok` only: Hermes' own `⚠` lines of the create, and whether one says skills, keys or model were not set up
+   *  (the page then holds the template back). */
+  notes?: string[];
+  incomplete?: boolean;
 }
 
 export interface AppRun {
