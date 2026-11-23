@@ -765,8 +765,11 @@ class AgentViewMixin:
                             running=result.get(contract.TRANSCRIPT_RUNNING) is True,
                             cursor=as_text(result.get(contract.TRANSCRIPT_NEXT_CURSOR)), polled_at=self.clock())
         view.transcript.cwd = self.transcript.cwd
-        self._fill_view(view, result.get("messages") if wire == WIRE_WATCH else result.get(contract.TRANSCRIPT_ROWS),
-                        agent.goal)
+        rows = result.get("messages") if wire == WIRE_WATCH else result.get(contract.TRANSCRIPT_ROWS)
+        self._fill_view(view, rows, agent.goal)
+        if wire == WIRE_POLL and not view.running:  # a finished child: its pages are read until an empty one
+            view.pages_left = view_state.CATCH_UP_PAGES
+            view_state.page_read(view, empty=not view_state.message_rows(rows))
         main = self._screen_draft()  # whatever the composer holds now is main's: set aside whole, the view's comes in
         main._drop_pending()
         child = self.child_drafts.pop(subagent_id, None) or Composer(history=main.history, on_record=main.on_record)
@@ -777,17 +780,20 @@ class AgentViewMixin:
         self._full_redraw()
 
     def _fill_view(self, view: SubagentView, rows: object, goal: str) -> None:
-        """`view`'s transcript from the top: `› From main`, the brief (the goal, until a read brings its row), then
-        the rows read, drawn as a resumed session's are (`App._draw_history`)."""
+        """`view`'s transcript from the top: `› From main`, the brief (the goal, until a read brings its row, which
+        then takes its place: `_on_view_rows`), then the rows read, drawn as a resumed session's are
+        (`App._draw_history`). The rebuilt transcript holds no echo of a steer sent from the view, so every stored
+        row is drawn and none is matched against an echo (`sent_steers` starts over)."""
         messages = view_state.message_rows(rows)
         view.transcript = Transcript(self.clock)
         view.transcript.cwd = self.transcript.cwd
         view.transcript.add_aside(NoticeBlock(FROM_MAIN, one_line=True))
-        view.brief_pending = False
+        view.brief_pending, view.brief_block = False, None
+        view.sent_steers.clear()
         if not view_state.has_brief(messages) and goal.strip():
-            view.transcript.add_user(goal, recorded=True)
+            view.brief_block = view.transcript.add_user(goal, recorded=True)
             view.brief_pending = True
-        self._draw_history(view_state.unseen_rows(view, messages) if view.sent_steers else messages, into=view.transcript)
+        self._draw_history(messages, into=view.transcript)
 
     def _leave_view(self, redraw: bool = True, close: bool = True) -> None:
         """Back to main: main's draft comes back exactly as the view set it aside, the view's unsent draft is kept for
@@ -863,48 +869,69 @@ class AgentViewMixin:
         self.dirty = True
 
     def _view_frame(self, event_type: str, payload: object) -> None:
-        """A parent `subagent.*` frame for the agent on screen: its working row runs until its `subagent.complete`,
-        and on the shared gateway that end reads its last rows at once."""
+        """A parent `subagent.*` frame for the agent on screen: its working row runs until its `subagent.complete`;
+        on the shared gateway that end schedules a read of its last rows (`poll_due_at`: never a second read while
+        one is out, still at most one a second)."""
         view = self.viewing
         if view is None or not isinstance(payload, Mapping) or as_text(payload.get("subagent_id")) != view.subagent_id:
             return
         if event_type == contract.SUBAGENT_COMPLETE:
-            view.running = False
-            if view.wire == WIRE_POLL:
-                self._poll_view(view)
-        else:
-            view.running = True
+            view_state.child_ended(view)  # on the shared gateway the next paced read reads its last rows
 
     def _poll_view_when_due(self) -> None:
-        """`session.transcript` for the subagent on screen while it runs, on the shared gateway: at most one call every
-        `subagent_session.POLL_SECONDS`, and none while the last is unanswered for less than `POLL_ANSWER_SECONDS`."""
-        due = view_state.poll_due_at(self.viewing, self.clock())
-        if due is not None and self.clock() >= due and self.viewing is not None:
-            self._poll_view(self.viewing)
+        """`session.transcript` for the subagent on screen on the shared gateway, when `poll_due_at` says: while it
+        runs at most one read a second, one at a time; once it ended, its pages one after another until an empty
+        one. A read unanswered for `POLL_ANSWER_SECONDS` is forgotten (here and in the client) before the next goes."""
+        view = self.viewing
+        due = view_state.poll_due_at(view, self.clock())
+        if view is None or due is None or self.clock() < due:
+            return
+        if view.poll_open and view.read_id is not None:
+            self.pending.pop(view.read_id, None)
+            self.client.forget(view.read_id)
+        self._poll_view(view)
 
     def _poll_view(self, view: SubagentView) -> None:
-        view.polled_at, view.poll_open = self.clock(), True
-        self._request(
-            "session.transcript", view_state.read_params(view.parent_sid, view.subagent_id, view.cursor),
-            lambda result: self._on_view_rows(view, result),
-            lambda error: self._on_view_rows(view, {}),
+        """One read from the view's cursor, fenced: only the latest read's answer, asked from the cursor the view
+        still holds, applies (`_on_view_rows`)."""
+        view.read_seq += 1
+        seq, cursor = view.read_seq, view.cursor
+        view.polled_at, view.poll_open, view.read_now = self.clock(), True, False
+        view.read_id = self._request(
+            "session.transcript", view_state.read_params(view.parent_sid, view.subagent_id, cursor),
+            lambda result: self._on_view_rows(view, seq, cursor, result),
+            lambda error: self._on_view_rows(view, seq, cursor, {}),
         )
 
-    def _on_view_rows(self, view: SubagentView, result: Mapping[str, Any]) -> bool:
-        """A poll's answer: the new rows drawn in the view, or all of them again on `reset`. One for a view since
-        left, or with no rows to read (a refusal), changes nothing on screen."""
-        view.poll_open = False
-        if self.viewing is not view or result.get(contract.TRANSCRIPT_AVAILABLE) is not True:
+    def _on_view_rows(self, view: SubagentView, seq: int, cursor: str, result: Mapping[str, Any]) -> bool:
+        """A read's answer: the new rows drawn in the view (the real brief in the goal's place), or all of them again
+        on `reset`. Only the latest read's, asked from the view's cursor now, applies; one for a view since left, or
+        with no rows to read (a refusal), changes nothing on screen. The cursor only moves forward and `running`
+        only from true to false (`child_ended`)."""
+        if seq != view.read_seq:
             return True
-        rows = result.get(contract.TRANSCRIPT_ROWS)
+        view.poll_open, view.read_id = False, None
+        if self.viewing is not view or cursor != view.cursor:
+            return True
+        if result.get(contract.TRANSCRIPT_AVAILABLE) is not True:
+            if not view.running:
+                view.pages_left = max(view.pages_left - 1, 0)  # a refused catch-up page still counts
+            return True
+        rows = view_state.message_rows(result.get(contract.TRANSCRIPT_ROWS))
         if result.get(contract.TRANSCRIPT_RESET) is True:
             agent = self.roster.agents.get(view.subagent_id)
             self._fill_view(view, rows, agent.goal if agent is not None else "")
             self._full_redraw()
         else:
-            self._draw_history(view_state.unseen_rows(view, view_state.message_rows(rows)), into=view.transcript)
+            kept, brief = view_state.unseen_rows(view, rows)
+            if brief is not None and view.brief_block is not None and brief.strip():
+                view.transcript.replace_user_text(view.brief_block, brief)  # the brief in the goal's place, once
+                self._full_redraw()
+            self._draw_history(kept, into=view.transcript)
         view.cursor = as_text(result.get(contract.TRANSCRIPT_NEXT_CURSOR)) or view.cursor
-        view.running = result.get(contract.TRANSCRIPT_RUNNING) is True
+        if result.get(contract.TRANSCRIPT_RUNNING) is not True:
+            view_state.child_ended(view)
+        view_state.page_read(view, empty=not rows)
         self.dirty = True
         return True
 

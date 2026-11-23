@@ -235,10 +235,14 @@ class LiveEventTests(unittest.TestCase):
                                   rows_answer([TOOL, REPLY], running=False, reset=False, cursor="c2"), None))
         assert app.viewing is not None
         self.assertEqual(texts(app.viewing.transcript)[-2:], ["tools", f"reply:{REPLY['text']}"])
+        app._poll_view_when_due()  # it ended with rows on that page: the next page goes at once (R1 D7)
+        self.assertEqual(client.named("session.transcript")[-1]["cursor"], "c2")
+        app._on_response(Response(call_id(client, "session.transcript"),
+                                  rows_answer([], running=False, reset=False, cursor="c2"), None))
         now[0] = 10 * POLL_SECONDS
         count = len(client.named("session.transcript"))
         app._poll_view_when_due()
-        self.assertEqual(len(client.named("session.transcript")), count)  # it ended: no more polls
+        self.assertEqual(len(client.named("session.transcript")), count)  # an empty page: caught up, no more reads
 
     def test_a_poll_answer_for_a_view_since_left_draws_nothing(self) -> None:
         app, client, now = viewing(shared=True)
@@ -446,7 +450,7 @@ class StateTests(unittest.TestCase):
     def test_steers_and_the_brief_sent_from_the_view_are_not_drawn_twice(self) -> None:
         view = SubagentView(FIRST, NAME, SID, view_state.WIRE_POLL, Transcript(), brief_pending=True,
                             sent_steers=["also say hi"])
-        self.assertEqual(view_state.unseen_rows(view, [BRIEF, STEER_ROW, REPLY]), [REPLY])
+        self.assertEqual(view_state.unseen_rows(view, [BRIEF, STEER_ROW, REPLY]), ([REPLY], GOAL))
         self.assertEqual(view.sent_steers, [])
 
 

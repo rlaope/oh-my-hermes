@@ -59,8 +59,9 @@ CONTINUE_REFUSED = "Hermes did not continue {name}: {reason}. Your text is back 
 VIEW_TEXT_DROPPED = "{name} is no longer listed; what was sent to it did not go: {text}"
 
 POLL_SECONDS = 1.0  # the most often a running child's transcript is read while it is on screen
-POLL_ANSWER_SECONDS = 10.0  # a poll with no answer this long no longer holds the next one back
+POLL_ANSWER_SECONDS = 10.0  # a poll with no answer this long is forgotten and no longer holds the next one back
 READ_LIMIT = 200  # rows a transcript read asks for at once
+CATCH_UP_PAGES = 50  # pages read one after another once the child ended, until an empty one (caught up)
 
 # What Enter does with a line typed in the view (`send_kind`).
 SEND_STEER = "steer"  # the child runs: `subagent.steer` on the parent session
@@ -97,6 +98,15 @@ class SubagentView:
     brief_pending: bool = False
     sent_steers: list[str] = field(default_factory=list)
     main_draft: Composer | None = None
+    # The attached read's fence: the latest read's number and the request id it went as; only that read's answer,
+    # asked from the cursor the view still holds, applies. `pages_left`: catch-up pages still allowed once the child
+    # ended; `read_now`: the next page goes at once (the last page brought rows). `brief_block`: the goal drawn as
+    # the brief until the real brief row replaces it in place.
+    read_seq: int = 0
+    read_id: int | None = None
+    pages_left: int = 0
+    read_now: bool = False
+    brief_block: Any = None
 
 
 def wire_for(shared_gateway: bool) -> str:
@@ -135,20 +145,23 @@ def message_rows(rows: object) -> list[dict[str, Any]]:
     return [row for row in rows if isinstance(row, dict) and row.get("row_kind", "") in MESSAGE_ROW_KINDS]
 
 
-def unseen_rows(view: SubagentView, rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
-    """`rows` less those already on screen in another form: the brief the view drew from the goal, and a steer sent
+def unseen_rows(view: SubagentView, rows: Sequence[dict[str, Any]]) -> tuple[list[dict[str, Any]], str | None]:
+    """`rows` less those already on screen in another form, and the real brief's text when it is among them: the
+    brief the view drew from the goal (its row replaces that placeholder in place, `brief_pending`), and a steer sent
     from the view, whose row it drew as it went."""
     kept: list[dict[str, Any]] = []
+    brief: str | None = None
     for row in rows:
         role, text = row.get("role"), row.get("text") if isinstance(row.get("text"), str) else ""
         if role == "user" and view.brief_pending and row.get("display_kind") != "steer":
             view.brief_pending = False
+            brief = text
             continue
         if role == "user" and row.get("display_kind") == "steer" and text in view.sent_steers:
             view.sent_steers.remove(text)
             continue
         kept.append(row)
-    return kept
+    return kept, brief
 
 
 def has_brief(rows: Sequence[dict[str, Any]]) -> bool:
@@ -167,13 +180,35 @@ def send_kind(view: SubagentView) -> str:
 
 
 def poll_due_at(view: SubagentView | None, now: float) -> float | None:
-    """When the next transcript poll may go, on the app's clock; None while none goes (no view, the watch wire, or
-    a child that no longer runs)."""
-    if view is None or view.wire != WIRE_POLL or not view.running:
+    """When the next transcript read may go, on the app's clock; None while none goes (no view, the watch wire, or a
+    child that no longer runs and is caught up). One read at a time: while one is out, the next waits for its
+    answer or `POLL_ANSWER_SECONDS`; else at most one every `POLL_SECONDS`, but a catch-up page right after a page
+    that brought rows (`read_now`)."""
+    if view is None or view.wire != WIRE_POLL or not (view.running or view.pages_left > 0):
         return None
-    if view.polled_at is None:
+    if view.poll_open and view.polled_at is not None:
+        return view.polled_at + POLL_ANSWER_SECONDS
+    if view.polled_at is None or view.read_now:
         return now
-    return view.polled_at + (POLL_ANSWER_SECONDS if view.poll_open else POLL_SECONDS)
+    return view.polled_at + POLL_SECONDS
+
+
+def page_read(view: SubagentView, empty: bool) -> None:
+    """After a page was applied: once the child ended, the next page goes at once while pages bring rows, until an
+    empty page (caught up) or `CATCH_UP_PAGES` pages since it ended."""
+    if view.running:
+        view.read_now = False
+        return
+    view.pages_left = 0 if empty else view.pages_left - 1
+    view.read_now = view.pages_left > 0
+
+
+def child_ended(view: SubagentView) -> None:
+    """The child's run ended (a `subagent.complete`, a read saying it no longer runs): `running` only ever goes
+    from true to false, and the catch-up pages start counting."""
+    if view.running:
+        view.running = False
+        view.pages_left = CATCH_UP_PAGES
 
 
 def rule_label(name: str) -> str:

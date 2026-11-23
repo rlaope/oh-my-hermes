@@ -8,9 +8,13 @@ from __future__ import annotations
 
 import unittest
 
-from test_tui_agent_session_view import BRIEF, FIRST, SECOND, WATCH, entered, lazy_answer, rows_answer, texts, viewing
-from test_tui_modes import SID, answer, call_id, queue, type_text
+from test_tui_agent_session_view import (
+    BRIEF, FIRST, GOAL, REPLY, SECOND, STEER_ROW, TOOL, WATCH, entered, lazy_answer, rows_answer, texts, viewing,
+)
+from test_tui_agent_view import agent_event
+from test_tui_modes import SID, answer, call_id, drawn, queue, type_text
 from omh.tui import app as app_module
+from omh.tui import subagent_session as view_state
 from omh.tui.gateway import Event, Response, ServerRequest
 from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, UP, Key
 
@@ -235,6 +239,101 @@ class OpenIntentTests(unittest.TestCase):
         app._switch_session("different-stored-session")
         app._on_response(Response(opened, lazy_answer([BRIEF]), None))
         self.assertIsNone(app.viewing)
+
+
+class ReadFenceTests(unittest.TestCase):
+    """D6: one attached read in flight per view; only the latest, asked from the view's cursor, applies."""
+
+    def test_a_completion_while_a_read_is_out_sends_no_second_read(self) -> None:
+        app, client, now = viewing(shared=True)
+        now[0] = 1
+        app._poll_view_when_due()
+        now[0] = 1.1
+        agent_event(app, "complete", FIRST, status="completed", summary="done")
+        app._poll_view_when_due()
+        self.assertEqual(len(client.named("session.transcript")), 2, "the open's read and the one poll")
+
+    def test_an_older_answer_never_duplicates_rows_rolls_the_cursor_back_or_marks_the_child_running(self) -> None:
+        app, client, now = viewing(shared=True)
+        now[0] = 1
+        app._poll_view_when_due()
+        older = call_id(client, "session.transcript")
+        now[0] = 1 + view_state.POLL_ANSWER_SECONDS
+        app._poll_view_when_due()  # the first went unanswered: forgotten, the next goes
+        newer = call_id(client, "session.transcript")
+        self.assertNotIn(older, app.pending)
+        app._on_response(Response(newer, rows_answer([REPLY], running=False, reset=False, cursor="final"), None))
+        app._on_response(Response(older, rows_answer([REPLY], running=True, reset=False, cursor="earlier"), None))
+        assert app.viewing is not None
+        self.assertEqual((app.viewing.running, app.viewing.cursor), (False, "final"))
+        self.assertEqual(texts(app.viewing.transcript).count(f"reply:{REPLY['text']}"), 1)
+
+    def test_a_completion_schedules_one_read_at_the_paced_second(self) -> None:
+        app, client, now = viewing(shared=True)
+        before = len(client.named("session.transcript"))
+        now[0] = 0.2
+        agent_event(app, "complete", FIRST, status="completed", summary="done")
+        app._poll_view_when_due()
+        self.assertEqual(len(client.named("session.transcript")), before, "not before the second is up")
+        now[0] = 1
+        app._poll_view_when_due()
+        self.assertEqual(len(client.named("session.transcript")), before + 1)
+
+
+class CatchUpTests(unittest.TestCase):
+    """D7: caught up means an empty page."""
+
+    def test_a_finished_child_with_a_full_first_page_is_read_until_an_empty_page(self) -> None:
+        page = [BRIEF, *[{"role": "assistant", "text": f"chunk {i}"} for i in range(199)]]
+        app, client, now = viewing(shared=True, result=rows_answer(page, running=False, cursor="page-2"))
+        app._poll_view_when_due()  # at once: a page that brought rows is followed by the next
+        self.assertEqual(client.named("session.transcript")[-1].get("cursor"), "page-2")
+        answer(app, client, rows_answer([{"role": "assistant", "text": "the final reply"}], running=False, reset=False,
+                                        cursor="page-3"))
+        app._poll_view_when_due()
+        self.assertEqual(client.named("session.transcript")[-1].get("cursor"), "page-3")
+        answer(app, client, rows_answer([], running=False, reset=False, cursor="page-3"))
+        count = len(client.named("session.transcript"))
+        now[0] = 100
+        app._poll_view_when_due()
+        assert app.viewing is not None
+        self.assertEqual(len(client.named("session.transcript")), count, "an empty page: caught up")
+        self.assertEqual(texts(app.viewing.transcript)[-1], "reply:the final reply")
+
+    def test_catch_up_stops_after_its_page_cap(self) -> None:
+        app, client, now = viewing(shared=True, result=rows_answer([BRIEF], running=False, cursor="p0"))
+        for page in range(view_state.CATCH_UP_PAGES + 5):
+            app._poll_view_when_due()
+            if app.viewing.poll_open:
+                answer(app, client, rows_answer([{"role": "assistant", "text": f"p{page}"}], running=False, reset=False,
+                                                cursor=f"p{page + 1}"))
+        self.assertEqual(len(client.named("session.transcript")), view_state.CATCH_UP_PAGES)
+
+
+class SameTextTests(unittest.TestCase):
+    """D8: the same text however the view was read."""
+
+    def test_the_real_brief_replaces_the_goal_placeholder_in_place(self) -> None:
+        app, client, now = viewing(shared=True, result=rows_answer([]), rows=35, cols=100)
+        assert app.viewing is not None
+        drawn(app)  # the goal is on screen as the brief
+        now[0] = 1
+        app._poll_view_when_due()
+        brief = {**BRIEF, "text": GOAL + "\n\nUse the terminal toolset only."}
+        answer(app, client, rows_answer([brief, TOOL], reset=False, cursor="c2"))
+        self.assertEqual(texts(app.viewing.transcript), ["notice:› From main", f"user:{brief['text']}", "tools"])
+        self.assertIn("Use the terminal toolset only.", "\n".join(drawn(app)))
+
+    def test_a_reset_rebuilds_from_rows_and_keeps_the_stored_steer(self) -> None:
+        app, client, now = viewing(shared=True)
+        submit(app, STEER_ROW["text"])
+        answer(app, client, {"status": "queued"})
+        now[0] = 1
+        app._poll_view_when_due()
+        answer(app, client, rows_answer([BRIEF, STEER_ROW, REPLY], reset=True, running=False))
+        assert app.viewing is not None
+        self.assertEqual(texts(app.viewing.transcript),
+                         ["notice:› From main", f"user:{GOAL}", f"user:{STEER_ROW['text']}", f"reply:{REPLY['text']}"])
 
 
 if __name__ == "__main__":

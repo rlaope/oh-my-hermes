@@ -1777,6 +1777,15 @@ class Transcript:
         self._keep_previews()
         return block
 
+    def replace_user_text(self, block: UserBlock, text: str) -> None:
+        """`block`, a prompt drawn in place of one not read yet (a subagent view's goal for its brief), takes the
+        real `text`; the next full redraw prints it where it stood."""
+        if block.text != text:
+            block.text = text
+            self._measured = None
+            self._live_held = None
+            self._version += 1
+
     def set_user_previews(self, lookup: Callable[[str], Preview | None]) -> None:
         """Every prompt not yet taken takes the preview `lookup` gives for each of its images (by what `images`
         holds for it; one it has already stays where `lookup` gives none); the live region draws them at the next frame. At most
