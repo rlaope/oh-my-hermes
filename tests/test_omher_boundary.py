@@ -68,6 +68,8 @@ RULES = (
     "and in folder chats and threads the bridge created itself (`folder.open` for an oh-my-hermes session;"
     " `thread.create`, or an `omher-thread` block in the bot's own main-chat answer, for a thread under the bot);",
     "the bridge has exactly one `prompt.submit` call site and it takes the main chat's id or such a folder chat's or thread's.",
+    "only the person's Discard there acknowledges the lost turn, through Hermes' own `prompt.resolve_unknown` with that"
+    " admission's id and generation (`chat.discard`); omher never sends the lost turn again.",
     "an `omher-thread-route` block in an answer only asks the person whether to send their message to an open thread,"
     " and nothing is sent until they press Send there.",
     "The SESSIONS entry is back as TERMINALS (the sidebar section, its `+` menu and background menu, ⌘N/⌘T and ⌘⇧[ ])"

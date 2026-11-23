@@ -6,6 +6,7 @@ import { Composer } from "./parts/Composer";
 import { promptsOf } from "./parts/promptHistory";
 import { OmhPromptLine } from "../onboarding/OmhPromptLine";
 import { ConnectBlock } from "./connect/ConnectBlock";
+import { LostTurnBlock } from "./parts/LostTurnBlock";
 import { t } from "../i18n";
 import { ThreadChat } from "../threads/ThreadChat";
 
@@ -42,6 +43,8 @@ export function Chat() {
         {/* Hermes says the bot cannot answer (no AI account): one quiet block above the composer, so a long chat
             that loses its account still shows it without scrolling */}
         <ConnectBlock bot={bot} />
+        {/* Hermes lost a turn of this chat when it stopped mid-turn: the chat is paused until the person discards it */}
+        <LostTurnBlock bot={bot} chat={chat} />
         <OmhPromptLine bot={bot} />
         <Composer
           key={bot.name}

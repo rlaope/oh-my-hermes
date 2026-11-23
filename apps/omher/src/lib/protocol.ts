@@ -103,6 +103,16 @@ export interface Msg {
   steer_read?: number;
   /** steered rows: the first line the bot wrote after it in that turn (its note or its answer). */
   steer_reply?: string;
+  /** user rows: still in Hermes' queue, not started and not in the transcript yet (behind a turn it lost). Its id is
+   *  `q-<admission id>`; once it runs, the transcript has it under its own row id. */
+  queued?: boolean;
+}
+
+/** A turn Hermes lost when its gateway stopped mid-turn (a crash or a kill): `id` is its admission, `text` what the
+ *  person had sent. Hermes holds every later message of that chat until the person discards it (`chat.discard`). */
+export interface LostTurn {
+  id: string;
+  text: string;
 }
 
 /** The automation whose delivered result a Bot Chat answer replies to: its name and when it came in (unix s). */
@@ -281,6 +291,8 @@ export interface ChatOpenResult {
   session_id: string;
   messages: Msg[];
   running: boolean;
+  /** Turns of this chat Hermes lost in a restart: the chat is paused until they are discarded. */
+  lost?: LostTurn[];
   model: string;
   provider: string;
   reasoning: string;
@@ -317,8 +329,11 @@ export interface OpMap {
   /** `reply_to` = an elsewhere session id: the bridge adds that thread as context for the bot.
    *  omher posts nothing. */
   /** `queued`: a held message (steer queue); a still-busy Hermes runs it after its current work, never steers it. */
-  "chat.send": { params: { bot: string; text: string; session?: string; reply_to?: string; queued?: boolean }; result: { input_id: string } };
+  /** `paused`: Hermes keeps the message in its queue behind a turn it lost, and runs it once that turn is discarded. */
+  "chat.send": { params: { bot: string; text: string; session?: string; reply_to?: string; queued?: boolean }; result: { input_id: string; paused?: boolean } };
   "chat.interrupt": { params: { bot: string; session?: string }; result: Record<string, never> };
+  /** Acknowledge the chat's lost turns (Hermes' `prompt.resolve_unknown`): never re-run, and what waits behind runs. */
+  "chat.discard": { params: { bot: string; session?: string }; result: { discarded: number } };
   /** Steer the main chat's running turn (Hermes' `session.steer`): `queued` = taken, `rejected` = not (no turn runs,
    *  or Hermes refused). The bridge never sends a refused steer another way. */
   /** queued = taken; rejected = no agent saw it (safe to send normally); uncertain = may already be with the agent */

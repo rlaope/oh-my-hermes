@@ -629,6 +629,10 @@ let manual;
 // chat.steer: per bot "accept" (default) or "reject" (mock.steerMode), and every steer taken (mock.steers)
 let steerMode = new Map();
 let steers = [];
+// #3123: a main-chat turn Hermes lost when its gateway was killed (`mock.lostTurn`), bot -> [{ id, text }], and the
+// messages Hermes keeps queued behind it, bot -> [{ id, text, ts }]. Nothing runs until `chat.discard`.
+let lostTurns = new Map();
+let lostQueue = new Map();
 // Bots whose skills.list is empty (mock.noSkills).
 let noSkills;
 // Tasks › Linear: the bots whose config names a Linear MCP server (mock.linear {bot, server|null})
@@ -816,6 +820,8 @@ function reset() {
   manual = new Set();
   steerMode = new Map();
   steers = [];
+  lostTurns = new Map();
+  lostQueue = new Map();
   noSkills = new Set();
   linearMcp = new Map();
   notReady = new Map(); // bot -> the sign-in provider that now passes its strict check ("" = none)
@@ -1203,8 +1209,10 @@ const OPS = {
     if (waiting.length) setTimeout(() => waiting.forEach(broadcast), 0);
     return {
       session_id: `main-${b.name}`,
-      messages: history[b.name],
+      // a message waiting behind a lost turn is not in the transcript: the bridge adds it, marked queued
+      messages: [...history[b.name], ...(lostQueue.get(b.name) ?? []).map((q) => ({ id: q.id, role: "user", text: q.text, ts: q.ts, queued: true }))],
       running: Boolean(turns[b.name]),
+      lost: lostTurns.get(b.name) ?? [],
       model: m.model,
       provider: m.provider,
       reasoning: m.reasoning,
@@ -1331,6 +1339,13 @@ const OPS = {
       if (turns[key]) (queues[key] ??= []).push(text);
       else startTurn(key, text, f);
       return { input_id };
+    }
+    // behind a turn Hermes lost: kept in Hermes' queue (not the transcript), nothing runs, the reply says so
+    if (lostTurns.get(b.name)?.length) {
+      const q = lostQueue.get(b.name) ?? [];
+      q.push({ id: `q-${nextId("adm")}`, text, ts: now() });
+      lostQueue.set(b.name, q);
+      return { input_id, paused: true };
     }
     history[b.name].push({ id: nextId("u"), role: "user", text, ts: now(), ...(reply_to ? { reply_to } : {}) });
     if (turns[b.name]) (queues[b.name] ??= []).push(text);
@@ -1879,6 +1894,30 @@ const OPS = {
     needStr(p, "bot");
     if (p.on === false) manual.delete(p.bot);
     else manual.add(p.bot);
+    return {};
+  },
+  // Hermes' prompt.resolve_unknown on the chat's lost turns: never re-run; the messages queued behind them then run
+  "chat.discard": (p) => {
+    const b = needBot(p);
+    if (p.session !== undefined) needFolder(p, b);
+    const key = p.session !== undefined ? folderTurnKey(b.name, p.session) : b.name;
+    const n = lostTurns.get(key)?.length ?? 0;
+    lostTurns.delete(key);
+    const q = lostQueue.get(key) ?? [];
+    lostQueue.delete(key);
+    for (const { text, ts } of q) history[b.name].push({ id: nextId("u"), role: "user", text, ts });
+    if (q.length) {
+      queues[b.name] = [...q.slice(1).map((x) => x.text), ...(queues[b.name] ?? [])];
+      setTimeout(() => startTurn(b.name, q[0].text), 0);
+    }
+    return { discarded: n };
+  },
+  // the bot's main chat comes back with a turn Hermes lost mid-stream (its gateway was killed): `text` was that turn
+  "mock.lostTurn": (p) => {
+    const b = needBot(p);
+    const text = needStr(p, "text");
+    history[b.name].push({ id: nextId("u"), role: "user", text, ts: now() });
+    lostTurns.set(b.name, [{ id: nextId("adm"), text }]);
     return {};
   },
   "mock.steerMode": (p) => {

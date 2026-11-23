@@ -5088,6 +5088,31 @@ def chat_messages(rows, watch_names: set[str] | frozenset[str] = frozenset(), ru
     return out[-MAX_OPEN_MESSAGES:]
 
 
+def pending_turns(snap: dict) -> tuple[dict[str, int], list[dict], list[dict]]:
+    """The chat's admissions Hermes has not finished, from a ``session.resume``/``session.create`` snapshot
+    (``pending``): ``lost`` (admission id -> execution generation) are turns Hermes lost across a restart of its
+    gateway (status ``unknown``). Hermes holds every later message of that chat in its queue until one of them is
+    acknowledged (``prompt.resolve_unknown``), and never runs the lost one again. ``shown_lost`` is them for the
+    page (id, text); ``waiting`` is the person's messages queued behind them, which are not in the transcript yet,
+    as user rows marked ``queued`` so a reopened chat still shows them."""
+    lost: dict[str, int] = {}
+    shown_lost: list[dict] = []
+    waiting: list[dict] = []
+    rows = snap.get("pending") if isinstance(snap.get("pending"), list) else []
+    for row in sorted((r for r in rows if isinstance(r, dict)), key=lambda r: r.get("sequence") or 0):
+        aid, status = row.get("admission_id"), row.get("status")
+        if not isinstance(aid, str) or not aid:
+            continue
+        text = row.get("text") if isinstance(row.get("text"), str) else ""
+        text = split_reply_block(split_term_links(split_peer_hint(split_thread_hint(text))))[0].strip()
+        if status == "unknown" and type(row.get("execution_generation")) is int:
+            lost[aid] = row["execution_generation"]
+            shown_lost.append({"id": aid, "text": text})
+        elif status == "queued" and not row.get("steering") and text:
+            waiting.append({"id": f"q-{aid}", "role": "user", "text": text, "ts": time.time(), "queued": True})
+    return lost, shown_lost, waiting
+
+
 # ---------------------------------------------------------------- SSH peers (BOUNDARY rule 31)
 # A peer is another computer's omher bridge, reached through a loopback port the desktop shell forwards over the
 # person's own `ssh`. This bridge only opens a WebSocket client to that port: it merges the peer's bots into
@@ -5103,7 +5128,7 @@ PEER_LIST_TIMEOUT = 5.0
 PEER_OPEN_TIMEOUT = 15.0
 # Bot-scoped ops a peer's bot takes: sent to the peer with the bare name, its answer passed back as it came.
 PEER_FORWARD = frozenset({
-    "chat.open", "chat.send", "chat.interrupt", "chat.steer", "approval.respond", "clarify.respond", "chat.attach", "chat.set_model",
+    "chat.open", "chat.send", "chat.interrupt", "chat.discard", "chat.steer", "approval.respond", "clarify.respond", "chat.attach", "chat.set_model",
     "models.options", "bots.ready", "bots.rename", "bots.avatar", "bots.set_avatar", "bots.info", "skills.list",
     "commands.list",
     "links.places", "tasks.linear", "elsewhere.list", "elsewhere.peek", "routines.list", "runs.list", "runs.get", "runs.prs",
@@ -5714,6 +5739,7 @@ class FolderChat:
         self.prompts: dict[str, int | None] = {}
         self.asked: dict[str, tuple[float, float | None]] = {}  # open prompt_id -> (asked at, gateway timeout s)
         self.batches: dict[str, list[str]] = {}  # open batch clarify request id -> question ids, in order
+        self.lost_turns: dict[str, int] = {}  # turns Hermes lost in a restart (pending_turns): admission id -> generation
         self.last = ""  # a thread's latest answer, its last line (the threads note on main-chat turns quotes it)
         self.last_at = 0.0
 
@@ -5753,6 +5779,7 @@ class Conn:
         self.threads: dict[str, dict] = {}  # threads `thread.list` found (stored id -> row): what `thread.open` takes
         self.threads_shown = False  # an app that shows threads read them: main-chat turns carry the threads note
         self.split_done: set[str] = set()  # answers whose thread blocks were acted on (never twice)
+        self.lost_turns: dict[str, int] = {}  # main-chat turns Hermes lost in a restart (pending_turns): id -> generation
         self.asked: dict[str, tuple[float, float | None]] = {}  # open prompt_id -> (asked at, gateway timeout s)
         self.batches: dict[str, list[str]] = {}  # open batch clarify request id -> question ids, in order
         self.clarify_batch: bool | None = None  # the gateway asks a multi-question clarify as one request
@@ -5805,7 +5832,8 @@ class Bridge:
         self._own_plugins: set[tuple[str, str]] = set()
         self.ops = {
             "hello": self.op_hello, "bots.list": self.op_bots_list, "chat.open": self.op_chat_open,
-            "chat.send": self.op_chat_send, "chat.interrupt": self.op_chat_interrupt, "chat.steer": self.op_chat_steer,
+            "chat.send": self.op_chat_send, "chat.interrupt": self.op_chat_interrupt,
+            "chat.discard": self.op_chat_discard, "chat.steer": self.op_chat_steer,
             "approval.respond": self.op_approval_respond, "clarify.respond": self.op_clarify_respond,
             "elsewhere.list": self.op_elsewhere_list, "elsewhere.peek": self.op_elsewhere_peek,
             "routines.list": self.op_routines_list, "models.options": self.op_models_options,
@@ -6090,6 +6118,7 @@ class Bridge:
         conn.client = conn.stack = conn.pump = None
         conn.in_turn = False
         conn.main_id = conn.main_stored = conn.generation = None
+        conn.lost_turns = {}
         conn.prompts.clear()
         folders = list(conn.folders.values())
         conn.folders.clear()
@@ -6457,6 +6486,7 @@ class Bridge:
                 log.debug("naming the Bot Chat after create failed: %s", e)
         conn.main_id = snap["session_id"]
         conn.main_stored = snap.get("stored_session_id") or conn.main_id
+        conn.lost_turns = pending_turns(snap)[0]
         if snap.get("execution_generation") is not None:
             conn.generation = snap["execution_generation"]
         return snap
@@ -6476,9 +6506,10 @@ class Bridge:
         running = bool(snap.get("running") if snap.get("running") is not None else info.get("running"))
         conn.in_turn = running
         conn.watch_names = self._watch_names(conn.name)
+        conn.lost_turns, lost, waiting = pending_turns(snap)
         result = {"session_id": conn.main_id, "messages": chat_messages(snap.get("messages"), conn.watch_names, running,
-                                                                        main=True),
-                  "running": running,
+                                                                        main=True) + waiting,
+                  "running": running, "lost": lost,
                   "model": str(info.get("model") or bot["model"]), "provider": str(info.get("provider") or bot["provider"]),
                   "reasoning": str(info.get("reasoning_effort") or bot["reasoning"])}
         prompts = [x for x in (snap.get("prompts") or []) if isinstance(x, dict) and x.get("prompt_id")]
@@ -6538,7 +6569,9 @@ class Bridge:
         await self._submit(conn, main, text, input_id, queued)
         if chat is not None and chat.kind == "thread" and not chat.title:
             await self._name_thread(conn, chat, p["text"])
-        return {"input_id": input_id}
+        # behind a turn Hermes lost in a restart: Hermes keeps it in its queue and runs it only after that turn is
+        # discarded (chat.discard), so the page shows it waiting, not read
+        return {"input_id": input_id, **({"paused": True} if (chat or conn).lost_turns else {})}
 
     async def _probe_clarify_batch(self, conn: Conn) -> None:
         """Ask once per connection whether the gateway can send a turn's several clarify questions as one
@@ -6601,6 +6634,30 @@ class Bridge:
         main, chat = await self._target(conn, p)
         await self._call(conn, "session.interrupt", session_id=main, execution_generation=await self._generation(conn, main, chat))
         return {}
+
+    async def op_chat_discard(self, p) -> dict:
+        """The person's Discard on a chat Hermes paused: a turn of it was lost when Hermes' gateway stopped
+        mid-turn (a crash, a kill), so Hermes holds every later message of that chat until someone acknowledges
+        it. Only the turns the chat's own snapshot listed (``pending_turns``) of the main chat, or with ``session``
+        of a folder chat or thread this bridge created (``_target``), and only through Hermes' own
+        ``prompt.resolve_unknown`` with that turn's generation. Hermes ends the lost turn as interrupted and never
+        runs it again; the messages waiting behind it then run in order. A turn already settled (``stale_generation``,
+        ``not_found``) counts as done."""
+        conn = await self._conn(p.get("bot"))
+        main, chat = await self._target(conn, p)
+        t = chat or conn
+        done = 0
+        for aid, gen in list(t.lost_turns.items()):
+            try:
+                await self._call(conn, "prompt.resolve_unknown", session_id=main, admission_id=aid, execution_generation=gen)
+            except BridgeError:
+                raise
+            except Exception as e:
+                if not _named(e, "GatewayRPCError") or str(e) not in ("stale_generation", "not_found"):
+                    raise
+            t.lost_turns.pop(aid, None)
+            done += 1
+        return {"discarded": done}
 
     async def op_chat_steer(self, p) -> dict:
         """Steer the running turn of the bot's main chat, or with ``session`` of a folder chat or thread this bridge
@@ -7040,8 +7097,10 @@ class Bridge:
         if type(snap.get("revision")) is int:
             chat.revision = snap["revision"]
         chat.in_turn = running
+        chat.lost_turns, lost, waiting = pending_turns(snap)
         result = {"thread": tid, "session_id": tid, "title": chat.title, "cwd": chat.cwd,
-                  "messages": chat_messages(snap.get("messages"), running=running), "running": running,
+                  "messages": chat_messages(snap.get("messages"), running=running) + waiting, "running": running,
+                  "lost": lost,
                   "model": str(info.get("model") or conn.bot["model"]), "provider": str(info.get("provider") or conn.bot["provider"]),
                   "reasoning": str(info.get("reasoning_effort") or conn.bot["reasoning"])}
         prompts = [x for x in (snap.get("prompts") or []) if isinstance(x, dict) and x.get("prompt_id")]
