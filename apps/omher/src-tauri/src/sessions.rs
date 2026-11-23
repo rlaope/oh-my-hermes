@@ -1287,6 +1287,8 @@ fn command_for(argv: Vec<OsString>, cwd: &Path, path_env: Option<OsString>, acco
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
     cmd.env("TERM_PROGRAM", "omher");
+    // what this omher paints (kitty Unicode placeholders from 1.1.4) is read off its version, as other terminals say it
+    cmd.env("TERM_PROGRAM_VERSION", env!("CARGO_PKG_VERSION"));
     if let Some(p) = path_env {
         cmd.env("PATH", p);
     }
@@ -1999,6 +2001,15 @@ mod tests {
         assert_eq!(s.start_agent("claude", &tmp, None, None, Some("abcdefgh23"), &[], 80, 24, |_| {}).unwrap_err(), "claude sessions are not given a terminal link");
         assert_eq!(s.start_agent("omh", &tmp, None, None, Some("NOT-A-LINK"), &[], 80, 24, |_| {}).unwrap_err(), "not a terminal link id");
         assert_eq!(s.count(), 0);
+    }
+
+    /// A terminal says it is omher and which omher, so a TUI asks for kitty placeholders only from one that paints them.
+    #[test]
+    fn a_terminal_names_omher_and_its_version() {
+        let cmd = command_for(vec![OsString::from("/x/omh")], &std::env::temp_dir(), None, &[]);
+        let env: Vec<(String, String)> = cmd.iter_extra_env_as_str().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        assert!(env.contains(&("TERM_PROGRAM".to_string(), "omher".to_string())));
+        assert!(env.contains(&("TERM_PROGRAM_VERSION".to_string(), env!("CARGO_PKG_VERSION").to_string())));
     }
 
     /// The link variable is added beside the account's and the terminal's own, and nothing else changes.

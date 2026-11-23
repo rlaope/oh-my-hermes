@@ -50,7 +50,7 @@ describe("terminal rows", () => {
     expect(termStatus({ status: "exited", exitCode: 2 }, undefined, now)).toBe("err");
     expect(termStatus({ status: "exited", exitCode: null }, undefined, now)).toBeNull();
     expect(termStatus({ status: "failed" }, undefined, now)).toBe("err");
-    expect(termStatus({ status: "running" }, "bell", now)).toBe("bell");
+    expect(termStatus({ status: "running" }, "bell", now)).toBe("news");
   });
   it("groups by folder in first-seen order", () => {
     const g = termGroups([{ cwd: "/a" }, { cwd: "/b" }, { cwd: "/a" }]);

@@ -133,8 +133,9 @@ and evidence obvious to a reviewer reading the PR without the chat history.
     network integration.
   - **The OMH TUI's update notice** (`src/tui/update_notice.py`), a scoped
     network integration.
-  - **Show-reel provider scripts** and the **Channel watch collector**: inert
-    package data only the user runs.
+  - **Show-reel provider scripts**, the **Channel watch collector**, and the
+    **PR watch monitor and event guard**: inert package data only the user
+    runs.
   - **The OMH TUI** (bare `omh`) and its gateway child: a foreground frontend over
     Hermes' own gateway; read
     [`docs/OMH-TUI-BOUNDARY.md`](docs/OMH-TUI-BOUNDARY.md) before touching

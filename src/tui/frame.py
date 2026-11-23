@@ -64,6 +64,7 @@ from .theme import DEFAULT_THEME, KIND_FAMILIES, Theme, aura_moves
 from .width import cell_width, truncate, truncate_line
 
 RULE = "─"  # the composer's rules, above and under it, full width
+RULE_LABEL_LEAD = 8  # the rule cells a label at the top rule's end leaves before it, however long the label
 INFO_INSET = 2  # cells before the info line's text, under the rule
 BRANCH_LABEL = "branch:"
 BRANCH_CUTS = (24, 12)  # the cells a long branch name is cut to on a narrow info line, its `…` included
@@ -115,6 +116,7 @@ def build_frame(
     tail_spacer: bool = False,
     slot_limit: int = 0,
     diagnostics: Sequence[tuple[int, int]] = (),
+    rule_label: str = "",
 ) -> Frame:
     """The region for one repaint; `min_height` rows at least, pad rows under the live block making up the rest.
 
@@ -144,6 +146,8 @@ def build_frame(
     blank one over the working row: it goes when the tail does not fit whole.
     `slot_limit`, with no composer, lets the slot take more rows than
     `layout.choice_cap` (a picker that takes the screen, `layout.tall_cap`).
+    `rule_label` ends the composer's top rule (`─── name ─`, `labelled_rule`): the subagent whose session is on
+    screen, which what is typed goes to.
     """
     cap = composer_cap(rows)
     composer_lines: list[Line] = []
@@ -212,13 +216,16 @@ def build_frame(
             Span(AURA_RULE * cols, replace(theme.rule, bold=True)),)
     # The composer's rules frame it and are no text: never highlighted, never copied by a drag (`style.gutter`).
     rule = tuple(Span(span.text, replace(span.style, gutter=True)) for span in rule)
+    bottom_rule = rule
+    if rule_label and not (glow and not composer_blank):
+        rule = labelled_rule(cols, rule_label, theme)
     lines = compose(
         budget,
         tail=tail,
         slot=slot,
         rule=rule,
         composer=_browsing_rows(len(composer_lines), cols, theme) if composer_blank else composer_lines,
-        bottom_rule=rule,
+        bottom_rule=bottom_rule,
         info=truncate_line(info, cols),
         below=below,
         agents=agents,
@@ -274,6 +281,18 @@ def _browsing_rows(count: int, cols: int, theme: Theme) -> list[Line]:
     if count <= 0:
         return []
     return [truncate_line((Span(" " * INFO_INSET), Span(BROWSING_HINT, theme.hint)), cols), *[BLANK] * (count - 1)]
+
+
+def labelled_rule(width: int, label: str, theme: Theme = DEFAULT_THEME) -> Line:
+    """The composer's top rule ending in `label`, as Claude Code's names the teammate shown: `──── label ─`. The label
+    is cut with `…` to leave `RULE_LABEL_LEAD` rule cells before it, and goes where not even `…` fits."""
+    room = width - RULE_LABEL_LEAD - 3  # the lead, the spaces around the label and the rule cell after it
+    if room < 2:
+        return rule_line(width, theme)
+    shown = truncate(label, room)
+    lead = width - cell_width(shown) - 3
+    return (Span(RULE * lead + " ", replace(theme.rule, gutter=True)), Span(shown, replace(theme.label, gutter=True)),
+            Span(" " + RULE, replace(theme.rule, gutter=True)))
 
 
 def rule_line(width: int, theme: Theme = DEFAULT_THEME) -> Line:

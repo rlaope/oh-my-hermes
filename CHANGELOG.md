@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **GLM 5.4 is mapped to Z.ai.** `glm-5.4` (opened to every GLM Coding Plan user on 2026-11-23) now resolves to the
+  `zai` provider family, so a chain or override that names it routes to Z.ai. It joins no shipped chain, and it has
+  no contract or price row until Z.ai publishes a model page and list price.
+- **A large workspace no longer logs a warning after every shell command.** When the shell round end re-indexes a
+  workspace past its entry or time budget, that designed skip is now logged at debug (`shell_changed skipped=`)
+  instead of warning on nearly every `terminal` / `execute_code` call (~700 lines a day in one workspace). A real
+  fault inside the walk still warns (`shell_changed failed=`). (#3140, carried; thanks @probepark)
 - **`omh_delegate_route` can hand a child the rest of its chain, each step at its own effort (opt-in).** With
   `{"schema_version": "delegate_route_options/v1", "write_fallback_providers": true}` in
   `~/.omh/routing/delegate-route.json`, `set` also writes the positions after the head into
@@ -41,6 +48,16 @@ All notable changes will be documented here.
   discarded elsewhere (Hermes' own app, `/discard`) clears the note at once. A message waiting in Hermes' queue behind
   a turn that is still running (nothing lost) also stays in the chat after a restart, as "Waiting · runs after the
   current turn". (#3123; `docs/OMHER-BOUNDARY.md` rule 3)
+- **omher's reasoning picker offers every level Hermes accepts, ultra included.** The chat model picker's Reasoning
+  control showed none, low, medium, high and xhigh only, so minimal, max and ultra could not be picked. The bridge now
+  reads the installed Hermes' own levels (`hermes_constants.VALID_REASONING_EFFORTS`, after "none") and offers them in
+  Hermes' order: none, minimal, low, medium, high, xhigh, max, ultra. An older Hermes offers only the levels it has,
+  and the bridge refuses any other before asking Hermes. When the levels are not importable the picker offers the
+  full list, and a level the gateway refuses shows the picker's note instead of looking applied. The eight levels sit
+  in two rows of four. A level the route does not send as picked says so, as Hermes' own pickers do: Hermes sends
+  `max` for `ultra` on most routes, so the pill reads "ultra · sends max" and the popover "ultra (sends max on this
+  route)", from Hermes' `reasoning_effort_wire`. (`apps/omher/bridge/omher_bridge.py` `reasoning_levels`,
+  `apps/omher/src/chat/model/levels.ts`)
 - **Fanout hands coding units to a harness CLI you declare, or to one of nine presets.** Put an executor in
   `<omh_home>/routing/executors.toml` (never read from a repository or the working directory) as an `argv` list
   with exactly one `{prompt}` or `{prompt_file}` element, or opt in to a preset with `omh coding executors add
@@ -201,6 +218,16 @@ All notable changes will be documented here.
     TUI use for pasted pictures), so a pasted screenshot shows as the picture itself instead of a coarse block
     mosaic. The layer stays above the GPU renderer, keeps one canvas per terminal, and shares the 32 MB per-terminal
     picture budget with the other image kinds; Settings › Terminal › Show images turns it off.
+- **github-event-ops: watch one PR without a polling loop, and bound a bot that works on PRs.** Asking Hermes to
+  wait on a pull request ("watch PR 42 until its checks finish", "PR 42 체크 끝날 때까지 지켜봐줘") now reaches
+  `github-event-ops`, whose PR watch recipe (`references/pr-watch.md`) sets up one Hermes cron monitor job for that
+  PR: `toolkit/scripts/pr_watch.py` prints only the PR's settled state from one read-only `gh pr view`, so the agent
+  wakes only when checks finish, a conflict or review appears, or the PR merges or closes, every 5 minutes for two
+  hours at most. A bot takes at most two fix rounds per PR, counted from the PR's own commits and heads and kept per
+  PR across watches; after that the fix is a person's. `toolkit/scripts/pr_event_guard.py`, as a webhook route's
+  `--script`, drops events the bot's own runs caused and more than 5 events per 15 minutes. Both scripts are inert
+  package data the person's Hermes runs (owner-approved scoped integration, 2026-11-23); OMH never runs them.
+  (`src/skills/pr_watch_toolkit/`, `src/skills/catalog_feature_surfaces.py`, `src/routing/policy.py`)
 - **OMH TUI: kitty previews inside omher, and a quiet Ctrl+Enter.** Under `TERM_PROGRAM=omher` the OMH TUI asks for
   kitty previews (tmux and screen keep half-blocks). Ctrl+Enter on a prompt with images during a turn now stops the
   turn and sends the prompt without an `Interrupted.` notice, like Claude Code's send-now; Hermes' "Operation
@@ -340,6 +367,38 @@ All notable changes will be documented here.
   arms, every live run). The change now clears the total in `reset()`, so the case asks only whether the reviewer
   sees the lock the caller holds. Results recorded before this fix overstate false alarms on this case.
   (`benchmarks/review-false-alarms/corpus/trap-lock-held-by-caller`)
+- **omher's sidebar shows each TERMINALS split as one layout card, with live state per pane.** With the search box
+  empty, a split of 2 to 4 panes is a card at the top of TERMINALS drawn like the split (one cell per pane, real
+  proportions, the CLI's mark, name and last line), and its members leave the folder rows. Text follows the cell's
+  size; each cell's edge shows its state (a light segment circling a busy one, a dashed flowing edge for background
+  work, a blinking amber edge when a bot asks to type into it, red on error), with how long a busy cell has run after a minute.
+  A click focuses a pane, a right-click opens the row menu, and a grip under the card sets its height, kept with the
+  split (`SplitGroup.mapH` in `omher.splits`). Animation is CSS only and stops under reduced motion. Terminals that
+  report no background work never show the dashed edge. A terminal's bell, OSC 9 message or progress done is now quiet
+  news everywhere (an accent dot on the row and the folder summary, a slowly breathing accent edge on the cell, "rang"
+  in the notification), and the amber warning is kept for waits omher knows: a bot's request to type, a chat's approval
+  or question. (`apps/omher/src/sessions/SplitLayoutCard.tsx`) (#3138)
+
+- The OMH TUI no longer asks for kitty image previews in an omher terminal that cannot paint them. omher 1.1.3
+  and earlier set `TERM_PROGRAM=omher` but draw no kitty Unicode placeholders, so pasting an image showed a block of
+  tofu boxes in the transcript and the picture itself over the composer. omher now also sets
+  `TERM_PROGRAM_VERSION`, and the TUI takes real pixels only from omher 1.1.4 on; older omher terminals get the
+  coloured half-block preview.
+
+- **Enter on a subagent in the OMH TUI shows its session on the main screen, as Claude Code shows a teammate's.**
+  Before, Enter in the agent list opened a read-only log in a pager, and the only way to talk to a subagent was `s`
+  then a line. Now Enter (or a click, or Enter on a dag node's child) shows a dim `› From main` row, the brief as the
+  first prompt, the tool rows, the reply, and the agent's own working row while it runs. The composer's top rule ends
+  with the agent's name and reads `Message @<name>…`. What you send goes to that agent: a steer while it runs; once it
+  ended, on Hermes' stdio gateway a turn that continues it, while the shared gateway says it cannot continue it and
+  keeps your text. Esc, or the list's `main` row, goes back to main, whose transcript kept everything meanwhile; the
+  list marks the agent shown `⏺` and the rest `◯`, and its hint reads `⏎ view · x stop · s steer · esc back`. Where
+  Hermes cannot show the session the log pager opens as before. Main and the view each keep their own draft, and a
+  late refusal returns text to the screen it was typed on, added after what is kept there; a paste belongs to the
+  composer it was typed in; `s` and the view both refuse slash commands, `!` lines and images for a subagent; main's
+  questions and stop keys stay on main's screen; on the shared gateway the view reads one page at a time until an
+  empty page, at most 50 reads after the agent ends, then says it could not read the rest. (`src/tui/subagent_session.py`,
+  `src/tui/agent_view.py`, `src/tui/app.py`, `src/tui/frame.py`)
 
 ## 5.0.0 - 2026-11-21
 

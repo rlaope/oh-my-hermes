@@ -788,8 +788,8 @@ class AgentActionTests(unittest.TestCase):
         self.assertEqual(app.composer.text, "never mind")
 
     def test_a_narrow_list_keeps_its_keys_and_the_way_back(self) -> None:
-        for cols, said in ((100, AGENT_LIST_HINT), (42, "⏎ log · x interrupt · s steer · esc back"),  # and the inset
-                           (34, "x interrupt · s steer · esc back")):
+        for cols, said in ((100, AGENT_LIST_HINT), (42, "⏎ view · x stop · s steer · esc back"),  # and the inset
+                           (34, "⏎ view · x stop · esc back"), (24, "x stop · esc back")):
             with self.subTest(cols=cols):
                 app, _client = focused(cols=cols)
                 self.assertEqual(under_the_frame(app)[-1].rstrip(), said)
@@ -797,7 +797,8 @@ class AgentActionTests(unittest.TestCase):
     def test_the_hint_names_both_keys(self) -> None:
         app, _client = focused()
         self.assertEqual(under_the_frame(app)[-1], AGENT_LIST_HINT)
-        self.assertIn("x interrupt", AGENT_LIST_HINT)
+        self.assertIn("⏎ view", AGENT_LIST_HINT)
+        self.assertIn("x stop", AGENT_LIST_HINT)
         self.assertIn("s steer", AGENT_LIST_HINT)
 
     def test_the_contract_declares_both_calls_with_a_session_and_an_agent(self) -> None:
@@ -1232,6 +1233,11 @@ def subagent_frame(event_type: str, payload: dict[str, object]) -> str:
 INTERRUPTED_PROMPT = "Write the numbers from 1 to 300, one per line, nothing else."
 
 
+# A Hermes that refuses the session view's lazy resume (an older one rejects `lazy`): Enter opens the agent's log,
+# the view's fallback, which the real-loop cases here pin.
+REFUSED_VIEW = ("session.resume", {"error": {"code": 4000, "message": "unknown field: lazy"}})
+
+
 def delegating_scenario(*answers: tuple[str, dict]) -> Scenario:
     """The recorded turn the person interrupts, with Hermes' subagent frames arriving just before it waits.
 
@@ -1248,7 +1254,7 @@ def delegating_scenario(*answers: tuple[str, dict]) -> Scenario:
 class AgentReplayTests(AppTestCase):
     def test_the_view_the_list_and_the_log_work_in_the_real_loop_and_the_tail_is_asked_of_hermes(self) -> None:
         tail = {"subagent_id": FIRST, "available": True, "text": "TAIL: grepping src/\n", "truncated": False}
-        run = self.prepare(delegating_scenario(("subagent.tail", {"result": tail})))
+        run = self.prepare(delegating_scenario(("subagent.tail", {"result": tail}), REFUSED_VIEW))
         terminal = run.terminal
         listed = terminal.shows(AGENT_LIST_HINT)
         terminal.script(

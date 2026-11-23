@@ -119,6 +119,26 @@ class ClientMethodTests(unittest.TestCase):
         self.assertEqual(contract.call_problem("prompt.submit", base), "")
         self.assertEqual(contract.CLIENT_METHODS["session.history"], {"session_id"})
 
+    def test_a_lazy_resume_is_sendable_only_as_true_with_a_session(self) -> None:
+        # The subagent session view's watch of a child on Hermes' stdio entry (`_resume_lazy`).
+        self.assertEqual(contract.call_problem("session.resume", {"session_id": "child-1", "lazy": True}), "")
+        self.assertEqual(contract.call_problem("session.resume", {"session_id": "s", "cols": 80}), "")
+        for bad in ({"session_id": "child-1", "lazy": False}, {"session_id": "child-1", "lazy": "yes"},
+                    {"session_id": "", "lazy": True}, {"lazy": True}):
+            self.assertIn("lazy only as true", contract.call_problem("session.resume", bad), bad)
+
+    def test_a_subagent_transcript_read_needs_its_subagent_and_a_string_cursor(self) -> None:
+        # A shared gateway's read of one child's rows, polled forward from `next_cursor`.
+        ok = {"session_id": "parent", "subagent_id": "sa-1", "order": "oldest", "limit": 200}
+        self.assertEqual(contract.call_problem("session.transcript", ok), "")
+        self.assertEqual(contract.call_problem("session.transcript", {**ok, "cursor": "c0"}), "")
+        self.assertEqual(contract.call_problem("session.transcript", {"session_id": "s", "order": "latest"}), "")
+        for bad in ({"session_id": "parent", "cursor": "c0"}, {**ok, "subagent_id": " "},
+                    {**ok, "subagent_id": None}):
+            self.assertIn("only with the subagent_id", contract.call_problem("session.transcript", bad), bad)
+        self.assertIn("cursor as the string", contract.call_problem("session.transcript", {**ok, "cursor": 3}))
+        self.assertIn("does not declare", contract.call_problem("session.transcript", {**ok, "child_session_id": "c"}))
+
     def test_a_reasoning_config_set_takes_effort_levels_only(self) -> None:
         # Under the same key Hermes reads these as display settings and writes them to config.yaml.
         effort = {"key": "reasoning", "session_id": "live-1"}
@@ -144,7 +164,8 @@ class ClientMethodTests(unittest.TestCase):
                     "session.title", "session.delete",  # these two only rename or delete a picker row
                     "session.transcript"}  # only reads a picker row Hermes lists as not resumable
         self.assertEqual(contract.OPTIONAL_METHODS, optional)
-        self.assertEqual(contract.CLIENT_METHODS["session.transcript"], {"session_id", "order", "limit"})
+        self.assertEqual(contract.CLIENT_METHODS["session.transcript"],
+                         {"session_id", "order", "limit", "subagent_id", "cursor"})
         self.assertEqual(contract.CLIENT_METHODS["session.title"], {"session_id", "title"})
         self.assertEqual(contract.CLIENT_METHODS["session.delete"], {"session_id"})
         self.assertLessEqual(contract.OPTIONAL_METHODS, set(contract.CLIENT_METHODS))

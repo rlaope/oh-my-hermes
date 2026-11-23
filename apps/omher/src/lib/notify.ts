@@ -118,7 +118,7 @@ export function watchMissedNote(who: string, bot: string, rows: { text: string; 
 }
 
 /** Something a SESSIONS session did that is not a chat event: its program ended, it could not start, or its
- *  terminal rang its bell. */
+ *  terminal rang (a bell or an OSC 9 message: the note says it rang, not that it waits, since it may have finished). */
 export interface SessionNote {
   kind: "ended" | "failed" | "bell";
   /** `web-app · Claude Code` */
