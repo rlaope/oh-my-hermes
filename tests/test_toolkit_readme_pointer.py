@@ -47,7 +47,12 @@ class ToolkitReadmePointerTests(unittest.TestCase):
                 if f"{name}/SKILL.md" not in files:
                     continue
                 with self.subTest(pack=pack, skill=name):
-                    self.assertIn("toolkit/README.md", files[f"{name}/SKILL.md"])
+                    # A toolkit the pack does not ship (Hermes-only companion data) is not named either:
+                    # the pointer would send the host to a file it does not have.
+                    if f"{name}/toolkit/README.md" in files:
+                        self.assertIn("toolkit/README.md", files[f"{name}/SKILL.md"])
+                    else:
+                        self.assertNotIn("toolkit/", files[f"{name}/SKILL.md"])
 
 
 if __name__ == "__main__":

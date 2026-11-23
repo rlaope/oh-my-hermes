@@ -565,7 +565,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # and dag-ulw; only those five bodies move, and the pin before it was 891b61cd...f061.
         # Merged with the OpenResearch references branch: loop and source-finder gain reference pointers
         # (experiment-tree, literature-retrieval); this branch's pin was 7c051fb0...7aaf, and main's was 66929abd...07a7.
-        self.assertEqual(_digest(legacy_hashes), 'a55761860310b5121f357c3ac03de780ed7f565da860711b6bab90ff448f5b9c')
+        # github-event-ops then gains the PR watch recipe, the fix-round cap and the trigger guards, and
+        # automation-blueprint points a PR wait at that recipe; only those two bodies move, and the pin before it
+        # was a5576186...5b9c.
+        self.assertEqual(_digest(legacy_hashes), '1bcdb9c023d882f3e4ee301cd3502e77f495e3b8f43870b1cb294e69dafa90d1')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

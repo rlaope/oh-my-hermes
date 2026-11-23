@@ -87,6 +87,7 @@ Quality bar:
 - Map overlap, missed-run, retry, backfill, and failure-pause onto what Hermes cron does natively and say which choices it cannot honour, so nobody is asked for a policy the runtime ignores; the map is in `references/recurring-surface-choice.md`.
 - After activation, read status from Hermes, not from the blueprint: `cronjob_manage` list (state, last_status, next_run_at), `hermes cron runs`, and open `hermes cron incidents` (detected or alerted).
 - Expose whether a no-agent watchdog is a candidate without claiming it exists or ran.
+- A wait on one pull request's checks or review is a monitor job, not a recurring agent run: follow the PR watch recipe in `omh-github-event-ops` (`skill_view(name='omh-github-event-ops', file_path='references/pr-watch.md')`), whose monitor script wakes the agent only when the PR's settled state changes and whose deadline and repeat count end the job.
 - When the person asks to watch a Slack or Discord channel and be told first when a post matches a condition, follow `references/channel-watch.md`: confirm where, what, how often, and where it reports in one line, then install the collector from `toolkit/` as `toolkit/README.md` describes (`skill_view(name='omh-automation-blueprint', file_path='toolkit/README.md')`), write its config, and create the job yourself.
 - List host automation, gateway delivery, source retrieval, and no-agent execution as not evidence until observed.
 

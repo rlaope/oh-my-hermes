@@ -190,6 +190,13 @@ PROCESS_SPAWN_ALLOWLIST: dict[str, str] = {
         "data, never imported by core, routing, preparation, or install; companion nonexecution "
         "and built-wheel parity tests guard it."
     ),
+    "src/skills/pr_watch_toolkit/scripts/pr_watch.py": (
+        "the PR watch monitor -- inert package data that only a Hermes cron job runs, as the "
+        "`--monitor-script` of a copy the person installed into `<profile>/scripts/`, on Hermes' "
+        "interpreter; spawns exactly one read-only `gh pr view` per tick (argv pinned in "
+        "GH_INVOCATION_EXCEPTIONS), no shell, stdin closed, a 30 s timeout. Nothing in src/ imports it "
+        "(test_core_never_imports_the_pr_watch_toolkit); stated in docs/IMPLEMENTATION-BOUNDARIES.md."
+    ),
     "src/install/agent_skills_projection.py": (
         "explicit `omh install --target agents --scope repo` (including read-only --status); "
         "runs only bounded local git rev-parse --show-toplevel with fsmonitor disabled, "
@@ -740,6 +747,27 @@ class NoHiddenProcessSpawn(unittest.TestCase):
                     continue
                 for dotted in paths:
                     self.assertNotIn("show_reel_toolkit", dotted.split("."), (relative_path, node.lineno, dotted))
+
+    def test_core_never_imports_the_pr_watch_toolkit(self) -> None:
+        """The PR watch scripts are run by the person's Hermes, never by omh."""
+        companion = "src/skills/pr_watch_toolkit/"
+        self.assertEqual(
+            {p for p in PROCESS_SPAWN_ALLOWLIST if p.startswith(companion)}, {companion + "scripts/pr_watch.py"}
+        )
+        for relative_path, tree in _source_modules():
+            if relative_path.startswith(companion):
+                continue
+            for stem in ("pr_watch", "pr_event_guard", "pr_watch_toolkit"):
+                self.assertFalse(_imports_module_named(tree, stem), (relative_path, stem))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    paths = [alias.name for alias in node.names]
+                elif isinstance(node, ast.ImportFrom):
+                    paths = [node.module or "", *(f"{node.module or ''}.{alias.name}" for alias in node.names)]
+                else:
+                    continue
+                for dotted in paths:
+                    self.assertNotIn("pr_watch_toolkit", dotted.split("."), (relative_path, node.lineno, dotted))
 
     def test_only_allowlisted_modules_import_subprocess(self) -> None:
         for relative_path, tree in _source_modules():
@@ -2175,10 +2203,12 @@ GIT_ARGV_ALLOWLIST: dict[tuple[str, tuple[str, ...]], str] = {
     ),
 }
 
-# The one executed forge invocation in `src/`. It is not repository authority:
-# it stars the project on the operator's own account, from an interactive
-# prompt in `omh setup`, and it can neither push code nor merge anything. It is
-# pinned by exact argv so that widening it to any other `gh` call fails here.
+# The executed forge invocations in `src/`. Neither is repository authority:
+# one stars the project on the operator's own account, from an interactive
+# prompt in `omh setup`; the other is the PR watch monitor's read-only
+# `gh pr view`, run only by the person's Hermes. Neither can push code or merge
+# anything. Each is pinned by exact argv so that widening it to any other `gh`
+# call fails here.
 GH_INVOCATION_EXCEPTIONS: dict[tuple[str, tuple[str, ...]], str] = {
     (
         "src/commands/setup.py",
@@ -2186,6 +2216,18 @@ GH_INVOCATION_EXCEPTIONS: dict[tuple[str, tuple[str, ...]], str] = {
     ): (
         "opt-in 'star the repo?' prompt during interactive `omh setup`; mutates the operator's "
         "own stars, never repository contents, and never runs unattended"
+    ),
+    (
+        "src/skills/pr_watch_toolkit/scripts/pr_watch.py",
+        (
+            "gh", "pr", "view", "--repo", "--json",
+            "state,headRefOid,mergeable,reviewDecision,latestReviews,statusCheckRollup,commits",
+        ),
+    ): (
+        "the PR watch monitor's one read of the PR it watches (the number and owner/name are validated "
+        "runtime values between the literals): `gh pr view` with a fixed `--json` field list, a read that "
+        "cannot push, comment, label, review, or merge. It runs only as a Hermes cron `--monitor-script` "
+        "the person installed, never from omh, and uses the gh CLI's own sign-in"
     ),
 }
 
