@@ -136,6 +136,20 @@ All notable changes will be documented here.
   come from chats only. Before the first reading the meter says it shows after your next
   Claude turn in omher. Local only: nothing is sent and no token is read.
   (`docs/OMHER-BOUNDARY.md` rules 11, 17 and 18)
+- **Two scenario suites measure automation intent and coding hand-off, before their skill text changes.**
+  `benchmarks/automation-intent/v1` grades whether a plain-language request becomes the right prepared automation
+  (schedule, target, delivery, filters, silence) or correctly a clarifying question, no automation, or an edit of
+  the existing job. `benchmarks/orchestration/v1` grades whether the parent hands coding to the owner the person
+  named in that request (and only then), targets the right repository, cites only links the observed evidence
+  returned, and stays within a word budget. Grading is a deterministic structural function; reports use
+  `omh_reported_rate/v1` with a Wilson 95% interval, infrastructure failures (`arm_did_not_run`, `timeout`,
+  `transport_error`) and unobserved scenarios excluded by name, and `percent: null` over an empty denominator. Each
+  suite has a held-out split read only when named, reported as counts only, and kept out of skill and routing
+  sources by test. The live arm is opt-in and runs only through `omh coding hermes-child dispatch
+  --confirm-dispatch`; neither suite has been run live, so both are `prepared_not_observed`.
+  (`src/quality/scenario_suite.py`, `src/quality/automation_intent_grading.py`,
+  `src/quality/orchestration_grading.py`; `benchmarks/automation-intent/v1/README.md`,
+  `benchmarks/orchestration/v1/README.md`, `docs/CAPABILITY_IMPACT.md` "Growth Gate")
 - **omher Tasks shows my pull requests, reviews and issues across repositories and GitHub accounts.** The Tasks page
   has a scope toggle, "이 저장소 | 나". "나" lists, across every repository, the open pull requests asking for my
   review, my open pull requests, the open issues assigned to me and the last 7 days' mentions (folded until opened).
