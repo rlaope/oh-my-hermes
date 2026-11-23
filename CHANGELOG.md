@@ -116,6 +116,22 @@ All notable changes will be documented here.
   `_section_node_is_sequence`, `_block_header`, `_skills_document_parts`)
   `enabled:` or `provider:` key written above it, which Hermes could not load. Reported by @chhxbchhxb in #3075.
   (`src/install/config_adapter.py` `_root_is_plain_block_mapping`, `_section_node_is_sequence`)
+- **`omh doctor` says why a Hermes bot went quiet: gateways older than the build, stray gateways, and adapters that
+  failed to connect.** A Discord bot whose profile gained a role allowlist kept working until its next reconnect, when
+  Discord refused the Server Members privileged intent that Hermes then requests, and the bot stayed offline. On the
+  same machine several gateway processes were running, some started before the installed Hermes build, and nothing
+  in OMH said so. Doctor now prints a **Hermes gateways (read-only)** section, also carried as the `gateway_health`
+  row's `detail` in `--json` (`omh_gateway_health/v1`). It lists each running gateway with the profiles it serves and
+  its start time, and flags one started before the installed build stamp unless its own record stamps the installed
+  commit. It reports Hermes' own pending-fleet-restart record and its last update receipt's restart outcome, any
+  `hermes gateway run` process no record names, and a profile two gateways serve, by PID. For each profile and
+  platform it gives the state now: the serving gateway's own record entry first, else the newest gateway log line
+  of this gateway run (a served profile's reconnect that ends in the adapter's own failure line counts); a line
+  from an earlier run is said as such, never as connected. A privileged-intents refusal names the intents and the Developer Portal page that enables them;
+  a rejected token is named, and any other reason is shown, bounded, as unrecognized. Missing evidence is said as
+  missing, never as healthy. The fix is always Hermes' own command; OMH stops and restarts nothing.
+  (`src/maintenance/gateway_health.py`, `src/maintenance/hermes_gateway_formats.py`,
+  `src/system/process_listing.py`; `docs/INSTALLATION.md` "Bot Profiles")
 - **omher 1.1.3.** GitHub across your repositories and accounts, a Claude usage meter that shows numbers, and terminals
   and bridges that recover by themselves.
   - **GitHub:** Tasks gains a "나" scope: your review requests, your pull requests, issues assigned to you and mentions,
@@ -219,6 +235,16 @@ All notable changes will be documented here.
     TUI use for pasted pictures), so a pasted screenshot shows as the picture itself instead of a coarse block
     mosaic. The layer stays above the GPU renderer, keeps one canvas per terminal, and shares the 32 MB per-terminal
     picture budget with the other image kinds; Settings › Terminal › Show images turns it off.
+- **github-event-ops: watch one PR without a polling loop, and bound a bot that works on PRs.** Asking Hermes to
+  wait on a pull request ("watch PR 42 until its checks finish", "PR 42 체크 끝날 때까지 지켜봐줘") now reaches
+  `github-event-ops`, whose PR watch recipe (`references/pr-watch.md`) sets up one Hermes cron monitor job for that
+  PR: `toolkit/scripts/pr_watch.py` prints only the PR's settled state from one read-only `gh pr view`, so the agent
+  wakes only when checks finish, a conflict or review appears, or the PR merges or closes, every 5 minutes for two
+  hours at most. A bot takes at most two fix rounds per PR, counted from the PR's own commits and heads and kept per
+  PR across watches; after that the fix is a person's. `toolkit/scripts/pr_event_guard.py`, as a webhook route's
+  `--script`, drops events the bot's own runs caused and more than 5 events per 15 minutes. Both scripts are inert
+  package data the person's Hermes runs (owner-approved scoped integration, 2026-11-23); OMH never runs them.
+  (`src/skills/pr_watch_toolkit/`, `src/skills/catalog_feature_surfaces.py`, `src/routing/policy.py`)
 - **OMH TUI: kitty previews inside omher, and a quiet Ctrl+Enter.** Under `TERM_PROGRAM=omher` the OMH TUI asks for
   kitty previews (tmux and screen keep half-blocks). Ctrl+Enter on a prompt with images during a turn now stops the
   turn and sends the prompt without an `Interrupted.` notice, like Claude Code's send-now; Hermes' "Operation
