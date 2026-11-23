@@ -100,7 +100,7 @@ test("the row menu's Copy link copies the link, and the terminal says so", async
   const row = page.getByTestId(`session-${id}`);
   await row.click({ button: "right" });
   const menu = page.getByTestId("session-row-menu");
-  await expect(menu.getByRole("menuitem")).toHaveText(["Rename", /^Show in (Finder|Explorer|file manager)$/, "Open in Terminal", "Copy link", "New terminal here", "Close session"]);
+  await expect(menu.getByRole("menuitem")).toHaveText(["Rename", /^Show in (Finder|Explorer|file manager)$/, "Open in Terminal", "Copy link", "Hand to a bot…", "New terminal here", "Close session"]);
   await menu.getByTestId("session-copy-link").click();
   await expect.poll(() => clip(page)).toBe(await linkOf(page, id));
   await expect(page.getByTestId("term-link-copied")).toHaveText("Link copied");

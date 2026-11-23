@@ -92,6 +92,9 @@ describe("a TERMINALS session's link id", () => {
     expect(ss.byLink("aaaaaaaaaa")).toBeNull();
     expect(termMenuItems(ra)).toEqual(["rename", "reveal", "terminal", "link", "here", "close"]);
     expect(termMenuItems({ cwd: "/w" })).toEqual(["rename", "reveal", "terminal", "here", "close"]);
+    // Hand to <bot>: only with a folder and a bot to hand it to
+    expect(termMenuItems(ra, true)).toEqual(["rename", "reveal", "terminal", "link", "hand", "here", "close"]);
+    expect(termMenuItems({ cwd: "" }, true)).toEqual(["rename", "here", "close"]);
   });
 
   it("is kept through the saved list; one saved before links existed (or a bad or clashing one) gets a fresh one", () => {

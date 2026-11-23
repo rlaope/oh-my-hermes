@@ -8,6 +8,9 @@ import { t, tx, type Key } from "../i18n";
 import { SourceIcon, Spinner } from "../ui";
 import { cadence, isFailure, nextRun, sourceName, statusText } from "./format";
 import { rowMoving } from "./rowMotion";
+import { loadTrees } from "./trees";
+import { HandoverCard, handBots, type HandoverFrom } from "../handover/HandoverCard";
+import { SessionMenu, MENU_W_PX, menuHeight } from "../sessions/SessionsSection";
 import "./panel.css";
 
 export type PanelTab = "details" | "terminal" | "schedule" | "worktrees" | "diff" | "runs";
@@ -289,17 +292,6 @@ function useLoad<T>(key: string, load: () => Promise<T>): { data: T | null; erro
 
 const act = () => getStore().actions;
 
-/** One worktree list per bot, shared by the Worktrees and Diff tabs; Refresh (or 10 s) reads it again. */
-const TREES_TTL = 10_000;
-const trees = new Map<string, { at: number; p: Promise<{ worktrees: Worktree[] }> }>();
-function loadTrees(bot: string, fresh = false): Promise<{ worktrees: Worktree[] }> {
-  const hit = trees.get(bot);
-  if (hit && !fresh && Date.now() - hit.at < TREES_TTL) return hit.p;
-  const p = act().panelWorktrees(bot);
-  trees.set(bot, { at: Date.now(), p });
-  p.catch(() => trees.get(bot)?.p === p && trees.delete(bot));
-  return p;
-}
 function Loading({ error, empty }: { error: string | null; empty?: string }) {
   if (error) return <div className="pn-empty bad">{error}</div>;
   if (empty) return <div className="pn-empty">{empty}</div>;
@@ -445,8 +437,15 @@ export function WorktreesTab({ bot, onOpenDiff }: { bot: Bot; onOpenDiff: (path:
     fresh.current = false;
     return loadTrees(bot.name, f);
   });
+  // right-click a row: its menu ("Hand to <bot>"), then the handover card at the same place
+  const [menu, setMenu] = useState<{ x: number; y: number; w: Worktree } | null>(null);
+  const [hand, setHand] = useState<{ at: { x: number; y: number }; from: HandoverFrom } | null>(null);
   if (!data) return <Loading error={error} />;
   const list: Worktree[] = data.worktrees;
+  const handCard = hand && <HandoverCard at={hand.at} from={hand.from} onClose={() => setHand(null)} />;
+  // Hand to <bot> only for a bot of this computer (a bot over SSH lists folders on another computer) and only while a
+  // bot of this computer is online to take it; read, not subscribed, when the row is right-clicked
+  const canHand = () => !bot.host && handBots(getStore().getSnapshot().bots).length > 0;
   return (
     <div className="pn-body" data-testid="panel-worktrees">
       <div className="pn-sec">
@@ -461,7 +460,23 @@ export function WorktreesTab({ bot, onOpenDiff }: { bot: Bot; onOpenDiff: (path:
       </div>
       {list.length === 0 && <div className="pn-empty">{t("pn.noTrees", { bot: bot.display_name })}</div>}
       {list.map((w) => (
-        <button key={w.path} type="button" className="pn-row link" onClick={() => onOpenDiff(w.path)} data-testid="panel-tree" title={w.path}>
+        <button
+          key={w.path}
+          type="button"
+          className="pn-row link"
+          onClick={() => onOpenDiff(w.path)}
+          onContextMenu={(e) => {
+            if (!canHand()) return;
+            e.preventDefault();
+            // the ContextMenu key or Shift+F10 reports no pointer (0, 0): the menu opens under the row instead
+            const r = e.currentTarget.getBoundingClientRect();
+            const px = e.clientX || e.clientY ? e.clientX : r.left + 12;
+            const py = e.clientX || e.clientY ? e.clientY : r.bottom;
+            setMenu({ x: Math.max(6, Math.min(px, window.innerWidth - MENU_W_PX - 6)), y: Math.max(6, Math.min(py, window.innerHeight - menuHeight(1) - 6)), w });
+          }}
+          data-testid="panel-tree"
+          title={w.path}
+        >
           <b className="mono">{w.branch || (w.head ? t("pn.detachedAt", { sha: w.head.slice(0, 7) }) : t("pn.detached"))}</b>
           <span className="pn-r">{shortTime(w.last)}</span>
           <span className="pn-s">
@@ -472,6 +487,16 @@ export function WorktreesTab({ bot, onOpenDiff }: { bot: Bot; onOpenDiff: (path:
           </span>
         </button>
       ))}
+      {menu && (
+        <SessionMenu
+          at={menu}
+          name={menu.w.branch || leaf(menu.w.path)}
+          actions={["hand"]}
+          onPick={() => setHand({ at: { x: menu.x, y: menu.y }, from: { kind: "worktree", bot: bot.name, worktree: menu.w } })}
+          onDismiss={() => setMenu(null)}
+        />
+      )}
+      {handCard}
     </div>
   );
 }
