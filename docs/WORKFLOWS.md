@@ -9209,7 +9209,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Why: The id is in the catalog and every write goes through the bot's own tools and approvals.
 - Bad example:
   - Prompt: Apply the inbox-triage bot template and turn the digest on so it runs tomorrow.
-  - Expected behavior: Apply the template with every job paused, then say turning the digest on is the person's: resume it on the Automations page or ask me to resume `inbox-triage-morning-digest` as its own request.
+  - Expected behavior: Show the plan and, after the person's yes, apply it with every job paused; then say turning the digest on is the person's: resume it on the Automations page or ask me to resume `inbox-triage-morning-digest` as its own request.
   - Why: Applying a template never turns a schedule on; resuming is a separate yes from the person.
 - Quality bar:
   - Read the template from `references/templates.md` (`skill_view(name='omh-bot-template', file_path='references/templates.md')`); an id it does not list: name the ids it lists and stop.
@@ -9242,6 +9242,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Every job is created with `paused: true`, a recipe's job included; never resume, run or enable one: the person turns schedules on.
   - Append the persona seed to SOUL.md; never replace or delete what SOUL.md holds, and never write `MEMORY.md` or `USER.md`.
   - Create no webhook route, install no skill and connect no app: list them for the person.
+  - This skill removes nothing. Asked to remove a template, say where that happens: its jobs are paused or removed on the bot's Automations page or with `cronjob_manage` when the person asks for each one, and its persona section is taken out of SOUL.md by the person.
   - Every schedule and webhook run of an applied template is unattended: With nobody to answer the confirmation (a scheduled job, a one-shot run, a webhook run), an irreversible or externally visible action is not run: it is handed to a person's turn and its confirmation is recorded as missing. The one exception is a bot whose person turned on its PR delivery grant (`omh capability-policy pr-delivery on`, which only the person runs; the bot only tells them the command): it may push a new branch under the grant's branch prefix, open a pull request from that branch, and push fix commits to and comment on a pull request it opened, and nothing else. Merging, force-pushing, pushing to the default branch, and anything on a pull request it did not open stay a person's, grant or no grant.
   - A bot template is prepared guidance. Listing or applying one does not prove a profile exists, a persona was written, a skill or app is installed, or a cron job or webhook route was created or ran; read those back from Hermes. Every job a template creates is paused until the person turns it on.
 

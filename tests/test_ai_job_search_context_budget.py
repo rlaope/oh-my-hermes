@@ -600,7 +600,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # the pin before it was ba130d2d...7694.
         # bot-template's body then joins the legacy set; no existing body moves, and the pin before it was
         # 2f25c65f...7a09.
-        self.assertEqual(_digest(legacy_hashes), '097815971afb963bbfff2563d11d14bad11bd15be05e447a29474b108b71ff7c')
+        self.assertEqual(_digest(legacy_hashes), '20d37f3510bbfbd7445d575fedd0cb3130ed9991a420a385111dd50991a6f669')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
