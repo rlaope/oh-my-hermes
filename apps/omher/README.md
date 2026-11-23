@@ -125,6 +125,12 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
 - **While it answers** (Settings › General): a message sent while a bot is answering waits in the steer queue until
   the turn ends (the default), or, set to Steer, is steered into the running answer at once, as its Steer button
   would; a message behind another held one still waits its turn (`e2e/steer-queue.spec.ts`).
+- **New bot** (`src/addbot/NewBot.tsx`, BOUNDARY rule 43): the sidebar `+` › New bot lists oh-my-hermes' bot
+  templates (`omh profile bot-templates --json`) beside No template; Create checks the name against Hermes' own profile
+  rule and runs Hermes' `hermes -p default profile create <name>`, and with a template sends the new bot's main chat one
+  `/omh-bot-template` line that the bot applies with its own approvals, every schedule paused. A new profile sees
+  oh-my-hermes' skills after the next `omh update`; until then the gallery waits for Apply template
+  (`e2e/new-bot.spec.ts`).
 - **Remote machines over SSH** (`src-tauri/src/peers.rs`, `src/peers/`): the sidebar `+` › Connect over SSH (or the
   chip under a bot's `omher-peer` reply, or Settings › Remote machines) takes a host from `~/.ssh/config` or
   `user@host`, checks it and shows the exact `ssh` command, the Hermes found there and its bots; only Connect saves it

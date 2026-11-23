@@ -51,6 +51,10 @@
 // signIn: the strict check for that provider passes, as after `hermes auth add <id>`, and its models show in
 // models.options),
 // mock.botPageFail {bot, on} (the bot page's bots.page read fails for that bot until turned off),
+// Add bot › New bot (rule 43): bots.templates answers OMH's catalog (TEMPLATE_SEED) or `missing`/`old`
+// (mock.templates {omh}); bots.create {name} checks Hermes' name rule and the bots here as the bridge does, then makes
+// the bot as `hermes profile create` would (no oh-my-hermes skills yet: mock.skills adds `omh-bot-template`), or fails
+// with Hermes' text once (mock.createNext {line}).
 // mock.move {on} (the bridge died and came back on a new port: answers `{port}` once a second listener is up, then drops
 // every connection to the first port, which refuses WebSockets until `mock.move {on: false}` or mock.reset).
 import http from "node:http";
@@ -678,6 +682,19 @@ const APP_SKILL_SEED = {
   ],
 };
 let notReady = new Map();
+// Add bot › New bot (rule 43): what `omh profile bot-templates --json` answers, and the next create's failure line.
+let templatesOmh = "ok";
+let createNext = null;
+const TEMPLATE_SEED = [
+  { id: "pr-review", title: "PR reviewer", summary: "Reviews pull requests bug first and watches a PR until its checks settle.",
+    skills: ["code-review", "github-event-ops"], schedules: [{ name: "pr-review-review-queue", title: "Weekday review queue" }],
+    webhooks: ["Pull request and review events"], apps: [] },
+  { id: "inbox-triage", title: "Inbox triage", summary: "Sorts new mail into reply, task and ignore, and never sends without your yes.",
+    skills: ["connector-operator"], schedules: [{ name: "inbox-triage-new-mail", title: "New mail matching a filter" },
+      { name: "inbox-triage-morning-digest", title: "Weekday morning digest" }], webhooks: [], apps: [] },
+];
+const PROFILE_NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+const PROFILE_RESERVED = new Set(["hermes", "default", "test", "tmp", "root", "sudo"]);
 
 // The bot page's persona and memory (bots.page), as the bridge's read_bot_page answers: one bot with everything,
 // one with no SOUL.md, a memory file too big to read and a switched-off target, one whose SOUL.md is a link (never
@@ -909,6 +926,8 @@ function reset() {
   lostTurns = new Map();
   lostQueue = new Map();
   noSkills = new Set();
+  templatesOmh = "ok";
+  createNext = null;
   botPageFail = new Set();
   linearMcp = new Map();
   appState = new Map([["kami:linear", "installed"], ["kami:figma", "needs_signin"], ["kami:datadog", "disabled"]]);
@@ -1611,6 +1630,25 @@ const OPS = {
     const seed = b.host ? remotePage : (BOT_PAGE_SEED[b.name] ?? (() => ({ soul: pageFile("SOUL.md", "missing"), memory: [memTarget("memory", "MEMORY.md", "missing", [], 2200), memTarget("user", "USER.md", "missing", [], 1375)] })));
     return seed();
   },
+  "bots.templates": () =>
+    templatesOmh === "ok" ? { omh: "ok", templates: structuredClone(TEMPLATE_SEED) } : { omh: templatesOmh, templates: [] },
+  "bots.create": (p) => {
+    const name = p.name;
+    if (typeof name !== "string" || !PROFILE_NAME.test(name))
+      throw new OpError("bad_request", "Use lowercase letters, numbers, '-' or '_', starting with a letter or number, up to 64 characters.");
+    if (PROFILE_RESERVED.has(name)) throw new OpError("bad_request", `${name} is a name Hermes keeps for itself.`);
+    if (bots[name]) throw new OpError("exists", `A bot named ${name} is already on this computer.`);
+    if (createNext) {
+      const line = createNext;
+      createNext = null;
+      return { outcome: "failed", line };
+    }
+    bots[name] = { name, display_name: name.charAt(0).toUpperCase() + name.slice(1), is_default: false, model: "Haiku 5",
+      provider: "claude-proxy", description: "", status: "online", running: false, reasoning: "low" };
+    models[name] = { model: "Haiku 5", provider: "claude-proxy", reasoning: "low" };
+    history[name] = [];
+    return { outcome: "ok", bot: name };
+  },
   "skills.list": (p) => {
     needBot(p);
     if (noSkills.has(p.bot)) return { skills: [] };
@@ -1920,6 +1958,14 @@ const OPS = {
     const b = needBot(p);
     const omh = PLUGIN_SEED.find((x) => x.name === "omh");
     plugins[b.name] = [...(plugins[b.name] ?? []).filter((x) => x.name !== "omh"), { ...structuredClone(omh), live_tools: 0 }];
+    return {};
+  },
+  "mock.templates": (p) => {
+    templatesOmh = needStr(p, "omh");
+    return {};
+  },
+  "mock.createNext": (p) => {
+    createNext = needStr(p, "line");
     return {};
   },
   "mock.skills": (p) => {

@@ -2867,14 +2867,25 @@ def _stop_run(proc) -> None:
 
 
 def run_hermes_mcp(hermes: str, bot: str, verb: str, name: str, home: Path, timeout: float) -> tuple[int | None, str]:
-    """Run one `hermes mcp` argv and return (exit code, its output); the code is None for a run stopped at *timeout*
-    (`_stop_run`), whose output so far is still returned. No shell, nothing on stdin (so Hermes asks nothing: a value it
-    needs is refused in its own words), the Hermes root as HERMES_HOME, none of the gateway's own markers, and UTF-8
-    output on every system. The output goes to a temporary file, not a pipe, so a helper Hermes left running (a
-    browser it opened) can never keep the run from ending."""
+    """Rule 41: one `hermes -p <bot> mcp install|login|remove <name>` (mcp_argv) through `_run_hermes_argv`."""
+    return _run_hermes_argv(mcp_argv(hermes, bot, verb, name), home, timeout)
+
+
+def run_hermes_profile_create(hermes: str, name: str, home: Path, timeout: float) -> tuple[int | None, str]:
+    """Rule 43: one `hermes -p default profile create <name>` (profile_create_argv) through `_run_hermes_argv`."""
+    return _run_hermes_argv(profile_create_argv(hermes, name), home, timeout)
+
+
+def _run_hermes_argv(argv: list[str], home: Path, timeout: float) -> tuple[int | None, str]:
+    """Run one pinned Hermes argv and return (exit code, its output); the code is None for a run stopped at *timeout*
+    (`_stop_run`), whose output so far is still returned. Only run_hermes_mcp and run_hermes_profile_create call it,
+    each with its own checked argv (mcp_argv, profile_create_argv). No shell, nothing on stdin (so Hermes asks nothing:
+    a value it needs is refused in its own words), the Hermes root as HERMES_HOME, none of the gateway's own markers
+    and no TUI gateway address (so Hermes acts here, not through a gateway the address names), and UTF-8 output on
+    every system. The output goes to a temporary file, not a pipe, so a helper Hermes left running (a browser it
+    opened, the default-plugin install a new profile starts) can never keep the run from ending."""
     import tempfile
-    argv = mcp_argv(hermes, bot, verb, name)
-    env = {k: v for k, v in os.environ.items() if k not in _GATEWAY_MARKERS}
+    env = {k: v for k, v in os.environ.items() if k not in _GATEWAY_MARKERS and k != "HERMES_TUI_GATEWAY_URL"}
     env.update(HERMES_HOME=str(home), PYTHONIOENCODING="utf-8", NO_COLOR="1")
     if os.name == "nt":
         kw = {"creationflags": 0x08000000 | 0x00000200}  # CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP
@@ -2895,6 +2906,122 @@ def run_hermes_mcp(hermes: str, bot: str, verb: str, name: str, home: Path, time
         out.seek(max(0, size - MCP_OUTPUT_MAX))
         text = out.read(MCP_OUTPUT_MAX).decode("utf-8", errors="replace")
     return code, text
+
+
+# ---------------------------------------------------------------- new bots (Add bot › Create, BOUNDARY rule 43)
+# A press runs one fixed argv, `hermes -p default profile create <name>`: `-p default` so the new profile copies the
+# main profile's keys and model (Hermes' own default for a new profile) whatever Hermes' sticky `active_profile` names.
+# The name follows Hermes' own rule (hermes_cli/profiles.py `validate_profile_name`: `PROFILE_ID_RE` from
+# hermes_constants.py, not one of `_RESERVED_NAMES`, never `default`), and a name that is already a folder under
+# `profiles/` is refused before anything runs. The outcome is read from the folder Hermes made, not its exit code.
+PROFILE_RESERVED = frozenset({"hermes", "default", "test", "tmp", "root", "sudo"})
+PROFILE_CREATE_TIMEOUT = 120.0  # seconds: Hermes copies its bundled skills into the new profile
+
+
+def profile_create_argv(hermes: str, name: str) -> list[str]:
+    """`hermes -p default profile create <name>`: the name is checked here as one argv element; nothing else varies."""
+    if not isinstance(name, str) or not PROFILE_ID.fullmatch(name) or name in PROFILE_RESERVED:
+        raise ValueError(f"not a new profile name Hermes accepts: {name!r}")
+    return [hermes, "-p", "default", "profile", "create", name]
+
+
+def new_profile_refusal(home: Path, name: object) -> tuple[str, str] | None:
+    """(error code, the words the page shows) when *name* cannot be a new bot, else None. Hermes' own rule, then what
+    is on disk: any entry of that name under `profiles/` (a link, a file, a folder with or without a config) is
+    refused, as Hermes refuses it."""
+    if not isinstance(name, str) or not PROFILE_ID.fullmatch(name):
+        return "bad_request", "Use lowercase letters, numbers, '-' or '_', starting with a letter or number, up to 64 characters."
+    if name in PROFILE_RESERVED:
+        return "bad_request", f"{name} is a name Hermes keeps for itself."
+    if os.path.lexists(home / "profiles" / name):
+        return "exists", f"A bot named {name} is already on this computer."
+    return None
+
+
+def new_profile_made(home: Path, name: str) -> bool:
+    """Whether Hermes made the bot: `profiles/<name>/` is a real folder (not a link) holding its config.yaml, the
+    file omher lists a bot by (discover_bots)."""
+    path = home / "profiles" / name
+    try:
+        return not path.is_symlink() and path.is_dir() and (path / "config.yaml").is_file()
+    except OSError:
+        return False
+
+
+# ---------------------------------------------------------------- bot templates (OMH's catalog, BOUNDARY rule 43)
+# The Add bot gallery lists OMH's bot templates from one fixed read, `omh profile bot-templates --json`
+# (`bot_template_catalog/v1`). omher keeps only what the gallery shows and never sends text from it: the one message a
+# Create sends is built in the page from the template id.
+OMH_TEMPLATES_ARGV = ("profile", "bot-templates", "--json")
+OMH_TEMPLATES_TIMEOUT = 30.0
+OMH_TEMPLATES_OUTPUT_MAX = 1024 * 1024
+BOT_TEMPLATE_CATALOG = "bot_template_catalog/v1"
+TEMPLATE_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
+TEMPLATES_MAX = 32
+
+
+def omh_path(which=None, environ=None) -> str | None:
+    """oh-my-hermes' own command: on PATH, else where its installer puts it (an app opened from the Dock has a short
+    PATH): `~/.local/bin/omh`, on Windows `%LOCALAPPDATA%\\omh\\bin\\omh.cmd` or `~\\.local\\bin\\omh.cmd`."""
+    import shutil
+    which = which or shutil.which
+    found = which("omh")
+    if found:
+        return found
+    env = os.environ if environ is None else environ
+    home = Path(env.get("USERPROFILE") or env.get("HOME") or Path.home())
+    if os.name == "nt":
+        local = env.get("LOCALAPPDATA")
+        places = ([Path(local, "omh", "bin", "omh.cmd")] if local else []) + [home / ".local" / "bin" / "omh.cmd"]
+    else:
+        places = [home / ".local" / "bin" / "omh"]
+    for p in places:
+        if p.is_file() and (os.name == "nt" or os.access(p, os.X_OK)):
+            return str(p)
+    return None
+
+
+def _template_row(t: object) -> dict | None:
+    """One template as the gallery shows it, or None for a row that is not one."""
+    if not isinstance(t, dict) or not isinstance(t.get("id"), str) or not TEMPLATE_ID.fullmatch(t["id"]):
+        return None
+    text = lambda v, n: _clip(" ".join(v.split()), n) if isinstance(v, str) else ""  # noqa: E731
+    rows = lambda v: [r for r in v if isinstance(r, dict)][:16] if isinstance(v, list) else []  # noqa: E731
+    return {
+        "id": t["id"],
+        "title": text(t.get("title"), 80) or t["id"],
+        "summary": text(t.get("summary"), 300),
+        "skills": [s for s in t.get("skills") or [] if isinstance(s, str) and TEMPLATE_ID.fullmatch(s)][:16],
+        "schedules": [{"name": text(r.get("job_name"), 80), "title": text(r.get("title"), 80)} for r in rows(t.get("schedules"))],
+        "webhooks": [text(r.get("title"), 120) for r in rows(t.get("webhooks"))],
+        "apps": [{"name": r["name"], "need": "required" if r.get("need") == "required" else "optional"}
+                 for r in rows(t.get("apps")) if isinstance(r.get("name"), str) and MCP_NAME.fullmatch(r["name"])],
+    }
+
+
+def read_bot_templates(omh: str | None, timeout: float = OMH_TEMPLATES_TIMEOUT) -> dict:
+    """`bots.templates`: {omh: ok|missing|old|failed, templates, line?}. One `omh profile bot-templates --json`, no
+    shell, nothing on stdin. An omh that does not know the command (it exits non-zero, or prints something that is not
+    the catalog) is `old`; the gallery then offers only a bot with no template."""
+    if not omh:
+        return {"omh": "missing", "templates": []}
+    try:
+        r = subprocess.run([omh, *OMH_TEMPLATES_ARGV], capture_output=True, timeout=timeout, stdin=subprocess.DEVNULL,
+                           env={**os.environ, "NO_COLOR": "1", "PYTHONIOENCODING": "utf-8"})
+    except subprocess.TimeoutExpired:
+        return {"omh": "failed", "templates": [], "line": f"oh-my-hermes did not answer in {int(timeout)} seconds."}
+    except OSError as e:
+        return {"omh": "failed", "templates": [], "line": _clip(f"oh-my-hermes could not be started: {e}", 300)}
+    if r.returncode != 0:
+        return {"omh": "old", "templates": []}
+    try:
+        payload = json.loads(r.stdout[:OMH_TEMPLATES_OUTPUT_MAX].decode("utf-8", errors="replace"))
+    except ValueError:
+        return {"omh": "old", "templates": []}
+    if not isinstance(payload, dict) or payload.get("schema_version") != BOT_TEMPLATE_CATALOG:
+        return {"omh": "old", "templates": []}
+    rows = [row for t in (payload.get("templates") or [])[:TEMPLATES_MAX] if (row := _template_row(t))]
+    return {"omh": "ok", "templates": rows}
 
 
 class PrStates:
@@ -6531,7 +6658,7 @@ class Bridge:
             "chat.set_model": self.op_set_model, "bots.ready": self.op_bots_ready,
             "bots.rename": self.op_bots_rename, "bots.avatar": self.op_bots_avatar,
             "bots.set_avatar": self.op_bots_set_avatar, "bots.info": self.op_bots_info,
-            "bots.page": self.op_bots_page,
+            "bots.page": self.op_bots_page, "bots.templates": self.op_bots_templates, "bots.create": self.op_bots_create,
             "skills.list": self.op_skills_list, "commands.list": self.op_commands_list, "links.places": self.op_links_places, "tasks.linear": self.op_tasks_linear,
             "folder.open": self.op_folder_open, "folder.close": self.op_folder_close,
             "folder.resume": self.op_folder_resume,
@@ -6562,6 +6689,7 @@ class Bridge:
         self.announce_media = False  # amain: tell the app (stdout) which files it may open
         self._restarting: set[str] = set()      # bots whose restart command runs now
         self._apps_busy: set[str] = set()       # bots whose `hermes mcp` run (rule 41) runs now
+        self._creating = False                  # a `hermes profile create` (rule 43) runs now
         self._refused: dict[str, float] = {}     # bot -> when Hermes last refused its restart (live work)
         self._reattaching: set[str] = set()     # bots that omher's own restart attaches again (`_reattach`)
         self._recovering: set[str] = set()      # bots a `_recover` looks for
@@ -8226,6 +8354,37 @@ class Bridge:
         another computer this op is forwarded to that computer's bridge (PEER_FORWARD), which reads its own files."""
         bot = self._bot(p.get("bot"))
         return await asyncio.to_thread(read_bot_page, bot["path"])
+
+    async def op_bots_templates(self, p) -> dict:
+        """Add bot's gallery: OMH's bot templates through one `omh profile bot-templates --json` (rule 43)."""
+        return await asyncio.to_thread(read_bot_templates, omh_path())
+
+    async def op_bots_create(self, p) -> dict:
+        """Add bot › Create: one `hermes -p default profile create <name>` on this computer (rule 43). The name is
+        checked against Hermes' rule and the disk first; the outcome is the folder Hermes made, and a failure shows
+        Hermes' own words. omher writes nothing in the new profile."""
+        name = p.get("name")
+        refusal = await asyncio.to_thread(new_profile_refusal, self.home, name)
+        if refusal:
+            raise BridgeError(*refusal)
+        if self._creating:
+            raise BridgeError("busy", "omher is still making another bot")
+        hermes = hermes_path()
+        if not hermes:
+            return {"outcome": "failed", "line": "Hermes is not on this computer."}
+        self._creating = True
+        try:
+            code, output = await asyncio.to_thread(run_hermes_profile_create, hermes, name, self.home, PROFILE_CREATE_TIMEOUT)
+        finally:
+            self._creating = False
+        if await asyncio.to_thread(new_profile_made, self.home, name):
+            return {"outcome": "ok", "bot": name}
+        said = hermes_said(output)
+        if code is None:
+            line = f"Hermes did not finish in {int(PROFILE_CREATE_TIMEOUT)} seconds." + (f"\n{said}" if said else "")
+        else:
+            line = said or f"Hermes exited with code {code}."
+        return {"outcome": "failed", "line": line}
 
     async def op_tasks_linear(self, p) -> dict:
         """Tasks › Linear: whether the bot has a Linear MCP server in its config (rule 33). Hermes' gateway offers no

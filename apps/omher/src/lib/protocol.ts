@@ -284,6 +284,32 @@ export interface AppSkill {
 }
 /** What one `hermes -p <bot> mcp install|login|remove <name>` came to, read back from the bot's files; a run that did
  *  not work carries Hermes' own words (`line`). */
+/** One of OMH's bot templates as Add bot's gallery shows it (`bots.templates`, from `omh profile bot-templates`). */
+export interface BotTemplate {
+  id: string;
+  title: string;
+  summary: string;
+  skills: string[];
+  /** The jobs applying it creates, each paused: its job name and a short title. */
+  schedules: { name: string; title: string }[];
+  webhooks: string[];
+  apps: { name: string; need: "required" | "optional" }[];
+}
+
+/** `bots.templates`: `missing` when no `omh` is on this computer, `old` when it predates bot templates. */
+export interface BotTemplates {
+  omh: "ok" | "missing" | "old" | "failed";
+  templates: BotTemplate[];
+  line?: string;
+}
+
+/** `bots.create`: `ok` once Hermes' new profile folder is there; otherwise Hermes' own words. */
+export interface BotCreate {
+  outcome: "ok" | "failed";
+  bot?: string;
+  line?: string;
+}
+
 export interface AppRun {
   outcome: "ok" | "failed";
   state: AppState;
@@ -498,6 +524,10 @@ export interface OpMap {
   "bots.info": { params: { bot: string }; result: BotInfo };
   /** The bot page's persona and memory files, read-only (BOUNDARY rule 42); a bot on another computer is read there. */
   "bots.page": { params: { bot: string }; result: BotPage };
+  /** OMH's bot templates for Add bot's gallery: one `omh profile bot-templates --json` read (BOUNDARY rule 43). */
+  "bots.templates": { params: Record<string, never>; result: BotTemplates };
+  /** Add bot › Create: Hermes' own `hermes -p default profile create <name>` on this computer (BOUNDARY rule 43). */
+  "bots.create": { params: { name: string }; result: BotCreate };
   /** The bot's skills from its profile folder (read-only), sorted by name. */
   "skills.list": { params: { bot: string }; result: { skills: Skill[] } };
   /** The slash commands Hermes answers for this bot, from Hermes' own registry (read-only). */
