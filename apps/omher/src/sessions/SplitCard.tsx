@@ -32,7 +32,8 @@ export interface RowMenuKit {
   Name: ComponentType<{ initial: string; auto: boolean; onDone: (title: string | null | undefined) => void }>;
 }
 
-/** The orbit's three strokes, head aligned: [length % of the edge, width px, opacity]. */
+/** The orbit's three strokes, head aligned: [length % of the edge, width px, opacity]. Drawn 1.25 px in, so the 2.5 px
+ *  head stays inside the cell's clip. */
 const ORBIT: readonly [number, number, number][] = [
   [20, 1.1, 0.35],
   [12, 1.7, 0.65],
@@ -108,7 +109,7 @@ const SplitCell = memo(function SplitCell({ rec, x, y, w, h, focused, agents, un
         <rect className="sc-edge" {...inRect(w, h, focused ? 0.75 : 0.6)} />
         {state === "work" &&
           ORBIT.map(([len, sw, op]) => (
-            <rect key={len} className={`sc-orbit sc-o${len}`} {...inRect(w, h, focused ? 3 : 1)} pathLength={100} strokeWidth={sw} opacity={op} strokeDasharray={`${len} ${100 - len}`} />
+            <rect key={len} className={`sc-orbit sc-o${len}`} {...inRect(w, h, focused ? 3 : 1.25)} pathLength={100} strokeWidth={sw} opacity={op} strokeDasharray={`${len} ${100 - len}`} />
           ))}
         {state === "bg" && <rect className="sc-dash" {...inRect(w, h, 1)} />}
         {state === "wait" && <rect className="sc-wait" {...inRect(w, h, 0.75)} pathLength={100} />}
