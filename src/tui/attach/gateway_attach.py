@@ -38,6 +38,12 @@ the stdio entry's in a closed set of places. `Adapter` translates those, after
 * `session.resume` asks for the display projection; a create or resume
   answer's `display_messages` are its `messages`, and an approval or clarify
   still open in it is sent as a request.
+* `session.resume` with `lazy` (the subagent session view's watch of a child,
+  which only Hermes' stdio entry serves) is answered here, never sent: the
+  owner refuses the key, and a plain resume would mount the child read-only
+  (empty while it runs) and become the session `shell.exec` runs in. The
+  refusal (REFUSED, LAZY_WATCH_UNSUPPORTED) moves nothing; the view reads that
+  child with `session.transcript {subagent_id, cursor}`, which passes through.
 * `session.close` is the owner's `session.detach` of this connection's view.
 * `prompt.submit` gets an `input_id` and the images queued for its session;
   one that truncates (a rewind) first reads the session's revision and
@@ -142,6 +148,8 @@ LIFECYCLE_EVENTS = frozenset({"session.info", "message.start", "message.complete
 # `useSessionLifecycle.ts`: the stamp of a view the TUI closes for good, applied once no other viewer is left.
 CLOSE_END_REASON = "tui_close"
 REFUSED = 4001  # the owner's own refusal code; not a drift code (4000, -32601), so the TUI keeps the session
+# `gateway_contract.LAZY_WATCH_UNSUPPORTED`, the same text: this file imports nothing of `omh`.
+LAZY_WATCH_UNSUPPORTED = "lazy watch unsupported on the shared gateway"
 PARAM_REJECTED = 4000
 STALE_GENERATION = "stale_generation"  # the owner's refusal of a control sent for a generation it has moved past
 NOT_FOUND = 4016  # the stdio entry's "image not found" / "unsupported image"
@@ -693,6 +701,8 @@ class Adapter:
         return [self._forward(request_id, "session.create", params)]
 
     def _resume(self, request_id: object, params: dict[str, Any]) -> list[Action]:
+        if "lazy" in params:
+            return [_refuse(request_id, REFUSED, LAZY_WATCH_UNSUPPORTED, {"reason": "lazy_watch_unsupported"})]
         params.pop("cols", None)
         params["display_projection"] = True
         return [self._forward(request_id, "session.resume", params)]

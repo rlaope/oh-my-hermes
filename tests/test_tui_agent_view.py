@@ -58,10 +58,20 @@ def agent_event(app: App, kind: str, subagent_id: str = FIRST, **changes: object
     app._on_event(Event(f"subagent.{kind}", SID, payload(subagent_id, **changes)))
 
 
-def agent_app(*, busy: bool = True, frames: list[tuple[str, dict[str, object]]] = STARTS, **options: object) -> tuple[App, RecordingClient]:
-    """An app at clock 0 whose live session has the recorded agents running."""
+def agent_app(
+    *, busy: bool = True, frames: list[tuple[str, dict[str, object]]] = STARTS, session_view: bool = False,
+    **options: object,
+) -> tuple[App, RecordingClient]:
+    """An app at clock 0 whose live session has the recorded agents running.
+
+    Enter and a click on an agent open its session on the main screen, and its log in the pager only where that
+    read is refused (`AgentViewMixin._open_agent`, pinned in `test_tui_agent_session_view`). The recorded agents all
+    have a child session, so by default the opener here is the log's, the view's fallback, which these modules pin;
+    `session_view` keeps the real one."""
     options.setdefault("clock", lambda: 0.0)
     app, client = make_app(busy=busy, **options)
+    if not session_view:
+        app._open_agent = app._open_agent_log  # type: ignore[method-assign]
     relay(app, frames)
     return app, client
 
