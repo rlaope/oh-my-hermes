@@ -138,6 +138,8 @@ src/
 
   maintenance/
     doctor.py
+    gateway_health.py
+    hermes_gateway_formats.py
     probe.py
     release.py
 
