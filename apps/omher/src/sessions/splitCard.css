@@ -1,4 +1,4 @@
-/* The TERMINALS split card (SplitCard.tsx). Theme tokens only; the attention colour is the row's bell colour, with a
+/* The TERMINALS split card (SplitLayoutCard.tsx). Theme tokens only; the attention colour is the row's bell colour, with a
    darker one on light. Motion: keyframes on SVG strokes (pathLength 100 for the orbit) and on opacity, nothing else. */
 .split-card {
   --sc-attn: #e8a33c;

@@ -167,7 +167,7 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   week's mentions, for the GitHub accounts you add in Settings › Accounts › GitHub (the ones your `gh` is signed in
   to), with what needs action first; the sidebar's Tasks row counts the review requests. A non-active `gh` account is
   read with its token passed only to that one `gh` call (`BOUNDARY.md` rules 18 and 33).
-- **Split card** (`src/sessions/SplitCard.tsx`, `splitCard.ts`): while the search box is empty, each TERMINALS split
+- **Split card** (`src/sessions/SplitLayoutCard.tsx`, `splitCard.ts`): while the search box is empty, each TERMINALS split
   (2 to 4 panes) is one card at the top of the list, drawn like the split itself: one cell per pane in its real place and
   proportions, each with the CLI's mark, the session's name and its last line. Its members are not listed again as rows.
   Text follows the cell's size: name and mark on one line in a short cell, mark beside the name in a normal one, and the

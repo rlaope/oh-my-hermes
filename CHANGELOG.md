@@ -287,7 +287,7 @@ All notable changes will be documented here.
   work, a blinking amber edge when it waits for you, red on error), with how long a busy cell has run after a minute.
   A click focuses a pane, a right-click opens the row menu, and a grip under the card sets its height, kept with the
   split (`SplitGroup.mapH` in `omher.splits`). Animation is CSS only and stops under reduced motion. Terminals that
-  report no background work never show the dashed edge. (`apps/omher/src/sessions/SplitCard.tsx`) (#TBD)
+  report no background work never show the dashed edge. (`apps/omher/src/sessions/SplitLayoutCard.tsx`) (#TBD)
 
 ## 5.0.0 - 2026-11-21
 

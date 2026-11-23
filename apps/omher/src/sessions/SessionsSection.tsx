@@ -23,8 +23,7 @@ import { AgentMark } from "./AgentMark";
 import { agentDef, agentLabel, draftFolder, folderChoices, folderName, hermesOnly, installLine, isTerminalRec, menuFocus, menuOrder, missingNote, parentPath, SHELL, splitPaneName, termActivity, termFallbackName, terminalAgents, termMarkAgent, termStatus, tildePath, type AgentId, type AgentInfo, type RowMark, type SessionRec, type TermStatus, type Unseen } from "./agents";
 import { TermRowMark } from "./TermRowMark";
 import { SplitGlyph, splitWith, useSplit, useSplitPrune } from "./SplitView";
-// `.jsx` names SplitCard.tsx alone: a bare "./SplitCard" is splitCard.ts on a case-insensitive disk
-import { SplitCard, type RowMenuKit } from "./SplitCard.jsx";
+import { SplitCard, type RowMenuKit } from "./SplitLayoutCard";
 import { pressToSplit } from "./splitDrag";
 import { groupOf, groupSessions, paneOf } from "./splitState";
 import type { Layout } from "../terminal/layout";
