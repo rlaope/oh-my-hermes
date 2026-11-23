@@ -300,6 +300,17 @@ All notable changes will be documented here.
   sees the lock the caller holds. Results recorded before this fix overstate false alarms on this case.
   (`benchmarks/review-false-alarms/corpus/trap-lock-held-by-caller`)
 
+- **Enter on a subagent in the OMH TUI shows its session on the main screen, as Claude Code shows a teammate's.**
+  Before, Enter in the agent list opened a read-only log in a pager, and the only way to talk to a subagent was `s`
+  then a line. Now Enter (or a click, or Enter on a dag node's child) shows a dim `› From main` row, the brief as the
+  first prompt, the tool rows, the reply, and the agent's own working row while it runs. The composer's top rule ends
+  with the agent's name and reads `Message @<name>…`. What you send goes to that agent: a steer while it runs; once it
+  ended, on Hermes' stdio gateway a turn that continues it, while the shared gateway says it cannot continue it and
+  keeps your text. Esc, or the list's `main` row, goes back to main, whose transcript kept everything meanwhile; the
+  list marks the agent shown `⏺` and the rest `◯`, and its hint reads `⏎ view · x stop · s steer · esc back`. Where
+  Hermes cannot show the session the log pager opens as before. (`src/tui/subagent_session.py`,
+  `src/tui/agent_view.py`, `src/tui/app.py`, `src/tui/frame.py`)
+
 ## 5.0.0 - 2026-11-21
 
 - **A mise-managed `codex` or `python3` runs again in `omh coding run`.** mise links every tool it manages to one

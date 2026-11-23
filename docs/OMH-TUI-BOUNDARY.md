@@ -287,6 +287,24 @@ child, act on that agent, and only on the person's keypress: `x` interrupts it
 (`subagent.steer`) with text the person then types and sends; the TUI never
 interrupts, steers or answers for a subagent on its own.
 
+Enter on an agent (the list, a click on its row, a tree node's child) shows
+that subagent's session on the main screen, as Claude Code shows a
+teammate's, and only on the person's key. What it reads depends on the
+gateway: on Hermes' stdio entry, `session.resume` of the child's session with
+`lazy: true`, which answers its history and an agent-less watch session whose
+mirrored `message.*` and `tool.*` events the view draws; on the shared gateway,
+`session.transcript` with the parent session and the `subagent_id`, read
+forward from its cursor at most once a second while the child runs and the
+view is open. A plain resume of a child is never sent (on the shared gateway
+it would mount the child and move the attach adapter's current session).
+What it sends, only when the person presses Enter in the view: `subagent.steer`
+while the child runs, and after it ended `prompt.submit` on the watch session
+(stdio only; the shared gateway cannot continue a child, and the view says so
+and sends nothing). Leaving the view (Esc, `main`, a session switch, `/new`, a
+restart) sends `session.close` for the watch session. A refused read falls back
+on the agent's log above. Main's transcript keeps folding every main event
+while a subagent is on screen.
+
 The waiting row above the composer between turns (`src/tui/wait_kinds.py`)
 names what the session waits on from what the TUI already holds, read-only:
 the words of a background process's command as Hermes' `processes.json`

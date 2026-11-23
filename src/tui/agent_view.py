@@ -12,14 +12,17 @@ info line counts them (`3 agents · ↓ agents`). Down on an empty composer give
 the keys to the view's rows, which become a list the person picks from as
 from a picker: the composer's rows are drawn blank while it is open (so
 nothing moves), and the info line says its keys. Every key goes to the list
-then; a key it does not bind does nothing. Enter or a click opens one
-agent's log in the pager. In a dag run Down gives the keys to the tree
+then; a key it does not bind does nothing. Enter or a click shows that
+agent's session on the main screen (`subagent_session`, `_open_agent`): what
+the person sends there goes to it, Esc or the list's `main` row goes back, and
+where Hermes refuses the read the agent's log opens in the pager instead. In a
+dag run Down gives the keys to the tree
 instead (`_tree_key`): its rows fold and unfold, and Enter, `x` and `s` act
 on the highlighted node's child as the list's keys do. The log is
 read-only: `subagent.tail` is asked for the open agent while it runs, at most
 every `TAIL_POLL_SECONDS`, and no more once `TAIL_MISSES_BEFORE_STOP` answers
-in a row had no tail, until that agent sends a frame; nothing is ever sent to
-a subagent. On the main screen the OMH TUI takes the mouse wherever the row a
+in a row had no tail, until that agent sends a frame; nothing is sent to a
+subagent but what the person types (`x`, `s`, a line in its session view). On the main screen the OMH TUI takes the mouse wherever the row a
 report lands on is certain (the owner's decision of 2026-11-11, back from the
 one of 2026-11-06): a drag selects and copies without the rail, and the wheel
 up hands the mouse to the terminal until the next key (`App._screen_mouse`). With `OMH_TUI_MOUSE=0`
