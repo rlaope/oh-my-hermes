@@ -77,9 +77,11 @@ Asking needs someone to answer. In a delegated child, a single-query
 `hermes chat -q` process, or a programmatic platform (`webhook`,
 `msgraph_webhook`, `api_server`), the rule blocks instead, as a `block` rule
 would: there the host answers the prompt from config, and at
-`approvals.unattended_mode: approve` it would run the call. A plugin cannot
-tell a cron turn apart, so a cron turn is asked, and the host's
-`approvals.cron_mode` answers it. A `repeat: "once"` ask rule is used up the
+`approvals.unattended_mode: approve` it would run the call. An ask rule does
+not yet treat a cron turn as unattended (OMH records its platform as `cron`,
+but the ask predicate does not read it), so a cron turn is asked, and the
+host's `approvals.cron_mode` answers it. The PR delivery gate does hold cron
+as unattended ([PR Delivery Grant](PR-DELIVERY-GRANT.md)). A `repeat: "once"` ask rule is used up the
 first time it asks or blocks in a session. OMH never sees how a prompt was
 answered.
 

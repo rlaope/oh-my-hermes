@@ -109,10 +109,18 @@ def opened_prs_path(omh_home: str | Path, hermes_home: str | Path) -> Path:
 
 
 def _load_object(path: Path) -> tuple[dict | None, str]:
-    """(document, reason): a document only when the file is a readable JSON object."""
+    """(document, reason): a document only when the file is a readable JSON object.
+
+    On POSIX the file must also belong to the user running OMH and be
+    writable by nobody else; on Windows the mode bits say nothing, so this
+    check does not apply there.
+    """
     try:
-        if path.stat().st_size > MAX_GRANT_BYTES:
+        info = path.stat()
+        if info.st_size > MAX_GRANT_BYTES:
             return None, "grant_file_too_large"
+        if os.name == "posix" and (info.st_uid != os.getuid() or info.st_mode & 0o022):
+            return None, "grant_file_not_private"
         raw = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return None, "no_grant_recorded"
@@ -221,27 +229,34 @@ def parse_pr_url(text: str) -> tuple[str, int] | None:
     return f"{host}/{owner}/{name}".lower(), int(number)
 
 
-def opened_prs(omh_home: str | Path, hermes_home: str | Path) -> frozenset[tuple[str, int]]:
-    """(`host/owner/name`, number) of every PR this profile's gate recorded as opened."""
+def _opened_rows(omh_home: str | Path, hermes_home: str | Path) -> list[dict]:
     try:
         path = opened_prs_path(omh_home, hermes_home)
         if path.stat().st_size > MAX_OPENED_BYTES:
-            return frozenset()
+            return []
         lines = path.read_text(encoding="utf-8").splitlines()[-MAX_OPENED_RECORDS:]
     except (OSError, RuntimeError, ValueError, UnicodeDecodeError):
-        return frozenset()
-    found: set[tuple[str, int]] = set()
+        return []
+    rows: list[dict] = []
     for line in lines:
         try:
             row = json.loads(line)
         except ValueError:
             continue
-        if not isinstance(row, dict) or row.get("schema_version") != OPENED_PR_SCHEMA_VERSION:
-            continue
-        parsed = parse_pr_url(str(row.get("url") or ""))
-        if parsed is not None:
-            found.add(parsed)
-    return frozenset(found)
+        if isinstance(row, dict) and row.get("schema_version") == OPENED_PR_SCHEMA_VERSION:
+            rows.append(row)
+    return rows
+
+
+def opened_prs(omh_home: str | Path, hermes_home: str | Path) -> frozenset[tuple[str, int]]:
+    """(`host/owner/name`, number) of every PR this profile's gate recorded as opened."""
+    found = (parse_pr_url(str(row.get("url") or "")) for row in _opened_rows(omh_home, hermes_home))
+    return frozenset(parsed for parsed in found if parsed is not None)
+
+
+def opened_count(omh_home: str | Path, hermes_home: str | Path, session_id: str) -> int:
+    """How many PRs the gate recorded as opened by this session: the per-run cap reads it."""
+    return sum(1 for row in _opened_rows(omh_home, hermes_home) if row.get("session_id") == session_id)
 
 
 def append_opened_pr(

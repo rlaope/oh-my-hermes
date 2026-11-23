@@ -32,6 +32,7 @@ from _local_package import load_local_package
 
 load_local_package()
 
+from omh.commands import pr_delivery as pr_delivery_cli  # noqa: E402
 from omh.plugin_bundle.omh import pr_delivery  # noqa: E402
 from omh.plugin_bundle.omh import pr_delivery_gate as gate  # noqa: E402
 from omh.plugin_bundle.omh.hooks import nudge_budget, session_attendance  # noqa: E402
@@ -72,9 +73,12 @@ class _Home(unittest.TestCase):
         cwd.start()
         self.addCleanup(cwd.stop)
 
-    def cli(self, *argv: str, hermes: Path | None = None):
-        code, stdout, stderr = run_cli(["--omh-home", str(self.home), "--hermes-home", str(hermes or self.hermes),
-                                        "capability-policy", "pr-delivery", *argv], output_json=False)
+    def cli(self, *argv: str, hermes: Path | None = None, typed_yes: bool = True):
+        # `on` asks for a yes on the controlling terminal; the test stands in for the person typing it.
+        with mock.patch.object(pr_delivery_cli, "confirm_on_terminal", return_value=typed_yes):
+            code, stdout, stderr = run_cli(["--omh-home", str(self.home), "--hermes-home",
+                                            str(hermes or self.hermes), "capability-policy", "pr-delivery", *argv],
+                                           output_json=False)
         return SimpleNamespace(code=code, stdout=stdout, stderr=stderr)
 
     def grant_on(self, prefix: str = "bot/") -> None:
@@ -175,6 +179,23 @@ class CliTests(_Home):
                 self.assertIn("Only the person", result.stdout)
         self.assertFalse(pr_delivery.grant_path(self.home, self.hermes).exists())
 
+    def test_on_needs_a_yes_typed_at_the_terminal(self):
+        result = self.cli("on", typed_yes=False)
+        self.assertEqual(result.code, 2)
+        self.assertIn("typed at your own terminal", result.stdout)
+        self.assertFalse(pr_delivery.grant_path(self.home, self.hermes).exists())
+        # With no controlling terminal (a gateway or cron child) the confirmation is a no.
+        with mock.patch("builtins.open", side_effect=OSError("no tty")), mock.patch.object(os, "name", "posix"):
+            self.assertFalse(pr_delivery_cli.confirm_on_terminal("yes? "))
+
+    def test_a_grant_file_others_can_write_reads_off(self):
+        if os.name != "posix":
+            self.skipTest("mode bits mean nothing on Windows")
+        self.grant_on()
+        path = pr_delivery.grant_path(self.home, self.hermes)
+        path.chmod(0o666)
+        self.assertEqual(self.state()["reason"], "grant_file_not_private")
+
     def test_an_invalid_prefix_is_refused(self):
         result = self.cli("on", "--branch-prefix", "main")
         self.assertEqual(result.code, 2)
@@ -243,10 +264,31 @@ class AttendedSessionTests(_Home):
             with self.subTest(command=command):
                 self.assertIsNone(self.terminal(command))
 
-    def test_a_cron_turn_reads_as_attended_so_the_gate_cannot_hold_it(self):
-        # A plugin cannot see the cron marker (`session_attendance`); a session
-        # whose platform was never recorded is the cron case. Stated, not fixed.
-        self.assertIsNone(self.terminal("git push origin HEAD:main", session="cron_job_session"))
+    def test_a_cron_turn_is_held_as_unattended(self):
+        # Hermes builds every cron agent with platform="cron", and pre_llm_call
+        # records it (`session_attendance.note_session_platform`).
+        session = "cron_widgets-pr-42_20261124_101010"
+        session_attendance.note_session_platform(session, "cron")
+        self.assertEqual(self.terminal("git push origin HEAD:main", session=session)["action"], "block")
+        directive = self.terminal("git push origin HEAD:refs/heads/bot/x", session=session)
+        self.assertIn("grant is off", directive["message"])
+        self.grant_on()
+        self.assertIsNone(self.terminal("git push origin HEAD:refs/heads/bot/x", session=session))
+        self.assertEqual(self.terminal("gh pr merge 42", session=session)["action"], "block")
+
+    def test_a_session_whose_platform_is_subagent_is_a_child(self):
+        self.grant_on()
+        session_attendance.note_session_platform("child-2", "subagent")
+        directive = self.terminal("git push origin HEAD:refs/heads/bot/x", session="child-2")
+        self.assertIn("A delegated child does not carry the PR delivery grant", directive["message"])
+
+    def test_developing_this_repo_through_hermes_is_not_refused(self):
+        session_attendance.note_session_platform(SESSION, "cli")
+        for command in ("uv run python -m unittest tests/test_pr_delivery_grant.py",
+                        "cat src/plugin_bundle/omh/pr_delivery.py", "grep -rn pr_delivery src",
+                        'git commit -m "docs: explain pr-delivery on and off"'):
+            with self.subTest(command=command):
+                self.assertIsNone(self.terminal(command))
 
     def test_turning_the_grant_on_or_off_is_refused_in_every_session(self):
         session_attendance.note_session_platform(SESSION, "cli")
@@ -256,6 +298,17 @@ class AttendedSessionTests(_Home):
             "uv run python -P -m omh.cli capability-policy pr-delivery off",
             "sh -c 'omh capability-policy pr-delivery on'",
             "echo '{}' > ~/.omh/runtime/pr_delivery/grant-0123456789abcdef.json",
+            "echo a#b; env -u HERMES_SESSION_ID omh capability-policy pr-delivery on",
+            "X=on; env -u HERMES_SESSION_ID omh capability-policy pr-delivery $X",
+            "env -u HERMES_SESSION_ID omh capability-policy pr-delivery $'on'",
+            "omh capability-policy pr-delivery `echo on`",
+            "printf on | env -u HERMES_SESSION_ID xargs omh capability-policy pr-delivery",
+            "P=pr-delivery; omh capability-policy $P on",
+            "cat > ~/.omh/runtime/pr_deliv''ery/grant-0123456789abcdef.json < /tmp/forged.json",
+            "cp /tmp/forged.json ~/.omh/runtime/pr_*/grant-0123456789abcdef.json",
+            "cd ~/.omh/runtime && cp /tmp/f.json pr_deliver?/grant-x.json",
+            "echo x >> ~/.omh/runtime/PR_DELIVERY/opened-x.jsonl",
+            "ln -s ~/.omh/runtime/pr_deliv''ery /tmp/s",
         )
         for command in refused:
             with self.subTest(command=command):
@@ -263,9 +316,16 @@ class AttendedSessionTests(_Home):
                 self.assertIsNotNone(directive)
                 self.assertEqual(directive["action"], "block")
                 self.assertIn("Only the person", directive["message"])
-        code = self.pre("execute_code", {"code": "open('runtime/pr_delivery/grant.json','w').write('{}')"})
-        self.assertEqual(code["action"], "block")
-        self.assertIsNone(self.terminal("omh capability-policy pr-delivery show"))
+        for code in ("open('runtime/pr_delivery/grant.json','w').write('{}')",
+                     "p = '~/.omh/runtime/pr_' + 'delivery'",
+                     "subprocess.run(['omh', 'capability-policy', 'pr-' + 'delivery', 'on'], env={})"):
+            with self.subTest(code=code):
+                self.assertEqual(self.pre("execute_code", {"code": code})["action"], "block")
+        submitted = self.pre("process", {"action": "submit", "session_id": "p1",
+                                         "data": "omh capability-policy pr-delivery on"})
+        self.assertEqual(submitted["action"], "block")
+        # Whatever the verb: the bot reads the grant through omh_status, never the CLI.
+        self.assertIsNotNone(self.terminal("omh capability-policy pr-delivery show"))
 
     def test_a_file_tool_write_into_the_store_is_refused(self):
         target = self.home / "runtime" / "pr_delivery" / "grant-0123456789abcdef.json"
@@ -324,12 +384,12 @@ class UnattendedMatrixTests(_Home):
         "git push origin": gate.UNQUALIFIED,
         "git push origin HEAD": gate.UNQUALIFIED,
         "git push -u origin bot/fix-ci": gate.UNQUALIFIED,
-        "git push origin HEAD:$BRANCH": gate.UNQUALIFIED,
+        "git push origin HEAD:$BRANCH": gate.UNCLASSIFIED,
         "gh pr create --fill": gate.UNQUALIFIED,
         "gh pr comment 42 --body hi": gate.UNQUALIFIED,
         "sh -c 'git push -f origin HEAD:bot/x'": gate.FORCE_PUSH,
         "bash -lc 'git push origin HEAD:main'": gate.PUSH_OUTSIDE,
-        "env GIT_TRACE=1 git push origin HEAD:main": gate.PUSH_OUTSIDE,
+        "env GIT_TRACE=1 git push origin HEAD:main": gate.UNCLASSIFIED,
         "timeout 60 git push origin HEAD:main": gate.PUSH_OUTSIDE,
         "eval 'git push origin HEAD:main'": gate.PUSH_OUTSIDE,
         "git add -A\ngit push origin HEAD:main": gate.PUSH_OUTSIDE,
@@ -345,12 +405,82 @@ class UnattendedMatrixTests(_Home):
         "python3 -c \"import subprocess; subprocess.run(['git', 'push', 'origin', 'HEAD:main'])\"": gate.UNCLASSIFIED,
         "cat <<EOF | sh\ngit push origin HEAD:main\nEOF": gate.UNCLASSIFIED,
         "gh extension-thing do-it": gate.UNCLASSIFIED,
+        # Review of record for #3154: each of these reached a never-allowed effect before.
+        "echo a#b; git push origin HEAD:main": gate.PUSH_OUTSIDE,
+        "git status a#b; git push -f origin HEAD:main": gate.FORCE_PUSH,
+        "git push origin HEAD:refs/heads/bot/x#y; git push -f origin HEAD:main": gate.FORCE_PUSH,
+        "git status # <<\ngit push -f origin HEAD:main": gate.UNCLASSIFIED,
+        "git status <<EOF\nEOF\ngit push -f origin HEAD:main": gate.UNCLASSIFIED,
+        "git log --format='<<'\ngh pr merge 42": gate.UNCLASSIFIED,
+        "gh pr view 42 # <<\ngh pr merge 42 --admin": gate.UNCLASSIFIED,
+        "gh pr merge 42 -b -h": gate.FORGE_MERGE,
+        "gh pr merge 42 --body -h --squash": gate.FORGE_MERGE,
+        "gh api -X PUT repos/o/r/pulls/1/merge -H -h": gate.FORGE_MERGE,
+        "gh api -X PUT -f -h repos/o/r/pulls/1/merge": gate.FORGE_MERGE,
+        "git rebase HEAD~1 -x 'true' -x 'git push -f origin HEAD:main'": gate.FORCE_PUSH,
+        "git bisect run sh -c 'git push -f origin HEAD:main'": gate.FORCE_PUSH,
+        "git -c core.sshCommand='git push --force origin HEAD:main' fetch origin": gate.UNCLASSIFIED,
+        "GIT_SSH_COMMAND='git push -f origin HEAD:main' git fetch origin": gate.UNCLASSIFIED,
+        "GIT_SSH_COMMAND=x git push origin HEAD:refs/heads/bot/x": gate.UNCLASSIFIED,
+        "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.sshCommand GIT_CONFIG_VALUE_0=x git fetch": gate.UNCLASSIFIED,
+        "export GIT_SSH_COMMAND='git push -f origin HEAD:main'": gate.UNCLASSIFIED,
+        "git fetch --upload-pack='git push -f origin HEAD:main' origin": gate.UNCLASSIFIED,
+        "git clone -u 'sh -c x' https://example.invalid/r.git": gate.UNCLASSIFIED,
+        "gh repo clone o/r -- --upload-pack=x": gate.UNCLASSIFIED,
+        "git -c protocol.ext.allow=always fetch 'ext::sh -c x'": gate.UNCLASSIFIED,
+        "git fetch 'ext::sh -c x'": gate.UNCLASSIFIED,
+        "git difftool -x 'git push -f origin HEAD:main'": gate.UNCLASSIFIED,
+        "git grep -O'git push -f' x": gate.UNCLASSIFIED,
+        "git push --receive-pack='sh -c x' ../r HEAD:refs/heads/bot/x": gate.UNCLASSIFIED,
+        "git --exec-path=/tmp/evil push origin HEAD:refs/heads/bot/x": gate.UNCLASSIFIED,
+        "git push origin $'+HEAD:refs/heads/bot/x'": gate.UNCLASSIFIED,
+        "$'\\x67it' push -f origin HEAD:main": gate.UNCLASSIFIED,
+        "$GIT push origin HEAD:main": gate.UNCLASSIFIED,
+        "G=git; $G push origin HEAD:main": gate.UNCLASSIFIED,
+        "GIT push origin HEAD:main": gate.PUSH_OUTSIDE,  # a case-insensitive file system finds git
+        "gh pr comment 42 -R acme/widgets --repo other/r -b x": gate.OTHER_PR_OR_REPO,
+        "GH_REPO=other/repo gh pr create --head bot/x --title t --body b": gate.UNCLASSIFIED,
+        "env GH_REPO=victim/repo gh pr create --head bot/x --title t --body b": gate.UNCLASSIFIED,
+        "GH_HOST=evil.example gh pr create --head bot/x --title t --body b": gate.UNCLASSIFIED,
+        "git push -o merge_request.create -o merge_request.merge_when_pipeline_succeeds origin HEAD:refs/heads/bot/x":
+            gate.OTHER_PR_OR_REPO,
+        "gh pr create --head bot/x --title t --body b; gh pr create --head bot/y --title t --body b":
+            gate.UNCLASSIFIED,
+        "gh pr create --head bot/x --title t --body b && echo done": gate.UNCLASSIFIED,
+        f"gh pr comment {URL} -b '/merge'": gate.FORGE_MERGE,
+        f"gh pr comment {URL} -b '@dependabot merge'": gate.FORGE_MERGE,
+        f"gh pr comment {URL} -b 'bors r+'": gate.FORGE_MERGE,
+        "gh pr create --head bot/x --label automerge --title t --body b": gate.OTHER_PR_OR_REPO,
+        "gh pr create --head bot/x --body-file /etc/passwd --title t": gate.UNCLASSIFIED,
+        "gh auth token": gate.UNCLASSIFIED,
+        "gh auth status -t": gate.UNCLASSIFIED,
+        "gh auth setup-git": gate.UNCLASSIFIED,
+        "gh auth refresh -s delete_repo": gate.UNCLASSIFIED,
+        "git() { command git push -f origin HEAD:main; }": gate.UNCLASSIFIED,
+        "gh () { echo https://github.com/victim/r/pull/9; }": gate.UNCLASSIFIED,
+        "alias git='git push -f origin HEAD:main'": gate.UNCLASSIFIED,
+        "git config core.sshCommand 'sh -c x'": gate.UNCLASSIFIED,
+        "git config core.hooksPath /tmp/hooks": gate.UNCLASSIFIED,
+        "git remote set-url origin https://example.invalid/victim.git": gate.UNCLASSIFIED,
+        "git push https://github.com/victim/repo.git HEAD:refs/heads/bot/x": gate.PUSH_OUTSIDE,
+        "git push upstream HEAD:refs/heads/bot/x": gate.PUSH_OUTSIDE,
+        "gh api -X GET -f query='mutation{mergePullRequest}' graphql": gate.OTHER_PR_OR_REPO,
+        "gh repo set-default other/repo": gate.UNCLASSIFIED,
+        "sh <<< 'git push origin HEAD:main'": gate.UNCLASSIFIED,
+        "bash -c \"$CMD\"": gate.UNCLASSIFIED,
+        "echo Z2l0IHB1c2g= | base64 -d | sh": gate.UNCLASSIFIED,
+        "curl -X PUT -H 'Authorization: token x' https://api.github.com/repos/o/r/pulls/1/merge":
+            gate.OTHER_PR_OR_REPO,
+        "git push --dry-run=no origin HEAD:main": gate.UNCLASSIFIED,
+        "git push origin HEAD:refs/heads/bot/x:refs/heads/main": gate.UNQUALIFIED,
     }
     LOCAL = (
         "git status", "git diff --stat", "git commit -m 'fix: ci'", "git fetch origin", "git log -1",
-        "git push --dry-run origin HEAD:main", "git push --help", "gh pr view 42 --json state",
+        "git push --dry-run origin HEAD:main", "gh pr view 42 --json state",
         "gh pr checks 42", "gh run view 7 --log-failed", "gh api repos/acme/widgets/pulls/42",
         "gh api -X GET repos/acme/widgets/pulls -f state=open", "ls -la", "cat README.md",
+        "git config user.email bot@example.invalid", "git config --get remote.origin.url", "git remote -v",
+        "gh auth status", "gh repo set-default --view", "git push origin HEAD:refs/heads/bot/x --dry-run",
     )
 
     def setUp(self) -> None:
@@ -414,6 +544,32 @@ class UnattendedMatrixTests(_Home):
                 self.assertEqual(self.terminal("git push origin HEAD:main", session=session)["action"], "block")
                 self.assertEqual(self.terminal("gh pr merge 42", session=session)["action"], "block")
 
+    def test_a_second_pr_in_one_session_is_a_persons(self):
+        self.grant_on()
+        self._record_opened(URL, session=SESSION)
+        directive = self.terminal("gh pr create --head bot/second --title t --body b")
+        self.assertIn("already opened a pull request", directive["message"])
+        session_attendance.note_session_platform("other-run", "webhook")
+        self.assertIsNone(self.terminal("gh pr create --head bot/second --title t --body b", session="other-run"))
+
+    def test_process_stdin_is_read_as_a_command_line(self):
+        self.grant_on()
+        submit = self.pre("process", {"action": "submit", "session_id": "p1", "data": "git push -f origin HEAD:main"})
+        self.assertEqual(submit["action"], "block")
+        partial = self.pre("process", {"action": "write", "session_id": "p1", "data": "git pu"})
+        self.assertEqual(partial["action"], "block")
+        self.assertIsNone(self.pre("process", {"action": "submit", "session_id": "p1", "data": "git status"}))
+        self.assertIsNone(self.pre("process", {"action": "poll", "session_id": "p1"}))
+
+    def test_mcp_forge_writes_and_git_dir_writes_are_held(self):
+        self.grant_on()
+        self.assertEqual(self.pre("mcp_github_merge_pull_request", {"pull_number": 42})["action"], "block")
+        self.assertEqual(self.pre("mcp_github_push_files", {"branch": "main"})["action"], "block")
+        self.assertIsNone(self.pre("mcp_github_get_pull_request", {"pull_number": 42}))
+        hook = self.pre("write_file", {"path": "repo/.git/hooks/pre-push", "content": "#!/bin/sh\n"})
+        self.assertEqual(hook["action"], "block")
+        self.assertIsNone(self.pre("write_file", {"path": "repo/src/app.py", "content": "x = 1\n"}))
+
     def test_a_delegated_child_does_not_carry_the_grant(self):
         self.grant_on()
         child = "child-session-1"
@@ -446,9 +602,9 @@ class UnattendedMatrixTests(_Home):
         session_attendance.note_session_platform(SESSION, "cli")
         self.assertEqual(self.terminal("omh capability-policy pr-delivery on")["action"], "block")
 
-    def _record_opened(self, url: str) -> None:
+    def _record_opened(self, url: str, session: str = "an-earlier-run") -> None:
         self.assertTrue(pr_delivery.append_opened_pr(self.home, self.hermes, url=url, head_branch="bot/fix-ci",
-                                                     session_id=SESSION))
+                                                     session_id=session))
 
 
 class OpenedPrRecordTests(_Home):
@@ -516,7 +672,7 @@ class StatedContractTests(unittest.TestCase):
             self.assertIn(phrase, body)
         reference = (ROOT / "skills/omh-github-event-ops/references/pr-watch.md").read_text(encoding="utf-8")
         for phrase in ("## 7. Delivering the bot's own PR", "| comment on a PR it opened | act on a PR it did not "
-                       "open, or change repository settings |", "cannot tell"):
+                       "open, or change repository settings |", "a watch job or any\ncron turn"):
             self.assertIn(phrase, reference)
         for action in ("push a new branch under the grant's prefix", "open a PR from that branch",
                        "push fix commits to a PR it opened", "force-push, or delete a remote branch",

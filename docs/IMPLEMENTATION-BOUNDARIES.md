@@ -152,12 +152,13 @@ stays in `AGENTS.md`, where `tests/test_paired_run_arm_home.py` reads it.
   not carry it, and its only writer is the CLI. OMH's `pre_tool_call` hook
   (`src/plugin_bundle/omh/pr_delivery_gate.py`) refuses a command that would
   change the grant in every session, and in a session where
-  `session_attendance` can tell nobody can answer (a programmatic platform, a
-  single-query process, a delegated child) refuses the never-allowed classes
-  whatever the grant says, the allowed ones while it is off, a push or PR that
-  does not name its destination, and a command it cannot classify. A cron
-  turn cannot be told apart by a plugin, so there the skill text, the PR
-  watch's fix-round cap and Hermes' own `approvals.cron_mode` bound the run.
+  nobody can answer (a programmatic platform, a cron turn, a single-query
+  process, a delegated child) refuses the never-allowed classes whatever the
+  grant says, the allowed ones while it is off, a push or PR that does not
+  name its destination, and a command it cannot classify. It holds a
+  cooperating model against mistakes and naive injected instructions; it is
+  not a boundary against a model that sets out to evade it (a script file, a
+  persistent-shell function, an HTTP client with a token).
   "A PR this bot opened" is OMH's record of the URL a grant-allowed `gh pr
   create` printed, never the model's word. The matrix and its residuals are in
   [`docs/PR-DELIVERY-GRANT.md`](PR-DELIVERY-GRANT.md);

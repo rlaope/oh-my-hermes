@@ -1,73 +1,68 @@
 """What an unattended run may publish to a forge, held at `pre_tool_call`.
 
-The matrix (owner-approved, 2026-11-23; `docs/PR-DELIVERY-GRANT.md` states it
-for people). Rows are session kinds as `session_attendance` can tell them;
-columns are what a `terminal` command does on the forge.
+Owner-approved, 2026-11-23; `docs/PR-DELIVERY-GRANT.md` states the matrix for
+people. Rows are session kinds; columns are what a command does on the forge.
 
 * **Attended** (a person can answer a prompt): this gate has no opinion. The
   person is there and Hermes' own approvals apply.
-* **Unattended** (a programmatic platform such as `webhook` or `api_server`,
-  or a single-query `hermes chat -q` process):
-  - grant-covered: a push whose every destination is spelled
-    `<src>:refs/heads/<prefix>...` with no force; `gh pr create --head
-    <prefix>...` without `--repo`; `gh pr comment <URL>` (or `<n> --repo
-    <owner>/<name>`) on a PR this profile's gate recorded as opened. Allowed
-    with the grant on; refused with a hand-off message when it is off.
-  - always refused, whatever the grant says: any force push or remote ref
-    deletion (`-f`, `--force`, `--force-with-lease`, `+refspec`, `--delete`,
-    `:dst`, `--mirror`, `--prune`); a push to anything outside the prefix (the
-    default branch, tags, `--all`, `HEAD:main`); a merge (`gh pr merge`, a
-    `gh api` write to a merge endpoint); any other `gh pr` mutation, a PR or
-    comment on a PR not recorded as the bot's, `gh pr create --repo`, and
-    repository-level writes (`gh repo edit`, secrets, labels, releases, any
-    `gh api` call that writes).
-  - refused as unqualified, whatever the grant says: a push or PR that does
-    not name its destination (`git push`, `git push origin HEAD`, `git push
-    origin bot/x` -- a bare name can be remapped by `remote.<name>.push` --
-    `gh pr create` without `--head`, `gh pr comment 12` without `--repo`). The
-    hook cannot know the current branch at the moment the shell runs, so it
-    does not guess.
-  - refused as unclassified (fail closed): a command it cannot read (an
-    unbalanced quote, a backquote, `env -S`), a git subcommand it does not
-    know (an alias may be a push), a `gh` group it does not know, and any
-    other program whose words name git or gh beside a forge verb (`xargs`,
-    `python -c`, a heredoc fed to a shell); an `execute_code` call whose code
-    names them too.
-* **Delegated child**: unattended, and the grant is NOT inherited: the
-  grant-covered columns are refused with a message to return the work to the
-  parent session. A child's card names a session nobody started.
-* **Cron turn**: indistinguishable from attended at this seam
-  (`session_attendance`), so this gate has no opinion there. What bounds it
-  instead is the skill text (`_UNATTENDED_GATE` and `github-event-ops`), the
-  PR watch's fix-round cap, and Hermes' own `approvals.cron_mode` for the
-  commands Hermes flags (a force push; Hermes flags no plain push and no `gh`
-  verb).
+* **Unattended** -- a programmatic platform (`webhook`, `msgraph_webhook`,
+  `api_server`), a cron turn (Hermes builds every cron agent with
+  `platform="cron"`, which `pre_llm_call` passes and `session_attendance`
+  records), a delegated child (`platform="subagent"`, or `subagent_start`), or
+  a single-query `hermes chat -q` process:
+  - grant-covered: a push to the literal remote `origin` whose every
+    destination is spelled `<src>:refs/heads/<prefix>...` with no force;
+    `gh pr create --head <prefix>...` as a command of its own, without
+    `--repo` or `--label`, at most one per session; `gh pr comment <URL>`
+    (or `<n> --repo <owner>/<name>`) on a PR this profile's gate recorded as
+    opened, with a body that is no bot command. Allowed with the grant on;
+    refused with a hand-off message while it is off, and always in a
+    delegated child, which does not carry the grant.
+  - always refused, whatever the grant says: force pushes and remote ref
+    deletion, a push anywhere but `origin`'s prefixed branches, merges and
+    merge triggers, any other PR or repository write, push options.
+  - refused as unqualified: a push or PR that does not name its destination.
+    The hook cannot know which branch is checked out when the shell runs, and
+    `remote.<name>.push` can remap a bare branch name.
+  - refused as unclassified (fail closed): anything the tables below do not
+    know, and every form that carries a command or configuration into git or
+    gh (`-c`, `GIT_*`/`GH_*`/`PATH` assignments, `--upload-pack`, `ext::`,
+    `rebase -x`, a `$` word, a function or alias named git or gh).
 
 Everywhere, attended or not: a command that would turn the grant on or off,
-or that names its store, is refused. Only the person turns it on, at their
-own terminal.
+or that names its store, is refused.
 
-Classification is shell-aware tokenizing, the same `shlex` segments
-`remote_wait_nudge` uses to anchor `git push`, then an explicit option table
-per command. It is never a substring guess; where the table does not know a
-token the answer is "unclassified", which refuses in an unattended session.
-Only `git` and `gh` are recognized as forge CLIs.
+What this is, stated plainly: a gate that holds a cooperating model against
+its own mistakes and against naive injected instructions. It is not a boundary
+against a model that sets out to evade it -- a script file, a persistent-shell
+function defined under another name, an HTTP client with a token, or an MCP
+tool this gate does not name all reach the forge without passing here. The
+residuals are listed in `docs/PR-DELIVERY-GRANT.md`.
+
+The lexer is this module's own: shell-aware `shlex` with `#` NOT a comment
+character (bash does not end a word at `a#b`, and over-reading a real comment
+is the fail-closed direction). Only `git` and `gh` are recognized forge CLIs.
 """
 
 from __future__ import annotations
 
+import fnmatch
 import json
+import os
 import re
+import shlex
 from collections.abc import Mapping
 from typing import Final
 
 from . import pr_delivery
+from .consistency_trigger import _edit_targets
 from .hooks.nudge_budget import session_is_delegated
-from .hooks.session_attendance import escalation_can_reach_a_person
-from .remote_wait_nudge import _command_lines, _segments, _shell_tokens, _strip_env_assignments
+from .hooks.session_attendance import SINGLE_QUERY_SESSION_ENV, UNATTENDED_APPROVAL_PLATFORMS, session_platform
 
 TERMINAL_TOOL: Final = "terminal"
 CODE_TOOL: Final = "execute_code"
+PROCESS_TOOL: Final = "process"
+FILE_TOOLS: Final = frozenset({"write_file", "patch"})
 
 # Command classes.
 LOCAL: Final = "local"
@@ -83,7 +78,6 @@ UNCLASSIFIED: Final = "unclassified"
 NOT_GOVERNED: Final = "not_governed_by_this_gate"
 
 GRANT_COVERED: Final = frozenset({PUSH_BOT_BRANCH, OPEN_PR, COMMENT_OWN_PR})
-ALWAYS_REFUSED: Final = frozenset({FORCE_PUSH, PUSH_OUTSIDE, FORGE_MERGE, OTHER_PR_OR_REPO, UNQUALIFIED, UNCLASSIFIED})
 # Most severe first: a command's class is its worst segment's.
 _SEVERITY: Final = (
     FORCE_PUSH, FORGE_MERGE, PUSH_OUTSIDE, OTHER_PR_OR_REPO, UNCLASSIFIED, UNQUALIFIED,
@@ -91,8 +85,8 @@ _SEVERITY: Final = (
 )
 _DESCRIPTIONS: Final[Mapping[str, str]] = {
     FORCE_PUSH: "a force push or a remote branch deletion",
-    FORGE_MERGE: "a merge",
-    PUSH_OUTSIDE: "a push to a branch outside the bot's branch prefix (the default branch, a tag, or every branch)",
+    FORGE_MERGE: "a merge, or a command that asks a bot to merge",
+    PUSH_OUTSIDE: "a push to anything but a branch under the bot's prefix on origin",
     OTHER_PR_OR_REPO: "a change to a pull request this bot did not open, or to the repository itself",
     UNQUALIFIED: "a push or pull-request command that does not name its destination",
     UNCLASSIFIED: "a command whose forge effect OMH cannot read",
@@ -101,11 +95,17 @@ _DESCRIPTIONS: Final[Mapping[str, str]] = {
     COMMENT_OWN_PR: "a comment on the bot's own pull request",
 }
 
+# Session kinds where nobody answers: the host's programmatic platforms, cron,
+# and a delegated child's own platform.
+UNATTENDED_PLATFORMS: Final = UNATTENDED_APPROVAL_PLATFORMS | frozenset({"cron", "subagent"})
+_TRUTHY: Final = frozenset({"1", "true", "yes", "on"})
+
 _MAX_DEPTH: Final = 3
+_SEPARATORS: Final = frozenset({"&&", "||", "|", "|&", ";", ";;", ";&", ";;&", "&", "(", ")"})
+_REDIRECT: Final = re.compile(r"^&?[<>]+[&|]?$")
 _SHELLS: Final = frozenset({"sh", "bash", "zsh", "dash", "ksh", "fish"})
 # Transparent wrappers: the command after them is the command. Each maps to
-# the options that take a separate value; a wrapper listed in
-# `_WRAPPER_POSITIONALS` also takes that many positional arguments first.
+# the options that take a separate value.
 _WRAPPERS: Final[Mapping[str, frozenset[str]]] = {
     "env": frozenset({"-u", "--unset", "-C", "--chdir"}),
     "command": frozenset(),
@@ -119,83 +119,124 @@ _WRAPPERS: Final[Mapping[str, frozenset[str]]] = {
     "stdbuf": frozenset({"-i", "-o", "-e"}),
 }
 _WRAPPER_POSITIONALS: Final[Mapping[str, int]] = {"timeout": 1}
-# `env -S` splits its argument into a new command line: not read here.
 _UNREADABLE_WRAPPER_OPTIONS: Final = frozenset({"-S", "--split-string"})
+_ASSIGNMENT: Final = re.compile(r"^([A-Za-z_][A-Za-z_0-9]*)\+?=")
+# Variables that redirect or reprogram git or gh: their `-c`, `--repo` and
+# `--exec-path` in another spelling.
+_FORGE_ENV: Final = re.compile(r"^(?:GIT_|GH_|GITHUB_|PATH$|HOME$|XDG_CONFIG_HOME$)", re.IGNORECASE)
+_DECLARERS: Final = frozenset({"export", "declare", "typeset", "readonly", "local", "set"})
+_DEFINERS: Final = frozenset({"alias", "function", "unalias", "unset", "hash"})
 
-_FORGE_WORD: Final = re.compile(r"\b(?:git|gh)\b")
-_FORGE_VERB: Final = re.compile(r"\b(?:push|merge|pr|api|repo|release|secret|variable|label|workflow|ruleset)\b")
-_GRANT_STORE_WORD: Final = re.compile(r"pr_delivery")
-_GRANT_COMMAND_WORD: Final = "pr-delivery"
-_CODE_GRANT_WORD: Final = re.compile(r"pr[-_]delivery")
+# A pattern rather than a ("git", ...) literal: INVARIANT 3 reads such a tuple as a git argv.
+_FORGE_CLI: Final = re.compile(r"^(?:git|gh)$")
+_FORGE_WORD: Final = re.compile(r"\b(?:git|gh)\b", re.IGNORECASE)
+_FORGE_VERB: Final = re.compile(
+    r"\b(?:push|merge|pr|api|repo|release|secret|variable|label|workflow|ruleset|send-pack|config|remote)\b",
+    re.IGNORECASE,
+)
+_EXEC_CARRIERS: Final = ("--upload-pack", "--receive-pack", "--exec", "--extcmd", "--open-files-in-pager")
+_EXEC_URL: Final = re.compile(r"(?:^|[:=])(?:ext|fd)::", re.IGNORECASE)
 
 # git ------------------------------------------------------------------------
-_GIT_GLOBAL_VALUE: Final = frozenset(
-    {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--super-prefix", "--config-env", "--list-cmds"}
-)
+_GIT_GLOBAL_VALUE: Final = frozenset({"-C", "--git-dir", "--work-tree", "--namespace", "--super-prefix", "--list-cmds"})
 _GIT_GLOBAL_BOOL: Final = frozenset({
     "-p", "--paginate", "-P", "--no-pager", "--bare", "--no-replace-objects", "--literal-pathspecs",
     "--glob-pathspecs", "--noglob-pathspecs", "--icase-pathspecs", "--no-optional-locks", "--no-advice",
-    "--html-path", "--man-path", "--info-path", "--version", "--help", "-h", "--exec-path",
+    "--html-path", "--man-path", "--info-path", "--version", "--help", "-h",
 })
-# Subcommands that change nothing on a remote. `push` is classified on its
-# own; a few that run a nested command line are read through it; any name
-# not here (an alias, `lfs`, `send-email`, `svn`) is unclassified.
+# Subcommands that change nothing on a remote and run nothing they are handed.
+# `push`, `config`, `remote`, `rebase`, `bisect`, `submodule` are read on their
+# own; any name not here (an alias, `lfs`, `send-email`, `difftool`) is unclassified.
 _GIT_LOCAL: Final = frozenset({
     "add", "am", "annotate", "apply", "archive", "blame", "branch", "bundle", "cat-file", "check-attr",
     "check-ignore", "check-mailmap", "check-ref-format", "checkout", "cherry", "cherry-pick", "clean",
-    "clone", "column", "commit", "commit-graph", "commit-tree", "config", "count-objects", "describe",
-    "diff", "diff-files", "diff-index", "diff-tree", "difftool", "fetch", "for-each-ref", "format-patch",
+    "clone", "column", "commit", "commit-graph", "commit-tree", "count-objects", "describe",
+    "diff", "diff-files", "diff-index", "diff-tree", "fetch", "for-each-ref", "format-patch",
     "fsck", "gc", "grep", "hash-object", "help", "init", "interpret-trailers", "log", "ls-files",
-    "ls-remote", "ls-tree", "maintenance", "merge", "merge-base", "merge-file", "mergetool", "mktag",
+    "ls-remote", "ls-tree", "maintenance", "merge", "merge-base", "merge-file", "mktag",
     "mktree", "mv", "name-rev", "notes", "pack-refs", "prune", "pull", "range-diff", "read-tree", "reflog",
-    "remote", "repack", "replace", "request-pull", "rerere", "reset", "restore", "rev-list", "rev-parse",
+    "repack", "replace", "request-pull", "rerere", "reset", "restore", "rev-list", "rev-parse",
     "revert", "rm", "shortlog", "show", "show-branch", "show-ref", "sparse-checkout", "stash", "status",
     "stripspace", "switch", "symbolic-ref", "tag", "unpack-file", "update-index", "update-ref", "var",
     "verify-commit", "verify-pack", "verify-tag", "version", "whatchanged", "worktree", "write-tree",
 })
+_GIT_CONFIG_READS: Final = frozenset({"--get", "--get-all", "--get-regexp", "--get-urlmatch", "-l", "--list", "get",
+                                      "list"})
+_GIT_CONFIG_SAFE_KEYS: Final = frozenset({"user.name", "user.email"})
+_GIT_REMOTE_READS: Final = frozenset({"", "-v", "--verbose", "show", "get-url"})
 _PUSH_LONG_BOOL: Final = frozenset({
     "--set-upstream", "--quiet", "--verbose", "--progress", "--no-progress", "--no-verify", "--verify",
     "--atomic", "--no-atomic", "--porcelain", "--thin", "--no-thin", "--ipv4", "--ipv6", "--no-signed",
     "--no-force-with-lease", "--no-recurse-submodules", "--no-follow-tags",
 })
-# Long options whose value may come as the next token.
-_PUSH_LONG_VALUE: Final = frozenset({"--repo", "--push-option", "--receive-pack", "--exec"})
-# Long options whose value may only come after `=`.
 _PUSH_LONG_OPTIONAL_VALUE: Final = frozenset({"--signed", "--recurse-submodules"})
 _FORCE_LONG: Final = frozenset({"--force", "--force-with-lease", "--force-if-includes", "--delete", "--mirror", "--prune"})
 _WIDE_LONG: Final = frozenset({"--all", "--branches", "--tags", "--follow-tags"})
-_NOT_LITERAL: Final = re.compile(r"[$`*?\[\\~^\s]|\.\.|@\{")
+_NOT_LITERAL: Final = re.compile(r"[$`*?\[\\~^\s'\"]|\.\.|@\{")
+_PUSH_REMOTE: Final = "origin"
 
 # gh -------------------------------------------------------------------------
-_GH_READ_ONLY_GROUPS: Final = frozenset({"--help", "-h", "--version", "help", "version", "completion", "status",
-                                         "search", "browse", "auth"})
+_GH_READ_ONLY_GROUPS: Final = frozenset({"--version", "version", "status", "search"})
 _GH_READ_VERBS: Final = frozenset({"view", "list", "status", "checks", "diff", "checkout", "get", "check",
                                    "download", "clone", "watch", "set-default"})
 _GH_PR_MUTATIONS: Final = frozenset({"edit", "close", "reopen", "ready", "review", "lock", "unlock",
                                      "update-branch", "revert"})
-# Repository-level groups: any verb outside the read verbs writes the repository.
 _GH_REPO_GROUPS: Final = frozenset({"repo", "secret", "variable", "label", "workflow", "release", "ruleset",
                                     "cache", "deploy-key"})
-# Mutations outside this grant's subject (issues, workflow runs): unchanged by this gate.
 _GH_NOT_GOVERNED_GROUPS: Final = frozenset({"issue", "run"})
-_GH_PR_CREATE_VALUE: Final = frozenset({"-t", "--title", "-b", "--body", "-F", "--body-file", "-B", "--base", "-H",
-                                        "--head", "-a", "--assignee", "-l", "--label", "-m", "--milestone", "-p",
-                                        "--project", "-r", "--reviewer", "-T", "--template", "-R", "--repo",
-                                        "--recover"})
-_GH_PR_CREATE_BOOL: Final = frozenset({"-d", "--draft", "-f", "--fill", "--fill-first", "--fill-verbose", "-w",
-                                       "--web", "-e", "--editor", "--no-maintainer-edit", "--dry-run"})
-_GH_PR_COMMENT_VALUE: Final = frozenset({"-b", "--body", "-F", "--body-file", "-R", "--repo"})
-_GH_PR_COMMENT_BOOL: Final = frozenset({"-e", "--editor", "-w", "--web", "--edit-last", "--delete-last",
-                                        "--create-if-none", "--yes"})
-_GH_API_VALUE: Final = frozenset({"-X", "--method", "-f", "--raw-field", "-F", "--field", "-H", "--header",
-                                  "--input", "-q", "--jq", "-t", "--template", "--cache", "-p", "--preview",
-                                  "--hostname"})
-_GH_API_BOOL: Final = frozenset({"-i", "--include", "--paginate", "--silent", "--verbose", "--slurp"})
-_GH_API_BODY: Final = frozenset({"-f", "--raw-field", "-F", "--field", "--input"})
-_MERGE_ENDPOINT: Final = re.compile(r"(?:^|/)(?:merge|merges)(?:$|[/?])")
+
+
+def _aliases(*pairs: tuple[str, str]) -> dict[str, str]:
+    """Each spelling of a gh flag mapped to one canonical name, so the last value wins as in gh."""
+    table: dict[str, str] = {}
+    for short, long in pairs:
+        table[short] = long
+        table[long] = long
+    return table
+
+
+_GH_PR_CREATE_VALUE: Final = _aliases(
+    ("-t", "--title"), ("-b", "--body"), ("-F", "--body-file"), ("-B", "--base"), ("-H", "--head"),
+    ("-a", "--assignee"), ("-l", "--label"), ("-m", "--milestone"), ("-p", "--project"), ("-r", "--reviewer"),
+    ("-T", "--template"), ("-R", "--repo"), ("--recover", "--recover"),
+)
+_GH_PR_CREATE_BOOL: Final = _aliases(
+    ("-d", "--draft"), ("-f", "--fill"), ("--fill-first", "--fill-first"), ("--fill-verbose", "--fill-verbose"),
+    ("--no-maintainer-edit", "--no-maintainer-edit"), ("--dry-run", "--dry-run"),
+)
+_GH_PR_COMMENT_VALUE: Final = _aliases(("-b", "--body"), ("-F", "--body-file"), ("-R", "--repo"))
+_GH_PR_COMMENT_BOOL: Final = _aliases(("--edit-last", "--edit-last"), ("--create-if-none", "--create-if-none"),
+                                      ("--yes", "--yes"))
+_GH_API_VALUE: Final = _aliases(
+    ("-X", "--method"), ("-f", "--raw-field"), ("-F", "--field"), ("-H", "--header"), ("--input", "--input"),
+    ("-q", "--jq"), ("-t", "--template"), ("--cache", "--cache"), ("-p", "--preview"), ("--hostname", "--hostname"),
+)
+_GH_API_BOOL: Final = _aliases(("-i", "--include"), ("--paginate", "--paginate"), ("--silent", "--silent"),
+                               ("--verbose", "--verbose"), ("--slurp", "--slurp"))
+_GH_API_BODY: Final = frozenset({"--raw-field", "--field", "--input"})
+_MERGE_ENDPOINT: Final = re.compile(r"(?:^|/)(?:merge|merges|auto-merge)(?:$|[/?])", re.IGNORECASE)
+# A comment line that is a command to a bot (`/merge`, `@bot merge`, `bors r+`).
+_BOT_COMMAND_LINE: Final = re.compile(r"^\s*(?:/|@\S+\s+\S|bors\b)", re.IGNORECASE)
 _PR_NUMBER: Final = re.compile(r"^#?([1-9][0-9]{0,9})$")
 _REPO_NAME: Final = re.compile(r"^(?:([A-Za-z0-9.-]+)/)?([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)$")
 _DEFAULT_HOST: Final = "github.com"
+
+# MCP tools that write to a forge, by the verbs in their names.
+_MCP_FORGE_WRITE: Final = re.compile(
+    r"merge|push|delete|fork|create_pull_request|update_pull_request|create_or_update_file|create_branch|"
+    r"create_ref|update_ref|"
+    r"create_repository|update_repository", re.IGNORECASE)
+
+# An HTTP client writing to a forge API without gh: the cheap, common shape only.
+_HTTP_CLIENTS: Final = frozenset({"curl", "wget", "http", "https", "xh"})
+_FORGE_API_HOST: Final = re.compile(r"api\.github\.com|/api/v3/|/api/graphql", re.IGNORECASE)
+_WRITE_METHOD: Final = re.compile(r"\b(?:PUT|POST|PATCH|DELETE)\b|--data|(?:^|\s)-d\b|--json|--form", re.IGNORECASE)
+
+# The grant's command and store, as tokens.
+_GRANT_GROUP: Final = "capability-policy"
+_GRANT_COMMAND: Final = "pr-delivery"
+_STORE_GLOB: Final = frozenset("*?[{")
+_STORE_DIR: Final = pr_delivery.STORE_DIRNAME
 
 _BLOCK_SUFFIX: Final = "A blocked call did not run."
 
@@ -206,19 +247,67 @@ class _Context:
     def __init__(self, prefix: str, opened: frozenset[tuple[str, int]]) -> None:
         self.prefix = prefix
         self.opened = opened
-        # The head branch of the one `gh pr create` the command holds, for the record.
         self.pr_head = ""
+        self.pr_creates = 0
+        self.segments = 0
+
+
+def nobody_can_answer(session_id: object) -> bool:
+    """This gate's own unattended predicate: wider than the ask rules', because cron is held here."""
+    if session_is_delegated(session_id):
+        return True
+    if str(os.environ.get(SINGLE_QUERY_SESSION_ENV, "") or "").strip().lower() in _TRUTHY:
+        return True
+    return session_platform(session_id) in UNATTENDED_PLATFORMS
+
+
+def _delegated(session_id: object) -> bool:
+    return session_is_delegated(session_id) or session_platform(session_id) == "subagent"
+
+
+def _tokens(command: str) -> list[str]:
+    """Shell-aware tokens, `#` included as an ordinary character; `[]` when it will not tokenize."""
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    try:
+        return list(lexer)
+    except ValueError:
+        return []
+
+
+def _segments(tokens: list[str]) -> list[list[str]]:
+    """Command segments, with redirections and their targets removed."""
+    segments: list[list[str]] = [[]]
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        index += 1
+        if token in _SEPARATORS:
+            segments.append([])
+            continue
+        if _REDIRECT.match(token):
+            if segments[-1] and segments[-1][-1].isdigit():
+                segments[-1].pop()
+            index += 1  # the redirection's target
+            continue
+        segments[-1].append(token)
+    return [segment for segment in segments if segment]
 
 
 def _worst(classes: list[str]) -> str:
-    if not classes:
-        return LOCAL
-    return min(classes, key=_SEVERITY.index)
+    return min(classes, key=_SEVERITY.index) if classes else LOCAL
 
 
 def classify_command(command: object, *, prefix: str, opened: frozenset[tuple[str, int]] = frozenset()) -> str:
-    """The forge class of one `terminal` command line. Pure; reads no file."""
-    return _classify(command, _Context(prefix, opened), 0)
+    """The forge class of one command line. Pure; reads no file."""
+    context = _Context(prefix, opened)
+    result = _classify(command, context, 0)
+    if result == OPEN_PR and (context.pr_creates != 1 or context.segments != 1):
+        # One PR, as a command of its own: nothing else in the line can print
+        # into its output, and a loop cannot open many.
+        return UNCLASSIFIED
+    return result
 
 
 def _classify(command: object, context: _Context, depth: int) -> str:
@@ -229,26 +318,59 @@ def _classify(command: object, context: _Context, depth: int) -> str:
     mentions_forge = _FORGE_WORD.search(command) is not None
     if "`" in command and mentions_forge:
         return UNCLASSIFIED
-    lines = _command_lines(command)
-    whole = _shell_tokens(lines[0])
+    lines = command.splitlines()
+    if len(lines) > 1 and "<<" in command and mentions_forge:
+        # A heredoc's body is lines too, and its extent is not tracked here.
+        return UNCLASSIFIED
+    whole = _tokens(command)
     if not whole:
         return UNCLASSIFIED if mentions_forge else LOCAL
-    classes = [_classify_segment(segment, context, depth) for segment in _segments(whole)]
-    # The per-line pass catches a push on its own line, which `shlex` would
-    # read as more arguments of the line before; a line that does not
-    # tokenize alone is inside a quoted string the whole pass already read.
-    for line in lines[1:]:
-        classes.extend(_classify_segment(segment, context, depth) for segment in _segments(_shell_tokens(line)))
+    if _defines_forge_function(whole):
+        return UNCLASSIFIED
+    for index, token in enumerate(whole[:-1]):
+        # A here-string or redirection hands its target to the program as input.
+        if _REDIRECT.match(token) and _FORGE_WORD.search(whole[index + 1]):
+            return UNCLASSIFIED
+    segments = _segments(whole)
+    if depth == 0:
+        context.segments = len(segments) if len(lines) <= 1 else len(segments) + len(lines)
+    classes = [_classify_segment(segment, context, depth) for segment in segments]
+    # The per-line pass catches a push on its own line, which `shlex` reads as
+    # more arguments of the line before; a line that does not tokenize alone
+    # is inside a quoted string the whole pass already read.
+    if len(lines) > 1:
+        for line in lines:
+            classes.extend(_classify_segment(segment, context, depth) for segment in _segments(_tokens(line)))
     return _worst(classes)
+
+
+def _defines_forge_function(tokens: list[str]) -> bool:
+    """`git() {...}` or `gh ()`: every later git command in a persistent shell would be that function."""
+    for index, token in enumerate(tokens[:-1]):
+        if _FORGE_CLI.match(_basename(token).lower()) and tokens[index + 1] == "(":
+            return True
+    return False
 
 
 def _basename(token: str) -> str:
     return token.rsplit("/", 1)[-1]
 
 
-def _unwrap(segment: list[str]) -> list[str] | None:
-    """The segment from its real command on, or None when a wrapper hides it."""
-    words = _strip_env_assignments(segment)
+def _split_assignments(words: list[str]) -> tuple[list[str], list[str]]:
+    names: list[str] = []
+    index = 0
+    while index < len(words):
+        match = _ASSIGNMENT.match(words[index])
+        if match is None:
+            break
+        names.append(match.group(1))
+        index += 1
+    return names, words[index:]
+
+
+def _unwrap(segment: list[str]) -> tuple[list[str], list[str]] | None:
+    """(assignment names, the segment from its real command on), or None when a wrapper hides it."""
+    names, words = _split_assignments(segment)
     while words and _basename(words[0]) in _WRAPPERS:
         name = _basename(words[0])
         value_options = _WRAPPERS[name]
@@ -259,8 +381,9 @@ def _unwrap(segment: list[str]) -> list[str] | None:
                 return None
             index += 2 if option in value_options and "=" not in words[index] else 1
         index += _WRAPPER_POSITIONALS.get(name, 0)
-        words = _strip_env_assignments(words[index:])
-    return words
+        more, words = _split_assignments(words[index:])
+        names.extend(more)
+    return names, words
 
 
 def _shell_payload(words: list[str]) -> str | None:
@@ -276,67 +399,114 @@ def _shell_payload(words: list[str]) -> str | None:
     return None
 
 
+def _nested(words: list[str], context: _Context, depth: int) -> str:
+    """A command handed on as words: read both as the shell re-joins them and as argv."""
+    return _worst([_classify(" ".join(words), context, depth + 1), _classify(shlex.join(words), context, depth + 1)])
+
+
 def _classify_segment(segment: list[str], context: _Context, depth: int) -> str:
-    words = _unwrap(segment)
-    if words is None:
-        return UNCLASSIFIED if _FORGE_WORD.search(" ".join(segment)) else LOCAL
+    text = " ".join(segment)
+    forge_text = _FORGE_WORD.search(text) is not None
+    unwrapped = _unwrap(segment)
+    if unwrapped is None:
+        return UNCLASSIFIED if forge_text else LOCAL
+    names, words = unwrapped
+    if any(_FORGE_ENV.match(name) for name in names):
+        return UNCLASSIFIED
     if not words:
         return LOCAL
-    name = _basename(words[0])
+    head = words[0]
+    name = _basename(head).lower()
+    if name in _DECLARERS:
+        declared = [_ASSIGNMENT.match(word) for word in words[1:]]
+        if any(match is not None and _FORGE_ENV.match(match.group(1)) for match in declared):
+            return UNCLASSIFIED
+    if name in _DEFINERS and forge_text:
+        return UNCLASSIFIED
+    if any(mark in head for mark in "$\\'\"") and _FORGE_VERB.search(text):
+        return UNCLASSIFIED
+    if _FORGE_CLI.match(name):
+        carried = (any("$" in word or _EXEC_URL.search(word) for word in words[1:])
+                   or any(word.split("=", 1)[0] in _EXEC_CARRIERS for word in words[1:]))
+        if carried:
+            return UNCLASSIFIED
+        return _classify_git(words[1:], context, depth) if name == "git" else _classify_gh(words[1:], context)
     if name in _SHELLS:
         payload = _shell_payload(words)
         if payload is not None:
-            return _classify(payload, context, depth + 1)
+            return UNCLASSIFIED if "$" in payload else _classify(payload, context, depth + 1)
+        if not any(not word.startswith("-") for word in words[1:]) or "-s" in words[1:]:
+            return UNCLASSIFIED  # a shell reading its commands from stdin: a pipe or a redirection this gate cannot read
     elif name == "eval":
-        return _classify(" ".join(words[1:]), context, depth + 1)
-    elif name == "git":
-        return _classify_git(words[1:], context, depth)
-    elif name == "gh":
-        return _classify_gh(words[1:], context)
-    text = " ".join(words)
-    if _FORGE_WORD.search(text) and _FORGE_VERB.search(text):
+        return UNCLASSIFIED if any("$" in word for word in words[1:]) else _nested(words[1:], context, depth)
+    if name in _HTTP_CLIENTS and _FORGE_API_HOST.search(text) and _WRITE_METHOD.search(text):
+        return OTHER_PR_OR_REPO  # a forge API write that skips gh
+    if forge_text and _FORGE_VERB.search(text):
         return UNCLASSIFIED
     return LOCAL
 
 
 def _classify_git(args: list[str], context: _Context, depth: int) -> str:
     index = 0
-    configured = False
     while index < len(args) and args[index].startswith("-"):
-        option, has_value, value = args[index].partition("=")
+        option, has_value, _value = args[index].partition("=")
         if option in _GIT_GLOBAL_VALUE:
             if not has_value:
                 index += 1
-                value = args[index] if index < len(args) else ""
-            if option in ("-c", "--config-env"):
-                configured = True
-                if value.lower().startswith("alias."):
-                    return UNCLASSIFIED
         elif option not in _GIT_GLOBAL_BOOL:
+            # `-c`, `--config-env`, `--exec-path` and anything unknown can
+            # reprogram what the subcommand runs or where it pushes.
             return UNCLASSIFIED
         index += 1
     if index >= len(args):
         return LOCAL
     subcommand, rest = args[index], args[index + 1:]
     if subcommand == "push":
-        # A `-c` can redirect a push (`url.<base>.insteadOf`, `remote.<name>.push`).
-        return UNCLASSIFIED if configured else _classify_push(rest, context)
+        return _classify_push(rest, context)
+    if subcommand == "config":
+        return _classify_git_config(rest)
+    if subcommand == "remote":
+        return LOCAL if (rest[0] if rest else "") in _GIT_REMOTE_READS else UNCLASSIFIED
     if subcommand == "submodule" and "foreach" in rest:
-        return _classify(" ".join(rest[rest.index("foreach") + 1:]), context, depth + 1)
+        return _nested(rest[rest.index("foreach") + 1:], context, depth)
     if subcommand == "bisect" and rest[:1] == ["run"]:
-        return _classify(" ".join(rest[1:]), context, depth + 1)
+        return _nested(rest[1:], context, depth)
     if subcommand == "rebase":
-        for position, token in enumerate(rest):
-            if token in ("-x", "--exec") and position + 1 < len(rest):
-                return _worst([LOCAL, _classify(rest[position + 1], context, depth + 1)])
-            if token.startswith("--exec="):
-                return _classify(token.split("=", 1)[1], context, depth + 1)
+        return _classify_rebase(rest, context, depth)
+    if subcommand == "grep" and any(word.startswith("-O") for word in rest):
+        return UNCLASSIFIED
+    if subcommand == "clone" and any(word.startswith("-u") for word in rest):
+        return UNCLASSIFIED
     return LOCAL if subcommand in _GIT_LOCAL else UNCLASSIFIED
+
+
+def _classify_git_config(rest: list[str]) -> str:
+    if any(word in _GIT_CONFIG_READS for word in rest):
+        return LOCAL
+    keys = [word for word in rest if not word.startswith("-") and word != "set"]
+    if keys and keys[0].lower() in _GIT_CONFIG_SAFE_KEYS:
+        return LOCAL
+    # A write to any other key can run a program or redirect a remote
+    # (`core.sshCommand`, `core.hooksPath`, `url.*.pushInsteadOf`, `alias.*`).
+    return UNCLASSIFIED
+
+
+def _classify_rebase(rest: list[str], context: _Context, depth: int) -> str:
+    classes = [LOCAL]
+    for position, token in enumerate(rest):
+        if token in ("-x", "--exec"):
+            nested = rest[position + 1] if position + 1 < len(rest) else ""
+            classes.append(_classify(nested, context, depth + 1) if nested else UNCLASSIFIED)
+        elif token.startswith("--exec="):
+            classes.append(_classify(token.split("=", 1)[1], context, depth + 1))
+        elif token.startswith("-x") and len(token) > 2:
+            classes.append(_classify(token[2:], context, depth + 1))
+    return _worst(classes)
 
 
 def _classify_push(args: list[str], context: _Context) -> str:
     positionals: list[str] = []
-    repository_option = False
+    repository = ""
     wide = False
     dry_run = False
     index = 0
@@ -354,40 +524,46 @@ def _classify_push(args: list[str], context: _Context) -> str:
             option, has_value, value = token.partition("=")
             if option in _FORCE_LONG:
                 return FORCE_PUSH
+            if option == "--push-option":
+                return OTHER_PR_OR_REPO  # a push option can open or merge a request on the forge
             if option in _WIDE_LONG:
                 wide = True
-            elif option in ("--dry-run", "--help"):
+            elif option == "--dry-run":
+                if has_value:
+                    return UNCLASSIFIED
                 dry_run = True
-            elif option in _PUSH_LONG_VALUE:
+            elif option == "--repo":
                 if not has_value:
+                    value = args[index] if index < len(args) else ""
                     index += 1
-                repository_option = repository_option or option == "--repo"
+                repository = value
             elif option in _PUSH_LONG_OPTIONAL_VALUE:
                 if option == "--recurse-submodules" and value not in ("check", "no"):
                     wide = True
             elif option not in _PUSH_LONG_BOOL:
                 return UNCLASSIFIED
             continue
-        cluster = token[1:]
-        for position, letter in enumerate(cluster):
+        for letter in token[1:]:
             if letter in "fd":
                 return FORCE_PUSH
-            if letter in "nh":
+            if letter == "o":
+                return OTHER_PR_OR_REPO
+            if letter == "n":
                 dry_run = True
-            elif letter == "o":
-                if position == len(cluster) - 1:
-                    index += 1
-                break
             elif letter not in "uqv46":
                 return UNCLASSIFIED
     if dry_run:
         return LOCAL
     if wide:
         return PUSH_OUTSIDE
-    refspecs = positionals if repository_option else positionals[1:]
-    if not refspecs:
+    if not repository and positionals:
+        repository, positionals = positionals[0], positionals[1:]
+    if not repository or not positionals:
         return UNQUALIFIED
-    return _worst([_classify_refspec(spec, context.prefix) for spec in refspecs])
+    refspecs = [_classify_refspec(spec, context.prefix) for spec in positionals]
+    if repository != _PUSH_REMOTE:
+        refspecs.append(PUSH_OUTSIDE)
+    return _worst(refspecs)
 
 
 def _classify_refspec(spec: str, prefix: str) -> str:
@@ -402,7 +578,7 @@ def _classify_refspec(spec: str, prefix: str) -> str:
         return UNQUALIFIED if _under_prefix(source, prefix) else PUSH_OUTSIDE
     if not source:
         return FORCE_PUSH if destination else PUSH_OUTSIDE  # `:dst` deletes; `:` pushes every matching branch
-    if not destination or _NOT_LITERAL.search(destination):
+    if not destination or _NOT_LITERAL.search(destination) or ":" in destination:
         return PUSH_OUTSIDE if "*" in destination else UNQUALIFIED
     return PUSH_BOT_BRANCH if _under_prefix(destination, prefix) else PUSH_OUTSIDE
 
@@ -415,8 +591,8 @@ def _under_prefix(ref: str, prefix: str) -> bool:
     return ref.startswith(prefix) and len(ref) > len(prefix) and not _NOT_LITERAL.search(ref)
 
 
-def _options(args: list[str], value_options: frozenset[str], bool_options: frozenset[str]):
-    """(options, positionals, known) for a `gh` verb's arguments, by its own option table."""
+def _options(args: list[str], value_options: Mapping[str, str], bool_options: Mapping[str, str]):
+    """(options by canonical name, last value wins as in gh; positionals; known)."""
     options: dict[str, str] = {}
     positionals: list[str] = []
     index = 0
@@ -429,37 +605,46 @@ def _options(args: list[str], value_options: frozenset[str], bool_options: froze
         option, has_value, value = token.partition("=")
         if option in value_options:
             if not has_value:
+                # pflag hands the next argument to a value flag even when it starts with "-".
                 value = args[index] if index < len(args) else ""
                 index += 1
-            options[option] = value
+            options[value_options[option]] = value
         elif option in bool_options and not has_value:
-            options[option] = ""
+            options[bool_options[option]] = ""
         else:
             return options, positionals, False
     return options, positionals, True
 
 
 def _first_verb(args: list[str]) -> tuple[str, list[str]]:
-    """A gh group's verb, skipping a leading `-R <repo>`; and the arguments after it."""
+    """A gh group's verb, skipping a leading `-R <repo>`; and the arguments around it."""
     index = 0
     while index < len(args) and args[index].startswith("-"):
         index += 2 if args[index] in ("-R", "--repo") else 1
     if index >= len(args):
-        return "", []
+        return "", args
     return args[index], args[:index] + args[index + 1:]
 
 
 def _classify_gh(args: list[str], context: _Context) -> str:
-    if not args or args[0] in _GH_READ_ONLY_GROUPS:
-        return LOCAL
-    if "--help" in args or "-h" in args:
+    if not args or args in (["--help"], ["-h"], ["help"]) or args[0] in _GH_READ_ONLY_GROUPS:
         return LOCAL
     group, rest = args[0], args[1:]
+    if rest in (["--help"], ["-h"]):
+        return LOCAL
+    if group == "auth":
+        # A token or a widened scope takes the next step outside this gate.
+        return LOCAL if rest == ["status"] else UNCLASSIFIED
     if group == "api":
         return _classify_gh_api(rest)
     verb, verb_args = _first_verb(rest)
+    if verb_args in (["--help"], ["-h"]):
+        return LOCAL
     if group == "pr":
         return _classify_gh_pr(verb, verb_args, context)
+    if group == "repo" and verb == "set-default":
+        # It picks the repository every later gh command acts on, like `--repo`.
+        return LOCAL if verb_args in (["--view"], ["-v"]) else UNCLASSIFIED
     if group in _GH_REPO_GROUPS:
         return LOCAL if not verb or verb in _GH_READ_VERBS else OTHER_PR_OR_REPO
     if group in _GH_NOT_GOVERNED_GROUPS:
@@ -478,25 +663,29 @@ def _classify_gh_pr(verb: str, args: list[str], context: _Context) -> str:
         return OTHER_PR_OR_REPO
     if verb == "create":
         options, positionals, known = _options(args, _GH_PR_CREATE_VALUE, _GH_PR_CREATE_BOOL)
-        if not known or positionals:
-            return UNCLASSIFIED
+        if not known or positionals or "--body-file" in options:
+            return UNCLASSIFIED  # a body file is read off disk into a public PR
         if "--dry-run" in options:
             return LOCAL
-        if "-R" in options or "--repo" in options:
-            return OTHER_PR_OR_REPO
-        head = options.get("-H", options.get("--head", ""))
+        if "--repo" in options or "--label" in options:
+            return OTHER_PR_OR_REPO  # another repository; a label can be an auto-merge rule's trigger
+        head = options.get("--head", "")
         if not head:
             return UNQUALIFIED
-        if ":" in head or not _under_prefix(head, context.prefix):
-            return OTHER_PR_OR_REPO if ":" in head else PUSH_OUTSIDE
+        if ":" in head:
+            return OTHER_PR_OR_REPO
+        if not _under_prefix(head, context.prefix):
+            return PUSH_OUTSIDE
         context.pr_head = head
+        context.pr_creates += 1
         return OPEN_PR
     if verb == "comment":
         options, positionals, known = _options(args, _GH_PR_COMMENT_VALUE, _GH_PR_COMMENT_BOOL)
-        if not known or len(positionals) > 1:
+        if not known or len(positionals) > 1 or "--body-file" in options:
             return UNCLASSIFIED
-        selector = positionals[0] if positionals else ""
-        pr = _selected_pr(selector, options.get("-R", options.get("--repo", "")))
+        if any(_BOT_COMMAND_LINE.match(line) for line in options.get("--body", "").splitlines()):
+            return FORGE_MERGE
+        pr = _selected_pr(positionals[0] if positionals else "", options.get("--repo", ""))
         if pr is None:
             return UNQUALIFIED
         return COMMENT_OWN_PR if pr in context.opened else OTHER_PR_OR_REPO
@@ -507,7 +696,7 @@ def _selected_pr(selector: str, repository: str) -> tuple[str, int] | None:
     """(`host/owner/name`, number) a `gh pr comment` names unambiguously, else None."""
     by_url = pr_delivery.parse_pr_url(selector)
     if by_url is not None:
-        return by_url
+        return None if repository else by_url
     number = _PR_NUMBER.match(selector)
     repo = _REPO_NAME.match(repository)
     if number is None or repo is None:
@@ -520,57 +709,69 @@ def _classify_gh_api(args: list[str]) -> str:
     options, positionals, known = _options(args, _GH_API_VALUE, _GH_API_BOOL)
     if not known or len(positionals) != 1:
         return UNCLASSIFIED
-    method = options.get("-X", options.get("--method", "")).upper()
-    if not method:
-        method = "POST" if _GH_API_BODY.intersection(options) else "GET"
+    endpoint = positionals[0].split("?", 1)[0]
+    if endpoint.strip("/").lower() == "graphql":
+        return LOCAL if not options.keys() & (_GH_API_BODY | {"--method"}) else OTHER_PR_OR_REPO
+    method = options.get("--method", "").upper() or ("POST" if _GH_API_BODY & options.keys() else "GET")
     if method == "GET":
         return LOCAL
-    endpoint = positionals[0].split("?", 1)[0]
     return FORGE_MERGE if _MERGE_ENDPOINT.search(endpoint) else OTHER_PR_OR_REPO
 
 
 # Directives -------------------------------------------------------------------
 
 
-def _command_of(tool_input: object) -> str:
-    if isinstance(tool_input, Mapping):
-        value = tool_input.get("command")
-        return value if isinstance(value, str) else ""
-    return ""
+def _text_arg(tool_input: object, key: str) -> str:
+    value = tool_input.get(key) if isinstance(tool_input, Mapping) else None
+    return value if isinstance(value, str) else ""
 
 
-def _code_of(tool_input: object) -> str:
-    if isinstance(tool_input, Mapping):
-        value = tool_input.get("code")
-        return value if isinstance(value, str) else ""
-    return ""
+def _process_data(tool_input: object) -> str | None:
+    """The stdin a `process` write or submit sends to a background process, else None."""
+    if _text_arg(tool_input, "action") not in ("write", "submit"):
+        return None
+    return _text_arg(tool_input, "data")
 
 
-def _names_grant_change(command: str) -> bool:
-    """Whether a command line turns the grant on or off, or touches its store."""
-    if _GRANT_STORE_WORD.search(command):
+def _names_store(token: str) -> bool:
+    lowered = token.lower()
+    if "pr_delivery/" in lowered or lowered.endswith("/pr_delivery"):
         return True
-    tokens = _shell_tokens(command)
+    if "runtime/" in lowered and any(mark in lowered for mark in _STORE_GLOB):
+        return True
+    # A glob that the shell would expand to the store's directory (`pr_deliver?/`, `pr_*`).
+    return any(any(mark in part for mark in _STORE_GLOB) and fnmatch.fnmatchcase(_STORE_DIR, part)
+               for part in lowered.split("/"))
+
+
+def _names_grant_change(command: str, depth: int = 0) -> bool:
+    """Whether a command line would change the grant or touch its store."""
+    tokens = _tokens(command)
     if not tokens:
-        return _GRANT_COMMAND_WORD in command
+        lowered = command.lower()
+        return _GRANT_COMMAND in lowered or "pr_delivery" in lowered
+    if any(_names_store(token) for token in tokens):  # redirection targets included
+        return True
     for segment in _segments(tokens):
-        if _GRANT_COMMAND_WORD in segment:
-            after = segment[segment.index(_GRANT_COMMAND_WORD) + 1:]
-            if "on" in after or "off" in after:
-                return True
-        # A token holding a whole command line (`sh -c '...'`, `eval '...'`) is read as one.
-        if any(" " in token and _names_grant_change(token) for token in segment):
+        lowered = [token.lower() for token in segment]
+        if _GRANT_GROUP in lowered and (_GRANT_COMMAND in lowered or any("$" in t or "`" in t for t in lowered)):
             return True
-    return False
+        if depth < _MAX_DEPTH and any(" " in token and _names_grant_change(token, depth + 1) for token in segment):
+            return True
+    return "`" in command and _GRANT_GROUP in command.lower()
 
 
 def grant_change_directive(*, tool_name: object, tool_input: object) -> dict[str, str] | None:
     """Refuse, in every session, a tool call that would turn the grant on or off."""
     tool = str(tool_name or "")
     if tool == TERMINAL_TOOL:
-        named = _names_grant_change(_command_of(tool_input))
+        named = _names_grant_change(_text_arg(tool_input, "command"))
+    elif tool == PROCESS_TOOL:
+        data = _process_data(tool_input)
+        named = data is not None and _names_grant_change(data)
     elif tool == CODE_TOOL:
-        named = _CODE_GRANT_WORD.search(_code_of(tool_input)) is not None
+        code = _text_arg(tool_input, "code").lower()
+        named = "runtime/pr_" in code or "pr_delivery/" in code or _GRANT_GROUP in code
     else:
         return None
     if not named:
@@ -586,35 +787,58 @@ def grant_change_directive(*, tool_name: object, tool_input: object) -> dict[str
     }
 
 
+def _tool_class(tool: str, tool_input: object, prefix: str, opened: frozenset[tuple[str, int]]) -> str:
+    if tool == TERMINAL_TOOL:
+        return classify_command(_text_arg(tool_input, "command"), prefix=prefix, opened=opened)
+    if tool == PROCESS_TOOL:
+        data = _process_data(tool_input)
+        if data is None:
+            return LOCAL
+        if _text_arg(tool_input, "action") == "write" and data and not data.endswith("\n"):
+            # A partial line is joined with the next write by the program
+            # reading it, so no single write can be judged.
+            return UNCLASSIFIED
+        return classify_command(data, prefix=prefix, opened=opened)
+    if tool == CODE_TOOL:
+        code = _text_arg(tool_input, "code")
+        return UNCLASSIFIED if _FORGE_WORD.search(code) and _FORGE_VERB.search(code) else LOCAL
+    if tool in FILE_TOOLS:
+        # A file under `.git/` (a hook, the config) runs on the next git command.
+        targets = _edit_targets(tool, dict(tool_input) if isinstance(tool_input, Mapping) else {})
+        return UNCLASSIFIED if any(".git" in re.split(r"[\\/]", target) for target in targets) else LOCAL
+    if tool.lower().startswith("mcp") and _MCP_FORGE_WRITE.search(tool):
+        return OTHER_PR_OR_REPO
+    return LOCAL
+
+
 def delivery_directive(
     *, tool_name: object, tool_input: object, session_id: str, omh_home: str, hermes_home: str
 ) -> dict[str, str] | None:
     """The block for a forge command an unattended session may not run, else None."""
     tool = str(tool_name or "")
-    if tool not in (TERMINAL_TOOL, CODE_TOOL):
-        return None
-    if escalation_can_reach_a_person(session_id):
+    if not nobody_can_answer(session_id):
         return None
     grant = pr_delivery.read_grant(omh_home, hermes_home)
     prefix = pr_delivery.branch_prefix(grant)
-    if tool == CODE_TOOL:
-        code = _code_of(tool_input)
-        forge_class = UNCLASSIFIED if _FORGE_WORD.search(code) and _FORGE_VERB.search(code) else LOCAL
-    else:
-        opened = pr_delivery.opened_prs(omh_home, hermes_home)
-        forge_class = classify_command(_command_of(tool_input), prefix=prefix, opened=opened)
+    opened = pr_delivery.opened_prs(omh_home, hermes_home) if tool in (TERMINAL_TOOL, PROCESS_TOOL) else frozenset()
+    forge_class = _tool_class(tool, tool_input, prefix, opened)
     if forge_class in (LOCAL, NOT_GOVERNED):
         return None
-    delegated = session_is_delegated(session_id)
+    delegated = _delegated(session_id)
     if forge_class in GRANT_COVERED and grant.get("state") == "on" and not delegated:
-        return None
+        if forge_class != OPEN_PR or pr_delivery.opened_count(omh_home, hermes_home, session_id) < 1:
+            return None
+        return {"action": "block", "message": _refusal(forge_class, grant, prefix, delegated, capped=True)}
     return {"action": "block", "message": _refusal(forge_class, grant, prefix, delegated)}
 
 
-def _refusal(forge_class: str, grant: Mapping[str, object], prefix: str, delegated: bool) -> str:
+def _refusal(forge_class: str, grant: Mapping[str, object], prefix: str, delegated: bool, capped: bool = False) -> str:
     what = _DESCRIPTIONS.get(forge_class, "this command")
     lead = f"[OMH PR delivery] Nobody can answer a confirmation in this session, so OMH did not run {what}."
-    if forge_class in GRANT_COVERED and delegated:
+    if capped:
+        detail = ("This run already opened a pull request; a second one is a person's decision. Report the first "
+                  "PR and hand any further one to a person's turn.")
+    elif forge_class in GRANT_COVERED and delegated:
         detail = ("A delegated child does not carry the PR delivery grant: return the prepared branch and "
                   "commits to the parent session, which pushes and opens the pull request.")
     elif forge_class in GRANT_COVERED:
@@ -626,8 +850,9 @@ def _refusal(forge_class: str, grant: Mapping[str, object], prefix: str, delegat
                   f"{prefix}<topic>`, `gh pr create --head {prefix}<topic>`, `gh pr comment <PR URL>`. The hook "
                   "cannot see which branch is checked out when the shell runs, so it does not guess.")
     elif forge_class == UNCLASSIFIED:
-        detail = ("OMH cannot read what this command publishes. Run git and gh as their own commands, without a "
-                  "shell wrapper, eval, script or alias, or hand the step to a person's turn.")
+        detail = ("OMH cannot read what this command publishes. Run git and gh as plain commands of their own, "
+                  "without a shell wrapper, eval, variable, alias, script, `-c` or GIT_/GH_ setting, and run "
+                  "`gh pr create` alone; or hand the step to a person's turn.")
     else:
         detail = ("That is never run without a person, whatever the PR delivery grant says "
                   f"(state: {grant.get('state', 'off')}). Hand it to a person's turn with the evidence.")
@@ -639,8 +864,8 @@ def observe_opened_pr(
 ) -> bool:
     """Record the PR a grant-allowed `gh pr create` printed. True when a record was written.
 
-    Only a command that is exactly one `gh pr create` segment counts, so no
-    other program in the same command line can print a URL into its output;
+    Only a command that classifies as exactly one `gh pr create` and nothing
+    else, so no other program in the line can print a URL into its output;
     only a zero exit; only a URL on the output's last line, which is where
     `gh pr create` prints it.
     """
@@ -649,14 +874,11 @@ def observe_opened_pr(
     grant = pr_delivery.read_grant(omh_home, hermes_home)
     if grant.get("state") != "on":
         return False
-    command = _command_of(tool_input)
-    tokens = _shell_tokens(command)
-    segments = _segments(tokens)
-    if len(segments) != 1 or len(command.strip().splitlines()) != 1:
+    command = _text_arg(tool_input, "command")
+    if classify_command(command, prefix=pr_delivery.branch_prefix(grant)) != OPEN_PR:
         return False
     context = _Context(pr_delivery.branch_prefix(grant), frozenset())
-    if _classify_segment(segments[0], context, 0) != OPEN_PR:
-        return False
+    _ = _classify(command, context, 0)
     url = _last_output_line(result)
     if not url:
         return False

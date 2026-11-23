@@ -23,7 +23,10 @@ The grant is per Hermes profile. Select the profile with `omh --hermes-home
 <profile home>` (and `--omh-home` when that profile has its own OMH home).
 `on` and `off` refuse to run inside a Hermes session, which they detect from
 the `HERMES_SESSION_ID` that Hermes sets for every command its terminal tool
-runs. `omh doctor` lists every profile in the OMH home whose grant is on.
+runs. `on` also asks for a typed yes on the controlling terminal
+(`/dev/tty`); a gateway- or cron-run child has none. On Windows, which has no
+`/dev/tty`, it asks on stdin only when stdin is a console (untested). `omh
+doctor` lists every profile in the OMH home whose grant is on.
 
 ## What it allows
 
@@ -62,24 +65,52 @@ new pull request's URL on its last line.
 
 ## Enforcement matrix
 
-OMH's `pre_tool_call` hook (`src/plugin_bundle/omh/pr_delivery_gate.py`)
-reads `terminal` commands with the same shell-aware tokenizing that anchors
-`git push` elsewhere in the plugin. It unwraps `env`, `sudo`, `timeout` and
-similar wrappers and reads into `sh -c` and `eval`. It then uses an explicit
-option table for `git push`, `gh pr`, `gh api` and the repository-level `gh`
-groups.
+OMH's `pre_tool_call` hook (`src/plugin_bundle/omh/pr_delivery_gate.py`) reads
+`terminal` commands, `process` stdin writes, `execute_code`, file writes and
+MCP tool names. Commands go through its own shell-aware lexer, in which `#` is
+an ordinary character, as it is to bash inside a word. It unwraps `env`,
+`sudo`, `timeout` and similar wrappers, reads into `sh -c`, `eval`,
+`submodule foreach`, `rebase -x` and `bisect run`, and then applies an explicit
+option table for `git push`, `git config`, `git remote`, `gh pr`, `gh api`,
+`gh auth` and the repository-level `gh` groups. A `gh` flag given twice is
+read as gh reads it: the last value wins.
 
-| Command class | Attended chat | Programmatic platform (`webhook`, `msgraph_webhook`, `api_server`) or single-query `hermes chat -q` | Delegated child | Cron turn |
-| --- | --- | --- | --- | --- |
-| push to `refs/heads/<prefix>...` with a named destination | Hermes approvals | allowed with the grant on, refused with a hand-off while it is off | refused, because a child does not carry the grant | not visible to OMH |
-| `gh pr create --head <prefix>...`, without `--repo` | Hermes approvals | same as above | refused | not visible |
-| push or `gh pr comment <URL>` on a recorded own PR | Hermes approvals | same as above | refused | not visible |
-| merge (`gh pr merge`, a `gh api` write to a merge endpoint) | Hermes approvals | refused | refused | not visible |
-| force push or ref deletion (`-f`, `--force`, `--force-with-lease`, `+ref`, `--delete`, `:ref`, `--mirror`, `--prune`) | Hermes approvals | refused | refused | Hermes flags it, and `approvals.cron_mode` decides |
-| push outside the prefix (`HEAD:main`, `main`, tags, `--all`) | Hermes approvals | refused | refused | not visible |
-| another PR or the repository (`gh pr edit/close/review/...`, a comment on an unrecorded PR, `gh pr create --repo`, `gh repo/secret/label/release ...`, any `gh api` write) | Hermes approvals | refused | refused | not visible |
-| destination not named (`git push`, `git push origin HEAD`, `git push origin bot/x`, `gh pr create` without `--head`, `gh pr comment 12` without `--repo`) | Hermes approvals | refused | refused | not visible |
-| unclassifiable (a backquote, an unbalanced quote, `env -S`, an unknown git subcommand or alias, an unknown `gh` group, git or gh beside a forge verb under another program, `execute_code` naming them) | Hermes approvals | refused (fails closed) | refused | not visible |
+A session counts as unattended when it is one of these:
+
+- a programmatic platform (`webhook`, `msgraph_webhook`, `api_server`);
+- a cron turn (Hermes builds every cron agent with `platform="cron"`, and OMH
+  records the platform `pre_llm_call` passes);
+- a delegated child (`platform="subagent"`, or reported by `subagent_start`);
+- a single-query `hermes chat -q` process.
+
+| Command class | Attended chat | Unattended | Delegated child |
+| --- | --- | --- | --- |
+| push to `origin` `HEAD:refs/heads/<prefix>...` with a named destination | Hermes approvals | allowed with the grant on, refused with a hand-off while it is off | refused, because a child does not carry the grant |
+| `gh pr create --head <prefix>...` as the only command in the line, without `--repo` or `--label`, at most one per session | Hermes approvals | same as above | refused |
+| `gh pr comment <URL>` on a recorded own PR, body not a bot command | Hermes approvals | same as above | refused |
+| merge or merge trigger (`gh pr merge`, a `gh api` write to a merge endpoint, a comment line starting with `/`, `@name ...` or `bors`) | Hermes approvals | refused | refused |
+| force push or ref deletion (`-f`, `--force`, `--force-with-lease`, `+ref`, `--delete`, `:ref`, `--mirror`, `--prune`) | Hermes approvals | refused | refused |
+| push outside the prefix or to a remote other than `origin` (`HEAD:main`, `main`, tags, `--all`, a URL) | Hermes approvals | refused | refused |
+| push options (`-o`), another PR or the repository (`gh pr edit/close/review/...`, a comment on an unrecorded PR, `gh pr create --repo/--label`, `gh repo/secret/label/release ...`, any `gh api` write, an MCP tool whose name says merge, push, delete or pull_request) | Hermes approvals | refused | refused |
+| destination not named (`git push`, `git push origin HEAD`, `git push origin bot/x`, `gh pr create` without `--head`, `gh pr comment 12` without `--repo`) | Hermes approvals | refused | refused |
+| unclassifiable (see below) | Hermes approvals | refused (fails closed) | refused |
+
+Unclassifiable covers:
+
+- an unbalanced quote, a backquote, `env -S`, or a heredoc in a multi-line
+  command that names git or gh;
+- a `$` word, or a quoted or escaped command word, beside a forge verb;
+- `-c`, `--config-env` or `--exec-path` on git, and a `GIT_*`, `GH_*`,
+  `GITHUB_*`, `PATH`, `HOME` or `XDG_CONFIG_HOME` assignment or export;
+- `--upload-pack`, `--receive-pack`, `--exec`, `--extcmd`, `ext::` or `fd::`;
+- a write to any `git config` key but `user.name` and `user.email`, and any
+  `git remote` change;
+- a git subcommand or alias the table does not know, and `difftool`;
+- `gh auth` other than a plain `status`, and an unknown `gh` group;
+- a function or alias named git or gh;
+- git or gh beside a forge verb under another program;
+- `execute_code` naming them, a `process` write that is not a whole line,
+  and a file-tool write under `.git/`.
 
 In an attended chat nothing changes. The person is there, and Hermes' own
 approvals apply.
@@ -89,28 +120,45 @@ Why a bare branch name counts as "not named": `remote.<name>.push` can remap
 hook cannot see which branch is checked out, so a push must say
 `HEAD:refs/heads/<prefix><topic>`.
 
-Why a cron turn is not visible: the cron marker is a Hermes context variable
-and never a process variable, and a plugin hook is not passed it
-(`src/plugin_bundle/omh/hooks/session_attendance.py`). A PR watch job runs as
-a cron turn, so there the bounds are the following. The job's prompt and the
-`github-event-ops` skill text state the grant's scope. The PR watch's
-two-round fix cap holds. Hermes' own approvals flag a force push and decide it
-by `approvals.cron_mode`, which defaults to deny. Hermes flags no plain `git
-push` and no `gh` verb (measured against the installed Hermes'
-`tools/approval_detection.py`). That includes a push to the default branch
-and `gh pr merge`.
+What Hermes itself flags (measured against the installed Hermes'
+`tools/approval_detection.py`): a force push. It flags no plain `git push`,
+including one to the default branch, and no `gh` verb, including `gh pr
+merge`. Outside OMH's gate, nothing else stops those in an unattended run.
+
+A raise inside OMH's hook fails closed: Hermes turns a `pre_tool_call`
+exception into a block (`hermes_cli/plugins_dispatch.py`). A runtime-binding
+fault before the gate runs (an unreadable profile config) returns an allow
+for every gate, this one included; that window is the pre-existing one
+`tool_hooks.py` states.
+
+## What this gate is, and is not
+
+It holds a cooperating model against its own mistakes and against naive
+injected instructions, such as a webhook payload telling the bot to merge. It
+is **not** a boundary against a model that sets out to evade it. These reach
+the forge without passing the gate:
+
+- a script file run by an interpreter (`bash deliver.sh`, `python x.py`), and
+  `base64 -d | sh`;
+- the persistent shell (Hermes' `terminal.persistent_shell` defaults to on): a
+  function, alias or PATH shim defined under a name the gate does not read;
+- an HTTP client with a token (`curl`, `wget`, `httpie`, a Python request),
+  for which `gh auth token` is refused but any token already in the
+  environment or a file is not;
+- an MCP forge tool whose name does not say merge, push, delete or
+  pull_request;
+- a local-path or `insteadOf` remote set up before the grant applied;
+- the grant file and the opened-PR record written by arbitrary code under
+  another spelling (the file tools and command lines that name the store are
+  refused);
+- on Windows, the grant file's mode bits, which mean nothing there.
 
 ## Residuals, stated
 
-- Only `git` and `gh` are recognized as forge CLIs. Another forge's CLI is not
-  classified.
-- A script file run by an interpreter (`bash deliver.sh`, `python deliver.py`)
-  is not read. A command line or `execute_code` that names git or gh beside a
-  forge verb is refused.
-- The repository a push goes to (the remote's URL) is not checked. Only the
-  destination branch is checked.
-- The grant file and the opened-PR record are protected against the file
-  tools and against command lines that name them. They are not protected
-  against arbitrary code that writes them under another spelling.
-- A commit message whose body holds a line that reads as a forge command can
-  be refused in an unattended session. This is the fail-closed direction.
+- Only `git` and `gh` are recognized as forge CLIs.
+- Two profiles that grant the same prefix can each push to the other's bot
+  branches. Give each bot its own prefix.
+- `gh issue` and `gh run` mutations are outside this gate.
+- A commit message or command argument that reads as a forge command, or
+  holds a `$`, can be refused in an unattended session. This is the
+  fail-closed direction.

@@ -574,8 +574,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # github-event-ops moves, and the pin before it was c839b0a3...23f3.
         # The PR delivery grant then names its one exception in the unattended rule (browser, command,
         # connector and workspace-file operators) and delivery with its evidence in github-event-ops; only
-        # those five bodies move, and the pin before it was fe24412b...1dd4.
-        self.assertEqual(_digest(legacy_hashes), 'b45d33cc87b92eba3431d73b2c3856421a68c8c269fd50d7dae4383317b18367')
+        # those five bodies move, and the pin before it was fe24412b...1dd4. Its review round names a cron
+        # turn as held and one PR per run; only github-event-ops moves, and the pin before it was b45d33cc...8367.
+        self.assertEqual(_digest(legacy_hashes), '411ffac7bbc89b75fb3e41a4ad48bbce24c5aeabab8ae8f9e8154f844406b5d3')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

@@ -11,9 +11,12 @@ This module holds the one writer of the grant, `write_pr_delivery_grant`.
 `tests/test_pr_delivery_grant.py` holds that nothing else in `src/` calls it:
 no plugin tool, hook or skill can turn the grant on. `on` and `off` also
 refuse to run inside a Hermes session (a `HERMES_SESSION_ID` in the
-environment, which Hermes sets for every command its terminal tool runs), and
-the plugin's tool hook refuses any command line naming them, so a bot can
-only tell the person the command.
+environment, which Hermes sets for every command its terminal tool runs),
+`on` needs a yes typed at the controlling terminal, and the plugin's tool
+hook refuses any command line naming them, so a bot can only tell the person
+the command. A model that sets out to evade all three (a pseudo-terminal it
+drives, an environment it scrubs, a command line spelled past the hook) is
+the stated residual, not a case this module claims to stop.
 
 The grant is per Hermes profile: the file names the profile's Hermes home,
 and a grant for one profile never reads as on for another, even when both
@@ -25,6 +28,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -59,22 +64,46 @@ def write_pr_delivery_grant(paths, *, state: str, branch_prefix: str, previous: 
         "granted_at": _now() if state == "on" else str((previous or {}).get("granted_at") or ""),
         "changed_by": pr_delivery.TURN_ON_COMMAND if state == "on" else pr_delivery.TURN_OFF_COMMAND,
         "enforcement": (
-            "OMH's tool hook refuses the never-allowed actions in a session nobody can answer, and the "
-            "grant-covered ones too while the grant is off; it cannot tell a cron turn apart, where the "
-            "skill text, the PR watch's caps and Hermes' own approvals bound the run instead. omh itself "
-            "runs no forge command."
+            "OMH's tool hook refuses the never-allowed actions in a session nobody can answer (a webhook, "
+            "api_server, cron, one-shot or delegated run), and the grant-covered ones too while the grant is "
+            "off. It holds a cooperating model, not one that sets out to evade it. omh itself runs no forge "
+            "command."
         ),
     }
     if state == "off":
         document["turned_off_at"] = _now()
     path = pr_delivery.grant_path(paths.omh_home, paths.hermes_home)
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-        handle.write(json.dumps(document, indent=2, sort_keys=True) + "\n")
-    os.replace(temporary, path)
+    descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(document, indent=2, sort_keys=True) + "\n")
+        os.chmod(temporary, 0o600)
+        os.replace(temporary, path)
+    except OSError:
+        Path(temporary).unlink(missing_ok=True)
+        raise
     return document
+
+
+def confirm_on_terminal(prompt: str) -> bool:
+    """A yes typed at the controlling terminal. A gateway- or cron-run child has none, so it is a no.
+
+    POSIX reads `/dev/tty`; Windows, which has no `/dev/tty`, asks on stdin
+    only when stdin is a console. Untested on Windows.
+    """
+    if os.name == "nt":
+        if not sys.stdin.isatty():
+            return False
+        return input(prompt).strip().lower() in ("y", "yes")
+    try:
+        with open("/dev/tty", "r+", encoding="utf-8") as tty:
+            tty.write(prompt)
+            tty.flush()
+            answer = tty.readline()
+    except OSError:
+        return False
+    return answer.strip().lower() in ("y", "yes")
 
 
 def _previous(path: Path) -> dict | None:
@@ -128,6 +157,12 @@ def _change(args: argparse.Namespace, *, state: str) -> int:
         print(f"Refused: {prefix!r} is not a branch prefix. Use one path segment ending in '/', for example 'bot/'.")
         return EXIT_REFUSED
     paths = _paths(args)
+    if state == "on" and not confirm_on_terminal(
+        f"Let the bot of {_profile(paths)} push branches under {prefix} and open and update its own pull "
+        "requests when nobody can answer? Type yes: "
+    ):
+        print("Refused: turning the grant on needs a yes typed at your own terminal.")
+        return EXIT_REFUSED
     before = pr_delivery.read_grant(paths.omh_home, paths.hermes_home)
     path = pr_delivery.grant_path(paths.omh_home, paths.hermes_home)
     previous = _previous(path)

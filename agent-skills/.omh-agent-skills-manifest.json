@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "2b12b41430618ab24a2fb0ca42cd88e11688a201be1ab8e4f9b4fd7d542dafe1",
+  "catalog_revision": "d4055076b61d93bd559d00ad46403aa35217de03c875b9fd3930499ec9f7968e",
   "files": {
     "omh-accessibility-audit/SKILL.md": "01b41b6815463311a950c558300afeb4e2659a1bba44efcf741568cacac6f1d6",
     "omh-accessibility-audit/references/a11y-rules.md": "615cc9eaa24ee36089d395b215cc25b2d9b0d2549f228a5f81df0553f45d2f75",
@@ -135,7 +135,7 @@
     "omh-geospatial-analysis/toolkit/upstream-manifest.json": "7d30df2e943e5fd1cca16048403caaa1002d695745735b49c5070032b0ce70f3",
     "omh-git-workflow/SKILL.md": "c75e0706efeb2d6f26923e3ba8555e80e663d4b41416e18963e9a67cc108da85",
     "omh-git-workflow/references/git-repair-method.md": "dce3aaf3ee00faf0f359bdbe58081efa43accc903afbd792d96aed69bae98130",
-    "omh-github-event-ops/SKILL.md": "cad1310fbcd53ded70f74973d8fdc4c7352140c31c773aa8cb750431e6d6a814",
+    "omh-github-event-ops/SKILL.md": "6dfcc259c2a8109568068775ebf1dba4f2a712d444cacfa259cef8b893066821",
     "omh-github-issue-intake/SKILL.md": "d9a09aa136436dba67a052aa4355cdc05e3e973326feee6218338e2d2d22e496",
     "omh-harness-session-inventory/SKILL.md": "816805878e9e944396119e33c27c2f8cae0aa55221d1444f1a2029988234a86f",
     "omh-iac-change/SKILL.md": "40e31a867a780129cf84475d2c64e0e7c1a73dd1c7b1b4b131dc7f107b1fd5ef",

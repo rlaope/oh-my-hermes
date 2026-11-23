@@ -46,7 +46,8 @@ _UNATTENDED_GATE = (
 # PR watch reference so the two cannot drift.
 _PR_DELIVERY_STEPS = (
     "push the work branch with a named destination and no force (`git push origin HEAD:refs/heads/<prefix><topic>`), "
-    "open the PR from it (`gh pr create --head <prefix><topic>`, without `--repo`), then start the bounded PR watch "
+    "open the PR from it (`gh pr create --head <prefix><topic>` as a command of its own, without `--repo` or "
+    "`--label`, one PR per run), then start the bounded PR watch "
     "(two fix rounds, then a person); a fix round pushes to the same branch the same way, and a comment names the PR "
     "by its URL (`gh pr comment <PR URL>`)"
 )
@@ -121,9 +122,9 @@ _FEATURE_SURFACE_SKILLS = (
                 "command). Read its state from `omh_status` (`pr_delivery_grant`). With it on, an unattended run may "
                 f"{_PR_DELIVERY_STEPS}. With it off, the push and the PR are handed to a person's turn with the "
                 "prepared branch, commits and PR text. Never merge, force-push, push to the default branch, or act on "
-                "a PR the bot did not open. In a webhook or one-shot run OMH's tool hook refuses those, and refuses a "
-                "push or PR that does not name its destination; a refused command is handed to a person's turn, "
-                "never rephrased through a shell wrapper, an alias or code.",
+                "a PR the bot did not open. In a webhook, scheduled or one-shot run, and in a delegated child, OMH's "
+                "tool hook refuses those, and refuses a push or PR that does not name its destination; a refused "
+                "command is handed to a person's turn, never rephrased through a shell wrapper, an alias or code.",
                 "Unattended delivery of the bot's own work needs a PR delivery grant the person gave this bot; without "
                 f"one, the push and the PR are handed to a person's turn. With it, an unattended run may "
                 f"{_PR_DELIVERY_STEPS}. Never merge, force-push, push to the default branch, or act on a PR the bot "

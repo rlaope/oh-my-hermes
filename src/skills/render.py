@@ -11372,10 +11372,9 @@ reason=state_unreadable path=<file>` rather than guessing the count.
 The script computes and prints the count; it cannot stop a run from pushing.
 The stop is the run obeying `next=`. In this job a push is a person's (the
 unattended rule) unless the person turned on the bot's PR delivery grant
-(section 7). A watch job runs as a cron turn, which OMH's tool hook cannot
-tell apart from an attended one, so there the bounds are this cap, the job's
-prompt, and Hermes' own `approvals.cron_mode` for the commands Hermes flags (a
-force push).
+(section 7). A watch job runs as a cron turn, which OMH's tool hook holds as
+unattended: with the grant on it lets a fix round's push to the bot's branch
+through and nothing else; with it off it refuses the push.
 
 ## 5. The own-PR guard and the burst cap
 
@@ -11480,17 +11479,16 @@ prepared. "A PR this bot opened" is OMH's record, not the run's word: when a
 tool hook records that URL for this profile, and a comment is allowed only on
 a recorded PR.
 
-Where OMH's tool hook can tell nobody can answer (a webhook or `api_server`
-run, a one-shot `hermes chat -q`, a delegated child), it refuses the
-never-allowed actions whatever the grant says, refuses the allowed ones while
-the grant is off (and always in a delegated child, which does not carry the
-grant), refuses a push or PR that does not name its destination (`git push`,
-`git push origin HEAD`, `gh pr create` without `--head`), and refuses a
-command it cannot read (a shell wrapper around git, an alias, `execute_code`
-naming git or gh). A watch job is a cron turn, which a plugin cannot tell
-apart from an attended chat, so there nothing is refused by OMH: the job's
-prompt, the fix-round cap and Hermes' own `approvals.cron_mode` (Hermes flags a
-force push, and no plain push or `gh` verb) are the bounds.
+In a run nobody can answer (a webhook or `api_server` run, a watch job or any
+cron turn, a one-shot `hermes chat -q`, a delegated child), OMH's tool hook
+refuses the never-allowed actions whatever the grant says, refuses the
+allowed ones while the grant is off (and always in a delegated child, which
+does not carry the grant), refuses a push or PR that does not name its
+destination (`git push`, `git push origin HEAD`, `gh pr create` without
+`--head`), a second PR in one run, and a command it cannot read (a shell
+wrapper around git, a variable, an alias, `-c` or a `GIT_`/`GH_` setting,
+`execute_code` naming git or gh). It holds a bot that follows this page; it is
+not a boundary against one that sets out to evade it.
 """
 
 
