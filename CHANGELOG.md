@@ -24,6 +24,15 @@ All notable changes will be documented here.
   text is never added to it, waits in the composer instead, and a notice says so. The text is read only when the
   screen is this machine's (no SSH, and inside tmux not over SSH): through the Win32 clipboard on Windows, `pbpaste`
   on a Mac, and `wl-paste`, `xclip` or `xsel` on Linux. (#3131; `docs/OMH-TUI-BOUNDARY.md`)
+- **omher on Windows: "Reply there" no longer draws over the row's time, and the app names Windows' own fonts.** In
+  the side panel's "Where your bot is", hovering a Slack or Discord row showed "거기에 답장" on top of the row's time
+  ("거기에답장일"): the button floated over the time and its hover fill was see-through. Now the time gives way while
+  the button shows, the row keeps room for the button in its own layout (so the title stops before it in every language
+  and font), and the fill is opaque. The font list names Segoe UI, Malgun Gothic, Yu Gothic UI / Meiryo and Microsoft
+  YaHei UI and puts the UI language's own CJK fonts first, so Windows no longer falls back to older fonts or draws
+  Japanese kanji in a Chinese face; code text names Cascadia Mono and Consolas. Segmented controls and fixed-height
+  buttons keep their label on one line and grow with it instead of wrapping inside the box, and a split terminal's
+  corner buttons sit on an opaque fill.
 - **omher on Windows: a terminal running oh-my-hermes reads oh-my-hermes, not Hermes.** Windows has no terminal
   foreground process group, so omher looks through the processes under the terminal for a known agent CLI. It took
   the newest one, and `omh.exe` starts `hermes.exe` beneath itself, so the row read "Hermes" with the Hermes mark and
@@ -153,6 +162,22 @@ All notable changes will be documented here.
   `_section_node_is_sequence`, `_block_header`, `_skills_document_parts`)
   `enabled:` or `provider:` key written above it, which Hermes could not load. Reported by @chhxbchhxb in #3075.
   (`src/install/config_adapter.py` `_root_is_plain_block_mapping`, `_section_node_is_sequence`)
+- **`omh doctor` says why a Hermes bot went quiet: gateways older than the build, stray gateways, and adapters that
+  failed to connect.** A Discord bot whose profile gained a role allowlist kept working until its next reconnect, when
+  Discord refused the Server Members privileged intent that Hermes then requests, and the bot stayed offline. On the
+  same machine several gateway processes were running, some started before the installed Hermes build, and nothing
+  in OMH said so. Doctor now prints a **Hermes gateways (read-only)** section, also carried as the `gateway_health`
+  row's `detail` in `--json` (`omh_gateway_health/v1`). It lists each running gateway with the profiles it serves and
+  its start time, and flags one started before the installed build stamp unless its own record stamps the installed
+  commit. It reports Hermes' own pending-fleet-restart record and its last update receipt's restart outcome, any
+  `hermes gateway run` process no record names, and a profile two gateways serve, by PID. For each profile and
+  platform it gives the state now: the serving gateway's own record entry first, else the newest gateway log line
+  of this gateway run (a served profile's reconnect that ends in the adapter's own failure line counts); a line
+  from an earlier run is said as such, never as connected. A privileged-intents refusal names the intents and the Developer Portal page that enables them;
+  a rejected token is named, and any other reason is shown, bounded, as unrecognized. Missing evidence is said as
+  missing, never as healthy. The fix is always Hermes' own command; OMH stops and restarts nothing.
+  (`src/maintenance/gateway_health.py`, `src/maintenance/hermes_gateway_formats.py`,
+  `src/system/process_listing.py`; `docs/INSTALLATION.md` "Bot Profiles")
 - **omher 1.1.3.** GitHub across your repositories and accounts, a Claude usage meter that shows numbers, and terminals
   and bridges that recover by themselves.
   - **GitHub:** Tasks gains a "나" scope: your review requests, your pull requests, issues assigned to you and mentions,

@@ -5759,9 +5759,12 @@ def _print_doctor_summary(payload: dict[str, object], *, language: str = "en") -
     if isinstance(state_log, dict) and state_log.get("path") and state_log.get("entry"):
         print(f"  {tr(language, 'state_log', path=state_log.get('path'), entry=state_log.get('entry'))}")
     _print_doctor_privacy_controls(payload)
+    _print_doctor_gateway_health(checks, language=language, use_color=use_color)
     for check in checks:
         if not isinstance(check, dict) or (check.get("ok") and check.get("severity") != "warning"):
             continue
+        if check.get("name") == "gateway_health":
+            continue  # printed whole, as its own section, above
         name = check.get("name", "unknown")
         message = check.get("message", "")
         remediation = check.get("remediation", "") or check.get("next_action", "")
@@ -5775,6 +5778,19 @@ def _print_doctor_summary(payload: dict[str, object], *, language: str = "en") -
         print(f"  {_doctor_human_next_action(next_action, language=language)}")
     print(f"  {tr(language, 'doctor_boundary')}")
     print(f"  {tr(language, 'machine_readable')}")
+
+
+def _print_doctor_gateway_health(checks: list[object], *, language: str, use_color: bool) -> None:
+    """The `gateway_health` row's report, every line of it, whatever its severity: absence is said, not hidden."""
+    check = next((item for item in checks if isinstance(item, dict) and item.get("name") == "gateway_health"), None)
+    detail = check.get("detail") if check else None
+    if not isinstance(detail, dict):
+        return
+    print(_color(tr(language, "doctor_gateway_health"), "1;32", use_color))
+    for line in detail.get("lines", []):
+        print(f"  {line}")
+    for action in detail.get("next_actions", []) if detail.get("findings") else []:
+        print(f"    {tr(language, 'doctor_fix')}: {action}")
 
 
 def _print_doctor_privacy_controls(payload: dict[str, object]) -> None:
