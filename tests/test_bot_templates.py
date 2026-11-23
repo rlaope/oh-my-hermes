@@ -13,6 +13,7 @@ load_local_package()
 
 from omh.catalogs.bot_templates import (  # noqa: E402
     APPLY_SKILL,
+    MONITOR_RECIPES_REFERENCE,
     BOT_TEMPLATE_CATALOG_SCHEMA_VERSION,
     BOT_TEMPLATE_SCHEMA_VERSION,
     BOT_TEMPLATES,
@@ -48,6 +49,12 @@ HERMES_MCP_CATALOG_NAMES = frozenset({"atlassian", "datadog", "grafana", "linear
 # Hermes' bundled skills the templates use, by folder name under `skills/<category>/` of the same checkout.
 HERMES_BUNDLED_SKILLS = frozenset(
     {"email-inbox-triage", "github", "google-workspace", "meeting-action-items", "obsidian"}
+)
+# Rows of `automation-blueprint`'s `references/monitor-recipes.md` (PR #3153), by their config example's name. The
+# skill stops at a missing reference with the `omh update` line, so an older OMH names what it lacks.
+MONITOR_RECIPE_IDS = frozenset(
+    {"gmail-new-mail", "calendar-starting-soon", "notion-changed", "linear-assigned", "jira-assigned",
+     "obsidian-folder-changed", "sentry-new-issue"}
 )
 
 
@@ -153,11 +160,15 @@ class BotTemplateCatalogTests(unittest.TestCase):
                     self.assertIsNotNone(content)
                     self.assertIn(f"## {webhook.section}\n", content)
             for schedule in template.schedules:
-                if schedule.reference is None or schedule.recipe:
+                if schedule.reference is None:
                     continue
                 with self.subTest(schedule=schedule.id):
-                    self.assertIsNotNone(_reference(*schedule.reference))
                     self.assertTrue(schedule.asks)
+                    if schedule.recipe:
+                        self.assertEqual(schedule.reference, MONITOR_RECIPES_REFERENCE)
+                        self.assertIn(schedule.recipe, MONITOR_RECIPE_IDS)
+                    else:
+                        self.assertIsNotNone(_reference(*schedule.reference))
 
     def test_persona_seeds_are_generic_and_never_open_a_link_or_name_a_person(self) -> None:
         for template in BOT_TEMPLATES:
