@@ -92,6 +92,12 @@ class TurnEndTests(unittest.TestCase):
             with self.subTest(state=name):
                 self.assertEqual(self.ends(ITERM, report, TURN_ALERT_SECONDS - 0.5), "")
 
+    def test_omher_is_quiet_at_a_turn_end_in_every_state(self) -> None:
+        # Inside omher the OSC 9;4 done is the turn end's signal (`tests/test_tui_progress_report.py`).
+        for name, report in STATES:
+            with self.subTest(state=name):
+                self.assertEqual(self.ends({"TERM_PROGRAM": "omher"}, report, 60), "")
+
     def test_bell_off_is_silent_in_every_state(self) -> None:
         for name, report in STATES:
             with self.subTest(state=name):
