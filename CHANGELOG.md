@@ -4,6 +4,23 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`omh_delegate_route` can hand a child the rest of its chain, each step at its own effort (opt-in).** With
+  `{"schema_version": "delegate_route_options/v1", "write_fallback_providers": true}` in
+  `~/.omh/routing/delegate-route.json`, `set` also writes the positions after the head into
+  `delegation.fallback_providers` (`{provider, model, reasoning_effort}` each, in chain order). A child whose head
+  fails, a quota 429 included, then moves on inside the same dispatch instead of waiting out the head's retries.
+  It is off by default. It applies only on a Hermes whose source has hermes-agent PR #144787's
+  `agent/fallback_reasoning.py`, because an older Hermes runs every fallback at `agent.reasoning_overrides` rather
+  than the entry's effort. On such a Hermes only the three scalars are written, and the result's `in_child_fallback`
+  and `omh doctor` (`plugin_delegate_route_fallback_chain`) say why. Positions whose provider you have not
+  configured are skipped. OMH records the chain it wrote with the route and takes it back out at turn end and on
+  `clear` (an absent key stays absent), and the lost-update and per-conversation guards cover it. Your own
+  `delegation.fallback_providers` (`[]` included) is never overwritten. The list writer keeps the scalar writer's
+  rules: plain tokens only, an atomic replace, a symlinked config refused. `action=fallback` still re-dispatches,
+  continuing after the positions the child already walked (`walked_in_child`). Requested by @rafaelmoreiraai in
+  #3124. (`src/plugin_bundle/omh/delegation_fallback_chain.py`, `src/plugin_bundle/omh/delegation_routing.py`,
+  `src/plugin_bundle/omh/delegation_route_restore.py`, `src/plugin_bundle/omh/tools/delegate_route_tool.py`,
+  `src/maintenance/doctor.py`; `docs/INSTALLATION.md` "The rest of the chain inside the child")
 - **Fanout hands coding units to a harness CLI you declare, or to one of nine presets.** Put an executor in
   `<omh_home>/routing/executors.toml` (never read from a repository or the working directory) as an `argv` list
   with exactly one `{prompt}` or `{prompt_file}` element, or opt in to a preset with `omh coding executors add

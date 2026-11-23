@@ -19,12 +19,16 @@ from ..delegation_route_restore import (
 # which pairs it with the baseline bookkeeping under one lock. Reaching for
 # the raw writer here again would reopen the window this PR closed.
 from ..delegation_routing import (
+    FALLBACK_CHAIN_KEY,
     _read_delegation_route_text,
+    encode_fallback_chain,
     read_child_endpoint,
     read_config_snapshot,
     read_delegation_route,
     read_session_provider,
+    route_like,
 )
+from ..delegation_fallback_chain import host_support, host_support_note, load_fallback_chain_option
 from ..hermes_delegation import (
     HERMES_MIXTURE_CATEGORY_CHAINS,
     append_delegation_route_provenance,
@@ -255,6 +259,91 @@ def _chain_entry(
         entry["provider"] = provider
         entry["model"] = wire_model
     return entry
+
+
+def _in_child_chain(
+    hermes_home: Any,
+    omh_home: Any,
+    positions: tuple[tuple[str, str], ...],
+    routes: dict[str, tuple[str, str]],
+) -> tuple[str, dict[str, Any] | None]:
+    """The chain positions after the routed one, as `delegation.fallback_providers` text (#3124).
+
+    Returns the chain to write (`""` writes none, and takes out a chain OMH
+    left from an earlier lane) and the report for the result, which is None
+    while the person has no options document, so a route reads as it always
+    did. Opt-in and host-gated (`delegation_fallback_chain`). A position is
+    written only when it resolves to a provider the person configured: a
+    fallback entry sends the child's whole task to that provider, the rule
+    `set` applies to the head. A position with no provider route is skipped
+    too, since Hermes drops an entry without a provider.
+    """
+    enabled, option_status = load_fallback_chain_option(omh_home)
+    if not enabled:
+        return "", None if option_status == "absent" else {"status": "off", "options": option_status}
+    support = host_support()
+    if not support["supported"]:
+        return "", {
+            "status": "host_unsupported",
+            "reason": support["reason"],
+            "note": host_support_note(support) + "; only the three delegation scalars were written",
+        }
+    configured = _configured_providers(hermes_home, omh_home)
+    entries: list[dict[str, str]] = []
+    skipped: list[dict[str, str]] = []
+    for alias, effort in positions:
+        entry = _chain_entry(alias, effort, routes)
+        provider = entry["provider"]
+        reason = ""
+        if not provider:
+            reason = "no_provider_route"
+        elif provider.casefold() not in configured:
+            reason = "provider_not_configured"
+        elif _always_thinking_claude(alias) and effort.casefold() in _NO_THINKING_EFFORTS:
+            reason = "no_thinking_effort_refused"
+        elif encode_fallback_chain([entry]) is None:
+            reason = "unwritable_value"
+        if reason:
+            skipped.append({"alias": alias, "provider": provider, "reason": reason})
+        else:
+            entries.append(entry)
+    report: dict[str, Any] = {"status": "no_positions" if not entries else "written", "entries": entries}
+    if skipped:
+        report["skipped"] = skipped
+    return (encode_fallback_chain(entries) or "") if entries else "", report
+
+
+def _chain_outcome(result: dict[str, Any], report: dict[str, Any] | None) -> dict[str, str]:
+    """Fold the writer's chain note into the report; return the provenance fields for the chain.
+
+    `applied` names a chain only when OMH wrote it, so the provenance record
+    never claims a chain the person owns.
+    """
+    chain = str((result.get("applied") or {}).get(FALLBACK_CHAIN_KEY, "") or "")
+    note = str(result.pop("fallback_chain", "") or "")
+    if report is not None and report.get("status") == "written" and note.startswith("kept_"):
+        if note == "kept_unsupported_config":
+            report["status"] = "unsupported_config"
+            report["note"] = (
+                "config.yaml has more than one `delegation:` section, and a list cannot be written into "
+                "both, so only the three delegation scalars were written."
+            )
+        else:
+            report["status"] = "person_owned"
+            report["note"] = (
+                "delegation.fallback_providers already holds your own value; OMH never overwrites it, "
+                "so only the three delegation scalars were written. Remove the key "
+                "(`hermes config unset delegation.fallback_providers`) to let OMH write the chain."
+            )
+    if report is not None:
+        result["in_child_fallback"] = report
+    if not chain:
+        return {}
+    fields = {FALLBACK_CHAIN_KEY: chain}
+    entries = (report or {}).get("entries") or []
+    if entries and (report or {}).get("status") == "written":
+        fields["fallback_through"] = str(entries[-1]["alias"])
+    return fields
 
 
 def _legacy_custom_provider_names(config_text: str) -> set[str]:
@@ -538,7 +627,7 @@ def _conversation(hermes_home: Any, session_id: str) -> set[str]:
 
 def _fallback_position(
     route: dict[str, str], hermes_home: Any, omh_home: Any, session_id: str
-) -> tuple[dict[str, str], str, str, str, str]:
+) -> tuple[dict[str, str], str, str, str, str, str]:
     """The route a fallback is advancing FROM, where that came from, and its lane.
 
     Only the CALLING conversation's own route is a position. The live keys,
@@ -583,6 +672,10 @@ def _fallback_position(
     inside a mixture category that happens to list the same model — and a
     digest that no longer matches the file says the config moved between
     the write and the read, which the caller reports instead of advancing.
+
+    The last value is the alias of the last in-child fallback position that
+    record wrote into `delegation.fallback_providers` (#3124), or `""`: the
+    child walked those positions itself, so the re-dispatch starts after it.
     """
     conversation = _conversation(hermes_home, session_id)
     newest = newest_written_provenance(omh_home, session_ids=conversation)
@@ -592,20 +685,21 @@ def _fallback_position(
         route.get("model")
         and record
         and record["writer_session_id"] in conversation
-        and dict(route) == record["written"]
+        and route_like(route, record["written"]) == record["written"]
     ):
-        position, source = dict(route), "live_route"
+        position, source = dict(record["written"]), "live_route"
     elif recovered.get("model"):
         position, source = recovered, "provenance"
     else:
-        return {}, "none", "", "", ""
+        return {}, "none", "", "", "", ""
     if recovered == position:
         category = str(newest.get("category", "") or "")
         identity = str(newest.get("identity", "") or "")
         identity_digest = str(newest.get("identity_digest", "") or "")
+        walked = str(newest.get("fallback_through", "") or "")
     else:
-        category, identity, identity_digest = "", "", ""
-    return position, source, category, identity, identity_digest
+        category, identity, identity_digest, walked = "", "", "", ""
+    return position, source, category, identity, identity_digest, walked
 
 
 OMH_DELEGATE_ROUTE_SCHEMA = {
@@ -625,7 +719,9 @@ OMH_DELEGATE_ROUTE_SCHEMA = {
         "Unless delegation.fallback_providers is set, a child whose model the account cannot serve "
         "dies on an HTTP 400 yet reports completed with the error text as its result (completed with "
         "no recorded model usage means exactly this): call action=fallback and re-dispatch; it stays "
-        "in this conversation's category. An exhausted chain restores the keys' value from before "
+        "in this conversation's category. When the user opted in, set also writes the later chain "
+        "positions into delegation.fallback_providers (see `in_child_fallback`), and fallback continues "
+        "after the positions the child walked. An exhausted chain restores the keys' value from before "
         "OMH first wrote them; when it cannot prove OMH wrote the current value it changes nothing "
         "and reports unrecorded_value_not_ours. "
         "Relay any `say` field to the user once, in their language and your own words."
@@ -928,16 +1024,18 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
                 attach_public_observation(payload, observation),
                 ensure_ascii=False, sort_keys=True,
             )
-        route = read_delegation_route(hermes_home)
+        # With the chain, so the conditional writes below also see a change
+        # to the chain OMH wrote (`route_like` keeps the person's out).
+        route = read_delegation_route(hermes_home, with_chain=True)
         # A fallback normally happens a turn AFTER the route was written --
         # the child dies on HTTP 400 and the model is told next turn -- and
         # by then the turn-end restore has taken the route back out. The
         # chain position therefore comes from this conversation's provenance
         # when the live keys no longer carry its route; `expected_previous`
         # below still guards against what is actually in the file.
-        position, position_source, position_category, position_identity, position_identity_digest = _fallback_position(
-            route, hermes_home, omh_home, session_id
-        )
+        (
+            position, position_source, position_category, position_identity, position_identity_digest, walked,
+        ) = _fallback_position(route, hermes_home, omh_home, session_id)
         current_model = str(position.get("model", ""))
         current_provider = str(position.get("provider", ""))
         # The live route holds whatever was dispatched, which is the provider's
@@ -1085,6 +1183,14 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
         if not identity_fallback:
             category, index = matches[0]
             chain = chains[category]
+        # The positions the route wrote into delegation.fallback_providers
+        # were the child's own to walk; a re-dispatch goes on after the last.
+        walked_in_child: list[str] = []
+        if walked:
+            later = [position for position in range(index + 1, len(chain)) if chain[position][0] == walked]
+            if later:
+                walked_in_child = [alias for alias, _ in chain[index + 1 : later[0] + 1]]
+                index = later[0]
         # A candidate whose route names a provider the person never
         # configured is passed over, never written: model-providers.json is a
         # file a model with a file tool can write too, and the child would
@@ -1136,6 +1242,8 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
                 result["identity"] = recorded_identity
             result["from"] = current_model
             result["position_source"] = position_source
+            if walked_in_child:
+                result["walked_in_child"] = walked_in_child
             if skipped_unconfigured:
                 result["skipped_unconfigured"] = skipped_unconfigured
             result["evidence_boundary"] = _EVIDENCE_BOUNDARY
@@ -1168,6 +1276,7 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
                 ),
             }
             return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
+        in_child, in_child_report = _in_child_chain(hermes_home, omh_home, chain[index + 2 :], provider_routes)
         result = write_route_with_baseline(
             hermes_home,
             omh_home=omh_home,
@@ -1176,8 +1285,10 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
             model=wire_model,
             reasoning_effort=next_effort,
             provider=next_provider,
+            fallback_providers=in_child,
             expected_previous=route,
         )
+        chain_fields = _chain_outcome(result, in_child_report) if result.get("status") == "routed" else {}
         if result.get("status") == "routed":
             result["status"] = "fell_back"
             result["applied"]["alias"] = next_model
@@ -1199,6 +1310,7 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
                     "from_alias": current_alias,
                     "session_id": session_id,
                     "written_at": time.time(),
+                    **chain_fields,
                     **(
                         {"identity": recorded_identity, "identity_digest": identity_digest}
                         if identity_selected
@@ -1211,6 +1323,8 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
                 _chain_entry(alias, chain_effort, provider_routes)
                 for alias, chain_effort in chain[index + 2 :]
             ]
+        if walked_in_child:
+            result["walked_in_child"] = walked_in_child
         if skipped_unconfigured:
             result["skipped_unconfigured"] = skipped_unconfigured
         result["evidence_boundary"] = _EVIDENCE_BOUNDARY
@@ -1367,6 +1481,14 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
             origin = "explicit provider argument" if args.get("provider") else "routing/model-providers.json"
             payload = _unconfigured_provider_error(provider, configured, origin=origin, hermes_home=hermes_home)
             return json.dumps(attach_public_observation(payload, observation), ensure_ascii=False, sort_keys=True)
+    # The identity's own chain supplies the fallback candidates when the
+    # identity supplied the head; a category keeps its own chain either way.
+    fallback_chain = identity_chain or chains.get(category, ())
+    # An explicit model is no chain position, so nothing after it is the
+    # child's to fall back to.
+    in_child, in_child_report = _in_child_chain(
+        hermes_home, omh_home, () if model else tuple(fallback_chain[chain_index + 1 :]), provider_routes
+    )
     result = write_route_with_baseline(
         hermes_home,
         omh_home=omh_home,
@@ -1375,7 +1497,9 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
         model=wire_model,
         reasoning_effort=effort,
         provider=provider,
+        fallback_providers=in_child,
     )
+    chain_fields = _chain_outcome(result, in_child_report) if result.get("status") == "routed" else {}
     if result.get("status") == "routed":
         result["applied"]["alias"] = alias
         result["category"] = category
@@ -1394,6 +1518,7 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
                 "reasoning_effort": effort,
                 "session_id": session_id,
                 "written_at": time.time(),
+                **chain_fields,
                 **(
                     {"identity": requested_identity, "identity_digest": identity_digest}
                     if identity_routed
@@ -1402,9 +1527,6 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
             },
             omh_home,
         )
-        # The identity's own chain supplies the fallback candidates when the
-        # identity supplied the head; a category keeps its own chain either way.
-        fallback_chain = identity_chain or chains.get(category, ())
         result["fallback_candidates"] = [
             _chain_entry(chain_alias, chain_effort, provider_routes)
             for chain_alias, chain_effort in fallback_chain[chain_index + 1:]

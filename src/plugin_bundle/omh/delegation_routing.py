@@ -26,6 +26,13 @@ This module owns that write. It is deliberately narrow:
   rewrites them.
 * A leading byte-order mark stays where it is, and the `delegation:` line
   after it is recognised rather than duplicated.
+* `delegation.fallback_providers` is a fourth key only when a caller asks for
+  it (the opt-in in-child chain, `delegation_fallback_chain`). It is a block
+  sequence, written by its own block writer under the same rules: every value
+  is a plain identifier token in single quotes, the write is the same atomic
+  replace, and a value this writer did not produce in its own shape (`[]`,
+  a flow list, an entry with a `base_url` or any other key, a comment inside
+  the block) is the person's and is never rewritten or removed.
 
 Writing a route is preparation, not execution: nothing dispatches from here,
 and the route only takes effect when the agent's next `delegate_task` call
@@ -37,13 +44,34 @@ from __future__ import annotations
 from . import runtime_paths
 from .route_endpoint_guard import BOM, child_endpoint, managed_config_layer, route_endpoint_refusal
 
+import json
 import os
 import re
 import tempfile
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Collection, Iterable, Mapping
 
 ROUTABLE_KEYS = ("model", "reasoning_effort", "provider")
+# The in-child fallback chain. A mapping OMH STORES (the record's last
+# write, a conversation's route, provenance) carries it, as
+# `encode_fallback_chain`'s canonical text, only when OMH wrote that chain;
+# the person's own chain is never part of a route. A live read is compared
+# with a stored mapping through `route_like`, which keeps the chain key only
+# when the stored side has one, so a person editing or removing their own
+# chain is never mistaken for a change to OMH's route.
+FALLBACK_CHAIN_KEY = "fallback_providers"
+ROUTE_KEYS = (*ROUTABLE_KEYS, FALLBACK_CHAIN_KEY)
+_CHAIN_ENTRY_KEYS = ("provider", "model", "reasoning_effort")
+_MAX_CHAIN_ENTRIES = 16
+# The longest chain text a provenance record keeps (`hermes_delegation`).
+MAX_CHAIN_TEXT = 4096
+# What `_read_fallback_chain` can say about the key.
+CHAIN_ABSENT = "absent"
+CHAIN_OMH_SHAPE = "chain"
+CHAIN_FOREIGN = "foreign"
+# More than one `delegation:` section: the scalar writer writes each, a list
+# cannot be put in both, so no chain is written or removed there.
+CHAIN_UNSUPPORTED = "unsupported"
 
 _VALUE_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._/-]|:(?=[A-Za-z0-9])){0,127}$")
 _SECTION_RE = re.compile(r"^delegation:\s*(#.*)?$")
@@ -53,17 +81,33 @@ def _managed_key_re(key: str, indent: int) -> re.Pattern[str]:
     return re.compile(rf"^ {{{indent}}}{re.escape(key)}\s*:")
 
 
-def read_delegation_route(hermes_home: str | Path | None = None) -> dict[str, str]:
+def read_delegation_route(hermes_home: str | Path | None = None, *, with_chain: bool = False) -> dict[str, str]:
     """Read the current routable delegation keys from config.yaml (text scan).
 
     Last occurrence wins, mirroring YAML's duplicate-key behaviour, so what
     this reports is what Hermes will actually resolve.
+
+    `with_chain` adds `fallback_providers` when the file holds a chain in
+    this writer's shape, whoever wrote it; compare it with a stored mapping
+    through `route_like`.
     """
     config_path = _config_path(hermes_home)
     text, _, error = _read_config_snapshot(config_path)
     if error:
         return {}
-    return _read_delegation_route_text(text)
+    return _read_route_with_chain(text) if with_chain else _read_delegation_route_text(text)
+
+
+def route_like(live: Mapping[str, str], stored: Mapping[str, str]) -> dict[str, str]:
+    """`live` (a `with_chain` read) as `stored` sees it: the chain only when `stored` has one.
+
+    A stored mapping names a chain only when OMH wrote it, so a chain the
+    person owns stays out of every "does the file still hold OMH's route?"
+    comparison, and a record from before the chain existed still matches.
+    """
+    if FALLBACK_CHAIN_KEY in stored:
+        return dict(live)
+    return {key: value for key, value in live.items() if key != FALLBACK_CHAIN_KEY}
 
 
 def read_delegation_settings(hermes_home: str | Path | None, keys: tuple[str, ...]) -> dict[str, str]:
@@ -142,6 +186,191 @@ def _read_delegation_route_text(text: str) -> dict[str, str]:
     return values
 
 
+def _read_route_with_chain(text: str) -> dict[str, str]:
+    """The three keys plus a chain in this writer's shape, whoever wrote it."""
+    values = _read_delegation_route_text(text)
+    lines = text.removeprefix(BOM).splitlines()
+    if not _has_unsupported_delegation(lines):
+        state, chain, _span = _read_fallback_chain(lines)
+        if state == CHAIN_OMH_SHAPE:
+            values[FALLBACK_CHAIN_KEY] = chain
+    return values
+
+
+def read_fallback_chain_state(hermes_home: str | Path | None = None) -> str:
+    """`absent`, `chain` (a list in this writer's shape), `foreign` (a shape only a person writes) or `unsupported`.
+
+    `null` and `~` read as absent: Hermes treats them as the key not being
+    there. An unreadable config reads as `foreign`, so nothing is written
+    over a value nobody could see.
+    """
+    text, _, error = _read_config_snapshot(_config_path(hermes_home))
+    if error:
+        return CHAIN_FOREIGN
+    return _read_fallback_chain(text.removeprefix(BOM).splitlines())[0]
+
+
+def encode_fallback_chain(entries: Iterable[Mapping[str, Any]]) -> str | None:
+    """The canonical text of a chain, or None when an entry is not writable.
+
+    Each entry needs a provider and a model (Hermes drops an entry missing
+    either), and every value must be a plain identifier token, the scalar
+    writer's own rule, so nothing a model or a routing file supplies can
+    carry YAML structure into the block.
+    """
+    cleaned: list[dict[str, str]] = []
+    for entry in entries:
+        if not isinstance(entry, Mapping):
+            return None
+        values = {key: str(entry.get(key, "") or "").strip() for key in _CHAIN_ENTRY_KEYS}
+        if not values["provider"] or not values["model"]:
+            return None
+        if any(value and not _VALUE_RE.match(value) for value in values.values()):
+            return None
+        cleaned.append({key: value for key, value in values.items() if value})
+    if not cleaned or len(cleaned) > _MAX_CHAIN_ENTRIES:
+        return None
+    text = json.dumps(cleaned, sort_keys=True, separators=(",", ":"))
+    return text if len(text) <= MAX_CHAIN_TEXT else None
+
+
+def decode_fallback_chain(text: str) -> list[dict[str, str]] | None:
+    """The entries of a canonical chain text, or None for anything else."""
+    try:
+        raw = json.loads(text)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(raw, list):
+        return None
+    for entry in raw:
+        if not isinstance(entry, dict) or set(entry) - set(_CHAIN_ENTRY_KEYS):
+            return None
+        if any(not isinstance(value, str) for value in entry.values()):
+            return None
+    if encode_fallback_chain(raw) != text:
+        return None
+    return [dict(entry) for entry in raw]
+
+
+def _read_fallback_chain(lines: list[str]) -> tuple[str, str, tuple[int, int] | None]:
+    """The chain key's state, its canonical text, and the lines it spans.
+
+    The span is returned for a chain in this writer's shape and for a bare
+    `null`/`~`, the two values the writer may replace; a foreign value has
+    none, so there is nothing for a caller to rewrite.
+    """
+    child_indents = _delegation_child_indents(lines)
+    found: list[tuple[int, int]] = []
+    sections = 0
+    in_section = False
+    child_indent = 2
+    for index, line in enumerate(lines):
+        if _SECTION_RE.match(line):
+            in_section, child_indent = True, child_indents.get(index, 2)
+            sections += 1
+            continue
+        if in_section and _top_level_key(line) is not None:
+            in_section = False
+        if in_section and _mapping_key(line, child_indent) == FALLBACK_CHAIN_KEY:
+            found.append((index, child_indent))
+    if sections > 1:
+        # Two `delegation:` sections are a file the block writer would have
+        # to pick one of; the scalar writer writes both, a list cannot.
+        return CHAIN_UNSUPPORTED, "", None
+    if not found:
+        return CHAIN_ABSENT, "", None
+    if len(found) > 1:
+        return CHAIN_FOREIGN, "", None
+    index, indent = found[0]
+    header = lines[index]
+    if not _managed_key_re(FALLBACK_CHAIN_KEY, indent).match(header):
+        return CHAIN_FOREIGN, "", None
+    inline = header.partition(":")[2].strip()
+    end = _chain_block_end(lines, index, indent)
+    if inline:
+        if inline.casefold() in {"null", "~"} and end == index + 1:
+            return CHAIN_ABSENT, "", (index, end)
+        return CHAIN_FOREIGN, "", None
+    entries = _parse_chain_items(lines[index + 1 : end])
+    encoded = encode_fallback_chain(entries) if entries else None
+    if encoded is None:
+        return CHAIN_FOREIGN, "", None
+    return CHAIN_OMH_SHAPE, encoded, (index, end)
+
+
+def _chain_block_end(lines: list[str], index: int, indent: int) -> int:
+    """One past the last line that belongs to the value of the key at `index`.
+
+    A blank or comment line inside the value is taken in, so the parse
+    sees it and calls the value foreign rather than stopping short of it.
+    """
+    end = index + 1
+    for position in range(index + 1, len(lines)):
+        line = lines[position]
+        stripped = line.lstrip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        depth = len(line) - len(stripped)
+        if depth > indent or (depth == indent and stripped.startswith("- ")):
+            end = position + 1
+            continue
+        break
+    return end
+
+
+def _parse_chain_items(block: list[str]) -> list[dict[str, str]] | None:
+    """A block sequence of `provider`/`model`/`reasoning_effort` mappings, or None.
+
+    Both sequence indents parse (`- ` under the key, and PyYAML's default
+    `- ` at the key's own indent), so a chain Hermes re-dumped is still
+    recognised. Anything else -- a comment or blank line, another key, a
+    nested value, a flow mapping, a tab -- is not this writer's shape.
+    """
+    entries: list[dict[str, str]] = []
+    item_indent: int | None = None
+    key_indent: int | None = None
+    for line in block:
+        stripped = line.lstrip(" ")
+        if not stripped or stripped.startswith("#") or stripped[0] == "\t":
+            return None
+        indent = len(line) - len(stripped)
+        if stripped.startswith("- "):
+            body = stripped[2:]
+            here = indent + 2 + len(body) - len(body.lstrip(" "))
+            body = body.lstrip(" ")
+            if item_indent is None:
+                item_indent, key_indent = indent, here
+            if indent != item_indent or here != key_indent:
+                return None
+            entries.append({})
+        else:
+            if not entries or indent != key_indent:
+                return None
+            body = stripped
+        key, separator, raw = body.partition(":")
+        if not separator or key not in _CHAIN_ENTRY_KEYS or key in entries[-1]:
+            return None
+        if raw and not raw[0].isspace():
+            return None
+        value = _yaml_string_token(raw)
+        if not value:
+            return None
+        entries[-1][key] = value
+    return entries or None
+
+
+def _chain_block_lines(prefix: str, chain: str) -> list[str]:
+    """The block this writer emits for a canonical chain under `prefix`."""
+    lines = [f"{prefix}{FALLBACK_CHAIN_KEY}:"]
+    for entry in decode_fallback_chain(chain) or []:
+        lead = f"{prefix}  - "
+        for key in _CHAIN_ENTRY_KEYS:
+            if key in entry:
+                lines.append(f"{lead}{key}: '{entry[key]}'")
+                lead = f"{prefix}    "
+    return lines
+
+
 def read_session_provider(hermes_home: str | Path | None = None) -> str:
     """The provider this session runs on, from config.yaml's own `model:` block.
 
@@ -182,23 +411,36 @@ def _read_session_provider_text(text: str) -> str:
 _ROUTE_WRITE_ATTEMPTS = 5
 
 
-def _apply_route_delta(text: str, desired: Mapping[str, str]) -> str:
+def _apply_route_delta(text: str, desired: Mapping[str, str], chain: str | None = None) -> str:
     """Return text with only the routable delegation keys set to desired.
 
     Pure transformation: every other line passes through unchanged (line
     endings come out as LF, as this writer has always written them). Returns
     text itself when there is nothing to add or remove, so the caller can skip
     a byte-identical write.
+
+    `chain` is the fallback chain: None leaves its lines as they are, `""`
+    removes a chain in this writer's shape, and a canonical chain text
+    replaces it (or a bare `null`). The caller has already decided that the
+    value in the file is one it may replace; a foreign value has no span, so
+    it is never touched here either.
     """
     bom = BOM if text.startswith(BOM) else ""
     lines = text[len(bom):].splitlines()
     child_indents = _delegation_child_indents(lines)
+    skip: range = range(0)
+    if chain is not None:
+        state, _current, span = _read_fallback_chain(lines)
+        if span is not None and (state == CHAIN_OMH_SHAPE or chain):
+            skip = range(*span)
     output: list[str] = []
     inserted = False
     in_section = False
     section_seen = False
     child_indent = 2
     for index, line in enumerate(lines):
+        if index in skip:
+            continue
         if _SECTION_RE.match(line):
             in_section = True
             section_seen = True
@@ -209,6 +451,8 @@ def _apply_route_delta(text: str, desired: Mapping[str, str]) -> str:
                 value = desired.get(key, "")
                 if value:
                     output.append(f"{prefix}{key}: '{value}'")
+            if chain and not inserted:
+                output.extend(_chain_block_lines(prefix, chain))
             inserted = True
             continue
         if in_section and _top_level_key(line) is not None:
@@ -220,7 +464,7 @@ def _apply_route_delta(text: str, desired: Mapping[str, str]) -> str:
             continue
         output.append(line)
     wanted = {key: value for key, value in desired.items() if value}
-    if wanted and not inserted:
+    if (wanted or chain) and not inserted:
         if output and output[-1].strip():
             output.append("")
         output.append("delegation:")
@@ -228,6 +472,8 @@ def _apply_route_delta(text: str, desired: Mapping[str, str]) -> str:
             value = wanted.get(key, "")
             if value:
                 output.append(f"  {key}: '{value}'")
+        if chain:
+            output.extend(_chain_block_lines("  ", chain))
         section_seen = True
     if not section_seen and not wanted:
         return text
@@ -262,7 +508,7 @@ def _route_candidate_refusal(
     `current_provider` and a conditional write's predicate never mix two
     states of the file.
     """
-    if expected_previous is not None and dict(previous) != dict(expected_previous):
+    if expected_previous is not None and route_like(previous, expected_previous) != dict(expected_previous):
         return {
             "status": "error",
             "error": "active route changed before fallback write",
@@ -288,11 +534,27 @@ def write_delegation_route(
     clear: bool = False,
     expected_previous: Mapping[str, str] | None = None,
     guard_route_endpoint: bool = False,
+    fallback_providers: str | None = None,
+    replaceable_fallback: Collection[str] | None = None,
 ) -> dict[str, Any]:
     """Set (or clear) the routable delegation keys, touching nothing else.
 
     Keys with an empty desired value are removed, restoring parent
     inheritance for that key; `clear=True` removes all three.
+
+    `fallback_providers` is the in-child chain, independent of `clear`: None
+    (every caller that predates it) leaves the key alone, `""` removes a
+    chain, and a canonical chain text (`encode_fallback_chain`) writes it.
+    The person's own value is never replaced or removed, judged on the read
+    the write replaces: a foreign shape always, and a chain in this writer's
+    shape unless it is in `replaceable_fallback` (None means any, which is
+    for a restore that already matched the file against its record). A kept
+    value is reported as `fallback_chain: kept_person_owned`.
+
+    `previous` and `applied` are in the stored shape: each names a chain
+    only when it is OMH's (the replaced one when it was replaceable, the
+    written or unchanged one after), so they compare with a later
+    `route_like` read. `expected_previous` is compared the same way.
 
     `guard_route_endpoint` is for a route: it refuses one Hermes would not
     send where it says (`route_endpoint_guard.route_endpoint_refusal`),
@@ -312,13 +574,15 @@ def write_delegation_route(
     for key, value in desired.items():
         if value and not _VALUE_RE.match(value):
             return {"status": "error", "error": f"invalid {key} value"}
+    if fallback_providers and decode_fallback_chain(fallback_providers) is None:
+        return {"status": "error", "error": f"invalid {FALLBACK_CHAIN_KEY} value"}
     config_path = _config_path(hermes_home)
     text, signature, error = _read_config_snapshot(config_path)
     if error:
         return {"status": "error", "error": error}
     if _file_signature(config_path) != signature:
         return {"status": "error", "error": "config changed during route read"}
-    first_route = _read_delegation_route_text(text)
+    first_route = _read_route_with_chain(text)
     refusal = _route_candidate_refusal(
         text,
         first_route,
@@ -347,7 +611,7 @@ def write_delegation_route(
         fresh_text, fresh_signature, fresh_error = _read_config_snapshot(config_path)
         if fresh_error:
             return {"status": "error", "error": fresh_error}
-        previous = _read_delegation_route_text(fresh_text)
+        previous = _read_route_with_chain(fresh_text)
         refusal = _route_candidate_refusal(
             fresh_text,
             previous,
@@ -365,14 +629,28 @@ def write_delegation_route(
                     "written, so the route already in place stays"
                 ),
             }
-        new_text = _apply_route_delta(fresh_text, desired)
+        chain, chain_note = _chain_decision(
+            fresh_text, previous, fallback_providers, replaceable_fallback
+        )
+        current_chain = previous.get(FALLBACK_CHAIN_KEY, "")
+        applied = dict(wanted)
+        if chain_note == "written" and chain:
+            applied[FALLBACK_CHAIN_KEY] = chain
+        elif chain_note == "unchanged" and current_chain:
+            applied[FALLBACK_CHAIN_KEY] = current_chain
+        replaced = {key: value for key, value in previous.items() if key != FALLBACK_CHAIN_KEY}
+        if current_chain and chain_note in ("written", "removed", "unchanged"):
+            replaced[FALLBACK_CHAIN_KEY] = current_chain
+        noted = {"fallback_chain": chain_note} if chain_note else {}
+        new_text = _apply_route_delta(fresh_text, desired, chain)
         if new_text == fresh_text:
             if not _unchanged_since(config_path, fresh_signature, fresh_text):
                 continue
             return {
                 "status": "cleared" if clear else "routed",
-                "previous": previous,
-                "applied": wanted,
+                "previous": replaced,
+                "applied": applied,
+                **noted,
             }
         try:
             # The mode is read before the temp file exists, so nothing but
@@ -404,10 +682,42 @@ def write_delegation_route(
             return {"status": "error", "error": f"config write failed: {type(exc).__name__}"}
         return {
             "status": "cleared" if clear else "routed",
-            "previous": previous,
-            "applied": wanted,
+            "previous": replaced,
+            "applied": applied,
+            **noted,
         }
     return {"status": "error", "error": "config kept changing during route update"}
+
+
+def _chain_decision(
+    text: str,
+    previous: Mapping[str, str],
+    desired: str | None,
+    replaceable: Collection[str] | None,
+) -> tuple[str | None, str]:
+    """What the writer does to the chain on this read: the `chain` for `_apply_route_delta`, and a note.
+
+    The note is empty when the caller did not ask about the chain, and
+    otherwise names the outcome: `written`, `removed`, `unchanged` or
+    `kept_person_owned` (or `kept_unsupported_config` for a file with two
+    `delegation:` sections). After `written`, `removed` or `unchanged` any
+    chain in the file is OMH's; after a `kept_` note it is not.
+    """
+    if desired is None:
+        return None, ""
+    state = _read_fallback_chain(text.removeprefix(BOM).splitlines())[0]
+    current = previous.get(FALLBACK_CHAIN_KEY, "")
+    if state == CHAIN_UNSUPPORTED:
+        return None, "kept_unsupported_config" if desired else "unchanged"
+    if state == CHAIN_FOREIGN:
+        return None, "kept_person_owned"
+    if current and replaceable is not None and current not in replaceable:
+        # Even when it equals the chain asked for: the note is what says
+        # whose chain the file holds, and this one is the person's.
+        return None, "kept_person_owned"
+    if current == desired:
+        return None, "unchanged"
+    return desired, "written" if desired else "removed"
 
 
 def delegation_config_path(hermes_home: str | Path | None = None) -> Path:

@@ -566,6 +566,7 @@ def run_doctor(paths: OmhPaths, *, state_write: bool = True) -> list[Check]:
     checks.append(_auto_resume_check(paths))
     checks.extend(_hermes_gateway_checks(paths))
     checks.append(_delegation_protocol_platform_check(paths))
+    checks.append(_delegate_route_fallback_chain_check(paths))
     checks.append(_hermes_model_routing_check(paths))
     checks.append(_provider_entitlements_check(paths))
     checks.append(_jev_sidekick_check(paths))
@@ -941,6 +942,87 @@ def _delegation_protocol_platform_check(paths: OmhPaths) -> Check:
     return Check(
         "plugin_delegation_protocol", True,
         f"Hermes builds a delegate_task child with {literal} ({source}), {reach}",
+    )
+
+
+def _delegate_route_fallback_chain_check(paths: OmhPaths) -> Check:
+    """Will `omh_delegate_route` write the chain into `delegation.fallback_providers`, and if not, why (#3124)?
+
+    Opt-in (`write_fallback_providers` in `routing/delegate-route.json`) and
+    host-gated: the Hermes this home runs from must honour a fallback entry's
+    `reasoning_effort` (hermes-agent PR #144787), read off its source as
+    `delegation_fallback_chain.host_support` does. A person's own
+    `delegation.fallback_providers` keeps the chain out too, and is named.
+    Never fails: an option that cannot apply leaves routing exactly as it was.
+    """
+    from ..plugin_bundle.omh.delegation_fallback_chain import (
+        delegate_route_options_path,
+        host_support,
+        host_support_note,
+        load_fallback_chain_option,
+    )
+    from ..plugin_bundle.omh.delegation_route_restore import omh_written_chains, load_route_restore_record
+    from ..plugin_bundle.omh.delegation_routing import (
+        CHAIN_FOREIGN,
+        CHAIN_OMH_SHAPE,
+        CHAIN_UNSUPPORTED,
+        FALLBACK_CHAIN_KEY,
+        delegation_config_path,
+        read_delegation_route,
+        read_fallback_chain_state,
+    )
+
+    options = delegate_route_options_path(paths.omh_home)
+    enabled, status = load_fallback_chain_option(paths.omh_home)
+    scalars = "omh_delegate_route writes only delegation.model, reasoning_effort and provider"
+    if status.startswith("invalid:"):
+        return Check(
+            "plugin_delegate_route_fallback_chain", True,
+            f"{options} is ignored ({status}), so the in-child fallback chain is off; {scalars}",
+            severity="warning",
+            next_action=f'write {{"schema_version": "delegate_route_options/v1", "write_fallback_providers": true}} to {options}',
+        )
+    if not enabled:
+        return Check(
+            "plugin_delegate_route_fallback_chain", True,
+            f"in-child fallback chain is off (opt-in: write_fallback_providers in {options}); {scalars}",
+            observed=False,
+        )
+    support = host_support(resolve_hermes_code_root(paths.hermes_home))
+    if not support["supported"]:
+        return Check(
+            "plugin_delegate_route_fallback_chain", True,
+            f"write_fallback_providers is on, but {host_support_note(support)}; so {scalars}",
+            severity="warning",
+            next_action="update Hermes (`hermes update`) to a release with hermes-agent PR #144787, then restart it",
+            observed=support["reason"] != "hermes_source_not_found",
+        )
+    state = read_fallback_chain_state(paths.hermes_home)
+    if state == CHAIN_UNSUPPORTED:
+        return Check(
+            "plugin_delegate_route_fallback_chain", True,
+            "write_fallback_providers is on, but config.yaml has more than one `delegation:` section and a list "
+            f"cannot be written into both; so {scalars}",
+            severity="warning",
+            next_action="merge the `delegation:` sections of config.yaml into one",
+        )
+    chain = read_delegation_route(paths.hermes_home, with_chain=True).get(FALLBACK_CHAIN_KEY, "")
+    record = load_route_restore_record(paths.omh_home)
+    if record and record["config_path"] != str(delegation_config_path(paths.hermes_home)):
+        record = {}  # another profile's record says nothing about this file
+    owned = state == CHAIN_OMH_SHAPE and chain not in omh_written_chains(record, paths.omh_home)
+    if state == CHAIN_FOREIGN or owned:
+        return Check(
+            "plugin_delegate_route_fallback_chain", True,
+            "write_fallback_providers is on, but delegation.fallback_providers in config.yaml holds your own "
+            f"value, which OMH never overwrites; so {scalars}",
+            severity="warning",
+            next_action="remove it (`hermes config unset delegation.fallback_providers`) to let OMH write the chain",
+        )
+    return Check(
+        "plugin_delegate_route_fallback_chain", True,
+        "omh_delegate_route also writes the chain positions after the head into delegation.fallback_providers, "
+        f"each at its own reasoning_effort; {host_support_note(support)}",
     )
 
 
