@@ -60,8 +60,8 @@ describe("TERMINALS folders", () => {
     expect(parseFolderPrefs(JSON.stringify({ collapsed: ["/a", 3, "/a"], order: "x" }))).toEqual({ collapsed: ["/a"], order: [] });
   });
   it("a collapsed header's summary: count, output flowing, waiting, failed", () => {
-    expect(folderSummary(["busy", null, "bell"])).toEqual({ count: 3, busy: true, needs: true, failed: false });
-    expect(folderSummary(["ok", "err"])).toEqual({ count: 2, busy: false, needs: false, failed: true });
+    expect(folderSummary(["busy", null, "bell"])).toEqual({ count: 3, busy: true, needs: true, news: false, failed: false });
+    expect(folderSummary(["ok", "err"])).toEqual({ count: 2, busy: false, needs: false, news: false, failed: true });
   });
 });
 

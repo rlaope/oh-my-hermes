@@ -9,6 +9,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { mock, usePlatform } from "./term-find-helpers";
+import { openFromSidebar, sidebarEntry } from "./split-drag-helpers";
 
 const SHOTS = process.env.OMHER_SHOTS || "";
 const FOLDER = "/home/you/code/web-app";
@@ -146,8 +147,9 @@ test("Settings › Terminal › Default shell: kept, used by the plain Shell row
     localStorage.setItem("omher.term", JSON.stringify({ ...r, defaultShell: "" }));
   });
   await page.reload();
-  await expect(page.getByTestId(`session-${a}`)).toBeVisible();
-  await page.getByTestId(`session-${a}`).locator(".ss-open").click();
+  // a and its split's new Shell come back as the split's card
+  await expect(sidebarEntry(page, a)).toBeVisible();
+  await openFromSidebar(page, a);
   const paused = page.locator(`[data-testid="split-pane"][data-session="${a}"]`).getByTestId("session-paused").or(page.getByTestId("session-paused").first());
   await paused.getByRole("button").first().click();
   await expect.poll(() => shellStarts(page)).toEqual(["unix:/bin/bash"]);

@@ -16,6 +16,9 @@ export interface TermAct {
   cwd?: string;
   /** Its program reports progress (OSC 9;4 working) and has not reported done: the row shows it working. */
   progress?: boolean;
+  /** ms since epoch the current unbroken busy streak began (output or progress with no BUSY_MS gap): the split card's
+   *  elapsed time. A quiet gap ends the streak; the next flow starts a new one. */
+  busySince?: number;
 }
 
 const NONE: TermAct = Object.freeze({});
@@ -51,6 +54,9 @@ export const termActs: TermActivityStore = createTermActivity();
 
 /** Output flowed within BUSY_MS of `now`, or its program reports progress (the row's spinner, while it runs). */
 export const flowing = (a: TermAct, now: number): boolean => !!a.progress || (!!a.lastOut && now - a.lastOut < BUSY_MS);
+
+/** The busy streak's start once output (or progress) comes at `now`: kept while `prev` was still flowing, else now. */
+export const nextBusySince = (prev: TermAct, now: number): number => (flowing(prev, now) && prev.busySince !== undefined ? prev.busySince : now);
 
 /** Which label `ageOf(at, now)` shows ("now", "5m", "3h", "2d"), as a key: equal keys, equal labels. */
 export function ageBucket(at: number, now: number): string {

@@ -5,10 +5,10 @@
 // panes). ⌘⌥arrows / ⌘] ⌘[ move the keyboard,
 // ⌘⇧⌥arrows move the pane, ⌘⇧↩ zooms it, ⌘⌃= evens them out, ⌘W closes it (the session keeps running; the menu's
 // Close Window does the same while a split has the keyboard, and closes the window otherwise). Rows in the split
-// carry a glyph, Plans draws the split small, and the split comes back after a restart. Bot chats never split.
+// are one card on top of TERMINALS (split-card spec), Plans draws the split small, and the split comes back after a restart. Bot chats never split.
 import { expect, test, type Page } from "@playwright/test";
 import { mock, openApp, platformIsMac } from "./term-find-helpers";
-import { dragRowOnto, type Side } from "./split-drag-helpers";
+import { dragRowOnto, openFromSidebar, type Side } from "./split-drag-helpers";
 
 type Sessions = { startTerminal(a: string, cwd: string): string; ptyOf(id: string): number | null };
 type Call = { op: string; id?: number; agent?: string; cwd?: string | null; data?: string };
@@ -21,6 +21,7 @@ const out = (page: Page, id: number, d: string) => page.evaluate(([p, s]) => (wi
 const term = (page: Page, id: string) => page.locator(`[data-testid="terminal"][data-session="${id}"]`);
 const pane = (page: Page, id: string) => page.locator(`[data-testid="split-pane"][data-session="${id}"]`);
 const textarea = (page: Page, id: string) => term(page, id).locator(".xterm-helper-textarea");
+const cell = (page: Page, id: string) => page.locator(`[data-testid="split-cell"][data-session="${id}"]`);
 const focusedTerm = (page: Page) => page.evaluate(() => document.activeElement?.closest('[data-testid="terminal"]')?.getAttribute("data-session") ?? null);
 const shellStarts = (page: Page) => page.evaluate(() => ((window as unknown as { __omherShellCalls?: Call[] }).__omherShellCalls ?? []).filter((c) => c.op === "start"));
 const writes = (page: Page) => page.evaluate(() => [...((window as unknown as { __omherSessionCalls?: Call[] }).__omherSessionCalls ?? []), ...((window as unknown as { __omherShellCalls?: Call[] }).__omherShellCalls ?? [])].filter((c) => c.op === "write"));
@@ -63,10 +64,10 @@ async function splitNew(page: Page, from: string, key: string): Promise<string> 
   return id;
 }
 
-/** Running session `pick` in a new pane on `from`'s `side`: `from` opened, then `pick`'s row dragged onto that part of
- *  its pane; `pick` has the keyboard. */
+/** Running session `pick` in a new pane on `from`'s `side`: `from` opened (from its row, or its cell once it is in a
+ *  split), then `pick`'s row dragged onto that part of its pane; `pick` has the keyboard. */
 async function splitWith(page: Page, from: string, pick: string, side: Side = "right") {
-  await page.getByTestId(`session-${from}`).locator(".ss-open").click();
+  await openFromSidebar(page, from);
   await dragRowOnto(page, pick, from, side);
   await expect(pane(page, pick)).toHaveAttribute("data-focused", "true");
 }
@@ -139,8 +140,8 @@ test("the focused pane is the open session; the others are dimmed to the setting
   const [a, b, c] = await sessions(page, ["/w/a", "/w/b", "/w/c"]);
   await splitWith(page, a, b);
   await splitWith(page, b, c, "down");
-  // c has the keyboard: it is the open session (header, row), drawn full; a and b are dimmed to 0.6
-  await expect(page.getByTestId(`session-${c}`)).toHaveClass(/active/);
+  // c has the keyboard: it is the open session (header, its cell in the card), drawn full; a and b are dimmed to 0.6
+  await expect(cell(page, c)).toHaveAttribute("data-focused", "true");
   await expect(pane(page, c)).toHaveAttribute("data-focused", "true");
   const opacity = (id: string) => pane(page, id).locator(".term-wrap").evaluate((el) => getComputedStyle(el).opacity);
   await expect.poll(() => opacity(c)).toBe("1");
@@ -151,7 +152,7 @@ test("the focused pane is the open session; the others are dimmed to the setting
   // ⌘⌥← to a, ⌘⌥→ back to b (the nearest lined up), ⌘⌥↓ to c
   await page.keyboard.press(k.focus("Left"));
   await expect.poll(() => focusedTerm(page)).toBe(a);
-  await expect(page.getByTestId(`session-${a}`)).toHaveClass(/active/);
+  await expect(cell(page, a)).toHaveAttribute("data-focused", "true");
   await expect.poll(() => opacity(a)).toBe("1");
   await page.keyboard.press(k.focus("Right"));
   await expect.poll(() => focusedTerm(page)).toBe(b);
@@ -164,7 +165,7 @@ test("the focused pane is the open session; the others are dimmed to the setting
   await expect.poll(() => focusedTerm(page)).toBe(c);
   // a click in a pane focuses it
   await term(page, a).click();
-  await expect(page.getByTestId(`session-${a}`)).toHaveClass(/active/);
+  await expect(cell(page, a)).toHaveAttribute("data-focused", "true");
   // ⌘⇧⌥→ moves a to the right (it trades places with the pane beside it) and keeps the keyboard
   const x0 = (await term(page, a).boundingBox())!.x;
   await textarea(page, a).focus();
@@ -278,15 +279,16 @@ test("the menu's Close Window and the ⌘W key close the pane that holds the key
   expect(await page.evaluate(() => (window as unknown as { __omherWindowCloses?: number }).__omherWindowCloses ?? 0)).toBe(0);
 });
 
-test("rows in a split carry a glyph (the focused one marked, a split out of view dimmed); Plans draws the split small and a click there focuses that pane", async ({ page }) => {
+test("a split's sessions are its card's cells (the focused one marked, a split out of view dimmed); Plans draws the split small and a click there focuses that pane", async ({ page }) => {
   await openApp(page);
-  const k = await keys(page);
   const [a, b, c] = await sessions(page, ["/w/a", "/w/b", "/w/c"]);
   await splitWith(page, a, b);
-  await expect(page.getByTestId(`session-${a}`).getByTestId("term-split-glyph")).toBeVisible();
-  await expect(page.getByTestId(`session-${b}`)).toHaveAttribute("data-split", "focused");
-  await expect(page.getByTestId(`session-${a}`)).toHaveAttribute("data-split", "in");
-  await expect(page.getByTestId(`session-${c}`).getByTestId("term-split-glyph")).toHaveCount(0);
+  await expect(cell(page, a)).toBeVisible();
+  await expect(cell(page, b)).toHaveAttribute("data-focused", "true");
+  await expect(cell(page, a)).toHaveAttribute("data-focused", "false");
+  await expect(page.getByTestId("split-card")).not.toHaveAttribute("data-away", "true");
+  await expect(cell(page, c)).toHaveCount(0);
+  await expect(page.getByTestId(`session-${c}`)).toBeVisible();
   // Plans: two boxes side by side, b filled. ⌘. works with the keyboard in a pane; off macOS Ctrl+. typed in a
   // terminal is the program's (src/app/shortcuts.ts), in a split as in one terminal, so it is pressed outside it
   if (await platformIsMac(page)) await page.keyboard.press("Meta+.");
@@ -302,10 +304,10 @@ test("rows in a split carry a glyph (the focused one marked, a split out of view
   const boxA = page.locator(`[data-testid="split-map-box"][data-session="${a}"]`);
   const boxB = page.locator(`[data-testid="split-map-box"][data-session="${b}"]`);
   await expect(boxB).toHaveAttribute("data-focused", "true");
-  // bare shells are named by their folder in the map and in the row glyph's label, not "Shell" each
+  // bare shells are named by their folder in the map and in the card cell's label, not "Shell" each
   await expect(boxA).toHaveAttribute("title", "a");
   await expect(boxB).toHaveAttribute("title", "b");
-  await expect(page.getByTestId(`session-${a}`).getByTestId("term-split-glyph")).toHaveAttribute("aria-label", /: a$/);
+  await expect(cell(page, a).locator(".sc-open")).toHaveAttribute("aria-label", /\ba$/);
   // both boxes measured in one frame, polled while the panel opens: b's left edge meets a's right edge, same top
   const beside = () =>
     page.evaluate(([ia, ib]) => {
@@ -318,15 +320,15 @@ test("rows in a split carry a glyph (the focused one marked, a split out of view
   await expect(page.getByTestId("plans-empty")).toBeVisible();
   await boxA.click();
   await expect(boxA).toHaveAttribute("data-focused", "true");
-  await expect(page.getByTestId(`session-${a}`)).toHaveAttribute("data-split", "focused");
+  await expect(cell(page, a)).toHaveAttribute("data-focused", "true");
   await expect.poll(() => focusedTerm(page)).toBe(a);
-  // a session alone has no map; the split's rows keep their glyph, marked as a split not in view, and c has none
+  // a session alone has no map; the split's card stays, drawn as a split not in view, and c is still a row
   await page.getByTestId(`session-${c}`).locator(".ss-open").click();
   await expect(page.getByTestId("split-map")).toHaveCount(0);
-  await expect(page.getByTestId(`session-${a}`).getByTestId("term-split-glyph")).toBeVisible();
-  await expect(page.getByTestId(`session-${a}`)).toHaveAttribute("data-split", "away");
-  await expect(page.getByTestId(`session-${b}`)).toHaveAttribute("data-split", "away");
-  await expect(page.getByTestId(`session-${c}`).getByTestId("term-split-glyph")).toHaveCount(0);
+  await expect(page.getByTestId("split-card")).toHaveAttribute("data-away", "true");
+  await expect(cell(page, a)).toHaveAttribute("data-focused", "false");
+  await expect(cell(page, b)).toHaveAttribute("data-focused", "false");
+  await expect(cell(page, c)).toHaveCount(0);
 });
 
 test("bot chats never split: the keys do nothing there, and a TERMINALS row dragged onto one finds no drop zone", async ({ page }) => {

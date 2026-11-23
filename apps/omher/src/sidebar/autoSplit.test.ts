@@ -31,6 +31,16 @@ describe("auto BOTS | TERMINALS split", () => {
     expect(b.stops).toContain(hb);
     expect(665 - hb - ht).toBeLessThan(20);
   });
+  it("with no pair of whole-row ends, keeps TERMINALS' first row (a tall split card) whole when it fits", () => {
+    // BOTS ends on a whole row only at 150, 250, 350 (tall bot rows); TERMINALS: a 256 px card first, then folder rows.
+    // No pair of whole-row ends fits 440 px: an even split (220 each) would cut the card, hidden whole at the top
+    const b = { need: 600, stops: [150, 250, 350, 450, 550] };
+    const t = { need: 40 + 824, stops: [40 + 258 + 14, 40 + 345 + 14, 40 + 440 + 14] };
+    const [hb, ht] = planSplit(440, b, t);
+    expect(hb + ht).toBe(440);
+    expect(ht).toBeGreaterThanOrEqual(t.stops[0]!);
+    expect(hb).toBeGreaterThanOrEqual(96);
+  });
   it("keeps each region at least the minimum", () => {
     const [hb, ht] = planSplit(300, rows(30, 200, 3), rows(30, 200, 3));
     expect(hb).toBeGreaterThanOrEqual(96);

@@ -5,7 +5,7 @@
 //   whole when it needs at most AUTO_WHOLE of the room; else the two heights leave as little room unused as they can,
 //   near an even split. A plain flex layout split evenly and left a blank band where edgeFade hid a cut row.
 import { useEffect, type RefObject } from "react";
-import { CUE_PX, CUT_ROWS, isHead } from "./edgeFade";
+import { cardGive, CUE_PX, CUT_ROWS, isHead } from "./edgeFade";
 
 /** A region as the planner sees it: its height with every row shown, and the heights at which its list ends on a
  *  whole row (each below `need`). */
@@ -52,7 +52,12 @@ export function planSplit(room: number, b: Region, t: Region, min = AUTO_MIN): [
     if (!best || score < best.score - 0.01) best = { hb, ht, score };
   }
   if (best) return [best.hb, best.ht];
-  const hb = Math.max(minB, Math.min(room - minT, aim));
+  // no pair of whole-row ends fits: still keep each region's first row whole when it fits beside the other's minimum
+  // (a tall split card in TERMINALS is otherwise cut, and hidden, at once)
+  let hb = Math.max(minB, Math.min(room - minT, aim));
+  const first = (r: Region) => hs(r)[0]!;
+  if (first(t) > room - hb && first(t) <= room - minB) hb = room - first(t);
+  else if (first(b) > hb && first(b) <= room - minT) hb = first(b);
   return [hb, room - hb];
 }
 
@@ -61,11 +66,15 @@ export function planSplit(room: number, b: Region, t: Region, min = AUTO_MIN): [
 export function listStops(list: HTMLElement): number[] {
   const top = list.getBoundingClientRect().top - list.scrollTop;
   const stops: number[] = [];
+  // a split card drawn shorter than its own height (edgeFade caps it to the list) counts at its own height, and so do
+  // the rows under it
+  let give = 0;
   for (const r of list.querySelectorAll<HTMLElement>(CUT_ROWS)) {
+    if (r.matches(".split-card")) give += cardGive(r);
     const box = r.getBoundingClientRect();
     if (box.height === 0) continue;
     if (isHead(r)) continue;
-    stops.push(Math.ceil(box.bottom - top) + CUE_PX);
+    stops.push(Math.ceil(box.bottom - top + give) + CUE_PX);
   }
   return stops;
 }
@@ -75,6 +84,7 @@ function measure(sec: HTMLElement): { need: number; chrome: number; list: HTMLEl
   const cs = getComputedStyle(sec);
   let need = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
   let list: HTMLElement | null = null;
+  let listH = 0;
   for (const c of sec.children) {
     const el = c as HTMLElement;
     const ccs = getComputedStyle(el);
@@ -82,10 +92,13 @@ function measure(sec: HTMLElement): { need: number; chrome: number; list: HTMLEl
     const m = parseFloat(ccs.marginTop) + parseFloat(ccs.marginBottom);
     if (el.matches(".bot-list, .ss-list")) {
       list = el;
-      need += el.scrollHeight + m;
+      let give = 0;
+      for (const c of el.querySelectorAll(".split-card")) give += cardGive(c);
+      listH = el.scrollHeight + give;
+      need += listH + m;
     } else need += el.getBoundingClientRect().height + m;
   }
-  return { need: Math.ceil(need), chrome: Math.ceil(need) - (list?.scrollHeight ?? 0), list };
+  return { need: Math.ceil(need), chrome: Math.ceil(need) - listH, list };
 }
 
 // only the height is inline; `data-auto` turns the flex sizing off in CSS (sessions.css), so the divider's own inline
@@ -146,7 +159,7 @@ export function useAutoSplit(bots: RefObject<HTMLElement | null>, terms: RefObje
       soon();
     });
     mo.observe(side, { childList: true });
-    for (const sec of [b, t]) mo.observe(sec, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "data-collapsed"] });
+    for (const sec of [b, t]) mo.observe(sec, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "data-collapsed", "data-map-h"] });
     return () => {
       cancelAnimationFrame(frame);
       ro.disconnect();

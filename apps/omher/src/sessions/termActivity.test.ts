@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ageOf } from "./SessionsSection";
 import { BUSY_MS } from "./agents";
-import { ageBucket, ageChangeAt, createTermActivity, faceKey, flowing, nextFaceAt } from "./termActivity";
+import { ageBucket, ageChangeAt, createTermActivity, faceKey, flowing, nextBusySince, nextFaceAt } from "./termActivity";
 
 describe("termActivity store", () => {
   it("notifies only the session that changed", () => {
@@ -66,5 +66,25 @@ describe("row face timing", () => {
     expect(faceKey({ lastOut: at + 500 }, 0, at + 600)).toBe(faceKey({ lastOut: at }, 0, at + 100));
     // the second line is part of the face
     expect(faceKey({ lastOut: at, lastLine: "x" }, 0, at)).not.toBe(faceKey({ lastOut: at, lastLine: "y" }, 0, at));
+  });
+});
+
+describe("busy streak", () => {
+  it("starts on the first flow, holds while output keeps coming and starts over after a quiet gap", () => {
+    const t0 = 1_000_000;
+    expect(nextBusySince({}, t0)).toBe(t0);
+    let a = { lastOut: t0, busySince: nextBusySince({}, t0) };
+    // output again within BUSY_MS: the same streak
+    a = { lastOut: t0 + 500, busySince: nextBusySince(a, t0 + 500) };
+    a = { lastOut: t0 + 1500, busySince: nextBusySince(a, t0 + 1500) };
+    expect(a.busySince).toBe(t0);
+    // quiet for longer than BUSY_MS: a new streak
+    const later = a.lastOut + BUSY_MS + 1;
+    expect(nextBusySince(a, later)).toBe(later);
+  });
+
+  it("holds through progress and starts one when progress had none", () => {
+    expect(nextBusySince({ progress: true, busySince: 5, lastOut: 1 }, 100_000)).toBe(5);
+    expect(nextBusySince({ progress: true }, 100_000)).toBe(100_000);
   });
 });
