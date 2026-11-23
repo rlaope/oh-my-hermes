@@ -25,6 +25,18 @@ All notable changes will be documented here.
   #3124. (`src/plugin_bundle/omh/delegation_fallback_chain.py`, `src/plugin_bundle/omh/delegation_routing.py`,
   `src/plugin_bundle/omh/delegation_route_restore.py`, `src/plugin_bundle/omh/tools/delegate_route_tool.py`,
   `src/maintenance/doctor.py`; `docs/INSTALLATION.md` "The rest of the chain inside the child")
+- **omher: a bot's chat that stopped answering after a crash says why and gets going again.** When Hermes' gateway
+  stops in the middle of a turn (a crash, a kill, Windows ending the process), Hermes brings that turn back as lost
+  and keeps every later message of the chat in its own queue until someone acknowledges it, because the lost turn may
+  have done part of its work. omher did not read that state: a new message showed "Read", nothing answered, and after
+  a restart the message was gone from the chat (it was in Hermes' queue, not its transcript), while a new thread worked.
+  Now the main chat, a thread and an oh-my-hermes folder chat show a note above the composer that the chat is paused,
+  with the lost turn's text and **Discard and continue**. Discard acknowledges only that turn through Hermes' own
+  `prompt.resolve_unknown`; Hermes does not run it again, and the messages waiting behind it then run in order. A
+  message sent meanwhile reads "Waiting" instead of "Read" and stays in the chat across a restart. A lost turn
+  discarded elsewhere (Hermes' own app, `/discard`) clears the note at once. A message waiting in Hermes' queue behind
+  a turn that is still running (nothing lost) also stays in the chat after a restart, as "Waiting · runs after the
+  current turn". (#3123; `docs/OMHER-BOUNDARY.md` rule 3)
 - **Fanout hands coding units to a harness CLI you declare, or to one of nine presets.** Put an executor in
   `<omh_home>/routing/executors.toml` (never read from a repository or the working directory) as an `argv` list
   with exactly one `{prompt}` or `{prompt_file}` element, or opt in to a preset with `omh coding executors add
@@ -295,6 +307,19 @@ All notable changes will be documented here.
   last, and loading the skill stays an optional last clause. The hint grows by 225 characters, only on review
   requests.
 - omher connects over SSH to a Windows computer whose Hermes has only the `hermes.cmd` shim and no venv: the remote discovery now reads the shim's interpreter too (a UTF-8 BOM included), in the same order the local app reads launchers (the agent's bin before the user bin, `.exe` before `.cmd` in each), so a stale launcher from an older install is never picked over the current one. Reported and first fixed by @jundev0001 in #3077.
+- **A diff review reads the files it was given before listing anything as not checked.** In live runs the
+  reviewer sometimes wrote "Not checked: the Policy constructor" while the file that defines it was in the review's
+  context, unread, and then flagged a bug that file rules out. The code-review rules OMH adds to a review request now
+  say: open every provided file that defines, constructs or calls what the diff touches before deciding; a file you
+  could read never goes under Not checked. The code-review skill's finding-validation method says the same. The hint
+  grows by 150 characters, only on review requests. (`src/plugin_bundle/omh/awareness.py`,
+  `src/skills/review_methods.py`)
+- **The review false-alarm benchmark no longer scores a correct bug report as a false alarm.** The
+  `trap-lock-held-by-caller` change added a running total that `reset()` never cleared, so after a reset `total()`
+  disagreed with `snapshot()`. Reviewers that reported this were right, but they were counted as false alarms (both
+  arms, every live run). The change now clears the total in `reset()`, so the case asks only whether the reviewer
+  sees the lock the caller holds. Results recorded before this fix overstate false alarms on this case.
+  (`benchmarks/review-false-alarms/corpus/trap-lock-held-by-caller`)
 
 ## 5.0.0 - 2026-11-21
 

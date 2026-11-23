@@ -133,6 +133,7 @@ export function Timeline({
             queueBusy={it.held && chat?.steering === it.id}
             queueOff={off ?? undefined}
             last={it.id === lastSent}
+            paused={!!chat?.lost?.length}
           />
         );
       }

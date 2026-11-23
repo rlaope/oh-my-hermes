@@ -1,5 +1,6 @@
 // Bridge ops and events of threads under a bot (bridge `thread.*`). Kept here, not in lib/protocol.ts, so this lane
 // merges cleanly beside the others; the shapes are the bridge's (omher_bridge.py op_thread_*).
+import type { LostTurn } from "../lib/protocol";
 
 /** One thread as `thread.list` / `thread.create` give it. `thread` is Hermes' stored session id (stable across
  *  restarts); its events arrive tagged `session: <thread>` and land in the store under `fold:<bot>:<thread>`. */
@@ -24,8 +25,10 @@ export interface ThreadOpenResult {
   session_id: string;
   title: string;
   cwd: string;
-  messages: { id: string; role: "user" | "assistant"; text: string; ts: number }[];
+  messages: { id: string; role: "user" | "assistant"; text: string; ts: number; queued?: boolean }[];
   running: boolean;
+  /** Turns of this thread Hermes lost in a restart (as `chat.open`'s). */
+  lost?: LostTurn[];
   model: string;
   provider: string;
   reasoning: string;
