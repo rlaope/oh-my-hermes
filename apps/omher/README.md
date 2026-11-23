@@ -125,6 +125,13 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
 - **While it answers** (Settings › General): a message sent while a bot is answering waits in the steer queue until
   the turn ends (the default), or, set to Steer, is steered into the running answer at once, as its Steer button
   would; a message behind another held one still waits its turn (`e2e/steer-queue.spec.ts`).
+- **Link chips** (`src/chat/parts/linkKinds.ts`, `e2e/links.spec.ts`): a link in a message shows as the service's mark
+  and what it points at, read from the address alone (nothing is fetched): GitHub, Slack, Discord, Google (Docs,
+  Sheets, Slides, Forms, Drive, Calendar events and booking pages, Meet, Gmail, Maps, Search), X, LinkedIn, YouTube,
+  Notion, Linear, Figma, npm, Jira and Confluence Cloud (`*.atlassian.net`), Sentry, Asana, Todoist, ClickUp and
+  GitLab (`gitlab.com`); another page on an Atlassian site is a generic Atlassian chip. A self-hosted Jira or GitLab,
+  or a lookalike host, stays a plain link named by its real host.
+  An `obsidian://` note link is named the same way but is text: omher opens only web links and messenger threads.
 - **Remote machines over SSH** (`src-tauri/src/peers.rs`, `src/peers/`): the sidebar `+` › Connect over SSH (or the
   chip under a bot's `omher-peer` reply, or Settings › Remote machines) takes a host from `~/.ssh/config` or
   `user@host`, checks it and shows the exact `ssh` command, the Hermes found there and its bots; only Connect saves it
