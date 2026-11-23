@@ -176,7 +176,8 @@ _SCRUBS = (
     (re.compile(r"(?i)\b((?:authorization:\s*)?(?:bearer|basic)\s+)[A-Za-z0-9._~+/=-]{16,}"), r"\1<redacted>"),
     (re.compile(r"(?i)\b(bot\s+)(?=[A-Za-z0-9._~+/=-]*\d)[A-Za-z0-9._~+/=-]{16,}"), r"\1<redacted>"),
     # Not when what follows is an environment variable's name (`missing key: DISCORD_BOT_TOKEN`), and for `code` and
-    # `key` only a value with a letter and a digit, or 16 characters: discord.py's `(error code: 50001)` stays.
+    # `key` only a value with a letter and a digit, or 16 characters: discord.py's `(error code: 50001)` stays. The
+    # name test also keeps a secret made only of capitals and `_` with no digit; real keys of that shape are rare.
     (re.compile(r"(?i)\b(token|access_token|refresh_token|api[_-]?key|apikey|client_secret|secret|password|passwd|pwd)"
                 r"(\s*[:=]\s*)(?-i:(?![A-Z][A-Z_]*(?![\w])))[^\s,;'\"&)]{6,}"), r"\1\2<redacted>"),
     (re.compile(r"(?i)\b(code|key)(\s*[:=]\s*)(?-i:(?![A-Z][A-Z_]*(?![\w])))"

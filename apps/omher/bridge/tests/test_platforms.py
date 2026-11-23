@@ -155,7 +155,9 @@ class FindAndRun(unittest.TestCase):
             script, pid_file = Path(tmp) / "omh", Path(tmp) / "child.pid"
             script.write_text(f'#!/bin/sh\nsleep 30 &\necho $! > "{pid_file}"\nwait\n')
             script.chmod(0o755)
-            self.assertIsNone(ob.run_omh_read(str(script), Path(tmp), "platforms", timeout=0.5))
+            # 3 s: room for the shell to write the child's pid before the stop, even on a loaded runner
+            self.assertIsNone(ob.run_omh_read(str(script), Path(tmp), "platforms", timeout=3.0))
+            self.assertTrue(pid_file.exists(), "the script never wrote its child's pid before the stop")
             child = int(pid_file.read_text())
             for _ in range(50):
                 try:
