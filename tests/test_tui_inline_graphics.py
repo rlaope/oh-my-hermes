@@ -65,17 +65,33 @@ class InlineGraphicsTests(unittest.TestCase):
         self.assertEqual(inline_graphics({"TERM_PROGRAM": "otty", "TMUX": "x"}), INLINE_UNICODE)
 
     def test_omher_is_kitty(self) -> None:
-        # omher's terminal pane: TERM_PROGRAM=omher over an xterm TERM, no kitty variable.
+        # omher's terminal pane from 1.1.4: TERM_PROGRAM=omher and its version over an xterm TERM, no kitty variable.
+        self.assertEqual(inline_graphics({"TERM_PROGRAM": "omher", "TERM_PROGRAM_VERSION": "1.1.4",
+                                          "TERM": "xterm-256color", "COLORTERM": "truecolor"}), INLINE_KITTY)
+        self.assertEqual(inline_graphics({"TERM_PROGRAM": "OMHER", "TERM_PROGRAM_VERSION": "1.2.0"}), INLINE_KITTY)
+        self.assertEqual(inline_graphics({"TERM_PROGRAM": "omher", "TERM_PROGRAM_VERSION": "2.0"}), INLINE_KITTY)
+        self.assertEqual(inline_graphics({"TERM_PROGRAM": "omher", "TERM_PROGRAM_VERSION": "1.1.10"}), INLINE_KITTY)
+        self.assertEqual(inline_graphics({"TERM_PROGRAM": "omher", "TERM_PROGRAM_VERSION": "1.1.4-beta.1"}), INLINE_KITTY)
+
+    def test_an_omher_that_paints_no_placeholders_is_unicode(self) -> None:
+        # omher 1.1.3 and earlier set no version and paint no placeholders: kitty there drew tofu boxes.
         self.assertEqual(inline_graphics({"TERM_PROGRAM": "omher", "TERM": "xterm-256color", "COLORTERM": "truecolor"}),
-                         INLINE_KITTY)
-        self.assertEqual(inline_graphics({"TERM_PROGRAM": "OMHER"}), INLINE_KITTY)
+                         INLINE_UNICODE)
+        for version in ("1.1.3", "1.0.9", "0.9", "", " ", "dev", "1.x.4", "v1.2.0"):
+            with self.subTest(version=version):
+                self.assertEqual(inline_graphics({"TERM_PROGRAM": "omher", "TERM_PROGRAM_VERSION": version}),
+                                 INLINE_UNICODE)
 
     def test_omher_inside_tmux_or_screen_is_unicode(self) -> None:
-        self.assertEqual(inline_graphics({"TERM_PROGRAM": "omher", "TMUX": "x"}), INLINE_UNICODE)
-        self.assertEqual(inline_graphics({"TERM_PROGRAM": "omher", "STY": "x"}), INLINE_UNICODE)
+        new = {"TERM_PROGRAM": "omher", "TERM_PROGRAM_VERSION": "1.1.4"}
+        self.assertEqual(inline_graphics({**new, "TMUX": "x"}), INLINE_UNICODE)
+        self.assertEqual(inline_graphics({**new, "STY": "x"}), INLINE_UNICODE)
 
     def test_a_program_named_like_omher_is_not_omher(self) -> None:
-        self.assertEqual(inline_graphics({"TERM_PROGRAM": "omher-dev"}), INLINE_UNICODE)
+        self.assertEqual(inline_graphics({"TERM_PROGRAM": "omher-dev", "TERM_PROGRAM_VERSION": "1.1.4"}), INLINE_UNICODE)
+
+    def test_another_terminals_version_does_not_matter(self) -> None:
+        self.assertEqual(inline_graphics({"TERM_PROGRAM": "otty", "TERM_PROGRAM_VERSION": "0.1"}), INLINE_KITTY)
 
     def test_a_program_named_like_otty_is_not_otty(self) -> None:
         self.assertEqual(inline_graphics({"TERM_PROGRAM": "cotty"}), INLINE_UNICODE)

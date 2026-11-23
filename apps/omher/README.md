@@ -181,6 +181,21 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   the window is hidden; a thread is also read when opened, after its turn ends and on Refresh, two at most at a time.
   Without `gh`, a login or the network the mark shows the number only (`BOUNDARY.md` rules 21 and 40,
   `e2e/thread-prs.spec.ts`).
+- **Split card** (`src/sessions/SplitLayoutCard.tsx`, `splitCard.ts`): while the search box is empty, each TERMINALS split
+  (2 to 4 panes) is one card at the top of the list, drawn like the split itself: one cell per pane in its real place and
+  proportions, each with the CLI's mark, the session's name and its last line. Its members are not listed again as rows.
+  Text follows the cell's size: name and mark on one line in a short cell, mark beside the name in a normal one, and the
+  mark above the name in a tall, narrow one. The open pane has a solid accent edge. Other cells show their state on the
+  edge: a light segment circling it while output flows (and, after a minute, how long it has been busy: `14m`, `2h`,
+  dimmer after ten minutes), a flowing dashed edge while the session reports background work, an amber blinking edge
+  when a bot asks to type into it, a soft accent edge breathing slowly when it rang unseen, a red edge after an error. A click focuses that pane and a
+  right-click opens the row's menu. The band under the card is a height grip: drag it, press ↑ or ↓ (16 px), or double-click
+  for the default. The height is kept with that split across restarts and layout changes. With reduced motion
+  nothing moves: a busy cell gets a thin steady edge and a waiting cell a steady amber one. A terminal's bell, OSC 9
+  message or progress done is shown as news (an accent dot on its row, that soft edge on its cell), since it may mean
+  it finished as well as that it waits; the amber warning sign is kept for a request omher knows about. A terminal that reports no
+  background work never shows the dashed edge. The Plans panel keeps its own split map. The layout card borrows its
+  ideas from kasaterm's sidebar map (2rami/kasaterm, MIT); the code is written fresh.
 - **ACP agents** (`src-tauri/src/acp_chat.rs`): one adapter for agents that speak the Agent Client Protocol
   (JSON-RPC on stdio), one table row per agent. OpenCode (`opencode acp`) is the first. omher turns off the
   protocol's file and terminal capabilities, so the agent uses its own tools; its permission requests become

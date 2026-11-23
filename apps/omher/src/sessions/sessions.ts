@@ -36,7 +36,7 @@ import { savedPanelKeys } from "../terminal/state";
 import { termTheme } from "./term/themes";
 import { getShellHost, learnThisHost } from "../terminal/host";
 import { onSessionFg } from "./fg";
-import { termActs } from "./termActivity";
+import { nextBusySince, termActs } from "./termActivity";
 import { isLinkId, LINK_COPIED_EVENT, newLinkId, termLinkUrl } from "./termLink";
 import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, idInUse, installLine, isBuiltin, isGone, isShell, isTerminalRec, LAST_LINE_MAX, refusedResume, SHELL, termEnd, termMarkAgent, lastPrintedLine, OPEN_KEY, setsUpScreen, UI_BYTES, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, termGroups, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
@@ -1500,7 +1500,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       const now = Date.now();
       if (!ofChat && now - marked >= OUT_MARK_MS) {
         marked = now;
-        termActs.patch(id, { lastOut: now });
+        // the busy streak's start (the split card's elapsed time): kept while output keeps coming, new after a quiet gap
+        termActs.patch(id, { lastOut: now, busySince: nextBusySince(termActs.get(id), now) });
       }
       if (!ofChat && lineTimer === null) lineTimer = setTimeout(readLine, OUT_MARK_MS);
     };
@@ -1511,7 +1512,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         // a program omher stopped (the row closed, Restart) or one already replaced says nothing more
         if (terms.get(id) !== t || t.run !== run) return;
         t.closed = true;
-        termActs.patch(id, { progress: undefined });
+        termActs.patch(id, { progress: undefined, busySince: undefined });
         if (lineTimer !== null) clearTimeout(lineTimer);
         lineTimer = null;
         fgOff.get(id)?.();
@@ -1775,17 +1776,23 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       };
       wire(first.term);
       // the folder its shell reports (OSC 7): the row's folder line. Progress (OSC 9;4): working while reported; done
-      // after working, unseen, marks the row as the bell does (no notification: a report is not a ring). Both come
+      // after working, unseen, marks the row as news (`quiet`: no notification, a report is not a ring, and a bell
+      // after it still notifies), and working again clears that. Both come
       // on the element, which a parked terminal made again keeps, and go with it.
       onCwd(el, (path) => {
         if (rec(id)) termActs.patch(id, { cwd: path });
       });
       onProgress(el, (st) => {
         if (!rec(id) || tt.closed) return;
-        if (st === "busy") return termActs.patch(id, { progress: true });
+        if (st === "busy") {
+          // working again: the done it reported before is behind it (a bell the person has not seen stays)
+          if (state.unseen[id] === "quiet") seen(id);
+          return termActs.patch(id, { progress: true, busySince: nextBusySince(termActs.get(id), Date.now()) });
+        }
         if (!termActs.get(id).progress) return;
         termActs.patch(id, { progress: undefined });
-        flag(id, "bell");
+        // news on the row, no notification; never over a bell nobody has seen, which must keep notifying once
+        if (state.unseen[id] !== "bell") flag(id, "quiet");
       });
     }
     const tt = t;
@@ -2258,7 +2265,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const ms = graceNow();
     const g = groupOf(getSplit().groups, id);
     const index = state.list.findIndex((s) => s.id === id);
-    const split: SplitWas | null = g ? { layout: g.layout, ...(g.zoom ? { zoom: true as const } : {}) } : null;
+    const split: SplitWas | null = g ? { layout: g.layout, ...(g.zoom ? { zoom: true as const } : {}), ...(g.mapH === undefined ? {} : { mapH: g.mapH }) } : null;
     if (!grace.begin(id, r.title || nameOf(r), ms, { rec: r, index, split })) return false;
     heldRecs.set(id, r);
     t.held = true;
