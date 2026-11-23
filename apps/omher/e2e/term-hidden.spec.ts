@@ -241,12 +241,17 @@ test("the bell and an OSC 9 message from a hidden terminal still reach its row",
   };
   await type("after 1200 bell");
   const b = await tagged(page);
-  await expect(row).toHaveAttribute("data-term-status", "bell", { timeout: 8000 });
+  await expect(row).toHaveAttribute("data-term-status", "news", { timeout: 8000 });
+  // news is a small accent dot with the rang tooltip, never the warning triangle (khope 2026-11-23)
+  const glyph = row.getByTestId("term-status");
+  await expect(glyph).toHaveAttribute("title", "Rang (it may have finished or be waiting)");
+  await expect(glyph.locator("svg circle")).toHaveCount(1);
+  await expect(glyph.locator("svg path")).toHaveCount(0);
   await show(page, a);
-  await expect(row).not.toHaveAttribute("data-term-status", "bell");
+  await expect(row).not.toHaveAttribute("data-term-status", "news");
   await type("after 1200 osc9");
   await show(page, b);
-  await expect(row).toHaveAttribute("data-term-status", "bell", { timeout: 8000 });
+  await expect(row).toHaveAttribute("data-term-status", "news", { timeout: 8000 });
 });
 
 test("the bottom panel's terminal, hidden, draws nothing and shows what its shell printed meanwhile", async ({ page }) => {

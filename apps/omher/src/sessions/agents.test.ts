@@ -16,6 +16,8 @@ import {
   splitPaneName,
   termActivity,
   terminalNote,
+  termStatus,
+  isNews,
   tildePath,
   type Recent,
   type SessionRec,
@@ -266,5 +268,32 @@ describe("splitPaneName", () => {
   });
   it("falls back to the agent's name when the folder has none", () => {
     expect(splitPaneName(shell(""), null)).toBe("Shell");
+  });
+});
+
+// khope 2026-11-23: a bell, an OSC 9 message or a progress done is news (it may have finished or be waiting); only a
+// wait omher knows (an approval or question, a bot's request to type) is the amber warning
+describe("a ring is news, a known wait is the warning", () => {
+  const term: SessionRec = { id: "t1", agent: "claude", cwd: "/home/k/web-app", startedAt: 1_700_000_000_000, status: "running", view: "terminal", open: "terminal" };
+  it("termStatus says news for an unseen ring, never bell", () => {
+    expect(termStatus({ status: "running" }, "bell", 5_000)).toBe("news");
+    expect(termStatus({ status: "running", lastOut: 4_900 }, "bell", 5_000)).toBe("news");
+    expect(termStatus({ status: "exited", exitCode: 0 }, "bell", 5_000)).toBe("ok");
+    expect(termStatus({ status: "running" }, "end", 5_000)).toBeNull();
+    // a progress done nobody saw is the same news on the row
+    expect(termStatus({ status: "running" }, "quiet", 5_000)).toBe("news");
+    expect(isNews("quiet")).toBe(true);
+    expect(isNews("bell")).toBe(true);
+    expect(isNews("end")).toBe(false);
+    expect(isNews(undefined)).toBe(false);
+  });
+  it("rowModel marks an unseen ring news and only a pending request or an open ask needs", () => {
+    expect(rowModel(term, undefined, undefined, "bell")).toMatchObject({ mark: "news", needsYou: false });
+    expect(rowModel(term, undefined, undefined, "bell", true)).toMatchObject({ mark: "needs" });
+    expect(rowModel(term, undefined, undefined, undefined, true)).toMatchObject({ mark: "needs" });
+    expect(rowModel(term, { turn: false, needsYou: true }, undefined, "bell")).toMatchObject({ mark: "needs", needsYou: true });
+    // a ring from a program that has since ended is not news: how it ended says more
+    expect(rowModel({ ...term, status: "exited", exitCode: 0 }, undefined, undefined, "bell").mark).toBeNull();
+    expect(rowModel({ ...term, status: "exited", exitCode: 0 }, undefined, undefined, undefined, true).mark).toBeNull();
   });
 });

@@ -249,6 +249,32 @@ class SnapshotStateTest(_Workspace):
         self.assertNotIn("other", ct._sessions)
 
 
+class ShellChangeBudgetTest(_Workspace):
+    """A re-index that runs past its entries or deadline is the designed undecidable case on a large
+    workspace, so it says nothing at WARNING: it fired ~700 times a day in a workspace whose index walk
+    regularly passes `MAX_SCAN_ENTRIES`. A real fault inside the walk still warns."""
+
+    def _shell_turn(self) -> None:
+        self.write("src/app/units.py", TO_CENTS)
+        ct.snapshot_before_edit({"tool_name": "terminal", "session_id": SESSION, "turn_id": self.turn}, {})
+        self.assertIsNotNone(ct._sessions[SESSION]["index"])
+
+    def test_a_scan_budget_skip_is_logged_at_debug(self):
+        self._shell_turn()
+        with mock.patch.object(ct, "_index", side_effect=ct._Budget("deadline")):
+            with self.assertLogs(ct._LOG, level="DEBUG") as logs:
+                self.assertEqual(ct.shell_changed_files(SESSION, self.turn), ())
+        self.assertTrue(any("skipped=_Budget" in line for line in logs.output), logs.output)
+        self.assertFalse(any("failed=" in line for line in logs.output), logs.output)
+
+    def test_a_real_fault_in_the_walk_still_warns(self):
+        self._shell_turn()
+        with mock.patch.object(ct, "_index", side_effect=RuntimeError("boom")):
+            with self.assertLogs(ct._LOG, level="WARNING") as logs:
+                self.assertEqual(ct.shell_changed_files(SESSION, self.turn), ())
+        self.assertIn("failed=RuntimeError", logs.output[-1])
+
+
 class OpaqueEditTest(_Workspace):
     """Python files a turn changed without `patch` / `write_file`, which Hermes's changed_paths omit."""
 
