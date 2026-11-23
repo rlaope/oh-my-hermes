@@ -1731,6 +1731,7 @@ class Intake:
 
     running: bool = False
     held: HeldSubmit | None = None
+    view: Any = None  # the subagent view (`SubagentView`) it was typed in; None for main's screen
 
 
 @dataclass(frozen=True)
@@ -2385,6 +2386,9 @@ class App(ModesMixin, AgentViewMixin):
         self.agent_steer: str | None = None  # the agent `s` picked: the next line sent is its steer
         self.viewing: SubagentView | None = None  # the subagent whose session is on the main screen; None: main's
         self.view_opening: str | None = None  # the agent an open's read is out for; another Enter replaces it
+        # A subagent view's draft left unsent, by agent: it comes back when that agent's view opens again; an agent
+        # the roster drops takes its draft with it (`_prune_child_drafts`).
+        self.child_drafts: dict[str, Composer] = {}
         over_ssh = any(environ.get(name) for name in SSH_VARIABLES)
         remote = over_ssh or any(environ.get(name) for name in WSL_VARIABLES)
         self.remote = remote  # input crosses a link that can split a mouse report (`_report_may_follow`)
@@ -3710,9 +3714,8 @@ class App(ModesMixin, AgentViewMixin):
         self.turn_pending = self.interrupting = False
         self._lose_roster()  # they stay in the agent view, so the HUD's agents block does not take them up instead
         self.list_selected = None
-        if self.viewing is not None:  # its watch session went with the old gateway: back to main
-            self.viewing = None
-            self._full_redraw()
+        if self.viewing is not None:  # its watch session went with the old gateway: back to main, drafts restored
+            self._leave_view(close=False)
         self.view_opening = None
         first_id = max(self.pending, default=0) + 1
         self._settle_lost_calls()
@@ -5119,7 +5122,7 @@ class App(ModesMixin, AgentViewMixin):
         """Keep empty-draft queued send policy shared by ordinary and visual input."""
         if event in (SEND_NOW_KEY, STEER_FALLBACK_KEY) and not self.composer.text and self._steer_keys_live() and (
             self._queue_head_sends_now()
-        ):
+        ) and self.viewing is None:  # main's queued head never goes from a subagent's session
             self.composer._clear_visual()
             self._send_queued_now()
             return True
@@ -5439,7 +5442,7 @@ class App(ModesMixin, AgentViewMixin):
         ):
             self.composer._drop_pending()
             self.escape_armed = None
-            if not self.composer.text and self._steer_keys_live() and self._queue_head_steers():
+            if not self.composer.text and self._steer_keys_live() and self._queue_head_steers() and self.viewing is None:
                 self._send_queued_now()
             else:
                 self._on_composer(self._edit(self.composer, event), event, steer=True)
@@ -5592,7 +5595,7 @@ class App(ModesMixin, AgentViewMixin):
                 and bool(action.text.strip())
             )
             images = tuple(image for _label, image in action.images if isinstance(image, Attachment))
-            if self.viewing is not None and self.slot is None and self.tell_draft is None:
+            if self.viewing is not None and self.slot is None and self.tell_draft is None and self.agent_steer is None:
                 self._send_to_view(action.text, action.shown, images)  # to the subagent on screen, never main
                 return
             if self.slot is None and self.tell_draft is None and self._hold_submit(action, images, steer, now):
@@ -6833,7 +6836,7 @@ class App(ModesMixin, AgentViewMixin):
         no prompt's images are out, and no prompt goes until it is answered, its answer having sent the detach
         (`_take_attachment`), or until it has none in its time."""
 
-        intake = Intake()
+        intake = Intake(view=self.viewing)
         self.intakes.append(intake)
 
         def run() -> None:
@@ -7427,8 +7430,8 @@ class App(ModesMixin, AgentViewMixin):
         line, and Enter then runs it as one.
         With nothing queued Up is the composer's: it walks the input history.
         """
-        if not isinstance(event, Key) or event.name != UP or self.composer.text or not self.queued:
-            return False
+        if not isinstance(event, Key) or event.name != UP or self.composer.text or not self.queued or self.viewing:
+            return False  # in a subagent's session main's queue is not the composer's to take
         self._take_back_queue(self.composer)
         return True
 
@@ -7746,20 +7749,31 @@ class App(ModesMixin, AgentViewMixin):
         else:
             self._steer_unanswered(block, seconds)
 
-    def _on_agent_steer_unanswered(self, sid: str, session: str, block: SteerBlock, seconds: float) -> None:
+    def _on_agent_steer_unanswered(
+        self, sid: str, session: str, block: SteerBlock, seconds: float, view: SubagentView | None = None,
+    ) -> None:
         """An agent steer with no answer in `seconds`: as the main steer's, and if `sid`, the session it went to, was
-        left, a notice names the agent and `session`."""
+        left, a notice names the agent and `session`. `view`: the subagent session it was typed in, which its text
+        goes back to (`_give_back_from`)."""
         if sid != self.sid:
             said = AGENT_STEER_LEFT_UNANSWERED_NOTICE.format(name=block.agent, seconds=seconds, session=session)
-            self._steer_back(block.text, said)
+            self._steer_back(block.text, said, view)
         else:
-            self._steer_unanswered(block, seconds)
+            self._steer_unanswered(block, seconds, view)
 
-    def _steer_unanswered(self, block: SteerBlock, seconds: float) -> None:
+    def _steer_unanswered(self, block: SteerBlock, seconds: float, view: SubagentView | None = None) -> None:
         """A steer, the main turn's or an agent's, unanswered in the `seconds` its call was waited for: its row says
         so and its text is given back."""
         self.transcript.steer_answered(block, STEER_REFUSED, STEER_UNANSWERED_OUTCOME.format(seconds=seconds))
-        self._give_back(block.text)
+        self._give_back_from(view, block.text)
+
+    def _give_back_from(self, view: SubagentView | None, text: str) -> None:
+        """Text not taken back to the screen it was typed on: main's draft for None, else `view`'s
+        (`_give_back_to_view`)."""
+        if view is None:
+            self._give_back(text)
+        else:
+            self._give_back_to_view(view, text)
 
     def _steer_refused(self, block: SteerBlock, reason: str, queued: QueuedLine | None = None, turn: int = 0) -> None:
         """The steer says what became of its text (with Hermes' `reason`), which goes as the next prompt.
@@ -7794,9 +7808,9 @@ class App(ModesMixin, AgentViewMixin):
         self.transcript.steer_answered(block, STEER_REFUSED, STEER_REFUSED_OUTCOME.format(fallback=fallback, reason=reason))
         self._send_typed(block.text)
 
-    def _steer_back(self, text: str, notice: str = STEER_LEFT_NOTICE) -> None:
+    def _steer_back(self, text: str, notice: str = STEER_LEFT_NOTICE, view: SubagentView | None = None) -> None:
         """A steer settled after its session was left: the text returns to the person, never to the live session."""
-        self._give_back(text)
+        self._give_back_from(view, text)
         self.transcript.add_notice(notice, NOTICE_WARN)
 
     def _draft(self) -> Composer:
@@ -7806,18 +7820,25 @@ class App(ModesMixin, AgentViewMixin):
         image's remainder, a command's prefill) goes here, never into an
         answer to Hermes.
         """
+        if self.viewing is not None and self.viewing.main_draft is not None:
+            return self.viewing.main_draft  # a subagent's session is on screen: main's draft is the one set aside
+        return self._screen_draft()
+
+    def _screen_draft(self) -> Composer:
+        """The draft of the screen shown (main's, or a subagent view's own): the composer, or the one set aside while a
+        question or a tell row has a composer of its own."""
         if self.tell_draft is not None:
             return self.tell_draft
         return self.slot_draft if self.slot_draft is not None else self.composer
 
-    def _give_back(self, text: str, images: Sequence[Attachment] = ()) -> None:
+    def _give_back(self, text: str, images: Sequence[Attachment] = (), into: Composer | None = None) -> None:
         """A steer's text back to the person, never into an answer to Hermes: on a line of its own after the draft
-        (`_draft`), its `images` tokens again. Its paste chips stay, and so does its caret while the draft is not
-        drawn."""
-        draft = self._draft()
+        (`_draft`, or `into`), its `images` tokens again. Its paste chips stay, and so does its caret while the draft
+        is not drawn."""
+        draft = into if into is not None else self._draft()
         caret, end = draft.caret, len(draft.text)
         draft.replace(end, end, f"\n{text}" if draft.text else text, _tokens(images))
-        if draft is self.slot_draft or draft is self.tell_draft or self._composer_hidden():
+        if draft is not self.composer or self._composer_hidden():
             draft.caret = caret  # a hidden draft comes back as the person left it, the text after its end
 
     # ── slash commands ──
@@ -8725,7 +8746,7 @@ class App(ModesMixin, AgentViewMixin):
         attachment = replace(attachment, label=IMAGE_LABEL.format(number=self.image_count), data=data)
         self._request_preview(attachment)
         if not self._join_held(self.intake_answering, attachment):
-            self._draft().insert_image(attachment.label, attachment)
+            self._intake_draft().insert_image(attachment.label, attachment)
 
     def _request_preview(self, attachment: Attachment) -> None:
         """Ask Hermes to render `attachment` for the prompt echo (`image.render`, by the path it staged it at): kitty
@@ -8814,7 +8835,7 @@ class App(ModesMixin, AgentViewMixin):
         self._take_attachment(sid, attachment)
         remainder = as_text(result.get("remainder")).strip()
         if remainder:  # `/image shot.png what is this?` keeps the question for the person to send
-            self._draft().handle(Paste(remainder))
+            self._intake_draft().handle(Paste(remainder))
 
     def _on_clipboard_pasted(self, sid: str, result: dict[str, Any]) -> None:
         attachment = attachment_from(result) if result.get("attached") is True else None
@@ -8857,7 +8878,13 @@ class App(ModesMixin, AgentViewMixin):
             held.text += text
             held.shown = held.shown + text if held.shown else ""
             return
-        self._draft().handle(Paste(text))
+        self._intake_draft().handle(Paste(text))
+
+    def _intake_draft(self) -> Composer:
+        """Where what an intake answers goes: the draft of the screen it was typed on (`_origin_draft`), the screen's
+        own for an agent no longer listed."""
+        intake = self.intake_answering
+        return (self._origin_draft(intake.view) if intake is not None else None) or self._draft()
 
     def _redraw(self, arg: str) -> None:
         self._full_redraw()

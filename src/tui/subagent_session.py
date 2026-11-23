@@ -38,6 +38,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from . import gateway_contract as contract
+from .composer import Composer
 from .style import Line, Span
 from .theme import Theme
 from .transcript import Transcript
@@ -55,6 +56,7 @@ REFUSED_WHILE_VIEWING = (
 )
 STILL_RUNNING = "{name} is still running; your text is back in the composer."
 CONTINUE_REFUSED = "Hermes did not continue {name}: {reason}. Your text is back in the composer."
+VIEW_TEXT_DROPPED = "{name} is no longer listed; what was sent to it did not go: {text}"
 
 POLL_SECONDS = 1.0  # the most often a running child's transcript is read while it is on screen
 POLL_ANSWER_SECONDS = 10.0  # a poll with no answer this long no longer holds the next one back
@@ -77,7 +79,9 @@ class SubagentView:
     left is dropped. `running` is the child's own run (the read's `running`, a `subagent.complete`); `turn_running`
     a turn continued on the watch sid (stdio). `brief_pending`: the goal was drawn as the brief because the read had
     no user row yet, so the first user row a later read brings is that brief and is not drawn again. `sent_steers`
-    are the texts steered from here whose stored rows a later read brings back (drawn once, as the steer row)."""
+    are the texts steered from here whose stored rows a later read brings back (drawn once, as the steer row).
+    `main_draft` is main's composer (text, chips, images, caret) as it stood when the view was shown: the composer
+    on screen is the view's own until the view is left, when main's comes back exactly."""
 
     subagent_id: str
     name: str
@@ -92,6 +96,7 @@ class SubagentView:
     poll_open: bool = False
     brief_pending: bool = False
     sent_steers: list[str] = field(default_factory=list)
+    main_draft: Composer | None = None
 
 
 def wire_for(shared_gateway: bool) -> str:

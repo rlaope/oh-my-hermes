@@ -58,10 +58,11 @@ from .dag_tree import TreeState, bound_node, run_key, tree_lines
 from .panels import (
     RUNNING_NODE_STATES, agent_view_count, agent_view_keep, dag_run_summary, graph_is_dag, panel_lines,
 )
+from .composer import Composer
 from .style import Line, Span, Style
 from . import subagent_session as view_state
 from .subagent_session import (
-    CONTINUE_REFUSED, FROM_MAIN, REFUSED_WHILE_VIEWING, SEND_CONTINUE, SEND_STEER, SEND_UNSUPPORTED, STILL_RUNNING,
+    CONTINUE_REFUSED, FROM_MAIN, REFUSED_WHILE_VIEWING, VIEW_TEXT_DROPPED, SEND_CONTINUE, SEND_STEER, SEND_UNSUPPORTED, STILL_RUNNING,
     UNSUPPORTED_LINE, WIRE_POLL, WIRE_WATCH, SubagentView, mark_rows,
 )
 from .subagents import (
@@ -610,6 +611,7 @@ class AgentViewMixin:
     def _steer_agent(self, text: str) -> None:
         """Send `text`, the line the person typed after `s`, to the agent they picked; back to the composer if it cannot go."""
         subagent_id, self.agent_steer = self.agent_steer, None
+        view = self.viewing  # typed in a subagent's session: what is not taken goes back there (`_origin_draft`)
         agent = self.roster.agents.get(subagent_id or "")
         if agent is None or agent.status in FINISHED_STATUSES or not self.sid:
             name = agent.name if agent is not None else "That agent"
@@ -621,14 +623,16 @@ class AgentViewMixin:
         self._request(
             "subagent.steer",
             {"session_id": sid, "subagent_id": agent.subagent_id, "text": text},
-            lambda result: self._on_agent_steered(sid, session, block, result),
-            lambda error: self._on_agent_steered(sid, session, block, {}, as_text(error.get("message")).strip().rstrip(".")),
-            lambda seconds: self._on_agent_steer_unanswered(sid, session, block, seconds),  # given back, never resent
+            lambda result: self._on_agent_steered(sid, session, block, result, view=view),
+            lambda error: self._on_agent_steered(sid, session, block, {}, as_text(error.get("message")).strip().rstrip("."),
+                                                 view=view),
+            lambda seconds: self._on_agent_steer_unanswered(sid, session, block, seconds, view),  # back, never resent
             steer=block,
         )
 
     def _on_agent_steered(
-        self, sid: str, session: str, block: SteerBlock, result: Mapping[str, Any], reason: str = ""
+        self, sid: str, session: str, block: SteerBlock, result: Mapping[str, Any], reason: str = "",
+        view: SubagentView | None = None,
     ) -> bool:
         """Hermes' answer to an agent steer: taken, or refused (with `reason` when Hermes gave one) and given back.
 
@@ -636,14 +640,14 @@ class AgentViewMixin:
         comes back with a notice saying so, as the main steer's does.
         """
         if sid != self.sid:
-            self._steer_back(block.text, AGENT_STEER_LEFT_NOTICE.format(name=block.agent, session=session))
+            self._steer_back(block.text, AGENT_STEER_LEFT_NOTICE.format(name=block.agent, session=session), view)
             return True
         if as_text(result.get("status")) == contract.STEER_QUEUED:
             self.transcript.steer_answered(block, STEER_QUEUED)
         else:
             said = AGENT_STEER_REFUSED_BECAUSE.format(reason=reason) if reason else AGENT_STEER_REFUSED
             self.transcript.steer_answered(block, STEER_REFUSED, said)
-            self._give_back(block.text)
+            self._give_back_from(view, block.text)
         return True
 
     def _on_mouse(self, event: Mouse) -> None:
@@ -745,6 +749,11 @@ class AgentViewMixin:
         view.transcript.cwd = self.transcript.cwd
         self._fill_view(view, result.get("messages") if wire == WIRE_WATCH else result.get(contract.TRANSCRIPT_ROWS),
                         agent.goal)
+        main = self._screen_draft()  # whatever the composer holds now is main's: set aside whole, the view's comes in
+        main._drop_pending()
+        child = self.child_drafts.pop(subagent_id, None) or Composer(history=main.history, on_record=main.on_record)
+        child.set_vim(main.vim)
+        view.main_draft = self._swap_draft(child)
         self.viewing = view
         self.list_selected = self.tree_selected = None  # the composer has the keys: what is typed goes to the agent
         self._full_redraw()
@@ -762,17 +771,63 @@ class AgentViewMixin:
             view.brief_pending = True
         self._draw_history(view_state.unseen_rows(view, messages) if view.sent_steers else messages, into=view.transcript)
 
-    def _leave_view(self, redraw: bool = True) -> None:
-        """Back to main: the watch session closes (the shared gateway's read holds none), and main's transcript,
-        which folded every main event meanwhile, is drawn again. An open still out is dropped as it answers."""
+    def _leave_view(self, redraw: bool = True, close: bool = True) -> None:
+        """Back to main: main's draft comes back exactly as the view set it aside, the view's unsent draft is kept for
+        its agent (`child_drafts`), the watch session closes (the shared gateway's read holds none; `close` False when
+        it went with the gateway), and main's transcript, which folded every main event meanwhile, is drawn again. An
+        open still out is dropped as it answers."""
         self.view_opening = None
         view, self.viewing = self.viewing, None
         if view is None:
             return
-        if view.watch_sid:
+        if view.main_draft is not None:
+            child = self._swap_draft(view.main_draft)
+            child._drop_pending()
+            if child.text.strip() or child.images:
+                self.child_drafts[view.subagent_id] = child
+            view.main_draft = None
+        view.sent_steers.clear()
+        if view.watch_sid and close:
             self._request("session.close", {"session_id": view.watch_sid}, lambda _result: None, lambda _error: True)
         if redraw:
             self._full_redraw()
+
+    def _swap_draft(self, draft: Composer) -> Composer:
+        """Put `draft` where the screen's draft stands (`App._screen_draft`: the composer, or the one a question's or a
+        tell row's own composer set aside) and hand back the one it replaces."""
+        if self.tell_draft is not None:
+            old, self.tell_draft = self.tell_draft, draft
+        elif self.slot_draft is not None:
+            old, self.slot_draft = self.slot_draft, draft
+        else:
+            old, self.composer = self.composer, draft
+        return old
+
+    def _origin_draft(self, view: SubagentView | None) -> Composer | None:
+        """The draft of the screen something was typed on: main's (`_draft`, set aside while a view is shown) for
+        None; for `view`, its composer while that same view is on screen, else its agent's kept draft
+        (`child_drafts`), which comes back when its view opens again; None for an agent no longer listed."""
+        if view is None:
+            return self._draft()
+        if self.viewing is view:
+            return self._screen_draft()
+        if view.subagent_id not in self.roster.agents:
+            return None
+        return self.child_drafts.setdefault(view.subagent_id, Composer())
+
+    def _give_back_to_view(self, view: SubagentView, text: str, images: Sequence[Any] = ()) -> None:
+        """Text a view sent and its agent did not take goes back where it was typed (`_origin_draft`), never into
+        main's draft; for an agent no longer listed, one notice on main's screen holds it."""
+        draft = self._origin_draft(view)
+        if draft is None:
+            self.transcript.add_notice(VIEW_TEXT_DROPPED.format(name=view.name, text=text), NOTICE_WARN)
+            return
+        self._give_back(text, images, into=draft)
+
+    def _prune_child_drafts(self) -> None:
+        """Drop the kept drafts of agents the roster no longer holds, so they stay as few as the roster's agents."""
+        for subagent_id in [key for key in self.child_drafts if key not in self.roster.agents]:
+            del self.child_drafts[subagent_id]
 
     def _view_event(self, view: SubagentView, event: Any) -> None:
         """An event of the viewed child's watch session (Hermes mirrors its `message.*`, `reasoning.*` and `tool.*`
@@ -846,12 +901,12 @@ class AgentViewMixin:
         seen = shown or text
         if images or seen.startswith("!") or seen.startswith("/"):
             view.transcript.add_notice(REFUSED_WHILE_VIEWING.format(name=view.name), NOTICE_WARN)
-            self._give_back(text, images)
+            self._give_back_to_view(view, text, images)
             return
         kind = view_state.send_kind(view)
         if kind == SEND_UNSUPPORTED:
             view.transcript.add_aside(NoticeBlock(UNSUPPORTED_LINE.format(name=view.name), one_line=True))
-            self._give_back(text)
+            self._give_back_to_view(view, text)
             return
         if kind == SEND_CONTINUE:
             view.transcript.add_user(text)
@@ -885,7 +940,7 @@ class AgentViewMixin:
         view.transcript.steer_answered(block, STEER_REFUSED, said)
         if block.text in view.sent_steers:
             view.sent_steers.remove(block.text)
-        self._give_back(block.text)
+        self._give_back_to_view(view, block.text)
         return True
 
     def _continue_refused(self, view: SubagentView, text: str, error: Mapping[str, Any]) -> bool:
@@ -897,7 +952,7 @@ class AgentViewMixin:
             reason = (as_text(error.get("message")) or "refused").strip().rstrip(".")
             notice = CONTINUE_REFUSED.format(name=view.name, reason=reason)
         view.transcript.add_notice(notice, NOTICE_WARN)
-        self._give_back(text)
+        self._give_back_to_view(view, text)
         return True
 
     def _open_agent_log(self, subagent_id: str) -> None:
@@ -988,6 +1043,7 @@ class AgentViewMixin:
         self.roster.clear(self._open_dag_nodes())
         self.view_hold = None
         self._drop_agent_actions()
+        self._prune_child_drafts()
 
     def _prune_kept_lanes(self) -> None:
         """Drop the lanes a new turn kept for a dag run (`_clear_roster`) once a payload shows that run over (its
@@ -1042,6 +1098,7 @@ class AgentViewMixin:
             self.agent_steer = None
         for subagent_id in dropped:
             self.tail_misses.pop(subagent_id, None)
+        self._prune_child_drafts()
 
     def _lose_roster(self) -> None:
         """The gateway exited: the agents stay listed as they were, those not finished marked interrupted, and every
