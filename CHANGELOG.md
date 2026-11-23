@@ -25,6 +25,10 @@ All notable changes will be documented here.
   #3124. (`src/plugin_bundle/omh/delegation_fallback_chain.py`, `src/plugin_bundle/omh/delegation_routing.py`,
   `src/plugin_bundle/omh/delegation_route_restore.py`, `src/plugin_bundle/omh/tools/delegate_route_tool.py`,
   `src/maintenance/doctor.py`; `docs/INSTALLATION.md` "The rest of the chain inside the child")
+- **omher: an open thread reads again cleanly after the bridge comes back.** After a bridge restart, the page re-read an
+  open thread at the same time as it listed the bot's threads again. The new bridge knew no thread yet and refused
+  it, so the thread showed a false "not reachable" line and a turn Hermes lost there stayed unseen. Threads are now
+  listed first and the open ones read after that, on reconnect and when a bot comes back. (Follow-up to #3127)
 - **omher: a bot's chat that stopped answering after a crash says why and gets going again.** When Hermes' gateway
   stops in the middle of a turn (a crash, a kill, Windows ending the process), Hermes brings that turn back as lost
   and keeps every later message of the chat in its own queue until someone acknowledges it, because the lost turn may
