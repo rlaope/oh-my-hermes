@@ -250,6 +250,17 @@ All notable changes will be documented here.
   `--script`, drops events the bot's own runs caused and more than 5 events per 15 minutes. Both scripts are inert
   package data the person's Hermes runs (owner-approved scoped integration, 2026-11-23); OMH never runs them.
   (`src/skills/pr_watch_toolkit/`, `src/skills/catalog_feature_surfaces.py`, `src/routing/policy.py`)
+- **Bot templates: a new bot can start as a PR reviewer, an inbox triager or a channel watcher, with nothing turned
+  on.** Seven templates (`pr-review`, `inbox-triage`, `release-notes`, `alert-triage`, `meeting-to-issues`,
+  `research-vault`, `channel-watch`) each name what they reuse: OMH skills, Hermes' bundled skills, the PR watch and
+  event guard of `github-event-ops`, the channel watch and monitor recipes of `automation-blueprint`, a team profile
+  pack role and playbooks. `omh profile bot-templates --json` lists them (`bot_template_catalog/v1`). Asking a bot to
+  apply one ("apply the pr-review bot template", "봇 템플릿 적용해줘", or omher's `/omh-bot-template` line) loads the
+  new `omh-bot-template` skill: it stops at the first skill the bot lacks with the line that adds it, appends the
+  persona seed to the bot's `SOUL.md` only through Hermes' own approval for that write, creates every schedule paused,
+  lists webhooks and apps without creating or connecting any, and on a second run says what is already there. A
+  Discord, Slack or Telegram bot template in code, a PR template, an email, Jinja or prompt template keep their old
+  routes. (`src/catalogs/bot_templates.py`, `src/skills/bot_template_skill.py`, `src/routing/bot_template_cues.py`)
 - **OMH TUI: kitty previews inside omher, and a quiet Ctrl+Enter.** Under `TERM_PROGRAM=omher` the OMH TUI asks for
   kitty previews (tmux and screen keep half-blocks). Ctrl+Enter on a prompt with images during a turn now stops the
   turn and sends the prompt without an `Interrupted.` notice, like Claude Code's send-now; Hermes' "Operation
@@ -426,6 +437,18 @@ All notable changes will be documented here.
   there by its own bridge, over the same SSH link. Picture and name editing stay where they were.
   (`apps/omher/bridge/omher_bridge.py` `read_bot_page`, `apps/omher/src/settings/BotSections.tsx`;
   `docs/OMHER-BOUNDARY.md` rule 42)
+- **omher: make a new bot from the sidebar `+`, from a bot template or empty.** Add a bot used to list only profiles
+  that already existed and name `hermes profile create`. New bot now shows oh-my-hermes' bot templates beside No
+  template; you pick one, type a name and press Create. omher checks the name against Hermes' own rule (lowercase
+  letters, numbers, `-` or `_`, up to 64, not a name Hermes keeps such as `default`) and refuses one that is already on
+  this computer, then runs Hermes' own `hermes -p default profile create <name>` (no shell, nothing on stdin, at most
+  120 seconds) and counts it done only when the new profile's folder is there, showing Hermes' own words otherwise.
+  With a template, the new bot's main chat gets one message, ``/omh-bot-template Apply the bot template `<id>` to
+  this bot.``, and the bot applies it with its own approvals, every schedule paused. A new profile gets oh-my-hermes' skills
+  on the next `omh update`, so until then the gallery says so and sends nothing until you press Apply template.
+  Without `omh`, or with one from before bot templates, the gallery says so and an empty bot still works.
+  (`apps/omher/src/addbot/NewBot.tsx`, `apps/omher/bridge/omher_bridge.py` `op_bots_create`; `docs/OMHER-BOUNDARY.md`
+  rule 43)
 - The OMH TUI no longer asks for kitty image previews in an omher terminal that cannot paint them. omher 1.1.3
   and earlier set `TERM_PROGRAM=omher` but draw no kitty Unicode placeholders, so pasting an image showed a block of
   tofu boxes in the transcript and the picture itself over the composer. omher now also sets
