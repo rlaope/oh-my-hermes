@@ -222,13 +222,22 @@
   gap: 4px;
   text-align: center;
 }
+/* stacked: every line is the cell's width and centred in it, so a long title ellipsizes at its end and keeps its start */
 .sc-open.stack .sc-t {
   flex-direction: column;
   gap: 5px;
+  width: 100%;
   max-width: 100%;
 }
+.sc-open.stack .sc-n,
 .sc-open.stack .sc-l {
+  width: 100%;
   max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
 }
 .sc-editing .ss-name-in {
   min-width: 0;

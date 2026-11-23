@@ -170,9 +170,9 @@ test("with a search typed no card is drawn and the split's sessions are rows aga
   await expect(page.getByTestId(`session-${a}`)).toHaveCount(0);
 });
 
-test("a 1+3 split gives its tall cell stacked text and its short cells text beside the mark", async ({ page }) => {
-  await openApp(page);
-  const [a, b, c, d] = await sessions(page, ["/w/a", "/w/b", "/w/c", "/w/d"]);
+/** A 1+3 split: a tall on the left, b, c, d in even thirds on the right. */
+async function oneThree(page: Page, ids: string[]) {
+  const [a, b, c, d] = ids as [string, string, string, string];
   await splitWith(page, a, b, "right");
   await splitWith(page, b, c, "down");
   await splitWith(page, c, d, "down");
@@ -181,6 +181,64 @@ test("a 1+3 split gives its tall cell stacked text and its short cells text besi
   await term(page, d).locator(".xterm-helper-textarea").focus();
   await page.keyboard.press((await page.evaluate(() => /Mac|iPhone|iPad/.test(navigator.platform))) ? "Meta+Control+Equal" : "Control+Alt+Equal");
   await expect.poll(() => mapH(page)).toBe(126);
+}
+
+/** The grip's value as the accessibility tree reports it (what a screen reader hears), with its range. */
+async function gripAx(page: Page) {
+  const cdp = await page.context().newCDPSession(page);
+  const { nodes } = (await cdp.send("Accessibility.getFullAXTree")) as { nodes: { role?: { value: string }; name?: { value: string }; value?: { value: unknown }; properties?: { name: string; value: { value: unknown } }[] }[] };
+  const n = nodes.find((x) => x.role?.value === "separator" && String(x.name?.value ?? "").startsWith("Card height"));
+  const prop = (k: string) => n?.properties?.find((p) => p.name === k)?.value.value;
+  await cdp.detach();
+  return { now: Number(n?.value?.value), min: Number(prop("valuemin")), max: Number(prop("valuemax")) };
+}
+
+test("the grip tells assistive technology its real range, and its value follows the keys past 100 up to 240", async ({ page }) => {
+  await openApp(page);
+  const [a, b] = await sessions(page, ["/w/a", "/w/b"]);
+  await splitWith(page, a, b);
+  const grip = page.getByTestId("split-card-grip");
+  await expect(grip).toHaveAttribute("aria-valuemin", "46");
+  await expect(grip).toHaveAttribute("aria-valuemax", "240");
+  await grip.focus();
+  // 62 + 3 × 16 = 110, above the 0–100 a range-less separator falls back to
+  for (let i = 0; i < 3; i++) await page.keyboard.press("ArrowDown");
+  await expect(grip).toHaveAttribute("aria-valuenow", "110");
+  expect(await gripAx(page)).toEqual({ now: 110, min: 46, max: 240 });
+  for (let i = 0; i < 9; i++) await page.keyboard.press("ArrowDown");
+  await expect(grip).toHaveAttribute("aria-valuenow", "240");
+  expect((await gripAx(page)).now).toBe(240);
+});
+
+test("a long name in a tall cell keeps its start and ends in an ellipsis inside the cell", async ({ page }) => {
+  await openApp(page);
+  const [a, b, c, d] = await sessions(page, ["/w/a", "/w/b", "/w/c", "/w/d"]);
+  await oneThree(page, [a, b, c, d]);
+  await expect(cell(page, a)).toHaveAttribute("data-text", "stack");
+  const name = "VISIBLE-PREFIX — implement a long descriptive title for the review split";
+  await cell(page, a).click({ button: "right" });
+  await page.getByTestId("session-rename").click();
+  await cell(page, a).getByTestId("session-rename-input").fill(name);
+  await page.keyboard.press("Enter");
+  await expect(cell(page, a).getByTestId("split-cell-name")).toHaveText(name);
+  const fit = await cell(page, a).evaluate((e) => {
+    const n = e.querySelector(".sc-n") as HTMLElement;
+    const c = e.getBoundingClientRect();
+    const r = n.getBoundingClientRect();
+    return { scroll: n.scrollWidth, client: n.clientWidth, cellW: c.width, left: r.left - c.left, right: c.right - r.right, overflow: getComputedStyle(n).textOverflow };
+  });
+  // the title is cut (an ellipsis at its end), no wider than the cell, and starts inside it (its prefix shows)
+  expect(fit.scroll).toBeGreaterThan(fit.client);
+  expect(fit.client).toBeLessThanOrEqual(fit.cellW);
+  expect(fit.left).toBeGreaterThanOrEqual(0);
+  expect(fit.right).toBeGreaterThanOrEqual(0);
+  expect(fit.overflow).toBe("ellipsis");
+});
+
+test("a 1+3 split gives its tall cell stacked text and its short cells text beside the mark", async ({ page }) => {
+  await openApp(page);
+  const [a, b, c, d] = await sessions(page, ["/w/a", "/w/b", "/w/c", "/w/d"]);
+  await oneThree(page, [a, b, c, d]);
   await expect(cell(page, a)).toHaveAttribute("data-text", "stack");
   for (const id of [b, c, d]) await expect(cell(page, id)).toHaveAttribute("data-text", "beside");
 });

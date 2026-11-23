@@ -15,7 +15,7 @@ import { TermRowMark } from "./TermRowMark";
 import { focusSplitPane, splitWith } from "./SplitView";
 import { pressToSplit } from "./splitDrag";
 import { groupSessions, setMapHeight, type SplitGroup } from "./splitState";
-import { cellBoxes, cellState, cellText, clampCardHeight, defaultCardHeight, elapsedLabel, GRIP_STEP, type CellState } from "./splitCard";
+import { CARD_MAX_H, CARD_MIN_H, cellBoxes, cellState, cellText, clampCardHeight, defaultCardHeight, elapsedLabel, GRIP_STEP, type CellState } from "./splitCard";
 import { usePendingRequests } from "./termShare";
 import { countRender, useTermFace } from "./termActivity";
 import { pickTitle } from "./titles";
@@ -201,6 +201,9 @@ export function SplitCard({ group, current, list, agents, unseen, ticking, lang,
         role="separator"
         aria-orientation="horizontal"
         aria-valuenow={mapH}
+        aria-valuemin={CARD_MIN_H}
+        aria-valuemax={CARD_MAX_H}
+        aria-valuetext={`${mapH} px`}
         aria-label={t("split.cardGrip")}
         title={t("split.cardGrip")}
         tabIndex={0}
