@@ -89,6 +89,18 @@ span.lk.lk-static .brand-ic {
 span.lk.lk-static .lk-t {
   text-decoration: none;
 }
+/* its address, read out but not shown; defined here too, so the chip does not depend on the sidebar's stylesheet */
+span.lk.lk-static .vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
 /* an unknown site or a lookalike host: a plain link, shortened to where it really goes */
 a.lk-web {
   overflow-wrap: anywhere;
