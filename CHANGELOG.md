@@ -269,14 +269,40 @@ All notable changes will be documented here.
 - **Bot templates: a new bot can start as a PR reviewer, an inbox triager or a channel watcher, with nothing turned
   on.** Seven templates (`pr-review`, `inbox-triage`, `release-notes`, `alert-triage`, `meeting-to-issues`,
   `research-vault`, `channel-watch`) each name what they reuse: OMH skills, Hermes' bundled skills, the PR watch and
-  event guard of `github-event-ops`, the channel watch and monitor recipes of `automation-blueprint`, a team profile
-  pack role and playbooks. `omh profile bot-templates --json` lists them (`bot_template_catalog/v1`). Asking a bot to
+  event guard of `github-event-ops`, the channel watch and monitor recipes of `automation-blueprint`, the inbox-to-work
+  and alert-to-fix recipes of `app-work-intake` and `operating-rhythm`'s meeting-to-issues line, a team profile pack
+  role and playbooks. `omh profile bot-templates --json` lists them (`bot_template_catalog/v1`). Asking a bot to
   apply one ("apply the pr-review bot template", "봇 템플릿 적용해줘", or omher's `/omh-bot-template` line) loads the
   new `omh-bot-template` skill: it stops at the first skill the bot lacks with the line that adds it, appends the
   persona seed to the bot's `SOUL.md` only through Hermes' own approval for that write, creates every schedule paused,
   lists webhooks and apps without creating or connecting any, and on a second run says what is already there. A
   Discord, Slack or Telegram bot template in code, a PR template, an email, Jinja or prompt template keep their old
   routes. (`src/catalogs/bot_templates.py`, `src/skills/bot_template_skill.py`, `src/routing/bot_template_cues.py`)
+- **automation-blueprint: be told when something happens on a platform that sends no webhook.** Asking Hermes to
+  be told when new mail matches a filter, a calendar event is about to start, a Notion page or database changes, a
+  Linear or Jira issue is assigned, an Obsidian vault folder changes, or a Sentry issue opens ("tell me when a mail
+  from my boss arrives", "노션 데이터베이스 바뀌면 알려줘") now reaches `automation-blueprint`, whose monitor recipes
+  (`references/monitor-recipes.md`) prepare one paused Hermes cron monitor job per trigger. Its script, from
+  `toolkit/monitors/`, prints only ids and the platform's own timestamps, so the agent wakes only when they change:
+  `api_watch.py` reads Notion, Linear, Jira and Sentry with a key from one environment name, sent only to that
+  platform's fixed host; `google_watch.py` runs Hermes' own google-workspace skill CLI; `vault_watch.py` lists an
+  Obsidian folder's file metadata. A missing or rejected credential is reported once; a network failure is a failed
+  monitor tick, never a change. The scripts write nothing and are inert package data the person's Hermes runs, the
+  same scoped-integration class as the PR watch scripts; OMH never runs them.
+  (`src/skills/monitor_recipes.py`, `src/skills/monitor_watch_toolkit/`, `src/routing/policy.py`)
+- **Work that starts in another app: a spec, a mail, an alert, a meeting, a vault, a Figma frame.** A new skill,
+  `app-work-intake`, reads the item through the bot's own Hermes tool and takes one of three paths: a Notion or
+  Confluence page or a Linear or Jira issue becomes a plan, a fanout run and a PR, with the PR link written back to
+  the source ("turn Linear issue ENG-42 into a PR and link the PR back"); a mail message becomes a work thread or a
+  Needs item instead of a reply; a Sentry or Datadog alert becomes a triage and a fix hand-off, bounded by the PR
+  watch guards in `github-event-ops`. Three existing skills gain the other three: `operating-rhythm` turns a meeting's
+  notes or transcript into tracker issues through Hermes' `meeting-action-items`, `wiki` uses an Obsidian vault for
+  recall, the bot's daily journal and copies of approved `.omh/memory` records (never Hermes' `MEMORY.md`), and
+  `frontend` reads a Figma frame into `DESIGN.md` tokens and a handoff. Each names the Hermes MCP server or bundled
+  skill it needs and stops with `hermes mcp install <name>` when it is missing; every write to an app stays the bot's
+  own approved action, reported only after reading it back. Replies, summaries, one-ticket actions, calendar
+  questions and Figma exports keep their routes. OMH itself calls no app.
+  (`src/skills/catalog_feature_surfaces.py`, `src/skills/render.py`, `src/routing/policy.py`)
 - **OMH TUI: kitty previews inside omher, and a quiet Ctrl+Enter.** Under `TERM_PROGRAM=omher` the OMH TUI asks for
   kitty previews (tmux and screen keep half-blocks). Ctrl+Enter on a prompt with images during a turn now stops the
   turn and sends the prompt without an `Interrupted.` notice, like Claude Code's send-now; Hermes' "Operation
@@ -301,6 +327,14 @@ All notable changes will be documented here.
   channel or thread, what happened and whether they need to do anything. The automation-blueprint reference quotes
   the same prompt, and a bridge test keeps the two identical. Applies to briefings omher sets up from now on; an
   existing `omher-brief` job keeps its prompt until it is edited.
+- **A bot can push its own branch and open its own PR unattended, once you grant it.** Off by default for every
+  profile, and only you change it, at your own terminal: `omh capability-policy pr-delivery on` (`show`, `off`,
+  `--json`). With it on, a webhook, one-shot or scheduled run may push a branch under the grant's prefix (`bot/`
+  by default), open a PR from it, and push fixes to and comment on a PR it opened, nothing else. It never merges,
+  force-pushes, pushes to the default branch, or touches a PR it did not open. In a run nobody can answer (a
+  webhook or `api_server` run, a cron turn, `hermes chat -q`, a delegated child), OMH's tool hook refuses those
+  whatever the grant says, and refuses the allowed ones while the grant is off. It holds a bot that follows the
+  skill, not one that sets out to evade it. `omh doctor` lists the profiles whose grant is on. See [PR Delivery Grant](docs/PR-DELIVERY-GRANT.md).
 - **omher keeps every TERMINALS row over a restart, types European Option signs, and gives the keyboard back.**
   - **Restart:** every TERMINALS row comes back, however many there are. Before, only the newest 20 were saved and the
     next start deleted the older rows' history and files, even for a running Claude. Only the newest 20 keep their

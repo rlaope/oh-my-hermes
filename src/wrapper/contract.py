@@ -537,6 +537,7 @@ VISIBLE_ACTIONS = (
     "prepare_material_package",
     "prepare_deliverable_package",
     "prepare_github_event_ops_card",
+    "prepare_app_work_intake_card",
     "prepare_github_issue_intake",
     "show_direction_check",
     "confirm_issue_creation",
@@ -1225,6 +1226,7 @@ _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
     "prepare_ai_job_search": ("prepare_ai_job_search", "Prepare career work"),
     "prepare_deliverable_package": ("prepare_deliverable_package", "Prepare deliverable"),
     "prepare_github_event_ops_card": ("prepare_github_event_ops_card", "Open event card"),
+    "prepare_app_work_intake_card": ("prepare_app_work_intake_card", "Open intake card"),
     "prepare_github_issue_intake": ("prepare_github_issue_intake", "Open intake card"),
     "prepare_long_document_reading": ("prepare_long_document_reading", "Plan page ranges"),
     "show_chunk_ledger": ("show_chunk_ledger", "Show chunk ledger"),
@@ -4204,6 +4206,38 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
             "knowledge-store write",
             "brief delivery",
             "stakeholder approval",
+        ],
+    },
+    "app-work-intake": {
+        "kind": "app_work_intake",
+        "headline": "I can turn this app item into work without claiming any of it happened.",
+        "body": (
+            "I will prepare the intake card: the item's app and id as read through the bot's own Hermes tool, the path it takes "
+            "(spec to PR, inbox to work, or alert to fix), the skills that own each step, and the write-back with its exact text. "
+            "App reads, plans, dispatch, PRs, threads, fixes, and every write to the app stay observed-only."
+        ),
+        "phase": "app_work_intake_prepared",
+        "next_action": "prepare_app_work_intake_card",
+        "artifact_schema": "app_work_intake_card/v1",
+        "claim_boundary_suffix": "It is not an app read, a plan, a dispatch, a PR, a write-back, a thread, or a fix.",
+        "actions": [
+            {"id": "prepare_app_work_intake_card", "label": "Open intake card", "style": "primary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "read_the_item_through_its_app_tool",
+            "choose_spec_to_pr_inbox_to_work_or_alert_to_fix",
+            "hand_each_step_to_its_owning_skill",
+            "record_write_back_only_after_read_back",
+        ],
+        "evidence_not_observed": [
+            "app read",
+            "plan acceptance",
+            "dispatch",
+            "PR",
+            "write-back",
+            "thread or task",
+            "fix",
         ],
     },
     "github-event-ops": {

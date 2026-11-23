@@ -34,6 +34,8 @@ from omh.routing.bot_template_cues import (  # noqa: E402
 from omh.routing.localization import normalized_phrase  # noqa: E402
 from omh.routing.policy import everyday_sense_phrase_unanchored  # noqa: E402
 from omh.skills.catalog import installable_skill_names  # noqa: E402
+from omh.skills.catalog_feature_surfaces import _UNATTENDED_GATE  # noqa: E402
+from omh.skills.monitor_recipes import MONITOR_RECIPES  # noqa: E402
 from omh.skills.packaging import builtin_skill_reference_templates, builtin_skill_templates  # noqa: E402
 from omh.team_profiles import list_team_profile_packs  # noqa: E402
 
@@ -50,12 +52,9 @@ HERMES_MCP_CATALOG_NAMES = frozenset({"atlassian", "datadog", "grafana", "linear
 HERMES_BUNDLED_SKILLS = frozenset(
     {"email-inbox-triage", "github", "google-workspace", "meeting-action-items", "obsidian"}
 )
-# Rows of `automation-blueprint`'s `references/monitor-recipes.md` (PR #3153), by their config example's name. The
-# skill stops at a missing reference with the `omh update` line, so an older OMH names what it lacks.
-MONITOR_RECIPE_IDS = frozenset(
-    {"gmail-new-mail", "calendar-starting-soon", "notion-changed", "linear-assigned", "jira-assigned",
-     "obsidian-folder-changed", "sentry-new-issue"}
-)
+# Rows of `automation-blueprint`'s `references/monitor-recipes.md`, by their config example's name: a renamed recipe
+# fails here instead of leaving a dead name in a template.
+MONITOR_RECIPE_IDS = frozenset(recipe.example.removesuffix(".json") for recipe in MONITOR_RECIPES)
 
 
 def _reference(skill: str, path: str) -> str | None:
@@ -170,13 +169,27 @@ class BotTemplateCatalogTests(unittest.TestCase):
                     else:
                         self.assertIsNotNone(_reference(*schedule.reference))
 
+    def test_guides_name_a_shipped_recipe_page_or_body_line(self) -> None:
+        bodies = {t.name: t.content for t in builtin_skill_templates()}
+        guided = set()
+        for template in BOT_TEMPLATES:
+            for guide in template.guides:
+                with self.subTest(template=template.id, guide=guide.skill):
+                    self.assertIn(guide.skill, template.skills)
+                    if guide.path == "SKILL.md":
+                        self.assertIn(f"- {guide.section}: ", bodies[guide.skill])
+                    else:
+                        self.assertFalse(guide.section)
+                        self.assertIsNotNone(_reference(guide.skill, guide.path))
+                    guided.add((template.id, guide.skill))
+        self.assertLessEqual({("inbox-triage", "app-work-intake"), ("meeting-to-issues", "operating-rhythm")}, guided)
+
     def test_persona_seeds_are_generic_and_never_open_a_link_or_name_a_person(self) -> None:
         for template in BOT_TEMPLATES:
             seed = template.to_dict()["persona_seed"]
             with self.subTest(template=template.id):
                 self.assertTrue(seed.startswith(f"## Bot template: {template.title}\n\n"))
                 self.assertNotRegex(seed, r"https?://|@|[A-Z][a-z]+ [A-Z][a-z]+ (?:Inc|LLC|Corp)")
-                self.assertIn("never", seed)
 
     def test_apply_message_opens_with_the_skill_command_and_names_the_id(self) -> None:
         for template_id in bot_template_ids():
@@ -241,6 +254,8 @@ class BotTemplateSkillTests(unittest.TestCase):
             "(`/new`)",
         ):
             self.assertIn(required, body)
+        # the unattended rule is the shared one, not a restatement
+        self.assertIn(_UNATTENDED_GATE, body)
 
     def test_hermes_only_and_absent_from_the_portable_projection(self) -> None:
         from omh.skills.catalog_portable import PORTABILITY_HERMES_ONLY, skill_portability

@@ -258,6 +258,8 @@ _PORTABILITY: dict[str, str] = {
     'omh-ai-job-search': PORTABILITY_PORTABLE,
     # required_inputs: user request; expected_outputs: github-event-ops/v1 card or guidance; final_checklist requires evidence/approval, not a native runtime.
     'omh-github-event-ops': PORTABILITY_PORTABLE,
+    # quality_bar reads the item through Hermes MCP catalog servers and bundled skills; its recipes are Hermes-only references.
+    'omh-app-work-intake': PORTABILITY_HERMES_ONLY,
     # expected_outputs require omh_agent_board RPC; final_checklist invokes Hermes native_action.
     'omh-agent-board': PORTABILITY_HERMES_ONLY,
     # expected_outputs are review-first local memory candidates; native-memory guidance is excluded by override.
@@ -602,6 +604,13 @@ PORTABLE_SUPPORT_PATHS = frozenset({
 # the reference exactly once, so an edit that moves it fails the render
 # instead of shipping the old pointer.
 PORTABLE_REFERENCE_REWRITES: dict[str, tuple[tuple[str, str], ...]] = {
+    # The Figma frame section names Hermes' MCP catalog entry; other hosts bring their own Figma server.
+    'frontend/references/reference-token-extraction.md': (
+        (
+            "in the lane that\nhas it, on Hermes the `figma` catalog entry (`hermes mcp install figma`, then\n`hermes mcp login figma`); when",
+            "in the lane that\nhas it; when",
+        ),
+    ),
     'ultrawork/references/dependency-topology.md': (
         (
             "When the accepted plan's tasks form an ordered graph with a separate verification task and the user did not name this skill themselves, and `omh_dag` is in your tool list, recommend `dag-ulw` with a one-line reason (it validates the graph, settles each node from its handoff, and reports a verdict) rather than running the order here. Stay here for live coordinated lanes, a durable ledger, or a single owner.\n\n",

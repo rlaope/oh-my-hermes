@@ -59,6 +59,7 @@ from .catalog import (
 )
 from .procedure_rendering import specialist_procedure_reference_markdown
 from .search_guidance import search_reference_templates
+from .monitor_recipes import monitor_recipes_reference_templates
 from .dag_ulw_skill import dag_ulw_reference_templates
 from .market_research_skill import REFERENCE_CONTENT as MARKET_RESEARCH_REFERENCES
 from .show_reel_references import show_reel_reference_templates
@@ -93,6 +94,7 @@ from .render import (
     award_bar_score_reference_templates,
     channel_watch_reference_templates,
     pr_watch_reference_templates,
+    app_work_intake_reference_templates,
     buzz_reference_templates,
     buzz_skill,
     code_review_reference_templates,
@@ -273,6 +275,8 @@ REFERENCE_PRODUCERS: tuple[Callable[[], list[SkillReferenceTemplate]], ...] = (
     automation_blueprint_reference_templates,
     channel_watch_reference_templates,
     pr_watch_reference_templates,
+    app_work_intake_reference_templates,
+    monitor_recipes_reference_templates,
     external_connector_reference_templates,
     verification_gate_reference_templates,
     security_safety_review_reference_templates,

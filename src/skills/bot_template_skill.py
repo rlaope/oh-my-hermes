@@ -8,6 +8,7 @@ from ..catalogs.bot_templates import (
     TemplateSchedule,
 )
 from ..plugin_bundle.omh.native_tools import NATIVE_CRON_TOOL
+from .catalog_feature_surfaces import _UNATTENDED_GATE
 from .catalog_types import SkillDefinition, SkillExample
 
 REFERENCE_PATH = "references/templates.md"
@@ -56,6 +57,7 @@ DEFINITION = SkillDefinition(
         "Append the persona seed to SOUL.md; never replace or delete what SOUL.md holds, and never write "
         "`MEMORY.md` or `USER.md`.",
         "Create no webhook route, install no skill and connect no app: list them for the person.",
+        f"Every schedule and webhook run of an applied template is unattended: {_UNATTENDED_GATE}",
         BOT_TEMPLATE_CLAIM_BOUNDARY,
     ),
     quality_bar=(
@@ -79,7 +81,8 @@ DEFINITION = SkillDefinition(
         "is not connected (no `mcp__<app>__` tool in your list), create nothing for it and say what is missing: "
         "`omh update`, or the app to connect on omher's Apps page or with `hermes -p <bot> mcp install <app>`.",
         "Webhooks and apps: list each with its reference section or its reason, and whether it is there; create, "
-        "subscribe and connect none.",
+        "subscribe and connect none. Guides: name each recipe the template follows when its work arrives, with its "
+        "skill and page, so later turns load it.",
         "End with one list: written, created paused, already there, not done with the reason; then say nothing "
         "runs until the person turns a job on (omher's Automations page, or asking you to resume it).",
     ),
@@ -190,6 +193,11 @@ def _template_section(template: BotTemplate) -> str:
         lines += ["  " + line for schedule in template.schedules for line in _schedule_lines(template, schedule)]
     else:
         lines.append("  - none")
+    if template.guides:
+        lines.append("- Guides (follow when that work arrives):")
+        for guide in template.guides:
+            where = f"`{guide.path}`" if guide.path != "SKILL.md" else f"its body, the line `{guide.section}:`"
+            lines.append(f"  - `{guide.skill}` {where}: {guide.when}")
     lines.append("- Webhook suggestions (create none):")
     if template.webhooks:
         for webhook in template.webhooks:

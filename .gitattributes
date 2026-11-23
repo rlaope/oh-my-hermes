@@ -77,3 +77,4 @@ skills/omh-github-event-ops/toolkit/** text eol=lf
 # The gateway health fixture is Hermes' log bytes as written (LF); the reader is
 # tested on those bytes on every checkout.
 tests/fixtures/gateway_health/** text eol=lf
+src/skills/monitor_watch_toolkit/** text eol=lf

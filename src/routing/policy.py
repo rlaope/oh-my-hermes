@@ -2092,6 +2092,17 @@ _TOOLBELT_READINESS_TOKENS = _normalized_token_set(
 # or every such phrase would anchor itself.
 _ANCHOR_OUTSIDE_PHRASE_SKILLS = frozenset({"model-compression"})
 EVERYDAY_SENSE_PHRASES: dict[str, tuple[tuple[str, ...], frozenset[str]]] = {
+    # "export this Figma frame as PNG" is a file export, not a frame to build.
+    "frontend": (
+        ("figma frame", "figma to code", "figma design to code", "implement this figma", "build this figma"),
+        frozenset(
+            {
+                "app", "build", "code", "component", "components", "css", "design", "frontend", "handoff",
+                "html", "implement", "layout", "page", "react", "responsive", "screen", "site", "svelte",
+                "tailwind", "tokens", "ui", "vue", "website",
+            }
+        ),
+    ),
     "failure-signal-audit": (
         ("silent failure", "silent failures", "hidden failure", "hidden failures"),
         frozenset(
@@ -5408,6 +5419,127 @@ _CHANNEL_WATCH_BLOCKERS = (
     "슬랙으로",
     "디스코드로",
 )
+# "Tell me when a mail from my boss arrives", "노션 페이지 바뀌면 알려줘": a
+# trigger on a platform that sends Hermes no webhook (Gmail, Google Calendar,
+# Notion, Linear, Jira, Obsidian, Sentry) is one of automation-blueprint's
+# monitor recipes, a Hermes cron monitor job. Measured before the
+# `monitor_trigger_before_connector_or_wiki` guard, these clarified toward
+# morning-brief, connector-operator, wiki or operating-rhythm, fell back, or
+# dispatched connector-operator, wiki or github-event-ops; none listed
+# automation-blueprint. It needs all three: the platform named, a tell-me cue,
+# and an event cue that is about the platform's own items (arrives, changes,
+# is assigned, opens; 오면, 바뀌면, 배정되면, 생기면) or a time before a start
+# ("10 minutes before", "시작 15분 전에"). A bare `when` or `before` is not an
+# event: "tell me when my next meeting is" is a question. A question about
+# time, a how-to, a service outage or API, the platform as the delivery target,
+# the bot's own work, or a write that follows the trigger stands it down.
+_MONITOR_TRIGGER_SPOKEN_PLATFORMS = (
+    "gmail", "inbox", "mail", "mails", "calendar", "notion", "jira", "obsidian", "sentry",
+)
+_MONITOR_TRIGGER_PLATFORMS = (
+    "linear issue",
+    "linear ticket",
+    "linear app",
+    "지메일",
+    "메일",
+    "받은편지함",
+    "캘린더",
+    "노션",
+    "리니어",
+    "지라",
+    "옵시디언",
+    "센트리",
+)
+_MONITOR_TRIGGER_NOTIFY_CUES = (
+    "tell me",
+    "ping me",
+    "notify me",
+    "alert me",
+    "let me know",
+    "remind me",
+    "message me",
+    "알려줘",
+    "알려 줘",
+    "알려주",
+    "알림",
+)
+_MONITOR_TRIGGER_SPOKEN_EVENTS = (
+    "arrives",
+    "arrive",
+    "comes in",
+    "come in",
+    "changes",
+    "changed",
+    "is updated",
+    "gets updated",
+    "is edited",
+    "is assigned",
+    "gets assigned",
+    "assigned to me",
+    "is opened",
+    "opens",
+    "is created",
+    "minutes before",
+    "minute before",
+    "mins before",
+    "hour before",
+    "hours before",
+    "before it starts",
+    "before each",
+    "starts soon",
+)
+_MONITOR_TRIGGER_KO_EVENTS = (
+    "오면",
+    "들어오면",
+    "생기면",
+    "바뀌면",
+    "변경되면",
+    "수정되면",
+    "배정되면",
+    "할당되면",
+    "올라오면",
+    "열리면",
+    "분 전에",
+    "분 전",
+    "시간 전에",
+    "시작 전",
+    "시작하기 전",
+)
+_MONITOR_TRIGGER_SPOKEN_BLOCKERS = (
+    "when is",
+    "when my next",
+    "when did",
+    "when i",
+    "when you",
+    "before you",
+    "is down",
+    "back up",
+    "back online",
+    "api",
+    "docs",
+    "and then",
+    "and update",
+    "then update",
+    "and create",
+    "and reply",
+    "and send",
+    "and post",
+    "email me",
+    "mail me",
+    "video",
+)
+_MONITOR_TRIGGER_BLOCKERS = (
+    *_GREENFIELD_QUESTION_OPENERS,
+    "what's",
+    "whats",
+    "영상",
+    "방법",
+    "왜",
+    "설정",
+    "끄는",
+    "이전에",
+    "보내",
+)
 # "Watch PR 42 until its checks finish" is a wait on one pull request: a Hermes
 # cron monitor job from github-event-ops' PR watch recipe, not a model polling
 # loop. Measured before the `pr_watch_before_loop_or_ultrawork` guard, the
@@ -5532,6 +5664,179 @@ _PR_WATCH_BLOCKERS = (
     "how many",
 )
 
+# An item in another app that should become work is app-work-intake: a spec page
+# or tracker issue turned into a PR, a mail message turned into a task instead
+# of a reply, or a Sentry or Datadog alert turned into a fix. Each shape needs
+# the app item and the work it becomes together, said as whole words. Before
+# this guard the tracker phrasings dispatched connector-operator (a one-action
+# card) or ultrawork (no source read, no write-back), and the alert ones
+# clarified toward build-failure-triage. Reading, summarizing, creating or
+# moving one thing in the app has no work cue and stays with connector-operator,
+# and a cadence or a "tell me when" trigger is automation-blueprint's job, whose
+# run loads this skill.
+_APP_WORK_SPEC_APPS = frozenset({"notion", "confluence", "linear", "jira"})
+# A Korean app name counts only at the start of a word: `지라` also ends
+# `~ㄹ지라도` ("even if"), which is never the tracker.
+_APP_WORK_SPEC_APPS_KO = ("노션", "컨플루언스", "리니어", "지라")
+_APP_WORK_SPEC_APPS_KO_NOT = ("지라도",)
+# The app name has to name its item: "Linear issue", "Notion spec", "Jira ticket
+# PAY-118". "linear interpolation" and "a notion that" name no item.
+_APP_WORK_SPEC_NOUNS = frozenset(
+    {"spec", "specs", "specification", "page", "pages", "doc", "docs", "issue", "issues", "ticket", "tickets", "story", "epic"}
+)
+_APP_WORK_SPEC_NOUNS_KO = ("티켓", "이슈", "페이지", "스펙", "문서")
+_APP_WORK_ISSUE_KEY = re.compile(r"\b[a-z][a-z0-9]{1,9}-\d+\b")
+_APP_WORK_PR_VERBS = frozenset(
+    {"turn", "turning", "make", "convert", "implement", "implementing", "build", "building", "raise", "create"}
+)
+# `open` creates a PR only as "open a PR": "open the PR linked in Jira ticket PAY-2" reads one that exists.
+_APP_WORK_OPEN_PR_PHRASES = ("open a pr", "open a pull request", "open prs")
+_APP_WORK_PR_VERBS_KO = ("만들", "올려", "열어", "생성")
+# Building from the item with no PR named needs the item named as one that is
+# read: "implement this Notion spec", "build what this Confluence page describes".
+_APP_WORK_BUILD_VERBS = frozenset({"implement", "implementing", "build", "building"})
+_APP_WORK_READING_DETERMINERS = frozenset({"this", "the", "that"})
+_APP_WORK_MAIL_NOUNS = frozenset({"email", "emails", "e-mail", "mail", "mails", "inbox", "gmail"})
+_APP_WORK_MAIL_NOUNS_KO = ("메일", "이메일", "받은편지함")
+_APP_WORK_MAIL_CUES = (
+    "into a task",
+    "into tasks",
+    "into a work item",
+    "into work",
+    "into a thread",
+    "into threads",
+    "as a task",
+    "instead of replying",
+    "instead of a reply",
+    "rather than replying",
+    "inbox to work",
+)
+_APP_WORK_MAIL_CUES_KO = ("작업으로", "태스크로", "할 일로", "스레드로", "답장 말고", "답장하지 말고")
+# A reply, a forward or a send asked for outright is a send, which this recipe never makes; it counts only when the
+# sentence declines the reply in so many words.
+_APP_WORK_MAIL_SEND_TERMS = frozenset({"reply", "respond", "forward", "send"})
+_APP_WORK_MAIL_SEND_KO = ("답장해", "회신해", "전달해", "보내")
+_APP_WORK_MAIL_DECLINES = ("instead of replying", "instead of a reply", "rather than replying", "답장하지 말고", "답장 말고")
+_APP_WORK_ALERT_APPS = frozenset({"sentry", "datadog"})
+_APP_WORK_ALERT_APPS_KO = ("센트리", "데이터독")
+# The alert has to be one: an alert or monitor that fired, not an SDK, an
+# integration or an agent that errors.
+_APP_WORK_ALERT_TERMS = frozenset({"alert", "alerts", "monitor", "monitors", "fired", "firing", "triggered"})
+_APP_WORK_ALERT_PHRASES = ("sentry issue",)
+_APP_WORK_ALERT_KO = ("알림", "알럿", "경보")
+_APP_WORK_ALERT_BLOCKERS = frozenset({"sdk", "integration", "agent", "install", "config", "configuration", "setup"})
+_APP_WORK_FIX_VERBS = frozenset({"fix", "triage", "debug", "investigate", "handoff"})
+_APP_WORK_FIX_PHRASES = ("hand off", "hand it off", "fix hand-off", "alert to fix")
+_APP_WORK_FIX_CUES_KO = ("고쳐", "수정해", "수정까지", "트리아지", "분류하고", "넘겨")
+_APP_WORK_BLOCKERS = (
+    *_GREENFIELD_QUESTION_OPENERS,
+    "summarize",
+    "summary of",
+    "set up",
+    "install",
+    "configure",
+    "connect my",
+    "pr description",
+    "pr title",
+    "pr body",
+    "요약",
+    "설치",
+    "연결해",
+)
+# A trigger that waits for the item ("tell me when a Linear issue is assigned")
+# is a monitor job; automation-blueprint creates it and its run loads this skill.
+_APP_WORK_TRIGGER_CUES = (
+    "tell me when",
+    "let me know when",
+    "notify me",
+    "whenever",
+    "every time",
+    "each time",
+    "when a new",
+    "as soon as",
+    # `has_cadence` reads no Korean frequency word.
+    "매일",
+    "매주",
+    "매달",
+    "매시간",
+    "마다",
+)
+# A meeting's notes or transcript turned into tracker issues is operating-rhythm's
+# meeting-to-issues recipe, which loads Hermes' `meeting-action-items` and keeps
+# the created links in the action item history. Before this guard a sentence
+# naming Linear or Jira dispatched connector-operator's one-ticket card. It
+# needs the meeting record, a creation verb and the issues together; a
+# question about the notes, a transcript to translate, or one GitHub issue filed
+# from a report stays where it was.
+_MEETING_RECORD_PHRASES = (
+    "meeting notes",
+    "meeting transcript",
+    "meeting minutes",
+    "standup notes",
+    "call notes",
+    "call transcript",
+    "action items",
+    "the transcript",
+    "this transcript",
+    "회의록",
+    "회의 내용",
+    "미팅 노트",
+)
+# Not `open`: "open issues" are issues that already exist.
+_MEETING_CREATE_VERBS = frozenset({"turn", "create", "file", "make", "convert", "raise"})
+_MEETING_ISSUE_TERMS = frozenset({"issues", "tickets"})
+_MEETING_ISSUE_PHRASES_KO = ("이슈로 만들", "이슈 만들", "이슈 등록", "이슈 생성", "티켓으로 만들", "티켓 만들", "티켓 등록")
+_MEETING_TO_ISSUES_BLOCKERS = (
+    *_GREENFIELD_QUESTION_OPENERS,
+    "summarize",
+    "summary of",
+    "translate",
+    # A recording to transcribe first is a media input; the issues come after it.
+    "transcribe",
+    "voice memo",
+    "recording",
+    "which",
+    "what",
+    "github",
+    "요약",
+    "번역",
+    "알려줘",
+)
+# An Obsidian vault named as where the bot recalls from, keeps its daily journal,
+# or copies approved memory records is wiki's vault-as-knowledge recipe. Before
+# this guard "daily" and "obsidian" read as a recurring research department.
+# It needs an Obsidian or notes vault and one of those uses, said as a phrase;
+# a secrets vault, an app's memory use, a bolt (볼트), and research collected on
+# a cadence into the vault keep their routes.
+_VAULT_KNOWLEDGE_VAULTS = ("obsidian", "my vault", "notes vault", "옵시디언")
+_VAULT_KNOWLEDGE_USES = (
+    "as memory",
+    "as my memory",
+    "recall from",
+    "journal in",
+    "journal to",
+    "daily journal",
+    "memory records",
+    "approved records",
+    "일지",
+    "저널",
+    "기억",
+)
+_VAULT_KNOWLEDGE_BLOCKERS = (
+    *_GREENFIELD_QUESTION_OPENERS,
+    "research department",
+    "리서치 부서",
+    "memory usage",
+    "too much memory",
+    "uses memory",
+    "메모리 사용량",
+    "hashicorp",
+    "secret",
+)
+_VAULT_KNOWLEDGE_RESEARCH_TERMS = frozenset(
+    {"research", "collect", "gather", "scan", "news", "papers", "paper", "articles", "digest"}
+)
+_VAULT_KNOWLEDGE_RESEARCH_KO = ("리서치", "수집", "조사", "뉴스", "논문")
 _ONE_OFF_TOKENS = _normalized_token_set(
     {
         "once",
@@ -6196,6 +6501,42 @@ CHANNEL_WATCH_GUARD = RoutingGuardRule(
     why="Matched a messenger platform, a watch verb, and a tell-me cue; a channel watch is a recurring collector job with a [SILENT] judging prompt, not a one-off delivery card.",
     activation_status="active",
 )
+VAULT_KNOWLEDGE_GUARD = RoutingGuardRule(
+    id="vault_knowledge_before_research_department",
+    rule="An Obsidian vault named as a recall source, the bot's daily journal, or the place for approved memory records should route to wiki's vault-as-knowledge recipe before the research department.",
+    matched_label="guard:vault_knowledge",
+    preferred_skills=("wiki",),
+    score_boost=40,
+    why="Matched a vault and a recall, journal, or memory use; the recipe reads notes as data, appends only to the folder the person named, and copies approved records only.",
+    activation_status="active",
+)
+MEETING_TO_ISSUES_GUARD = RoutingGuardRule(
+    id="meeting_to_issues_before_connector",
+    rule="A meeting's notes or transcript that should become tracker issues should route to operating-rhythm's meeting-to-issues recipe before the one-ticket connector card.",
+    matched_label="guard:meeting_to_issues",
+    preferred_skills=("operating-rhythm",),
+    score_boost=40,
+    why="Matched a meeting record and the issues it should become; the recipe extracts with Hermes' meeting-action-items, creates only approved issues, and keeps their links in the action item history.",
+    activation_status="active",
+)
+APP_WORK_INTAKE_GUARD = RoutingGuardRule(
+    id="app_work_intake_before_connector_or_coding",
+    rule="An item in another app that should become work (a Notion, Confluence, Linear or Jira spec to a PR, a mail message to a task instead of a reply, a Sentry or Datadog alert to a fix) should route to app-work-intake before the one-action connector card or a coding plan.",
+    matched_label="guard:app_work_intake",
+    preferred_skills=("app-work-intake",),
+    score_boost=44,
+    why="Matched an app item and the work it should become; app-work-intake reads the item through the bot's own Hermes tool, picks the path, and writes back only as an approved action.",
+    activation_status="active",
+)
+MONITOR_TRIGGER_GUARD = RoutingGuardRule(
+    id="monitor_trigger_before_connector_or_wiki",
+    rule="Being told when something happens on Gmail, Google Calendar, Notion, Linear, Jira, Obsidian, or Sentry should route to automation-blueprint's monitor recipes before the connector, wiki, or briefing lanes.",
+    matched_label="guard:monitor_trigger",
+    preferred_skills=("automation-blueprint",),
+    score_boost=36,
+    why="Matched a platform with no webhook, a tell-me cue, and an event cue; the trigger is a paused Hermes cron monitor job whose script wakes the agent only on a change, not a one-off read.",
+    activation_status="active",
+)
 PR_WATCH_GUARD = RoutingGuardRule(
     id="pr_watch_before_loop_or_ultrawork",
     rule="Waiting on one pull request until its checks finish, it merges, or it settles should route to github-event-ops' PR watch recipe before the loop or ultrawork lanes.",
@@ -6270,7 +6611,11 @@ ROUTING_GUARD_RULES = (
     RESEARCH_DEPARTMENT_GUARD,
     SCHEDULED_OPS_BLUEPRINT_GUARD,
     CHANNEL_WATCH_GUARD,
+    MONITOR_TRIGGER_GUARD,
     PR_WATCH_GUARD,
+    APP_WORK_INTAKE_GUARD,
+    MEETING_TO_ISSUES_GUARD,
+    VAULT_KNOWLEDGE_GUARD,
     SOURCE_FINDER_GUARD,
     WEB_RESEARCH_BEFORE_PROCESS_GUARD,
     POINT_IN_TIME_WEB_GUARD,
@@ -6395,6 +6740,10 @@ GUARD_DISPATCH_TRUST: dict[str, tuple[str, str]] = {
     "risky_refactor_before_cleanup": (GUARD_TRUSTED, "risky refactor named as the change; no measured record as a winner, keeps its shape label"),
     "safe_feature_change_before_generic_plan": (GUARD_TRUSTED, "a safe feature change named as the change; no measured record as a winner, keeps its shape label"),
     "channel_watch_before_gateway_or_connector": (GUARD_TRUSTED, "a watch verb on a Slack or Discord channel plus a tell-me cue; no measured record as a winner, keeps its shape label"),
+    "monitor_trigger_before_connector_or_wiki": (GUARD_TRUSTED, "a platform with no webhook, a tell-me cue and an event cue; no measured record as a winner, keeps its shape label"),
+    "vault_knowledge_before_research_department": (GUARD_TRUSTED, "a vault plus a recall, journal, or memory use; no measured record as a winner, keeps its shape label"),
+    "meeting_to_issues_before_connector": (GUARD_TRUSTED, "a meeting record plus the issues it should become; no measured record as a winner, keeps its shape label"),
+    "app_work_intake_before_connector_or_coding": (GUARD_TRUSTED, "an app item plus the work it should become; no measured record as a winner, keeps its shape label"),
     "pr_watch_before_loop_or_ultrawork": (GUARD_TRUSTED, "a watch or wait verb on one pull request plus a settle cue; no measured record as a winner, keeps its shape label"),
     "scheduled_ops_blueprint_before_reliability_or_research": (GUARD_CONTEXT_ONLY, "a cadence plus a scheduled action; measured 0 right / 1 wrong"),
     "source_finder_before_generic_web_research": (GUARD_CONTEXT_ONLY, "fires on source and paper nouns; no measured record as a winner, keeps its shape label"),
@@ -6930,10 +7279,25 @@ def _active_routing_guard_rules_cached(
         and (explicit_scheduled_ops_blueprint or not research_department_applies)
     ):
         rules.append(SCHEDULED_OPS_BLUEPRINT_GUARD)
-    if not direct_coding_task_applies and channel_watch_guard_applies(normalized_query):
+    channel_watch_applies = not direct_coding_task_applies and channel_watch_guard_applies(normalized_query)
+    if channel_watch_applies:
         rules.append(CHANNEL_WATCH_GUARD)
+    # A monitor trigger names the platform as what is watched, so the connector
+    # and GitHub event lanes, which fire on the same platform and issue words,
+    # stand down for it.
+    monitor_trigger_applies = (
+        not direct_coding_task_applies and not channel_watch_applies and monitor_trigger_guard_applies(normalized_query)
+    )
+    if monitor_trigger_applies:
+        rules.append(MONITOR_TRIGGER_GUARD)
     if not direct_coding_task_applies and pr_watch_guard_applies(normalized_query):
         rules.append(PR_WATCH_GUARD)
+    if app_work_intake_guard_applies(normalized_query):
+        rules.append(APP_WORK_INTAKE_GUARD)
+    if meeting_to_issues_guard_applies(normalized_query):
+        rules.append(MEETING_TO_ISSUES_GUARD)
+    if vault_knowledge_guard_applies(normalized_query):
+        rules.append(VAULT_KNOWLEDGE_GUARD)
     source_finder_applies = (
         not delivery_cycle_applies
         and not paper_learning_applies
@@ -6972,7 +7336,7 @@ def _active_routing_guard_rules_cached(
         rules.append(MISSED_WORKFLOW_WEB_RESEARCH_GUARD)
     if _github_issue_intake_guard_applies(normalized_query, query_tokens):
         rules.append(GITHUB_ISSUE_INTAKE_GUARD)
-    if _github_event_ops_guard_applies(normalized_query, query_tokens):
+    if not monitor_trigger_applies and _github_event_ops_guard_applies(normalized_query, query_tokens):
         rules.append(GITHUB_EVENT_OPS_GUARD)
     if contract_redline_guard_applies(normalized_query):
         rules.append(CONTRACT_REDLINE_GUARD)
@@ -7049,6 +7413,7 @@ def _active_routing_guard_rules_cached(
     if (
         not direct_coding_task_applies
         and not feedback_before_coding_applies
+        and not monitor_trigger_applies
         and _connector_operator_guard_applies(normalized_query, query_tokens)
     ):
         rules.append(CONNECTOR_OPERATOR_GUARD)
@@ -8524,6 +8889,8 @@ def _research_department_guard_applies(normalized_query: str, query_tokens: set[
         return False
     if _wiki_capture_destination_request(normalized_query, query_tokens):
         return False
+    if vault_knowledge_guard_applies(normalized_query):
+        return False
     explicit_research_ops = _contains_phrase(normalized_query, _RESEARCH_DEPARTMENT_PHRASES)
     # A research department named outright keeps its request even when the
     # digest lands in an LLM wiki; otherwise the LLM wiki is the request.
@@ -9250,6 +9617,9 @@ def _coding_handoff_status_guard_applies(
 
 
 def _github_issue_intake_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    # Issues taken from a meeting's notes are operating-rhythm's meeting-to-issues recipe, not one report to file.
+    if meeting_to_issues_guard_applies(normalized_query):
+        return False
     # Pre-creation filing only: issue-to-PR and pull-request event language
     # stays with github-event-ops, classification-only reports with
     # feedback-triage.
@@ -10410,6 +10780,9 @@ def appearance_edit_request(query_tokens: set[str]) -> bool:
 def _browser_operator_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if _contains_phrase(normalized_query, _BROWSER_OPERATOR_LIVE_INCIDENT_BLOCKERS):
         return False
+    # "build what this Confluence page describes and open a PR" reads the page through its app's tool.
+    if app_work_intake_guard_applies(normalized_query):
+        return False
     if _contains_phrase(normalized_query, _BROWSER_OPERATOR_VISUAL_QA_BLOCKERS):
         return False
     if _contains_phrase(normalized_query, _BROWSER_OPERATOR_PROVIDER_AUTH_BLOCKERS):
@@ -10518,6 +10891,10 @@ def _command_operator_guard_applies(normalized_query: str, query_tokens: set[str
 def _connector_operator_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if _contains_phrase(normalized_query, _CONNECTOR_OPERATOR_BLOCKERS):
         return False
+    # Work started from an app item is app-work-intake, and a meeting's issues are operating-rhythm's;
+    # this lane is one action in the app.
+    if app_work_intake_guard_applies(normalized_query) or meeting_to_issues_guard_applies(normalized_query):
+        return False
     # A digest on a cadence is a scheduled job, and a deploy command is a
     # release, not an action in a connected app.
     if has_cadence(normalized_query, query_tokens):
@@ -10596,6 +10973,9 @@ def _live_info_operator_guard_applies(normalized_query: str, query_tokens: set[s
 
 def _media_input_operator_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if _contains_phrase(normalized_query, _MEDIA_INPUT_OPERATOR_BLOCKERS):
+        return False
+    # A transcript already in hand that should become issues is a meeting record, not media to transcribe.
+    if meeting_to_issues_guard_applies(normalized_query):
         return False
     if _connector_operator_guard_applies(normalized_query, query_tokens):
         return False
@@ -10890,6 +11270,148 @@ def channel_watch_guard_applies(normalized_query: str) -> bool:
     if not _contains_phrase(normalized_query, _CHANNEL_WATCH_NOTIFY_CUES):
         return False
     return not _contains_phrase(normalized_query, _CHANNEL_WATCH_BLOCKERS)
+
+
+def _app_work_words(normalized_query: str) -> list[str]:
+    return [word.strip(".,!?;:()[]{}\"'`#") for word in normalized_query.split()]
+
+
+def _app_work_words_said(words: list[str], phrase: str) -> bool:
+    """The phrase as whole words: "into work" is not said in "into Workspace"."""
+    wanted = normalized_phrase(phrase).split()
+    return any(words[start:start + len(wanted)] == wanted for start in range(len(words) - len(wanted) + 1))
+
+
+def _app_work_trigger_or_cadence(normalized_query: str) -> bool:
+    """A schedule or a trigger is the entry point: automation-blueprint owns it, and its job runs this skill."""
+    # "as soon as possible" and "asap" are urgency, not a trigger.
+    unhurried = normalized_query.replace(normalized_phrase("as soon as possible"), " ")
+    return (
+        has_cadence(normalized_query, routing_tokens(normalized_query))
+        or _contains_phrase(unhurried, _APP_WORK_TRIGGER_CUES)
+        or monitor_trigger_guard_applies(normalized_query)
+    )
+
+
+def vault_knowledge_guard_applies(normalized_query: str) -> bool:
+    """An Obsidian or notes vault and a recall, journal, or memory-record use of it, said as a phrase."""
+    if _contains_phrase(normalized_query, _VAULT_KNOWLEDGE_BLOCKERS):
+        return False
+    # Told when a vault folder changes is a monitor recipe, not a use of the vault.
+    if monitor_trigger_guard_applies(normalized_query):
+        return False
+    if not _contains_phrase(normalized_query, _VAULT_KNOWLEDGE_VAULTS):
+        return False
+    # "recall what I wrote about RAG from my Obsidian vault": recall counts beside the vault wherever it is said.
+    if not (_contains_phrase(normalized_query, _VAULT_KNOWLEDGE_USES) or "recall" in routing_terms(normalized_query)):
+        return False
+    # Research collected on a cadence keeps the research department; the vault is only where it lands.
+    research = bool(_VAULT_KNOWLEDGE_RESEARCH_TERMS & routing_terms(normalized_query)) or _contains_phrase(
+        normalized_query, _VAULT_KNOWLEDGE_RESEARCH_KO
+    )
+    return not (research and has_cadence(normalized_query, routing_tokens(normalized_query)))
+
+
+def meeting_to_issues_guard_applies(normalized_query: str) -> bool:
+    """A meeting's notes or transcript, a creation verb, and the tracker issues it should become, together."""
+    if _contains_phrase(normalized_query, _MEETING_TO_ISSUES_BLOCKERS):
+        return False
+    if monitor_trigger_guard_applies(normalized_query):
+        return False
+    if not _contains_phrase(normalized_query, _MEETING_RECORD_PHRASES):
+        return False
+    terms = routing_terms(normalized_query)
+    if _MEETING_CREATE_VERBS & terms and _MEETING_ISSUE_TERMS & terms:
+        return True
+    return _contains_phrase(normalized_query, _MEETING_ISSUE_PHRASES_KO)
+
+
+def _app_work_spec_item(words: list[str], normalized_query: str) -> tuple[bool, bool]:
+    """(an app name naming its item, that item read as "this/the/that <app> <noun>")."""
+    item = read = False
+    has_key = bool(_APP_WORK_ISSUE_KEY.search(normalized_query))
+    for index, word in enumerate(words):
+        english = word in _APP_WORK_SPEC_APPS
+        korean = any(word.startswith(normalized_phrase(name)) for name in _APP_WORK_SPEC_APPS_KO) and not any(
+            word.startswith(normalized_phrase(name)) for name in _APP_WORK_SPEC_APPS_KO_NOT
+        )
+        if not (english or korean):
+            continue
+        following = words[index + 1] if index + 1 < len(words) else ""
+        noun = following in _APP_WORK_SPEC_NOUNS or any(
+            following.startswith(normalized_phrase(name)) for name in _APP_WORK_SPEC_NOUNS_KO
+        )
+        if noun or (has_key and english):
+            item = True
+            if index > 0 and words[index - 1] in _APP_WORK_READING_DETERMINERS:
+                read = True
+    return item, read
+
+
+def _app_work_pr_named(words: list[str]) -> bool:
+    return any(_is_pr_word(words, index) for index in range(len(words)))
+
+
+def app_work_intake_guard_applies(normalized_query: str) -> bool:
+    """An app item and the work it should become: a spec to a PR, a mail to a task, an alert to a fix."""
+    if _contains_phrase(normalized_query, _APP_WORK_BLOCKERS):
+        return False
+    if _app_work_trigger_or_cadence(normalized_query):
+        return False
+    terms = routing_terms(normalized_query)
+    words = _app_work_words(normalized_query)
+    item, read = _app_work_spec_item(words, normalized_query)
+    if item:
+        pr_verb = (
+            bool(_APP_WORK_PR_VERBS & terms)
+            or any(_app_work_words_said(words, phrase) for phrase in _APP_WORK_OPEN_PR_PHRASES)
+            or _contains_phrase(normalized_query, _APP_WORK_PR_VERBS_KO)
+        )
+        if _app_work_pr_named(words) and pr_verb:
+            return True
+        if read and _APP_WORK_BUILD_VERBS & terms:
+            return True
+    mail = bool(_APP_WORK_MAIL_NOUNS & terms) or _contains_phrase(normalized_query, _APP_WORK_MAIL_NOUNS_KO)
+    if mail and (
+        any(_app_work_words_said(words, cue) for cue in _APP_WORK_MAIL_CUES)
+        or _contains_phrase(normalized_query, _APP_WORK_MAIL_CUES_KO)
+    ):
+        send = bool(_APP_WORK_MAIL_SEND_TERMS & terms) or _contains_phrase(normalized_query, _APP_WORK_MAIL_SEND_KO)
+        if not send or _contains_phrase(normalized_query, _APP_WORK_MAIL_DECLINES):
+            return True
+    alert_app = bool(_APP_WORK_ALERT_APPS & terms) or _contains_phrase(normalized_query, _APP_WORK_ALERT_APPS_KO)
+    if not alert_app or _APP_WORK_ALERT_BLOCKERS & terms:
+        return False
+    alert = (
+        bool(_APP_WORK_ALERT_TERMS & terms)
+        or _contains_phrase(normalized_query, _APP_WORK_ALERT_PHRASES)
+        or _contains_phrase(normalized_query, _APP_WORK_ALERT_KO)
+    )
+    fix = (
+        bool(_APP_WORK_FIX_VERBS & terms)
+        or _contains_phrase(normalized_query, _APP_WORK_FIX_PHRASES)
+        or _contains_phrase(normalized_query, _APP_WORK_FIX_CUES_KO)
+    )
+    return alert and fix
+
+
+def monitor_trigger_guard_applies(normalized_query: str) -> bool:
+    """A platform with no webhook, a tell-me cue, and an event cue on its items together; none alone."""
+    if not (
+        any(phrase_is_spoken(normalized_query, word) for word in _MONITOR_TRIGGER_SPOKEN_PLATFORMS)
+        or _contains_phrase(normalized_query, _MONITOR_TRIGGER_PLATFORMS)
+    ):
+        return False
+    if not _contains_phrase(normalized_query, _MONITOR_TRIGGER_NOTIFY_CUES):
+        return False
+    if not (
+        any(phrase_is_spoken(normalized_query, phrase) for phrase in _MONITOR_TRIGGER_SPOKEN_EVENTS)
+        or _contains_phrase(normalized_query, _MONITOR_TRIGGER_KO_EVENTS)
+    ):
+        return False
+    if any(phrase_is_spoken(normalized_query, phrase) for phrase in _MONITOR_TRIGGER_SPOKEN_BLOCKERS):
+        return False
+    return not _contains_phrase(normalized_query, _MONITOR_TRIGGER_BLOCKERS)
 
 
 def pr_watch_guard_applies(normalized_query: str) -> bool:

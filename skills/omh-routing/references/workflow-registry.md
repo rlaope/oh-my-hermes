@@ -22,7 +22,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ## Role Registry
 
-- `guide`: `oh-my-hermes`, `meta-router`, `model-setup`, `parallel-tools`, `websearch-setup`, `morning-brief`, `spend-gate`, `jev-ask`, `jev-route`, `gateway-intent-card`, `voice-operator`, `browser-operator`, `workspace-file-operator`, `command-operator`, `connector-operator`, `live-info-operator`, `external-connector-readiness`, `prompt-import-readiness`, `content-operator`, `media-input-operator`, `data-analysis`
+- `guide`: `oh-my-hermes`, `meta-router`, `model-setup`, `parallel-tools`, `websearch-setup`, `morning-brief`, `spend-gate`, `jev-ask`, `jev-route`, `app-work-intake`, `gateway-intent-card`, `voice-operator`, `browser-operator`, `workspace-file-operator`, `command-operator`, `connector-operator`, `live-info-operator`, `external-connector-readiness`, `prompt-import-readiness`, `content-operator`, `media-input-operator`, `data-analysis`
 - `handoff-guide`: `ultrawork`, `maestro`, `frontend-refactor`, `ai-slop-cleaner`, `executor-runtime-readiness`
 - `memory-keeper`: `rules-distill`, `wiki`, `memory-new`, `memory-sync`, `decision-recall`
 - `operator`: `strategy-brief`, `meeting-brief`, `feedback-triage`, `finance-analysis`, `people-ops`, `support-operations`, `sales-development`, `ops-review`, `operating-rhythm`, `report-package`, `materials-package`, `img-summary`, `apple-design`, `design-orchestration`, `design-quality-gate`, `award-bar-score`, `frontend`, `visual-qa`, `workspace-audit`, `agent-evaluation`, `automation-blueprint`, `reliability-review`, `idea-to-deploy`, `llm-app-dev`, `cto-loop`, `deploy-and-monitor`, `inference-serving`, `github-issue-intake`, `live-incident-response`, `lifecycle-growth`, `sales-pipeline-review`, `show-reel`, `skill-eval`, `bot-template`, `geospatial-analysis`, `sprite-forge`, `biomedical-evidence`, `molecular-docking`, `ai-job-search`, `github-event-ops`, `deliverable-package`, `physical-device-readiness`, `agent-debug`, `skill-scout`, `skill-health`, `provider-profile-posture`
@@ -160,6 +160,7 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `jev-action-check`: `jev-action-check`, `jev action check`, `ask jev if this command is safe`, `jev risk check`
 - `jev-done-check`: `jev-done-check`, `jev done check`, `ask jev if this is done`, `jev evidence check`
 - `github-event-ops`: `github-event-ops`, `github event ops`, `github ops`, `github triage`, `github pr`, `github review`, `github action`, `github actions`, `pr opened`
+- `app-work-intake`: `app-work-intake`, `app work intake`, `spec to pr`, `spec to a pr`, `notion spec`, `confluence spec`, `linear issue to pr`, `linear issue into a pr`, `jira issue to pr`
 - `agent-board`: `agent-board`, `agent board`, `kanban`, `multi-agent`, `multi agent`, `multi agent board`, `multiple hermes agents`, `multiple hermes profiles`, `hermes profiles`
 - `memory-new`: `memory-new`, `new memory`, `project memory`, `product memory`, `remember this project`, `remember this product`, `do not save`, `do not save this token`, `memory capture`
 - `memory-sync`: `memory-sync`, `memory curation`, `memory review`, `memory inspect`, `memory check`, `memory update`, `context cleanup`, `curate memory`, `stale memory`

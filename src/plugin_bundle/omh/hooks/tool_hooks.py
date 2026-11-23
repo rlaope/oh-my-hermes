@@ -22,6 +22,7 @@ from ..jev_consent import arm_tool_call as arm_jev_tool_call
 from ..jev_consent import disarm_tool_call as disarm_jev_tool_call
 from ..native_todo import project_native_todo
 from ..plan_stage_gate import plan_stage_edit_directive
+from ..pr_delivery_gate import delivery_directive, grant_change_directive, observe_opened_pr
 from ..research_receipts import record_fetch_receipts
 from ..skill_ownership import managed_skill_edit_directive
 from ..team_gate import team_start_directive
@@ -281,6 +282,21 @@ def pre_tool_call(**kwargs: object) -> dict[str, object] | None:
     )
     if evidence_directive is not None:
         return _route_gated(_veto_over_ask(evidence_directive, pending_ask), **route_gate)
+    # Only the person turns the PR delivery grant on or off, so a command
+    # that would is refused in every session; and in a session nobody can
+    # answer, a forge command outside what the grant covers -- or inside it
+    # with the grant off -- is refused (`pr_delivery_gate`, owner-approved
+    # 2026-11-23). Beside the other refusals of OMH's own, which an ask
+    # rule never overrides.
+    delivery = grant_change_directive(tool_name=kwargs.get("tool_name"), tool_input=tool_input) or delivery_directive(
+        tool_name=kwargs.get("tool_name"),
+        tool_input=tool_input,
+        session_id=session_id,
+        omh_home=omh_home,
+        hermes_home=hermes_home,
+    )
+    if delivery is not None:
+        return _route_gated(_veto_over_ask(delivery, pending_ask), **route_gate)
     # A dag-ulw node's child writing outside its node's write scope is refused
     # (`dag_scope_guard`): the scope was checked at define and never again.
     scope_directive = dag_scope_directive(
@@ -553,6 +569,15 @@ def post_tool_call(**kwargs: object) -> dict[str, object] | None:
     # A blocked call's result is a refusal, not Hermes' dispatch handle.
     if kwargs.get("tool_name") == "delegate_task" and str(kwargs.get("status", "") or "").lower() != "blocked":
         observe_delegate_call(kwargs)
+    # The record of which PRs this bot opened: a grant-allowed `gh pr create`
+    # whose own output named the new PR (`pr_delivery_gate`). A blocked call
+    # opened nothing.
+    if str(kwargs.get("status", "") or "").lower() != "blocked":
+        _ = observe_opened_pr(
+            tool_name=kwargs.get("tool_name"), tool_input=_tool_arguments(kwargs), result=kwargs.get("result"),
+            session_id=str(kwargs.get("session_id", "") or kwargs.get("task_id", "") or ""),
+            omh_home=omh_home, hermes_home=hermes_home,
+        )
     return None
 
 

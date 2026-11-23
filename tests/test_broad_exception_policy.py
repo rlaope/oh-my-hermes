@@ -84,6 +84,13 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "reports as a Script Error the watch row shows as not readable; a traceback could quote the bot token.",
     ),
     ClassifiedSite(
+        "src/skills/monitor_watch_toolkit/scripts/api_watch.py", "call", INTENTIONAL,
+        "The monitor's HTTP read: http.client's malformed-reply errors (BadStatusLine and its kin) become "
+        "Transient('bad_response'), an exit 1 with one fixed stderr line that Hermes reports as a failed monitor "
+        "source, never a change; naming them would mean importing http.client into a network client the safety "
+        "invariants keep at urllib's surface, and the class or traceback never reaches stderr.",
+    ),
+    ClassifiedSite(
         "src/workflows/repro_audit/operations.py", "_publish", INTENTIONAL,
         "Exclusive publication rolls back only invocation-owned staged files and re-raises the original failure; it never relabels a failed audit as success.",
     ),
@@ -1147,8 +1154,12 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # 114 -> 115 / 103 -> 104: the channel-watch collector's `main` (an unexpected error names its class only, exit 1;
 # a traceback could quote the bot token).
 # 115 -> 116 / 104 -> 105: proofread.Worker._run reports unexpected failure as Outcome.error.
-EXPECTED_HANDLER_COUNT = 117
-EXPECTED_ANCHOR_COUNT = 106
+# 116 -> 117 / 105 -> 106: the monitor-recipe HTTP read, `api_watch.Client.call` (a malformed reply is a
+# fixed `unreachable reason=bad_response`, exit 1, never a change).
+# 117 -> 118 / 106 -> 107: merged with the doctor's gateway health row (`doctor._gateway_health_check`, an
+# unexpected failure is an observed=False warning row), which reached this branch through #3157.
+EXPECTED_HANDLER_COUNT = 118
+EXPECTED_ANCHOR_COUNT = 107
 
 
 class DerivedSite(NamedTuple):

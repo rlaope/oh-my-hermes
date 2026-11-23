@@ -208,9 +208,11 @@ CONCEPTUAL_AWARENESS_SURFACES = ("request-to-handoff", "executor selection", "co
 # the producer after merging fix/skill-harness-fit; no headroom.
 # 13051 -> 13054: model-compression's clause says "smaller or cheaper via its
 # weights" again (+3 in its index line), measured from the producer; no headroom.
-# 13054 -> 13136: one `bot-template` index line plus newline (+82), measured
+# 13054 -> 13141: one `app-work-intake` index line (the cross-platform workflows' one new
+# skill), measured from the producer; no headroom.
+# 13141 -> 13223: one `bot-template` index line plus newline (+82), measured
 # from the producer; no headroom.
-SKILL_INDEX_CHAR_LIMIT = 13136
+SKILL_INDEX_CHAR_LIMIT = 13223
 # The longest single skill line in that index. Every description is already cut
 # to 60 characters, so what moves this is a longer skill name.
 # 100 -> 99: same word-boundary cut as above, measured from the producer.
@@ -1123,9 +1125,13 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 64019
 # 549528 -> 549751 (2026-11-20): OpenAI's GPT-6.2 Codex guide lines: dag-ulw's node-prompt line briefs like a
 # colleague and names `review_focus` (+161), agent-instructions' infer-from-code rule enters its first-four
 # quality-bar slice (+62); only those two rows. Measured from the producer against main c5a909c6b. No headroom.
-# 549751 -> 554001: one `bot-template` capability row (4248) plus its separator
-# (+4250); dropping only that row reproduces 549751. Measured from the producer.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 554001
+# 549751 -> 554000: one `app-work-intake` capability row (4247, its workflow-skill exposure and
+# preferred usage included) plus its separator (+4249); the operating-rhythm, wiki and frontend rows
+# did not move (their new lines sit past the first-four slice). Measured per row from the producer.
+# No headroom.
+# 554000 -> 558250: one `bot-template` capability row (4248) plus its separator
+# (+4250); dropping only that row reproduces 554000. Measured from the producer.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 558250
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -1239,9 +1245,11 @@ FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # separator (+947); the method stays in its on-demand reference.
 # 146418 -> 147355: one 935-character standalone `skill-eval` row plus
 # separator (+937); the lift method stays in its on-demand reference.
-# 147355 -> 148298: one 941-character standalone `bot-template` row plus
+# 147355 -> 148307: one 950-character standalone `app-work-intake` row plus
+# separator (+952); its three recipes stay in on-demand references.
+# 148307 -> 149250: one 941-character standalone `bot-template` row plus
 # separator (+943); the templates stay in its on-demand reference.
-STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 148298
+STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 149250
 STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # ULW fold context ceiling (issue #954, PR D). The limit is the pre-D measured
 # value of the full profile's `skill_body` chars on `main` @ acb9a060, in the
