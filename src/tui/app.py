@@ -2386,6 +2386,7 @@ class App(ModesMixin, AgentViewMixin):
         self.agent_steer: str | None = None  # the agent `s` picked: the next line sent is its steer
         self.viewing: SubagentView | None = None  # the subagent whose session is on the main screen; None: main's
         self.view_opening: str | None = None  # the agent an open's read is out for; another Enter replaces it
+        self.view_open_seq = 0  # the latest open's number: only its answer may show a view (`_view_opened`)
         # A subagent view's draft left unsent, by agent: it comes back when that agent's view opens again; an agent
         # the roster drops takes its draft with it (`_prune_child_drafts`).
         self.child_drafts: dict[str, Composer] = {}
@@ -3716,7 +3717,7 @@ class App(ModesMixin, AgentViewMixin):
         self.list_selected = None
         if self.viewing is not None:  # its watch session went with the old gateway: back to main, drafts restored
             self._leave_view(close=False)
-        self.view_opening = None
+        self._cancel_view_open()
         first_id = max(self.pending, default=0) + 1
         self._settle_lost_calls()
         self.default_asked = False  # a read or switch for Hermes' default went with the old gateway: ask again
@@ -8243,6 +8244,7 @@ class App(ModesMixin, AgentViewMixin):
         if not self.sid:
             self.transcript.add_notice(NO_SESSION_NOTICE, NOTICE_WARN)
             return
+        self._cancel_view_open()  # a subagent open still out belongs to the session being left
         self.switch_counter += 1
         seq = self.switch_seq = self.switch_counter
         self._request(
@@ -8565,6 +8567,7 @@ class App(ModesMixin, AgentViewMixin):
         does not resolve (`_on_resume_refused`). `label` names it on the switching row. `seq` continues the switch
         it numbers (a title lookup's, whose callers drop it once a newer one was asked for); None asks for a new one,
         or makes one already out to the same target the newest again."""
+        self._cancel_view_open()  # a subagent open still out belongs to the session being left
         if seq is None:
             out = {call.switch_seq for call in self.pending.values() if call.switch}
             again = next((number for number in sorted(out, reverse=True) if self.switch_targets.get(number) == target),

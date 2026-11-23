@@ -565,8 +565,8 @@ class AgentViewMixin:
             self.list_selected = ids[min(max(row, 0), len(ids) - 1)]
         elif name == ENTER and self.list_selected != MAIN_ID:
             self._open_agent(self.list_selected)  # its session on the main screen, else its log over the list
-        elif name == ENTER and self.viewing is not None:
-            self.list_selected = None  # main's row: back to main
+        elif name == ENTER and (self.viewing is not None or self.view_opening is not None):
+            self.list_selected = None  # main's row: back to main, an open still out dropped
             self._leave_view()
         elif name in (ENTER, ESCAPE, LEFT) or action in LEAVE_KEYS or (
             isinstance(event, Key) and name == CHAR and event.ctrl and event.char == "c"  # Shift or Alt too
@@ -685,8 +685,8 @@ class AgentViewMixin:
             self.list_selected = target if target != MAIN_ID else None  # main has no log: the click leaves the list
         if target != MAIN_ID:
             self._open_agent(target)
-        elif self.viewing is not None:
-            self._leave_view()  # main's row: back to main
+        elif self.viewing is not None or self.view_opening is not None:
+            self._leave_view()  # main's row: back to main, an open still out dropped
 
     # ── one subagent's session on the main screen (`subagent_session`) ──
 
@@ -706,39 +706,57 @@ class AgentViewMixin:
         if not self.sid or not agent.child_session_id:
             self._open_agent_log(subagent_id)
             return
+        if self.view_opening == subagent_id:
+            return  # its open is out already: one intent, one read
         wire = view_state.wire_for(self.shared_gateway)
         method, params = view_state.open_call(wire, self.sid, subagent_id, agent.child_session_id, self.size[0])
         self.view_opening = subagent_id
-        sid = self.sid
+        self.view_open_seq += 1
+        sid, seq = self.sid, self.view_open_seq
         self._request(
             method, params,
-            lambda result: self._view_opened(sid, subagent_id, wire, result),
-            lambda error: self._view_refused(sid, subagent_id),
-            lambda _seconds: self._view_refused(sid, subagent_id),  # no answer: the log, as for a refusal
+            lambda result: self._view_opened(sid, seq, subagent_id, wire, result),
+            lambda error: self._view_refused(sid, seq, subagent_id),
+            lambda _seconds: self._view_refused(sid, seq, subagent_id),  # no answer: the log, as for a refusal
             watch=True,
         )
 
-    def _view_refused(self, sid: str, subagent_id: str) -> bool:
+    def _open_wanted(self, sid: str, seq: int) -> bool:
+        """Whether an open's answer is the latest open's, still wanted: none since replaced or cancelled it (`main`,
+        Esc, a switch, `/new`, a respawn: `_cancel_view_open`), in the session it was asked in."""
+        return self.view_opening is not None and seq == self.view_open_seq and sid == self.sid
+
+    def _cancel_view_open(self) -> None:
+        """Drop the open still out: its answer, when it comes, shows nothing (`_open_wanted`)."""
+        self.view_opening = None
+        self.view_open_seq += 1
+
+    def _close_watch(self, watch: str) -> None:
+        """`session.close` of a watch session an answer opened that no view shows; never the one the shown view owns
+        (Hermes hands the same live watch sid to a second lazy resume of a child)."""
+        if watch and (self.viewing is None or self.viewing.watch_sid != watch):
+            self._request("session.close", {"session_id": watch}, lambda _result: None, lambda _error: True)
+
+    def _view_refused(self, sid: str, seq: int, subagent_id: str) -> bool:
         """A refused open, of any kind: the agent's log in the pager, as before the view, if it is still wanted."""
-        if self.view_opening == subagent_id and sid == self.sid:
+        if self._open_wanted(sid, seq):
             self.view_opening = None
             self._open_agent_log(subagent_id)
         return True
 
-    def _view_opened(self, sid: str, subagent_id: str, wire: str, result: Mapping[str, Any]) -> None:
+    def _view_opened(self, sid: str, seq: int, subagent_id: str, wire: str, result: Mapping[str, Any]) -> None:
         """An open's answer: the view, filled from the history or rows it read, on the main screen. One that reads no
-        view (`subagent_session.read_refused`) opens the agent's log instead. One no longer wanted (another Enter, Esc,
-        a session left) is dropped, and the watch session it opened closed."""
+        view (`subagent_session.read_refused`) opens the agent's log instead. One that is not the latest open's, or
+        was cancelled (`_open_wanted`), is dropped, and the watch session it opened closed unless the shown view owns
+        it."""
         watch = as_text(result.get("session_id")) if wire == WIRE_WATCH else ""
-        if self.view_opening != subagent_id or sid != self.sid:
-            if watch:
-                self._request("session.close", {"session_id": watch}, lambda _result: None, lambda _error: True)
+        if not self._open_wanted(sid, seq):
+            self._close_watch(watch)
             return
         self.view_opening = None
         agent = self.roster.agents.get(subagent_id)
         if view_state.read_refused(wire, result) or agent is None:
-            if watch:
-                self._request("session.close", {"session_id": watch}, lambda _result: None, lambda _error: True)
+            self._close_watch(watch)
             self._open_agent_log(subagent_id)
             return
         if self.viewing is not None:
@@ -776,7 +794,7 @@ class AgentViewMixin:
         its agent (`child_drafts`), the watch session closes (the shared gateway's read holds none; `close` False when
         it went with the gateway), and main's transcript, which folded every main event meanwhile, is drawn again. An
         open still out is dropped as it answers."""
-        self.view_opening = None
+        self._cancel_view_open()
         view, self.viewing = self.viewing, None
         if view is None:
             return

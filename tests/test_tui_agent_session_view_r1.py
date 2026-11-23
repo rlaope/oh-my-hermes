@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import unittest
 
-from test_tui_agent_session_view import BRIEF, FIRST, SECOND, WATCH, entered, lazy_answer, viewing
+from test_tui_agent_session_view import BRIEF, FIRST, SECOND, WATCH, entered, lazy_answer, rows_answer, texts, viewing
 from test_tui_modes import SID, answer, call_id, queue, type_text
 from omh.tui import app as app_module
 from omh.tui.gateway import Event, Response, ServerRequest
@@ -184,6 +184,57 @@ class StopOwnerTests(unittest.TestCase):
         app._on_input(Key(CHAR, "c"))
         self.assertEqual(client.named("session.interrupt"), [])
         self.assertIsNotNone(app.viewing)
+
+
+class OpenIntentTests(unittest.TestCase):
+    """D5: each open is one intent; only the latest open's answer may show a view."""
+
+    def test_a_second_enter_on_the_agent_whose_open_is_out_sends_nothing(self) -> None:
+        app, client, _ = entered()
+        app._on_input(Key(ENTER))
+        self.assertEqual(len(client.named("session.resume")), 1)
+        answer(app, client, lazy_answer([BRIEF]))
+        self.assertEqual((app.viewing.watch_sid, client.named("session.close")), (WATCH, []))
+
+    def test_a_stale_open_answer_reusing_the_shown_watch_never_closes_it(self) -> None:
+        app, client, _ = entered()
+        old = call_id(client, "session.resume")
+        app._on_input(Key(ESCAPE))  # the list closes
+        app._on_input(Key(ESCAPE))  # the open is cancelled
+        app._open_agent(FIRST)
+        app._on_response(Response(call_id(client, "session.resume"), lazy_answer([BRIEF]), None))
+        app._on_response(Response(old, lazy_answer([BRIEF]), None))  # Hermes reuses the live watch sid
+        self.assertEqual((app.viewing.watch_sid, client.named("session.close")), (WATCH, []))
+
+    def test_a_stale_open_answer_on_the_shared_gateway_never_replaces_the_latest(self) -> None:
+        app, client, _ = entered(shared=True)
+        old = call_id(client, "session.transcript")
+        app._on_input(Key(ESCAPE))
+        app._on_input(Key(ESCAPE))
+        app._open_agent(FIRST)
+        new = call_id(client, "session.transcript")
+        app._on_response(Response(old, rows_answer([BRIEF, {"role": "assistant", "text": "old snapshot"}], cursor="old"),
+                                  None))
+        self.assertIsNone(app.viewing, "the cancelled open shows nothing")
+        app._on_response(Response(new, rows_answer([BRIEF, {"role": "assistant", "text": "new snapshot"}], cursor="new"),
+                                  None))
+        self.assertEqual((app.viewing.cursor, texts(app.viewing.transcript)[-1]), ("new", "reply:new snapshot"))
+
+    def test_the_main_row_cancels_an_open_still_out(self) -> None:
+        app, client, _ = entered()
+        app._on_input(Key(UP))
+        app._on_input(Key(ENTER))  # main's row, before the open answered
+        answer(app, client, lazy_answer([BRIEF]))
+        self.assertIsNone(app.viewing)
+        self.assertEqual(client.named("session.close"), [{"session_id": WATCH}], "the watch no view owns is closed")
+
+    def test_a_session_switch_cancels_an_open_still_out(self) -> None:
+        app, client, _ = entered()
+        opened = call_id(client, "session.resume")
+        app._on_input(Key(ESCAPE))
+        app._switch_session("different-stored-session")
+        app._on_response(Response(opened, lazy_answer([BRIEF]), None))
+        self.assertIsNone(app.viewing)
 
 
 if __name__ == "__main__":
