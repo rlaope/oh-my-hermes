@@ -262,7 +262,8 @@ class Argv(unittest.TestCase):
         self.assertIs(seen["stdin"], subprocess.DEVNULL)
         self.assertNotIn("shell", seen)
         self.assertEqual(seen["waits"], [330.0])
-        self.assertEqual((seen["env"]["HERMES_HOME"], seen["env"]["PYTHONIOENCODING"]), ("/home/h", "utf-8"))
+        # the home as the system writes the path (`\\home\\h` on Windows)
+        self.assertEqual((seen["env"]["HERMES_HOME"], seen["env"]["PYTHONIOENCODING"]), (str(Path("/home/h")), "utf-8"))
         self.assertNotIn("_HERMES_GATEWAY", seen["env"])
         # its own session (POSIX) or process group (Windows), so a stop reaches only this run
         if os.name == "nt":
