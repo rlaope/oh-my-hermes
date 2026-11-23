@@ -17,8 +17,10 @@ export const CUT_ROWS = ".bot-w > .bot, .th-row, .tg-h, .ss-row, .split-card, .b
 export const CUE_PX = 14;
 
 /** How many px to hide at the bottom of a list whose box ends at `bottom`: from the top of the first row that would
- *  reach into the cue band, at least the band itself. `rows`: the rows' tops and bottoms. */
-export function cutBelow(bottom: number, rows: readonly { top: number; bottom: number; head?: boolean }[], band = CUE_PX): number {
+ *  reach into the cue band, at least the band itself. `rows`: the rows' tops and bottoms. With the list's `top` given,
+ *  a cut that would hide every row (a first row taller than the list) hides only the band: the top of that row shows,
+ *  and its controls stay reachable, rather than an empty list. */
+export function cutBelow(bottom: number, rows: readonly { top: number; bottom: number; head?: boolean }[], band = CUE_PX, top?: number): number {
   // hiding a row from its top can reach into the row above it (a bot row over its first thread): repeat until no
   // shown row reaches past the hidden part's top, and the last row shown is not a `head` (an open folder's header,
   // a bot over its threads) whose rows are all hidden
@@ -38,7 +40,34 @@ export function cutBelow(bottom: number, rows: readonly { top: number; bottom: n
       moved = true;
     }
   }
+  if (top !== undefined && from <= bottom - band && !rows.some((r) => r.bottom <= from + 0.5 && r.bottom > top + 0.5) && rows.some((r) => r.top < bottom)) return band;
   return Math.max(band, Math.ceil(bottom - from));
+}
+
+/** The px a split card is drawn shorter than its own height (`data-map-h`, the saved or dragged one) because the list
+ *  caps it to fit (`--sc-cap`, set below). The auto split plans with the cards at their own heights, so a cap never
+ *  feeds back into the room TERMINALS is given. */
+export function cardGive(card: Element): number {
+  const own = Number((card as HTMLElement).dataset.mapH);
+  const map = card.querySelector(".sc-map");
+  return map && Number.isFinite(own) ? Math.max(0, own - map.getBoundingClientRect().height) : 0;
+}
+
+/** The tallest map the first split card in `el` may draw so its whole card, grip and the chevron's band fit the list's
+ *  box, or "" (no cap) when the list's rows fit it at their own heights. The saved height is never changed. */
+function cardCap(el: HTMLElement): string {
+  const cards = el.querySelectorAll<HTMLElement>(".split-card");
+  const first = cards[0];
+  const map = first?.querySelector(".sc-map");
+  if (!first || !map) return "";
+  let give = 0;
+  for (const c of cards) give += cardGive(c);
+  if (el.scrollHeight + give <= el.clientHeight + 1) return "";
+  const box = el.getBoundingClientRect();
+  const m = map.getBoundingClientRect();
+  const above = m.top - box.top + el.scrollTop;
+  const below = first.getBoundingClientRect().bottom - m.bottom;
+  return `${Math.max(0, Math.floor(el.clientHeight - above - below - CUE_PX))}px`;
 }
 
 /** A row that heads others below it (an open folder's header, a bot row over its threads): never the last one shown. */
@@ -60,6 +89,12 @@ export function useEdgeFade<T extends HTMLElement>(own?: { current: T | null }):
       stop.current = null;
       if (!el) return;
       const read = () => {
+        // a split card taller than the list gives way first (CSS only, so the rows below are read at the drawn size)
+        const cap = cardCap(el);
+        if (el.style.getPropertyValue("--sc-cap") !== cap) {
+          if (cap) el.style.setProperty("--sc-cap", cap);
+          else el.style.removeProperty("--sc-cap");
+        }
         const m = edgeOf(el);
         if (m) el.dataset.more = m;
         else delete el.dataset.more;
@@ -70,7 +105,7 @@ export function useEdgeFade<T extends HTMLElement>(own?: { current: T | null }):
             const b = r.getBoundingClientRect();
             return { top: b.top, bottom: b.bottom, head: isHead(r) };
           });
-          clip = `inset(0 0 ${cutBelow(box.bottom, rows)}px 0)`;
+          clip = `inset(0 0 ${cutBelow(box.bottom, rows, CUE_PX, box.top)}px 0)`;
         }
         if (el.style.clipPath !== clip) el.style.clipPath = clip;
       };
@@ -80,7 +115,8 @@ export function useEdgeFade<T extends HTMLElement>(own?: { current: T | null }):
       ro?.observe(el);
       // rows come and go (threads load, a terminal starts): the list's content changes size, not the list
       const mo = typeof MutationObserver === "function" ? new MutationObserver(read) : null;
-      mo?.observe(el, { childList: true, subtree: true });
+      // and a split card's own height changes (its grip) without a row coming or going
+      mo?.observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-map-h"] });
       stop.current = () => {
         el.removeEventListener("scroll", read);
         ro?.disconnect();

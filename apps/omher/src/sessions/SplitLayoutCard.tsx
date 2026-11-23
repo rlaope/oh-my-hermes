@@ -139,6 +139,9 @@ export function SplitCard({ group, current, list, agents, unseen, ticking, lang,
   const away = !current || !ids.includes(current);
   const map = useRef<HTMLDivElement>(null);
   const [mapW, setMapW] = useState(0);
+  // the map's drawn height: its own (saved, dragged or default) unless the TERMINALS list caps it to fit (edgeFade's
+  // --sc-cap), never below CARD_MIN_H; the saved height stays as it is
+  const [drawnH, setDrawnH] = useState(0);
   const [drag, setDrag] = useState<number | null>(null);
   const saved = group.mapH ?? defaultCardHeight(group.layout);
   const mapH = drag ?? saved;
@@ -146,7 +149,11 @@ export function SplitCard({ group, current, list, agents, unseen, ticking, lang,
   useLayoutEffect(() => {
     const el = map.current;
     if (!el) return;
-    const read = () => setMapW(Math.round(el.getBoundingClientRect().width));
+    const read = () => {
+      const r = el.getBoundingClientRect();
+      setMapW(Math.round(r.width));
+      setDrawnH(Math.round(r.height));
+    };
     read();
     const ro = typeof ResizeObserver === "function" ? new ResizeObserver(read) : null;
     ro?.observe(el);
@@ -198,10 +205,10 @@ export function SplitCard({ group, current, list, agents, unseen, ticking, lang,
     e.preventDefault();
     set(clampCardHeight(mapH + (e.key === "ArrowUp" ? -GRIP_STEP : GRIP_STEP)));
   };
-  const boxes = mapW > 0 ? cellBoxes(group.layout, mapW, mapH) : [];
+  const boxes = mapW > 0 ? cellBoxes(group.layout, mapW, drawnH > 0 ? drawnH : mapH) : [];
   return (
-    <div className="split-card" role="group" aria-label={t("split.card", { n: ids.length })} data-testid="split-card" data-panes={ids.length} data-away={away ? "true" : undefined}>
-      <div ref={map} className="sc-map" style={{ height: mapH }}>
+    <div className="split-card" role="group" aria-label={t("split.card", { n: ids.length })} data-testid="split-card" data-panes={ids.length} data-away={away ? "true" : undefined} data-map-h={mapH}>
+      <div ref={map} className="sc-map" style={{ height: `max(${CARD_MIN_H}px, min(${mapH}px, var(--sc-cap, ${mapH}px)))` }}>
         {boxes.map((b) => {
           const rec = list.find((r) => r.id === b.id);
           // a pane whose session just went (the prune runs after this render) draws nothing

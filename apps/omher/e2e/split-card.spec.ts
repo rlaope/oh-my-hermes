@@ -312,6 +312,56 @@ test("in a right-to-left document the card mirrors as the main split does: the t
   expect(cellA.x + cellA.width).toBeLessThanOrEqual(box.x + box.width + 0.5);
 });
 
+test("a tall card in a short TERMINALS gives way so it is never hidden whole: 1280×600, and 1280×700 with the divider low", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 700 });
+  for (const bot of ["kami", "friren", "default", "omh-tui"]) await mock("mock.threads", { bot, threads: Array.from({ length: 5 }, (_, i) => ({ title: `Review thread ${i + 1}`, ago: 600 + i })) });
+  await openApp(page);
+  await expect(page.locator(".th-row")).toHaveCount(20);
+  const [a, b, c, d] = await sessions(page, ["/w/a", "/w/b", "/w/c", "/w/d", "/w/e", "/w/f", "/w/g", "/w/h", "/w/i", "/w/j"]);
+  await oneThree(page, [a!, b!, c!, d!]);
+  const grip = page.getByTestId("split-card-grip");
+  await grip.focus();
+  for (let i = 0; i < 8; i++) await page.keyboard.press("ArrowDown");
+  await expect(grip).toHaveAttribute("aria-valuenow", "240");
+  /** Every cell's centre, hit-tested: the cell it lands on (null when the clip or another element hides it), and how
+   *  much of the card the list's clip leaves showing. */
+  const seen = () =>
+    page.evaluate(() => {
+      const list = document.querySelector<HTMLElement>('[data-testid="session-list"]')!;
+      list.scrollTop = 0;
+      const lb = list.getBoundingClientRect();
+      const cut = Number(/inset\(0px 0px ([\d.]+)px/.exec(list.style.clipPath)?.[1] ?? 0);
+      const card = document.querySelector(".split-card")!.getBoundingClientRect();
+      const hits = [...document.querySelectorAll<HTMLElement>('[data-testid="split-cell"]')].map((e) => {
+        const r = e.getBoundingClientRect();
+        const [x, y] = [r.left + r.width / 2, r.top + r.height / 2];
+        const at = y < lb.bottom - cut ? document.elementFromPoint(x, y) : null;
+        return at?.closest<HTMLElement>('[data-testid="split-cell"]')?.dataset.session === e.dataset.session ? e.dataset.session : (at?.className ?? null);
+      });
+      return { hits, shown: Math.max(0, Math.min(card.bottom, lb.bottom - cut) - card.top), card: card.height };
+    });
+  const check = async () => {
+    await page.waitForTimeout(250);
+    const v = await seen();
+    expect(v.hits.filter((h) => [a, b, c, d].includes(h as string)).length, JSON.stringify(v)).toBeGreaterThan(0);
+    expect(v.shown, JSON.stringify(v)).toBeGreaterThan(0);
+    return v;
+  };
+  await check();
+  await page.setViewportSize({ width: 1280, height: 600 });
+  const short = await check();
+  // the card gave way to the room: every cell is reachable, and the saved height is still 240
+  expect(short.hits, JSON.stringify(short)).toEqual([a, b, c, d]);
+  expect(short.shown, JSON.stringify(short)).toBe(short.card);
+  await expect(grip).toHaveAttribute("aria-valuenow", "240");
+  expect(await page.evaluate(() => localStorage.getItem("omher.splits"))).toContain('"mapH":240');
+  // 1280×700 with BOTS | TERMINALS dragged low
+  await page.setViewportSize({ width: 1280, height: 700 });
+  await page.getByTestId("side-split").focus();
+  for (let i = 0; i < 16; i++) await page.keyboard.press("ArrowDown");
+  await check();
+});
+
 test("a 1+3 split gives its tall cell stacked text and its short cells text beside the mark", async ({ page }) => {
   await openApp(page);
   const [a, b, c, d] = await sessions(page, ["/w/a", "/w/b", "/w/c", "/w/d"]);
