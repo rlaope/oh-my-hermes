@@ -399,6 +399,9 @@ test("a partner that closes or changes under the drag: letting go merges nothing
   await expect(page.getByTestId(`session-${m}`)).toHaveCount(0);
   const to = await sidePoint(page, term(page, b), "left");
   await page.mouse.move(to.x, to.y, { steps: 4 });
+  // the preview that named m goes at once
+  await expect(shade(page)).toHaveCount(0);
+  await expect(fill(page)).toHaveCount(0);
   await page.mouse.up();
   await expect(split(page)).toHaveCount(0);
   // a fresh drag names a and merges with it

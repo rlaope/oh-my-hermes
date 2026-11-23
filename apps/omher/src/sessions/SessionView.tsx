@@ -952,7 +952,8 @@ export function SessionView() {
     const still = () => !partner || mergePartner(getSessions().getState().list, getSessions().getState().agents, getSplit().groups, rec.id) === partner;
     pressToSplit(e, rec.id, (d) => void (still() && splitWith(d.at, rec.id, d.side)), undefined, {
       keepFocus: true,
-      aim: partner ? (x, y) => mergeTargetAt(x, y, rec.id, partner, pname) : undefined,
+      // the preview goes at once when the partner it names is no longer the one (closed or moved under the drag)
+      aim: partner ? (x, y) => (still() ? mergeTargetAt(x, y, rec.id, partner, pname) : null) : undefined,
     });
   };
   const closeHead = () => {

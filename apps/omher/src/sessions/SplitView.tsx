@@ -10,15 +10,16 @@
 // side the preview shows and the other, named in the preview, in the other half; back onto the header, Escape, or the
 // button let go outside the window changes nothing, and a folder with no other row offers nothing. A zoomed split's
 // header does not drag. The header's x closes the focused pane as ⌘W does, or the session on its own as closeLone
-// does, asking the row's Stop? when that close cannot be undone. The pane with the keyboard is the session open in the main column; the others are dimmed (Settings ›
-// Terminal › Dim unfocused panes) and the focused one shows by its cursor. Panes have no title bar (Ghostty / iTerm
-// splits): a 1px divider between them, the grip, and a zoom and an x in the top right corner, which show while the
-// pointer is over the pane. ⌘W closes the pane (the session stays in TERMINALS), ⌘⌥arrows move between panes, ⌘] / ⌘[
-// step through them, ⌘⇧⌥arrows move the pane, ⌘⇧↩ zooms it (the zoom follows the keyboard to another pane; splitting,
-// closing or moving a pane ends it, splitState.ts), ⌘⌃= evens them out (layout.ts paneKey has the keys off macOS).
-// Dividers drag and a double click evens them. Each pane is its session's own terminal (sessions.ts attach), so each
-// keeps its own engine; a pane whose session came back paused after a restart shows it paused. Bot chats never split:
-// only TERMINALS sessions go in a split, and the keys live in TERMINALS terminals only.
+// does, asking the row's Stop? when that close cannot be undone. The pane with the keyboard is the session open in the
+// main column; the others are dimmed (Settings › Terminal › Dim unfocused panes) and the focused one shows by its
+// cursor. Panes have no title bar (Ghostty / iTerm splits): a 1px divider between them, the grip, and a zoom and an x
+// in the top right corner, which show while the pointer is over the pane. ⌘W closes the pane (the session stays in
+// TERMINALS), ⌘⌥arrows move between panes, ⌘] / ⌘[ step through them, ⌘⇧⌥arrows move the pane, ⌘⇧↩ zooms it (the zoom
+// follows the keyboard to another pane; splitting, closing or moving a pane ends it, splitState.ts), ⌘⌃= evens them out
+// (layout.ts paneKey has the keys off macOS). Dividers drag and a double click evens them. Each pane is its session's
+// own terminal (sessions.ts attach), so each keeps its own engine; a pane whose session came back paused after a
+// restart shows it paused. Bot chats never split: only TERMINALS sessions go in a split, and the keys live in TERMINALS
+// terminals only.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { getStore } from "../state/store";
 import { CloseIcon, ExpandIcon } from "../ui";
