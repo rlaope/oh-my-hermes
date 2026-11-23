@@ -159,10 +159,11 @@ struct ArgvClock {
 
 #[cfg(unix)]
 impl ArgvClock {
-    /// Whether to read process `pid`'s argv `now`; `same_exe`: its program is the one the last probe saw.
+    /// Whether to read process `pid`'s argv `now`; `same_exe`: its program is the one the last probe saw. `ppid` 0 is
+    /// a parent that could not be read this time (a loaded macOS can fail `proc_pidinfo` for a moment): not a change.
     fn due(&mut self, pid: u32, ppid: u32, same_exe: bool, now: std::time::Instant) -> bool {
         match &mut self.seen {
-            Some((p, pp, first, last)) if *p == pid && *pp == ppid && same_exe => {
+            Some((p, pp, first, last)) if *p == pid && (ppid == 0 || *pp == ppid) && same_exe => {
                 if now.saturating_duration_since(*first) < ARGV_FRESH || now.saturating_duration_since(*last) >= ARGV_EVERY {
                     *last = now;
                     return true;
@@ -688,6 +689,10 @@ mod tests {
         assert!(c.due(8, 2, true, at(10400)));
         assert!(c.due(8, 2, true, at(12300)));
         assert!(!c.due(8, 2, true, at(12500)));
+        // a parent that could not be read this time (0) is no new parent: the clock keeps its pace
+        assert!(!c.due(8, 0, true, at(12600)));
+        assert!(!c.due(8, 2, true, at(12700)));
+        assert!(c.due(8, 0, true, at(17300)), "5 s after the last read");
     }
 
     /// 60 probes of one interpreter process a second apart (the poller's cadence while a terminal is busy): the argv
