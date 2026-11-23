@@ -7,6 +7,7 @@ import { shortTime } from "../app/time";
 import { t, tx, type Key } from "../i18n";
 import { SourceIcon, Spinner } from "../ui";
 import { cadence, isFailure, nextRun, sourceName, statusText } from "./format";
+import { rowMoving } from "./rowMotion";
 import "./panel.css";
 
 export type PanelTab = "details" | "terminal" | "schedule" | "worktrees" | "diff" | "runs";
@@ -182,28 +183,27 @@ type Box = { at: number; x0: number; x1: number; y0: number; y1: number };
 let swept: Box[] = [];
 let sweepEnd = 0;
 
+/** Where the row's free space starts: right of its last tab. */
+function rowEdge(row: HTMLElement): number {
+  const tabs = [...row.querySelectorAll(".pn-tab")].map((t) => t.getBoundingClientRect().right);
+  return tabs.length ? Math.max(...tabs) : row.getBoundingClientRect().left;
+}
 function freeBox(row: HTMLElement): Box | null {
   const b = row.getBoundingClientRect();
-  const tabs = [...row.querySelectorAll(".pn-tab")].map((t) => t.getBoundingClientRect().right);
   const rest = [...row.querySelectorAll("button:not(.pn-tab)")].map((t) => t.getBoundingClientRect().left);
-  const x0 = tabs.length ? Math.max(...tabs) : b.left;
+  const x0 = rowEdge(row);
   // the row's own buttons sit past the window's edge while the panel grows: only what the window shows counts
   const x1 = Math.min(rest.length ? Math.min(...rest) : b.right, window.innerWidth);
   return x1 > x0 ? { at: performance.now(), x0, x1, y0: b.top, y1: b.bottom } : null;
 }
-/** The slide itself still runs (the window's grid, or the overlay panel), or the row moved more than a pixel between
- *  the last two frames drawn before the press (within MOVE_MS): what is under the pointer is not what the person aimed
- *  at. A busy main thread draws the slide's frames further apart than MOVE_MS, so two samples alone can miss a row
- *  that is still moving. A row that held still in those two frames has stopped, even if an earlier frame in the window
- *  moved it: a tab pressed then is the tab's. */
-const MOVE_MS = 60;
+/** The slide itself still runs (the window's grid, or the overlay panel). A busy main thread draws the slide's frames
+ *  far apart, so the recorded frames alone can miss a row that is still moving. */
 const sliding = () =>
   [document.querySelector(".window"), document.querySelector(".details")].some((el) => el?.getAnimations().some((a) => a instanceof CSSTransition));
-const moving = (now: number) => {
-  if (sliding()) return true;
-  const last = swept.filter((b) => b.at <= now && now - b.at <= MOVE_MS).slice(-2).map((b) => b.x0);
-  return last.length > 1 && Math.abs(last[1] - last[0]) > 1;
-};
+/** Is what is under the pointer not what the person aimed at: the row slid between the frame they saw and the hit
+ *  test, or had just slid into that frame (rowMotion.ts). A tab that held still from the frame before the press to the
+ *  hit test is the tab's, however much an earlier frame moved it. */
+const moving = (now: number, row: HTMLElement) => rowMoving(swept, now, rowEdge(row), sliding());
 
 function onSweptPress(e: PointerEvent) {
   // the press's own time, not when this handler runs: a busy main thread hands it over late, and the person aimed at
@@ -217,7 +217,10 @@ function onSweptPress(e: PointerEvent) {
   // a control the person actually hit outside the row (the model pill, the places chip) always wins: only the
   // header's bare background (and tabs still moving) can be claimed
   if (onControl(hit)) return;
-  if (row && !moving(now)) return;
+  if (row && !moving(now, row as HTMLElement)) return;
+  // the free space covered the spot in a frame of the aim window, also one drawn after the press and before this
+  // late handler: what the hit test found there slid in, and swallowing its click loses nothing the person aimed at
+  // (a tab that stopped never gets here: moving() above, and the bare header has no click)
   const aimed = (b: Box) => now - b.at <= AIM_MS && e.clientX >= b.x0 && e.clientX <= b.x1 && e.clientY >= b.y0 && e.clientY <= b.y1;
   if (!swept.some(aimed)) return;
   const swallow = (c: MouseEvent) => {

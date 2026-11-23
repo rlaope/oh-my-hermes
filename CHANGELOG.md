@@ -8,9 +8,12 @@ All notable changes will be documented here.
   a press on a tab that is still moving counts as the tab row's own press (for a double-click on the row), and its
   click goes nowhere. The check for "still moving" looked at every frame of the last 60 ms. So a tab that had already
   stopped, two or three frames before the click, still read as moving if an earlier frame in that window had moved
-  it. The click was dropped and the panel stayed on its old tab. Only the last two frames before the press count now.
-  A tab that held still in them is the person's to click.
-  (`apps/omher/src/elsewhere/PanelTabs.tsx`; e2e `panel-max.spec.ts`, seen on macOS CI)
+  it. The click was dropped and the panel stayed on its old tab. Now a tab counts as moving in three cases: while
+  the slide runs, when it moved between the frame the person saw at the press and the moment omher reads the click,
+  or when it had only just arrived in that frame. A tab that held still from the frame before the press is the
+  person's to click.
+  (`apps/omher/src/elsewhere/PanelTabs.tsx`, `apps/omher/src/elsewhere/rowMotion.ts`; e2e `panel-max.spec.ts`, seen
+  on macOS CI)
 - **`omh_delegate_route` can hand a child the rest of its chain, each step at its own effort (opt-in).** With
   `{"schema_version": "delegate_route_options/v1", "write_fallback_providers": true}` in
   `~/.omh/routing/delegate-route.json`, `set` also writes the positions after the head into
