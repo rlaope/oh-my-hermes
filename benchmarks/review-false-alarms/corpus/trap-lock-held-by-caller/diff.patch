@@ -8,7 +8,13 @@
  
      def record(self, name: str, amount: int = 1) -> None:
          with self._lock:
-@@ -24,5 +25,10 @@
+@@ -19,10 +20,16 @@
+     def reset(self) -> None:
+         with self._lock:
+             self._counts.clear()
++            self._total = 0
+ 
+     def names(self) -> list[str]:
          with self._lock:
              return sorted(self._counts)
  

@@ -20,6 +20,7 @@ class Counter:
     def reset(self) -> None:
         with self._lock:
             self._counts.clear()
+            self._total = 0
 
     def names(self) -> list[str]:
         with self._lock:

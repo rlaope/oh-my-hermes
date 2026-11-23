@@ -51,6 +51,14 @@ Two kinds:
 `why` says why the case is what it is. It is for the person reading the
 results; the reviewer never sees `case.json`.
 
+**Corrected case.** Until this fix, `trap-lock-held-by-caller` added a running
+`_total` that `reset()` never cleared: after `record a 5; reset; record b 2`,
+`total()` said 7 while `snapshot()` said `{b: 2}`. That is a real bug, and live
+runs that reported it at `app/metrics.py:22` were counted as false alarms
+(both arms, every run). The diff now clears `_total` in `reset()`, so the lock the
+caller holds is the case's only question. Records from before the fix overstate
+both arms' false alarms on this case; do not compare them with newer runs.
+
 The corpus has 23 traps and 10 controls today (Python, JavaScript and Go). `bench.py validate` checks every
 case against the schema.
 
