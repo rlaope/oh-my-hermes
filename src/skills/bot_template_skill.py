@@ -7,6 +7,7 @@ from ..catalogs.bot_templates import (
     BotTemplate,
     TemplateSchedule,
 )
+from ..catalogs.skill_display_names import omh_skill_display_name
 from ..plugin_bundle.omh.native_tools import NATIVE_CRON_TOOL
 from .catalog_feature_surfaces import _UNATTENDED_GATE
 from .catalog_types import SkillDefinition, SkillExample
@@ -146,6 +147,11 @@ def bot_template_reference_templates():
     return [SkillReferenceTemplate(DEFINITION.name, REFERENCE_PATH, loadable_skill_mentions(templates_reference()))]
 
 
+def _view(skill: str, path: str) -> str:
+    """A page of another skill, as the call that opens it (the bot loads it by its label)."""
+    return f"`skill_view(name='{omh_skill_display_name(skill)}', file_path='{path}')`"
+
+
 def _names(names: tuple[str, ...]) -> str:
     return ", ".join(f"`{name}`" for name in names) or "none"
 
@@ -167,7 +173,7 @@ def _schedule_lines(template: BotTemplate, schedule: TemplateSchedule) -> list[s
     skill, path = schedule.reference
     recipe = f" recipe `{schedule.recipe}`" if schedule.recipe else ""
     return [
-        f"- `{job}` ({schedule.title}): follow `{skill}` `{path}`{recipe}; ask for {schedule.asks}.{need}",
+        f"- `{job}` ({schedule.title}): follow {_view(skill, path)}{recipe}; ask for {schedule.asks}.{need}",
     ]
 
 
@@ -196,13 +202,14 @@ def _template_section(template: BotTemplate) -> str:
     if template.guides:
         lines.append("- Guides (follow when that work arrives):")
         for guide in template.guides:
-            where = f"`{guide.path}`" if guide.path != "SKILL.md" else f"its body, the line `{guide.section}:`"
-            lines.append(f"  - `{guide.skill}` {where}: {guide.when}")
+            where = (_view(guide.skill, guide.path) if guide.path != "SKILL.md"
+                     else f"`{guide.skill}`, the line `{guide.section}:` of its body")
+            lines.append(f"  - {where}: {guide.when}")
     lines.append("- Webhook suggestions (create none):")
     if template.webhooks:
         for webhook in template.webhooks:
             skill, path = webhook.reference
-            lines.append(f"  - {webhook.title}: `{skill}` `{path}`, section {webhook.section} ({webhook.events})")
+            lines.append(f"  - {webhook.title}: {_view(skill, path)}, section {webhook.section} ({webhook.events})")
     else:
         lines.append("  - none")
     apps = "; ".join(f"`{app.name}` ({app.need}: {app.why})" for app in template.apps) or "none"

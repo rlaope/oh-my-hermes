@@ -175,8 +175,8 @@ RULES = (
     "What Hermes itself does on that create: the new profile copies the default profile's keys and model (Hermes'"
     " default, `mirror_launch_credentials`), Hermes may make it through the default profile's running gateway instead of"
     " in its own process, and it seeds its bundled skills;",
-    "`--no-alias` keeps it from writing a `~/.local/bin/<name>` wrapper, so the press writes nothing outside Hermes'"
-    " home, and the page shows Hermes' own `hermes profile alias <name>` for the person to run if they want one.",
+    "With `--no-alias` no alias is written, so the press writes nothing outside Hermes' home; the page shows Hermes' own"
+    " `hermes profile alias <name>` for the person to run if they want one.",
     "The name is checked against Hermes' own rule (`validate_profile_name`: the page trims and lowercases it, then"
     " `^[a-z0-9][a-z0-9_-]{0,63}$`, and not `hermes`, `default`, `test`, `tmp`, `root` or `sudo`) and refused when"
     " anything of that name is already under `profiles/`, before anything runs; it is one argument.",
@@ -376,9 +376,9 @@ RULES = (
     "never runs this in its own pseudo-terminal, so no keystroke passes through omher.",
     "There are four exceptions. The first two are a bot's automations and plugins, which omher changes only by asking"
     " that bot's own gateway (rules 24 and 25); omher writes no file of either itself, with one exception of its own:",
-    "never signals a process (the exceptions are rule 41's stop of its own `hermes mcp` run past its time, rule 43's"
-    " stop of its own `omh` read past its time and rule 44's stop of its own `hermes profile create` run past its time,"
-    " all through `_stop_run`), never calls a service manager",
+    "never signals a process (the exceptions are its own runs past their time, stopped through `_stop_run`, which only"
+    " two functions call: `_run_hermes_argv`, for rule 41's `hermes mcp` run and rule 44's `hermes profile create` run,"
+    " and `run_omh_read`, for rule 43's and rule 44's `omh` reads), never calls a service manager",
     "The fourth is a new bot (rule 44): on the person's press, Hermes' own `hermes -p default profile create <name>"
     " --no-alias` makes a new profile with its folder and files; omher writes none of them, and it changes no profile"
     " that already exists.",
