@@ -56,21 +56,28 @@ from .panels import (
     RUNNING_NODE_STATES, agent_view_count, agent_view_keep, dag_run_summary, graph_is_dag, panel_lines,
 )
 from .style import Line, Span, Style
+from . import subagent_session as view_state
+from .subagent_session import (
+    CONTINUE_REFUSED, FROM_MAIN, REFUSED_WHILE_VIEWING, SEND_CONTINUE, SEND_STEER, SEND_UNSUPPORTED, STILL_RUNNING,
+    UNSUPPORTED_LINE, WIRE_POLL, WIRE_WATCH, SubagentView, mark_rows,
+)
 from .subagents import (
     COMPLETED, ENDED, FINISHED_STATUSES, INTERRUPTED, MAIN_ID, OPEN_MARK, RUNNING, TOKENS_MARK, Agent, Hit, short_title,
 )
 from .width import cell_width
 from .transcript import (
     AGENT_CANCELLED, AGENT_FAILED, AGENT_FINISHED, AGENT_INTERRUPTED, NOTICE_WARN, STEER_QUEUED, STEER_REFUSED,
-    AgentDoneBlock, NoticeBlock, SteerBlock, as_text,
+    AgentDoneBlock, NoticeBlock, SteerBlock, Transcript, as_text,
 )
 
 # The list Down opens (the agent view's rows, `layout.agent_view_cap` of them; a longer roster scrolls), and one
 # agent's log in the pager.
 CHIP_SEPARATOR = " · "  # between the agent count and what Down opens, on the info line
 # Its keys, on the info line while it is open, longest first: each keeps the two action keys and the way back.
-AGENT_LIST_HINT = "↑↓ select · ⏎ log · x interrupt · s steer · esc back"
-AGENT_LIST_HINTS = (AGENT_LIST_HINT, "⏎ log · x interrupt · s steer · esc back", "x interrupt · s steer · esc back")
+AGENT_LIST_HINT = "↑↓ select · ⏎ view · x stop · s steer · esc back"
+AGENT_LIST_HINTS = (
+    AGENT_LIST_HINT, "⏎ view · x stop · s steer · esc back", "⏎ view · x stop · esc back", "x stop · esc back",
+)
 # The dag tree's keys, the same way: each keeps the fold keys, the two action keys and the way back while it fits.
 TREE_HINT = "↑↓ select · ←/→ or space fold · ⏎ log · x interrupt · s steer · esc back"
 TREE_HINTS = (
@@ -118,6 +125,8 @@ AGENT_STEER_REFUSED = "back in the composer — Hermes did not take the steer"
 AGENT_STEER_REFUSED_BECAUSE = AGENT_STEER_REFUSED + " ({reason})"
 AGENT_LOG_KEYS = "←/→ agents"
 TAIL_POLL_SECONDS = 2.0
+# What a subagent view's open answer needs from 4009 on a continue: Hermes refuses a turn on a running session so.
+SESSION_BUSY = 4009
 # Hermes answers `available: false` while an agent's log is not there yet, as it starts. Five answers in a row
 # like that (ten seconds at the pace above) stop the calls for that agent, so one whose `subagent.complete`
 # never comes is not asked forever; a new frame for it asks again.
@@ -186,9 +195,14 @@ class AgentViewMixin:
         if self.roster.agents:
             running = self.roster.running_count()
             cap = self._view_cap(rows, cols, 1 + running + int(len(self.roster.agents) > running), room)
+            viewing = self.viewing.subagent_id if self.viewing is not None else None
             if self.list_selected is not None:
                 lines, self.listed = self.roster.list_lines(cols, self.theme, self.list_selected, frame, cap, now)
-                return lines
+                return lines if viewing is None else mark_rows(lines, self.listed, viewing, self.list_selected, self.theme)
+            if viewing is not None and viewing in self.roster.agents:
+                # The list's rows stay in sight, the viewed one pointed at and kept on screen (`mark_rows`).
+                lines, shown = self.roster.list_lines(cols, self.theme, viewing, frame, cap, now)
+                return mark_rows(lines, shown, viewing, None, self.theme)
             return self.roster.view_lines(cols, self.theme, frame, cap, now)
         if not valid:
             return []
@@ -353,7 +367,7 @@ class AgentViewMixin:
                     self.tree_selected = state.reveals.get(key, key)  # an `N more` row gives way to its nodes
         elif name == ENTER:
             if agent is not None:
-                self._open_agent_log(agent)
+                self._open_agent(agent)
         elif action in ("x", "s"):
             if agent is not None:
                 self._agent_action(action, agent, armed)
@@ -546,7 +560,10 @@ class AgentViewMixin:
             row = ids.index(self.list_selected) + delta
             self.list_selected = ids[min(max(row, 0), len(ids) - 1)]
         elif name == ENTER and self.list_selected != MAIN_ID:
-            self._open_agent_log(self.list_selected)  # over the list: leaving the log comes back to it
+            self._open_agent(self.list_selected)  # its session on the main screen, else its log over the list
+        elif name == ENTER and self.viewing is not None:
+            self.list_selected = None  # main's row: back to main
+            self._leave_view()
         elif name in (ENTER, ESCAPE, LEFT) or action in LEAVE_KEYS or (
             isinstance(event, Key) and name == CHAR and event.ctrl and event.char == "c"  # Shift or Alt too
         ):
@@ -655,12 +672,230 @@ class AgentViewMixin:
             self.tree_selected = target
             agent = self.tree_state.agents.get(target) if self.tree_state is not None else None
             if agent is not None:
-                self._open_agent_log(agent)
+                self._open_agent(agent)
             return
         if self.list_selected is not None:
             self.list_selected = target if target != MAIN_ID else None  # main has no log: the click leaves the list
         if target != MAIN_ID:
-            self._open_agent_log(target)
+            self._open_agent(target)
+        elif self.viewing is not None:
+            self._leave_view()  # main's row: back to main
+
+    # ── one subagent's session on the main screen (`subagent_session`) ──
+
+    def _open_agent(self, subagent_id: str) -> None:
+        """Show `subagent_id`'s session on the main screen, as Claude Code shows a teammate's; its log in the pager
+        where the view cannot open (no session, no child session yet, or a read Hermes refuses: `_view_opened`).
+
+        The read goes by the wire (`subagent_session.wire_for`): a lazy watch of the child's session on Hermes'
+        stdio entry, a `session.transcript` read of its rows on the shared gateway; never a plain resume of the
+        child. The agent already on screen only gives the composer the keys back."""
+        agent = self.roster.agents.get(subagent_id)
+        if agent is None:
+            return
+        if self.viewing is not None and self.viewing.subagent_id == subagent_id:
+            self.list_selected = self.tree_selected = None
+            return
+        if not self.sid or not agent.child_session_id:
+            self._open_agent_log(subagent_id)
+            return
+        wire = view_state.wire_for(self.shared_gateway)
+        method, params = view_state.open_call(wire, self.sid, subagent_id, agent.child_session_id, self.size[0])
+        self.view_opening = subagent_id
+        sid = self.sid
+        self._request(
+            method, params,
+            lambda result: self._view_opened(sid, subagent_id, wire, result),
+            lambda error: self._view_refused(sid, subagent_id),
+            lambda _seconds: self._view_refused(sid, subagent_id),  # no answer: the log, as for a refusal
+            watch=True,
+        )
+
+    def _view_refused(self, sid: str, subagent_id: str) -> bool:
+        """A refused open, of any kind: the agent's log in the pager, as before the view, if it is still wanted."""
+        if self.view_opening == subagent_id and sid == self.sid:
+            self.view_opening = None
+            self._open_agent_log(subagent_id)
+        return True
+
+    def _view_opened(self, sid: str, subagent_id: str, wire: str, result: Mapping[str, Any]) -> None:
+        """An open's answer: the view, filled from the history or rows it read, on the main screen. One that reads no
+        view (`subagent_session.read_refused`) opens the agent's log instead. One no longer wanted (another Enter, Esc,
+        a session left) is dropped, and the watch session it opened closed."""
+        watch = as_text(result.get("session_id")) if wire == WIRE_WATCH else ""
+        if self.view_opening != subagent_id or sid != self.sid:
+            if watch:
+                self._request("session.close", {"session_id": watch}, lambda _result: None, lambda _error: True)
+            return
+        self.view_opening = None
+        agent = self.roster.agents.get(subagent_id)
+        if view_state.read_refused(wire, result) or agent is None:
+            if watch:
+                self._request("session.close", {"session_id": watch}, lambda _result: None, lambda _error: True)
+            self._open_agent_log(subagent_id)
+            return
+        if self.viewing is not None:
+            self._leave_view(redraw=False)
+        view = SubagentView(subagent_id, agent.name, sid, wire, Transcript(self.clock), watch_sid=watch,
+                            running=result.get(contract.TRANSCRIPT_RUNNING) is True,
+                            cursor=as_text(result.get(contract.TRANSCRIPT_NEXT_CURSOR)), polled_at=self.clock())
+        view.transcript.cwd = self.transcript.cwd
+        self._fill_view(view, result.get("messages") if wire == WIRE_WATCH else result.get(contract.TRANSCRIPT_ROWS),
+                        agent.goal)
+        self.viewing = view
+        self.list_selected = self.tree_selected = None  # the composer has the keys: what is typed goes to the agent
+        self._full_redraw()
+
+    def _fill_view(self, view: SubagentView, rows: object, goal: str) -> None:
+        """`view`'s transcript from the top: `› From main`, the brief (the goal, until a read brings its row), then
+        the rows read, drawn as a resumed session's are (`App._draw_history`)."""
+        messages = view_state.message_rows(rows)
+        view.transcript = Transcript(self.clock)
+        view.transcript.cwd = self.transcript.cwd
+        view.transcript.add_aside(NoticeBlock(FROM_MAIN, one_line=True))
+        view.brief_pending = False
+        if not view_state.has_brief(messages) and goal.strip():
+            view.transcript.add_user(goal, recorded=True)
+            view.brief_pending = True
+        self._draw_history(view_state.unseen_rows(view, messages) if view.sent_steers else messages, into=view.transcript)
+
+    def _leave_view(self, redraw: bool = True) -> None:
+        """Back to main: the watch session closes (the shared gateway's read holds none), and main's transcript,
+        which folded every main event meanwhile, is drawn again. An open still out is dropped as it answers."""
+        self.view_opening = None
+        view, self.viewing = self.viewing, None
+        if view is None:
+            return
+        if view.watch_sid:
+            self._request("session.close", {"session_id": view.watch_sid}, lambda _result: None, lambda _error: True)
+        if redraw:
+            self._full_redraw()
+
+    def _view_event(self, view: SubagentView, event: Any) -> None:
+        """An event of the viewed child's watch session (Hermes mirrors its `message.*`, `reasoning.*` and `tool.*`
+        there): folded into the view's transcript, never main's. A turn continued on it runs from its
+        `message.start` to its `message.complete`."""
+        if event.type == "message.start" and not view.running:
+            view.turn_running = True
+        view.transcript.apply(event)
+        if event.type == "message.complete":
+            view.turn_running = False
+        elif event.type == "error":
+            view.turn_running = False
+            view.transcript.add_notice(as_text(event.payload.get("message")) or "The gateway reported an error.",
+                                       NOTICE_WARN)
+        self.dirty = True
+
+    def _view_frame(self, event_type: str, payload: object) -> None:
+        """A parent `subagent.*` frame for the agent on screen: its working row runs until its `subagent.complete`,
+        and on the shared gateway that end reads its last rows at once."""
+        view = self.viewing
+        if view is None or not isinstance(payload, Mapping) or as_text(payload.get("subagent_id")) != view.subagent_id:
+            return
+        if event_type == contract.SUBAGENT_COMPLETE:
+            view.running = False
+            if view.wire == WIRE_POLL:
+                self._poll_view(view)
+        else:
+            view.running = True
+
+    def _poll_view_when_due(self) -> None:
+        """`session.transcript` for the subagent on screen while it runs, on the shared gateway: at most one call every
+        `subagent_session.POLL_SECONDS`, and none while the last is unanswered for less than `POLL_ANSWER_SECONDS`."""
+        due = view_state.poll_due_at(self.viewing, self.clock())
+        if due is not None and self.clock() >= due and self.viewing is not None:
+            self._poll_view(self.viewing)
+
+    def _poll_view(self, view: SubagentView) -> None:
+        view.polled_at, view.poll_open = self.clock(), True
+        self._request(
+            "session.transcript", view_state.read_params(view.parent_sid, view.subagent_id, view.cursor),
+            lambda result: self._on_view_rows(view, result),
+            lambda error: self._on_view_rows(view, {}),
+        )
+
+    def _on_view_rows(self, view: SubagentView, result: Mapping[str, Any]) -> bool:
+        """A poll's answer: the new rows drawn in the view, or all of them again on `reset`. One for a view since
+        left, or with no rows to read (a refusal), changes nothing on screen."""
+        view.poll_open = False
+        if self.viewing is not view or result.get(contract.TRANSCRIPT_AVAILABLE) is not True:
+            return True
+        rows = result.get(contract.TRANSCRIPT_ROWS)
+        if result.get(contract.TRANSCRIPT_RESET) is True:
+            agent = self.roster.agents.get(view.subagent_id)
+            self._fill_view(view, rows, agent.goal if agent is not None else "")
+            self._full_redraw()
+        else:
+            self._draw_history(view_state.unseen_rows(view, view_state.message_rows(rows)), into=view.transcript)
+        view.cursor = as_text(result.get(contract.TRANSCRIPT_NEXT_CURSOR)) or view.cursor
+        view.running = result.get(contract.TRANSCRIPT_RUNNING) is True
+        self.dirty = True
+        return True
+
+    def _send_to_view(self, text: str, shown: str, images: Sequence[Any]) -> None:
+        """A line sent while a subagent's session is on screen goes to that subagent: a steer while it runs (or while a
+        turn continued on its watch session runs); once it ended, a turn that continues its own conversation on
+        Hermes' stdio entry, and on the shared gateway, which cannot, one dim row saying so with the text kept. A
+        slash command, a `!` line or an image is main's: refused with one notice, the text kept."""
+        view = self.viewing
+        if view is None or not text.strip():
+            return
+        seen = shown or text
+        if images or seen.startswith("!") or seen.startswith("/"):
+            view.transcript.add_notice(REFUSED_WHILE_VIEWING.format(name=view.name), NOTICE_WARN)
+            self._give_back(text, images)
+            return
+        kind = view_state.send_kind(view)
+        if kind == SEND_UNSUPPORTED:
+            view.transcript.add_aside(NoticeBlock(UNSUPPORTED_LINE.format(name=view.name), one_line=True))
+            self._give_back(text)
+            return
+        if kind == SEND_CONTINUE:
+            view.transcript.add_user(text)
+            view.turn_running = True
+            self._request(
+                "prompt.submit", {"session_id": view.watch_sid, "text": text}, lambda _result: None,
+                lambda error: self._continue_refused(view, text, error), watch=True,
+            )
+            return
+        block = view.transcript.add_steer(text, agent=view.name)
+        view.sent_steers.append(text)
+        if kind == SEND_STEER:
+            method, params = "subagent.steer", {"session_id": view.parent_sid, "subagent_id": view.subagent_id,
+                                                "text": text}
+        else:
+            method, params = "session.steer", {"session_id": view.watch_sid, "text": text}
+        self._request(
+            method, params,
+            lambda result: self._view_steered(view, block, result),
+            lambda error: self._view_steered(view, block, {}, as_text(error.get("message")).strip().rstrip(".")),
+            lambda seconds: self._view_steered(view, block, {}, f"no answer in {seconds:g} s"),
+            steer=block, watch=True,
+        )
+
+    def _view_steered(self, view: SubagentView, block: SteerBlock, result: Mapping[str, Any], reason: str = "") -> bool:
+        """Hermes' answer to a steer sent from the view: taken, or refused and its text back in the composer."""
+        if as_text(result.get("status")) == contract.STEER_QUEUED:
+            view.transcript.steer_answered(block, STEER_QUEUED)
+            return True
+        said = AGENT_STEER_REFUSED_BECAUSE.format(reason=reason) if reason else AGENT_STEER_REFUSED
+        view.transcript.steer_answered(block, STEER_REFUSED, said)
+        if block.text in view.sent_steers:
+            view.sent_steers.remove(block.text)
+        self._give_back(block.text)
+        return True
+
+    def _continue_refused(self, view: SubagentView, text: str, error: Mapping[str, Any]) -> bool:
+        """A continue Hermes refused: 4009 while the child still runs; either way the text is back in the composer."""
+        view.turn_running = False
+        if error.get("code") == SESSION_BUSY:
+            notice = STILL_RUNNING.format(name=view.name)
+        else:
+            reason = (as_text(error.get("message")) or "refused").strip().rstrip(".")
+            notice = CONTINUE_REFUSED.format(name=view.name, reason=reason)
+        view.transcript.add_notice(notice, NOTICE_WARN)
+        self._give_back(text)
+        return True
 
     def _open_agent_log(self, subagent_id: str) -> None:
         """One agent's log on the alternate screen, opened at its newest rows; nothing for an agent no longer held."""

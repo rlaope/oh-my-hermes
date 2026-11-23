@@ -324,6 +324,8 @@ from .slash import (
     slash_token_at,
 )
 from .style import CSI, NO_COLOR, TRUECOLOR, Line, Span, Style, color_depth
+from .subagent_session import PLACEHOLDER as VIEW_PLACEHOLDER
+from .subagent_session import SubagentView, poll_due_at, rule_label
 from .subagents import Hit, Roster
 from .terminal import (
     INLINE_KITTY,
@@ -1393,6 +1395,9 @@ class _Pending:
     # A session switch's call (`_switching`): what the row under the queue says while it is out, and which switch.
     switch: str = ""
     switch_seq: int = 0
+    # A subagent view's open (`AgentViewMixin._open_agent`): a refusal of any kind, drift codes included (an older
+    # Hermes rejects `lazy`), falls back on the agent's log instead of ending the session.
+    watch: bool = False
 
 
 @dataclass
@@ -2378,6 +2383,8 @@ class App(ModesMixin, AgentViewMixin):
         self.export_said = False  # EXPORT_NOTE has been said: the next /export runs
         self.interrupt_armed: str | None = None  # the agent a first `x` in the list asked about
         self.agent_steer: str | None = None  # the agent `s` picked: the next line sent is its steer
+        self.viewing: SubagentView | None = None  # the subagent whose session is on the main screen; None: main's
+        self.view_opening: str | None = None  # the agent an open's read is out for; another Enter replaces it
         over_ssh = any(environ.get(name) for name in SSH_VARIABLES)
         remote = over_ssh or any(environ.get(name) for name in WSL_VARIABLES)
         self.remote = remote  # input crosses a link that can split a mouse report (`_report_may_follow`)
@@ -2894,16 +2901,18 @@ class App(ModesMixin, AgentViewMixin):
                 params = entry.get("params")
                 self._on_server_request(ServerRequest(entry["id"], entry["method"], params if isinstance(params, dict) else {}))
 
-    def _draw_history(self, messages: object) -> None:
+    def _draw_history(self, messages: object, into: Transcript | None = None) -> None:
         """A resumed session's earlier turns as transcript blocks: prompts, replies, and each tool call one row as
         a live call draws it (`Transcript.add_recorded_tools`); the calls between two messages with words are one
         group, with no row between them. A user row Hermes wrote itself (`machine_row_line`) is one dim row, not
         a prompt.
 
-        Only the last `REDRAW_TAIL_ROWS` rows of them are printed; /history shows the rest.
+        Only the last `REDRAW_TAIL_ROWS` rows of them are printed; /history shows the rest. `into` draws them into
+        another transcript (a subagent view's) after what it holds, printing nothing, and leaves main's image count.
         """
         if not isinstance(messages, list):
             return
+        transcript = into if into is not None else self.transcript
         tools: list[dict[str, Any]] = []
         for message in messages:
             if not isinstance(message, dict):
@@ -2916,20 +2925,23 @@ class App(ModesMixin, AgentViewMixin):
             if role not in ("user", "assistant") or not text.strip():
                 continue
             if tools:
-                self.transcript.add_recorded_tools(tools)
+                transcript.add_recorded_tools(tools)
                 tools = []
             machine = machine_row_line(message) if role == "user" else ""
             if machine:
-                self.transcript.add_aside(NoticeBlock(machine, one_line=True))
+                transcript.add_aside(NoticeBlock(machine, one_line=True))
             elif role == "user":
-                self.transcript.add_user(text, known=self.known_slash, recorded=True)
+                transcript.add_user(text, known=self.known_slash, recorded=True)
+                if into is not None:
+                    continue
                 # Its `[Image #N]` labels are taken: the next image this run attaches is numbered past them.
                 self.image_count = max([self.image_count, *map(int, IMAGE_LABEL_NUMBERS.findall(text))])
             else:
-                self.transcript.add_assistant(text)
+                transcript.add_assistant(text)
         if tools:
-            self.transcript.add_recorded_tools(tools)
-        self.transcript.retake_tail(self.size[0], self.theme, REDRAW_TAIL_ROWS)
+            transcript.add_recorded_tools(tools)
+        if into is None:
+            self.transcript.retake_tail(self.size[0], self.theme, REDRAW_TAIL_ROWS)
 
     def _take_settings(self, result: dict[str, Any]) -> None:
         """`config.get`'s answer: the effort its config sets, shown until the session says its own (Hermes sends it
@@ -3248,6 +3260,7 @@ class App(ModesMixin, AgentViewMixin):
         self._track_path_token()
         self._ask_path_completion_when_due()
         self._ask_tail_when_due()
+        self._poll_view_when_due()
         self._take_hud()
         self._take_board()
         self._take_update_check()
@@ -3300,7 +3313,7 @@ class App(ModesMixin, AgentViewMixin):
         if self.redraw_at is not None:
             due.append(self.redraw_at)
         elif self._busy() or self._compressing_since() is not None or self._panel_live() or self._aura_live() \
-                or self._tree_spins() or self.held_submits:
+                or self._tree_spins() or self.held_submits or self._view_working():
             due.append(self.last_render + self._tick_seconds())
         if self.redraw_at is None and (background := self._background_due_at()) is not None:
             due.append(background)  # the background row's clock: once a second, on the second
@@ -3319,6 +3332,9 @@ class App(ModesMixin, AgentViewMixin):
         tail = self._tail_due_at()
         if tail is not None:
             due.append(tail)
+        polled = poll_due_at(self.viewing, self.clock())
+        if polled is not None:
+            due.append(polled)
         if self.notification is not None and self.notification.expires_at < math.inf:
             due.append(self.notification.expires_at)
         if self.wait_end is not None:
@@ -3494,6 +3510,7 @@ class App(ModesMixin, AgentViewMixin):
         compressing: bool = False,
         switch: str = "",
         switch_seq: int = 0,
+        watch: bool = False,
     ) -> int | None:
         """Send `method`; the request id it went as, None when nothing went out. `switch` and `switch_seq` mark a
         session switch's call (`_switching`)."""
@@ -3511,7 +3528,7 @@ class App(ModesMixin, AgentViewMixin):
             seconds = min(held + seconds, HELD_ANSWER_SECONDS)
         self.pending[request_id] = _Pending(
             method, on_result, on_error, self.clock() + seconds, self.transcript.command, on_expiry, steer, seconds,
-            compressing, switch, switch_seq,
+            compressing, switch, switch_seq, watch,
         )
         if self.queue_command_open and self.queue_command_calls is not None:
             self.queue_command_calls.add(request_id)
@@ -3693,6 +3710,10 @@ class App(ModesMixin, AgentViewMixin):
         self.turn_pending = self.interrupting = False
         self._lose_roster()  # they stay in the agent view, so the HUD's agents block does not take them up instead
         self.list_selected = None
+        if self.viewing is not None:  # its watch session went with the old gateway: back to main
+            self.viewing = None
+            self._full_redraw()
+        self.view_opening = None
         first_id = max(self.pending, default=0) + 1
         self._settle_lost_calls()
         self.default_asked = False  # a read or switch for Hermes' default went with the old gateway: ask again
@@ -4389,7 +4410,7 @@ class App(ModesMixin, AgentViewMixin):
             pending.on_result(response.result or {})
             return
         error = response.error
-        if contract.is_drift_error(error) and pending.method not in contract.OPTIONAL_METHODS:
+        if contract.is_drift_error(error) and pending.method not in contract.OPTIONAL_METHODS and not pending.watch:
             self._lose_gateway(
                 f"this Hermes refused {pending.method} ({error.get('code')}); "
                 "it no longer speaks the protocol the OMH TUI was built for",
@@ -4422,6 +4443,10 @@ class App(ModesMixin, AgentViewMixin):
             # A burst asks once: a catalog still unanswered is read after the change that was broadcast before it.
             if self.sid and not any(call.method == "commands.catalog" for call in self.pending.values()):
                 self._refresh_catalog()
+            return
+        view = self.viewing
+        if view is not None and view.watch_sid and event.session_id == view.watch_sid:
+            self._view_event(view, event)  # the viewed child's mirrored events: its transcript's, never main's
             return
         if not event.type.startswith(contract.GATEWAY_SCOPED_EVENT_PREFIX) and event.session_id != self.sid:
             return
@@ -4468,6 +4493,7 @@ class App(ModesMixin, AgentViewMixin):
             finished = self.roster.apply(event.type, payload, self.clock())  # folds what it knows; raises on nothing
             if finished is not None:
                 self._brief_finished(finished)
+            self._view_frame(event.type, payload)  # the working row of the agent on screen
             if isinstance(payload, Mapping):  # a new frame for an agent: its tail is asked for again
                 self.tail_misses.pop(as_text(payload.get("subagent_id")), None)
         else:
@@ -5566,6 +5592,9 @@ class App(ModesMixin, AgentViewMixin):
                 and bool(action.text.strip())
             )
             images = tuple(image for _label, image in action.images if isinstance(image, Attachment))
+            if self.viewing is not None and self.slot is None and self.tell_draft is None:
+                self._send_to_view(action.text, action.shown, images)  # to the subagent on screen, never main
+                return
             if self.slot is None and self.tell_draft is None and self._hold_submit(action, images, steer, now):
                 return  # it goes once the pastes it was typed with are answered, with their images
             if self.slot is not None:
@@ -5710,6 +5739,9 @@ class App(ModesMixin, AgentViewMixin):
             return True
         if self._menu_entries():
             self.menu_closed = self.composer.text
+            return True
+        if self.viewing is not None or self.view_opening is not None:
+            self._leave_view()  # back to main; stopping main's turn is Esc's on the main screen only
             return True
         if self.auto_continue is not None:
             self._hold_auto_continue(AUTO_CONTINUE_ESCAPED)
@@ -6426,7 +6458,7 @@ class App(ModesMixin, AgentViewMixin):
         if self._exit_said():  # only while the info line says so
             self.exit_code = 0
             return
-        busy = self._busy()
+        busy = self._busy() and self.viewing is None  # main's turn stops from the main screen only
         if busy:
             self._interrupt()
         self.exit_armed_at = now  # the info line says so until the second press can no longer come
@@ -8214,6 +8246,7 @@ class App(ModesMixin, AgentViewMixin):
         subagents) is dropped before the new one is adopted.
         The caller says so in the new transcript, after its own notice.
         """
+        self._leave_view(redraw=False)  # its watch session closes before the session it belongs to
         old = self.sid
         self.in_launch_session = False
         self.card_state = CARD_NONE
@@ -9528,8 +9561,8 @@ class App(ModesMixin, AgentViewMixin):
         self.region = self._new_region(at_top=True, lead=CLEAR_SCREEN_AND_SCROLLBACK)
         self.selection.forget()  # its rows were the old region's, which the clear erases with the highlight on them
         self.rows_ground = self._ground()
-        self.transcript.retake_tail(self.size[0], self.theme, REDRAW_TAIL_ROWS)
-        if self.banner_record is not None:
+        self._screen_transcript().retake_tail(self.size[0], self.theme, REDRAW_TAIL_ROWS)
+        if self.banner_record is not None and self.viewing is None:  # a subagent's session opens under no banner
             self.banner_facts = dict(self.banner_record)
             # The logo comes back only on top of the whole session it opened, never above a cut.
             self.logo_due = self.in_launch_session and not self.transcript.left_out
@@ -10005,7 +10038,7 @@ class App(ModesMixin, AgentViewMixin):
             self._refresh_agent_log()
             self.terminal.write(self.pager.frame(*self.size, self.theme, self._erase_ground()))
             return
-        stable = self.transcript.take_stable_lines(cols, self.theme, live_rows=self.size[1])
+        stable = self._screen_transcript().take_stable_lines(cols, self.theme, live_rows=self.size[1])
         head: list[Line] = []
         if self.banner_facts is not None:
             background = self._surface()
@@ -10066,9 +10099,8 @@ class App(ModesMixin, AgentViewMixin):
             slot_limit=tall_cap(rows, cols) if self._picker_cards() else 0,
             theme=self.theme,
             mode=self._display_mode(),
-            placeholder=(TELL_PLACEHOLDER if self.tell_draft is not None else PLACEHOLDER)
-            if self._composer_open()
-            else "",
+            placeholder=self._placeholder() if self._composer_open() else "",
+            rule_label=rule_label(self.viewing.name) if self.viewing is not None else "",
         )
         frame = build()
         if ended is not None and frame.budget.gaps[0] < ended.gaps[0]:  # the tail now ends blank, its own gap
@@ -10177,6 +10209,17 @@ class App(ModesMixin, AgentViewMixin):
             self.menu_below = False
             return True
         return False
+
+    def _placeholder(self) -> str:
+        """What an empty composer says: `Message @<name>…` while a subagent's session is on screen."""
+        if self.tell_draft is not None:
+            return TELL_PLACEHOLDER
+        return VIEW_PLACEHOLDER.format(name=self.viewing.name) if self.viewing is not None else PLACEHOLDER
+
+    def _screen_transcript(self) -> Transcript:
+        """The transcript the main screen shows: the viewed subagent's, else main's, which folds every main event
+        either way."""
+        return self.viewing.transcript if self.viewing is not None else self.transcript
 
     def _display_mode(self) -> str:
         """What the info line shows: the shell while the composer holds a `!` line for Hermes' shell, else the input mode."""
@@ -10396,6 +10439,8 @@ class App(ModesMixin, AgentViewMixin):
 
     def _tail(self, cols: int) -> list[Line]:
         self.tail_spacer = False  # until the rows below say otherwise: a tail that raises (`_drawn`) has no spacer
+        if self.viewing is not None:
+            return self._view_tail(self.viewing, cols)
         now = self.clock()
         # Never more than the screen; running tools' marks pulse unless motion is reduced. Briefings held under a live
         # block get what the last frame left the tail above its working rows (`Transcript.live_lines`'s `room`).
@@ -10482,6 +10527,33 @@ class App(ModesMixin, AgentViewMixin):
             glyph, words, _at = ended
             lines.append(truncate_line((Span(f"{glyph} {words}", self.theme.muted),), cols))
         return lines
+
+    def _view_tail(self, view: SubagentView, cols: int) -> list[Line]:
+        """The live rows of a subagent's session on screen, and its own working row while it (or a turn continued
+        on its watch session) runs: the spinner, `Working…`, its time and output tokens, as main's row reads."""
+        now = self.clock()
+        lines = view.transcript.live_lines(cols, self.theme, max_rows=self.size[1], now=now if self.motion else None)
+        if not lines and view.transcript.taken_any:
+            lines = [()]
+        if not self._view_working():
+            return lines
+        self.tail_spacer = bool(lines) and bool(lines[-1])
+        if self.tail_spacer:
+            lines.append(())
+        agent = self.roster.agents.get(view.subagent_id)
+        frame = self._spinner_frame()
+        facts = [elapsed_text(agent.elapsed(now))] if agent is not None else []
+        if agent is not None and agent.output_tokens:
+            facts.append(f"↓{compact_count(agent.output_tokens)} tokens")
+        row: Line = (Span(WORKING_GLYPHS[frame % len(WORKING_GLYPHS)], self.theme.accent), Span(" "),
+                     *working_spans(f"{WORKING_VERB}…", frame, self.theme),
+                     *((Span(f" ({' · '.join(facts)})", self.theme.muted),) if facts else ()))
+        lines.append(truncate_line(row, cols))
+        return lines
+
+    def _view_working(self) -> bool:
+        """Whether the subagent on screen runs: its own run, or a turn continued on its watch session."""
+        return self.viewing is not None and (self.viewing.running or self.viewing.turn_running)
 
     def _queued_rows(self, cols: int) -> list[Line]:
         """The queued prompts in the chat, above the working row (`queue_lines`), with what the oldest offers: the
@@ -10668,7 +10740,10 @@ class App(ModesMixin, AgentViewMixin):
     def _working_rows(self) -> int:
         """The tail's last rows that say a turn runs, as `_tail` draws them: the working (or waiting, or
         interrupting) row, and the tip under the working row from TIP_MIN_ROWS rows. The agent view leaves the tail
-        these (`layout.allocate`'s `tail_floor`), so a short terminal never loses the row saying a turn runs."""
+        these (`layout.allocate`'s `tail_floor`), so a short terminal never loses the row saying a turn runs. While
+        a subagent's session is on screen, its own working row alone."""
+        if self.viewing is not None:
+            return int(self._view_working())
         if not self._busy():  # the compression's row and the blank row under it, or the wait's row or its end line
             if self._compressing_since() is not None:
                 return 2
