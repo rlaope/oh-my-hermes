@@ -3,5 +3,5 @@
   "kind": "trap",
   "language": "python",
   "expected": "clean",
-  "why": "_bump mutates shared state with no lock in sight, but its only caller is record(), which holds self._lock for the whole call; total() takes the same lock. The lock sits outside the hunk."
+  "why": "_bump mutates shared state with no lock in sight, but its only caller is record(), which holds self._lock for the whole call; total() takes the same lock, and reset() clears _total with _counts under it, so total() always equals the sum of snapshot(). The lock sits outside the hunk."
 }

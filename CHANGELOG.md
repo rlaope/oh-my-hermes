@@ -274,6 +274,12 @@ All notable changes will be documented here.
   last, and loading the skill stays an optional last clause. The hint grows by 225 characters, only on review
   requests.
 - omher connects over SSH to a Windows computer whose Hermes has only the `hermes.cmd` shim and no venv: the remote discovery now reads the shim's interpreter too (a UTF-8 BOM included), in the same order the local app reads launchers (the agent's bin before the user bin, `.exe` before `.cmd` in each), so a stale launcher from an older install is never picked over the current one. Reported and first fixed by @jundev0001 in #3077.
+- **The review false-alarm benchmark no longer scores a correct bug report as a false alarm.** The
+  `trap-lock-held-by-caller` change added a running total that `reset()` never cleared, so after a reset `total()`
+  disagreed with `snapshot()`. Reviewers that reported this were right, but they were counted as false alarms (both
+  arms, every live run). The change now clears the total in `reset()`, so the case asks only whether the reviewer
+  sees the lock the caller holds. Results recorded before this fix overstate false alarms on this case.
+  (`benchmarks/review-false-alarms/corpus/trap-lock-held-by-caller`)
 
 ## 5.0.0 - 2026-11-21
 

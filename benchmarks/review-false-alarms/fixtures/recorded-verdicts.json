@@ -324,7 +324,7 @@
       "arm": "omh-off",
       "case": "trap-lock-held-by-caller",
       "run": 1,
-      "output": "I read diff.patch and the files under context/ that the change touches.\n\n_total is updated without the lock.\n\nVERDICT: bug app/metrics.py:33"
+      "output": "I read diff.patch and the files under context/ that the change touches.\n\n_total is updated without the lock.\n\nVERDICT: bug app/metrics.py:35"
     },
     {
       "arm": "omh-on",
