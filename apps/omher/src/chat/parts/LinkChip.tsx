@@ -2,7 +2,8 @@
 // at ("rlaope/oh-my-hermes#2657", "#docs-harness", "Meet · abc-defg-hij"), the full URL in the tooltip. A
 // markdown link with its own text keeps that text, with the small mark before it. A link to anything not
 // recognised (or a lookalike host) stays a plain link, shortened to its real host and path. Clicking opens
-// the link through the system (the desktop app's opener; a new tab in the browser build).
+// the link through the system (the desktop app's opener; a new tab in the browser build). An `obsidian://`
+// link is named the same way but is text, not a link: the opener takes only web links and threads (rule 22).
 import { memo, useEffect, useState, useSyncExternalStore, type MouseEvent, type ReactNode } from "react";
 import { BrandIcon } from "../../ui/brandIcons";
 import { PrIcon } from "../../ui/PrIcon";
@@ -88,6 +89,14 @@ export const LinkChip = memo(function LinkChip({ url, children, prState }: { url
   const named = !!info && (info.service === "slack" || info.service === "discord") && !children;
   const p = usePlaces(named);
   if (!info) return <a href={url} title={url} target="_blank" rel="noreferrer">{children ?? url}</a>;
+  if (info.service === "obsidian") {
+    return (
+      <span className="lk lk-static" data-testid="link-chip" data-service={info.service} data-kind={info.kind} title={url}>
+        <BrandIcon service={info.service} size={12} />
+        <span className="lk-t">{children ?? info.label}</span>
+      </span>
+    );
+  }
   const common = {
     href: url,
     title: url,
@@ -134,7 +143,8 @@ export function isBare(href: string, text: string): boolean {
   }
 }
 
-/** Plain text (a sent message) with each http(s) URL drawn as a chip, and each omher terminal link as an omher chip. */
+/** Plain text (a sent message) with each http(s) and `obsidian://` URL drawn as a chip, and each omher terminal link
+ * as an omher chip. */
 export function withLinks(text: string, key = "l"): ReactNode[] {
   const urls = [...findUrls(text).map((u) => ({ ...u, term: false })), ...findTermLinks(text).map((u) => ({ ...u, term: true }))].sort((a, b) => a.start - b.start);
   if (!urls.length) return [text];

@@ -3,7 +3,10 @@
 // (a pull request, a thread, a video, ...), and a short label for the chip that stands in for the bare URL.
 // A host must BE the service's domain or one of its subdomains: `github.com.evil.io` is a plain web link.
 // Anything not recognised is `service: "web"` with its domain as the label, so a lookalike shows where it goes.
-// Service names stay as written; the kind words around them follow the current language.
+// A service a host cannot tell apart (a self-hosted Jira or GitLab) is not guessed: only the cloud domain counts.
+// `obsidian://` is the one non-web scheme read here; omher never opens it (rule 22), the chip only names it.
+// Service names stay as written; the kind words around them follow the current language. Every label is bounded
+// and carries no control or bidi characters.
 import { t as tr, type Key } from "../../i18n";
 
 /** "Slack channel" in the current language. */
@@ -30,6 +33,14 @@ export type LinkService =
   | "linear"
   | "figma"
   | "npm"
+  | "jira"
+  | "confluence"
+  | "sentry"
+  | "asana"
+  | "todoist"
+  | "clickup"
+  | "gitlab"
+  | "obsidian"
   | "web";
 
 export interface LinkInfo {
@@ -51,6 +62,19 @@ const web = (host: string, path: string): LinkInfo => {
 /** `host` is `domain` or one of its subdomains (label boundary, so `xgithub.com` and `github.com.evil.io` are not). */
 function on(host: string, domain: string): boolean {
   return host === domain || host.endsWith("." + domain);
+}
+
+// C0 and C1 controls and the bidi marks, embeddings, overrides and isolates: a label never reorders or hides the
+// text around it.
+const UNSAFE = /[\p{Cc}؜‎‏‪-‮⁦-⁩]/gu;
+const LABEL_MAX = 80;
+/** A name taken from the URL (a page title, a note, a space key) inside a label. */
+const NAME_MAX = 48;
+
+/** `s` as chip text: unsafe characters out, whitespace collapsed, at most `max` characters (then an ellipsis). */
+function clean(s: string, max = LABEL_MAX): string {
+  const cps = [...s.replace(UNSAFE, " ").replace(/\s+/g, " ").trim()];
+  return cps.length > max ? cps.slice(0, max - 1).join("").trimEnd() + "…" : cps.join("");
 }
 
 const seg = (path: string) =>
@@ -270,12 +294,22 @@ function google(u: URL, p0: string[]): LinkInfo | null {
     if (id) meta.id = id;
     return { service: "googledrive", kind: id ? "file" : "page", label: id ? k("Drive", "lk.k.file") : "Google Drive", meta };
   }
+  // calendar.app.google/<code>: an appointment booking page's short link
+  if (host === "calendar.app.google") {
+    if (p0[0]) meta.code = p0[0];
+    return { service: "googlecalendar", kind: p0[0] ? "booking" : "page", label: p0[0] ? k("Calendar", "lk.k.booking") : "Google Calendar", meta };
+  }
   if (host === "calendar.google.com") {
     const eid = u.searchParams.get("eid");
     const p = dropAccount(p0.slice(p0[0] === "calendar" ? 1 : 0));
     if (eid || p.includes("eventedit") || p[0] === "event") {
       if (eid) meta.eid = eid;
       return { service: "googlecalendar", kind: "event", label: tr("lk.calEvent"), meta };
+    }
+    // calendar/appointments/schedules/<id>: the long form of a booking page
+    if (p[0] === "appointments" && p[1] === "schedules" && p[2]) {
+      meta.schedule = p[2];
+      return { service: "googlecalendar", kind: "booking", label: k("Calendar", "lk.k.booking"), meta };
     }
     return { service: "googlecalendar", kind: "page", label: "Google Calendar", meta };
   }
@@ -387,10 +421,13 @@ function youtube(u: URL, p: string[]): LinkInfo {
 
 /** "Release-Notes-0f1e…" -> "Release Notes" (Notion and Figma put a readable name in the path). */
 const titleOf = (slug: string) =>
-  slug
-    .replace(/-?[0-9a-f]{32}$/i, "")
-    .replace(/[-_+]+/g, " ")
-    .trim();
+  clean(
+    slug
+      .replace(/-?[0-9a-f]{32}$/i, "")
+      .replace(/[-_+]+/g, " ")
+      .trim(),
+    NAME_MAX,
+  );
 
 function notion(_u: URL, p: string[]): LinkInfo {
   const last = p[p.length - 1] ?? "";
@@ -413,7 +450,7 @@ function linear(_u: URL, p: string[]): LinkInfo {
 
 function figma(_u: URL, p: string[]): LinkInfo {
   const meta: Record<string, string> = {};
-  if (["file", "design", "proto", "board", "slides"].includes(p[0]) && p[1]) {
+  if (["file", "design", "proto", "board", "slides", "make", "site"].includes(p[0]) && p[1]) {
     meta.key = p[1];
     const name = p[2] ? titleOf(p[2]) : "";
     return { service: "figma", kind: p[0], label: name ? `Figma · ${name}` : k("Figma", "lk.k.file"), meta };
@@ -429,14 +466,273 @@ function npm(_u: URL, p: string[]): LinkInfo {
   return { service: "npm", kind: "page", label: "npm", meta: {} };
 }
 
-/** The service, kind and chip label of `url`; null for anything that is not an http(s) URL. */
+const JIRA_ISSUE = /^[A-Z][A-Z0-9_]+-\d+$/i;
+const JIRA_PROJECT = /^[A-Z][A-Z0-9_]+$/i;
+
+function jira(u: URL, p: string[], site: string): LinkInfo {
+  const meta: Record<string, string> = { site };
+  const issue = (key: string): LinkInfo => {
+    meta.issue = key.toUpperCase();
+    meta.project = meta.issue.slice(0, meta.issue.lastIndexOf("-"));
+    return { service: "jira", kind: "issue", label: meta.issue, meta };
+  };
+  const project = (): LinkInfo => ({ service: "jira", kind: "project", label: `${k("Jira", "lk.k.project")} · ${meta.project}`, meta });
+  // <site>.atlassian.net/browse/KEY-123, /browse/KEY
+  if (p[0] === "browse" && p[1]) {
+    if (JIRA_ISSUE.test(p[1])) return issue(p[1]);
+    if (JIRA_PROJECT.test(p[1])) {
+      meta.project = p[1].toUpperCase();
+      return project();
+    }
+  }
+  // /jira/software/[c/]projects/KEY/boards/42[?selectedIssue=KEY-7], /jira/servicedesk/projects/KEY/queues/…/KEY-7,
+  // /projects/KEY/issues/KEY-7
+  if (p[0] === "jira" || p[0] === "projects") {
+    const pi = p.indexOf("projects");
+    if (pi >= 0 && p[pi + 1] && JIRA_PROJECT.test(p[pi + 1])) meta.project = p[pi + 1].toUpperCase();
+    const bi = p.indexOf("boards");
+    if (meta.project && bi > pi && /^\d+$/.test(p[bi + 1] ?? "")) meta.board = p[bi + 1];
+    const selected = u.searchParams.get("selectedIssue") ?? "";
+    if (JIRA_ISSUE.test(selected)) return issue(selected);
+    if (meta.project && JIRA_ISSUE.test(p[p.length - 1])) return issue(p[p.length - 1]);
+    if (meta.board) return { service: "jira", kind: "board", label: `${k("Jira", "lk.k.board")} · ${meta.project}`, meta };
+    if (meta.project) return project();
+  }
+  return { service: "jira", kind: "page", label: "Jira", meta };
+}
+
+function confluence(p: string[], site: string): LinkInfo {
+  const meta: Record<string, string> = { site };
+  const page = (title?: string): LinkInfo => {
+    const name = title ? clean(title.replace(/\+/g, " "), NAME_MAX) : "";
+    return { service: "confluence", kind: "page", label: name ? `Confluence · ${name}` : k("Confluence", "lk.k.page"), meta };
+  };
+  // p[0] is "wiki". /wiki/spaces/ENG/pages/123456/Title, /pages/edit-v2/123456, /wiki/spaces/ENG[/overview]
+  if (p[1] === "spaces" && p[2]) {
+    meta.space = p[2];
+    if (p[3] === "pages") {
+      const at = p.findIndex((s, i) => i > 3 && /^\d+$/.test(s));
+      if (at > 0) {
+        meta.page = p[at];
+        return page(at === 4 ? p[5] : undefined);
+      }
+    } else if (!p[3] || p[3] === "overview") {
+      return { service: "confluence", kind: "space", label: `${k("Confluence", "lk.k.space")} · ${clean(p[2], NAME_MAX)}`, meta };
+    }
+    return { service: "confluence", kind: "page", label: "Confluence", meta };
+  }
+  // /wiki/display/ENG/Page+Title (the older form), /wiki/x/AbCd (a short link)
+  if (p[1] === "display" && p[2] && p[3]) {
+    meta.space = p[2];
+    return page(p[3]);
+  }
+  if (p[1] === "x" && p[2]) {
+    meta.short = p[2];
+    return page();
+  }
+  return { service: "confluence", kind: "page", label: "Confluence", meta };
+}
+
+function sentry(p: string[], host: string): LinkInfo {
+  const meta: Record<string, string> = {};
+  // sentry.io/organizations/<org>/…, or <org>.sentry.io/…
+  let org = "";
+  let q = p;
+  if (p[0] === "organizations" && p[1]) {
+    org = p[1];
+    q = p.slice(2);
+  } else if (/^[a-z0-9][a-z0-9-]*\.sentry\.io$/.test(host)) {
+    org = host.slice(0, -".sentry.io".length);
+  }
+  if (org) meta.org = org;
+  if (q[0] === "issues" && q[1] && /^\d+$/.test(q[1])) {
+    meta.issue = q[1];
+    return { service: "sentry", kind: "issue", label: `${k("Sentry", "lk.k.issue")} · ${q[1]}`, meta };
+  }
+  if (q[0] === "projects" && q[1]) {
+    meta.project = q[1];
+    return { service: "sentry", kind: "project", label: `${k("Sentry", "lk.k.project")} · ${clean(q[1], NAME_MAX)}`, meta };
+  }
+  if (q[0] === "releases" && q[1]) {
+    meta.release = q[1];
+    return { service: "sentry", kind: "release", label: `${k("Sentry", "lk.k.release")} · ${clean(q[1], NAME_MAX)}`, meta };
+  }
+  return { service: "sentry", kind: "page", label: "Sentry", meta: {} };
+}
+
+function asana(p: string[]): LinkInfo {
+  const meta: Record<string, string> = {};
+  const id = (s: string | undefined) => !!s && /^\d+$/.test(s);
+  const task = (t: string): LinkInfo => {
+    meta.task = t;
+    return { service: "asana", kind: "task", label: k("Asana", "lk.k.task"), meta };
+  };
+  const project = (): LinkInfo => ({ service: "asana", kind: "project", label: k("Asana", "lk.k.project"), meta });
+  // app.asana.com/0/<project>/<task>[/f], /0/<project>[/list|/board|…] (project 0: a task in no project)
+  if (p[0] === "0" && id(p[1])) {
+    if (p[1] !== "0") meta.project = p[1];
+    if (id(p[2])) return task(p[2]);
+    if (meta.project && (!p[2] || /^[a-z_]+$/.test(p[2]))) return project();
+  }
+  // app.asana.com/1/<workspace>/project/<project>[/task/<task>], /1/<workspace>/task/<task>
+  if (p[0] === "1" && id(p[1])) {
+    meta.workspace = p[1];
+    if (p[2] === "project" && id(p[3])) meta.project = p[3];
+    const ti = p.indexOf("task", 2);
+    if ((ti === 2 || (meta.project && ti === 4)) && id(p[ti + 1])) return task(p[ti + 1]);
+    if (meta.project) return project();
+  }
+  return { service: "asana", kind: "page", label: "Asana", meta: {} };
+}
+
+function todoist(u: URL, p: string[]): LinkInfo {
+  const meta: Record<string, string> = {};
+  // app.todoist.com/app/task/write-release-notes-6Xv2Q9pFg3J8mRcW, /app/project/<name>-<id>: the name is in the slug
+  if (p[0] === "app" && (p[1] === "task" || p[1] === "project") && p[2]) {
+    const m = /^(?:(.+)-)?([A-Za-z0-9]{6,})$/.exec(p[2]);
+    if (m) {
+      meta[p[1]] = m[2];
+      const name = m[1] ? clean(m[1].replace(/-+/g, " "), NAME_MAX) : "";
+      return { service: "todoist", kind: p[1], label: name ? `Todoist · ${name}` : k("Todoist", p[1] === "task" ? "lk.k.task" : "lk.k.project"), meta };
+    }
+  }
+  // todoist.com/showTask?id=…, /showProject?id=… (the older form)
+  const kind = p[0] === "showTask" ? "task" : p[0] === "showProject" ? "project" : "";
+  const id = u.searchParams.get("id") ?? "";
+  if (kind && /^[A-Za-z0-9]+$/.test(id)) {
+    meta[kind] = id;
+    return { service: "todoist", kind, label: k("Todoist", kind === "task" ? "lk.k.task" : "lk.k.project"), meta };
+  }
+  return { service: "todoist", kind: "page", label: "Todoist", meta };
+}
+
+const CLICKUP_VIEW: Record<string, ["list" | "space" | "folder", Key]> = {
+  li: ["list", "lk.k.list"],
+  s: ["space", "lk.k.space"],
+  f: ["folder", "lk.k.folder"],
+};
+
+function clickup(p: string[]): LinkInfo {
+  const meta: Record<string, string> = {};
+  // app.clickup.com/t/<task>, /t/<workspace>/<CUSTOM-12> (a custom task id, shown as it is)
+  if (p[0] === "t" && p[1] && /^[A-Za-z0-9-]+$/.test(p[2] ?? p[1])) {
+    const custom = p[2] && /^[A-Z][A-Z0-9]*-\d+$/i.test(p[2]) ? p[2].toUpperCase() : "";
+    if (p[2]) meta.workspace = p[1];
+    meta.task = custom || (p[2] ?? p[1]);
+    return { service: "clickup", kind: "task", label: custom || k("ClickUp", "lk.k.task"), meta };
+  }
+  // app.clickup.com/<workspace>/v/li/<list>, /v/s/<space>, /v/f/<folder>
+  const view = /^\d+$/.test(p[0] ?? "") && p[1] === "v" && p[3] ? CLICKUP_VIEW[p[2]] : undefined;
+  if (view) {
+    meta.workspace = p[0];
+    meta[view[0]] = p[3];
+    return { service: "clickup", kind: view[0], label: k("ClickUp", view[1]), meta };
+  }
+  return { service: "clickup", kind: "page", label: "ClickUp", meta: {} };
+}
+
+// First path segments on gitlab.com that are pages of GitLab itself, not a group or user.
+const GL_RESERVED = new Set([
+  "-", "admin", "api", "assets", "dashboard", "explore", "groups", "help", "oauth", "profile", "projects", "public",
+  "search", "snippets", "uploads", "users",
+]);
+
+function gitlab(p: string[], host: string): LinkInfo {
+  const meta: Record<string, string> = {};
+  const generic: LinkInfo = { service: "gitlab", kind: "page", label: "GitLab", meta };
+  if (host.replace(/^www\./, "") !== "gitlab.com" || !p.length || GL_RESERVED.has(p[0].toLowerCase())) return generic;
+  const dash = p.indexOf("-");
+  // without `/-/` a path may be a user, a group, a subgroup or a project: shown as the path, its kind not guessed
+  if (dash < 0) {
+    meta.path = p.join("/");
+    return { service: "gitlab", kind: "page", label: meta.path, meta };
+  }
+  if (dash < 2) return generic; // a group's own pages
+  // nested groups: acme/platform/billing/api -> "acme/…/api"
+  const full = p.slice(0, dash).join("/");
+  const name = dash > 2 ? `${p[0]}/…/${p[dash - 1]}` : full;
+  meta.project = full;
+  const [kind, id] = [p[dash + 1], p[dash + 2]];
+  const n = id && /^\d+$/.test(id) ? id : null;
+  if (kind === "merge_requests" && n) {
+    meta.number = n;
+    return { service: "gitlab", kind: "mr", label: `${name}!${n}`, meta };
+  }
+  if (kind === "issues" && n) {
+    meta.number = n;
+    return { service: "gitlab", kind: "issue", label: `${name}#${n}`, meta };
+  }
+  if (kind === "pipelines" && n) {
+    meta.pipeline = n;
+    return { service: "gitlab", kind: "pipeline", label: `${k("GitLab", "lk.k.pipeline")} · ${n}`, meta };
+  }
+  if (kind === "commit" && id && /^[0-9a-f]{7,64}$/i.test(id)) {
+    meta.sha = id;
+    return { service: "gitlab", kind: "commit", label: `${name}@${id.slice(0, 7)}`, meta };
+  }
+  return { service: "gitlab", kind: "repo", label: name, meta };
+}
+
+/** "Daily/2026-11-23.md" -> "2026-11-23": a note is named by its file, without the folders or `.md`. */
+const noteName = (path: string) => clean(path.split(/[\\/]/).filter(Boolean).pop()?.replace(/\.md$/i, "") ?? "", NAME_MAX);
+
+function obsidian(u: URL): LinkInfo {
+  const meta: Record<string, string> = {};
+  const generic: LinkInfo = { service: "obsidian", kind: "page", label: "Obsidian", meta };
+  if (u.username || u.password || u.port) return generic;
+  const q = u.searchParams;
+  const note = (file: string): LinkInfo => {
+    meta.file = file;
+    const name = noteName(file);
+    return { service: "obsidian", kind: "note", label: name ? `Obsidian · ${name}` : k("Obsidian", "lk.k.note"), meta };
+  };
+  const vault = q.get("vault");
+  if (vault) meta.vault = vault;
+  switch (u.hostname.toLowerCase()) {
+    // obsidian://open?vault=<v>&file=<path>, obsidian://open?path=<absolute path>, obsidian://open?vault=<v>
+    case "open": {
+      const file = q.get("file") ?? q.get("path");
+      if (file) return note(file);
+      if (vault) return { service: "obsidian", kind: "vault", label: `${k("Obsidian", "lk.k.vault")} · ${clean(vault, NAME_MAX)}`, meta };
+      break;
+    }
+    // obsidian://search?vault=<v>&query=<text>
+    case "search": {
+      const query = q.get("query");
+      if (query) meta.query = query;
+      return { service: "obsidian", kind: "search", label: query ? `${k("Obsidian", "lk.k.search")} · ${clean(query, NAME_MAX)}` : k("Obsidian", "lk.k.search"), meta };
+    }
+    // obsidian://new?vault=<v>&name=<name> (or &file=<path>)
+    case "new": {
+      const name = noteName(q.get("name") ?? q.get("file") ?? "");
+      return { service: "obsidian", kind: "new", label: name ? `${k("Obsidian", "lk.k.newNote")} · ${name}` : k("Obsidian", "lk.k.newNote"), meta };
+    }
+    // obsidian://vault/<vault>/<path to note>
+    case "vault": {
+      const [v, ...rest] = seg(u.pathname);
+      if (!v) break;
+      meta.vault = v;
+      if (rest.length) return note(rest.join("/"));
+      return { service: "obsidian", kind: "vault", label: `${k("Obsidian", "lk.k.vault")} · ${clean(v, NAME_MAX)}`, meta };
+    }
+  }
+  return generic;
+}
+
+/** The service, kind and chip label of `url`; null for anything that is not an http(s) or `obsidian://` URL. */
 export function classifyLink(url: string): LinkInfo | null {
+  const info = classify(url);
+  return info && { ...info, label: clean(info.label) };
+}
+
+function classify(url: string): LinkInfo | null {
   let u: URL;
   try {
     u = new URL(url.trim());
   } catch {
     return null;
   }
+  if (u.protocol === "obsidian:") return obsidian(u);
   if (u.protocol !== "https:" && u.protocol !== "http:") return null;
   if (u.username || u.password) return web(u.hostname, u.pathname); // user@host tricks stay plain
   const host = u.hostname.toLowerCase().replace(/\.$/, "");
@@ -445,7 +741,7 @@ export function classifyLink(url: string): LinkInfo | null {
   if (bare === "github.com" || host === "gist.github.com") return github(u, p);
   if (on(host, "slack.com")) return slack(u, p);
   if (["discord.com", "discordapp.com", "canary.discord.com", "ptb.discord.com"].includes(bare) || bare === "discord.gg") return discord(u, p);
-  if (on(host, "google.com") || on(host, "goo.gl") || host === "forms.gle" || /^(?:www\.)?google\.[a-z.]+$/.test(host)) {
+  if (on(host, "google.com") || on(host, "goo.gl") || host === "forms.gle" || host === "calendar.app.google" || /^(?:www\.)?google\.[a-z.]+$/.test(host)) {
     const g = google(u, p);
     if (g) return g;
   }
@@ -456,13 +752,23 @@ export function classifyLink(url: string): LinkInfo | null {
   if (bare === "linear.app") return linear(u, p);
   if (bare === "figma.com") return figma(u, p);
   if (bare === "npmjs.com") return npm(u, p);
+  // Jira and Confluence Cloud: <site>.atlassian.net, Confluence under /wiki
+  if (on(host, "atlassian.net") && host !== "atlassian.net") {
+    const site = host.slice(0, -".atlassian.net".length);
+    return p[0] === "wiki" ? confluence(p, site) : jira(u, p, site);
+  }
+  if (on(host, "sentry.io")) return sentry(p, host);
+  if (on(host, "asana.com")) return asana(p);
+  if (on(host, "todoist.com")) return todoist(u, p);
+  if (on(host, "clickup.com")) return clickup(p);
+  if (on(host, "gitlab.com")) return gitlab(p, host);
   return web(host.replace(/^www\./, ""), u.pathname);
 }
 
-/** The http(s) URLs in a piece of plain text, with where each sits (trailing punctuation left out). */
+/** The http(s) and `obsidian://` URLs in a piece of plain text, with where each sits (trailing punctuation left out). */
 export function findUrls(text: string): { url: string; start: number; end: number }[] {
   const out: { url: string; start: number; end: number }[] = [];
-  const re = /https?:\/\/[^\s<>"'`]+/g;
+  const re = /(?:https?|obsidian):\/\/[^\s<>"'`]+/g;
   for (let m = re.exec(text); m; m = re.exec(text)) {
     let url = m[0];
     // keep a closing bracket that has its opening one in the URL (wiki-style links), drop sentence punctuation
@@ -476,7 +782,7 @@ export function findUrls(text: string): { url: string; start: number; end: numbe
   return out;
 }
 
-/** Every http(s) link in a markdown text (bare, autolinked or `[text](url)`), first seen first, each once. */
+/** Every http(s) and `obsidian://` link in a markdown text (bare, autolinked or `[text](url)`), first seen first, each once. */
 export function linksIn(markdown: string): string[] {
   const seen = new Set<string>();
   const out: string[] = [];

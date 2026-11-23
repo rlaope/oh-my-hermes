@@ -75,6 +75,20 @@ a.lk:hover .lk-t {
 a.lk-text:hover .lk-u {
   color: var(--ink);
 }
+/* a link omher names but does not open (obsidian://, rule 22): the chip's mark and label as text, no link look */
+span.lk.lk-static {
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: default;
+}
+span.lk.lk-static .brand-ic {
+  vertical-align: -1px;
+  margin-right: 4px;
+  color: var(--ink);
+}
+span.lk.lk-static .lk-t {
+  text-decoration: none;
+}
 /* an unknown site or a lookalike host: a plain link, shortened to where it really goes */
 a.lk-web {
   overflow-wrap: anywhere;

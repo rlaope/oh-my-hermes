@@ -137,6 +137,60 @@ test("chips per service: mark, kind and label; a lookalike host stays a plain li
   await expect(mine.getByTestId("link-chip").locator(".lk-t")).toHaveText(["rlaope/oh-my-hermes#2657", "#docs-agent"]);
 });
 
+test("work-tool chips: Jira, Confluence, Sentry, Asana, Todoist, ClickUp, GitLab, and an Obsidian note that opens nothing", async ({ page }) => {
+  const opened = await catchOpens(page);
+  await open(page);
+  const text = [
+    "Tools today:",
+    "- Ticket https://acme.atlassian.net/browse/ACME-123 on https://acme.atlassian.net/jira/software/projects/ACME/boards/42",
+    "- Spec https://acme.atlassian.net/wiki/spaces/ENG/pages/123456/Release+Checklist",
+    "- Crash https://acme.sentry.io/issues/4512345678/",
+    "- Tasks https://app.asana.com/0/1205000000000001/1205000000000002, https://app.todoist.com/app/task/write-release-notes-6Xv2Q9pFg3J8mRcW and https://app.clickup.com/t/9012345678/DEV-123",
+    "- Review https://gitlab.com/acme/platform/billing/api/-/merge_requests/7 after https://gitlab.com/acme/widgets/-/pipelines/1234567890",
+    "- Notes obsidian://open?vault=Work&file=Projects%2FLaunch%20Plan.md",
+    "- Not GitLab: https://gitlab.com.evil.io/acme/widgets/-/issues/1",
+  ].join("\n");
+  await mock("mock.emit", { events: [{ event: "message", bot: "kami", id: "lk-tools", text }] });
+  const b = page.getByTestId("bubble-bot").filter({ hasText: "Tools today:" });
+  await b.scrollIntoViewIfNeeded();
+  const rows = await b.getByTestId("link-chip").evaluateAll((els) =>
+    els.map((a) => [a.tagName, a.getAttribute("data-service"), a.getAttribute("data-kind"), a.querySelector(".lk-t")!.textContent, a.querySelector("svg")!.getAttribute("data-brand")]),
+  );
+  expect(rows).toEqual([
+    ["A", "jira", "issue", "ACME-123", "jira"],
+    ["A", "jira", "board", "Jira board · ACME", "jira"],
+    ["A", "confluence", "page", "Confluence · Release Checklist", "confluence"],
+    ["A", "sentry", "issue", "Sentry issue · 4512345678", "sentry"],
+    ["A", "asana", "task", "Asana task", "asana"],
+    ["A", "todoist", "task", "Todoist · write release notes", "todoist"],
+    ["A", "clickup", "task", "DEV-123", "clickup"],
+    ["A", "gitlab", "mr", "acme/…/api!7", "gitlab"],
+    ["A", "gitlab", "pipeline", "GitLab pipeline · 1234567890", "gitlab"],
+    ["SPAN", "obsidian", "note", "Obsidian · Launch Plan", "obsidian"],
+  ]);
+  // each new mark is drawn (a path with a shape), 12px like the others
+  const sizes = await b.locator("[data-testid=link-chip] svg.brand-ic").evaluateAll((els) => els.map((e) => [e.getBoundingClientRect().width, (e.querySelector("path")?.getAttribute("d") ?? "").length > 100]));
+  expect(sizes).toHaveLength(10);
+  for (const [w, drawn] of sizes) {
+    expect(w).toBeGreaterThanOrEqual(12);
+    expect(w).toBeLessThanOrEqual(13);
+    expect(drawn).toBe(true);
+  }
+  // near-black brand colours (Confluence, Sentry) are drawn in the ink colour, like GitHub's
+  const ink = await b.locator("svg.brand-ic-confluence path, svg.brand-ic-sentry path").evaluateAll((els) => els.map((e) => e.getAttribute("fill")));
+  expect(ink).toEqual(["currentColor", "currentColor"]);
+  // the Obsidian note is text: no href, the URL in its tooltip, and a click opens nothing
+  const note = b.locator('[data-testid=link-chip][data-service="obsidian"]');
+  await expect(note).toHaveAttribute("title", "obsidian://open?vault=Work&file=Projects%2FLaunch%20Plan.md");
+  expect(await note.getAttribute("href")).toBeNull();
+  await note.click();
+  await b.locator('[data-testid=link-chip][data-service="jira"]').first().click();
+  await expect.poll(() => opened).toEqual(["https://acme.atlassian.net/browse/ACME-123"]);
+  // a lookalike stays a plain link named by its real host
+  await expect(b.getByTestId("link-plain")).toHaveText("gitlab.com.evil.io/acme/widgets/-/issues/1");
+  await expect(b).not.toContainText("obsidian://");
+});
+
 test("labels are readable at rest and ink on hover; no pill fill at rest", async ({ page }) => {
   await open(page);
   const chip = slackBubble(page).getByTestId("link-chip").first();
