@@ -43,6 +43,16 @@ All notable changes will be documented here.
   open thread at the same time as it listed the bot's threads again. The new bridge knew no thread yet and refused
   it, so the thread showed a false "not reachable" line and a turn Hermes lost there stayed unseen. Threads are now
   listed first and the open ones read after that, on reconnect and when a bot comes back. (Follow-up to #3127)
+- **omher: two terminals of one folder merge by dragging the header.** Drag a TERMINALS session's header down onto
+  its terminal and it joins the next session of its folder in a split, in the sidebar's order (the one before it when
+  it is the last; a row hidden by a search or a collapsed folder counts too): a translucent half shows where the
+  dragged session goes and the other half names the session that fills it. Taken back onto the header, or Escape,
+  nothing changes, and a button let go outside the window or the window losing focus ends the drag the same way; a
+  folder with no other session offers nothing, and a grab cursor shows only when a drag can do something. In a split
+  the header drags the focused pane as its grip does (not while the split is zoomed). The header also has an x: in a
+  split it closes the focused pane (the session stays in TERMINALS), on its own it closes the session as its row's x
+  does, undoable while it runs, and with the undo window Off it asks the row's Stop? first. Nothing new is started,
+  read, written or sent.
 - **omher: a bot's chat that stopped answering after a crash says why and gets going again.** When Hermes' gateway
   stops in the middle of a turn (a crash, a kill, Windows ending the process), Hermes brings that turn back as lost
   and keeps every later message of the chat in its own queue until someone acknowledges it, because the lost turn may

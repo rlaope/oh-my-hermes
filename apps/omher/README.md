@@ -153,7 +153,14 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   an agent starts it at once. Rows are grouped by folder under its git branch; each card shows its status (a spinner
   while output flows, a check or an x when the program ends), the mark of the CLI in the foreground (a Shell running
   `codex` shows Codex's), its name and age, and on its second line the CLI and the last line it printed. ⌘⇧] and ⌘⇧[
-  step through the terminals, and BOTS and TERMINALS scroll on their own. A session ends with its program and comes
+  step through the terminals, and BOTS and TERMINALS scroll on their own. Up to four sessions share the view as a
+  split: ⌘D / ⌘⇧D (Ctrl+Shift+D / Alt+Shift+D off macOS) splits with a new Shell, a row dragged onto the terminal
+  goes on the side it is dropped, and a pane's grip moves it. The header drags too: a session on its own, dragged by
+  its header onto its terminal, merges with the next session of its folder in the sidebar's order (the one before it
+  when it is the last; a row a search or a collapsed folder hides counts too), the preview naming that session; back
+  onto the header, or Escape, changes nothing. In a split the header moves the focused pane (not while zoomed). The
+  header's x closes the focused pane (the session stays listed), or a lone session as its row's x does: undoable
+  while it runs, else after the row's Stop? question. A session ends with its program and comes
   back after a restart waiting for Resume. DSH has no terminal view and is not offered there. The program runs in a
   pseudo-terminal (`portable-pty`: a Unix PTY on macOS, ConPTY on
   Windows) drawn with xterm.js. Settings › Terminal picks how every session terminal looks: a theme for the dark app
