@@ -1,0 +1,24 @@
+2026-11-23 15:02:10,118 ERROR gateway.run: Fatal discord adapter error for multiplexed profile harbor (discord_websocket_health_stale)
+2026-11-23 15:02:41,906 INFO gateway.run: ✓ discord reconnected (profile: harbor)
+2026-11-23 16:08:17,370 ERROR hermes_plugins.platforms__discord.adapter: [Discord] Failed to connect to Discord: Shard ID None is requesting privileged intents that have not been explicitly enabled in the developer portal. It is recommended to go to https://discord.com/developers/applications/ and explicitly enable the privileged intents within your application's page. If this is not possible, then consider disabling the privileged intents instead.
+Traceback (most recent call last):
+  File "/opt/hermes-agent/plugins/platforms/discord/adapter.py", line 1564, in connect
+  File "/opt/hermes-agent/plugins/platforms/discord/adapter.py", line 397, in _wait_for_ready_or_bot_exit
+discord.errors.PrivilegedIntentsRequired: Shard ID None is requesting privileged intents that have not been explicitly enabled in the developer portal.
+2026-11-23 16:08:17,377 WARNING gateway.run: ✗ discord failed to connect (profile: harbor)
+2026-11-23 16:08:17,380 INFO hermes_plugins.platforms__discord.adapter: [Discord] Disconnected
+2026-11-23 16:08:17,381 INFO gateway.run_profile_reconcile: [MULTIPLEX] Now serving profile 'harbor' (0 adapter(s) connected; control-socket)
+2026-11-23 16:30:00,000 INFO gateway.run: ✓ slack connected (profile: quay)
+2026-11-23 17:05:01,454 ERROR hermes_plugins.platforms__discord.adapter: [Discord] Failed to connect to Discord: Shard ID None is requesting privileged intents that have not been explicitly enabled in the developer portal. It is recommended to go to https://discord.com/developers/applications/ and explicitly enable the privileged intents within your application's page.
+  File "/opt/hermes-agent/plugins/platforms/discord/adapter.py", line 1564, in connect
+discord.errors.PrivilegedIntentsRequired: Shard ID None is requesting privileged intents that have not been explicitly enabled in the developer portal.
+2026-11-23 17:05:01,462 WARNING gateway.run: ✗ discord failed to connect (profile: harbor)
+2026-11-23 17:05:01,467 INFO hermes_plugins.platforms__discord.adapter: [Discord] Disconnected
+2026-11-23 17:05:01,467 INFO gateway.run_profile_reconcile: [MULTIPLEX] Now serving profile 'harbor' (0 adapter(s) connected; control-socket)
+2026-11-23 17:10:00,000 WARNING gateway.run: ✗ slack failed to connect (profile: quay)
+2026-11-23 17:23:26,032 INFO gateway.run_profile_reconcile: [MULTIPLEX] Profile 'harbor' unserved — 1 adapter(s) stopped and unrouted
+2026-11-23 17:23:30,802 INFO hermes_plugins.platforms__discord.adapter: [Discord] Connected as Harbor#0042
+2026-11-23 17:23:30,806 INFO gateway.run: ✓ discord connected (profile: harbor)
+2026-11-23 17:23:30,806 INFO gateway.run_profile_reconcile: [MULTIPLEX] Now serving profile 'harbor' (1 adapter(s) connected; control-socket)
+2026-11-23 17:30:12,500 INFO gateway.run: ✓ telegram connected
+2026-11-23 17:31:0

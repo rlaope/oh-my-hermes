@@ -565,6 +565,7 @@ def run_doctor(paths: OmhPaths, *, state_write: bool = True) -> list[Check]:
     checks.append(_tui_own_runtime_check(paths))
     checks.append(_auto_resume_check(paths))
     checks.extend(_hermes_gateway_checks(paths))
+    checks.append(_gateway_health_check(paths))
     checks.append(_delegation_protocol_platform_check(paths))
     checks.append(_delegate_route_fallback_chain_check(paths))
     checks.append(_hermes_model_routing_check(paths))
@@ -893,6 +894,35 @@ def _hermes_gateway_checks(paths: OmhPaths) -> list[Check]:
                 observed=running,
             ))
     return checks
+
+
+def _gateway_health_check(paths: OmhPaths) -> Check:
+    """This machine's Hermes gateways: fleet against the installed build, fleet shape, messaging adapter states.
+
+    Read-only (`maintenance.gateway_health`): Hermes' gateway records, build
+    stamp, update receipt and pending-restart record, the tails of its gateway
+    logs, and the process table read from the kernel (no process is spawned:
+    `system.process_listing`). Every finding is
+    Hermes' to clear, so the row stays ok and only warns; its next action names
+    Hermes' own command. `detail` carries the whole report, `lines` included,
+    which the human summary prints as its own section. None of these files is
+    one `--no-personal-files` names (SOUL.md and Hermes' memory files): the
+    gateway log is read as the `hermes_gateway` row already reads it, and only
+    the lines that match an adapter state shape are kept, never a message.
+    """
+    from .gateway_health import gateway_health
+
+    report = gateway_health(Path(paths.hermes_home))
+    observed = bool(report.gateways) or report.build.get("status") == "read"
+    message = " ".join(report.lines[:3]) if not report.findings else (
+        "Hermes gateways need attention: " + ", ".join(report.findings)
+    )
+    return Check(
+        "gateway_health", True, message,
+        severity="warning" if report.findings else "ok",
+        next_action="; ".join(report.next_actions) if report.findings else "",
+        observed=observed, detail=report.to_dict(),
+    )
 
 
 def _delegation_protocol_platform_check(paths: OmhPaths) -> Check:

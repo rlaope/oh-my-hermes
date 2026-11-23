@@ -101,6 +101,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import sqlite3
 import struct
 import sys
@@ -144,6 +145,7 @@ MESSAGE_SHOWN_ROWS = 3
 GATEWAY_STATE_FILE = "gateway_state.json"
 SUPERVISED_FLAG = "--external-supervisor"  # in a record's `argv`: a gateway an external supervisor runs
 GATEWAY_STATE_BYTES = 1 << 20
+_COMMIT_SHA = re.compile(r"[0-9a-f]{7,64}")
 STATE_DB = "state.db"
 STATE_DB_BUSY_SECONDS = 0.25
 # The files Hermes reads as a profile's identity (`hermes_constants._PROFILE_IDENTITY_MARKERS`).
@@ -257,6 +259,7 @@ class Gateway:
     # launchd service runs has no such flag in its argv and drains too: Hermes' restart sends it SIGUSR1
     # (`hermes_cli/gateway.py` `_systemd_graceful_restart_action`). So False does not mean a restart interrupts it.
     supervised: bool = False
+    code_sha: str = ""  # the commit Hermes stamps as the code this gateway runs (`code_sha`); "" when unstamped
 
 
 @dataclass(frozen=True)
@@ -567,6 +570,7 @@ def read_gateway(home: Path, now: float | None = None) -> Gateway:
         restart_requested=record.get("restart_requested") is True,
         rss=resident_bytes(pid) if live and pid is not None else None,
         supervised=isinstance(argv := record.get("argv"), list) and SUPERVISED_FLAG in argv,
+        code_sha=sha if isinstance(sha := record.get("code_sha"), str) and _COMMIT_SHA.fullmatch(sha) else "",
     )
 
 

@@ -4259,6 +4259,57 @@ shown only when it has something to say). Both read Hermes'
 All of it is local files only, in bounded reads; OMH stops, kills and
 restarts nothing, and the doctor row warns without failing.
 
+`omh doctor` also prints a **Hermes gateways (read-only)** section, whatever
+it finds, and carries the same report as the `gateway_health` row's `detail`
+in `--json` (`omh_gateway_health/v1`, its printed `lines` included). It
+answers three questions for the root Hermes home and every profile under it
+(the OMH TUI's own runtime profile too):
+
+- **Fleet against build.** Each running gateway with the profiles it serves
+  and its start time, from Hermes' own `gateway_state.json` (a record counts
+  only while the process it names is the one that wrote it), plus every
+  `hermes gateway run` the process table shows. Each is compared
+  with the installed Hermes build stamp (`hermes-agent/install-stamp.json`,
+  `builtAt`); a record that stamps the commit it runs (`code_sha`) is
+  believed over its start time. Beside it, Hermes' own pending-fleet-restart
+  record (the host obligation file in Hermes' host state directory, or a
+  home's `fleet_restart_pending` marker) and its latest update receipt
+  (`logs/update_receipts/latest.json`, an incomplete gateway restart or a
+  fleet row marked stale). The remedy is Hermes' `hermes gateway restart`
+  (`hermes --profile <name> gateway restart` for a standalone profile): while
+  turns are live Hermes asks first, refuses with no terminal to ask on, and
+  interrupts them only with `--yes`.
+- **Fleet shape.** A gateway process no record under this Hermes root names
+  (another Hermes home's, such as a scratch or test home, or one left
+  running), and a profile two recorded gateways both serve, by PID.
+- **Messaging adapters.** Per profile and platform, the newest state the
+  tails of the gateway logs record (`<home>/logs/gateway.log`, where a
+  multiplexed profile's lines land in the host's log, read with its rotated
+  `.1` when short): a later "connected" line supersedes an earlier failure,
+  and the reverse. A Discord bot refused for privileged intents gets which
+  intents Hermes requests (Message Content always; Server Members when the
+  profile has a role allowlist or a username rather than a numeric id in its
+  user allowlist, as Hermes' own record says when it holds the guidance) and
+  where to enable them: the Discord Developer Portal, the application's Bot
+  page, Privileged Gateway Intents. Hermes does not retry that failure on its
+  own, so the gateway needs a restart afterwards. A rejected token is named
+  too; any other reason is shown, bounded, as unrecognized.
+
+Missing evidence is said as missing: no Hermes install, no build stamp, no
+receipt, no running gateway, a log that is absent, unreadable or not in
+Hermes' format, and a process table that cannot be read (on Windows, where
+only recorded gateways are counted). Nothing is reported healthy from what
+was not read. Doctor spawns no process for this: the process table is read
+from the kernel (`/proc/<pid>/cmdline` on Linux; `proc_listallpids` and
+`sysctl(KERN_PROCARGS2)` on macOS, which answers for your own processes
+only), and only each process's command-line arguments are decoded, never
+its environment. Log reads are
+bounded tails that tolerate a cut first line and bytes that are not UTF-8;
+only lines in an adapter-state shape are kept, never a message, and a reason
+text loses long ids and token-shaped strings. `--no-personal-files` does not
+change this section: it names SOUL.md and Hermes' memory files, and the
+gateway log is read here as the `hermes_gateway` row already reads it.
+
 To opt one bot out of managed skill registration, unregister that profile only:
 
 ```sh
