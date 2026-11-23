@@ -233,8 +233,18 @@ RULES = (
     "omher updates itself only through Tauri's updater, and only from one fixed address:",
     "It installs a build only when its signature matches the public key pinned in `tauri.conf.json`,"
     " and only after the person presses the update button and confirms the restart; then it restarts omher.",
-    "For the Plans graph the bridge asks the person's own GitHub CLI for the state of a pull request a plan node names",
-    "with one fixed read: `gh pr view <number> -R <owner>/<repo> --json state,isDraft,mergedAt,url`.",
+    "For the Plans graph and for a bot's threads the bridge asks the person's own GitHub CLI for the state and check"
+    " result of a pull request, with one fixed read:"
+    " `gh pr view <number> -R <owner>/<repo> --json state,isDraft,mergedAt,url,statusCheckRollup,headRefOid`.",
+    "It reads a pull request from two sources only.",
+    "A thread's is one the bot named in its own answer in that thread, never in the person's message or a tool's output:",
+    "the bridge reads that thread's saved messages through Hermes' own `session.history` (read only, never resumed)",
+    "the host exactly `github.com`, no further path segment, a number of one to seven digits, the newest three of a thread.",
+    "it never asks for a title, a body or an author, and never reads a check's name.",
+    "at most 4 calls run at once and at most 30 start in any minute, for plans and threads together",
+    "The threads of a bot on another computer (rule 31) are not read this way: their numbers show with no state.",
+    "raises at most one system notification for each failing head commit",
+    "this changes no thread's state and starts, steers or stops nothing.",
     "Tasks (the sidebar's Tasks row and the Tasks page) list open issues and pull or merge requests read-only,"
     " through the person's own GitHub CLI (`gh`) and GitLab CLI (`glab`) under their own logins:",
     "The only argv are `auth status` (only its exit code is read; its output, which can name a token, goes nowhere:"
@@ -290,7 +300,7 @@ RULES = (
     "This is the one exception to rules 5 and 10: the request is `gh`'s own, under its own login; omher passes no token,"
     " reads none and changes nothing on GitHub.",
     "An answer is kept 5 minutes, a call is stopped after 3 seconds,",
-    "The app opens such a pull request's page in the browser only when the person clicks its number.",
+    "The app opens such a pull request's page in the browser only when the person clicks its number or its card.",
     "omher draws a link in a message as a link chip from its address alone: it fetches nothing from a link"
     " (no preview, title or oEmbed request).",
     "of the bot's own messenger sessions in its `state.db` (`links.places`), never a message.",
@@ -562,7 +572,8 @@ class DocPins(unittest.TestCase):
         # rule 12 (the one installer), rule 13 (media.read), rules 14-16 (Plans: dag records, delegation and
         # route reads, CLI agents' session files), rule 17 (CLI usage records), rule 18 (accounts), rule 19
         # (skills.list for the $ picker), rule 20 (the signed self-update), rule 21 (a plan node's PR state
-        # through the person's own `gh`), rule 22 (link chips: channel names read, web links opened on a
+        # through the person's own `gh`; amended in place, not a new rule, for a thread's PRs and their checks, since
+        # both read the same one fixed argv), rule 22 (link chips: channel names read, web links opened on a
         # click), rule 23 (Providers "Add key": the system terminal runs `hermes auth add`, omher never sees
         # the key), rule 24 (Automations: a bot's jobs changed only through its own `cron.manage`) and rule 25
         # (Plugins: only through its own `plugins.manage`, catalog installs after an inspect) each widened the
@@ -1178,11 +1189,67 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
             self.assertNotIn(word, body)
         self.assertIn("PR_TIMEOUT = 3.0", self.source)
         self.assertIn("PR_TTL = 300.0", self.source)
+        self.assertIn("PR_POOL = 4", self.source)
+        self.assertIn("PR_CALLS_PER_MIN = 30", self.source)
+        self.assertIn("PR_THREAD_MAX = 3", self.source)
         refs = [c for c in ast.walk(self.tree) if isinstance(c, ast.Name) and c.id == "gh_pr_view"]
         prstates = next(c for c in ast.walk(self.tree) if isinstance(c, ast.ClassDef) and c.name == "PrStates")
-        # one use: PrStates' default look-up; op_runs_prs reaches it only through PrStates
+        # one use: PrStates' default look-up; op_runs_prs and op_thread_prs reach it only through PrStates
         self.assertEqual(len(refs), 1)
         self.assertIn(refs[0], list(ast.walk(prstates)))
+        one = ast.unparse(next(f for f in ast.walk(prstates) if isinstance(f, ast.FunctionDef) and f.name == "_one"))
+        self.assertIn("with self._gate:", one)  # at most PR_POOL at once
+        self.assertIn("if not self._may_call(now):", one)  # at most PR_CALLS_PER_MIN a minute
+        self.assertIn("pr_checks_of(view.get('statusCheckRollup'))", one)  # the rollup reduced to one word
+        users = sorted(f.name for f in ast.walk(self.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))
+                       and any(isinstance(c, ast.Attribute) and c.attr == "prs" and ast.unparse(c) == "self.prs"
+                               for c in ast.walk(f)))
+        self.assertEqual(users, ["__init__", "op_runs_prs", "op_thread_prs"])  # __init__: the one shared PrStates
+
+    def test_a_threads_pr_comes_from_the_bots_own_answers_only(self) -> None:
+        """Rule 21's second source: a thread's PR is a full link in one of the bot's own answers of that thread, read
+        from Hermes' own history (never resumed), only for a thread this bridge created or listed; the link is checked
+        strictly before any call; a check's name is never read."""
+        fns = {f.name: f for f in ast.walk(self.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))}
+        op = ast.unparse(fns["op_thread_prs"])
+        self.assertIn("tid = self._thread_known(conn, p.get('thread'))", op)
+        self.assertIn("await self._call(conn, 'session.history', session_id=chat.stored_id if chat else tid)", op)
+        self.assertIn("thread_pr_refs(chat_messages(res.get('messages')", op)
+        self.assertNotIn("session.resume", op)
+        refs = ast.unparse(fns["thread_pr_refs"])
+        self.assertIn("m.get('role') != 'assistant'", refs)
+        self.assertIn("THREAD_PR_URL.finditer", refs)
+        url = re.search(r'THREAD_PR_URL = re\.compile\((.*?)\)\n', self.source, re.S).group(1)
+        self.assertIn(r"https://github\.com/", url)
+        self.assertIn("[1-9][0-9]{0,6}", url)
+        self.assertIn("(?![A-Za-z0-9_/])", url)
+        checks = ast.unparse(fns["pr_checks_of"])
+        for word in ("'name'", "'context'", "'description'", "'detailsUrl'", "'targetUrl'", "'workflowName'"):
+            self.assertNotIn(word, checks)
+        # thread ops never cross to a peer: a peer bot's threads are not read (rule 31)
+        forward = re.search(r"PEER_FORWARD = frozenset\(\{(.*?)\}\)", self.source, re.S).group(1)
+        self.assertNotIn('"thread.', forward)
+
+    def test_no_gh_verb_that_changes_github(self) -> None:
+        """Rules 21 and 33: nothing in the bridge or the desktop shell asks `gh` (or `glab`) to merge, close, comment,
+        edit, review or otherwise write: no such argv word appears outside comments and tests."""
+        verbs = ("merge", "close", "reopen", "comment", "edit", "ready", "create", "delete", "lock", "unlock",
+                 "transfer", "approve", "--method", "-X", "--input", "--body", "--add-label")
+        bridge = [ln for ln in self.source.splitlines() if not ln.lstrip().startswith("#")]
+        gh_lines = [ln for ln in bridge if "gh" in ln and "[" in ln]
+        for ln in gh_lines:
+            for v in verbs:
+                self.assertNotIn(f"'{v}'", ln)
+                self.assertNotIn(f'"{v}"', ln)
+        for path in sorted(SHELL.glob("*.rs")):
+            text = path.read_text(encoding="utf-8")
+            if not re.search(r'"(?:gh|gh\.exe|glab)"', text):
+                continue
+            code = text.split("#[cfg(test)]", 1)[0]
+            lines = [ln for ln in code.splitlines() if not ln.lstrip().startswith("//")]
+            for v in verbs:
+                hits = [ln.strip() for ln in lines if f'"{v}"' in ln]
+                self.assertEqual(hits, [], f"{path.name}: {v}")
 
     def test_bridge_never_posts_to_a_messenger(self) -> None:
         """Rule 2: a reply target is text handed to the bot. The bridge imports no sender (Hermes'
@@ -1202,7 +1269,8 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         self.assertEqual(offenders, [])
         runs = [c for c in ast.walk(self.tree) if isinstance(c, ast.Call) and ast.unparse(c.func).startswith("subprocess.")]
         self.assertEqual(sorted(ast.unparse(c.args[0]) for c in runs),
-                         ["['git', *pre, *args]", "[gh, 'pr', 'view', str(number), '-R', repo, '--json', 'state,isDraft,mergedAt,url']",
+                         ["['git', *pre, *args]",
+                          "[gh, 'pr', 'view', str(number), '-R', repo, '--json', 'state,isDraft,mergedAt,url,statusCheckRollup,headRefOid']",
                           "argv", "argv"])  # argv: rule 29's restart_argv (RestartOneBotOnAPress) and rule 24's
         # brief_create_argv (`hermes -p <bot> cron create`, pinned in bridge/tests/test_brief_setup.py)
         for host in ("slack.com/api", "discord.com/api", "api.telegram.org", "hooks.slack.com"):

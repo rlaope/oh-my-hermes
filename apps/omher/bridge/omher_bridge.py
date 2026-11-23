@@ -7,8 +7,8 @@ profile's own gateway through Hermes' ``connect_gateway``.
 
 Prints one line ``OMHER_BRIDGE_READY {"port": N}`` on stdout once listening; everything else goes
 to stderr. Binds 127.0.0.1 only and refuses (403) any connection whose ``token`` query parameter
-differs. Makes no model or network call of its own; the one outside read is a PR's state through the
-person's own `gh` (``runs.prs``).
+differs. Makes no model or network call of its own; the one outside read is a PR's state and check result through
+the person's own `gh` (``runs.prs`` for a plan, ``thread.prs`` for a thread).
 
 Boundary rules the code keeps:
 * One gateway connection per profile, opened lazily (``--eager`` opens them all at start).
@@ -2059,8 +2059,18 @@ PR_REPO = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9_.-]{1,100}$
 PR_TTL = 300.0          # seconds a PR state is reused
 PR_TTL_MISS = 60.0      # and a failed look-up (no gh, no network): tried again sooner
 PR_TIMEOUT = 3.0        # seconds one `gh pr view` may take
-PR_POOL = 4             # look-ups at once
+PR_POOL = 4             # look-ups at once, across every plan and thread
+PR_CALLS_PER_MIN = 30   # `gh pr view` runs in any 60 seconds, across every plan and thread; past it, the kept answer
+PR_FRESH_MIN = 10.0     # an explicit refresh asks again only when the kept answer is older than this
 PR_STATES = ("open", "merged", "closed", "draft", "unknown")
+PR_CHECKS = ("passing", "failing", "running", "none")
+PR_HEAD = re.compile(r"^[0-9a-f]{40}$")
+PR_ROLLUP_MAX = 500     # rollup entries looked at
+# A thread's PR: a full link in one of the bot's own answers, stricter than PR_URL (BOUNDARY rule 21): https only, the
+# host exactly `github.com`, nothing glued before it, a number with no leading zero, and no further path segment.
+THREAD_PR_URL = re.compile(r"(?<![A-Za-z0-9.@/-])https://github\.com/([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))/"
+                           r"([A-Za-z0-9_.-]{1,100})/pull/([1-9][0-9]{0,6})(?![A-Za-z0-9_/])")
+PR_THREAD_MAX = 3       # a thread's newest PRs read and shown
 
 
 def _pr_refs(text: str) -> list[tuple[int, int, str | None]]:
@@ -2105,8 +2115,57 @@ def attach_prs(run: dict, texts: dict[str, str]) -> dict:
     return run
 
 
+def thread_pr_refs(messages, limit: int = PR_THREAD_MAX) -> list[dict]:
+    """The PRs a thread's bot named, newest first, each once, at most ``limit``: full THREAD_PR_URL links in the
+    bot's own answers only (``chat_messages`` rows of role ``assistant``: the person's words and tool output never
+    count). {number, repo, url} each."""
+    seen: dict[tuple[str, int], int] = {}
+    order = 0
+    for m in messages or []:
+        if not isinstance(m, dict) or m.get("role") != "assistant" or not isinstance(m.get("text"), str):
+            continue
+        for hit in THREAD_PR_URL.finditer(m["text"]):
+            if hit.group(2) in (".", ".."):
+                continue
+            key = (f"{hit.group(1)}/{hit.group(2)}", int(hit.group(3)))
+            seen[key] = order
+            order += 1
+    newest = sorted(seen, key=lambda k: -seen[k])[:limit]
+    return [{"number": n, "repo": r, "url": f"https://github.com/{r}/pull/{n}"} for r, n in newest]
+
+
+def pr_checks_of(rollup) -> str:
+    """The checks of `gh pr view --json statusCheckRollup` as one of PR_CHECKS, from GitHub's enum fields only (a
+    check run's `status` and `conclusion`, a status context's `state`); a check's name, URL or any other text is never
+    read, so no name can make a state. Any failed: failing; else any not finished (or not understood): running; else
+    any passed: passing; else (none, or only skipped and neutral ones): none."""
+    if not isinstance(rollup, list):
+        return "none"
+    failed = running = passed = False
+    for c in rollup[:PR_ROLLUP_MAX]:
+        if not isinstance(c, dict):
+            continue
+        status, conclusion, state = (str(c.get(k) or "").upper() for k in ("status", "conclusion", "state"))
+        if c.get("__typename") == "StatusContext" or (state and not status):
+            if state == "SUCCESS":
+                passed = True
+            elif state in ("FAILURE", "ERROR"):
+                failed = True
+            else:  # PENDING, EXPECTED, anything else
+                running = True
+        elif status != "COMPLETED":
+            running = True
+        elif conclusion == "SUCCESS":
+            passed = True
+        elif conclusion in ("FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "STARTUP_FAILURE"):
+            failed = True
+        elif conclusion not in ("NEUTRAL", "SKIPPED", "STALE"):
+            running = True
+    return "failing" if failed else "running" if running else "passing" if passed else "none"
+
+
 def pr_state_of(view: dict) -> str:
-    """GitHub's answer (`gh pr view --json state,isDraft,mergedAt,url`) as one of PR_STATES."""
+    """GitHub's answer (`gh pr view --json state,isDraft,mergedAt,...`) as one of PR_STATES."""
     state = str(view.get("state") or "").upper()
     if state == "MERGED" or (state == "CLOSED" and view.get("mergedAt")):
         return "merged"
@@ -2139,9 +2198,11 @@ def _gh_path(which=None) -> str | None:
 
 def gh_pr_view(repo: str, number: int, *, gh: str | None = None, timeout: float = PR_TIMEOUT) -> dict | None:
     """One fixed read through the person's own `gh`: `gh pr view <n> -R <owner>/<repo> --json
-    state,isDraft,mergedAt,url`. None when gh is missing, slow, signed out or offline. omher passes no token and
+    state,isDraft,mergedAt,url,statusCheckRollup,headRefOid` (no title, body, author; the rollup's check names are
+    never read, see pr_checks_of). None when gh is missing, slow, signed out or offline. omher passes no token and
     reads none; gh uses its own login."""
-    if not PR_REPO.match(repo) or not isinstance(number, int) or isinstance(number, bool) or not 0 < number < 10**7:
+    if (not PR_REPO.match(repo) or repo.split("/")[1] in (".", "..") or not isinstance(number, int)
+            or isinstance(number, bool) or not 0 < number < 10**7):
         raise ValueError(f"not a PR: {repo}#{number}")
     gh = gh or _gh_path()
     if not gh:
@@ -2150,7 +2211,8 @@ def gh_pr_view(repo: str, number: int, *, gh: str | None = None, timeout: float 
     if os.name == "nt":
         kw["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
     try:
-        r = subprocess.run([gh, "pr", "view", str(number), "-R", repo, "--json", "state,isDraft,mergedAt,url"],
+        r = subprocess.run([gh, "pr", "view", str(number), "-R", repo, "--json",
+                            "state,isDraft,mergedAt,url,statusCheckRollup,headRefOid"],
                            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout,
                            stdin=subprocess.DEVNULL, env={**os.environ, "GH_PROMPT_DISABLED": "1",
                                                           "GH_NO_UPDATE_NOTIFIER": "1", "NO_COLOR": "1"}, **kw)
@@ -2375,36 +2437,58 @@ def reload_plugins(home: Path, root: Path):
 
 
 class PrStates:
-    """PR states by (repo, number), each kept PR_TTL seconds (a failed look-up PR_TTL_MISS). `view` is the look-up
-    (gh_pr_view; tests pass a stub)."""
+    """PR states and check results by (repo, number), each kept PR_TTL seconds (a failed look-up PR_TTL_MISS). `view`
+    is the look-up (gh_pr_view; tests pass a stub). Every plan and thread shares one instance, so the limits hold for
+    all of them together: at most PR_POOL look-ups at once and PR_CALLS_PER_MIN in any 60 seconds; past that a PR
+    keeps its last answer (or reads `unknown`, not kept) until the window has room."""
 
     def __init__(self, view=None, clock=time.monotonic):
         self._view = view or gh_pr_view
         self._clock = clock
-        self._cache: dict[tuple[str, int], tuple[float, dict]] = {}
+        self._cache: dict[tuple[str, int], tuple[float, dict, float]] = {}
         self._lock = threading.Lock()
+        self._gate = threading.BoundedSemaphore(PR_POOL)
+        self._calls: list[float] = []  # when each look-up in the last 60 seconds started
 
-    def _one(self, repo: str, number: int) -> dict:
+    def _may_call(self, now: float) -> bool:
+        with self._lock:
+            self._calls = [t for t in self._calls if now - t < 60.0]
+            if len(self._calls) >= PR_CALLS_PER_MIN:
+                return False
+            self._calls.append(now)
+            return True
+
+    def _one(self, repo: str, number: int, fresh: bool = False) -> dict:
         key = (repo, number)
         now = self._clock()
         with self._lock:
             hit = self._cache.get(key)
-        if hit and now < hit[0]:
+        if hit and now < hit[0] and not (fresh and now - hit[2] >= PR_FRESH_MIN):
             return hit[1]
+        if not self._may_call(now):
+            return hit[1] if hit else {"state": "unknown", "checks": "none"}
         try:
-            view = self._view(repo, number)
+            with self._gate:
+                view = self._view(repo, number)
         except ValueError:
             view = None
         state = pr_state_of(view) if view else "unknown"
-        out = {"state": state}
+        out = {"state": state, "checks": pr_checks_of(view.get("statusCheckRollup")) if view else "none"}
         url = view.get("url") if view else None
         if isinstance(url, str) and url == f"https://github.com/{repo}/pull/{number}":
             out["url"] = url
+        head = view.get("headRefOid") if view else None
+        if isinstance(head, str) and PR_HEAD.match(head):
+            out["head"] = head
         with self._lock:
-            self._cache[key] = (now + (PR_TTL if state != "unknown" else PR_TTL_MISS), out)
+            self._cache[key] = (now + (PR_TTL if state != "unknown" else PR_TTL_MISS), out, now)
             if len(self._cache) > 2000:
                 self._cache.clear()
         return out
+
+    def thread(self, refs: list[dict], fresh: bool = False) -> list[dict]:
+        """Each of a thread's PRs (thread_pr_refs) with its state and checks, in the same order."""
+        return [{**r, **{k: v for k, v in self._one(r["repo"], r["number"], fresh).items() if k != "url"}} for r in refs]
 
     def states(self, run: dict) -> dict[str, dict]:
         """{node id: {number, repo?, url?, state}} for every node of `run` that names a PR; a PR with no repo is
@@ -2419,7 +2503,7 @@ class PrStates:
         out = {}
         for n in nodes:
             pr = dict(n["pr"])
-            pr.update(got.get((pr.get("repo"), pr["number"]), {"state": "unknown"}))
+            pr.update(got.get((pr.get("repo"), pr["number"]), {"state": "unknown", "checks": "none"}))
             out[n["id"]] = pr
         return out
 
@@ -5873,7 +5957,7 @@ class Bridge:
             "folder.open": self.op_folder_open, "folder.close": self.op_folder_close,
             "folder.resume": self.op_folder_resume,
             "thread.create": self.op_thread_create, "thread.list": self.op_thread_list,
-            "thread.open": self.op_thread_open, "thread.remove": self.op_thread_remove,
+            "thread.open": self.op_thread_open, "thread.remove": self.op_thread_remove, "thread.prs": self.op_thread_prs,
             "panel.terminal": self.op_panel_terminal, "panel.worktrees": self.op_panel_worktrees,
             "panel.diff": self.op_panel_diff, "media.read": self.op_media_read,
             "chat.attach": self.op_chat_attach, "runs.list": self.op_runs_list, "runs.get": self.op_runs_get,
@@ -7153,6 +7237,19 @@ class Bridge:
             for x in asks:
                 await self._batch_clarify(conn, x)
         return Reply(result, replay if prompts or asks else None)
+
+    async def op_thread_prs(self, p) -> dict:
+        """The PRs a thread's bot named and GitHub's word on each (BOUNDARY rule 21): the thread's own saved
+        messages read through Hermes' ``session.history`` (read only: never resumed), the full PR links in the bot's
+        answers there (thread_pr_refs: newest first, at most PR_THREAD_MAX), then each one's state and checks through
+        the shared PrStates (its cache, pool and per-minute cap). ``fresh``: the person asked for a refresh.
+        {prs: [{number, repo, url, state, checks, head?}]}. Only a thread this bridge created or listed."""
+        conn = await self._conn(p.get("bot"))
+        tid = self._thread_known(conn, p.get("thread"))
+        chat = conn.folders.get(tid)
+        res = await self._call(conn, "session.history", session_id=chat.stored_id if chat else tid)
+        refs = thread_pr_refs(chat_messages(res.get("messages"), running=bool(chat and chat.in_turn)))
+        return {"prs": await asyncio.to_thread(self.prs.thread, refs, p.get("fresh") is True) if refs else []}
 
     def _hint_rows(self, conn: Conn) -> list[dict]:
         """The bot's open threads for the note, newest activity first: attached ones with their latest answer's last
