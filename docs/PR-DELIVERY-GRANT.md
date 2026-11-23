@@ -19,7 +19,9 @@ driving a terminal to flip the grant, or by writing its own forge client.
 Hermes' approval policy and the forge's own branch protection are the
 controls for that. Turn on branch protection for the default branch of every
 repository a granted bot can reach: require a pull request and a review, and
-refuse force pushes. The gate refuses the obvious self-grant spellings, but
+refuse force pushes. Also restrict what workflows on bot branches may do:
+require approval for workflow runs and for workflow changes, and keep secrets
+out of `pull_request` runs (see the list below). The gate refuses the obvious self-grant spellings, but
 that list is not complete.
 
 **What changes when this ships.** In a cron job (a PR watch included), a
@@ -177,6 +179,16 @@ the forge without passing the gate:
   fork, comment, review, close, label or a pull-request write. The gate reads
   only the tool's name, never its arguments, so it cannot judge a comment
   body sent through one;
+- a file write to `~/.ssh/config`: a `ProxyCommand` or `Match exec` there runs
+  a command during an otherwise covered push over ssh;
+- a workflow file under `.github/workflows/` committed on a bot branch: it
+  runs on the forge with the repository's token, and whatever secrets the
+  repository exposes to such runs, as soon as the branch is pushed or the PR
+  opens. The gate does not look inside a push for this. Bound it on the forge:
+  protect the default branch, require approval before workflows run for
+  changes from bots or outside contributors, require review for changes under
+  `.github/workflows/` (a CODEOWNERS entry), and keep secrets out of
+  `pull_request` runs;
 - a local-path or `insteadOf` remote set up before the grant applied, and a
   `cd` into another checkout before `git push origin ...` (`git -C`,
   `--git-dir` and `--work-tree` on a push are refused);
