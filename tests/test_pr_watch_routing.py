@@ -58,6 +58,43 @@ class PrWatchRoutingTests(unittest.TestCase):
         "wait until my teammate merges the PR, then rebase",
     )
 
+    # Negation scope and other branches, probed for the hold round. Each phrasing with the outcome it
+    # gets: True dispatches github-event-ops through the guard, False leaves the guard standing down.
+    NEGATION_AND_BRANCH_OUTCOMES = (
+        ("don't watch PR 42 until it merges, just review it", False),
+        ("I don't want you to babysit PR 42 until it merges", False),
+        ("do not watch PR 42 until it merges", False),
+        ("no need to watch PR 42 until it merges", False),
+        ("stop watching PR 42 until it merges", False),
+        ("never babysit PR 42 until it is merged", False),
+        ("don't not watch PR 42 until it merges", False),       # a double negative stays on clarify
+        ("don't stop watching PR 42 until CI passes", False),   # so does "don't stop", by choice
+        ("don't just watch PR 42 until it merges", True),       # "not just" adds to the watch
+        ("don't review it yet, watch PR 42 until CI passes", True),  # the decline is its own clause
+        ("watch PR 42, not until it merges but until CI passes", True),
+        ("not until PR 42 merges, watch the deploy", False),
+        ("watch PR 42 until CI on main passes", False),          # another branch's CI
+        ("watch PR 42 until the release branch is green", False),
+        ("watch PR 42 until it is merged into main", True),      # merging into main is the PR's own state
+        ("watch PR 42 until it lands on main", True),
+        ("PR 42 머지될 때까지 지켜보지 말고 리뷰만 해줘", False),
+        ("PR 42 머지될 때까지 지켜보지 마", False),
+        ("PR 42 머지될 때까지 안 지켜봐도 돼", False),
+        ("PR 42 머지될 때까지 지켜볼 필요 없어", False),
+        ("리뷰는 하지 말고 PR 42 체크 끝날 때까지 지켜봐줘", True),
+        ("배포 말고 PR 42 체크 끝날 때까지 지켜봐줘", True),     # 말고 declines the deploy, not the watch
+        ("PR 42 main 브랜치 CI 끝날 때까지 지켜봐줘", False),
+        # A real wait left on clarify: the branch name sits between the PR and its state word.
+        ("PR 42 main 브랜치에 머지될 때까지 지켜봐줘", False),
+    )
+
+    def test_negation_scope_and_other_branches(self) -> None:
+        for message, expected in self.NEGATION_AND_BRANCH_OUTCOMES:
+            with self.subTest(message=message):
+                self.assertEqual(_applies(message), expected)
+                route = _route(message)
+                self.assertEqual((route["action"], route["selected_skill"]) == ("dispatch", "github-event-ops"), expected)
+
     def test_some_real_pr_waits_stay_on_clarify(self) -> None:
         for message in self.LEFT_ON_CLARIFY:
             with self.subTest(message=message):

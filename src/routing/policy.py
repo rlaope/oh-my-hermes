@@ -45,6 +45,7 @@ from ..plugin_bundle.omh.command_verb import DIRECT_CODING_EDIT_VERBS as _DIRECT
 from ..plugin_bundle.omh.command_verb import command_words as _command_words
 from ..plugin_bundle.omh.command_verb import commanded_words
 from ..plugin_bundle.omh.show_reel_cues import show_reel_request_admitted
+from ..plugin_bundle.omh.domain_signals import canonical_domain_tokens, domain_tokens_are_locally_negated
 from ..plugin_bundle.omh.code_review_cues import (
     code_review_request_guard_applies as code_review_request_guard_applies,
     code_review_request_sentence as code_review_request_sentence,
@@ -5493,6 +5494,14 @@ _PR_WATCH_KO_OBJECT_WINDOW = 6
 _PR_WATCH_KO_MEASURE_WORDS = frozenset(
     normalized_phrase(word) for word in ("수", "수를", "수가", "속도", "속도를", "건수", "개수", "비율", "시간")
 )
+# The until-clause names another branch's state (CI on main, the release branch),
+# which a monitor of this PR cannot observe; merging into that branch is still
+# the PR's own state.
+_PR_WATCH_EN_OTHER_REFS = frozenset({"main", "main's", "master", "master's", "develop", "trunk", "branch", "branches"})
+_PR_WATCH_EN_MERGE_WORDS = frozenset({"merge", "merges", "merged", "land", "lands", "landed"})
+# A Korean watch or wait verb declined right where it is said: 지켜보지 말고/마,
+# 안 지켜봐도, 지켜볼 필요 없어.
+_PR_WATCH_KO_NEGATIONS = ("지 마", "지마", "지 말", "지말", "지 않", "지않", "필요 없", "필요는 없", "안 해도", "않아도")
 _PR_WATCH_KO_BLOCKERS = (
     "배포", "릴리즈", "릴리스", "스테이징", "서버", "로그", "영상", "대기열",
     "통계", "지표", "평균", "얼마나", "속도", "건수", "개수", "비율",
@@ -10899,24 +10908,45 @@ def _is_pr_word(words: list[str], index: int) -> bool:
     return _contains_phrase(word, _PR_WATCH_OBJECTS)
 
 
-def _english_verb_ends(words: list[str]) -> list[int]:
-    ends = []
+def _english_verb_spans(words: list[str]) -> list[tuple[int, int]]:
+    spans = []
     for start in range(len(words)):
         for verb in _PR_WATCH_EN_VERB_WORDS:
             if tuple(words[start:start + len(verb)]) == verb:
-                ends.append(start + len(verb) - 1)
-    return ends
+                spans.append((start, start + len(verb) - 1))
+    return spans
+
+
+def _english_verb_is_negated(raw: list[str], words: list[str], start: int) -> bool:
+    """"don't watch", "no need to babysit", "stop watching": the shared local-negation window, in the verb's clause."""
+    clause_start = 0
+    for k in range(start):
+        if raw[k][-1:] in ",;.!?" or words[k] in ("and", "but", "then"):
+            clause_start = k + 1
+    tokens = canonical_domain_tokens(" ".join(raw[clause_start:start]))
+    return domain_tokens_are_locally_negated(tokens, len(tokens)) or "stop" in tokens[-2:]
+
+
+def _korean_verb_is_negated(words: list[str], verb: int) -> bool:
+    """지켜보지 말고, 지켜보지 마, 안 지켜봐도, 지켜볼 필요 없어: a decline said at the verb itself."""
+    if verb > 0 and words[verb - 1] == normalized_phrase("안"):
+        return True
+    return _contains_phrase(" ".join(words[verb:verb + 3]), _PR_WATCH_KO_NEGATIONS)
 
 
 def _english_pr_watch(raw: list[str], words: list[str]) -> bool:
     """An English verb takes the PR as its object, and its until-clause is about the PR's own state.
 
-    The object is the words from the verb to the clause opener (`until`, `to`, `when`, ...); it may not
-    name another watched thing or a measure of PRs. The clause runs to the next comma or `and`/`then`;
-    it must name a PR state (checks, CI, merged, approved, ...) and no calendar boundary.
+    The verb is not declined in its own clause ("don't watch", "no need to babysit"). The object is the
+    words from the verb to the clause opener (`until`, `to`, `when`, ...); it may not name another
+    watched thing or a measure of PRs. The clause runs to the next comma or `and`/`then`; it must name
+    a PR state (checks, CI, merged, approved, ...), no calendar boundary, and no other branch's state
+    (CI on main) unless the PR merges into it.
     """
     pr_at = [index for index in range(len(words)) if _is_pr_word(words, index)]
-    for end in _english_verb_ends(words):
+    for start, end in _english_verb_spans(words):
+        if _english_verb_is_negated(raw, words, start):
+            continue
         for pr in (index for index in pr_at if end < index <= end + _PR_WATCH_EN_OBJECT_WINDOW):
             opener = next((k for k in range(pr + 1, len(words)) if words[k] in _PR_WATCH_EN_CLAUSE_OPENERS), None)
             if opener is None:
@@ -10931,7 +10961,10 @@ def _english_pr_watch(raw: list[str], words: list[str]) -> bool:
                 clause.append(words[k])
                 if raw[k][-1:] in ",;.":
                     break
-            if any(word in _PR_WATCH_EN_STATE_WORDS for word in clause) and not any(
+            other_branch = any(word in _PR_WATCH_EN_OTHER_REFS for word in clause) and not any(
+                word in _PR_WATCH_EN_MERGE_WORDS for word in clause
+            )
+            if any(word in _PR_WATCH_EN_STATE_WORDS for word in clause) and not other_branch and not any(
                 word in _PR_WATCH_EN_CALENDAR for word in clause
             ):
                 return True
@@ -10948,10 +10981,14 @@ def _korean_pr_watch(words: list[str]) -> bool:
     pr_at = [index for index in range(len(words)) if _is_pr_word(words, index)]
     verbs = [index for index, word in enumerate(words) if _contains_phrase(word, _PR_WATCH_KO_VERB_STEMS)]
     for verb in verbs:
+        if _korean_verb_is_negated(words, verb):
+            continue
         for pr in pr_at:
             if not pr < verb <= pr + _PR_WATCH_KO_OBJECT_WINDOW:
                 continue
             span = words[pr + 1:verb]
+            if _contains_phrase(" ".join(span), ("브랜치",)) and not _contains_phrase(" ".join(span), ("머지", "merge")):
+                continue  # another branch's state (main 브랜치 CI), not this PR's
             close = words[pr + 1:min(pr + 3, verb + 1)]
             if not (verb <= pr + 2 or any(_contains_phrase(word, _PR_WATCH_KO_STATE_WORDS) for word in close)):
                 continue

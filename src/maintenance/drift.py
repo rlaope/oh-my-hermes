@@ -1022,7 +1022,8 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # watched beside a merged PR stay off it (+3).
             # Its final round: a PR merge rate until a sprint ends, a weekly merge count, and review speed until a
             # sprint ends are measures, not waits on one PR (+3).
-            expected=1557,
+            # Its hold round: four declined watches (three English, one Korean) and CI on main stay off it (+5).
+            expected=1562,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
@@ -1643,7 +1644,8 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # Its verification round: a deploy monitored after a PR merges keeps deploy-and-monitor (+1).
             # Its final round: five PR waits that name logs, production, a server or a deploy elsewhere still
             # reach github-event-ops (+5).
-            expected=1365,
+            # Its hold round: a declined review followed by a PR watch, in English and Korean, still reaches it (+2).
+            expected=1367,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

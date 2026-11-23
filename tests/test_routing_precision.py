@@ -112,7 +112,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # PR watch adds six: a PR queue, two videos, a how-to, a CI concept question and a watch-out warning.
         # Its verification round adds three: a PR metric and two deploys watched beside a PR.
         # Its final round adds three PR measures watched until a date.
-        self.assertEqual(payload["summary"]["case_count"], 1557)
+        # Its hold round adds five: four declined watches and CI on main.
+        self.assertEqual(payload["summary"]["case_count"], 1562)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -292,7 +293,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # PR watch adds seven: five waits on one PR that dispatch, a PR review and CI on main that keep their owner.
         # Its verification round adds one: a deploy monitored after a merge keeps deploy-and-monitor.
         # Its final round adds five PR waits that name logs, production, a server or a deploy elsewhere.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1365)
+        # Its hold round adds two: a declined review, then a PR watch, in English and Korean.
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1367)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )
