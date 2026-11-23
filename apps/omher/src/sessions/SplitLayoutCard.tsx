@@ -202,10 +202,16 @@ export function SplitCard({ group, current, list, agents, unseen, ticking, lang,
     grip.addEventListener("lostpointercapture", end);
     window.addEventListener("blur", end);
   };
+  // keys step from the last height they set, not the rendered one: presses (or key repeat) faster than the saved
+  // height comes back each count, instead of all landing on the same step
+  const keyed = useRef<number | null>(null);
+  keyed.current = keyed.current === mapH ? keyed.current : null;
   const onGripKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
     e.preventDefault();
-    set(clampCardHeight(mapH + (e.key === "ArrowUp" ? -GRIP_STEP : GRIP_STEP)));
+    const next = clampCardHeight((keyed.current ?? mapH) + (e.key === "ArrowUp" ? -GRIP_STEP : GRIP_STEP));
+    keyed.current = next;
+    set(next);
   };
   const boxes = mapW > 0 ? cellBoxes(group.layout, mapW, drawnH > 0 ? drawnH : mapH) : [];
   return (

@@ -226,6 +226,9 @@ test("the grip tells assistive technology its real range, and its value follows 
   for (let i = 0; i < 3; i++) await page.keyboard.press("ArrowDown");
   await expect(grip).toHaveAttribute("aria-valuenow", "110");
   expect(await gripAx(page)).toEqual({ now: 110, min: 46, max: 240 });
+  // reading the accessibility tree over CDP may take focus off the page on a slow runner: keys go to the grip again
+  await grip.focus();
+  await expect(grip).toBeFocused();
   for (let i = 0; i < 9; i++) await page.keyboard.press("ArrowDown");
   await expect(grip).toHaveAttribute("aria-valuenow", "240");
   expect((await gripAx(page)).now).toBe(240);
