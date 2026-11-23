@@ -1269,7 +1269,8 @@ class ThreadPullRequests(unittest.TestCase):
         "40. A bot's thread shows the pull requests its bot linked there, through rule 21's one fixed `gh pr view` read,"
         " under its cache and limits.",
         "A thread's pull request is any full pull request link the bot wrote in its own answer in that thread, whoever's"
-        " pull request it is, never one in the person's message or a tool's output.",
+        " pull request it is, never one in the person's message, a tool's output or the summary Hermes writes when it"
+        " compresses a conversation",
         "read only and only for a thread it created or listed, and makes no gateway call for it, so a thread that is not"
         " open in omher is never resumed or attached to be read.",
         "To find them the bridge reads that thread's saved user and assistant rows across Hermes' compression of it",
@@ -1320,6 +1321,8 @@ class ThreadPullRequests(unittest.TestCase):
         self.assertIn("LINEAGE_STEPS = 32", self.source)
         self.assertIn("LINEAGE_MAX = 64", self.source)
         self.assertIn("role IN ('user', 'assistant')", ast.unparse(fns["read_thread_rows"]))
+        self.assertIn("if text.lstrip().startswith(COMPACTION_PREFIXES) or any((m in text for m in COMPACTION_MARKERS)):\n"
+                      "            text = ''", ast.unparse(fns["read_thread_rows"]))  # Hermes' compaction summary is never the bot's answer
         refs = ast.unparse(fns["thread_pr_refs"])
         self.assertIn("m.get('role') != 'assistant'", refs)
         self.assertIn("THREAD_PR_URL.finditer", refs)

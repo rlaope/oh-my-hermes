@@ -4787,6 +4787,14 @@ def read_session_cwds(profile_dir: Path, ids: list[str]) -> dict[str, str]:
 
 
 THREAD_ROWS_MAX = 2000  # a thread's newest user and assistant rows read for its PR links
+# The summary "carrier" row Hermes writes when it compresses a conversation (session_rules/turns.py: SUMMARY_PREFIX and
+# every shipped prefix begin "[CONTEXT COMPACTION", the legacy one "[CONTEXT SUMMARY]:"; _SUMMARY_END_MARKER,
+# _MERGED_PRIOR_CONTEXT_HEADER and _MERGED_SUMMARY_DELIMITER mark the merged forms). It is the compression model's
+# summary of earlier turns, which can quote the person's or a tool's links, never the bot's answer: such a row is read
+# with no text at all (the turns it summarises are read from the sessions before it).
+COMPACTION_PREFIXES = ("[CONTEXT COMPACTION", "[CONTEXT SUMMARY]:")
+COMPACTION_MARKERS = ("--- END OF CONTEXT SUMMARY", "[PRIOR CONTEXT — for reference only; not a new message]",
+                      "[END OF PRIOR CONTEXT — COMPACTION SUMMARY BELOW]")
 LINEAGE_STEPS = 32      # compression steps followed from a thread's id, each way
 LINEAGE_MAX = 64        # sessions of one thread's compression lineage read at most
 
@@ -4856,8 +4864,8 @@ def thread_last_row(profile_dir: Path, session_id: str) -> int | None:
 def read_thread_rows(profile_dir: Path, session_id: str) -> list[dict]:
     """One thread's saved user and assistant rows (`messages`: id, role, content, timestamp, and display_kind where the
     column exists) across Hermes' compression of it (thread_lineage), oldest first, the newest THREAD_ROWS_MAX, from
-    the profile's state.db opened read-only; [] when it has none (or no state.db). Never a tool row, reasoning or any
-    other column. Nothing is written."""
+    the profile's state.db opened read-only; [] when it has none (or no state.db). Never a tool row, Hermes'
+    compaction summary (COMPACTION_PREFIXES, COMPACTION_MARKERS), reasoning or any other column. Nothing is written."""
     import sqlite3
     db = profile_dir / "state.db"
     if not session_id or not db.is_file():
@@ -4882,7 +4890,10 @@ def read_thread_rows(profile_dir: Path, session_id: str) -> list[dict]:
         return []
     out = []
     for r in reversed(got):
-        row = {"row_id": r[0], "role": r[1], "content": r[2] if isinstance(r[2], str) else "", "timestamp": r[3]}
+        text = r[2] if isinstance(r[2], str) else ""
+        if text.lstrip().startswith(COMPACTION_PREFIXES) or any(m in text for m in COMPACTION_MARKERS):
+            text = ""  # Hermes' compaction summary, nobody's message: kept empty, so a user row still ends a turn
+        row = {"row_id": r[0], "role": r[1], "content": text, "timestamp": r[3]}
         if len(r) > 4 and isinstance(r[4], str):
             row["display_kind"] = r[4]
         out.append(row)

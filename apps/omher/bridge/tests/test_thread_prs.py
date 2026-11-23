@@ -326,6 +326,28 @@ class CompressionLineage(unittest.TestCase):
                 self.assertEqual(ob.thread_last_row(prof, start), max(r["row_id"] for r in rows))
             self.assertEqual([r["number"] for r in ob.thread_pr_refs(ob.chat_messages(ob.read_thread_rows(prof, "branch")))], [90])
 
+    def test_hermes_compaction_summary_is_never_the_bots_answer(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            prof = Path(d)
+            self.lineage_db(prof)
+            summary = ("[CONTEXT COMPACTION — REFERENCE ONLY] Earlier turns were compacted into the summary below. ...\n"
+                       "The user pasted https://github.com/o/r/pull/9 and a tool printed https://github.com/o/r/pull/8\n"
+                       "--- END OF CONTEXT SUMMARY — respond to the message below, not the summary above ---")
+            merged = ("[PRIOR CONTEXT — for reference only; not a new message]\nsee https://github.com/o/r/pull/7\n"
+                      "[END OF PRIOR CONTEXT — COMPACTION SUMMARY BELOW]\nsummary")
+            save_rows(prof, "fresh", [("assistant", summary), ("user", "go on"), ("assistant", merged),
+                                      ("assistant", "[CONTEXT SUMMARY]: https://github.com/o/r/pull/6"),
+                                      ("user", "and?"), ("assistant", "Opened https://github.com/o/r/pull/10")])
+            rows = ob.read_thread_rows(prof, "fresh")
+            self.assertEqual([r["number"] for r in ob.thread_pr_refs(ob.chat_messages(rows))], [10])
+            self.assertFalse(any("COMPACTION" in r["content"] or "CONTEXT SUMMARY" in r["content"] for r in rows))
+            # a user-role carrier still ends the turn before it: the bot's earlier answer stays that turn's answer
+            save_rows(prof, "user-carrier", [("user", "ship it"), ("assistant", "Opened https://github.com/o/r/pull/11"),
+                                             ("user", summary), ("assistant", "Rebased.")])
+            rows = ob.read_thread_rows(prof, "user-carrier")
+            self.assertEqual([r["number"] for r in ob.thread_pr_refs(ob.chat_messages(rows))], [11])
+
     def test_the_walk_is_bounded(self):
         import sqlite3
         import tempfile
