@@ -109,19 +109,20 @@ All notable changes will be documented here.
   `_section_node_is_sequence`, `_block_header`, `_skills_document_parts`)
   `enabled:` or `provider:` key written above it, which Hermes could not load. Reported by @chhxbchhxb in #3075.
   (`src/install/config_adapter.py` `_root_is_plain_block_mapping`, `_section_node_is_sequence`)
-- **omher: a bot's page shows who the bot is: its persona, what it remembers, and its work.** A bot's page in
-  Settings (the row menu's Edit bot, or Edit in the Details panel) showed only its picture, name and a few counts. It
-  now shows the profile's `SOUL.md` as plain text with its size; Hermes' built-in memory (`memories/MEMORY.md`, what the
-  bot remembers, and `memories/USER.md`, what it knows about you) as entries split on Hermes' delimiter, each with its
+- **omher: a bot's page shows who the bot is: its persona, what it remembers, and its work.** A bot's page in Settings
+  (the row menu's Edit bot, or Edit in the Details panel) showed only its picture, name and a few counts. It now shows
+  the profile's `SOUL.md` as plain text with its size; Hermes' built-in memory (`memories/MEMORY.md`, what the bot
+  remembers, and `memories/USER.md`, what it knows about you) as entries split on Hermes' delimiter, each with its
   characters against the limit `config.yaml` sets (Hermes' 2,200 and 1,375 when unset) and an Off mark when the profile
   switches it off; the bot's automations, each opening the Automations page on that job, with Open in Automations
   filtered to the bot; its Slack, Discord, Telegram and cron sessions, read-only; and its open threads with their
   status, each opening the thread. Nothing on the page writes: Edit opens the bot's main chat with a request such as
-  "Update your SOUL.md: " in the composer, and nothing is sent until you send it. The files are read when the page
-  opens and on Read again, at most 1 MB each (a larger file is sized and not read), never through a link that leads out
-  of the profile, with CRLF and non-UTF-8 bytes tolerated. A bot on another computer is read there by its own bridge,
-  over the same SSH link. Picture and name editing stay where they were. (`apps/omher/bridge/omher_bridge.py`
-  `read_bot_page`, `apps/omher/src/settings/BotSections.tsx`; `docs/OMHER-BOUNDARY.md` rule 40)
+  "Update your SOUL.md: " in the composer after anything you had typed there, and nothing is sent until you send it. The
+  files are read when the page opens and on Read again, at most 1 MB each (a larger file is sized and not read), only
+  the fixed paths and never through a link, with CRLF and non-UTF-8 bytes tolerated. A bot on another computer is read
+  there by its own bridge, over the same SSH link. Picture and name editing stay where they were.
+  (`apps/omher/bridge/omher_bridge.py` `read_bot_page`, `apps/omher/src/settings/BotSections.tsx`;
+  `docs/OMHER-BOUNDARY.md` rule 40)
 - **omher 1.1.3.** GitHub across your repositories and accounts, a Claude usage meter that shows numbers, and terminals
   and bridges that recover by themselves.
   - **GitHub:** Tasks gains a "나" scope: your review requests, your pull requests, issues assigned to you and mentions,

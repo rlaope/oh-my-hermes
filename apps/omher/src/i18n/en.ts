@@ -640,7 +640,7 @@ export const en = {
   "bp.editTip": "Opens the bot's chat with a request for you to finish and send. omher does not edit the file.",
   "bp.tooBig": "{file} is {size}, larger than the {max} omher reads, so it was not read.",
   "bp.unreadable": "{file} could not be read.",
-  "bp.outside": "{file} links to a file outside this bot's folder, so omher does not read it.",
+  "bp.link": "{file} is a link, so omher does not read it.",
   "bp.noSoul": "This profile has no SOUL.md.",
   "bp.soulEmpty": "SOUL.md is empty.",
   "bp.lossy": "Some bytes in this file are not UTF-8 and show as �.",

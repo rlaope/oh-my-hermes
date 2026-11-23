@@ -638,7 +638,7 @@ export const ja: Record<Key, string> = {
   "bp.editTip": "ボットのチャットを開き、依頼を入力欄に入れます。仕上げて送るのはあなたです。omher はファイルを編集しません。",
   "bp.tooBig": "{file} は {size} で、omher が読む上限 {max} を超えているため読みませんでした。",
   "bp.unreadable": "{file} を読めませんでした。",
-  "bp.outside": "{file} はこのボットのフォルダの外を指しているため、omher は読みません。",
+  "bp.link": "{file} はリンクのため、omher は読みません。",
   "bp.noSoul": "このプロファイルには SOUL.md がありません。",
   "bp.soulEmpty": "SOUL.md は空です。",
   "bp.lossy": "このファイルには UTF-8 でないバイトがあり、� と表示されます。",

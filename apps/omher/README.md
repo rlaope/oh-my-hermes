@@ -130,9 +130,9 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   Hermes' built-in `memories/MEMORY.md` and `memories/USER.md`, each as its entries with its characters against the
   limit `config.yaml` sets and an Off mark when it is switched off; then the bot's automations (Open in Automations
   shows them filtered), its sessions elsewhere and its open threads with their status. The bridge reads the three
-  files with `bots.page` when the page opens and on Read again, at most 1 MB each, never through a link out of the
-  profile (`read_bot_page`). Edit writes nothing: it opens the bot's main chat with a request in the composer for the
-  person to finish and send. A bot on another computer is read by that computer's own bridge over the SSH link.
+  files with `bots.page` when the page opens and on Read again, at most 1 MB each, only the fixed paths and never
+  through a link (`read_bot_page`). Edit writes nothing: it opens the bot's main chat with a request added after what
+  the person already typed there, for them to finish and send. A bot on another computer is read by that computer's own bridge over the SSH link.
   `BOUNDARY.md` rule 40.
 - **Remote machines over SSH** (`src-tauri/src/peers.rs`, `src/peers/`): the sidebar `+` › Connect over SSH (or the
   chip under a bot's `omher-peer` reply, or Settings › Remote machines) takes a host from `~/.ssh/config` or

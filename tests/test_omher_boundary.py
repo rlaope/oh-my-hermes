@@ -32,8 +32,11 @@ RULES = (
     "omher reads, never writes, three files of that bot's own profile: its persona `SOUL.md` and Hermes' built-in memory"
     " `memories/MEMORY.md` and `memories/USER.md`,",
     "It reads them only when the person opens that page or presses Read again, never on a timer;",
-    "it reads at most 1 MB of each, and a larger file is sized and not read; it never follows a link that leads out of the"
-    " profile; and it opens no other file for this page.",
+    "it reads at most 1 MB of each, and a larger file is sized and not read; it reads only those paths themselves and"
+    " never follows a link, wherever it leads:",
+    "on macOS and Linux each step is opened without following links (`O_NOFOLLOW`), so a link put in place after that"
+    " look is not followed either, and a FIFO in a file's place is not waited on; and it opens no other file for this"
+    " page.",
     "omher never writes, renames or removes these files, and rule 9 still holds: Edit only puts a request such as"
     " `Update your SOUL.md: ` in that bot's main-chat composer, nothing is sent until the person sends it,",
     "The files hold the person's own words, so they stay in the app: they go only to that page, in the answer to"
@@ -2975,7 +2978,8 @@ class BotPageReadsPersonaAndMemoryOnly(unittest.TestCase):
     opens those paths otherwise, nothing logs them, and Edit only drafts a chat message. A bot on another computer is
     forwarded to its own bridge."""
 
-    READER = ("read_bot_page", "read_page_file", "memory_entries", "_memory_limit", "_memory_on")
+    READER = ("read_bot_page", "read_page_file", "_open_fixed", "_is_link", "memory_entries", "_memory_limit",
+              "_memory_on")
 
     def setUp(self) -> None:
         self.source = BRIDGE.read_text(encoding="utf-8")
@@ -3014,13 +3018,29 @@ class BotPageReadsPersonaAndMemoryOnly(unittest.TestCase):
 
     def test_bounded_no_link_out_and_read_only(self) -> None:
         body = ast.unparse(self.fns["read_page_file"])
-        self.assertIn("if os.path.commonpath([real, top]) != top:", body)
-        self.assertIn("if size > MEMORY_FILE_BYTES:", body)
-        self.assertIn("fh.read(MEMORY_FILE_BYTES + 1)", body)
+        # only the fixed path: any link on it (in or out of the profile) is refused, and what it resolves to must be it
+        self.assertIn("if _is_link(here):", body)
+        self.assertIn("os.path.normcase(real) != os.path.normcase(os.path.join(top, *parts))", body)
+        self.assertIn("fd = _open_fixed(profile_dir, parts)", body)
+        self.assertIn("if not stat.S_ISREG(st.st_mode):", body)
+        self.assertIn("if st.st_size > MEMORY_FILE_BYTES:", body)
+        self.assertIn("chunks, left = ([], MEMORY_FILE_BYTES + 1)", body)
+        self.assertIn("chunk = os.read(fd, left)", body)
+        opener = ast.unparse(self.fns["_open_fixed"])
+        self.assertIn("nofollow = getattr(os, 'O_NOFOLLOW', 0)", opener)
+        self.assertIn("os.O_RDONLY | nofollow | getattr(os, 'O_NONBLOCK', 0), dir_fd=fd", opener)
         reader = "\n".join(ast.unparse(self.fns[n]) for n in self.READER)
-        opens = [c for n in self.READER for c in ast.walk(self.fns[n])
-                 if isinstance(c, ast.Call) and ast.unparse(c.func) == "open"]
-        self.assertEqual([ast.unparse(c) for c in opens], ["open(real, 'rb')"])
+        # read-only: no builtin open, and every os.open is O_RDONLY
+        builtin = [c for n in self.READER for c in ast.walk(self.fns[n])
+                   if isinstance(c, ast.Call) and ast.unparse(c.func) == "open"]
+        self.assertEqual(builtin, [])
+        os_opens = [ast.unparse(c) for n in self.READER for c in ast.walk(self.fns[n])
+                    if isinstance(c, ast.Call) and ast.unparse(c.func) == "os.open"]
+        self.assertEqual(len(os_opens), 4)
+        for call in os_opens:
+            self.assertIn("os.O_RDONLY", call)
+            for flag in ("O_WRONLY", "O_RDWR", "O_CREAT", "O_TRUNC", "O_APPEND"):
+                self.assertNotIn(flag, call)
         for banned in ("write", "unlink", "rename", "mkdir", "rmdir", "touch", "chmod", "subprocess", "self.", "log.",
                        "print(", "remove"):
             self.assertNotIn(banned, reader, banned)
@@ -3041,7 +3061,8 @@ class BotPageReadsPersonaAndMemoryOnly(unittest.TestCase):
         self.assertEqual(store.count('"bots.page"'), 1)
         self.assertIn('botPage: (bot) => bridge.request("bots.page", { bot }),', store)
         draft = store.split("async draftTo(bot, text) {", 1)[1].split("\n    },", 1)[0]
-        self.assertIn('dispatch({ type: "ui.draft", bot, text });', draft)
+        self.assertIn('dispatch({ type: "ui.draft", bot, text: next });', draft)
+        self.assertIn("const raw = getDraft(bot);", draft)  # the person's unsent text is kept
         for bad in ("send", "request(", "chat."):
             self.assertNotIn(bad, draft, bad)
         page = (UI_SRC / "settings" / "BotSections.tsx").read_text(encoding="utf-8")

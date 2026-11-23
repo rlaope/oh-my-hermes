@@ -862,34 +862,80 @@ MEMORY_FILE_BYTES = 1 << 20  # a bigger SOUL.md or memory file is sized and not 
 TRUTHY = frozenset({"1", "true", "yes", "on"})  # Hermes' `utils.env.TRUTHY_STRINGS`
 
 
+def _is_link(path: Path) -> bool:
+    """A symlink, or on Windows a junction: either way not the fixed path."""
+    try:
+        if stat.S_ISLNK(os.lstat(path).st_mode):
+            return True
+    except OSError:
+        return False
+    junction = getattr(os.path, "isjunction", None)  # Python 3.12+
+    return bool(junction and junction(path))
+
+
+def _open_fixed(profile_dir: Path, parts: tuple[str, ...]) -> int:
+    """A read-only fd for exactly `profile_dir/parts`, never through a link. On POSIX each step is opened from the
+    one before with O_NOFOLLOW (a link put in between fails with ELOOP or ENOTDIR) and the file with O_NONBLOCK, so a
+    FIFO in its place cannot block; elsewhere the path is opened after its steps were found not to be links."""
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    if nofollow and os.open in os.supports_dir_fd:
+        fd = os.open(profile_dir, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        try:
+            for part in parts[:-1]:
+                nxt = os.open(part, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | nofollow, dir_fd=fd)
+                os.close(fd)
+                fd = nxt
+            return os.open(parts[-1], os.O_RDONLY | nofollow | getattr(os, "O_NONBLOCK", 0), dir_fd=fd)
+        finally:
+            os.close(fd)
+    return os.open(profile_dir.joinpath(*parts), os.O_RDONLY | getattr(os, "O_BINARY", 0))
+
+
 def read_page_file(profile_dir: Path, *parts: str) -> dict:
     """One file of the profile for the bot page: `{state, size, text, lossy}`. `state` is `ok`, `missing`,
-    `too_big` (sized, not read), `unreadable` (not a regular file, or the read failed) or `outside` (a link that
-    leads out of the profile, never followed). The text is decoded as Hermes reads it (UTF-8, a leading BOM
-    dropped, line ends as LF); bytes that are not UTF-8 become U+FFFD and `lossy` says so."""
-    path = profile_dir.joinpath(*parts)
+    `too_big` (sized, not read), `unreadable` (not a regular file, or the read failed) or `link` (the path or a
+    folder on it is a link: never followed, wherever it leads). Only the fixed path is read. The text is
+    decoded as Hermes reads it (UTF-8, a leading BOM dropped, line ends as LF); bytes that are not UTF-8 become
+    U+FFFD and `lossy` says so."""
     out = {"state": "missing", "size": None, "text": "", "lossy": False}
+    here = profile_dir
+    for part in parts:
+        here = here / part
+        if _is_link(here):
+            return {**out, "state": "link"}
     try:
-        os.lstat(path)
+        os.lstat(here)
     except OSError:
         return out
     try:
-        real, top = os.path.realpath(path), os.path.realpath(profile_dir)
-        if os.path.commonpath([real, top]) != top:
-            return {**out, "state": "outside"}
-    except ValueError:  # another drive on Windows
-        return {**out, "state": "outside"}
+        real, top = os.path.realpath(here), os.path.realpath(profile_dir)
+        if os.path.normcase(real) != os.path.normcase(os.path.join(top, *parts)):
+            return {**out, "state": "link"}
+    except (OSError, ValueError):
+        return {**out, "state": "link"}
     try:
-        if not os.path.isfile(real):
+        fd = _open_fixed(profile_dir, parts)
+    except OSError as e:
+        return {**out, "state": "link" if e.errno in (errno.ELOOP, errno.ENOTDIR) else "unreadable"}
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
             return {**out, "state": "unreadable"}
-        size = os.path.getsize(real)
-        if size > MEMORY_FILE_BYTES:
-            return {**out, "state": "too_big", "size": size}
-        with open(real, "rb") as fh:
-            data = fh.read(MEMORY_FILE_BYTES + 1)
+        if st.st_size > MEMORY_FILE_BYTES:
+            return {**out, "state": "too_big", "size": st.st_size}
+        chunks, left = [], MEMORY_FILE_BYTES + 1
+        while left > 0:
+            chunk = os.read(fd, left)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            left -= len(chunk)
+        data = b"".join(chunks)
     except OSError:
         return {**out, "state": "unreadable"}
-    if len(data) > MEMORY_FILE_BYTES:  # grew since stat
+    finally:
+        os.close(fd)
+    if len(data) > MEMORY_FILE_BYTES:  # grew since fstat
         return {**out, "state": "too_big", "size": len(data)}
     try:
         text, lossy = data.decode("utf-8-sig"), False

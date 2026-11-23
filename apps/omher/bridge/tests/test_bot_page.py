@@ -132,33 +132,73 @@ class Reader(unittest.TestCase):
         os.symlink(outside / "secret.md", d / "SOUL.md")
         os.symlink(outside / "secret.md", d / "memories" / "USER.md")
         page = ob.read_bot_page(d)
-        self.assertEqual((page["soul"]["state"], page["soul"]["text"]), ("outside", ""))
-        self.assertEqual((_target(page, "user")["state"], _target(page, "user")["entries"]), ("outside", []))
+        self.assertEqual((page["soul"]["state"], page["soul"]["text"]), ("link", ""))
+        self.assertEqual((_target(page, "user")["state"], _target(page, "user")["entries"]), ("link", []))
         # the memories folder itself linked out of the profile
         (d / "memories" / "USER.md").unlink()
         (d / "memories").rmdir()
         os.symlink(outside, d / "memories")
         (outside / "MEMORY.md").write_text("also not", encoding="utf-8")
-        self.assertEqual(_target(ob.read_bot_page(d), "memory")["state"], "outside")
+        self.assertEqual(_target(ob.read_bot_page(d), "memory")["state"], "link")
 
-    def test_a_path_that_resolves_out_of_the_profile_is_not_read_on_any_system(self):
-        # the same check without a symlink (Windows needs a privilege to make one): what the path resolves to decides
+    @unittest.skipIf(os.name == "nt", "creating symlinks needs a privilege on Windows")
+    def test_a_link_inside_the_profile_is_not_followed_either(self):
+        # the profile's own .env (or another bot's folder under the default profile) is never shown as a memory
+        d = _profile(self.root)
+        (d / ".env").write_text("SOME_API_KEY=invented-not-a-key\n", encoding="utf-8")
+        os.symlink(Path("..") / ".env", d / "memories" / "USER.md")
+        os.symlink(d / ".env", d / "SOUL.md")
+        page = ob.read_bot_page(d)
+        self.assertEqual((_target(page, "user")["state"], _target(page, "user")["entries"]), ("link", []))
+        self.assertEqual((page["soul"]["state"], page["soul"]["text"]), ("link", ""))
+        (d / "memories" / "USER.md").unlink()
+        (d / "inner").mkdir()
+        (d / "inner" / "MEMORY.md").write_text("x", encoding="utf-8")
+        (d / "memories").rmdir()
+        os.symlink(d / "inner", d / "memories")
+        self.assertEqual(_target(ob.read_bot_page(d), "memory")["state"], "link")
+        # a dangling link reads the same
+        (d / "SOUL.md").unlink()
+        os.symlink(d / "nowhere.md", d / "SOUL.md")
+        self.assertEqual(ob.read_bot_page(d)["soul"]["state"], "link")
+
+    def test_a_path_that_resolves_elsewhere_is_not_read_on_any_system(self):
+        # without a symlink (Windows needs a privilege to make one, and has junctions): what the path resolves to decides
         d = _profile(self.root)
         (d / "SOUL.md").write_text("here", encoding="utf-8")
         real = os.path.realpath
         away = str(self.root / "elsewhere" / "SOUL.md")
         with mock.patch.object(ob.os.path, "realpath", lambda p: away if str(p).endswith("SOUL.md") else real(p)):
-            self.assertEqual(ob.read_bot_page(d)["soul"]["state"], "outside")
-        with mock.patch.object(ob.os.path, "commonpath", side_effect=ValueError("another drive")):
-            self.assertEqual(ob.read_bot_page(d)["soul"]["state"], "outside")
+            self.assertEqual(ob.read_bot_page(d)["soul"]["state"], "link")
+        with mock.patch.object(ob, "_is_link", lambda p: p.name == "memories"):
+            self.assertEqual([m["state"] for m in ob.read_bot_page(d)["memory"]], ["link", "link"])
 
-    @unittest.skipIf(os.name == "nt", "creating symlinks needs a privilege on Windows")
-    def test_a_link_inside_the_profile_is_read(self):
+    @unittest.skipIf(os.name == "nt", "POSIX: the fd walk with O_NOFOLLOW")
+    def test_a_link_put_in_place_after_the_check_is_not_followed(self):
+        # the race the checks cannot close: a folder swapped for a link between the look and the open
         d = _profile(self.root)
-        (d / "persona").mkdir()
-        (d / "persona" / "soul.md").write_text("inside", encoding="utf-8")
-        os.symlink(d / "persona" / "soul.md", d / "SOUL.md")
-        self.assertEqual(ob.read_bot_page(d)["soul"]["text"], "inside")
+        outside = self.root / "elsewhere"
+        outside.mkdir()
+        (outside / "MEMORY.md").write_text("swapped in", encoding="utf-8")
+        (d / "memories" / "MEMORY.md").write_text("mine", encoding="utf-8")
+        real_open = ob._open_fixed
+
+        def swap_then_open(profile_dir, parts):
+            if parts[0] == "memories":
+                (d / "memories" / "MEMORY.md").unlink()
+                (d / "memories").rmdir()
+                os.symlink(outside, d / "memories")
+            return real_open(profile_dir, parts)
+
+        with mock.patch.object(ob, "_open_fixed", swap_then_open):
+            m = ob.read_page_file(d, "memories", "MEMORY.md")
+        self.assertEqual((m["state"], m["text"]), ("link", ""))
+
+    @unittest.skipIf(not hasattr(os, "mkfifo"), "no FIFOs on this system")
+    def test_a_fifo_in_place_of_a_file_does_not_block(self):
+        d = _profile(self.root)
+        os.mkfifo(d / "SOUL.md")
+        self.assertEqual(ob.read_bot_page(d)["soul"]["state"], "unreadable")
 
     def test_the_reader_writes_nothing(self):
         d = _profile(self.root)

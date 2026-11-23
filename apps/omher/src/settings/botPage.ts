@@ -15,8 +15,8 @@ export function fileProblem(f: Pick<BotSoul, "state" | "size" | "file">): string
       return t("bp.tooBig", { file: f.file, size: fileSize(f.size ?? 0), max: fileSize(PAGE_FILE_MAX) });
     case "unreadable":
       return t("bp.unreadable", { file: f.file });
-    case "outside":
-      return t("bp.outside", { file: f.file });
+    case "link":
+      return t("bp.link", { file: f.file });
     default:
       return null;
   }

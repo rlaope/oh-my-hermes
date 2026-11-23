@@ -40,7 +40,7 @@ describe("bot page helpers", () => {
       "memories/MEMORY.md is 3.0 MB, larger than the 1.0 MB omher reads, so it was not read.",
     );
     expect(fileProblem({ file: "SOUL.md", state: "unreadable", size: null })).toBe("SOUL.md could not be read.");
-    expect(fileProblem({ file: "SOUL.md", state: "outside", size: null })).toMatch(/outside this bot's folder/);
+    expect(fileProblem({ file: "SOUL.md", state: "link", size: null })).toBe("SOUL.md is a link, so omher does not read it.");
     expect(PAGE_FILE_MAX).toBe(1 << 20);
   });
 

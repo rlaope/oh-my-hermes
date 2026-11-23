@@ -63,9 +63,9 @@ export interface BotInfo {
 }
 
 /** How the bridge found one file of the bot's profile for its page: read (`ok`), absent, larger than it reads
- *  (`too_big`: sized only), not a regular file or a failed read (`unreadable`), or a link that leads out of the
- *  profile, which it never follows (`outside`). */
-export type PageFileState = "ok" | "missing" | "too_big" | "unreadable" | "outside";
+ *  (`too_big`: sized only), not a regular file or a failed read (`unreadable`), or a link (the file or a folder on
+ *  its path), which it never follows wherever it leads (`link`). */
+export type PageFileState = "ok" | "missing" | "too_big" | "unreadable" | "link";
 
 /** The profile's `SOUL.md` (the bot's persona), read-only. `text` is "" unless `state` is `ok`; `lossy`: some bytes
  *  were not UTF-8 and show as U+FFFD. */

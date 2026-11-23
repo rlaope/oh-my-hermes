@@ -645,8 +645,8 @@ let linearMcp;
 let notReady = new Map();
 
 // The bot page's persona and memory (bots.page), as the bridge's read_bot_page answers: one bot with everything,
-// one with no SOUL.md, a memory file too big to read and a switched-off target, one whose SOUL.md links out of its
-// folder and whose memory could not be read. A bot on another computer reads like its own profile there.
+// one with no SOUL.md, a memory file too big to read and a switched-off target, one whose SOUL.md is a link (never
+// followed) and whose memory could not be read. A bot on another computer reads like its own profile there.
 const DELIM = "\n§\n";
 const pageFile = (file, state, text = "", extra = {}) => ({
   file,
@@ -680,7 +680,7 @@ const BOT_PAGE_SEED = {
     ],
   }),
   default: () => ({
-    soul: pageFile("SOUL.md", "outside"),
+    soul: pageFile("SOUL.md", "link"),
     memory: [memTarget("memory", "MEMORY.md", "unreadable", [], 2200), memTarget("user", "USER.md", "missing", [], 1375)],
   }),
 };

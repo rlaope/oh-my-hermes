@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { answerSlot, answerSoFar, activityText, chatRoute, createStore, folderKey, setChatRoute, initialState, reduce, replyChipFor, selectTimeline, type Action, type AppState, type BridgeLike, type MessageItem } from "./store";
 import type { Away, BridgeEvent, ChatOpenResult } from "../lib/protocol";
+import { setDraft } from "../app/drafts";
 import type { BridgeStatus } from "../lib/bridge";
 
 // The recorded Hermes turn (real-turn-events.json), already converted to protocol events.
@@ -714,6 +715,19 @@ describe("store", () => {
     expect(s.ui.thread).toBeNull();
     expect(s.ui.draft).toMatchObject({ bot: "friren", text: "again: " });
     expect(f.calls.filter((c) => c.op === "chat.send" || c.op === "bots.page")).toEqual([]);
+  });
+
+  it("the bot page's Edit keeps the person's unsent text and does not add the same request twice", async () => {
+    const f = fakeBridge();
+    const store = createStore(f.bridge, { now: () => T0, hiddenBots: () => [] });
+    await store.actions.init();
+    setDraft("kami", "half a thought ");
+    await store.actions.draftTo("kami", "Update your SOUL.md: ");
+    expect(store.getState().ui.draft?.text).toBe("half a thought\nUpdate your SOUL.md: ");
+    setDraft("kami", "half a thought\nUpdate your SOUL.md: ");
+    await store.actions.draftTo("kami", "Update your SOUL.md: ");
+    expect(store.getState().ui.draft?.text).toBe("half a thought\nUpdate your SOUL.md: ");
+    setDraft("kami", "");
   });
 
   it("Open in Automations carries the bot to filter by; opening it another way clears it", () => {

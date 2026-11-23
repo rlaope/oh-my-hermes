@@ -638,7 +638,7 @@ export const zh: Record<Key, string> = {
   "bp.editTip": "打开机器人的聊天，把请求放进输入框，由你补完并发送。omher 不会编辑这个文件。",
   "bp.tooBig": "{file} 大小为 {size}，超过 omher 读取的上限 {max}，因此没有读取。",
   "bp.unreadable": "无法读取 {file}。",
-  "bp.outside": "{file} 指向这个机器人文件夹之外的文件，因此 omher 不读取它。",
+  "bp.link": "{file} 是一个链接，因此 omher 不读取它。",
   "bp.noSoul": "这个配置没有 SOUL.md。",
   "bp.soulEmpty": "SOUL.md 是空的。",
   "bp.lossy": "这个文件中有些字节不是 UTF-8，显示为 �。",

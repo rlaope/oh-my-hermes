@@ -123,13 +123,37 @@ test("Edit puts a request in the bot's main chat and sends nothing", async ({ pa
   await page.getByTestId("bp-edit-user").focus();
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("thread-chat")).toHaveCount(0);
-  await expect(page.getByTestId("composer")).toHaveValue("Update what you remember about me (memories/USER.md): ");
+  // the first request was still unsent in the box: it stays, and this one comes after it
+  await expect(page.getByTestId("composer")).toHaveValue("Update your SOUL.md:\nUpdate what you remember about me (memories/USER.md): ");
+  await page.getByTestId("composer").fill("");
   await botPage(page, "kami");
   await page.getByTestId("bp-edit-memory").click();
   await expect(page.getByTestId("composer")).toHaveValue("Update your memory (memories/MEMORY.md): ");
   await page.getByTestId("composer").pressSequentially("drop the CHANGELOG line");
   await expect(page.getByTestId("composer")).toHaveValue("Update your memory (memories/MEMORY.md): drop the CHANGELOG line");
   expect((await submits()).length).toBe(before);
+});
+
+test("Edit keeps what the person had typed in the main chat, and a second press adds nothing", async ({ page }) => {
+  await open(page);
+  const before = (await submits()).length;
+  await page.getByTestId("composer").fill("half a thought");
+  await botPage(page, "kami");
+  await page.getByTestId("bp-edit-soul").click();
+  await expect(page.getByTestId("composer")).toHaveValue("half a thought\nUpdate your SOUL.md: ");
+  await botPage(page, "kami");
+  await page.getByTestId("bp-edit-soul").click();
+  await expect(page.getByTestId("composer")).toHaveValue("half a thought\nUpdate your SOUL.md: ");
+  expect((await submits()).length).toBe(before);
+});
+
+test("a long memory scrolls inside its card", async ({ page }) => {
+  await open(page);
+  await botPage(page, "kami");
+  const list = page.getByTestId("bp-entries-memory");
+  await expect(list).toHaveCSS("overflow-y", "auto");
+  await expect(list).toHaveCSS("max-height", "360px");
+  await expect(page.getByTestId("bp-automations").locator(".bp-rows")).toHaveCSS("max-height", "320px");
 });
 
 test("empty and error states say what is there", async ({ page }) => {
@@ -146,9 +170,9 @@ test("empty and error states say what is there", async ({ page }) => {
   await expect(page.getByTestId("bp-threads")).toHaveText("No open threads.");
   await expect(page.getByTestId("bp-away")).toHaveCount(1);
 
-  // a SOUL.md that links out of the profile, a memory file that could not be read
+  // a SOUL.md that is a link, a memory file that could not be read
   await botPage(page, "default");
-  await expect(page.getByTestId("bp-persona")).toHaveText("SOUL.md links to a file outside this bot's folder, so omher does not read it.");
+  await expect(page.getByTestId("bp-persona")).toHaveText("SOUL.md is a link, so omher does not read it.");
   await expect(page.getByTestId("bp-mem-memory")).toContainText("memories/MEMORY.md could not be read.");
   await expect(page.getByTestId("bp-elsewhere")).toHaveText("No sessions in Slack, Discord, Telegram or cron yet.");
 

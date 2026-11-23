@@ -638,7 +638,7 @@ export const ko: Record<Key, string> = {
   "bp.editTip": "봇 채팅을 열고 요청을 입력창에 넣어요. 마무리해서 보내는 건 직접 해요. omher는 파일을 고치지 않아요.",
   "bp.tooBig": "{file}은(는) {size}로, omher가 읽는 {max}보다 커서 읽지 않았어요.",
   "bp.unreadable": "{file}을(를) 읽지 못했어요.",
-  "bp.outside": "{file}이(가) 이 봇 폴더 밖의 파일을 가리켜서 omher가 읽지 않아요.",
+  "bp.link": "{file}이(가) 링크여서 omher가 읽지 않아요.",
   "bp.noSoul": "이 프로필에는 SOUL.md가 없어요.",
   "bp.soulEmpty": "SOUL.md가 비어 있어요.",
   "bp.lossy": "이 파일의 일부 바이트가 UTF-8이 아니어서 �로 보여요.",

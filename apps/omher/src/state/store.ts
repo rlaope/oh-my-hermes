@@ -1993,8 +1993,8 @@ export interface Actions {
   setPanelMax(open: boolean, tab?: PanelTabId): void;
   /** Put text in the selected bot's composer and focus it. Never sends. */
   prefill(text: string): void;
-  /** Open `bot`'s main chat (not a thread) with `text` in its composer, for the person to finish and send. Never
-   *  sends (the bot page's Edit). */
+  /** Open `bot`'s main chat (not a thread) with `text` in its composer after what the person already typed there,
+   *  for them to finish and send. Never sends (the bot page's Edit). */
   draftTo(bot: string, text: string): Promise<void>;
   setTheme(theme: Theme): void;
   setLook(look: Partial<Look>): void;
@@ -2896,7 +2896,12 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     setPanelMax: (open, tab) => dispatch({ type: "ui.panelMax", open, tab }),
     async draftTo(bot, text) {
       if (state.selectedBot !== bot || state.ui.view !== "chat" || state.ui.thread) await selectBot(bot);
-      dispatch({ type: "ui.draft", bot, text });
+      // the person's unsent text stays, first, with the request after it (the caret lands after the request); a
+      // request already in the box is not added again
+      const raw = getDraft(bot);
+      const typed = raw.trim();
+      const next = !typed ? text : typed.includes(text.trim()) ? raw : `${typed}\n${text}`;
+      dispatch({ type: "ui.draft", bot, text: next });
     },
     prefill(text) {
       const bot = state.selectedBot;
