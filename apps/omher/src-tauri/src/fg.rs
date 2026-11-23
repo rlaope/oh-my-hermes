@@ -3,7 +3,7 @@
 //! The classification is pure ([`agent_for_exe`], [`agent_for_process`]) and reads the agent tables that decide
 //! what omher starts (`sessions::AGENTS`, `sessions::LAYOUTS`, `acp_agents::ACP_LIST`) plus the few CLIs people run
 //! themselves ([`OTHER_PROGRAMS`], [`OTHER_PACKAGES`]). [`Probe`] reads one process (unix: the terminal's foreground
-//! process group leader; Windows: the session program's process tree, [`outermost_agent`]) with no shelling out; the
+//! process group leader; Windows: the session program's process tree, `outermost_agent`) with no shelling out; the
 //! per-session poller is `Sessions::watch_foreground`. A shell, an unknown program, or a name that other programs share
 //! outside a known install place is `None`: the row then shows the shell, never a wrong company's mark.
 
@@ -317,7 +317,7 @@ fn argv_bytes(pid: u32, out: &mut Vec<u8>) -> bool {
     true
 }
 
-/// Windows has no foreground process group: [`outermost_agent`] over the session program's process tree. An npm CLI
+/// Windows has no foreground process group: `outermost_agent` over the session program's process tree. An npm CLI
 /// runs as `node.exe`, whose command line is not read here, so on Windows only native CLIs (`claude.exe`, `codex.exe`,
 /// …) are found.
 #[cfg(windows)]
@@ -333,23 +333,34 @@ impl Probe {
 /// process under it, by `all` ((pid, parent) pairs) and `image` (a process's image path and creation time). A known
 /// CLI owns everything under it, so `omh.exe` that runs `hermes.exe` is omh, as the unix foreground process group
 /// leader is: the CLIs under the shell that no other CLI started, and of those the newest; `None` when there is none.
+/// A process whose image cannot be read (another user's, an elevated one) is no CLI and is searched through. Windows
+/// reuses pids and a parent pid is never updated, so a process created before its parent is no child of it (its own
+/// parent ended and the pid went to this one): it and what is under it are left out.
 #[cfg(any(windows, test))]
 fn outermost_agent(root: u32, all: &[(u32, u32)], image: impl Fn(u32) -> Option<(String, u64)>) -> Option<&'static str> {
-    let mut tree = vec![root];
+    // (pid, the creation time of its nearest ancestor in the tree whose image was read)
+    let mut tree: Vec<(u32, Option<u64>)> = vec![(root, None)];
     let mut found = None;
     let mut i = 0;
     while i < tree.len() {
-        let p = tree[i];
+        let (p, parent_created) = tree[i];
         i += 1;
-        if let Some((created, a)) = image(p).and_then(|(path, created)| agent_for_exe(&path).map(|a| (created, a))) {
+        let img = image(p);
+        let created = img.as_ref().map(|(_, t)| *t);
+        if let (Some(t), Some(pt)) = (created, parent_created) {
+            if t < pt {
+                continue;
+            }
+        }
+        if let Some((created, a)) = img.and_then(|(path, created)| agent_for_exe(&path).map(|a| (created, a))) {
             // what this CLI runs is its own: not looked at
             if found.is_none_or(|(t, _)| created > t) {
                 found = Some((created, a));
             }
             continue;
         }
-        let kids: Vec<u32> = all.iter().filter(|(c, parent)| *parent == p && *c != p && !tree.contains(c)).map(|(c, _)| *c).collect();
-        tree.extend(kids);
+        let kids: Vec<u32> = all.iter().filter(|(c, parent)| *parent == p && *c != p && !tree.iter().any(|(t, _)| t == c)).map(|(c, _)| *c).collect();
+        tree.extend(kids.into_iter().map(|c| (c, created.or(parent_created))));
     }
     found.map(|(_, a)| a)
 }
@@ -733,6 +744,29 @@ mod tests {
         // a shell at its prompt, a pid with no process
         assert_eq!(pick(2, &[(2, 1, CMD, 2), (3, 2, NODE, 3)]), None);
         assert_eq!(pick(99, &[(2, 1, CMD, 2)]), None);
+    }
+
+    /// Windows reuses pids: a process older than the one now holding its parent's pid is no child of it.
+    #[test]
+    fn windows_a_reused_parent_pid_adopts_nothing() {
+        let claude = "C:\\Users\\me\\.local\\bin\\claude.exe";
+        // omher's launcher ended and this terminal's cmd.exe got its pid: omher.exe and every other session (older
+        // than cmd) are not under it
+        assert_eq!(pick(2, &[(2, 1, CMD, 5), (3, 2, claude, 1)]), None);
+        let reused = [(2, 1, CMD, 5), (3, 2, "C:\\Users\\me\\AppData\\Local\\omher\\omher.exe", 1), (4, 3, claude, 2), (6, 2, NODE, 6), (7, 6, HERMES, 7)];
+        assert_eq!(pick(2, &reused), Some("hermes"));
+        // across an unreadable image the nearest readable ancestor's time stands
+        assert_eq!(pick(2, &[(2, 1, CMD, 5), (3, 2, "", 6), (4, 3, claude, 1)]), None);
+        // started in the same tick as its parent: still its child
+        assert_eq!(pick(2, &[(2, 1, CMD, 5), (3, 2, claude, 5)]), Some("claude"));
+    }
+
+    #[test]
+    fn windows_parent_cycles_and_self_parents_end() {
+        let claude = "C:\\Users\\me\\.local\\bin\\claude.exe";
+        assert_eq!(pick(2, &[(2, 3, CMD, 2), (3, 2, NODE, 3)]), None);
+        assert_eq!(pick(2, &[(2, 2, CMD, 2)]), None);
+        assert_eq!(pick(2, &[(2, 4, CMD, 2), (3, 2, NODE, 3), (4, 3, claude, 4)]), Some("claude"));
     }
 
     #[cfg(unix)]
