@@ -5,11 +5,12 @@ import { MentionLink, useMentions } from "./Mention";
 import { remarkMentions } from "./remarkMentions";
 import { isBare, LinkChip } from "./LinkChip";
 import { keepTermLinks, remarkTermLinks } from "./remarkTermLinks";
+import { remarkObsidianLinks } from "./remarkObsidianLinks";
 import { TermLinkChip } from "./TermLinkChip";
 import { parseTermLink } from "../../sessions/termLink";
 import { CopyButton } from "./Copy";
 
-const plain = [remarkGfm, remarkTermLinks];
+const plain = [remarkGfm, remarkTermLinks, remarkObsidianLinks];
 
 const HANGUL = /[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]/;
 
@@ -24,7 +25,7 @@ function textOf(node: ReactNode): string {
 /** Bot markdown. Inside a MentionContext (the app), `@name` of a known bot opens that bot's chat. */
 export const Markdown = memo(function Markdown({ text }: { text: string }) {
   const resolve = useMentions()?.resolve;
-  const plugins = useMemo(() => (resolve ? [remarkGfm, remarkTermLinks, [remarkMentions, { resolve }] as const] : plain), [resolve]);
+  const plugins = useMemo(() => (resolve ? [remarkGfm, remarkTermLinks, remarkObsidianLinks, [remarkMentions, { resolve }] as const] : plain), [resolve]);
   return (
     <ReactMarkdown
       remarkPlugins={plugins as typeof plain}
@@ -42,8 +43,11 @@ export const Markdown = memo(function Markdown({ text }: { text: string }) {
               {children}
             </a>
           ),
+        // an obsidian:// link (remarkObsidianLinks): a chip that names the note and opens nothing, its own text kept
         span: ({ node: _n, ...p }) => {
           const bot = (p as Record<string, unknown>)["data-mention"];
+          const note = (p as Record<string, unknown>)["data-obsidian"];
+          if (typeof note === "string") return <LinkChip url={note}>{isBare(note, textOf(p.children)) ? undefined : p.children}</LinkChip>;
           return typeof bot === "string" ? <MentionLink bot={bot}>{p.children}</MentionLink> : <span {...p} />;
         },
         // a code block: its own copy control in the corner, shown on hover

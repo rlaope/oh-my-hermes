@@ -14,6 +14,7 @@ import { TermMenu } from "../sessions/term/TermMenu";
 import { SettingsView } from "./SettingsView";
 import { AutomationsPage } from "../pages/Automations";
 import { PluginsPage } from "../pages/Plugins";
+import { AppsPage } from "../apps/AppsPage";
 import { TasksPage } from "../tasks/TasksPage";
 import { useLookAttributes, useThemeAttribute } from "./theme";
 import { useShortcuts } from "./shortcuts";
@@ -80,6 +81,8 @@ export function App() {
           <AutomationsPage />
         ) : s.ui.view === "plugins" ? (
           <PluginsPage />
+        ) : s.ui.view === "apps" ? (
+          <AppsPage />
         ) : s.ui.view === "tasks" ? (
           <TasksPage />
         ) : s.ui.view === "session" ? (

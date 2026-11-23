@@ -587,17 +587,6 @@
   flex-direction: column;
   min-height: 0;
 }
-.tk-cmd {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: var(--r);
-  background: var(--raise);
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--ink);
-}
 
 /* ---- Tasks › 나 (Me) ---- */
 .tk-scope {

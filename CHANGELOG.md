@@ -52,6 +52,16 @@ All notable changes will be documented here.
   open thread at the same time as it listed the bot's threads again. The new bridge knew no thread yet and refused
   it, so the thread showed a false "not reachable" line and a turn Hermes lost there stayed unseen. Threads are now
   listed first and the open ones read after that, on reconnect and when a bot comes back. (Follow-up to #3127)
+- **omher: two terminals of one folder merge by dragging the header.** Drag a TERMINALS session's header down onto
+  its terminal and it joins the next session of its folder in a split, in the sidebar's order (the one before it when
+  it is the last; a row hidden by a search or a collapsed folder counts too): a translucent half shows where the
+  dragged session goes and the other half names the session that fills it. Taken back onto the header, or Escape,
+  nothing changes, and a button let go outside the window or the window losing focus ends the drag the same way; a
+  folder with no other session offers nothing, and a grab cursor shows only when a drag can do something. In a split
+  the header drags the focused pane as its grip does (not while the split is zoomed). The header also has an x: in a
+  split it closes the focused pane (the session stays in TERMINALS), on its own it closes the session as its row's x
+  does, undoable while it runs, and with the undo window Off it asks the row's Stop? first. Nothing new is started,
+  read, written or sent.
 - **omher: a bot's chat that stopped answering after a crash says why and gets going again.** When Hermes' gateway
   stops in the middle of a turn (a crash, a kill, Windows ending the process), Hermes brings that turn back as lost
   and keeps every later message of the chat in its own queue until someone acknowledges it, because the lost turn may
@@ -159,6 +169,23 @@ All notable changes will be documented here.
   come from chats only. Before the first reading the meter says it shows after your next
   Claude turn in omher. Local only: nothing is sent and no token is read.
   (`docs/OMHER-BOUNDARY.md` rules 11, 17 and 18)
+- **omher: a thread shows the pull requests its bot linked, and whether their checks pass.** A bot's thread often
+  ends with "opened https://github.com/<owner>/<repo>/pull/<n>", and omher showed only a link: the thread list could
+  not say whether that PR was open, merged or failing. Now a thread's row carries a small mark for the newest PR link
+  the bot wrote in its answers there (number, state, and the checks for an open PR or a draft: passing, failing or
+  running), and the transcript shows a card under the answer that named each one (the newest three), with the
+  repository; a click opens the PR on GitHub, Refresh asks again. Any full PR link in the bot's own answers counts,
+  whoever's PR it is; the person's words and a tool's output never do. They are read from the thread's saved rows in
+  the bot's `state.db` (across Hermes' compression of a long thread), with no gateway call, so a thread is never resumed for it. An open PR with failing checks
+  puts its thread in Needs you ("checks failing on #n") until the checks pass or it is merged or closed, and rings
+  at most once per failing head commit and never twice for the same PR within 6 hours. The state comes from the same
+  one `gh pr view` the Plans graph uses, now with `statusCheckRollup` and `headRefOid`, reduced to one word from the
+  checks' status fields (a check's name is never read); answers are kept 5 minutes, at most 4 calls run at once and
+  30 a minute, of which threads take at most 20. A row in view, or a thread in Needs you, is read again every
+  5 minutes at the soonest, only while its PR may still change, also while the window is hidden, with a doubling
+  wait after a failed read. Without `gh`, a login or the network the mark shows the number with no state; a bot on
+  another computer has no threads in omher. This is a display: it never changes a thread's state and starts, steers
+  or stops nothing. (`docs/OMHER-BOUNDARY.md` rules 21 and 40)
 - **omher Tasks shows my pull requests, reviews and issues across repositories and GitHub accounts.** The Tasks page
   has a scope toggle, "이 저장소 | 나". "나" lists, across every repository, the open pull requests asking for my
   review, my open pull requests, the open issues assigned to me and the last 7 days' mentions (folded until opened).
@@ -247,6 +274,18 @@ All notable changes will be documented here.
   turn and sends the prompt without an `Interrupted.` notice, like Claude Code's send-now; Hermes' "Operation
   interrupted: waiting for model response (…)" line never shows as the reply, while it streams, at the end, or in a
   resumed conversation. Esc and `/stop` still say `Interrupted.`.
+- **omher: link chips for Jira, Confluence, Sentry, Asana, Todoist, ClickUp, GitLab and Obsidian.** Links to these
+  showed as plain web links. They now show the service's mark and what the link is, read from the address alone:
+  a Jira issue as `ACME-123`, a board or project; a Confluence page by its title, or a space; a Sentry issue, project
+  or release; an Asana or Todoist task or project (Todoist with the task's name); a ClickUp task, list, space or
+  folder; a GitLab merge request as `group/project!42`, an issue, pipeline or commit, nested groups shortened to
+  `group/…/project`. Only the cloud hosts count (`*.atlassian.net`, `gitlab.com`): a self-hosted Jira or GitLab, or
+  a lookalike host, stays a plain link; another page on an Atlassian site (Compass, the site's home) is a generic
+  Atlassian chip. Google Calendar booking pages and Figma Make and Sites files get chips too.
+  An `obsidian://` link (open, search, new, vault; bare, written as a link or as a reference) shows the note's name
+  as text that opens nothing, because omher opens only web links and messenger threads; a screen reader reads its
+  address. Every label is bounded and has no control or bidi characters, and a title's escaped `+` (`%2B`) stays a
+  plus in Confluence, Notion, Figma and Google Maps chips.
 
 - **omher: the Slack briefing opens with a greeting and what it is about.** A brief could open with what the bot did
   or could not do ("could not open the log...") with nothing saying which alert or thread it meant, so the person had
@@ -392,6 +431,17 @@ All notable changes will be documented here.
   news everywhere (an accent dot on the row and the folder summary, a slowly breathing accent edge on the cell, "rang"
   in the notification), and the amber warning is kept for waits omher knows: a bot's request to type, a chat's approval
   or question. (`apps/omher/src/sessions/SplitLayoutCard.tsx`) (#3138)
+- **omher: an Apps page connects a bot to Notion, Linear, Jira and the rest of Hermes' MCP catalog.** The plug in
+  the sidebar's foot opens one bot's apps: every entry of Hermes' MCP catalog and its integration skills (Google
+  Workspace, Obsidian, Apple Notes and Reminders, Microsoft Office and others), grouped as work apps, ops and data,
+  then the rest, each with its state for that bot (not connected, connected, turned off, needs sign-in, or state
+  unknown when the bot's config cannot be read). Connect, Sign in and Remove run the bot's own
+  `hermes -p <bot> mcp install|login|remove <name>`; the sign-in is Hermes' own browser page, a value an install asks
+  for is typed in a terminal, and Hermes' own words are shown when a run does not work. New chats get the app's tools
+  within about a minute (Hermes' gateway reconciles its MCP servers on its own); an open chat gets them after
+  `/reload-mcp`. The Tasks page's Linear screen now opens this page instead of printing the command. omher reads the
+  catalog files, the bot's `mcp_servers` names and switches and whether a sign-in token file exists, and never sees a
+  key or a token (`docs/OMHER-BOUNDARY.md` rule 41). (`apps/omher/src/apps/`)
 
 - The OMH TUI no longer asks for kitty image previews in an omher terminal that cannot paint them. omher 1.1.3
   and earlier set `TERM_PROGRAM=omher` but draw no kitty Unicode placeholders, so pasting an image showed a block of
