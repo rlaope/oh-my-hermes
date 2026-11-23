@@ -134,7 +134,11 @@ Unclassifiable covers:
 - a function or alias named git or gh;
 - git or gh beside a forge verb under another program;
 - `execute_code` naming them, a `process` write that is not a whole line,
-  and a file-tool write under `.git/`.
+  and a file-tool write to a file git or gh reads as configuration or runs
+  as a hook (anything under `.git/` in any letter case, `.gitconfig`,
+  `~/.config/git/config`, `.gitmodules`, gh's `config.yml` and `hosts.yml`);
+- an operator run joined to its neighbours (`;(`, `&&(`), and a
+  backslash-newline inside a word, which are read the way bash reads them.
 
 In an attended chat nothing changes. The person is there, and Hermes' own
 approvals apply.
@@ -169,9 +173,13 @@ the forge without passing the gate:
 - an HTTP client with a token (`curl`, `wget`, `httpie`, a Python request),
   for which `gh auth token` is refused but any token already in the
   environment or a file is not;
-- an MCP forge tool whose name does not say merge, push, delete or
-  pull_request;
-- a local-path or `insteadOf` remote set up before the grant applied;
+- an MCP or other forge tool whose name does not say merge, push, delete,
+  fork, comment, review, close, label or a pull-request write. The gate reads
+  only the tool's name, never its arguments, so it cannot judge a comment
+  body sent through one;
+- a local-path or `insteadOf` remote set up before the grant applied, and a
+  `cd` into another checkout before `git push origin ...` (`git -C`,
+  `--git-dir` and `--work-tree` on a push are refused);
 - the grant file and the opened-PR record written by arbitrary code under
   another spelling (the file tools and command lines that name the store are
   refused);
@@ -186,8 +194,10 @@ the forge without passing the gate:
 - `gh issue create|comment|close|edit|reopen` are outside this gate (owner
   call, 2026-11-24). `gh run rerun|cancel|delete` and `gh issue
   delete|transfer|develop` are refused in an unattended run.
-- The merge-trigger refusals (a comment line starting with `/`, `@name
-  <word>` or `bors`, and any `--label` on PR creation) are a best-effort
+- The merge-trigger refusals (a comment or PR title or body line that
+  starts with `/`, `!`, `@name <word>` or `bors`, or names merge, automerge,
+  squash or rebase; and any `--label`, `--milestone` or `--project` on PR
+  creation) are a best-effort
   list. A merge bot that reads other words or labels is not covered.
 - A commit message or command argument that reads as a forge command, or
   holds a `$`, can be refused in an unattended session. This is the

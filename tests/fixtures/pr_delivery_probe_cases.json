@@ -442,18 +442,17 @@
   },
   {
    "command": "git -C /tmp/other push origin HEAD:main",
-   "class": "push_outside_bot_branches",
+   "class": "unclassified",
    "verdict": "refused"
   },
   {
    "command": "git -C /tmp/other push origin HEAD:refs/heads/bot/x",
-   "class": "push_bot_branch",
-   "verdict": "allowed",
-   "why_allowed": "grant-covered: allowed with the grant on, refused while it is off"
+   "class": "unclassified",
+   "verdict": "refused"
   },
   {
    "command": "git --git-dir=/tmp/x push origin HEAD:refs/heads/main",
-   "class": "push_outside_bot_branches",
+   "class": "unclassified",
    "verdict": "refused"
   },
   {
@@ -2196,6 +2195,244 @@
    "command": "gh api -X PUT -f -h repos/o/r/pulls/1/merge",
    "class": "merge",
    "verdict": "refused"
+  },
+  {
+   "command": "git status;(gh pr merge 42)",
+   "class": "merge",
+   "verdict": "refused"
+  },
+  {
+   "command": "git status&&(gh pr merge 42)",
+   "class": "merge",
+   "verdict": "refused"
+  },
+  {
+   "command": "git status||(git push -f origin HEAD:main)",
+   "class": "force_push_or_ref_delete",
+   "verdict": "refused"
+  },
+  {
+   "command": "git status|(sh)",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "git status >(gh pr merge 42)",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "git status <(gh pr merge 42)",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "git diff --no-index <(gh pr merge 42) x",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "git status;{ gh pr merge 42; }",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "git log -1;)gh pr merge 42",
+   "class": "merge",
+   "verdict": "refused"
+  },
+  {
+   "command": "git status&gh pr merge 42",
+   "class": "merge",
+   "verdict": "refused"
+  },
+  {
+   "command": "git status &>/dev/null;gh pr merge 42",
+   "class": "merge",
+   "verdict": "refused"
+  },
+  {
+   "command": "git status 2>&1|gh pr merge 42",
+   "class": "merge",
+   "verdict": "refused"
+  },
+  {
+   "command": "git status;;gh pr merge 42",
+   "class": "merge",
+   "verdict": "refused"
+  },
+  {
+   "command": "(git status);gh pr merge 42",
+   "class": "merge",
+   "verdict": "refused"
+  },
+  {
+   "command": "git status)&&(gh pr merge 42",
+   "class": "merge",
+   "verdict": "refused"
+  },
+  {
+   "command": "g\\\nit push -f origin HEAD:main",
+   "class": "force_push_or_ref_delete",
+   "verdict": "refused"
+  },
+  {
+   "command": "gi\\\nt push -f origin HEAD:main",
+   "class": "force_push_or_ref_delete",
+   "verdict": "refused"
+  },
+  {
+   "command": "git push -f origin \\\nHEAD:main",
+   "class": "force_push_or_ref_delete",
+   "verdict": "refused"
+  },
+  {
+   "command": "gh pr mer\\\nge 42",
+   "class": "merge",
+   "verdict": "refused"
+  },
+  {
+   "command": "git status \\\n&& gh pr merge 42",
+   "class": "merge",
+   "verdict": "refused"
+  },
+  {
+   "command": "git status\ngh pr merge 42 # it's\n# done'",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "git status\ngit push -f origin HEAD:main # don't\n# ok'",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "gh pr view 42\ngh pr merge 42 --admin #'\n'",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "git commit -m 'a\nb' \ngh pr merge 42 # it's\n'",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "GIT push -f origin HEAD:main",
+   "class": "force_push_or_ref_delete",
+   "verdict": "refused"
+  },
+  {
+   "command": "Git push -f origin HEAD:main",
+   "class": "force_push_or_ref_delete",
+   "verdict": "refused"
+  },
+  {
+   "command": "git push ORIGIN HEAD:refs/heads/bot/x",
+   "class": "push_outside_bot_branches",
+   "verdict": "refused"
+  },
+  {
+   "command": "git push origin HEAD:refs/heads/bot/x HEAD:refs/heads/bot/y",
+   "class": "push_bot_branch",
+   "verdict": "allowed",
+   "why_allowed": "grant-covered: allowed with the grant on, refused while it is off"
+  },
+  {
+   "command": "gh pr comment https://github.com/acme/widgets/pull/42 -b 'ok\n/merge'",
+   "class": "merge",
+   "verdict": "refused"
+  },
+  {
+   "command": "gh pr comment https://github.com/acme/widgets/pull/42 -b '  /merge'",
+   "class": "merge",
+   "verdict": "refused"
+  },
+  {
+   "command": "gh pr comment https://github.com/acme/widgets/pull/42 -b 'please merge @bot'",
+   "class": "merge",
+   "verdict": "refused"
+  },
+  {
+   "command": "gh pr comment https://github.com/acme/widgets/pull/42 -b '!merge'",
+   "class": "merge",
+   "verdict": "refused"
+  },
+  {
+   "command": "gh pr comment https://github.com/acme/widgets/pull/42 -b 'bors: r+'",
+   "class": "merge",
+   "verdict": "refused"
+  },
+  {
+   "command": "gh pr comment https://github.com/acme/widgets/pull/42 -b 'â/merge'",
+   "class": "merge",
+   "verdict": "refused"
+  },
+  {
+   "command": "gh pr comment https://github.com/acme/widgets/pull/42 --body=/merge",
+   "class": "merge",
+   "verdict": "refused"
+  },
+  {
+   "command": "gh pr comment https://github.com/acme/widgets/pull/42 -b/merge",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "gh pr create --head bot/x --title t --body b --reviewer x",
+   "class": "open_pr",
+   "verdict": "allowed",
+   "why_allowed": "grant-covered: allowed with the grant on, refused while it is off"
+  },
+  {
+   "command": "gh pr create --head bot/x --title t --body '/merge'",
+   "class": "merge",
+   "verdict": "refused"
+  },
+  {
+   "command": "gh pr create --head bot/x -t t -b b -l automerge",
+   "class": "other_pr_or_repository_write",
+   "verdict": "refused"
+  },
+  {
+   "command": "gh pr create --head bot/x -t t -b b -lautomerge",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "gh pr create --head bot/x -t t -b b --label=automerge",
+   "class": "other_pr_or_repository_write",
+   "verdict": "refused"
+  },
+  {
+   "command": "gh pr create --head bot/x -t t -b b -m v1",
+   "class": "other_pr_or_repository_write",
+   "verdict": "refused"
+  },
+  {
+   "command": "gh pr create --head bot/x -t t -b b --project x",
+   "class": "other_pr_or_repository_write",
+   "verdict": "refused"
+  },
+  {
+   "command": "gh pr create --head bot/x -t t -Fbody.md",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "git --git-dir=/tmp/other/.git push origin HEAD:refs/heads/bot/x",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "git --work-tree=. push origin HEAD:refs/heads/bot/x",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "cd /tmp/other && git push origin HEAD:refs/heads/bot/x",
+   "class": "push_bot_branch",
+   "verdict": "allowed",
+   "why_allowed": "grant-covered, but a cd into another checkout is not followed (stated residual)"
   }
  ]
 }

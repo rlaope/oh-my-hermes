@@ -103,6 +103,7 @@ _TRUTHY: Final = frozenset({"1", "true", "yes", "on"})
 _MAX_DEPTH: Final = 3
 _SEPARATORS: Final = frozenset({"&&", "||", "|", "|&", ";", ";;", ";&", ";;&", "&", "(", ")"})
 _REDIRECT: Final = re.compile(r"^&?[<>]+[&|]?$")
+_OPERATOR_RUN: Final = re.compile(r"^[();<>|&]+$")
 _SHELLS: Final = frozenset({"sh", "bash", "zsh", "dash", "ksh", "fish"})
 # Transparent wrappers: the command after them is the command. Each maps to
 # the options that take a separate value.
@@ -222,7 +223,8 @@ _GH_API_BOOL: Final = _aliases(("-i", "--include"), ("--paginate", "--paginate")
 _GH_API_BODY: Final = frozenset({"--raw-field", "--field", "--input"})
 _MERGE_ENDPOINT: Final = re.compile(r"(?:^|/)(?:merge|merges|auto-merge)(?:$|[/?])", re.IGNORECASE)
 # A comment line that is a command to a bot (`/merge`, `@bot merge`, `bors r+`).
-_BOT_COMMAND_LINE: Final = re.compile(r"^\s*(?:/|@\S+\s+\S|bors\b)", re.IGNORECASE)
+_BOT_COMMAND_LINE: Final = re.compile(r"^\W*(?:[/!]|@\S+\s+\S|bors\b)|\b(?:merge|automerge|squash|rebase)\b",
+                               re.IGNORECASE)
 _PR_NUMBER: Final = re.compile(r"^#?([1-9][0-9]{0,9})$")
 _REPO_NAME: Final = re.compile(r"^(?:([A-Za-z0-9.-]+)/)?([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)$")
 _DEFAULT_HOST: Final = "github.com"
@@ -230,6 +232,7 @@ _DEFAULT_HOST: Final = "github.com"
 # MCP tools that write to a forge, by the verbs in their names.
 _MCP_FORGE_WRITE: Final = re.compile(
     r"merge|push|delete|fork|create_pull_request|update_pull_request|create_or_update_file|create_branch|"
+    r"comment|update_issue|review|close|reopen|label|"
     r"create_ref|update_ref|"
     r"create_repository|update_repository", re.IGNORECASE)
 
@@ -242,6 +245,10 @@ _WRITE_METHOD: Final = re.compile(r"\b(?:PUT|POST|PATCH|DELETE)\b|--data|(?:^|\s
 _CREDENTIAL: Final = re.compile(
     r"\b(?:GH_TOKEN|GITHUB_TOKEN|GH_ENTERPRISE_TOKEN|GITHUB_ENTERPRISE_TOKEN)\b|gh/hosts\.yml|\.git-credentials",
     re.IGNORECASE)
+
+# Files git or gh read as configuration (global, XDG, submodules, gh's own).
+_FORGE_CONFIG_FILES: Final = frozenset({".gitconfig", ".gitmodules", ".git-credentials", ".gitattributes"})
+_FORGE_CONFIG_SUFFIXES: Final = ("git/config", "git/attributes", "gh/config.yml", "gh/hosts.yml")
 
 # The grant's command and store, as tokens.
 _GRANT_GROUP: Final = "capability-policy"
@@ -294,7 +301,9 @@ def _segments(tokens: list[str]) -> list[list[str]]:
     while index < len(tokens):
         token = tokens[index]
         index += 1
-        if token in _SEPARATORS:
+        if token in _SEPARATORS or (_OPERATOR_RUN.match(token) and not _REDIRECT.match(token)):
+            # `punctuation_chars` joins a run of operators into one token
+            # (`;(`, `&&(`, `);`): every such run ends a command.
             segments.append([])
             continue
         if _REDIRECT.match(token):
@@ -326,6 +335,7 @@ def _classify(command: object, context: _Context, depth: int) -> str:
         return LOCAL
     if depth > _MAX_DEPTH:
         return UNCLASSIFIED
+    command = _join_continuations(command)
     mentions_forge = _FORGE_WORD.search(command) is not None
     if _CREDENTIAL.search(command):
         return UNCLASSIFIED  # printing a forge credential takes the next step outside this gate
@@ -359,10 +369,15 @@ def _classify(command: object, context: _Context, depth: int) -> str:
     return _worst(classes)
 
 
+def _join_continuations(command: str) -> str:
+    """Remove backslash-newlines, as bash does before it reads a word (`g\\<newline>it` is `git`)."""
+    return command.replace("\\\r\n", "").replace("\\\n", "")
+
+
 def _defines_forge_function(tokens: list[str]) -> bool:
     """`git() {...}` or `gh ()`: every later git command in a persistent shell would be that function."""
     for index, token in enumerate(tokens[:-1]):
-        if _FORGE_CLI.match(_basename(token).lower()) and tokens[index + 1] == "(":
+        if _FORGE_CLI.match(_basename(token).lower()) and tokens[index + 1].startswith("("):
             return True
     return False
 
@@ -463,9 +478,11 @@ def _classify_segment(segment: list[str], context: _Context, depth: int) -> str:
 
 def _classify_git(args: list[str], context: _Context, depth: int) -> str:
     index = 0
+    relocated = False
     while index < len(args) and args[index].startswith("-"):
         option, has_value, _value = args[index].partition("=")
         if option in _GIT_GLOBAL_VALUE:
+            relocated = relocated or option in ("-C", "--git-dir", "--work-tree")
             if not has_value:
                 index += 1
         elif option not in _GIT_GLOBAL_BOOL:
@@ -477,7 +494,8 @@ def _classify_git(args: list[str], context: _Context, depth: int) -> str:
         return LOCAL
     subcommand, rest = args[index], args[index + 1:]
     if subcommand == "push":
-        return _classify_push(rest, context)
+        # Another checkout's `origin` is another repository: push from the work tree itself.
+        return UNCLASSIFIED if relocated else _classify_push(rest, context)
     if subcommand == "config":
         return _classify_git_config(rest)
     if subcommand == "remote":
@@ -684,8 +702,11 @@ def _classify_gh_pr(verb: str, args: list[str], context: _Context) -> str:
             return UNCLASSIFIED  # a body file is read off disk into a public PR
         if "--dry-run" in options:
             return LOCAL
-        if "--repo" in options or "--label" in options:
-            return OTHER_PR_OR_REPO  # another repository; a label can be an auto-merge rule's trigger
+        if options.keys() & {"--repo", "--label", "--milestone", "--project"}:
+            # Another repository; a label, milestone or project can be an auto-merge rule's condition.
+            return OTHER_PR_OR_REPO
+        if _asks_a_bot(options.get("--title", "") + "\n" + options.get("--body", "")):
+            return FORGE_MERGE
         head = options.get("--head", "")
         if not head:
             return UNQUALIFIED
@@ -700,13 +721,18 @@ def _classify_gh_pr(verb: str, args: list[str], context: _Context) -> str:
         options, positionals, known = _options(args, _GH_PR_COMMENT_VALUE, _GH_PR_COMMENT_BOOL)
         if not known or len(positionals) > 1 or "--body-file" in options:
             return UNCLASSIFIED
-        if any(_BOT_COMMAND_LINE.match(line) for line in options.get("--body", "").splitlines()):
+        if _asks_a_bot(options.get("--body", "")):
             return FORGE_MERGE
         pr = _selected_pr(positionals[0] if positionals else "", options.get("--repo", ""))
         if pr is None:
             return UNQUALIFIED
         return COMMENT_OWN_PR if pr in context.opened else OTHER_PR_OR_REPO
     return UNCLASSIFIED
+
+
+def _asks_a_bot(text: str) -> bool:
+    """Best effort: a line that reads as a command to a merge bot, or names merging at all."""
+    return any(_BOT_COMMAND_LINE.search(line) for line in text.splitlines())
 
 
 def _selected_pr(selector: str, repository: str) -> tuple[str, int] | None:
@@ -744,10 +770,15 @@ def _text_arg(tool_input: object, key: str) -> str:
 
 
 def _process_data(tool_input: object) -> str | None:
-    """The stdin a `process` write or submit sends to a background process, else None."""
-    if _text_arg(tool_input, "action") not in ("write", "submit"):
-        return None
-    return _text_arg(tool_input, "data")
+    """The stdin a `process` call sends to a background process, else None.
+
+    `write` and `submit` send it; any other action that carries `data` is
+    read the same way rather than trusted to ignore it.
+    """
+    data = _text_arg(tool_input, "data")
+    if _text_arg(tool_input, "action") in ("write", "submit") or data:
+        return data
+    return None
 
 
 def _names_store(token: str) -> bool:
@@ -761,6 +792,7 @@ def _names_store(token: str) -> bool:
 
 def _names_grant_change(command: str, depth: int = 0) -> bool:
     """Whether a command line would change the grant or touch its store."""
+    command = _join_continuations(command)
     tokens = _tokens(command)
     if not tokens:
         lowered = command.lower()
@@ -809,7 +841,9 @@ def _tool_class(tool: str, tool_input: object, prefix: str, opened: frozenset[tu
         data = _process_data(tool_input)
         if data is None:
             return LOCAL
-        if _text_arg(tool_input, "action") == "write" and data and not data.endswith("\n"):
+        if data.rstrip("\r\n").endswith("\\"):
+            return UNCLASSIFIED  # a line continuation joins this send with the next one
+        if _text_arg(tool_input, "action") != "submit" and data and not data.endswith("\n"):
             # A partial line is joined with the next write by the program
             # reading it, so no single write can be judged.
             return UNCLASSIFIED
@@ -820,10 +854,20 @@ def _tool_class(tool: str, tool_input: object, prefix: str, opened: frozenset[tu
     if tool in FILE_TOOLS:
         # A file under `.git/` (a hook, the config) runs on the next git command.
         targets = _edit_targets(tool, dict(tool_input) if isinstance(tool_input, Mapping) else {})
-        return UNCLASSIFIED if any(".git" in re.split(r"[\\/]", target) for target in targets) else LOCAL
-    if tool.lower().startswith("mcp") and _MCP_FORGE_WRITE.search(tool):
+        return UNCLASSIFIED if any(_configures_forge(target) for target in targets) else LOCAL
+    lowered = tool.lower()
+    if (lowered.startswith("mcp") or "github" in lowered or "gitlab" in lowered) and _MCP_FORGE_WRITE.search(tool):
         return OTHER_PR_OR_REPO
     return LOCAL
+
+
+def _configures_forge(target: str) -> bool:
+    """A file that git or gh reads as configuration or runs as a hook. Case-folded: APFS and NTFS ignore case."""
+    lowered = target.replace("\\", "/").casefold()
+    parts = lowered.split("/")
+    if ".git" in parts or parts[-1] in _FORGE_CONFIG_FILES:
+        return True
+    return lowered.endswith(_FORGE_CONFIG_SUFFIXES)
 
 
 def delivery_directive(

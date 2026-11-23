@@ -347,7 +347,6 @@ class UnattendedMatrixTests(_Home):
     GRANT_COVERED = (
         "git push origin HEAD:refs/heads/bot/fix-ci",
         "git push -u origin HEAD:bot/fix-ci",
-        "git -C ../repo push origin HEAD:refs/heads/bot/fix-ci",
         "git add -A && git commit -m 'fix: ci' && git push origin HEAD:refs/heads/bot/fix-ci",
         "gh pr create --head bot/fix-ci --title 'fix: ci' --body 'Fixes the lint job.'",
         f"gh pr comment {URL} --body 'Round 1 pushed.'",
@@ -371,7 +370,7 @@ class UnattendedMatrixTests(_Home):
         "git push --tags origin": gate.PUSH_OUTSIDE,
         "git push origin HEAD:refs/tags/v1": gate.PUSH_OUTSIDE,
         "git push origin 'HEAD:refs/heads/*'": gate.PUSH_OUTSIDE,
-        "git -C /srv/repo push origin HEAD:main": gate.PUSH_OUTSIDE,
+        "git -C /srv/repo push origin HEAD:main": gate.UNCLASSIFIED,
         "git merge bot/x && git push origin HEAD:main": gate.PUSH_OUTSIDE,
         "gh pr merge 42 --squash": gate.FORGE_MERGE,
         f"gh pr merge {URL} --auto --merge": gate.FORGE_MERGE,
@@ -482,6 +481,20 @@ class UnattendedMatrixTests(_Home):
             gate.OTHER_PR_OR_REPO,
         "git push --dry-run=no origin HEAD:main": gate.UNCLASSIFIED,
         "git push origin HEAD:refs/heads/bot/x:refs/heads/main": gate.UNQUALIFIED,
+        # Second verification round (R1-R5).
+        "git status;(gh pr merge 42)": gate.FORGE_MERGE,
+        "git status&&(gh pr merge 42)": gate.FORGE_MERGE,
+        "git status||(git push -f origin HEAD:main)": gate.FORCE_PUSH,
+        "(git status);gh pr merge 42": gate.FORGE_MERGE,
+        "git status|(sh)": gate.UNCLASSIFIED,
+        "g\\\nit push -f origin HEAD:main": gate.FORCE_PUSH,
+        "gi\\\nt push -f origin HEAD:main": gate.FORCE_PUSH,
+        "git -C ../repo push origin HEAD:refs/heads/bot/fix-ci": gate.UNCLASSIFIED,
+        "git --git-dir=/tmp/other/.git push origin HEAD:refs/heads/bot/x": gate.UNCLASSIFIED,
+        f"gh pr comment {URL} -b '!merge'": gate.FORGE_MERGE,
+        f"gh pr comment {URL} -b '\u200b/merge'": gate.FORGE_MERGE,
+        "gh pr create --head bot/x --title t --body '/merge'": gate.FORGE_MERGE,
+        "gh pr create --head bot/x -t t -b b -m v1": gate.OTHER_PR_OR_REPO,
     }
     LOCAL = (
         "git status", "git diff --stat", "git commit -m 'fix: ci'", "git fetch origin", "git log -1",
@@ -577,6 +590,23 @@ class UnattendedMatrixTests(_Home):
         self.assertEqual(partial["action"], "block")
         self.assertIsNone(self.pre("process", {"action": "submit", "session_id": "p1", "data": "git status"}))
         self.assertIsNone(self.pre("process", {"action": "poll", "session_id": "p1"}))
+
+    def test_process_sends_joined_by_a_continuation_are_held(self):
+        for args in ({"action": "write", "data": "g\\\n"}, {"action": "submit", "data": "g\\"},
+                     {"action": "submit", "data": "git status;(gh pr merge 42)"},
+                     {"action": "write", "data": "gh pr merge 42\r"}):
+            with self.subTest(args=args):
+                self.assertEqual(self.pre("process", {"session_id": "p1", **args})["action"], "block")
+
+    def test_forge_configuration_files_are_held_case_folded(self):
+        for path in ("repo/.GIT/hooks/pre-push", "repo/.git", "/home/u/.gitconfig", "/home/u/.config/git/config",
+                     "/home/u/.config/gh/config.yml", "repo/.gitmodules"):
+            with self.subTest(path=path):
+                self.assertEqual(self.pre("write_file", {"path": path, "content": "x"})["action"], "block")
+        for tool in ("mcp_github_add_issue_comment", "mcp_github_update_issue", "github_merge_pr",
+                     "MCP_GitHub_Merge", "mcp__github__merge_pull_request", "mcp_github_enable_pr_auto_merge"):
+            with self.subTest(tool=tool):
+                self.assertEqual(self.pre(tool, {"body": "/merge"})["action"], "block")
 
     def test_mcp_forge_writes_and_git_dir_writes_are_held(self):
         self.grant_on()
