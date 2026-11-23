@@ -5390,6 +5390,57 @@ _CHANNEL_WATCH_BLOCKERS = (
     "슬랙으로",
     "디스코드로",
 )
+# "Watch PR 42 until its checks finish" is a wait on one pull request: a Hermes
+# cron monitor job from github-event-ops' PR watch recipe, not a model polling
+# loop. Measured before the `pr_watch_before_loop_or_ultrawork` guard, the
+# English phrasings clarified toward `ultrawork` (its `until` and `finish`
+# triggers) or `loop`, and the Korean ones fell back. It needs all three: a
+# pull request named as one, a watch or wait verb, and a settle cue (until it
+# finishes, passes, or merges); a how-to question, a queue of PRs, or a video
+# stands it down.
+_PR_WATCH_SPOKEN_OBJECTS = ("pr", "pull request")
+_PR_WATCH_OBJECTS = ("풀 리퀘스트", "풀리퀘스트", "풀리퀘")
+_PR_WATCH_VERBS = (
+    "keep an eye on",
+    "keep watching",
+    "keep monitoring",
+    "wait for",
+    "wait on",
+    "wait until",
+    "지켜보",
+    "지켜봐",
+    "기다려",
+    "기다렸다",
+    "감시",
+    "모니터링",
+    "주시",
+)
+_PR_WATCH_SPOKEN_VERBS = ("watch", "monitor", "babysit")
+_PR_WATCH_SETTLE_TOKENS = frozenset(
+    {
+        "until", "till", "finish", "finishes", "finished", "done", "complete", "completes", "completed",
+        "pass", "passes", "passed", "green", "merge", "merges", "merged", "settle", "settles", "settled",
+    }
+)
+_PR_WATCH_SETTLE_CUES = (
+    "끝날",
+    "끝나",
+    "끝날 때까지",
+    "완료",
+    "통과",
+    "머지",
+    "때까지",
+)
+_PR_WATCH_BLOCKERS = (
+    *_GREENFIELD_QUESTION_OPENERS,
+    "queue",
+    "backlog",
+    "대기열",
+    "video",
+    "영상",
+    "youtube",
+    "유튜브",
+)
 _ONE_OFF_TOKENS = _normalized_token_set(
     {
         "once",
@@ -6054,6 +6105,15 @@ CHANNEL_WATCH_GUARD = RoutingGuardRule(
     why="Matched a messenger platform, a watch verb, and a tell-me cue; a channel watch is a recurring collector job with a [SILENT] judging prompt, not a one-off delivery card.",
     activation_status="active",
 )
+PR_WATCH_GUARD = RoutingGuardRule(
+    id="pr_watch_before_loop_or_ultrawork",
+    rule="Waiting on one pull request until its checks finish, it merges, or it settles should route to github-event-ops' PR watch recipe before the loop or ultrawork lanes.",
+    matched_label="guard:pr_watch",
+    preferred_skills=("github-event-ops",),
+    score_boost=44,
+    why="Matched a pull request, a watch or wait verb, and a settle cue; a PR watch is a bounded Hermes cron monitor job, not a model polling loop or a coding plan.",
+    activation_status="active",
+)
 RESEARCH_DEPARTMENT_GUARD = RoutingGuardRule(
     id="research_department_before_generic_scheduled_ops",
     rule="Recurring or durable research operations should route to the research department workflow pack before generic scheduled ops.",
@@ -6119,6 +6179,7 @@ ROUTING_GUARD_RULES = (
     RESEARCH_DEPARTMENT_GUARD,
     SCHEDULED_OPS_BLUEPRINT_GUARD,
     CHANNEL_WATCH_GUARD,
+    PR_WATCH_GUARD,
     SOURCE_FINDER_GUARD,
     WEB_RESEARCH_BEFORE_PROCESS_GUARD,
     POINT_IN_TIME_WEB_GUARD,
@@ -6243,6 +6304,7 @@ GUARD_DISPATCH_TRUST: dict[str, tuple[str, str]] = {
     "risky_refactor_before_cleanup": (GUARD_TRUSTED, "risky refactor named as the change; no measured record as a winner, keeps its shape label"),
     "safe_feature_change_before_generic_plan": (GUARD_TRUSTED, "a safe feature change named as the change; no measured record as a winner, keeps its shape label"),
     "channel_watch_before_gateway_or_connector": (GUARD_TRUSTED, "a watch verb on a Slack or Discord channel plus a tell-me cue; no measured record as a winner, keeps its shape label"),
+    "pr_watch_before_loop_or_ultrawork": (GUARD_TRUSTED, "a watch or wait verb on one pull request plus a settle cue; no measured record as a winner, keeps its shape label"),
     "scheduled_ops_blueprint_before_reliability_or_research": (GUARD_CONTEXT_ONLY, "a cadence plus a scheduled action; measured 0 right / 1 wrong"),
     "source_finder_before_generic_web_research": (GUARD_CONTEXT_ONLY, "fires on source and paper nouns; no measured record as a winner, keeps its shape label"),
     "strategy_brief_before_generic_plan": (GUARD_TRUSTED, "a decide-whether or prioritize decision shape; no measured record as a winner, keeps its shape label"),
@@ -6779,6 +6841,8 @@ def _active_routing_guard_rules_cached(
         rules.append(SCHEDULED_OPS_BLUEPRINT_GUARD)
     if not direct_coding_task_applies and channel_watch_guard_applies(normalized_query):
         rules.append(CHANNEL_WATCH_GUARD)
+    if not direct_coding_task_applies and pr_watch_guard_applies(normalized_query):
+        rules.append(PR_WATCH_GUARD)
     source_finder_applies = (
         not delivery_cycle_applies
         and not paper_learning_applies
@@ -10735,6 +10799,26 @@ def channel_watch_guard_applies(normalized_query: str) -> bool:
     if not _contains_phrase(normalized_query, _CHANNEL_WATCH_NOTIFY_CUES):
         return False
     return not _contains_phrase(normalized_query, _CHANNEL_WATCH_BLOCKERS)
+
+
+def pr_watch_guard_applies(normalized_query: str) -> bool:
+    """One pull request, a watch or wait verb, and a settle cue together; none alone."""
+    if not (
+        any(phrase_is_spoken(normalized_query, noun) for noun in _PR_WATCH_SPOKEN_OBJECTS)
+        or _contains_phrase(normalized_query, _PR_WATCH_OBJECTS)
+    ):
+        return False
+    if not (
+        _contains_phrase(normalized_query, _PR_WATCH_VERBS)
+        or any(phrase_is_spoken(normalized_query, verb) for verb in _PR_WATCH_SPOKEN_VERBS)
+    ):
+        return False
+    if not (
+        _contains_phrase(normalized_query, _PR_WATCH_SETTLE_CUES)
+        or _PR_WATCH_SETTLE_TOKENS & routing_terms(normalized_query)
+    ):
+        return False
+    return not _contains_phrase(normalized_query, _PR_WATCH_BLOCKERS)
 
 
 def credential_rotation_guard_applies(normalized_query: str) -> bool:

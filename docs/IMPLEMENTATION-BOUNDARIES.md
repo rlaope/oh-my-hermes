@@ -118,8 +118,7 @@ stays in `AGENTS.md`, where `tests/test_paired_run_arm_home.py` reads it.
   against a fake API on 127.0.0.1.
 - **PR watch monitor and event guard**: `src/skills/pr_watch_toolkit/scripts/pr_watch.py`
   and `pr_event_guard.py` ship as inert package data under `github-event-ops`'
-  `toolkit/` (a scoped integration proposed 2026-11-23 by the change that adds
-  them; merging it is the owner's approval). OMH core, install, update, routing
+  `toolkit/` (scoped integration, owner approval pending). OMH core, install, update, routing
   and doctor never import or execute them, and nothing in `src/` imports them.
   The person (or their bot, on their request) copies them into
   `<profile>/scripts/`: Hermes runs `pr_watch_<watch>.py` as a cron job's
@@ -128,7 +127,7 @@ stays in `AGENTS.md`, where `tests/test_paired_run_arm_home.py` reads it.
   forge: one fixed `gh pr view <pr> --repo <owner>/<name> --json ...` argv per
   tick, no shell, the repository and number validated first, stdin closed, a
   30 s timeout, output capped, the gh CLI's own sign-in and no token read; it
-  writes only its own state file. It is in INVARIANT 1's
+  writes only its PR's own state file. It is in INVARIANT 1's
   `PROCESS_SPAWN_ALLOWLIST`, and its exact argv is in INVARIANT 3's
   `GH_INVOCATION_EXCEPTIONS`. `pr_event_guard.py` opens no connection and starts
   no process: it reads the route payload on stdin as data, prints only fixed

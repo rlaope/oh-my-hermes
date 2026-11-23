@@ -109,7 +109,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # One-line code backlogs add ten: four made in the session, six one-line look-alikes that keep their route.
         # skill-eval adds four: a chess, tennis, interview and Korean sales skill are a person's ability.
         # Its review round adds one: a person's skill at using Codex.
-        self.assertEqual(payload["summary"]["case_count"], 1545)
+        # PR watch adds six: a PR queue, two videos, a how-to, a CI concept question and a watch-out warning.
+        self.assertEqual(payload["summary"]["case_count"], 1551)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -186,7 +187,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # A concept question under a busy-path gateway origin is answered directly (+1).
         # 356 -> 359: the reach round's negatives that the router answers directly.
         # 364 -> 370: four one-line code backlogs, functions to explain and a one-line typo answer directly.
-        self.assertEqual(payload["summary"]["direct_answer_count"], 370)
+        # 370 -> 371: the PR watch lane's CI concept question is answered directly.
+        self.assertEqual(payload["summary"]["direct_answer_count"], 371)
         # show-reel's README-link control is answered as a file lookup (+1).
         # "Use OMH to fix the failing test in billing.py" names a file: a file lookup (+1).
         # Copying the skills OMH selected and summarizing the files it picked
@@ -284,7 +286,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # skill-eval adds seven host-fit checks (four English, three Korean) and five asks that keep
         # skill-health, skill-scout and agent-evaluation.
         # Its review round adds three: two artifact checks that dispatch, one staff assessment that does not.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1352)
+        # PR watch adds seven: five waits on one PR that dispatch, a PR review and CI on main that keep their owner.
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1359)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

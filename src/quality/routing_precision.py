@@ -129,6 +129,16 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
     RoutingPrecisionCase("repro-audit-score-explainer", "Explaining a benchmark score is a direct answer", "Explain how HellaSwag score is computed", "answer_directly", "direct_answer", "repro-audit"),
     RoutingPrecisionCase("repro-audit-patient-conditions", "A patient's reported conditions are not paper conditions", "List the reported conditions for this patient", "answer_clarification", "", "repro-audit"),
     RoutingPrecisionCase("repro-audit-insurance-conditions", "An insurance claim's conditions are not evaluation evidence", "Write up the reported conditions for the insurance claim", "answer_clarification", "", "repro-audit"),
+    # The PR watch guard needs one pull request, a watch or wait verb and a
+    # settle cue together. These use some of those words without asking to wait
+    # on one PR: a queue of PRs, a video, a how-to question, a CI concept
+    # question, and a warning about a PR. None may even list github-event-ops.
+    RoutingPrecisionCase("pr-watch-a-queue-is-not-one-pr", "Watching the PR queue is not a wait on one pull request", "watch the PR queue until Friday", "answer_clarification", "", "github-event-ops"),
+    RoutingPrecisionCase("pr-watch-a-video-is-not-a-pr", "Watching a video until it ends is not a PR watch", "watch this video until it finishes", "answer_clarification", "", "github-event-ops"),
+    RoutingPrecisionCase("pr-watch-korean-video-is-not-a-pr", "A Korean video watch is not a PR watch", "유튜브 영상 끝날 때까지 지켜봐줘", "answer_clarification", "", "github-event-ops"),
+    RoutingPrecisionCase("pr-watch-how-to-question-is-not-a-watch", "Asking how to watch a PR is a question, not a watch", "how do I watch a PR until checks finish?", "answer_clarification", "", "github-event-ops"),
+    RoutingPrecisionCase("pr-watch-ci-concept-question-stays-direct", "A CI concept question is answered directly", "how do CI checks work?", "answer_directly", "direct_answer", "github-event-ops"),
+    RoutingPrecisionCase("pr-watch-watch-out-is-a-warning", "Watch out for a PR is a warning, not a wait", "watch out for this PR, it breaks the build", "answer_clarification", "", "github-event-ops"),
     RoutingPrecisionCase("repro-audit-weather-conditions", "Weather conditions are not evaluation conditions", "Summarize the reported conditions from the weather report", "answer_clarification", "", "repro-audit"),
     RoutingPrecisionCase("repro-audit-soccer-evaluations", "Player evaluations are not benchmark records", "Compare evaluation results for our soccer players this season", "answer_clarification", ""),
     RoutingPrecisionCase("repro-audit-student-evaluations", "Student evaluations are not benchmark records", "Compare evaluation results for my students between midterm and final", "answer_clarification", ""),
@@ -11954,6 +11964,18 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "prepare_github_issue_intake",
         "github_issue_intake",
     ),
+    # A wait on one pull request is github-event-ops' PR watch recipe (a Hermes
+    # cron monitor job), not a model loop. Before the pr_watch guard these
+    # clarified toward ultrawork or loop, or dispatched ultrawork.
+    RoutingInterventionCase("pr-watch-until-checks-finish", "Watching one PR until its checks finish reaches GitHub event ops", "watch PR 42 until its checks finish", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
+    RoutingInterventionCase("pr-watch-keep-an-eye-until-ci-done", "Keeping an eye on a pull request until CI is done reaches GitHub event ops", "keep an eye on my pull request until CI is done", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
+    RoutingInterventionCase("pr-watch-babysit-until-merged", "Babysitting a PR until it merges reaches GitHub event ops", "babysit PR #3137 until it is merged", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
+    RoutingInterventionCase("pr-watch-korean-until-checks-finish", "A Korean wait on one PR's checks reaches GitHub event ops", "PR 42 체크 끝날 때까지 지켜봐줘", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
+    RoutingInterventionCase("pr-watch-korean-until-merged", "A Korean wait on one PR until it merges reaches GitHub event ops", "이 PR 머지될 때까지 지켜보다가 알려줘", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
+    # The guard's own words in other lanes keep their owners: reviewing a PR is
+    # code review, and watching CI on a branch with no PR is verification.
+    RoutingInterventionCase("pr-watch-review-pr-stays-code-review", "Reviewing a PR is code review, not a PR watch", "review PR 42", "dispatch", "code-review", "prepare_review_or_followup_handoff", "review_check"),
+    RoutingInterventionCase("pr-watch-ci-on-main-stays-verification", "Watching CI on main with no PR stays on the verification gate", "monitor CI on main until the build is green", "dispatch", "verification-gate", "prepare_verification_gate", "verification_gate"),
     RoutingInterventionCase(
         "open-issue-event-stays-event-ops",
         "An already-open issue event with failing CI stays in GitHub event ops",

@@ -45,9 +45,10 @@ Write `<profile>/pr_watch/<watch>.json` with mode 600:
 {"name": "<watch>", "repo": "<owner>/<name>", "pr": <number>, "deadline": "<now + 2h, UTC, YYYY-MM-DDTHH:MM:SSZ>", "fix_round_cap": 2}
 ```
 
-`fix_round_cap` is at most 2; a larger value is a config error. The monitor
-reads the PR with the gh CLI's own sign-in, read-only: one `gh pr view --json`
-per tick.
+`fix_round_cap` is at most 2; a larger value is a config error. The watch
+ends at its `deadline`, and in any case 24 hours after its first tick. The
+monitor reads the PR with the gh CLI's own sign-in, read-only: one `gh pr view
+--json` per tick.
 
 ## 3. Create the job
 
@@ -68,10 +69,14 @@ watch prompt>" --name pr-watch-<watch> --monitor-script pr_watch_<watch>.py
 Hermes runs the monitor before the agent on every tick and compares the exact
 output bytes with the last ones: unchanged output suppresses the agent run
 (no model call), changed output wakes it with a `MONITOR CHANGE DETECTED`
-diff, and the first tick wakes it once as a baseline. While checks run the
-monitor prints only its header and `next=wait`, so a push during a run settles
-nothing and wakes nobody. A failed `gh` read is reported by Hermes as a failed
-monitor source for that tick, never as a change.
+diff, and the first tick wakes it once as a baseline. Unsettled is not a
+change: while a check runs, while GitHub reports mergeability as `UNKNOWN`, and
+on the first tick a new head shows no checks, the monitor prints this watch's
+last settled block again, byte for byte (`next=wait` only before anything
+settled), so a push or a CI run starting wakes nobody. A failed `gh` read is a
+failed monitor source for that tick, never a change, and each failed tick is
+delivered as an alert to the job's target: a signed-out gh sends one every
+tick until `gh auth status` is fixed or the job is removed.
 
 The watch prompt:
 
@@ -98,13 +103,22 @@ If your previous output already reported this same state, reply [SILENT].
 ## 4. The fix-round cap
 
 On a failed check the bot takes at most two fix rounds on that PR. The count
-comes from evidence, not memory: the monitor keeps the first head it saw with
-checks settled as failed, and every commit the PR's own commit list holds after
-that head is one round used, whoever pushed it. A round pushed as two commits
-counts as two. When that head is no longer in the list (history rewritten),
-the count is unreadable and a failed check is a person's. After the second
-round fails, the monitor prints `next=hand_to_person reason=fix_round_cap` and
-the run stops and hands the fix to a person's turn with the evidence above.
+comes from evidence, not memory, and it only grows. The monitor keeps, per PR
+(`pr_watch/state/<owner>/<name>/pr-<n>.json`, shared by every watch on that
+PR and kept when a watch is removed), the first head it saw with checks settled
+as failed, every distinct head it observed after it, and the highest count it
+printed. Rounds used is the largest of that stored count, the heads observed
+after the first failed head (an amend and force-push is a new head, so a new
+round), and the commits the PR's own commit list holds after that head, whoever
+pushed them; a round pushed as two commits counts as two. The commit list
+counts only when it ends at the current head and holds the first failed head:
+otherwise (history rewritten, a list cut at 100 commits, a stale list) the
+count is unreadable and a failed check is a person's. After the second round
+fails, the monitor prints `next=hand_to_person reason=fix_round_cap` and the
+run stops and hands the fix to a person's turn with the evidence above.
+Requested changes are a person's too, whatever the checks say. A new PR for the
+same fix starts a new count, so opening one after the cap is a person's
+decision, not a round.
 
 The script computes and prints the count; it cannot stop a run from pushing.
 The stop is the run obeying `next=`, and in this job a push is already a
@@ -116,12 +130,22 @@ A webhook route that starts review or fix runs gets `pr_event_guard.py` as its
 filter. It decides from the payload and its config alone, with no network and
 no process:
 
-- Own-PR guard: an event sent by one of `own_logins`, on a PR one of them
-  opened, on a head branch under one of `own_branch_prefixes`, or a comment or
-  review whose body holds `own_comment_marker`, is dropped. On its own PR the
-  bot is woken only by its PR watch.
+- Own-PR guard: an event sent by one of `own_logins` (for a workflow run, also
+  its `actor` or `triggering_actor`), on a PR one of them opened, on a head
+  branch under one of `own_branch_prefixes`, or a comment or review whose body
+  holds `own_comment_marker`, is dropped. On its own PR the bot is woken only
+  by its PR watch; once that watch has ended, a person's review or comment on
+  the bot's PR starts nothing until the person asks in chat or a new watch
+  starts.
 - Burst cap: at most `max_events` accepted events per `window_minutes` start a
-  run (default 5 per 15 minutes); the rest are dropped, not queued.
+  run (default 5 per 15 minutes); the rest are dropped, not queued. A GitHub
+  redelivery spends a slot like any event.
+- It fails closed: an event without `sender.login` is dropped, and any error
+  (config, payload, window file) drops the event.
+
+Set the GitHub webhook's Content type: `application/json`. A form-encoded
+delivery reaches the script as one `payload` field; the guard unwraps it, but
+JSON is what the rest of the route expects.
 
 ```sh
 install -d -m 700 "<profile>/scripts" "<profile>/pr_event_guard"
@@ -136,7 +160,10 @@ Write `<profile>/pr_event_guard/<route>.json` with mode 600:
 
 Name a login in `own_logins` only when only the bot's runs use it (a GitHub
 App or a machine user); a bot that acts as the person names a branch prefix
-and a comment marker instead. Then subscribe the route with the guard:
+(ending in `/` or `-`) and a comment marker instead. Set both when you can: a
+check event names no PR author and its sender is usually the CI app, so a
+logins-only config lets check events on the bot's PR through. Then subscribe
+the route with the guard:
 
 ```sh
 hermes -p <profile> webhook subscribe <route> --signature github \
@@ -153,5 +180,6 @@ no head branch, so a run that a person's comment started re-reads the PR's
 
 Remove the job (`cronjob_manage` remove, or `hermes cron remove`) and the
 route (`hermes webhook remove <route>`), then delete the script copies, their
-config files and their `.state.json` files. Config, output lines and exit codes
-are in `toolkit/README.md`.
+config files and the guard's `.state.json`. Keep `pr_watch/state/`: it is each
+PR's fix-round evidence, and a later watch on the same PR continues from it.
+Config, output lines and exit codes are in `toolkit/README.md`.

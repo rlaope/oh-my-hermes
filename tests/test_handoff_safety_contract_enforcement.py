@@ -2221,7 +2221,7 @@ GH_INVOCATION_EXCEPTIONS: dict[tuple[str, tuple[str, ...]], str] = {
         "src/skills/pr_watch_toolkit/scripts/pr_watch.py",
         (
             "gh", "pr", "view", "--repo", "--json",
-            "state,headRefOid,mergeable,reviewDecision,latestReviews,statusCheckRollup,commits",
+            "state,headRefOid,mergeable,reviewDecision,reviews,statusCheckRollup,commits",
         ),
     ): (
         "the PR watch monitor's one read of the PR it watches (the number and owner/name are validated "

@@ -567,8 +567,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # (experiment-tree, literature-retrieval); this branch's pin was 7c051fb0...7aaf, and main's was 66929abd...07a7.
         # github-event-ops then gains the PR watch recipe, the fix-round cap and the trigger guards, and
         # automation-blueprint points a PR wait at that recipe; only those two bodies move, and the pin before it
-        # was a5576186...5b9c.
-        self.assertEqual(_digest(legacy_hashes), '1bcdb9c023d882f3e4ee301cd3502e77f495e3b8f43870b1cb294e69dafa90d1')
+        # was a5576186...5b9c. Its review round then restates the fix-round count (per PR, never lower, an amend
+        # included) and the guard's content-type and alert notes; only github-event-ops moves again.
+        self.assertEqual(_digest(legacy_hashes), '64aaeb576371ff60774df34ab0f5c0584c951f7b56cd0c543e5b4114bfab2733')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

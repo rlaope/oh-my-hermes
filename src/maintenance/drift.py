@@ -1016,7 +1016,9 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # check of the current directory or branch stay off a graph and off live information (+13).
             # skill-eval: a chess, tennis, job-interview and Korean sales skill stay off the host-fit check (+4).
             # Its review round: a person's skill at using Codex stays off it too (+1).
-            expected=1545,
+            # PR watch: a PR queue, a video (English and Korean), a how-to question, a CI concept question and a
+            # watch-out warning stay off github-event-ops (+6).
+            expected=1551,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
@@ -1632,7 +1634,9 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # skill-health, skill-scout and agent-evaluation (+12).
             # Its review round: an agent skill loading in Codex and SKILL.md compatibility reach it, and a
             # Korean staff assessment keeps deep-interview (+3).
-            expected=1352,
+            # PR watch: five waits on one PR (three English, two Korean) reach github-event-ops, and a PR review
+            # and CI on main keep code-review and verification-gate (+7).
+            expected=1359,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

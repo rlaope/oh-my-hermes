@@ -10,6 +10,7 @@ fake `gh` on PATH to pin its real argv. Nothing reaches GitHub.
 
 from __future__ import annotations
 
+import ast
 import datetime as dt
 import importlib.util
 import io
@@ -20,9 +21,11 @@ import subprocess
 import sys
 import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from urllib.parse import urlencode
 
 from _platform_support import requires_posix
 
@@ -31,7 +34,9 @@ KIT = ROOT / "src/skills/pr_watch_toolkit"
 GUARD = KIT / "scripts/pr_event_guard.py"
 WATCH = KIT / "scripts/pr_watch.py"
 SENTINEL = "Zq7-payload-text-must-never-print-4411"
-GH_FIELDS = "state,headRefOid,mergeable,reviewDecision,latestReviews,statusCheckRollup,commits"
+GH_FIELDS = "state,headRefOid,mergeable,reviewDecision,reviews,statusCheckRollup,commits"
+HEADER = "pr-watch: widgets-pr-42 acme/widgets#42"
+WAIT = "next=wait reason=unsettled"
 
 
 def load(path: Path, name: str):
@@ -52,6 +57,12 @@ def pr_event(sender="alice", author="alice", ref="feature/x", body=None) -> dict
     if body is not None:
         event["comment"] = {"body": body}
     return event
+
+
+def form_encoded(payload: dict) -> dict:
+    """What Hermes hands the script for a GitHub delivery sent as application/x-www-form-urlencoded."""
+    from urllib.parse import parse_qsl
+    return dict(parse_qsl(urlencode({"payload": json.dumps(payload)})))
 
 
 class GuardProcessTest(unittest.TestCase):
@@ -93,6 +104,14 @@ class GuardProcessTest(unittest.TestCase):
     def test_event_sent_by_the_bot_is_dropped(self):
         self.assert_dropped(self.run_guard(pr_event(sender="Widgets-Bot[bot]")), "own_sender")
 
+    def test_workflow_run_the_bot_started_is_dropped_under_a_logins_only_config(self):
+        self.write_config(own_branch_prefixes=[])
+        for field in ("actor", "triggering_actor"):
+            event = {"action": "completed", "sender": {"login": "github-actions[bot]"},
+                     "workflow_run": {"head_branch": "fix", field: {"login": "widgets-bot[bot]"}}}
+            with self.subTest(field=field):
+                self.assert_dropped(self.run_guard(event), "own_sender")
+
     def test_comment_on_a_pr_the_bot_opened_is_dropped(self):
         event = {"action": "created", "sender": {"login": "alice"}, "comment": {"body": "looks good"},
                  "issue": {"number": 7, "user": {"login": "widgets-bot[bot]"}, "pull_request": {"url": "x"}}}
@@ -123,12 +142,26 @@ class GuardProcessTest(unittest.TestCase):
             pr_event(sender="xwidgets-bot[bot]"),
             pr_event(ref="xbot/fix"),
             pr_event(ref="feature/bot/fix"),
+            pr_event(ref="bottom-fix"),
             pr_event(body="<!-- bot-run"),
         )
         for index, payload in enumerate(cases):
             self.write_config(max_events=100)
             with self.subTest(case=index):
                 self.assert_passed(self.run_guard(payload))
+
+    def test_a_form_encoded_delivery_is_unwrapped_before_the_guard_decides(self):
+        self.assert_dropped(self.run_guard(form_encoded(pr_event(sender="widgets-bot[bot]"))), "own_sender")
+        self.assert_passed(self.run_guard(form_encoded(pr_event())))
+        proc = self.run_guard({"payload": "not json"})
+        self.assertEqual((proc.returncode, proc.stdout), (4, b""))
+
+    def test_an_event_without_a_sender_is_dropped_and_spends_nothing(self):
+        for payload in ({"pull_request": {"head": {"ref": "x"}}}, {"payload": {"sender": {"login": "a"}}},
+                        {"sender": "alice"}, {"sender": {"login": ""}}, {"zen": "Keep it logically awesome."}):
+            with self.subTest(payload=payload):
+                self.assert_dropped(self.run_guard(payload), "unrecognized_payload")
+        self.assertFalse((self.home / "pr_event_guard" / "widgets-events.state.json").exists())
 
     def test_burst_over_the_cap_is_dropped(self):
         for _ in range(5):
@@ -137,25 +170,35 @@ class GuardProcessTest(unittest.TestCase):
         state = json.loads((self.home / "pr_event_guard" / "widgets-events.state.json").read_text())
         self.assertEqual(len(state["accepted"]), 5)  # the dropped event is not counted
 
+    def test_concurrent_deliveries_never_admit_more_than_the_cap(self):
+        with ThreadPoolExecutor(max_workers=12) as pool:
+            procs = list(pool.map(lambda _: self.run_guard(pr_event()), range(12)))
+        passed = [p for p in procs if p.stdout.decode().startswith("pr-event-guard: pass")]
+        self.assertEqual(len(passed), 5, [p.stderr.decode() for p in procs])
+        for proc in procs:
+            self.assertIn(proc.returncode, (0, 5))  # 5: the lock stayed busy, and the event was dropped
+
     def test_own_events_do_not_spend_the_window(self):
         self.write_config(max_events=1)
         self.assert_dropped(self.run_guard(pr_event(sender="widgets-bot[bot]")), "own_sender")
         self.assert_passed(self.run_guard(pr_event()))
 
     def test_malformed_stdin_is_dropped_with_a_nonzero_exit(self):
-        for raw in (b"", b"not json", b"[1, 2]", b'"text"', b"\xff\xfe"):
-            with self.subTest(raw=raw):
+        deep = b"[" * 200_000 + b"]" * 200_000
+        for raw in (b"", b"not json", b"[1, 2]", b'"text"', b"\xff\xfe", deep, b'{"payload": "' + b"[" * 50 + b'"}'):
+            with self.subTest(raw=raw[:20]):
                 proc = self.run_guard(raw)
-                self.assertEqual(proc.returncode, 4)
+                self.assertEqual(proc.returncode, 4, proc.stderr[-300:])
                 self.assertEqual(proc.stdout, b"")
+                self.assertNotIn(b"Traceback", proc.stderr)
 
     def test_hostile_field_types_are_data_and_never_echoed(self):
         hostile = {
-            "sender": "widgets-bot[bot]",
+            "sender": {"login": "mallory"},
             "pull_request": [SENTINEL],
             "issue": {"user": {"login": ["widgets-bot[bot]"]}},
             "check_run": {"pull_requests": [5, None, {"head": "bot/x"}, {"head": {"ref": 9}}]},
-            "workflow_run": {"head_branch": {"$ne": ""}},
+            "workflow_run": {"head_branch": {"$ne": ""}, "actor": "widgets-bot[bot]"},
             "comment": {"body": {"text": "<!-- bot-run -->"}},
             "ref": ["refs/heads/bot/x"],
             "title": "$(touch pwned) `rm -rf /` " + SENTINEL * 50,
@@ -164,6 +207,7 @@ class GuardProcessTest(unittest.TestCase):
         self.assert_passed(proc)
         self.assertNotIn(SENTINEL, proc.stdout.decode() + proc.stderr.decode())
         self.assertFalse((self.home / "pwned").exists())
+        self.assert_dropped(self.run_guard({**hostile, "sender": "widgets-bot[bot]"}), "unrecognized_payload")
 
     def test_payload_text_never_prints_on_a_drop(self):
         proc = self.run_guard(pr_event(ref="bot/" + SENTINEL))
@@ -174,7 +218,8 @@ class GuardProcessTest(unittest.TestCase):
         bad = (
             {"name": "widgets-events"},
             guard_config(own_logins=["bad login"]),
-            guard_config(own_branch_prefixes=["-x"]),
+            guard_config(own_branch_prefixes=["-x/"]),
+            guard_config(own_branch_prefixes=["bot"]),
             guard_config(own_comment_marker="short"),
             guard_config(max_events=0),
             guard_config(window_minutes=True),
@@ -213,6 +258,7 @@ class GuardInProcessTest(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         self.config = Path(tmp.name) / "widgets-events.json"
         self.config.write_text(json.dumps(guard_config(max_events=2, window_minutes=15)), encoding="utf-8")
+        self.state = self.config.with_name("widgets-events.state.json")
 
     def run_at(self, now: float, payload=None) -> tuple[int, str]:
         out, err = io.StringIO(), io.StringIO()
@@ -229,13 +275,25 @@ class GuardInProcessTest(unittest.TestCase):
         self.assertEqual(self.run_at(start + 15 * 60 - 1), (0, "[SILENT]"))
         self.assertTrue(self.run_at(start + 15 * 60 + 1)[1].startswith("pr-event-guard: pass window_count=2"))
 
-    def test_junk_and_future_stamps_in_the_state_do_not_block(self):
+    def test_a_clock_moved_back_does_not_reopen_the_window(self):
+        start = 1_800_000_000.0
+        self.run_at(start)
+        self.run_at(start + 1)
+        self.assertEqual(self.run_at(start - 3600), (0, "[SILENT]"))
+
+    def test_junk_stamps_are_ignored(self):
         now = 1_800_000_000
-        state = self.config.with_name("widgets-events.state.json")
-        state.write_text(json.dumps({"accepted": ["x", None, True, now + 10_000, now + 20_000, 1.5]}), encoding="utf-8")
+        self.state.write_text(json.dumps({"accepted": ["x", None, True, 1.5, now - 10_000]}), encoding="utf-8")
         self.assertTrue(self.run_at(now)[1].startswith("pr-event-guard: pass window_count=1"))
-        state.write_text("{not json", encoding="utf-8")
-        self.assertTrue(self.run_at(now + 1)[1].startswith("pr-event-guard: pass window_count=1"))
+
+    def test_an_unreadable_window_file_is_a_full_window(self):
+        now = 1_800_000_000
+        for damaged in ("{not json", "[1, 2]", '{"accepted": "x"}'):
+            self.state.write_text(damaged, encoding="utf-8")
+            with self.subTest(damaged=damaged):
+                self.assertEqual(self.run_at(now), (0, "[SILENT]"))
+                self.assertEqual(self.run_at(now + 60), (0, "[SILENT]"))
+        self.assertTrue(self.run_at(now + 15 * 60 + 1)[1].startswith("pr-event-guard: pass"))
 
     def test_a_held_lock_drops_the_event_and_a_stale_one_is_taken(self):
         lock = self.config.with_name("widgets-events.state.json.lock")
@@ -250,6 +308,11 @@ class GuardInProcessTest(unittest.TestCase):
         self.assertTrue(out.startswith("pr-event-guard: pass"), out)
         self.assertFalse(lock.exists())
 
+    @requires_posix
+    def test_the_window_file_is_private(self):
+        self.run_at(time.time())
+        self.assertEqual(self.state.stat().st_mode & 0o777, 0o600)
+
 
 # ---------------------------------------------------------------- monitor
 
@@ -262,11 +325,12 @@ def check_run(conclusion: str | None, status: str = "COMPLETED") -> dict:
 def gh_view(head: str, commits: list[str], checks: list[dict], state="OPEN", mergeable="MERGEABLE",
             decision="", reviews: int = 0) -> dict:
     return {"state": state, "headRefOid": head, "mergeable": mergeable, "reviewDecision": decision,
-            "latestReviews": [{"state": "COMMENTED", "body": SENTINEL}] * reviews,
+            "reviews": [{"state": "COMMENTED", "author": {"login": "carol"}, "body": SENTINEL}] * reviews
+            + [{"state": "PENDING", "body": "draft"}],
             "statusCheckRollup": checks, "commits": [{"oid": oid, "messageHeadline": SENTINEL} for oid in commits]}
 
 
-A, B, C, D = ("a" * 40, "b" * 40, "c" * 40, "d" * 40)
+A, B, C, D, E = ("a" * 40, "b" * 40, "c" * 40, "d" * 40, "e" * 40)
 FAIL = [check_run("SUCCESS"), check_run("FAILURE")]
 PASS = [check_run("SUCCESS"), {"__typename": "StatusContext", "context": "ci/legacy", "state": "SUCCESS"}]
 RUNNING = [check_run("SUCCESS"), check_run(None, status="IN_PROGRESS")]
@@ -281,9 +345,10 @@ class WatchTest(unittest.TestCase):
         self.config = self.dir / "widgets-pr-42.json"
         self.write_config()
         self.now = dt.datetime(2026, 11, 23, 12, 0, tzinfo=dt.timezone.utc)
+        self.state = self.dir / "state" / "acme" / "widgets" / "pr-42.json"
 
-    def write_config(self, **extra):
-        cfg = {"name": "widgets-pr-42", "repo": "acme/widgets", "pr": 42, "deadline": "2026-11-23T14:00:00Z", **extra}
+    def write_config(self, name="widgets-pr-42", **extra):
+        cfg = {"name": name, "repo": "acme/widgets", "pr": 42, "deadline": "2026-11-23T14:00:00Z", **extra}
         self.config.write_text(json.dumps(cfg), encoding="utf-8")
 
     def tick(self, data=None, now=None) -> tuple[int, str, str]:
@@ -307,7 +372,7 @@ class WatchTest(unittest.TestCase):
         second = self.tick(gh_view(A, [A], FAIL))[1]
         self.assertEqual(first, second)
         self.assertEqual(first.splitlines(), [
-            "pr-watch: widgets-pr-42 acme/widgets#42",
+            HEADER,
             f"state=open head={A[:12]} conflict=no",
             "checks=fail passed=1 failed=1 pending=0",
             "reviews=0 decision=none",
@@ -320,27 +385,54 @@ class WatchTest(unittest.TestCase):
             gh_view(A, [A], RUNNING), gh_view(A, [A], FAIL), gh_view(A, [A], FAIL, mergeable="CONFLICTING"),
             gh_view(A, [A], FAIL, reviews=1), gh_view(A, [A], FAIL, state="MERGED"),
         )]
+        self.assertEqual(outputs[0], f"{HEADER}\n{WAIT}\n")
         self.assertEqual(len(set(outputs)), len(outputs))
 
-    def test_a_push_while_checks_run_keeps_the_same_bytes(self):
-        self.tick(gh_view(A, [A], FAIL))
-        one = self.tick(gh_view(B, [A, B], RUNNING))[1]
-        two = self.tick(gh_view(C, [A, B, C], RUNNING))[1]
-        self.assertEqual(one, two)
-        self.assertEqual(one.splitlines(), ["pr-watch: widgets-pr-42 acme/widgets#42", "next=wait reason=checks_running"])
+    def test_unsettled_ticks_repeat_the_last_settled_bytes(self):
+        settled = self.tick(gh_view(A, [A], FAIL))[1]
+        for view in (
+            gh_view(B, [A, B], RUNNING),                     # the fix was pushed and CI is running
+            gh_view(C, [A, B, C], RUNNING),                  # another push mid-run
+            gh_view(C, [A, B, C], PASS, mergeable="UNKNOWN"),  # GitHub recomputing mergeability
+            gh_view(C, [A, B, C], []),                       # a new head before CI registered its checks
+            {**gh_view(C, [A, B, C], PASS), "state": "?"},   # an unreadable PR state
+            {**gh_view(C, [A, B, C], PASS), "headRefOid": None},
+        ):
+            with self.subTest(view=view["headRefOid"]):
+                self.assertEqual(self.tick(view)[1], settled)
+
+    def test_a_conflict_that_flickers_through_unknown_wakes_once(self):
+        outputs = [self.tick(gh_view(A, [A], PASS, mergeable=m))[1] for m in ("CONFLICTING", "UNKNOWN", "CONFLICTING")]
+        self.assertEqual(len(set(outputs)), 1)
+        self.assertIn("next=hand_to_person reason=merge_conflict", outputs[0])
+
+    def test_no_checks_settles_only_on_the_second_tick_of_the_same_head(self):
+        self.assertEqual(self.next_line(gh_view(A, [A], [])), WAIT)
+        self.assertEqual(self.next_line(gh_view(A, [A], [])), "next=report reason=checks_none")
 
     def test_two_fix_rounds_then_the_fix_is_a_persons(self):
         steps = (
             (gh_view(A, [A], FAIL), "next=fix_round round=1"),
-            (gh_view(B, [A, B], RUNNING), "next=wait reason=checks_running"),
+            (gh_view(B, [A, B], RUNNING), "next=fix_round round=1"),  # unsettled: the last settled bytes again
             (gh_view(B, [A, B], FAIL), "next=fix_round round=2"),
             (gh_view(C, [A, B, C], FAIL), "next=hand_to_person reason=fix_round_cap"),
             (gh_view(C, [A, B, C], PASS), "next=report reason=checks_pass"),
         )
         for data, expected in steps:
             self.assertEqual(self.next_line(data), expected)
-        state = json.loads(self.config.with_name("widgets-pr-42.state.json").read_text())
-        self.assertEqual(state, {"first_failed_head": A})
+        state = json.loads(self.state.read_text())
+        self.assertEqual((state["first_failed_head"], state["rounds_floor"], state["heads_after"]), (A, 2, [B, C]))
+
+    def test_an_amend_and_force_push_is_a_round_and_the_count_never_drops(self):
+        # The reviewer's probe: the first fix is amended and force-pushed twice over the same baseline.
+        steps = (
+            (gh_view(A, [A], FAIL), "next=fix_round round=1"),
+            (gh_view(B, [A, B], FAIL), "next=fix_round round=2"),
+            (gh_view(C, [A, C], FAIL), "next=hand_to_person reason=fix_round_cap"),
+            (gh_view(D, [A, D], FAIL), "next=hand_to_person reason=fix_round_cap"),
+        )
+        for data, expected in steps:
+            self.assertEqual(self.next_line(data), expected)
 
     def test_a_round_of_two_commits_counts_as_two(self):
         self.tick(gh_view(A, [A], FAIL))
@@ -350,27 +442,67 @@ class WatchTest(unittest.TestCase):
         self.write_config(fix_round_cap=0)
         self.assertEqual(self.next_line(gh_view(A, [A], FAIL)), "next=hand_to_person reason=fix_round_cap")
 
+    def test_a_commit_list_that_does_not_end_at_the_head_is_unreadable(self):
+        # GitHub's commit list stops at 100 commits, and a list can be stale: the head is not its last entry.
+        self.assertEqual(self.next_line(gh_view(B, [A], FAIL)), "next=hand_to_person reason=fix_rounds_unreadable")
+        self.state.unlink()
+        self.tick(gh_view(A, [A], FAIL))
+        _, out, _ = self.tick(gh_view(C, [A, B], FAIL))
+        self.assertIn("fix_rounds_used=unreadable", out)
+        self.assertEqual(out.strip().splitlines()[-1], "next=hand_to_person reason=fix_rounds_unreadable")
+
     def test_rewritten_history_makes_the_count_unreadable(self):
         self.tick(gh_view(A, [A], FAIL))
-        code, out, _ = self.tick(gh_view(D, [D], FAIL))
+        _, out, _ = self.tick(gh_view(D, [D], FAIL))
         self.assertIn("fix_rounds_used=unreadable", out)
         self.assertEqual(out.strip().splitlines()[-1], "next=hand_to_person reason=fix_rounds_unreadable")
         self.assertEqual(self.next_line(gh_view(D, [D], PASS)), "next=report reason=checks_pass")
 
+    def test_the_count_is_per_pr_and_survives_a_new_watch(self):
+        self.tick(gh_view(A, [A], FAIL))
+        self.assertEqual(self.next_line(gh_view(B, [A, B], FAIL)), "next=fix_round round=2")
+        # A second watch on the same PR: its own name, config file and deadline, as the recipe installs it.
+        self.config = self.dir / "widgets-pr-42-again.json"
+        self.write_config(name="widgets-pr-42-again", deadline="2026-11-23T18:00:00Z")
+        later = self.now + dt.timedelta(hours=3)
+        _, out, _ = self.tick(gh_view(C, [A, B, C], FAIL), now=later)
+        self.assertEqual(out.strip().splitlines()[-1], "next=hand_to_person reason=fix_round_cap")
+
+    def test_an_unreadable_state_file_is_kept_and_reads_as_an_unreadable_count(self):
+        self.state.parent.mkdir(parents=True)
+        for damaged in ("{not json", '{"first_failed_head": "zz"}', '{"rounds_floor": -1}', "[]"):
+            self.state.write_text(damaged, encoding="utf-8")
+            with self.subTest(damaged=damaged):
+                self.assertEqual(self.next_line(gh_view(A, [A], FAIL)), "next=hand_to_person reason=fix_rounds_unreadable")
+                self.assertEqual(self.state.read_text(encoding="utf-8"), damaged)
+
+    def test_a_second_review_by_the_same_person_is_a_change(self):
+        one = self.tick(gh_view(A, [A], PASS, reviews=1))[1]
+        two = self.tick(gh_view(A, [A], PASS, reviews=2))[1]
+        self.assertNotEqual(one, two)
+        self.assertIn("reviews=2 decision=none", two)
+
+    def test_a_review_while_checks_run_is_reported_once_they_settle(self):
+        settled = self.tick(gh_view(A, [A], PASS))[1]
+        self.assertEqual(self.tick(gh_view(B, [A, B], RUNNING, reviews=1))[1], settled)
+        after = self.tick(gh_view(B, [A, B], PASS, reviews=1))[1]
+        self.assertNotEqual(after, settled)
+        self.assertIn("reviews=1 decision=none", after)
+
     def test_ended_prs_conflicts_and_reviews(self):
         cases = (
             (gh_view(A, [A], FAIL, state="MERGED"), "next=stop_watch reason=merged"),
-            (gh_view(A, [A], PASS, state="CLOSED"), "next=stop_watch reason=closed"),
+            (gh_view(A, [A], RUNNING, state="CLOSED"), "next=stop_watch reason=closed"),
             (gh_view(A, [A], RUNNING, mergeable="CONFLICTING"), "next=hand_to_person reason=merge_conflict"),
-            (gh_view(A, [A], PASS, mergeable="UNKNOWN"), "next=report reason=checks_pass"),
             (gh_view(A, [A], PASS, decision="CHANGES_REQUESTED"), "next=hand_to_person reason=changes_requested"),
+            (gh_view(A, [A], FAIL, decision="CHANGES_REQUESTED"), "next=hand_to_person reason=changes_requested"),
             (gh_view(A, [A], PASS, decision="APPROVED"), "next=report reason=approved"),
-            (gh_view(A, [A], []), "next=report reason=checks_none"),
-            (gh_view(A, [A], [{"__typename": "StatusContext", "state": "PENDING"}]), "next=wait reason=checks_running"),
+            (gh_view(A, [A], [{"__typename": "StatusContext", "state": "PENDING"}]), WAIT),
             (gh_view(A, [A], [{"__typename": "StatusContext", "state": "ERROR"}]), "next=fix_round round=1"),
         )
         for index, (data, expected) in enumerate(cases):
-            self.config.with_name("widgets-pr-42.state.json").unlink(missing_ok=True)
+            if self.state.exists():
+                self.state.unlink()
             with self.subTest(case=index):
                 self.assertEqual(self.next_line(data), expected)
 
@@ -379,31 +511,40 @@ class WatchTest(unittest.TestCase):
         first = self.tick(None, now=late)
         later = self.tick(None, now=late + dt.timedelta(hours=1))
         self.assertEqual(first, later)
-        self.assertEqual(first[1].splitlines(), ["pr-watch: widgets-pr-42 acme/widgets#42",
-                                                 "next=stop_watch reason=deadline"])
+        self.assertEqual(first[1].splitlines(), [HEADER, "next=stop_watch reason=deadline"])
+
+    def test_a_far_deadline_still_ends_the_watch_a_day_after_its_first_tick(self):
+        self.write_config(deadline="2099-01-01T00:00:00Z")
+        self.assertEqual(self.next_line(gh_view(A, [A], PASS)), "next=report reason=checks_pass")
+        self.assertEqual(self.next_line_at(gh_view(A, [A], PASS), self.now + dt.timedelta(hours=23)),
+                         "next=report reason=checks_pass")
+        _, out, _ = self.tick(None, now=self.now + dt.timedelta(hours=24))
+        self.assertEqual(out.splitlines(), [HEADER, "next=stop_watch reason=deadline"])
+
+    def next_line_at(self, data, now) -> str:
+        code, out, err = self.tick(data, now=now)
+        self.assertEqual(code, 0, err)
+        return out.strip().splitlines()[-1]
 
     def test_hostile_gh_text_never_prints_and_bad_types_do_not_crash(self):
         code, out, err = self.tick(gh_view(A, [A], FAIL, reviews=2))
         self.assertEqual(code, 0, err)
         self.assertNotIn(SENTINEL, out)
         self.assertNotIn("ignore previous", out)
+        self.state.unlink()
         junk = {"state": ["OPEN"], "headRefOid": "../../etc; rm -rf", "mergeable": 5, "reviewDecision": {"x": 1},
-                "latestReviews": "many", "statusCheckRollup": [None, 3, "x", {"conclusion": {"a": 1}}],
+                "reviews": "many", "statusCheckRollup": [None, 3, "x", {"conclusion": {"a": 1}}],
                 "commits": [1, None, {"oid": ["x"]}, {"oid": "not-a-sha"}]}
-        code, out, err = self.tick(junk)
-        self.assertEqual(code, 0, err)
-        # Unreadable check entries are not settled: the watch waits rather than reading them as a pass.
-        self.assertEqual(out.strip().splitlines()[-1], "next=wait reason=checks_running")
-        code, out, err = self.tick({**junk, "statusCheckRollup": "x"})
-        self.assertEqual(code, 0, err)
-        self.assertIn("state=unknown head=unknown conflict=no", out)
-        self.assertIn("checks=none", out)
-        self.assertNotIn("rm -rf", out)
+        for data in (junk, {**junk, "statusCheckRollup": "x"}):
+            code, out, err = self.tick(data)
+            self.assertEqual(code, 0, err)
+            self.assertEqual(out, f"{HEADER}\n{WAIT}\n")  # nothing readable has settled
+            self.assertNotIn("rm -rf", out)
 
     def test_config_errors(self):
         bad = (
             {"fix_round_cap": 3}, {"repo": "-R/x"}, {"repo": "acme/../x"}, {"repo": "acme widgets/x"},
-            {"pr": "42"}, {"pr": True}, {"pr": 0}, {"deadline": "2026-11-23T14:00:00"},
+            {"repo": "acme/."}, {"pr": "42"}, {"pr": True}, {"pr": 0}, {"deadline": "2026-11-23T14:00:00"},
             {"deadline": "tomorrow"}, {"name": "Widgets"},
         )
         for extra in bad:
@@ -423,9 +564,23 @@ class WatchTest(unittest.TestCase):
         self.assertEqual((code, out.getvalue()), (4, ""))
         self.assertIn("reason=gh_exit_1", err.getvalue())
 
+    @requires_posix
+    def test_the_state_file_is_private(self):
+        self.tick(gh_view(A, [A], FAIL))
+        self.assertEqual(self.state.stat().st_mode & 0o777, 0o600)
+
     def test_example_config_is_valid(self):
         cfg = self.mod.load_config(KIT / "examples/pr-watch.json")
         self.assertEqual(cfg["fix_round_cap"], 2)
+
+    def test_the_gh_argv_is_one_fixed_list_with_only_the_number_and_repository_dynamic(self):
+        tree = ast.parse(WATCH.read_text(encoding="utf-8"))
+        lists = [node for node in ast.walk(tree) if isinstance(node, ast.List) and node.elts
+                 and isinstance(node.elts[0], ast.Constant) and node.elts[0].value == "gh"]
+        self.assertEqual(len(lists), 1)
+        shape = [element.value if isinstance(element, ast.Constant) else type(element).__name__
+                 for element in lists[0].elts]
+        self.assertEqual(shape, ["gh", "pr", "view", "Call", "--repo", "Name", "--json", GH_FIELDS])
 
 
 FAKE_GH = """#!{python}
@@ -495,7 +650,8 @@ class SkillTextContractTest(unittest.TestCase):
             "never a model polling loop", "`references/pr-watch.md`", "`toolkit/scripts/pr_watch.py`",
             "every 5 minutes, `repeat` 24, a `deadline` two hours out",
             "at most two fix rounds on one PR, counted from evidence, never memory",
-            "each commit the PR's own commit list holds after the first head whose checks settled failed is one round used",
+            "an amend and force-push included",
+            "the count never goes down and is kept per PR across watches",
             "hand the fix to a person's turn",
             "starts no new review or fix run",
             "At most 5 triggering events per 15 minutes start a run on one route; the rest are dropped, not queued.",
@@ -513,8 +669,12 @@ class SkillTextContractTest(unittest.TestCase):
     def test_reference_and_toolkit_are_rendered_from_the_kit(self):
         reference = (ROOT / "skills/omh-github-event-ops/references/pr-watch.md").read_text(encoding="utf-8")
         for phrase in ("monitor_script", "`repeat`: `24`", "5 events per 15 minutes per route", "2 rounds per PR",
-                       "A prepared recipe is not evidence"):
+                       "A prepared recipe is not evidence", "Content type: `application/json`",
+                       "delivered as an alert"):
             self.assertIn(phrase, reference)
+        readme = (KIT / "README.md").read_text(encoding="utf-8")
+        for phrase in ("Content type: `application/json`", "delivered as an alert"):
+            self.assertIn(phrase, readme)
         for relative in ("README.md", "scripts/pr_watch.py", "scripts/pr_event_guard.py",
                          "examples/pr-watch.json", "examples/pr-event-guard.json"):
             rendered = ROOT / "skills/omh-github-event-ops/toolkit" / relative
