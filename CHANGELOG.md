@@ -11,6 +11,27 @@ All notable changes will be documented here.
   it. The click was dropped and the panel stayed on its old tab. Only the last two frames before the press count now.
   A tab that held still in them is the person's to click.
   (`apps/omher/src/elsewhere/PanelTabs.tsx`; e2e `panel-max.spec.ts`, seen on macOS CI)
+- **`omh_delegate_route` can hand a child the rest of its chain, each step at its own effort (opt-in).** With
+  `{"schema_version": "delegate_route_options/v1", "write_fallback_providers": true}` in
+  `~/.omh/routing/delegate-route.json`, `set` also writes the positions after the head into
+  `delegation.fallback_providers` (`{provider, model, reasoning_effort}` each, in chain order). A child whose head
+  fails, a quota 429 included, then moves on inside the same dispatch instead of waiting out the head's retries.
+  It is off by default. It applies only on a Hermes whose source has hermes-agent PR #144787's
+  `agent/fallback_reasoning.py`, because an older Hermes runs every fallback at `agent.reasoning_overrides` rather
+  than the entry's effort. On such a Hermes only the three scalars are written, and the result's `in_child_fallback`
+  and `omh doctor` (`plugin_delegate_route_fallback_chain`) say why. A Hermes updated on disk but still running the
+  old code reads as `restart_pending` and writes no chain until it restarts. Positions whose provider you have not
+  configured are skipped. Writing stops at the first position Hermes would not try: one with no provider route, or one
+  whose provider and model the head or an earlier entry already has. That keeps the re-dispatch's starting point
+  exact. OMH records the chain it wrote with the route and takes it back out at turn end and on
+  `clear` (an absent key stays absent), and the lost-update and per-conversation guards cover it. Your own
+  `delegation.fallback_providers` (`[]` included) is never overwritten, and an edit you make to OMH's chain mid-turn is
+  kept while the scalars still come back out (`chain_foreign_edit`). The list writer keeps the scalar writer's
+  rules: plain tokens only, an atomic replace, a symlinked config refused. `action=fallback` still re-dispatches,
+  continuing after the positions the child already walked (`walked_in_child`). Requested by @rafaelmoreiraai in
+  #3124. (`src/plugin_bundle/omh/delegation_fallback_chain.py`, `src/plugin_bundle/omh/delegation_routing.py`,
+  `src/plugin_bundle/omh/delegation_route_restore.py`, `src/plugin_bundle/omh/tools/delegate_route_tool.py`,
+  `src/maintenance/doctor.py`; `docs/INSTALLATION.md` "The rest of the chain inside the child")
 - **omher: an open thread reads again cleanly after the bridge comes back.** After a bridge restart, the page re-read an
   open thread at the same time as it listed the bot's threads again. The new bridge knew no thread yet and refused
   it, so the thread showed a false "not reachable" line and a turn Hermes lost there stayed unseen. Threads are now
@@ -27,6 +48,16 @@ All notable changes will be documented here.
   discarded elsewhere (Hermes' own app, `/discard`) clears the note at once. A message waiting in Hermes' queue behind
   a turn that is still running (nothing lost) also stays in the chat after a restart, as "Waiting · runs after the
   current turn". (#3123; `docs/OMHER-BOUNDARY.md` rule 3)
+- **omher's reasoning picker offers every level Hermes accepts, ultra included.** The chat model picker's Reasoning
+  control showed none, low, medium, high and xhigh only, so minimal, max and ultra could not be picked. The bridge now
+  reads the installed Hermes' own levels (`hermes_constants.VALID_REASONING_EFFORTS`, after "none") and offers them in
+  Hermes' order: none, minimal, low, medium, high, xhigh, max, ultra. An older Hermes offers only the levels it has,
+  and the bridge refuses any other before asking Hermes. When the levels are not importable the picker offers the
+  full list, and a level the gateway refuses shows the picker's note instead of looking applied. The eight levels sit
+  in two rows of four. A level the route does not send as picked says so, as Hermes' own pickers do: Hermes sends
+  `max` for `ultra` on most routes, so the pill reads "ultra · sends max" and the popover "ultra (sends max on this
+  route)", from Hermes' `reasoning_effort_wire`. (`apps/omher/bridge/omher_bridge.py` `reasoning_levels`,
+  `apps/omher/src/chat/model/levels.ts`)
 - **Fanout hands coding units to a harness CLI you declare, or to one of nine presets.** Put an executor in
   `<omh_home>/routing/executors.toml` (never read from a repository or the working directory) as an `argv` list
   with exactly one `{prompt}` or `{prompt_file}` element, or opt in to a preset with `omh coding executors add

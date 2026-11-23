@@ -261,6 +261,9 @@ export interface ModelCurrent {
   model: string;
   provider: string;
   reasoning: string;
+  /** The level the route actually sends (Hermes' `reasoning_effort_wire`; it clamps `ultra` to `max` on most routes):
+   *  the pick itself when sent verbatim, "" or absent when Hermes does not say. */
+  reasoning_wire?: string;
 }
 
 /** `bots.ready`: Hermes' own readiness probe for a bot (`setup.runtime_check`). `unknown`: the gateway could not say
@@ -296,6 +299,8 @@ export interface ChatOpenResult {
   model: string;
   provider: string;
   reasoning: string;
+  /** As ModelCurrent's: what the route sends for `reasoning`. */
+  reasoning_wire?: string;
 }
 
 /** A Hermes chat the bridge created in a picked folder (SESSIONS > oh-my-hermes). */
