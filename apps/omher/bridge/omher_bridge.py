@@ -842,6 +842,102 @@ def read_bot_facts(profile_dir: Path) -> dict:
             "last_active": last, "skills": skills, "routines": len(read_routines(profile_dir))}
 
 
+# ---------------------------------------------------------------- the bot page: persona and memory (read-only)
+
+# The bot's persona is the profile's `SOUL.md`. Hermes' built-in memory is `<profile>/memories/`, one file per
+# target, entries joined by its `ENTRY_DELIMITER`, each target capped in characters by `memory.<limit key>` and
+# switched by `memory.<switch key>` in config.yaml (Hermes' `tools/memory_tool_store.py` and `tools/memory_tool.py`,
+# whose defaults are 2200 and 1375 characters, on unless the switch says otherwise). The names and the size cap are
+# the ones OMH's own reader uses (`src/tui/bot_board.py`: MEMORY_DIR, MEMORY_TARGETS, MEMORY_ENTRY_DELIMITER,
+# MEMORY_FILE_BYTES); the bridge does not import omh, so they are repeated here. These files hold the person's own
+# words: they are read only for `bots.page`, sent only in its answer, never logged and never written.
+SOUL_FILE = "SOUL.md"
+MEMORY_DIR = "memories"
+MEMORY_TARGETS = (
+    ("memory", "MEMORY.md", "memory_char_limit", "memory_enabled", 2200),
+    ("user", "USER.md", "user_char_limit", "user_profile_enabled", 1375),
+)
+MEMORY_ENTRY_DELIMITER = "\n§\n"
+MEMORY_FILE_BYTES = 1 << 20  # a bigger SOUL.md or memory file is sized and not read
+TRUTHY = frozenset({"1", "true", "yes", "on"})  # Hermes' `utils.env.TRUTHY_STRINGS`
+
+
+def read_page_file(profile_dir: Path, *parts: str) -> dict:
+    """One file of the profile for the bot page: `{state, size, text, lossy}`. `state` is `ok`, `missing`,
+    `too_big` (sized, not read), `unreadable` (not a regular file, or the read failed) or `outside` (a link that
+    leads out of the profile, never followed). The text is decoded as Hermes reads it (UTF-8, a leading BOM
+    dropped, line ends as LF); bytes that are not UTF-8 become U+FFFD and `lossy` says so."""
+    path = profile_dir.joinpath(*parts)
+    out = {"state": "missing", "size": None, "text": "", "lossy": False}
+    try:
+        os.lstat(path)
+    except OSError:
+        return out
+    try:
+        real, top = os.path.realpath(path), os.path.realpath(profile_dir)
+        if os.path.commonpath([real, top]) != top:
+            return {**out, "state": "outside"}
+    except ValueError:  # another drive on Windows
+        return {**out, "state": "outside"}
+    try:
+        if not os.path.isfile(real):
+            return {**out, "state": "unreadable"}
+        size = os.path.getsize(real)
+        if size > MEMORY_FILE_BYTES:
+            return {**out, "state": "too_big", "size": size}
+        with open(real, "rb") as fh:
+            data = fh.read(MEMORY_FILE_BYTES + 1)
+    except OSError:
+        return {**out, "state": "unreadable"}
+    if len(data) > MEMORY_FILE_BYTES:  # grew since stat
+        return {**out, "state": "too_big", "size": len(data)}
+    try:
+        text, lossy = data.decode("utf-8-sig"), False
+    except UnicodeDecodeError:
+        text, lossy = data.decode("utf-8-sig", "replace"), True
+    return {"state": "ok", "size": len(data), "text": text.replace("\r\n", "\n").replace("\r", "\n"), "lossy": lossy}
+
+
+def _memory_limit(value, default: int) -> int:
+    if isinstance(value, bool):
+        return default
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return default
+    return n if n > 0 else default
+
+
+def _memory_on(value) -> bool:
+    """Hermes' `is_truthy_value(value, default=True)`."""
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return value.strip().lower() in TRUTHY
+    return bool(value)
+
+
+def memory_entries(text: str) -> list[str]:
+    """Hermes' `MemoryStore._parse_entries`: stripped, non-empty entries split on the full delimiter."""
+    return [e for e in (x.strip() for x in text.split(MEMORY_ENTRY_DELIMITER)) if e]
+
+
+def read_bot_page(profile_dir: Path) -> dict:
+    """`bots.page`: the bot's persona (`SOUL.md`) and its built-in memory targets, read-only. Each target carries
+    its entries, its characters as Hermes counts them (the entries joined by the delimiter), its limit and switch
+    from config.yaml (Hermes' defaults when unset)."""
+    cfg = _load_yaml(profile_dir / "config.yaml").get("memory")
+    cfg = cfg if isinstance(cfg, dict) else {}
+    memory = []
+    for target, file_name, limit_key, switch_key, default in MEMORY_TARGETS:
+        f = read_page_file(profile_dir, MEMORY_DIR, file_name)
+        entries = memory_entries(f["text"]) if f["state"] == "ok" else []
+        memory.append({"target": target, "file": f"{MEMORY_DIR}/{file_name}", "state": f["state"], "size": f["size"],
+                       "lossy": f["lossy"], "entries": entries, "chars": len(MEMORY_ENTRY_DELIMITER.join(entries)),
+                       "limit": _memory_limit(cfg.get(limit_key), default), "enabled": _memory_on(cfg.get(switch_key))})
+    return {"soul": {"file": SOUL_FILE, **read_page_file(profile_dir, SOUL_FILE)}, "memory": memory}
+
+
 # ---------------------------------------------------------------- skills (read-only, the composer's $ picker)
 
 SKILL_HEAD_MAX = 8 * 1024     # bytes read from the top of a SKILL.md: its frontmatter, nothing past it
@@ -5175,7 +5271,7 @@ PEER_OPEN_TIMEOUT = 15.0
 PEER_FORWARD = frozenset({
     "chat.open", "chat.send", "chat.interrupt", "chat.discard", "chat.steer", "approval.respond", "clarify.respond", "chat.attach", "chat.set_model",
     "models.options", "bots.ready", "bots.rename", "bots.avatar", "bots.set_avatar", "bots.info", "skills.list",
-    "commands.list",
+    "commands.list", "bots.page",
     "links.places", "tasks.linear", "elsewhere.list", "elsewhere.peek", "routines.list", "runs.list", "runs.get", "runs.prs",
     "runs.node_session",
     "panel.terminal", "panel.worktrees", "panel.diff", "media.read", "automations.add", "automations.pause",
@@ -5887,6 +5983,7 @@ class Bridge:
             "chat.set_model": self.op_set_model, "bots.ready": self.op_bots_ready,
             "bots.rename": self.op_bots_rename, "bots.avatar": self.op_bots_avatar,
             "bots.set_avatar": self.op_bots_set_avatar, "bots.info": self.op_bots_info,
+            "bots.page": self.op_bots_page,
             "skills.list": self.op_skills_list, "commands.list": self.op_commands_list, "links.places": self.op_links_places, "tasks.linear": self.op_tasks_linear,
             "folder.open": self.op_folder_open, "folder.close": self.op_folder_close,
             "folder.resume": self.op_folder_resume,
@@ -7545,6 +7642,12 @@ class Bridge:
     async def op_bots_info(self, p) -> dict:
         bot = self._bot(p.get("bot"))
         return await asyncio.to_thread(read_bot_facts, bot["path"])
+
+    async def op_bots_page(self, p) -> dict:
+        """The bot page's persona and memory: files of the bot's own profile, read-only (rule 40). For a bot on
+        another computer this op is forwarded to that computer's bridge (PEER_FORWARD), which reads its own files."""
+        bot = self._bot(p.get("bot"))
+        return await asyncio.to_thread(read_bot_page, bot["path"])
 
     async def op_tasks_linear(self, p) -> dict:
         """Tasks › Linear: whether the bot has a Linear MCP server in its config (rule 33). Hermes' gateway offers no

@@ -28,6 +28,19 @@ DOCS_INDEX = ROOT / "docs" / "README.md"
 
 RULES = (
     "omher never patches Hermes.",
+    # rule 40: the bot page's persona and memory, read-only, bounded, on the person's opening, kept in the app
+    "omher reads, never writes, three files of that bot's own profile: its persona `SOUL.md` and Hermes' built-in memory"
+    " `memories/MEMORY.md` and `memories/USER.md`,",
+    "It reads them only when the person opens that page or presses Read again, never on a timer;",
+    "it reads at most 1 MB of each, and a larger file is sized and not read; it never follows a link that leads out of the"
+    " profile; and it opens no other file for this page.",
+    "omher never writes, renames or removes these files, and rule 9 still holds: Edit only puts a request such as"
+    " `Update your SOUL.md: ` in that bot's main-chat composer, nothing is sent until the person sends it,",
+    "The files hold the person's own words, so they stay in the app: they go only to that page, in the answer to"
+    " `bots.page`, and omher never logs them, keeps them in its own files or storage, or puts them in diagnostics, crash"
+    " reports or anything it sends anywhere else.",
+    "For a bot on another computer (rule 31) the page asks that computer's own omher bridge over the same SSH link as the"
+    " bot's other reads; that bridge reads the files there under this rule and sends them back over the link,",
     "that is the third and last writer to a terminal's pseudo-terminal (`typeAllowed`).",
     "Without the person's Allow, nothing a bot sent is typed.",
     "The sender name is what the requesting local process wrote in the request, and any process of the same OS user"
@@ -583,9 +596,11 @@ class DocPins(unittest.TestCase):
         # awake: one idle-sleep assertion while agents work); 38: rule 38 (a program's OSC 52 copy to the clipboard,
         # copy only, never a read, off in Settings › Terminal); 39: rule 39 (a bot whose gateway went away without
         # omher restarting it is looked for through Hermes' own discovery, which starts nothing, and attached again
-        # once ready). The rules stay numbered 1..n with no gap or repeat.
+        # once ready); 40: rule 40 (a bot's page reads its persona `SOUL.md` and Hermes' memory files read-only, bounded,
+        # on the person's opening, never writes them, keeps them in the app; a bot on another computer is read there).
+        # The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 39, len(rules))
+        self.assertTrue(6 <= len(rules) <= 40, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -2952,3 +2967,71 @@ class DiskTrayAndKeepAwake(unittest.TestCase):
         lib = (SHELL / "lib.rs").read_text(encoding="utf-8")
         exit_arm = lib.split("RunEvent::Exit = event {", 1)[1].split("shell.sessions.close_all();", 1)[0]
         self.assertIn("power.quit();", exit_arm)
+
+
+class BotPageReadsPersonaAndMemoryOnly(unittest.TestCase):
+    """Rule 40: `bots.page` reads the bot's own `SOUL.md`, `memories/MEMORY.md` and `memories/USER.md`, read-only,
+    at most 1 MB each, never through a link out of the profile; nothing in the bridge or the desktop shell writes or
+    opens those paths otherwise, nothing logs them, and Edit only drafts a chat message. A bot on another computer is
+    forwarded to its own bridge."""
+
+    READER = ("read_bot_page", "read_page_file", "memory_entries", "_memory_limit", "_memory_on")
+
+    def setUp(self) -> None:
+        self.source = BRIDGE.read_text(encoding="utf-8")
+        self.tree = ast.parse(self.source)
+        self.fns = {n.name: n for n in ast.walk(self.tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+    def _consts(self) -> dict:
+        return {t.id: n.value for n in self.tree.body if isinstance(n, ast.Assign)
+                for t in n.targets if isinstance(t, ast.Name)}
+
+    def test_the_op_is_a_file_read_of_the_bots_own_profile(self) -> None:
+        self.assertIn("'bots.page': self.op_bots_page", ast.unparse(self.fns["__init__"]))
+        op = ast.unparse(self.fns["op_bots_page"])
+        self.assertIn("bot = self._bot(p.get('bot'))", op)
+        self.assertIn("asyncio.to_thread(read_bot_page, bot['path'])", op)
+        self.assertNotIn("conn", op)  # no gateway call
+        reader = ast.unparse(self.fns["read_bot_page"])
+        self.assertIn("read_page_file(profile_dir, MEMORY_DIR, file_name)", reader)
+        self.assertIn("read_page_file(profile_dir, SOUL_FILE)", reader)
+        self.assertIn("_load_yaml(profile_dir / 'config.yaml').get('memory')", reader)
+
+    def test_the_files_their_names_and_the_cap(self) -> None:
+        c = self._consts()
+        self.assertEqual(ast.literal_eval(c["SOUL_FILE"]), "SOUL.md")
+        self.assertEqual(ast.literal_eval(c["MEMORY_DIR"]), "memories")
+        self.assertEqual([(t[0], t[1]) for t in ast.literal_eval(c["MEMORY_TARGETS"])],
+                         [("memory", "MEMORY.md"), ("user", "USER.md")])
+        self.assertEqual(ast.unparse(c["MEMORY_FILE_BYTES"]), "1 << 20")
+        # the only places the bridge names these files are those constants
+        for name in ("SOUL.md", "MEMORY.md", "USER.md"):
+            sites = [n for n in ast.walk(self.tree) if isinstance(n, ast.Constant) and n.value == name]
+            self.assertEqual(len(sites), 1, name)
+        uses = [n for n in ast.walk(self.tree) if isinstance(n, ast.Name) and n.id in ("SOUL_FILE", "MEMORY_DIR")]
+        users = {f.name for f in self.fns.values() for n in ast.walk(f) if n in uses}
+        self.assertEqual(users, {"read_bot_page"})
+
+    def test_bounded_no_link_out_and_read_only(self) -> None:
+        body = ast.unparse(self.fns["read_page_file"])
+        self.assertIn("if os.path.commonpath([real, top]) != top:", body)
+        self.assertIn("if size > MEMORY_FILE_BYTES:", body)
+        self.assertIn("fh.read(MEMORY_FILE_BYTES + 1)", body)
+        reader = "\n".join(ast.unparse(self.fns[n]) for n in self.READER)
+        opens = [c for n in self.READER for c in ast.walk(self.fns[n])
+                 if isinstance(c, ast.Call) and ast.unparse(c.func) == "open"]
+        self.assertEqual([ast.unparse(c) for c in opens], ["open(real, 'rb')"])
+        for banned in ("write", "unlink", "rename", "mkdir", "rmdir", "touch", "chmod", "subprocess", "self.", "log.",
+                       "print(", "remove"):
+            self.assertNotIn(banned, reader, banned)
+
+    def test_a_bot_on_another_computer_is_read_by_its_own_bridge(self) -> None:
+        forward = next(n.value for n in self.tree.body if isinstance(n, ast.Assign)
+                       and any(isinstance(t, ast.Name) and t.id == "PEER_FORWARD" for t in n.targets))
+        self.assertIn("bots.page", {c.value for c in ast.walk(forward) if isinstance(c, ast.Constant)})
+
+    def test_the_desktop_shell_never_names_these_files(self) -> None:
+        for rs in SHELL.rglob("*.rs"):
+            text = rs.read_text(encoding="utf-8")
+            for name in ("SOUL.md", "MEMORY.md", "USER.md", "memories/"):
+                self.assertNotIn(name, text, f"{rs.name}: {name}")
