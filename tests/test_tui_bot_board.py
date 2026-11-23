@@ -1232,12 +1232,25 @@ class MessagingTests(unittest.TestCase):
                                      ("disconnected", "✗ disconnected", DEFAULT_THEME.error),
                                      ("reconnecting", "✗ reconnecting", DEFAULT_THEME.warn)):
             with self.subTest(status=status):
-                bottom = self.card(self.demo(demo_down(status)), 150)[-2]
+                long_ago = "2027-01-15T07:49:00Z"  # 11 minutes before NOW: past EDGE_RECONNECT_SECONDS
+                bottom = self.card(self.demo(demo_down(status, since=long_ago)), 150)[-2]
                 text = squeeze(line_text(bottom))
                 self.assertIn(f"discord {words}", text)
                 self.assertEqual(text.count("discord"), 1, "the record's own discord chip is not drawn twice")
                 self.assertLess(text.index("discord"), text.index("whatsapp"))
                 self.assertEqual(next(span.style for span in bottom if span.text == words), style)
+
+    def test_a_routine_reconnect_stays_off_the_edge_until_ten_minutes_or_hermes_flags_it(self) -> None:
+        def edge(**fields) -> str:
+            return squeeze(lines_text(self.card(self.demo(demo_down("reconnecting", **fields)), 150))[-2])
+
+        self.assertEqual(bot_board.EDGE_RECONNECT_SECONDS, 600)
+        self.assertNotIn("reconnecting", edge(attention=False, since="2027-01-15T07:51:00Z"))  # 9 minutes
+        self.assertIn("discord ✗ reconnecting", edge(attention=False, since="2027-01-15T07:50:00Z"))  # 10 minutes
+        self.assertIn("discord ✗ reconnecting", edge(attention=True, since="2027-01-15T07:59:00Z"))
+        self.assertNotIn("reconnecting", edge(attention=False, since=""))
+        box = self.box(self.demo(demo_down("reconnecting", attention=False, since="2027-01-15T07:59:00Z")), 150)
+        self.assertTrue(field(box, "discord").startswith("discord ✗ reconnecting"), "the box says it at once")
 
     def test_connected_and_unknown_draw_no_state_chip(self) -> None:
         plain = squeeze(lines_text(self.card(bots()[2], 150))[-2])

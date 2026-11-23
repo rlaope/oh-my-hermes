@@ -440,13 +440,19 @@ def classify_reason(event: AdapterEvent) -> str:
     return REASON_UNRECOGNIZED
 
 
+def strip_controls(text: str) -> str:
+    """`text` on one line with no escape sequence (ANSI colour, an OSC 8 link) and no control or format character (a
+    bidi override, NUL, BEL): what every string a surface shows from Hermes' files goes through."""
+    cleaned = " ".join(_ESCAPES.sub("", text).split())
+    return "".join(ch for ch in cleaned if unicodedata.category(ch) not in ("Cc", "Cf"))
+
+
 def bounded_reason(text: str, limit: int = REASON_CHARS) -> str:
     """Hermes' reason text on one line, at most `limit` characters (`REASON_CHARS` unless said): with no escape
     sequence or control or format character (ANSI colour, an OSC 8 link, a bidi override), and without Discord, Slack
     or Telegram bot tokens, a Discord or Slack webhook's credential path, a bearer or labelled secret, any other opaque
     run of 32 or more key characters, Discord and Slack ids, email addresses, or a URL's query (`_SCRUBS`)."""
-    cleaned = " ".join(_ESCAPES.sub("", text).split())
-    cleaned = "".join(ch for ch in cleaned if unicodedata.category(ch) not in ("Cc", "Cf"))
+    cleaned = strip_controls(text)
     for pattern, replacement in _SCRUBS:
         cleaned = pattern.sub(replacement, cleaned)
     return cleaned if len(cleaned) <= limit else cleaned[: limit - 1].rstrip() + "…"

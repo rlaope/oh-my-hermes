@@ -23,8 +23,8 @@ POSIX = unittest.skipUnless(os.name == "posix", "a shell script stands in for om
 
 
 def row(**over) -> dict:
-    base = {"platform": "discord", "status": "failed", "attention": True, "since": "2026-11-23T09:00:00Z",
-            "logged": "2026-11-23T09:30:00Z", "reason_kind": "discord_privileged_intents",
+    base = {"platform": "discord", "status": "failed", "attention": True, "since": "2020-01-02T03:04:05Z",
+            "logged": "2020-01-02T03:34:05Z", "reason_kind": "discord_privileged_intents",
             "reason": "Shard ID None is requesting privileged intents.", "guidance": "Hermes is requesting: - Message "
             "Content Intent - Server Members Intent", "fix": "Enable them in the Discord Developer Portal.",
             "restart": "hermes -p default gateway restart", "intents": ["Message Content", "Server Members"],
@@ -110,7 +110,10 @@ class FindAndRun(unittest.TestCase):
     def test_a_relative_or_current_folder_omh_from_path_is_passed_over(self):
         with tempfile.TemporaryDirectory() as tmp:
             with mock.patch.object(Path, "home", return_value=Path(tmp)):
-                self.assertIsNone(ob.omh_path(which=lambda name: "bin/omh", environ={}))
+                # `PATH=.:…` or `bin`: which() answers relative to the bridge's folder, and Popen would resolve it
+                # against the home folder it starts in, so a different `omh` would run
+                for relative in ("bin/omh", "./omh", "omh"):
+                    self.assertIsNone(ob.omh_path(which=lambda name, r=relative: r, environ={}), relative)
                 self.assertIsNone(ob.omh_path(which=lambda name: os.path.join(os.getcwd(), "omh"), environ={}))
 
     @POSIX

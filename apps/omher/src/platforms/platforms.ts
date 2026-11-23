@@ -51,10 +51,23 @@ const WHY_KEY: Record<string, Key> = {
 };
 const RESTART = /^hermes -p ([a-z0-9][a-z0-9_-]{0,63}) gateway restart$/;
 
+/** A reconnect Hermes runs by itself shows on the sidebar row only after this long (the bot page says it at once). */
+export const ROW_RECONNECT_MS = 10 * 60_000;
+
 /** The bot's platforms known not to be connected now; [] when OMH could not say, or for a bot it has no row for. */
 export function notConnected(read: PlatformsRead | null, bot: string): PlatformState[] {
   if (!read?.available) return [];
   return (read.bots[bot]?.platforms ?? []).filter((p) => NOT_CONNECTED.has(p.status));
+}
+
+/** What the sidebar row names: failed and disconnected at once; reconnecting only when Hermes flags it as needing the
+ *  person, or after ROW_RECONNECT_MS of it, so Hermes' routine reconnects stay off the row. */
+export function rowDown(read: PlatformsRead | null, bot: string, now: number): PlatformState[] {
+  return notConnected(read, bot).filter((p) => {
+    if (p.status !== "reconnecting" || p.attention) return true;
+    const since = p.since ? Date.parse(p.since) : NaN;
+    return Number.isFinite(since) && now - since >= ROW_RECONNECT_MS;
+  });
 }
 
 /** "Discord disconnected": the sidebar row's words for a platform that is not connected. */

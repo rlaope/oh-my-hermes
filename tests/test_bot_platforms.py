@@ -19,6 +19,7 @@ from dataclasses import asdict
 from datetime import datetime
 import io
 import json
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -58,11 +59,11 @@ def formats_listing():
 
 
 def stamp(day: int, hour: int, minute: int = 0) -> str:
-    return f"2026-11-{day:02d} {hour:02d}:{minute:02d}:00,000"
+    return f"2020-01-{day:02d} {hour:02d}:{minute:02d}:00,000"
 
 
 def epoch(day: int, hour: int, minute: int = 0) -> float:
-    return datetime(2026, 11, day, hour, minute).timestamp()
+    return datetime(2020, 1, day, hour, minute).timestamp()
 
 
 def connected(day: int, hour: int, minute: int = 0) -> str:
@@ -179,24 +180,50 @@ class PerBot(unittest.TestCase):
                                                                                    current=True))))
             self.assertEqual((state.status, state.attention, state.since), ("connected", False, ""))
 
-    def test_a_failure_before_hermes_served_the_bot_again_says_nothing_about_now(self) -> None:
+    def test_a_platform_removed_from_a_bot_shows_nothing_after_hermes_serves_it_again(self) -> None:
         # Hermes drops a profile's verdicts when its config or .env changes (Discord removed, a token replaced) and
-        # serves it again: the old failure is from before that, so with no record entry it is not known now.
+        # serves it again: the old failure is from before that, so with no record entry there is nothing to show.
         with TemporaryDirectory() as tmp:
             root = self.home(tmp)
             records = self.serving(epoch(23, 7))
             for before in (fatal(23, 8), refused(23, 8)):
                 with self.subTest(before=before[:60]):
                     self.host(root, before, rescanned(23, 9))
-                    state = self.only(self.read(root, records))
-                    self.assertEqual((state.status, state.unknown_why, state.attention, state.since),
-                                     ("unknown", "earlier_run", False, ""))
+                    self.assertEqual(self.read(root, records)[BOT].platforms, ())
+                    report = gateway_health(root, environ={}, gateway_reader=lambda home: records.get(home.name, NO_RECORD),
+                                            list_processes=formats_listing, process_start=lambda pid: None)
+                    self.assertNotIn("adapter_not_connected", report.findings)
+                    self.assertIn(f"no adapter line since Hermes served {BOT} again", "\n".join(report.lines))
+
+    def test_after_a_re_serve_a_connect_or_a_new_failure_is_the_state_now(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = self.home(tmp)
+            records = self.serving(epoch(23, 7))
             self.host(root, fatal(23, 8), rescanned(23, 9), connected(23, 9, 1))
             self.assertEqual(self.only(self.read(root, records)).status, "connected")
             self.host(root, fatal(23, 8), rescanned(23, 9), refused(23, 9, 30))
             state = self.only(self.read(root, records))
             self.assertEqual((state.status, state.since), ("failed", iso_utc(epoch(23, 9, 30))),
                              "since restarts at the new failure")
+            self.host(root, rescanned(23, 9), connected(23, 9, 1), fatal(23, 10, code="discord_auth_error"))
+            state = self.only(self.read(root, records))
+            self.assertEqual((state.status, state.attention, state.since), ("disconnected", True, iso_utc(epoch(23, 10))))
+
+    def test_a_re_scan_that_kept_the_connection_then_a_much_later_failure_reads_disconnected_since_then(self) -> None:
+        # The generic shape behind the measured outage: a config change re-scans the bot while it stays connected,
+        # and hours later a reconnect is refused for privileged intents with no line after it.
+        with TemporaryDirectory() as tmp:
+            root = self.home(tmp)
+            records = self.serving(epoch(23, 7))
+            self.host(root, connected(23, 8), rescanned(23, 8, 1, connected_count=1),
+                      f"{stamp(23, 14)} INFO gateway.run: Secondary discord reconnect retry in 30s (profile: {BOT})",
+                      f"{stamp(23, 14, 1)} ERROR hermes_plugins.platforms__discord.adapter: [Discord] Failed to connect to "
+                      f"Discord: {INTENTS_REASON}",
+                      fatal(23, 14, 2))
+            state = self.only(self.read(root, records))
+            self.assertEqual((state.status, state.attention, state.reason_kind),
+                             ("disconnected", True, REASON_PRIVILEGED_INTENTS))
+            self.assertEqual(state.since, iso_utc(epoch(23, 14)), "since the later reconnect, not the re-scan")
 
     def test_a_failure_of_the_re_serve_itself_still_counts(self) -> None:
         # Hermes logs "Now serving" / "Re-scanned" after the adapters it restarted failed: those lines are that attempt's.
@@ -208,7 +235,7 @@ class PerBot(unittest.TestCase):
             state = self.only(self.read(root, self.serving(epoch(23, 7))))
             self.assertEqual((state.status, state.reason_kind), ("failed", REASON_PRIVILEGED_INTENTS))
             self.host(root, connected(23, 8), rescanned(23, 9))
-            self.assertEqual(self.only(self.read(root, self.serving(epoch(23, 7)))).status, "unknown",
+            self.assertEqual(self.read(root, self.serving(epoch(23, 7)))[BOT].platforms, (),
                              "an old connect is no more believed than an old failure")
 
     # ── unknown is never connected and never disconnected ──────────────────
@@ -413,6 +440,52 @@ class PerBot(unittest.TestCase):
                     handle.write(connected(23, 9, 30) + "\n")
                 self.assertEqual(self.only(self.read(root, records, log_reader=cache.read)).status, "connected")
                 self.assertGreater(len(calls), reads)
+
+    @unittest.skipUnless(os.name == "posix", "the gateway record's liveness probe is POSIX-only")
+    def test_every_leak_the_review_found_stays_out_of_the_command_output(self) -> None:
+        from omh.commands.main import main
+        from omh.tui.bot_board import process_facts
+
+        leaks = {
+            "bearer": "Authorization: Bearer " + "ab12" * 8,
+            "bot": "Bot " + "Q1w2E3r4" * 3,
+            "token": "token=" + "a1" * 10 + ":" + "b2" * 10,
+            "key": "key=" + "0123456789abcdef" * 2,
+            "code": "code=" + "c3" * 15,
+            "secret": "secret=" + "s3cr3t" * 3,
+            "password": "password=hunter22",
+            "hex": "f" * 16 + "0" * 16,
+            "base64": "2Xz++nd6e08VJBq/" + "Aa1" * 8 + "==",
+            "ansi": "\x1b[31mred\x1b[0m",
+            "osc8": "\x1b]8;;http://evil.invalid\x07click\x1b]8;;\x07",
+            "bidi": "\u202eevil\u202c",
+        }
+        with TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"HOME": tmp, "USERPROFILE": tmp}):
+            root = self.home(tmp)
+            pid = os.getpid()
+            (root / "gateway_state.json").write_text(json.dumps({
+                "pid": pid, "start_time": process_facts(pid)[0], "hermes_home": str(root), "gateway_state": "running",
+                "served_profiles": ["default", BOT]}), encoding="utf-8")
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            self.host(root, f"{now},000 ERROR gateway.run: ✗ discord error (profile: {BOT}): RuntimeError: "
+                      + " ".join(leaks.values()))
+            out = io.StringIO()
+            with redirect_stdout(out):
+                self.assertEqual(main(["--omh-home", str(Path(tmp) / ".omh"), "--hermes-home", str(root), "hermes",
+                                       "platforms"]), 0)
+        printed = out.getvalue()
+        bots = {bot["profile"]: bot for bot in json.loads(printed)["bots"]}
+        state = bots[BOT]["platforms"][0]
+        self.assertEqual((state["status"], state["reason_kind"]), ("failed", "unrecognized"))
+        for name, leak in leaks.items():
+            secret = leak if name in ("ansi", "osc8", "bidi", "hex", "base64") else leak.split("=", 1)[-1].split(" ")[-1]
+            with self.subTest(leak=name):
+                self.assertNotIn(secret, printed)
+                self.assertNotIn(json.dumps(secret)[1:-1], printed)
+        for ch in ("\x1b", "\u202e", "\x07"):
+            self.assertNotIn(json.dumps(ch)[1:-1], printed)
+        self.assertIn("~/.hermes/logs/gateway.log", state["fix"])
+        self.assertNotIn(tmp, printed.replace(json.dumps(str(root))[1:-1], ""), "no absolute path with a home folder")
 
     def test_the_command_prints_the_schema_and_every_bot(self) -> None:
         from omh.commands.main import main

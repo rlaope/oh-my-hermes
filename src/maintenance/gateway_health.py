@@ -83,6 +83,7 @@ from .hermes_gateway_formats import (
     classify_reason,
     iso_utc,
     read_build_stamp,
+    strip_controls,
     read_fleet_restart_state,
     read_gateway_log,
 )
@@ -161,6 +162,7 @@ class AdapterState:
     restart: str = ""  # Hermes' command that restarts the gateway serving the profile ("" when none serves it)
     guidance: str = ""  # Hermes' own guidance in the serving gateway's record entry, bounded and cleaned
     intents: tuple[str, ...] = ()  # a privileged-intents refusal: the intents that guidance names
+    re_served: str = ""  # for STATE_STALE: when Hermes served the profile again, which dropped that line's verdict
 
 
 @dataclass(frozen=True)
@@ -275,6 +277,8 @@ def bot_platforms(
     by_profile: dict[str, dict[str, PlatformStatus]] = {label: {} for label, _home in homes}
     unowned: list[AdapterState] = []
     for state in adapters:
+        if state.state == STATE_STALE and state.re_served:
+            continue  # Hermes dropped the verdict when it served the bot again: a removed platform shows nothing
         if state.last_state == AMBIGUOUS_PROFILE:
             unowned.append(state)
         else:
@@ -327,9 +331,11 @@ def _platform_status(state: AdapterState) -> PlatformStatus:
     else:
         status, unknown_why = PLATFORM_UNKNOWN, UNKNOWN_STATE
     up = status in {STATE_CONNECTED, STATE_DEGRADED}
+    clean = strip_controls  # every string leaves on one line, with no escape, control or format character
     return PlatformStatus(
-        state.platform, status, _adapter_down(state) and not unknown_why, "" if up else state.since, state.logged,
-        state.reason_kind, state.reason, state.guidance, state.fix, state.restart, state.intents, unknown_why,
+        state.platform, status, _adapter_down(state) and not unknown_why, "" if up else clean(state.since),
+        clean(state.logged), state.reason_kind, clean(state.reason), clean(state.guidance), clean(state.fix),
+        clean(state.restart), state.intents, unknown_why,
     )
 
 
@@ -437,9 +443,11 @@ def _adapter_states(
         started = iso_utc(info.started)
         if record is None and not this_run:
             if event is not None:
+                # in this gateway's run, but from before Hermes served the profile again: that verdict was dropped
+                again = iso_utc(reserved.get(profile)) if _in_run(event, info) else ""
                 states.append(AdapterState(profile, platform, STATE_STALE, _utc(event), log_path,
                                            last_state=event.state, gateway_started=started,
-                                           logged_as_written=event.logged, restart=restart))
+                                           logged_as_written=event.logged, restart=restart, re_served=again))
             continue
         current = event if this_run else None
         state = _adapter_state(profile, platform, current, log_path, record, restart, started)
@@ -525,9 +533,29 @@ def _restart_command(gateway_profile: str) -> str:
     return f"hermes -p {gateway_profile} gateway restart"
 
 
+def _shown_log(log_path: str) -> str:
+    """A gateway log as a fix names it, never with a user's home folder spelled out: `~/…` under it, else from the
+    Hermes root (`<Hermes root>/profiles/<name>/logs/gateway.log`)."""
+    if not log_path:
+        return ""
+    path = Path(log_path)
+    try:
+        user = Path.home()
+        pairs = ((path, user), (path.resolve(), user.resolve()))  # a resolved Hermes home under a linked one (/var)
+    except (RuntimeError, OSError):
+        pairs = ()
+    for candidate, base in pairs:
+        if candidate.is_relative_to(base):
+            return "~/" + candidate.relative_to(base).as_posix()
+    home = path.parent.parent
+    inside = f"profiles/{home.name}/" if home.parent.name == "profiles" else ""
+    return f"<Hermes root>/{inside}{GATEWAY_LOG_RELATIVE.as_posix()}"
+
+
 def _adapter_fix(
     kind: str, event: AdapterEvent, log_path: str, restart: str, record_error: str, needs_attention: bool = False
 ) -> str:
+    log_path = _shown_log(log_path)
     if kind == REASON_PRIVILEGED_INTENTS:
         # Hermes' own guidance in the record names Server Members only when the adapter requested it
         # (`_needs_server_members_intent`: a role allowlist, or a user allowlist entry that is not a numeric id or `*`).
@@ -751,6 +779,9 @@ def _adapter_line(state: AdapterState) -> str:
     if state.state == STATE_UNSERVED:
         return (f"{where}: no running gateway serves {state.profile}; its last line, `{state.last_state}` at "
                 f"{state.logged}, says nothing about now.")
+    if state.state == STATE_STALE and state.re_served:
+        return (f"{where}: no adapter line since Hermes served {state.profile} again ({state.re_served}); the last "
+                f"one, `{state.last_state}` at {state.logged}, is from before that, and Hermes dropped its verdict.")
     if state.state == STATE_STALE:
         return (f"{where}: no adapter line since the gateway serving it started ({state.gateway_started}); the "
                 f"last one, `{state.last_state}` at {state.logged}, is from an earlier run.")

@@ -238,6 +238,7 @@ CHIP_GLYPHS = {"unicode": ("●", "○"), "ascii": ("*", "o")}
 DOWN_GLYPHS = {"unicode": "✗", "ascii": "x"}  # a messaging platform known not to be connected, beside its words
 # Level 2's rows for one messaging platform: the most Hermes' reason and the fix may take before they are cut.
 WHY_ROWS, FIX_ROWS = 2, 4
+EDGE_RECONNECT_SECONDS = 600  # a reconnect Hermes runs by itself shows on a card's edge only after this long
 GATEWAY_MARKS = {"unicode": {}, "ascii": {"●": "*", "○": "o", "◌": "?"}}  # a gateway's mark in a box's top edge  # a platform as its gateway runs it now, or as last recorded
 
 GATEWAY_RUNNING = "running"
@@ -1435,7 +1436,8 @@ def _bot_facts(profile: Profile, now: float, theme: Theme) -> Line:
     return tuple(spans)
 
 
-def _bot_platforms(profile: Profile, served_by: str, width: int, theme: Theme, charset: str, spill: int = 0) -> tuple[Line, Line]:
+def _bot_platforms(profile: Profile, served_by: str, width: int, theme: Theme, charset: str, spill: int = 0,
+                   now: float | None = None) -> tuple[Line, Line]:
     """For the box's bottom edge: what the gateway says when it is not plainly running, each platform as a chip
     coloured by its state, and a restart Hermes was asked for; the last chips go first when they do not fit."""
     gateway = profile.gateway
@@ -1449,7 +1451,7 @@ def _bot_platforms(profile: Profile, served_by: str, width: int, theme: Theme, c
         pieces += [(EDGE_WHY_RANK + number, " · ", (Span(part, style),)) for number, part in enumerate(why)]
     if gateway.restart_requested:  # before the chips, so the chips stay one run however many spill on
         pieces.append((1, "  ", (Span("restart requested", theme.warn),)))
-    down = {state.platform: state for state in profile.messaging if state.status in PLATFORM_NOT_CONNECTED}
+    down = {state.platform: state for state in profile.messaging if _edge_down(state, now)}
     # A platform known not to be connected says so in words, kept before every other chip goes.
     pieces += [(1, "  ", _down_chip(state, theme, charset)) for state in down.values()]
     live, stale = CHIP_GLYPHS[charset]
@@ -1483,6 +1485,18 @@ UNKNOWN_WORDS = {
 }
 
 
+def _edge_down(state: PlatformStatus, now: float | None) -> bool:
+    """Whether a card's edge names the platform: failed or disconnected at once; reconnecting only when Hermes flags it
+    as needing a person or it has reconnected for EDGE_RECONNECT_SECONDS, so Hermes' routine reconnects stay quiet
+    there (the profile's box says each at once)."""
+    if state.status in (PLATFORM_FAILED, PLATFORM_DISCONNECTED):
+        return True
+    if state.status != PLATFORM_RECONNECTING:
+        return False
+    since = _utc_epoch(state.since)
+    return state.attention or (now is not None and since is not None and now - since >= EDGE_RECONNECT_SECONDS)
+
+
 def _down_style(state: PlatformStatus, theme: Theme) -> Style:
     return theme.warn if state.status == PLATFORM_RECONNECTING and not state.attention else theme.error
 
@@ -1507,7 +1521,7 @@ def _status_words(state: PlatformStatus, theme: Theme, charset: str) -> tuple[Sp
 
 
 def _utc_epoch(text: str) -> float | None:
-    """The producer's UTC time (`2026-11-23T09:00:00Z`) as epoch seconds; None for "" or a local-time stamp."""
+    """The producer's UTC time (`2020-01-02T03:04:05Z`) as epoch seconds; None for "" or a local-time stamp."""
     try:
         return datetime.strptime(text, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
     except (ValueError, OverflowError, OSError):
@@ -1666,7 +1680,7 @@ def bot_box(profile: Profile, served_by: str, highlighted: bool, now: float, wid
     top = (_bot_title(profile, served_by, highlighted, theme, charset), _bot_facts(profile, now, theme))
     joints = _joints(widths)
     spill = _box_width(widths) - joints[1] - 6 if split else 0  # past the second joint, before the far corner
-    bottom = _bot_platforms(profile, served_by, _edge_room(widths, faced), theme, charset, spill)
+    bottom = _bot_platforms(profile, served_by, _edge_room(widths, faced), theme, charset, spill, now)
     return _panel(widths, rows, edge, charset, top=top, bottom=bottom, after_first=faced)
 
 
@@ -1734,7 +1748,7 @@ def profile_box(profile: Profile, served_by: str, now: float, width: int, theme:
     columns = [_face_column(_text(profile.name), height, theme, charset), fields] if faced else [fields]
     rows = [[column[number] for column in columns] for number in range(height)]
     top = (_bot_title(profile, served_by, False, theme, charset), _bot_facts(profile, now, theme))
-    bottom = _bot_platforms(profile, served_by, _edge_room(widths, faced), theme, charset)
+    bottom = _bot_platforms(profile, served_by, _edge_room(widths, faced), theme, charset, now=now)
     return _panel(widths, rows, theme.rule, charset, top=top, bottom=bottom, after_first=faced)
 
 

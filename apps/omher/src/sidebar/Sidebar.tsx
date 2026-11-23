@@ -30,7 +30,7 @@ import { SplitDivider, useSideSplit } from "./SideSplit";
 import { useAutoSplit } from "./autoSplit";
 import { TasksBar } from "../tasks/TasksBar";
 import { DiskChip } from "./DiskChip";
-import { PLATFORMS_POLL_MS, notConnected } from "../platforms/platforms";
+import { PLATFORMS_POLL_MS, rowDown } from "../platforms/platforms";
 
 const sessionBackground = (target: EventTarget) => target instanceof Element && !target.closest(".ss-row, .tg-h, button, input, textarea, select, a, [contenteditable], [role=menu], [role=menuitem]");
 
@@ -145,7 +145,7 @@ export function Sidebar() {
               drag={drag.row(b.name)}
               groupId={hasThreads ? groupId : undefined}
               latest={hasThreads ? threadsLatest(s.threads[b.name]!, (th) => s.chats[threadKey(b.name, th)]) : null}
-              down={b.host ? [] : notConnected(s.platforms, b.name)}
+              down={b.host ? [] : rowDown(s.platforms, b.name, Date.now())}
               menu={{
                 onNewThread: onNew,
                 pinned,

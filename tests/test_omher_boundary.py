@@ -3400,9 +3400,10 @@ class MessagingPlatformsThroughOmh(unittest.TestCase):
         "the argv is fixed and takes nothing from the page, with no shell, nothing on stdin, its stderr dropped, started"
         " in the home folder without any `PYTHON*` variable of the Hermes interpreter, and at most 1 MB of what it prints"
         " read (a longer answer is refused).",
-        "A read still running after 20 seconds is stopped by `_stop_run`, the same stop rule 41 uses: on macOS and Linux"
-        " with everything in the session it was started in, on Windows the `omh.exe` process itself; nothing else is"
-        " signalled.",
+        "A read still running after 20 seconds is stopped by `_stop_run`, the same stop rule 41 uses: on POSIX with its"
+        " process group, on Windows the process; nothing else is signalled.",
+        "and when Hermes is reconnecting it only once Hermes flags that as needing the person or it has gone on for 10"
+        " minutes (`ROW_RECONNECT_MS`);",
         "That command reads, never writes, the gateway record (`gateway_state.json`) of the Hermes root and of each"
         " profile and the tail of each one's `logs/gateway.log` (at most 1 MB, with the rotated `gateway.log.1` before it"
         " when the log is shorter); it runs no Hermes command, signals no process and sends nothing anywhere, and omher"
@@ -3412,7 +3413,7 @@ class MessagingPlatformsThroughOmh(unittest.TestCase):
         "is shown as not known, never as connected or as not connected, and with no answer from `omh` nothing is shown"
         " as connected.",
         "shown to copy and never run by omher (rule 29's Restart stays the one way omher restarts a gateway). A bot on"
-        " another computer (rule 31) is not read.",
+        " another computer (rule 31) is not read, and `bots.platforms` is never forwarded to that computer's bridge.",
     )
 
     def setUp(self) -> None:
@@ -3494,10 +3495,10 @@ class MessagingPlatformsThroughOmh(unittest.TestCase):
             log = root / "profiles" / "demo-bot" / "logs" / "gateway.log"
             log.parent.mkdir()
             log.write_text(
-                "2026-11-23 09:00:00,000 ERROR hermes_plugins.platforms__discord.adapter: [Discord] Failed to connect to"
+                "2020-01-02 03:04:05,000 ERROR hermes_plugins.platforms__discord.adapter: [Discord] Failed to connect to"
                 f" Discord: LoginFailure: Improper token has been passed. {token} {hook}\n"
                 "Traceback (most recent call last):\n"
-                "2026-11-23 09:00:00,100 WARNING gateway.run: ✗ discord failed to connect\n", encoding="utf-8")
+                "2020-01-02 03:04:05,100 WARNING gateway.run: ✗ discord failed to connect\n", encoding="utf-8")
             out = json.dumps(bot_platforms_payload(root))
         bots = ob.platform_rows(out)
         self.assertIsNotNone(bots)
@@ -3518,6 +3519,7 @@ class MessagingPlatformsThroughOmh(unittest.TestCase):
         self.assertIn("<CopyButton text={() => step.command}", section)
         self.assertIn("openExternal(DISCORD_PORTAL)", section)
         self.assertIn('DISCORD_PORTAL = "https://discord.com/developers/applications"', helpers)
+        self.assertIn("export const ROW_RECONNECT_MS = 10 * 60_000;", helpers)
         for text in (section, helpers):
             for bad in ("bridge.request", "restartBot", "bots.restart", "getRestarts", "draftTo", "send(", "localStorage",
                         "console.", "dangerouslySetInnerHTML"):

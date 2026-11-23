@@ -4350,7 +4350,8 @@ answers three questions for the root Hermes home and every profile under it
   address or a URL's query. When Hermes serves a profile again after a
   config or `.env` change (`Re-scanned profile`, `Now serving profile`), it
   drops that profile's old verdicts, and so does this check: an adapter line
-  logged more than two minutes before that says nothing about now.
+  logged more than two minutes before that says nothing about now, and a fix
+  names a log as `~/…`, never with the home folder spelled out.
 
 The same adapter states, per bot, are what `omh hermes platforms` prints
 (read-only JSON, `omh_bot_platforms/v1`): each platform's status (connected,

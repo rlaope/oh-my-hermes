@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { Bot, PlatformState, PlatformsRead } from "../lib/protocol";
 import { setLang, t, LANGS } from "../i18n";
 import { PlatformChip, PlatformItem, PlatformsBody } from "./PlatformSection";
-import { fixSteps, notConnected, platformName, restartGateway, rowWords, statusWords, whyWords } from "./platforms";
+import { ROW_RECONNECT_MS, fixSteps, notConnected, platformName, restartGateway, rowDown, rowWords, statusWords, whyWords } from "./platforms";
 
 const BOT = { name: "demo-bot", display_name: "Demo" } as Bot;
 const REMOTE = { name: "far:demo-bot", display_name: "Demo", host: { kind: "ssh", peer: "far", label: "Other", host: "h" } } as Bot;
@@ -12,8 +12,8 @@ const state = (over: Partial<PlatformState> = {}): PlatformState => ({
   platform: "discord",
   status: "disconnected",
   attention: true,
-  since: "2026-11-23T09:00:00Z",
-  logged: "2026-11-23T09:30:00Z",
+  since: "2020-01-02T03:04:05Z",
+  logged: "2020-01-02T03:34:05Z",
   reason_kind: "discord_privileged_intents",
   unknown_why: "",
   reason: "Shard ID None is requesting privileged intents that have not been explicitly enabled in the developer portal.",
@@ -37,6 +37,19 @@ describe("which platforms the row speaks of", () => {
     expect(notConnected({ available: false, bots: read(...all).bots }, "demo-bot")).toEqual([]);
     expect(notConnected(null, "demo-bot")).toEqual([]);
     expect(notConnected(read(...all), "other-bot")).toEqual([]);
+  });
+
+  it("keeps Hermes' routine reconnects off the row: only past ten minutes, or when Hermes flags it", () => {
+    const at = Date.parse("2020-01-02T03:04:05Z");
+    const re = (since: string, attention = false) => state({ status: "reconnecting", attention, since, reason_kind: "transient" });
+    const shown = (p: PlatformState) => rowDown(read(p), "demo-bot", at + ROW_RECONNECT_MS).length;
+    expect(ROW_RECONNECT_MS).toBe(600_000);
+    expect(shown(re("2020-01-02T03:04:05Z"))).toBe(1); // exactly ten minutes
+    expect(shown(re("2020-01-02T03:05:05Z"))).toBe(0); // nine
+    expect(shown(re("2020-01-02T03:13:05Z", true))).toBe(1); // flagged
+    expect(shown(re(""))).toBe(0);
+    expect(shown(state())).toBe(1); // disconnected: at once
+    expect(notConnected(read(re("2020-01-02T03:13:05Z")), "demo-bot")).toHaveLength(1); // the page still lists it
   });
 
   it("names the platform as it names itself, in every language", () => {

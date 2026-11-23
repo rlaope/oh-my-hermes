@@ -664,7 +664,7 @@ const PLATFORMS_SEED = () => ({
     default: {
       log: "read",
       platforms: [
-        { platform: "discord", status: "connected", attention: false, since: "", logged: "2026-11-23T09:00:00Z", reason_kind: "", unknown_why: "", reason: "", guidance: "", restart: "hermes -p default gateway restart", intents: [] },
+        { platform: "discord", status: "connected", attention: false, since: "", logged: "2020-01-02T03:04:05Z", reason_kind: "", unknown_why: "", reason: "", guidance: "", restart: "hermes -p default gateway restart", intents: [] },
       ],
     },
   },
