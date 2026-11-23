@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Layout } from "../terminal/layout";
-import { groupOf, groupSessions, leaveIn, moveIn, paneKeyIn, paneOf, parseSplits, pruneIn, serializeSplits, splitIn, zoomIn, type SplitGroup } from "./splitState";
+import { equalizeIn, getSplit, groupOf, groupSessions, leaveIn, mapHeightIn, moveIn, paneKeyIn, paneOf, parseSplits, pruneIn, ratioIn, resetSplit, serializeSplits, setMapHeight, setSplit, splitIn, zoomIn, type SplitGroup } from "./splitState";
 
 const row = (a: Layout, b: Layout, ratio = 0.5): Layout => ({ dir: "row", ratio, a, b });
 const col = (a: Layout, b: Layout, ratio = 0.5): Layout => ({ dir: "col", ratio, a, b });
@@ -119,5 +119,40 @@ describe("TERMINALS splits", () => {
     expect(moveIn(z, "s1", "left")[0].zoom).toBe(true);
     // ratios and evening out keep the zoom
     expect(paneKeyIn(z, "s1", { kind: "equalize" }).groups[0].zoom).toBe(true);
+  });
+
+  it("keeps the card's dragged height with the split, through restarts and layout changes", () => {
+    const at = (mapH: unknown) => parseSplits(JSON.stringify({ groups: [{ layout: row(P(1), P(2)), mapH }] }))[0];
+    expect(at(120).mapH).toBe(120);
+    expect(at(999).mapH).toBe(240);
+    expect(at(3).mapH).toBe(46);
+    expect("mapH" in at("x")).toBe(false);
+    expect("mapH" in at(null)).toBe(false);
+    // NaN serializes as null; a non-finite number never comes back
+    expect("mapH" in at(Number.NaN)).toBe(false);
+    const g: SplitGroup[] = [{ layout: col(row(P(1), P(2)), row(P(3), P(4))), mapH: 120 }];
+    expect(parseSplits(serializeSplits(g))).toEqual(g);
+    const left = leaveIn(g, "s4").groups;
+    expect(left[0].mapH).toBe(120);
+    expect(groupSessions(left[0])).toHaveLength(3);
+    const two: SplitGroup[] = [{ layout: row(P(1), P(2)), mapH: 120 }];
+    expect(splitIn(two, "s1", "down", "s3")[0].mapH).toBe(120);
+    expect(moveIn(g, "s1", "right")[0].mapH).toBe(120);
+    expect(ratioIn(g, "s1", "", 0.3)[0].mapH).toBe(120);
+    expect(equalizeIn(g, "s1")[0].mapH).toBe(120);
+    expect(zoomIn(g, "s1")[0].mapH).toBe(120);
+    expect(mapHeightIn(g, "s2", 500)[0].mapH).toBe(240);
+    expect("mapH" in mapHeightIn(g, "s2", null)[0]).toBe(false);
+    // a session in no split changes nothing
+    expect(mapHeightIn(g, "s9", 80)).toBe(g);
+  });
+
+  it("saves a set card height with the split", () => {
+    setSplit({ groups: [{ layout: row(P(1), P(2)) }] });
+    setMapHeight("s2", 100);
+    expect(getSplit().groups[0].mapH).toBe(100);
+    setMapHeight("s1", null);
+    expect("mapH" in getSplit().groups[0]).toBe(false);
+    resetSplit();
   });
 });
