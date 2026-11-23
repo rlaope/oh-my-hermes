@@ -260,6 +260,11 @@ class AdapterHistory(unittest.TestCase):
             self.assertIn("discord: one of the profiles harbor, quay failed to connect at", text)
             self.assertIn("Privileged Gateway Intents", text)
             self.assertIn(FINDING_ADAPTER_DOWN, report.findings)
+            up = tuple(Platform(f"{name}:discord", "connected", "", False, True) for name in ("harbor", "quay"))
+            healed = Fleet().run_health(root, {".hermes": Gateway("running", True, 4100, code_sha=COMMIT, platforms=up,
+                                                                    served=("default", "harbor", "quay"))})
+            self.assertEqual(healed.findings, ())  # every candidate's record says connected: history, not a finding
+            self.assertIn("each one's own gateway record says it is connected now", "\n".join(healed.lines))
 
     def test_a_reason_with_no_open_reconnect_belongs_to_the_x_line_that_follows(self) -> None:
         lines = [

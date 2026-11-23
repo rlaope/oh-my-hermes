@@ -313,7 +313,7 @@ def _adapter_states(
             continue
         current = event if this_run else None
         states.append(_adapter_state(profile, platform, current, log_path, record, restart, started))
-    return logs, states + [state for state in ambiguous if state.reason_kind]
+    return logs, states + [state for state in ambiguous if state.reason_kind or state.source == SOURCE_RECORD]
 
 
 def _ambiguous_state(event: AdapterEvent, log_path: str, serving: dict[str, _Serving]) -> AdapterState:
@@ -321,12 +321,17 @@ def _ambiguous_state(event: AdapterEvent, log_path: str, serving: dict[str, _Ser
     falls in the run of a gateway serving them (else it says nothing about now and is left out)."""
     info = next((serving[name] for name in event.candidates if name in serving), None)
     this_run = info is not None and (info.started is None or event.epoch is None or event.epoch >= info.started - 1)
-    kind = classify_reason(event) if this_run else ""
+    entries = [serving[name].platforms.get(f"{name}:{event.platform}") if name in serving else None
+               for name in event.candidates]
+    # Every candidate's own current record entry says it is up: the line is history, not a finding.
+    all_up = all(entry is not None and entry.state in {STATE_CONNECTED, STATE_DEGRADED} for entry in entries)
+    kind = classify_reason(event) if this_run and not all_up else ""
     restart = _restart_command(info.gateway_profile if info is not None else DEFAULT_PROFILE)
     fix = _adapter_fix(kind, event, log_path, restart, "") if kind else ""
     return AdapterState(
         "/".join(event.candidates), event.platform, event.state, _utc(event), log_path, event.reason, event.code,
-        kind, fix, SOURCE_LOG, logged_as_written=event.logged, last_state=AMBIGUOUS_PROFILE,
+        kind, fix, SOURCE_RECORD if this_run and all_up else SOURCE_LOG, logged_as_written=event.logged,
+        last_state=AMBIGUOUS_PROFILE,
     )
 
 
@@ -583,6 +588,9 @@ def _adapter_down(state: AdapterState) -> bool:
 def _adapter_line(state: AdapterState) -> str:
     where = f"{state.profile} {state.platform}"
     latest = f"latest line {state.logged}" if state.logged else "no log line in this run"
+    if state.last_state == AMBIGUOUS_PROFILE and state.source == SOURCE_RECORD:
+        return (f"{state.platform}: one of the profiles {state.profile.replace('/', ', ')} failed to connect at "
+                f"{state.logged} (the log does not say which); each one's own gateway record says it is connected now.")
     if state.last_state == AMBIGUOUS_PROFILE:
         return (f"{state.platform}: one of the profiles {state.profile.replace('/', ', ')} failed to connect at "
                 f"{state.logged}, and the log does not say which (their reconnects were open together); each "
