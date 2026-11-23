@@ -116,6 +116,26 @@ stays in `AGENTS.md`, where `tests/test_paired_run_arm_home.py` reads it.
   only for loopback hosts (tests). Config, cursors, exit codes and the install
   command are in its `README.md`; `tests/test_channel_watch_toolkit.py` runs it
   against a fake API on 127.0.0.1.
+- **PR watch monitor and event guard**: `src/skills/pr_watch_toolkit/scripts/pr_watch.py`
+  and `pr_event_guard.py` ship as inert package data under `github-event-ops`'
+  `toolkit/` (owner-approved scoped integration, 2026-11-23). OMH core,
+  install, update, routing and doctor never import or execute them, and nothing
+  in `src/` imports them.
+  The person (or their bot, on their request) copies them into
+  `<profile>/scripts/`: Hermes runs `pr_watch_<watch>.py` as a cron job's
+  `--monitor-script` and `pr_event_guard_<route>.py` as a webhook route's
+  `--script`, on Hermes' interpreter. `pr_watch.py` is read-only toward the
+  forge: one fixed `gh pr view <pr> --repo <owner>/<name> --json ...` argv per
+  tick, no shell, the repository and number validated first, stdin closed, a
+  30 s timeout, output capped, the gh CLI's own sign-in and no token read; it
+  writes only its PR's own state file. It is in INVARIANT 1's
+  `PROCESS_SPAWN_ALLOWLIST`, and its exact argv is in INVARIANT 3's
+  `GH_INVOCATION_EXCEPTIONS`. `pr_event_guard.py` opens no connection and starts
+  no process: it reads the route payload on stdin as data, prints only fixed
+  words and counts, and writes only its own window file. Neither mutates
+  anything on the forge. Config, output and exit codes are in their
+  `README.md`; `tests/test_pr_watch_toolkit.py` runs both on fixture payloads,
+  hostile ones included, and the monitor against a fake `gh`.
 - **The OMH TUI** (bare `omh`) is a foreground frontend over Hermes' own
   gateway, not an execution surface: it relays only what the person types,
   answers no request on their behalf, and makes no model call; the one switch
@@ -228,6 +248,12 @@ The one-line form of the same exceptions, formerly under What This Repo Is in
   their own `ELEVENLABS_API_KEY` or codex login. OMH never imports or runs
   them; without the credential they exit 2. `eleven.py` is in INVARIANT 1's
   `PROCESS_SPAWN_ALLOWLIST`.
+- The `github-event-ops` toolkit scripts `toolkit/scripts/pr_watch.py` (a
+  Hermes cron monitor script: one read-only `gh pr view` per tick) and
+  `pr_event_guard.py` (a Hermes webhook filter: payload on stdin, no network or
+  process): package data the person's Hermes runs. OMH never imports or runs
+  them. `pr_watch.py` is in INVARIANT 1's `PROCESS_SPAWN_ALLOWLIST` and its argv
+  in INVARIANT 3's `GH_INVOCATION_EXCEPTIONS`.
 - The OMH TUI's gateway child, `src/tui/attach/gateway_attach.py`: not core.
   It runs only on Hermes' interpreter, spawned by path, imported by nothing in
   `src/`, and reaches the person's own gateway over loopback as Hermes' Ink TUI

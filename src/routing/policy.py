@@ -45,6 +45,7 @@ from ..plugin_bundle.omh.command_verb import DIRECT_CODING_EDIT_VERBS as _DIRECT
 from ..plugin_bundle.omh.command_verb import command_words as _command_words
 from ..plugin_bundle.omh.command_verb import commanded_words
 from ..plugin_bundle.omh.show_reel_cues import show_reel_request_admitted
+from ..plugin_bundle.omh.domain_signals import canonical_domain_tokens, domain_tokens_are_locally_negated
 from ..plugin_bundle.omh.code_review_cues import (
     code_review_request_guard_applies as code_review_request_guard_applies,
     code_review_request_sentence as code_review_request_sentence,
@@ -5390,6 +5391,130 @@ _CHANNEL_WATCH_BLOCKERS = (
     "슬랙으로",
     "디스코드로",
 )
+# "Watch PR 42 until its checks finish" is a wait on one pull request: a Hermes
+# cron monitor job from github-event-ops' PR watch recipe, not a model polling
+# loop. Measured before the `pr_watch_before_loop_or_ultrawork` guard, the
+# English phrasings clarified toward `ultrawork` (its `until` and `finish`
+# triggers) or `loop`, and the Korean ones fell back. It needs all three: a
+# pull request named as one, a watch or wait verb, and a settle cue (until it
+# finishes, passes, or merges); a how-to question, a queue of PRs, or a video
+# stands it down.
+_PR_WATCH_SPOKEN_OBJECTS = ("pr", "pull request")
+_PR_WATCH_OBJECTS = ("풀 리퀘스트", "풀리퀘스트", "풀리퀘")
+_PR_WATCH_VERBS = (
+    "keep an eye on",
+    "keep watching",
+    "keep monitoring",
+    "wait for",
+    "wait on",
+    "wait until",
+    "지켜보",
+    "지켜봐",
+    "기다려",
+    "기다렸다",
+    "감시",
+    "모니터링",
+    "주시",
+)
+_PR_WATCH_SPOKEN_VERBS = ("watch", "monitor", "babysit")
+_PR_WATCH_SETTLE_TOKENS = frozenset(
+    {
+        "until", "till", "finish", "finishes", "finished", "done", "complete", "completes", "completed",
+        "pass", "passes", "passed", "green", "merge", "merges", "merged", "settle", "settles", "settled",
+    }
+)
+_PR_WATCH_SETTLE_CUES = (
+    "끝날",
+    "끝나",
+    "끝날 때까지",
+    "완료",
+    "통과",
+    "머지",
+    "때까지",
+)
+# The PR must be the thing watched, and the wait must end on the PR's own state.
+# English: the PR comes within a few words after the watch or wait verb, the
+# words up to the clause opener (`until`, `to`, `when`) name no other watched
+# thing and no measure of PRs, and the clause names a PR state (checks, CI,
+# merged, approved) and no calendar boundary. Korean: the PR comes before the
+# verb with a PR-state word or the verb right after it, and the span up to the
+# verb holds the settle ending and no other watched thing, measure or date.
+# "배포 끝날 때까지 지켜보다가 PR 올려줘" names the PR as the result of the wait,
+# and "monitor PR merge rate until the sprint ends" a measure until a date.
+_PR_WATCH_EN_VERB_WORDS = (
+    ("watch",),
+    ("watching",),
+    ("monitor",),
+    ("monitoring",),
+    ("babysit",),
+    ("keep", "an", "eye", "on"),
+    ("keep", "watching"),
+    ("keep", "monitoring"),
+    ("wait", "for"),
+    ("wait", "on"),
+    ("wait", "until"),
+)
+_PR_WATCH_EN_OBJECT_WINDOW = 4
+_PR_WATCH_EN_CLAUSE_OPENERS = frozenset({"until", "till", "to", "when", "once"})
+_PR_WATCH_EN_STATE_WORDS = frozenset(
+    {
+        "check", "checks", "ci", "test", "tests", "build", "builds",
+        "pass", "passes", "passed", "passing", "green", "fail", "fails", "failed", "red",
+        "merge", "merges", "merged", "mergeable", "approve", "approves", "approved",
+        "review", "reviews", "reviewed", "close", "closes", "closed", "land", "lands", "landed",
+        "done", "finish", "finishes", "finished", "complete", "completes", "completed", "settle", "settles",
+    }
+)
+_PR_WATCH_EN_CALENDAR = frozenset(
+    {
+        "sprint", "week", "weekend", "month", "quarter", "year", "today", "tonight", "tomorrow", "eod",
+        "deadline", "morning", "evening", "noon", "monday", "tuesday", "wednesday", "thursday", "friday",
+        "saturday", "sunday",
+    }
+)
+# Another thing watched in the PR's place, and a measure of PRs.
+_PR_WATCH_OTHER_OBJECTS = frozenset(
+    {
+        "queue", "backlog", "video", "videos", "deploy", "deploys", "deployment", "deployments",
+        "release", "releases", "staging", "production", "prod", "rollout", "server", "servers", "logs",
+        "dashboard", "pipeline", "pipelines",
+    }
+)
+_PR_WATCH_MEASURES = frozenset(
+    {
+        "rate", "rates", "count", "counts", "number", "numbers", "speed", "time", "times", "turnaround",
+        "throughput", "latency", "velocity", "metric", "metrics", "stats", "statistics", "average", "long",
+        "many", "volume", "trend", "trends",
+    }
+)
+_PR_WATCH_KO_VERB_STEMS = ("지켜보", "지켜봐", "기다려", "기다렸", "감시", "모니터링", "주시")
+_PR_WATCH_KO_STATE_WORDS = ("체크", "ci", "머지", "리뷰", "빌드", "테스트", "검사", "승인", "통과", "실패", "닫히")
+_PR_WATCH_KO_OBJECT_WINDOW = 6
+# Whole words, compared after the router's own fold (Hangul is decomposed there).
+_PR_WATCH_KO_MEASURE_WORDS = frozenset(
+    normalized_phrase(word) for word in ("수", "수를", "수가", "속도", "속도를", "건수", "개수", "비율", "시간")
+)
+# The until-clause names another branch's state (CI on main, the release branch),
+# which a monitor of this PR cannot observe; merging into that branch is still
+# the PR's own state.
+_PR_WATCH_EN_OTHER_REFS = frozenset({"main", "main's", "master", "master's", "develop", "trunk", "branch", "branches"})
+_PR_WATCH_EN_MERGE_WORDS = frozenset({"merge", "merges", "merged", "land", "lands", "landed"})
+# A Korean watch or wait verb declined right where it is said: 지켜보지 말고/마,
+# 안 지켜봐도, 지켜볼 필요 없어.
+_PR_WATCH_KO_NEGATIONS = ("지 마", "지마", "지 말", "지말", "지 않", "지않", "필요 없", "필요는 없", "안 해도", "않아도")
+_PR_WATCH_KO_BLOCKERS = (
+    "배포", "릴리즈", "릴리스", "스테이징", "서버", "로그", "영상", "대기열",
+    "통계", "지표", "평균", "얼마나", "속도", "건수", "개수", "비율",
+    "이번 주", "주말", "금요일", "월요일", "화요일", "수요일", "목요일", "토요일", "일요일",
+    "스프린트", "분기", "오늘", "내일", "월말",
+)
+_PR_WATCH_BLOCKERS = (
+    *_GREENFIELD_QUESTION_OPENERS,
+    "watch out",
+    "how long",
+    "how many",
+)
+
 _ONE_OFF_TOKENS = _normalized_token_set(
     {
         "once",
@@ -6054,6 +6179,15 @@ CHANNEL_WATCH_GUARD = RoutingGuardRule(
     why="Matched a messenger platform, a watch verb, and a tell-me cue; a channel watch is a recurring collector job with a [SILENT] judging prompt, not a one-off delivery card.",
     activation_status="active",
 )
+PR_WATCH_GUARD = RoutingGuardRule(
+    id="pr_watch_before_loop_or_ultrawork",
+    rule="Waiting on one pull request until its checks finish, it merges, or it settles should route to github-event-ops' PR watch recipe before the loop or ultrawork lanes.",
+    matched_label="guard:pr_watch",
+    preferred_skills=("github-event-ops",),
+    score_boost=44,
+    why="Matched a pull request, a watch or wait verb, and a settle cue; a PR watch is a bounded Hermes cron monitor job, not a model polling loop or a coding plan.",
+    activation_status="active",
+)
 RESEARCH_DEPARTMENT_GUARD = RoutingGuardRule(
     id="research_department_before_generic_scheduled_ops",
     rule="Recurring or durable research operations should route to the research department workflow pack before generic scheduled ops.",
@@ -6119,6 +6253,7 @@ ROUTING_GUARD_RULES = (
     RESEARCH_DEPARTMENT_GUARD,
     SCHEDULED_OPS_BLUEPRINT_GUARD,
     CHANNEL_WATCH_GUARD,
+    PR_WATCH_GUARD,
     SOURCE_FINDER_GUARD,
     WEB_RESEARCH_BEFORE_PROCESS_GUARD,
     POINT_IN_TIME_WEB_GUARD,
@@ -6243,6 +6378,7 @@ GUARD_DISPATCH_TRUST: dict[str, tuple[str, str]] = {
     "risky_refactor_before_cleanup": (GUARD_TRUSTED, "risky refactor named as the change; no measured record as a winner, keeps its shape label"),
     "safe_feature_change_before_generic_plan": (GUARD_TRUSTED, "a safe feature change named as the change; no measured record as a winner, keeps its shape label"),
     "channel_watch_before_gateway_or_connector": (GUARD_TRUSTED, "a watch verb on a Slack or Discord channel plus a tell-me cue; no measured record as a winner, keeps its shape label"),
+    "pr_watch_before_loop_or_ultrawork": (GUARD_TRUSTED, "a watch or wait verb on one pull request plus a settle cue; no measured record as a winner, keeps its shape label"),
     "scheduled_ops_blueprint_before_reliability_or_research": (GUARD_CONTEXT_ONLY, "a cadence plus a scheduled action; measured 0 right / 1 wrong"),
     "source_finder_before_generic_web_research": (GUARD_CONTEXT_ONLY, "fires on source and paper nouns; no measured record as a winner, keeps its shape label"),
     "strategy_brief_before_generic_plan": (GUARD_TRUSTED, "a decide-whether or prioritize decision shape; no measured record as a winner, keeps its shape label"),
@@ -6779,6 +6915,8 @@ def _active_routing_guard_rules_cached(
         rules.append(SCHEDULED_OPS_BLUEPRINT_GUARD)
     if not direct_coding_task_applies and channel_watch_guard_applies(normalized_query):
         rules.append(CHANNEL_WATCH_GUARD)
+    if not direct_coding_task_applies and pr_watch_guard_applies(normalized_query):
+        rules.append(PR_WATCH_GUARD)
     source_finder_applies = (
         not delivery_cycle_applies
         and not paper_learning_applies
@@ -10735,6 +10873,133 @@ def channel_watch_guard_applies(normalized_query: str) -> bool:
     if not _contains_phrase(normalized_query, _CHANNEL_WATCH_NOTIFY_CUES):
         return False
     return not _contains_phrase(normalized_query, _CHANNEL_WATCH_BLOCKERS)
+
+
+def pr_watch_guard_applies(normalized_query: str) -> bool:
+    """A wait on one pull request's own state: the PR is what is watched, and the wait ends on its state."""
+    if not (
+        any(phrase_is_spoken(normalized_query, noun) for noun in _PR_WATCH_SPOKEN_OBJECTS)
+        or _contains_phrase(normalized_query, _PR_WATCH_OBJECTS)
+    ):
+        return False
+    if not (
+        _contains_phrase(normalized_query, _PR_WATCH_VERBS)
+        or any(phrase_is_spoken(normalized_query, verb) for verb in _PR_WATCH_SPOKEN_VERBS)
+    ):
+        return False
+    if not (
+        _contains_phrase(normalized_query, _PR_WATCH_SETTLE_CUES)
+        or _PR_WATCH_SETTLE_TOKENS & routing_terms(normalized_query)
+    ):
+        return False
+    if _contains_phrase(normalized_query, _PR_WATCH_BLOCKERS):
+        return False
+    raw = normalized_query.split()
+    words = [word.strip(".,!?;:()[]{}\"'`#") for word in raw]
+    return _english_pr_watch(raw, words) or _korean_pr_watch(words)
+
+
+def _is_pr_word(words: list[str], index: int) -> bool:
+    word = words[index]
+    if word in ("pr", "prs") or (word.startswith("pr") and word[2:] and not word[2:].isascii()):
+        return True  # `pr`, or `pr` with a Korean particle written onto it (`pr을`)
+    if word == "pull" and index + 1 < len(words) and words[index + 1].startswith("request"):
+        return True
+    return _contains_phrase(word, _PR_WATCH_OBJECTS)
+
+
+def _english_verb_spans(words: list[str]) -> list[tuple[int, int]]:
+    spans = []
+    for start in range(len(words)):
+        for verb in _PR_WATCH_EN_VERB_WORDS:
+            if tuple(words[start:start + len(verb)]) == verb:
+                spans.append((start, start + len(verb) - 1))
+    return spans
+
+
+def _english_verb_is_negated(raw: list[str], words: list[str], start: int) -> bool:
+    """"don't watch", "no need to babysit", "stop watching": the shared local-negation window, in the verb's clause."""
+    clause_start = 0
+    for k in range(start):
+        if raw[k][-1:] in ",;.!?" or words[k] in ("and", "but", "then"):
+            clause_start = k + 1
+    tokens = canonical_domain_tokens(" ".join(raw[clause_start:start]))
+    return domain_tokens_are_locally_negated(tokens, len(tokens)) or "stop" in tokens[-2:]
+
+
+def _korean_verb_is_negated(words: list[str], verb: int) -> bool:
+    """지켜보지 말고, 지켜보지 마, 안 지켜봐도, 지켜볼 필요 없어: a decline said at the verb itself."""
+    if verb > 0 and words[verb - 1] == normalized_phrase("안"):
+        return True
+    return _contains_phrase(" ".join(words[verb:verb + 3]), _PR_WATCH_KO_NEGATIONS)
+
+
+def _english_pr_watch(raw: list[str], words: list[str]) -> bool:
+    """An English verb takes the PR as its object, and its until-clause is about the PR's own state.
+
+    The verb is not declined in its own clause ("don't watch", "no need to babysit"). The object is the
+    words from the verb to the clause opener (`until`, `to`, `when`, ...); it may not name another
+    watched thing or a measure of PRs. The clause runs to the next comma or `and`/`then`; it must name
+    a PR state (checks, CI, merged, approved, ...), no calendar boundary, and no other branch's state
+    (CI on main) unless the PR merges into it.
+    """
+    pr_at = [index for index in range(len(words)) if _is_pr_word(words, index)]
+    for start, end in _english_verb_spans(words):
+        if _english_verb_is_negated(raw, words, start):
+            continue
+        for pr in (index for index in pr_at if end < index <= end + _PR_WATCH_EN_OBJECT_WINDOW):
+            opener = next((k for k in range(pr + 1, len(words)) if words[k] in _PR_WATCH_EN_CLAUSE_OPENERS), None)
+            if opener is None:
+                continue
+            obj = words[end + 1:opener]
+            if any(word in _PR_WATCH_OTHER_OBJECTS or word in _PR_WATCH_MEASURES for word in obj):
+                continue
+            clause = []
+            for k in range(opener + 1, len(words)):
+                if words[k] in ("and", "then", "but", "so"):
+                    break
+                clause.append(words[k])
+                if raw[k][-1:] in ",;.":
+                    break
+            other_branch = any(word in _PR_WATCH_EN_OTHER_REFS for word in clause) and not any(
+                word in _PR_WATCH_EN_MERGE_WORDS for word in clause
+            )
+            if any(word in _PR_WATCH_EN_STATE_WORDS for word in clause) and not other_branch and not any(
+                word in _PR_WATCH_EN_CALENDAR for word in clause
+            ):
+                return True
+    return False
+
+
+def _korean_pr_watch(words: list[str]) -> bool:
+    """A Korean verb follows the PR, and the words between them are the PR's own state ending.
+
+    A PR-state word (체크, CI, 머지, 리뷰, ...) or the verb comes right after the PR, the span up to
+    the verb holds the settle ending (끝날 때까지, 머지될 때까지, 되면), and it names no other watched
+    thing, no measure of PRs, and no calendar boundary.
+    """
+    pr_at = [index for index in range(len(words)) if _is_pr_word(words, index)]
+    verbs = [index for index, word in enumerate(words) if _contains_phrase(word, _PR_WATCH_KO_VERB_STEMS)]
+    for verb in verbs:
+        if _korean_verb_is_negated(words, verb):
+            continue
+        for pr in pr_at:
+            if not pr < verb <= pr + _PR_WATCH_KO_OBJECT_WINDOW:
+                continue
+            span = words[pr + 1:verb]
+            if _contains_phrase(" ".join(span), ("브랜치",)) and not _contains_phrase(" ".join(span), ("머지", "merge")):
+                continue  # another branch's state (main 브랜치 CI), not this PR's
+            close = words[pr + 1:min(pr + 3, verb + 1)]
+            if not (verb <= pr + 2 or any(_contains_phrase(word, _PR_WATCH_KO_STATE_WORDS) for word in close)):
+                continue
+            if any(word in _PR_WATCH_KO_MEASURE_WORDS or _contains_phrase(word, _PR_WATCH_KO_BLOCKERS) for word in span):
+                continue
+            if _contains_phrase(" ".join(span), _PR_WATCH_SETTLE_CUES) and any(
+                _contains_phrase(word, _PR_WATCH_KO_STATE_WORDS) for word in span
+            ):
+                return True
+    return False
+
 
 
 def credential_rotation_guard_applies(normalized_query: str) -> bool:

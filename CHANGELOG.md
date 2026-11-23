@@ -202,6 +202,16 @@ All notable changes will be documented here.
     TUI use for pasted pictures), so a pasted screenshot shows as the picture itself instead of a coarse block
     mosaic. The layer stays above the GPU renderer, keeps one canvas per terminal, and shares the 32 MB per-terminal
     picture budget with the other image kinds; Settings › Terminal › Show images turns it off.
+- **github-event-ops: watch one PR without a polling loop, and bound a bot that works on PRs.** Asking Hermes to
+  wait on a pull request ("watch PR 42 until its checks finish", "PR 42 체크 끝날 때까지 지켜봐줘") now reaches
+  `github-event-ops`, whose PR watch recipe (`references/pr-watch.md`) sets up one Hermes cron monitor job for that
+  PR: `toolkit/scripts/pr_watch.py` prints only the PR's settled state from one read-only `gh pr view`, so the agent
+  wakes only when checks finish, a conflict or review appears, or the PR merges or closes, every 5 minutes for two
+  hours at most. A bot takes at most two fix rounds per PR, counted from the PR's own commits and heads and kept per
+  PR across watches; after that the fix is a person's. `toolkit/scripts/pr_event_guard.py`, as a webhook route's
+  `--script`, drops events the bot's own runs caused and more than 5 events per 15 minutes. Both scripts are inert
+  package data the person's Hermes runs (owner-approved scoped integration, 2026-11-23); OMH never runs them.
+  (`src/skills/pr_watch_toolkit/`, `src/skills/catalog_feature_surfaces.py`, `src/routing/policy.py`)
 - **OMH TUI: kitty previews inside omher, and a quiet Ctrl+Enter.** Under `TERM_PROGRAM=omher` the OMH TUI asks for
   kitty previews (tmux and screen keep half-blocks). Ctrl+Enter on a prompt with images during a turn now stops the
   turn and sends the prompt without an `Interrupted.` notice, like Claude Code's send-now; Hermes' "Operation
