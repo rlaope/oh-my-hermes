@@ -281,6 +281,12 @@ All notable changes will be documented here.
   could read never goes under Not checked. The code-review skill's finding-validation method says the same. The hint
   grows by 150 characters, only on review requests. (`src/plugin_bundle/omh/awareness.py`,
   `src/skills/review_methods.py`)
+- **The review false-alarm benchmark no longer scores a correct bug report as a false alarm.** The
+  `trap-lock-held-by-caller` change added a running total that `reset()` never cleared, so after a reset `total()`
+  disagreed with `snapshot()`. Reviewers that reported this were right, but they were counted as false alarms (both
+  arms, every live run). The change now clears the total in `reset()`, so the case asks only whether the reviewer
+  sees the lock the caller holds. Results recorded before this fix overstate false alarms on this case.
+  (`benchmarks/review-false-alarms/corpus/trap-lock-held-by-caller`)
 
 ## 5.0.0 - 2026-11-21
 
