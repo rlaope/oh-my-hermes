@@ -7,6 +7,7 @@ Setups follow the review's repro scripts; the helpers are `test_tui_agent_sessio
 from __future__ import annotations
 
 import unittest
+from unittest import mock
 
 from test_tui_agent_session_view import (
     BRIEF, FIRST, GOAL, REPLY, SECOND, STEER_ROW, TOOL, WATCH, entered, lazy_answer, rows_answer, texts, viewing,
@@ -16,7 +17,7 @@ from test_tui_modes import SID, answer, call_id, drawn, queue, type_text
 from omh.tui import app as app_module
 from omh.tui import subagent_session as view_state
 from omh.tui.gateway import Event, Response, ServerRequest
-from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, UP, Key
+from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, UP, Key, Paste
 from omh.tui.transcript import BLOCK_CAP
 
 
@@ -402,6 +403,48 @@ class ContinueExpiryTests(unittest.TestCase):
         app._set_composer("")
         submit(app, "next child prompt")
         self.assertEqual(client.calls[-1], ("prompt.submit", {"session_id": WATCH, "text": "next child prompt"}))
+
+
+class IntakeGateTests(unittest.TestCase):
+    """D12: a view's submit goes through the same intake gate as main's (`_hold_submit`)."""
+
+    def test_a_pending_text_paste_joins_the_view_prompt_before_it_goes(self) -> None:
+        app, client, _now = viewing()
+        app._on_input(Paste("/tmp/view-file.txt"))
+        drop = call_id(client, "input.detect_drop")
+        submit(app, "look at this file ")
+        self.assertEqual(client.named("subagent.steer"), [], "held for the paste")
+        app._on_response(Response(drop, {"matched": False}, None))
+        self.assertEqual(client.named("subagent.steer")[-1]["text"], "look at this file /tmp/view-file.txt")
+        self.assertEqual(app.composer.text, "")
+
+    def test_a_pending_image_refuses_the_whole_prompt_before_anything_goes(self) -> None:
+        app, client, _now = viewing()
+        app._on_input(Paste("/tmp/view-image.png"))
+        drop = call_id(client, "input.detect_drop")
+        submit(app, "look at this image")
+        self.assertEqual(client.named("subagent.steer"), [])
+        with mock.patch.object(app_module, "read_image", return_value=b"png"):
+            app._on_response(Response(drop, {"matched": True, "is_image": True, "path": "/tmp/view-image.png",
+                                             "count": 1, "name": "view-image.png"}, None))
+        self.assertEqual(client.named("subagent.steer"), [], "the words never go without the image")
+        self.assertIn("look at this image", app.composer.text)
+        assert app.viewing is not None
+        self.assertTrue(any("images go to main" in line for line in texts(app.viewing.transcript)))
+
+
+class ScreenDetailsTests(unittest.TestCase):
+    """D13: Ctrl+O shows the transcript on screen."""
+
+    def test_ctrl_o_in_a_view_pages_the_childs_transcript(self) -> None:
+        app, _client, _now = viewing()
+        app.transcript.add_user("MAIN ONLY in history")
+        assert app.viewing is not None
+        app.viewing.transcript.add_user("CHILD ONLY in history")
+        app._on_input(Key(CHAR, "o", ctrl=True))
+        pager = "\n".join(drawn(app))
+        self.assertIn("CHILD ONLY in history", pager)
+        self.assertNotIn("MAIN ONLY in history", pager)
 
 
 if __name__ == "__main__":

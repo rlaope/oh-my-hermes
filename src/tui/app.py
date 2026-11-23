@@ -1722,6 +1722,7 @@ class HeldSubmit:
     since: float
     cancelled: bool = False
     now: bool = False  # sent with the send-now key (Ctrl+Enter): with images it cuts in (`App._cut_in`)
+    view: Any = None  # the subagent view (`SubagentView`) it was typed in, which it goes to; None for main
 
 
 @dataclass
@@ -5607,11 +5608,11 @@ class App(ModesMixin, AgentViewMixin):
                 and bool(action.text.strip())
             )
             images = tuple(image for _label, image in action.images if isinstance(image, Attachment))
+            if self.slot is None and self.tell_draft is None and self._hold_submit(action, images, steer, now):
+                return  # it goes once the pastes it was typed with are answered, with their images (a view's too)
             if self.viewing is not None and self.slot is None and self.tell_draft is None and self.agent_steer is None:
                 self._send_to_view(action.text, action.shown, images)  # to the subagent on screen, never main
                 return
-            if self.slot is None and self.tell_draft is None and self._hold_submit(action, images, steer, now):
-                return  # it goes once the pastes it was typed with are answered, with their images
             if self.slot is not None:
                 question = self.slot.question_index
                 answer = self.slot.submit_text(action.text)
@@ -6995,7 +6996,10 @@ class App(ModesMixin, AgentViewMixin):
         held, self.held_submits = [submit for submit in self.held_submits if not submit.cancelled], []
         for submit in held:
             submit.cancelled = True
-            self._give_back(submit.text, submit.images)
+            if submit.view is not None:
+                self._give_back_to_view(submit.view, submit.text, submit.images)
+            else:
+                self._give_back(submit.text, submit.images)
         return bool(held)
 
     def _hold_submit(self, action: ComposerAction, images: tuple[Attachment, ...], steer: bool, now: bool = False) -> bool:
@@ -7006,7 +7010,8 @@ class App(ModesMixin, AgentViewMixin):
         if not out and not self.held_submits:
             return False
         self._cancel_auto_continue(AUTO_CONTINUE_SENT)  # a submit, though it waits for its pastes
-        held = HeldSubmit(action.text, action.shown, action.chips, images, steer, self.clock(), now=now)
+        held = HeldSubmit(action.text, action.shown, action.chips, images, steer, self.clock(), now=now,
+                          view=self.viewing if self.agent_steer is None else None)
         for intake in out:
             intake.held = held
         self.held_submits.append(held)
@@ -7029,6 +7034,12 @@ class App(ModesMixin, AgentViewMixin):
         held, self.held_submits = self.held_submits, []
         for submit in held:
             if submit.cancelled:
+                continue
+            if submit.view is not None:  # typed in a subagent's session: it goes there, or back to its draft
+                if self.viewing is submit.view:
+                    self._send_to_view(submit.text, submit.shown, submit.images)
+                else:
+                    self._give_back_to_view(submit.view, submit.text, submit.images)
                 continue
             if submit.steer:
                 self._steer_or_submit(submit.text, submit.shown, submit.chips, submit.images, now=submit.now)
@@ -8905,8 +8916,9 @@ class App(ModesMixin, AgentViewMixin):
 
     def _history(self, arg: str) -> None:
         """The blocks held now in a pager that renders each one, details shown, only when a page reaches it; with
-        nothing to show, a notice."""
-        transcript = self.transcript
+        nothing to show, a notice. The transcript on screen (`_screen_transcript`): the viewed subagent's in its
+        session view."""
+        transcript = self._screen_transcript()
         blocks, dropped = transcript.shown_blocks(), transcript.dropped  # what the pager holds, as it opens
 
         def rows(index: int, width: int, theme: Theme) -> list[Line]:

@@ -946,7 +946,7 @@ class AgentViewMixin:
         if view is None or not text.strip():
             return
         seen = shown or text
-        if images or seen.startswith("!") or seen.startswith("/"):
+        if images or seen.startswith("!") or seen.startswith("/"):  # an image refuses the whole prompt: nothing goes
             view.transcript.add_notice(REFUSED_WHILE_VIEWING.format(name=view.name), NOTICE_WARN)
             self._give_back_to_view(view, text, images)
             return
