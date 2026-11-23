@@ -68,7 +68,7 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
     ("Ctrl+U / Ctrl+K", "Delete to the start or the end of the line; with a list or menu focused, Ctrl+K moves up instead"),
     ("Ctrl+_ / Ctrl+Y", "Undo or redo an edit in the composer (Ctrl+_ is what Ctrl+- and Ctrl+/ send on most terminals); "
                         "a run of typed characters is one edit"),
-    ("Esc", "Closes the / or @ menu; in a subagent's session, goes back to main; else interrupts a running turn, with a draft typed too, which stays in the "
+    ("Esc", "Closes the / or @ menu; in a subagent's session, goes back to main (in Vim INSERT the first Esc leaves INSERT); else interrupts a running turn, with a draft typed too, which stays in the "
             "composer (the activity row shows how long it has run, then interrupting…, and what you queued comes back "
             "to an empty composer unsent, or waits); cancels a rewind you picked; "
             "cancels an agent steer you picked and keeps what you typed; after an approval's tell row, "

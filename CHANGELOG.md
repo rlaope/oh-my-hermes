@@ -308,7 +308,9 @@ All notable changes will be documented here.
   ended, on Hermes' stdio gateway a turn that continues it, while the shared gateway says it cannot continue it and
   keeps your text. Esc, or the list's `main` row, goes back to main, whose transcript kept everything meanwhile; the
   list marks the agent shown `⏺` and the rest `◯`, and its hint reads `⏎ view · x stop · s steer · esc back`. Where
-  Hermes cannot show the session the log pager opens as before. (`src/tui/subagent_session.py`,
+  Hermes cannot show the session the log pager opens as before. Main and the view each keep their own draft, and a
+  late refusal returns text to the screen it was typed on; main's questions and stop keys stay on main's screen; on
+  the shared gateway the view reads one page at a time until an empty page. (`src/tui/subagent_session.py`,
   `src/tui/agent_view.py`, `src/tui/app.py`, `src/tui/frame.py`)
 
 ## 5.0.0 - 2026-11-21

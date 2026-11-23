@@ -447,5 +447,44 @@ class ScreenDetailsTests(unittest.TestCase):
         self.assertNotIn("MAIN ONLY in history", pager)
 
 
+class FollowUpTests(unittest.TestCase):
+    """NB1-NB3 and D14: the open refused while a rewind or tell is armed, the viewed row kept, the docs' sends."""
+
+    def test_opening_a_view_is_refused_with_one_notice_while_a_rewind_is_armed(self) -> None:
+        app, client, _now = viewing()
+        app._on_input(Key(ESCAPE))
+        app.rewind = app_module.Rewind(42, 1, ())
+        app._open_agent(FIRST)
+        self.assertIsNone(app.viewing)
+        self.assertEqual(client.named("session.resume")[1:], [], "no second open went")
+        self.assertEqual(sum(view_state.VIEW_REFUSED_ARMED in line for line in texts(app.transcript)), 1)
+        self.assertIsNotNone(app.rewind, "the rewind stays armed")
+
+    def test_the_viewed_agent_stays_listed_across_a_new_main_turn(self) -> None:
+        app, _client, _now = viewing()
+        app._clear_roster()  # what a new main turn's start does
+        self.assertIn(FIRST, app.roster.agents)
+        self.assertNotIn(SECOND, app.roster.agents)
+        app._on_input(Key(ESCAPE))
+        app._clear_roster()
+        self.assertNotIn(FIRST, app.roster.agents)
+
+    def test_the_boundary_doc_names_every_send_of_the_view(self) -> None:
+        from pathlib import Path
+
+        doc = (Path(__file__).resolve().parents[1] / "docs" / "OMH-TUI-BOUNDARY.md").read_text(encoding="utf-8")
+        section = doc[doc.index("## Agent views"):]
+        section = " ".join(section[:section.index("\n## ", 3)].split())
+        for phrase in ("`subagent.steer` on the parent session", "`prompt.submit` on the watch session",
+                       "`session.steer` on the watch session", "`session.close` for the watch session",
+                       "`lazy: true`", "until a page with no rows", "one read at a time per view"):
+            self.assertIn(phrase, section)
+
+    def test_the_esc_shortcut_says_vim_insert_takes_the_first_esc(self) -> None:
+        from omh.tui.shortcuts import SHORTCUTS
+
+        self.assertIn("in Vim INSERT the first Esc leaves INSERT", dict(SHORTCUTS)["Esc"])
+
+
 if __name__ == "__main__":
     unittest.main()

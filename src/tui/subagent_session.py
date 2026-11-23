@@ -56,6 +56,7 @@ REFUSED_WHILE_VIEWING = (
 )
 STILL_RUNNING = "{name} is still running; your text is back in the composer."
 CONTINUE_REFUSED = "Hermes did not continue {name}: {reason}. Your text is back in the composer."
+VIEW_REFUSED_ARMED = "A rewind or a tell is armed: send or cancel it (Esc) before opening a subagent's session."
 VIEW_TEXT_DROPPED = "{name} is no longer listed; what was sent to it did not go: {text}"
 
 POLL_SECONDS = 1.0  # the most often a running child's transcript is read while it is on screen

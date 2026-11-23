@@ -796,16 +796,16 @@ wake pipe on real Windows pipes.
   is open, so nothing on the screen moves; the list scrolls when there are
   more agents than rows; and
   the info line says its keys (`↑↓ select
-  · ⏎ log · x interrupt · s steer · esc back`). In a DAG run Down gives
+  · ⏎ view · x stop · s steer · esc back`). In a DAG run Down gives
   the keys to the tree instead, on its first running node, the same way:
   ↑↓ move over its rows, ← shuts the highlighted row (or, shut, goes to its
   parent), → opens it and Space flips it (an `N more` row gives way to
   the nodes it held), a fold you make stays, the rows scroll between `… N more nodes
   above` and `below`, and Enter, `x` and `s` act on the highlighted node's
-  agent as they do in the list (`↑↓ select · ←/→ or space fold · ⏎ log · x
+  agent as they do in the list (`↑↓ select · ←/→ or space fold · ⏎ view · x
   interrupt · s steer · esc back`); on a layer's row, or a node no agent ran
   for, they do nothing. A click on a tree row highlights it, and on a node's
-  row opens its agent's log. With fewer than three rows for the tree, Down
+  row shows its agent's session as Enter does. With fewer than three rows for the tree, Down
   opens the list instead. Esc, `q` or Ctrl+C closes the list or the tree,
   and so does Left in the list (in the tree Left shuts a row or goes to its
   parent, and never closes the tree); the composer comes back on its row as
@@ -822,11 +822,21 @@ wake pipe on real Windows pipes.
   continues its conversation, while the shared gateway, which cannot, says
   `<name> finished · continuing it is not supported by this Hermes` and keeps
   your text. Slash commands, `!` lines and images go to main, so the view
-  refuses them with one notice and keeps your text. Esc goes back to main, and
-  so does the list's `main` row with Enter; a session switch, `/new` or a
-  gateway restart goes back first. Main's transcript keeps everything that
-  happened meanwhile and is drawn again on the way back; stopping main's turn
-  (Esc, `/stop`, Ctrl+C) works on the main screen only. Where Hermes cannot
+  refuses them with one notice and keeps your text; a paste or drop still
+  being read is waited for first, and an image in it refuses the whole
+  prompt. The view's composer is its own: what you had typed for main is set
+  aside as you open it and comes back exactly when you leave, and what you
+  typed in the view and did not send comes back when you open that agent
+  again. `s` on another agent's row still steers that agent. Esc goes back to
+  main (in Vim INSERT the first Esc leaves INSERT, as anywhere), and so does
+  the list's `main` row with Enter; a session switch, `/new`, a gateway
+  restart, or a question from main (an approval, a clarify, a sudo or secret
+  prompt) goes back first, so main's question is answered on main's screen.
+  Main's transcript keeps everything that happened meanwhile and is drawn
+  again on the way back; stopping main's turn (Esc, `/stop`, Ctrl+C, Vim
+  `Space c`) works on the main screen only. Ctrl+O pages the transcript on
+  screen, the agent's in its view. Opening a view is refused with one notice
+  while a rewind or a tell row is armed: send or cancel it first. Where Hermes cannot
   show the session (an older Hermes, no child session yet, a refused read)
   Enter opens that agent's log on the alternate screen instead (its thinking
   lines, tool calls and reply, read-only, refreshed while it runs); Left and
@@ -1513,7 +1523,7 @@ Esc closes it):
 | Ctrl+W, Alt+Backspace, Ctrl+Backspace | Deletes the word before the caret (Ctrl+Backspace where the terminal reports it apart from Backspace) |
 | Ctrl+U / Ctrl+K | Delete to the start or the end of the line; with a list or menu focused, Ctrl+K moves up instead |
 | Ctrl+_ / Ctrl+Y | Undo or redo an edit in the composer (Ctrl+_ is what Ctrl+- and Ctrl+/ send on most terminals); a run of typed characters is one edit |
-| Esc | Closes the `/` or `@` menu; in a subagent's session, goes back to main; else interrupts a running turn, with a draft typed too, which stays in the composer (the activity row shows how long it has run, then `interrupting…`, and what you queued comes back to an empty composer unsent, or waits); cancels a rewind you picked; cancels an agent steer you picked and keeps what you typed; after an approval's tell row, sends nothing more and brings your draft back |
+| Esc | Closes the `/` or `@` menu; in a subagent's session, goes back to main (in Vim INSERT the first Esc leaves INSERT); else interrupts a running turn, with a draft typed too, which stays in the composer (the activity row shows how long it has run, then `interrupting…`, and what you queued comes back to an empty composer unsent, or waits); cancels a rewind you picked; cancels an agent steer you picked and keeps what you typed; after an approval's tell row, sends nothing more and brings your draft back |
 | Esc Esc | Between turns, with text, clears it and keeps it in this session's history; on an empty composer, lists your prompts to rewind to (`/rewind` does too) |
 | Esc (vim mode) | With display.vim_mode on in Hermes' config, the composer starts in INSERT and Esc goes to NORMAL and does nothing else; in NORMAL, . repeats the last completed local change and [n]. overrides its count rather than multiplying it. Insert/change sessions complete on Escape and undo as one transaction; put repeats its captured payload even after another yank. External paste/image edits and oversized insertion sessions do not replace the saved change. Submit, clear, history/draft replacement, masked transitions and Vim toggles reset it; motion, yank and undo do not. Repeat is local to this composer, not a macro. In NORMAL, v enters character VISUAL; motions extend its inclusive atom selection, d/c/y delete, change or yank, and v or Esc cancels (Esc drops a pending command first). Visual j/k clamp to draft rows without history; counts before v or d/c/y do not scale the selection. Visual delete/change dot repeats the selected atom length forward, with [n]. scaling that length. In NORMAL, V enters VISUAL LINE over whole hard lines; v/V converts modes retaining endpoint columns, and V again cancels line selection. Linewise d/c/y use a linewise register without a terminal separator; put supplies it. Line delete/change dot repeats the selected hard-line count forward, with [n]. scaling that count. NORMAL-only gv restores the last completed selection with exact anchor/head, type and direction; its count is ignored (vl Esc h 9999gv restores the original two atoms). Escape, toggle-out and yank save it. Text or paste/image metadata generation changes, undo/redo, submit, clear, history/draft replacement, masking and Vim toggles invalidate it, even when text becomes identical again; failed/no-op edits do not. Resize and navigation preserve it; absent/stale gv is a consumed no-op and gv inside VISUAL is unsupported. Space is not a visual leader; Enter sends unchanged text and Ctrl+V invalidates active and saved selection before attaching the clipboard image, never block visual. In NORMAL, h l 0 ^ $ w W b B e E ge gE j k gg G move, f F t T and a character find on the line and ; , repeat the find, i a I A o O insert, x X dd D C cc S s r, d c y with a motion (operator j/k select logical hard lines, never wrapped rows or history; gg/G select through the first/last hard line, or an absolute line with a count), iw aw, a quote object (i or a with double quote, single quote or backtick; inner count 1 selects inside, count 2 or more includes the quotes, around includes quotes and adjacent blanks without extra pairs; quote objects never cross a logical line; empty inner y keeps the register and moves inside, d keeps register and caret, and c enters INSERT inside), or a bracket object (i or a with (, ), [, ], {, }; closing aliases identical; inner and around count selects enclosing ancestor; empty inner y keeps register and moves to interior, d keeps register and caret, and c enters INSERT at interior), p P, u and Ctrl+R edit, a motion or edit count scales or repeats, and Esc does what it does without vim mode, except that during a turn it takes two to interrupt on an empty composer, and two clear a draft as between turns. In NORMAL, Space is the leader: Space s opens sessions, Space b opens bots, Space p folds the plan, Space r or Space / searches history, Space m cycles the input mode, and Space t steps reasoning effort. Space Enter submits or steers typed text, or sends the oldest eligible queued prompt now on an empty composer; Space c interrupts a running turn, else clears the draft into session history. Esc or an unmapped key cancels the leader; Ctrl+C, Ctrl+O, Ctrl+L and Ctrl+Z cancel it and do what they always do. A picker taking input also cancels pending leader and Vim commands; a session picker waiting while you type leaves typing, leader shortcuts and Enter with the composer until ↑, ↓, Esc or Ctrl+C or Ctrl+N / Ctrl+P takes the picker; Ctrl+J / Ctrl+K still edit a typed draft. The info line says INSERT, NORMAL, VISUAL or VISUAL LINE, NORMAL · SPC while the leader is armed (steady block), or REPLACE while r waits for one character (steady underline, CSI 4 SP q). A non-character follower cancels r without editing or firing a mode shortcut; continuous R is unsupported |
 | Ctrl+V | Attaches the clipboard image as an `[Image #N]` token at the caret |

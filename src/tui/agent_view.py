@@ -62,7 +62,7 @@ from .composer import Composer
 from .style import Line, Span, Style
 from . import subagent_session as view_state
 from .subagent_session import (
-    CONTINUE_REFUSED, FROM_MAIN, REFUSED_WHILE_VIEWING, VIEW_TEXT_DROPPED, SEND_CONTINUE, SEND_STEER, SEND_UNSUPPORTED, STILL_RUNNING,
+    CONTINUE_REFUSED, FROM_MAIN, REFUSED_WHILE_VIEWING, VIEW_REFUSED_ARMED, VIEW_TEXT_DROPPED, SEND_CONTINUE, SEND_STEER, SEND_UNSUPPORTED, STILL_RUNNING,
     UNSUPPORTED_LINE, WIRE_POLL, WIRE_WATCH, SubagentView, mark_rows,
 )
 from .subagents import (
@@ -703,6 +703,10 @@ class AgentViewMixin:
         if self.viewing is not None and self.viewing.subagent_id == subagent_id:
             self.list_selected = self.tree_selected = None
             return
+        if self.rewind is not None or self.tell_draft is not None:
+            self.transcript.add_notice(VIEW_REFUSED_ARMED, NOTICE_WARN)  # finish or cancel it first (NB1)
+            self.list_selected = self.tree_selected = None
+            return
         if not self.sid or not agent.child_session_id:
             self._open_agent_log(subagent_id)
             return
@@ -1093,7 +1097,10 @@ class AgentViewMixin:
         """Drop the agents and every piece of tail bookkeeping and pending action that names them, and the view's
         hold (`_held_view_rows`). The open dag run's lanes stay (`_open_dag_nodes`): their children outlive the turn
         that sent them, and the tree's rows under each node read them."""
+        viewed = self.roster.agents.get(self.viewing.subagent_id) if self.viewing is not None else None
         self.roster.clear(self._open_dag_nodes())
+        if viewed is not None and viewed.subagent_id not in self.roster.agents:
+            self.roster.agents[viewed.subagent_id] = viewed  # the agent on screen stays listed until it is left (NB2)
         self.view_hold = None
         self._drop_agent_actions()
         self._prune_child_drafts()

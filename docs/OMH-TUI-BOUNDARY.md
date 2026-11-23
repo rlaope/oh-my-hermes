@@ -294,16 +294,29 @@ gateway: on Hermes' stdio entry, `session.resume` of the child's session with
 `lazy: true`, which answers its history and an agent-less watch session whose
 mirrored `message.*` and `tool.*` events the view draws; on the shared gateway,
 `session.transcript` with the parent session and the `subagent_id`, read
-forward from its cursor at most once a second while the child runs and the
-view is open. A plain resume of a child is never sent (on the shared gateway
-it would mount the child and move the attach adapter's current session).
-What it sends, only when the person presses Enter in the view: `subagent.steer`
-while the child runs, and after it ended `prompt.submit` on the watch session
-(stdio only; the shared gateway cannot continue a child, and the view says so
-and sends nothing). Leaving the view (Esc, `main`, a session switch, `/new`, a
-restart) sends `session.close` for the watch session. A refused read falls back
-on the agent's log above. Main's transcript keeps folding every main event
-while a subagent is on screen.
+forward from its cursor. Those reads are the only calls the view makes without
+a key: one read at a time per view, fenced so only the latest read's answer,
+asked from the cursor the view still holds, applies (the cursor only moves
+forward, and a child that ended is never marked running again); at most one a
+second while the child runs and the view is open; a completion schedules the
+next read on that same pace; a read unanswered for 10 s is forgotten before
+the next goes. Once the child ended (or when a finished child is opened) its
+pages are read one after another until a page with no rows, the host's
+caught-up mark, at most 50 pages. A plain resume of a child is never sent (on
+the shared gateway it would mount the child and move the attach adapter's
+current session). Each open is one intent: only the latest open's answer
+shows a view, and `main`, Esc, a switch, `/new` or a restart cancels one still
+out. What it sends, only when the person presses Enter in the view:
+`subagent.steer` on the parent session while the child runs; after it ended,
+`prompt.submit` on the watch session (stdio only; the shared gateway cannot
+continue a child, and the view says so and sends nothing); and during that
+continued turn, `session.steer` on the watch session. An approval's deny
+interrupts the session that asked (`session.interrupt` on the watch session
+for a continued child, main's turn for main). Leaving the view (Esc, `main`, a
+session switch, `/new`, a restart) sends `session.close` for the watch
+session, never one a view on screen still owns. A refused read falls back on
+the agent's log above. Main's transcript keeps folding every main event while
+a subagent is on screen, held to the transcript's block cap.
 
 The waiting row above the composer between turns (`src/tui/wait_kinds.py`)
 names what the session waits on from what the TUI already holds, read-only:
