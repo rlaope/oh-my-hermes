@@ -638,6 +638,7 @@
   padding: 0 0 9px;
   color: var(--muted);
   font-size: 13px;
+  white-space: nowrap;
 }
 .pl-tabs button:hover {
   color: var(--ink);
@@ -781,6 +782,7 @@
   height: 28px;
   font-size: 12px;
   color: var(--quiet);
+  white-space: nowrap;
 }
 .pl-browsebar {
   display: flex;

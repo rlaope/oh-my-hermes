@@ -552,6 +552,7 @@ body.side-resizing * {
   color: var(--ink);
   font-size: 11.5px;
   flex: none;
+  white-space: nowrap;
 }
 .ss-btn:hover {
   background: var(--seg-on);
@@ -711,7 +712,8 @@ body.side-resizing * {
   gap: 2px;
   padding: 2px;
   border-radius: var(--r-sm);
-  background: color-mix(in srgb, var(--term-bg, var(--bg)) 86%, transparent);
+  /* opaque: the pane's text under the corner must not show through the buttons */
+  background: var(--term-bg, var(--bg));
   opacity: 0;
   transition: opacity 0.12s ease;
 }
@@ -1383,6 +1385,7 @@ body.split-dragging .xterm {
   font-size: 12px;
   font-weight: 560;
   flex: none;
+  white-space: nowrap;
 }
 .ss-go:disabled {
   background: var(--raise2);

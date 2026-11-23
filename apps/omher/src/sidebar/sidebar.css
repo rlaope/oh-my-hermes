@@ -596,6 +596,7 @@ button.upd:hover {
   color: var(--body);
   background: var(--seg-on);
   box-shadow: inset 0 0 0 1px var(--line-strong);
+  white-space: nowrap;
 }
 [data-theme="light"] .upd-dlg-btn {
   background: var(--raise2);
@@ -1068,6 +1069,7 @@ button.upd:hover {
   line-height: 15px;
   color: var(--muted);
   box-shadow: inset 0 0 0 1px var(--line-strong);
+  white-space: nowrap;
 }
 .needs-q {
   font-size: 11.5px;
@@ -1154,7 +1156,8 @@ body.row-dragging * {
   background: var(--line-strong);
 }
 .bot-w:hover .bot-r1 .bot-t,
-.bot-w.menu-open .bot-r1 .bot-t {
+.bot-w.menu-open .bot-r1 .bot-t,
+.bot-w:has(.bot-more:focus-visible) .bot-r1 .bot-t {
   visibility: hidden;
 }
 /* "+" for a new thread, left of ⋯ on hover (bots that can have one); the name gives way so neither covers it */
@@ -1212,6 +1215,9 @@ body.row-dragging .bot-w .bot-new {
   font-size: 12px;
   color: var(--body);
   text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .row-mi:hover,
 .row-mi:focus-visible {

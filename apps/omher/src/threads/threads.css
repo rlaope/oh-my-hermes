@@ -333,6 +333,7 @@
   font-size: 12px;
   color: var(--body);
   background: var(--raise2);
+  white-space: nowrap;
 }
 .th-confirm-b button:hover {
   background: var(--line-strong);
