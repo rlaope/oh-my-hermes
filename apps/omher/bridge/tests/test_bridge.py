@@ -1627,8 +1627,10 @@ class ReadOnlyRule(BridgeCase):
                             and n.attr in ("run", "Popen", "call", "check_call", "check_output"):
                         uses.append(fn.name)
         # _hermes_run: rule 24's one `hermes -p <bot> cron create` for the briefing (test_brief_setup pins its argv);
-        # run_hermes_mcp: rule 41's `hermes -p <bot> mcp install|login|remove <name>` (test_apps pins its argv)
-        self.assertEqual(uses, ["_git", "_hermes_run", "gh_pr_view", "run_hermes_restart", "run_hermes_mcp"])
+        # run_hermes_mcp: rule 41's `hermes -p <bot> mcp install|login|remove <name>` (test_apps pins its argv);
+        # run_omh_platforms: rule 43's `omh --hermes-home <root> hermes platforms` (test_platforms pins its argv)
+        self.assertEqual(uses, ["_git", "run_omh_platforms", "_hermes_run", "gh_pr_view", "run_hermes_restart",
+                                "run_hermes_mcp"])
         self.assertNotIn("create_subprocess", src)
         self.assertNotIn("os.system", src)
         self.assertEqual(ob.GIT_READS, {("worktree", "list"), ("rev-parse",), ("status",), ("diff",), ("log",),

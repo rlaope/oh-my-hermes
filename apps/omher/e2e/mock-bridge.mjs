@@ -51,6 +51,8 @@
 // signIn: the strict check for that provider passes, as after `hermes auth add <id>`, and its models show in
 // models.options),
 // mock.botPageFail {bot, on} (the bot page's bots.page read fails for that bot until turned off),
+// mock.platforms {available?, bots?} (what bots.platforms answers: OMH's `omh hermes platforms`, rule 43; by default
+// every listed platform is connected),
 // mock.move {on} (the bridge died and came back on a new port: answers `{port}` once a second listener is up, then drops
 // every connection to the first port, which refuses WebSockets until `mock.move {on: false}` or mock.reset).
 import http from "node:http";
@@ -651,6 +653,19 @@ let lostQueue = new Map();
 let noSkills;
 // Bots whose bots.page read fails (mock.botPageFail {bot, on}), as a peer whose link dropped answers.
 let botPageFail;
+// Each bot's messaging platforms as the bridge's PlatformStates answers (mock.platforms {available?, bots?}).
+let platformsRead;
+const PLATFORMS_SEED = () => ({
+  available: true,
+  bots: {
+    kami: {
+      log: "read",
+      platforms: [
+        { platform: "discord", status: "connected", attention: false, since: "", logged: "2026-11-23T09:00:00Z", reason_kind: "", unknown_why: "", reason: "", guidance: "", fix: "", restart: "hermes -p default gateway restart", intents: [] },
+      ],
+    },
+  },
+});
 // Tasks › Linear: the bots whose config names a Linear MCP server (mock.linear {bot, server|null})
 let linearMcp;
 // Apps (apps.*, BOUNDARY rule 41): Hermes' MCP catalog (APP_CATALOG) and each bot's state per entry (`<bot>:<name>` ->
@@ -910,6 +925,7 @@ function reset() {
   lostQueue = new Map();
   noSkills = new Set();
   botPageFail = new Set();
+  platformsRead = PLATFORMS_SEED();
   linearMcp = new Map();
   appState = new Map([["kami:linear", "installed"], ["kami:figma", "needs_signin"], ["kami:datadog", "disabled"]]);
   appsNext = {};
@@ -1605,6 +1621,7 @@ const OPS = {
       routines: (ROUTINE_SEED[b.name] ?? []).length,
     };
   },
+  "bots.platforms": () => structuredClone(platformsRead),
   "bots.page": (p) => {
     const b = needBotAny(p);
     if (botPageFail.has(b.name)) throw new OpError("bot_offline", `${b.name} is offline`);
@@ -2211,6 +2228,10 @@ const OPS = {
     const b = needBot(p);
     if (p.server) linearMcp.set(b.name, String(p.server));
     else linearMcp.delete(b.name);
+    return {};
+  },
+  "mock.platforms": (p) => {
+    platformsRead = { available: p.available !== false, bots: p.bots ?? {} };
     return {};
   },
   "mock.botPageFail": (p) => {

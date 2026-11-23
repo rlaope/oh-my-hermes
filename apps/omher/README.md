@@ -267,6 +267,14 @@ Rules the code keeps:
   through a link (`read_bot_page`). Edit writes nothing: it opens the bot's main chat with a request added after what
   the person already typed there, for them to finish and send. A bot on another computer is read by that computer's own bridge over the SSH link.
   `BOUNDARY.md` rule 42.
+- **A bot's messaging platforms.** A bot whose Discord, Slack or other platform failed to connect, was disconnected or
+  is reconnecting says so on its sidebar row ("Discord disconnected"), and its page's Messaging section gives each
+  platform's state, since when, why, Hermes' own words and the fix: for a Discord privileged-intents refusal the
+  intents and where to turn them on (with a link to the Developer Portal), then Hermes' `hermes -p <gateway> gateway
+  restart` to copy. omher runs and changes nothing for it. The bridge asks OMH's own read-only
+  `omh hermes platforms` (`bots.platforms`, `PlatformStates`), once per 30 seconds at most, and opens no Hermes log
+  itself; a state OMH cannot place is "not known", and without `omh` the section says it cannot tell.
+  `BOUNDARY.md` rule 43.
 - **A Slack briefing with nothing to set up.** For a bot whose Hermes profile has Slack connected, omher sets up one
   automation, `omher-brief`, by itself: every 15 minutes the channel-watch collector checks the Slack channels the bot
   shares with you and wakes the bot only when something needs you (someone asked you and got no answer, a thread it
