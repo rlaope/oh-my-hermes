@@ -546,6 +546,10 @@ HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES: dict[str, tuple[str, ...]] = {
     "gpt-5.6-terra": ("openai-codex", "openai"),
     "glm-5.3": ("zai", "openrouter", "opencode"),
     "glm-5.3-flash": ("zai", "openrouter", "opencode"),
+    # Recognition-only, in no shipped chain (2026-11-23): Z.ai opened GLM-5.4
+    # to every GLM Coding Plan user; no OpenRouter or OpenCode listing was
+    # observed, so no relay family. No page or price published yet.
+    "glm-5.4": ("zai",),
     # Recognition-only, in no shipped chain (catalog sync, 2026-10-28): Z.ai's
     # pricing page lists it and OpenRouter lists `z-ai/glm-5.3-flashx`; no
     # OpenCode serving was observed.
