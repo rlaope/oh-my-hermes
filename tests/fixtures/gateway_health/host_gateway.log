@@ -1,0 +1,30 @@
+2026-10-14 13:02:10,059 ERROR gateway.run: Fatal discord adapter error for multiplexed profile harbor (discord_websocket_health_stale)
+2026-10-14 13:02:41,453 INFO gateway.run: ✓ discord reconnected (profile: harbor)
+2026-10-14 13:58:07,280 ERROR gateway.run: Fatal discord adapter error for multiplexed profile harbor (discord_websocket_health_stale)
+2026-10-14 13:58:43,483 INFO hermes_plugins.platforms__discord.adapter: [Discord] Disconnected
+2026-10-14 13:58:43,490 INFO gateway.run: Secondary discord reconnect retry in 30s (profile: harbor)
+2026-10-14 14:00:11,496 INFO hermes_plugins.platforms__discord.adapter: [Discord] Registered /skill command with 12 skill(s) via autocomplete
+2026-10-14 14:04:11,087 INFO gateway.run: Secondary discord reconnect retry in 240s (profile: harbor)
+2026-10-14 14:08:17,185 ERROR hermes_plugins.platforms__discord.adapter: [Discord] Failed to connect to Discord: Shard ID None is requesting privileged intents that have not been explicitly enabled in the developer portal. It is recommended to go to https://discord.com/developers/applications/ and explicitly enable the privileged intents within your application's page. If this is not possible, then consider disabling the privileged intents instead.
+Traceback (most recent call last):
+  File "/opt/hermes-agent/plugins/platforms/discord/adapter.py", line 1564, in connect
+  File "/opt/hermes-agent/plugins/platforms/discord/adapter.py", line 397, in _wait_for_ready_or_bot_exit
+discord.errors.PrivilegedIntentsRequired: Shard ID None is requesting privileged intents that have not been explicitly enabled in the developer portal.
+2026-10-14 14:08:17,243 INFO hermes_plugins.platforms__discord.adapter: [Discord] Disconnected
+2026-10-14 14:30:00,000 INFO gateway.run: ✓ slack connected (profile: quay)
+2026-10-14 15:04:59,052 INFO gateway.run: ✓ local disconnected (0.00s) (profile: harbor)
+2026-10-14 15:04:59,077 INFO gateway.run_profile_reconcile: [MULTIPLEX] Profile 'harbor' unserved — 1 adapter(s) stopped and unrouted
+2026-10-14 15:05:01,227 ERROR hermes_plugins.platforms__discord.adapter: [Discord] Failed to connect to Discord: Shard ID None is requesting privileged intents that have not been explicitly enabled in the developer portal. It is recommended to go to https://discord.com/developers/applications/ and explicitly enable the privileged intents within your application's page.
+  File "/opt/hermes-agent/plugins/platforms/discord/adapter.py", line 1564, in connect
+discord.errors.PrivilegedIntentsRequired: Shard ID None is requesting privileged intents that have not been explicitly enabled in the developer portal.
+2026-10-14 15:05:01,231 WARNING gateway.run: ✗ discord failed to connect (profile: harbor)
+2026-10-14 15:05:01,233 INFO hermes_plugins.platforms__discord.adapter: [Discord] Disconnected
+2026-10-14 15:05:01,233 INFO gateway.run_profile_reconcile: [MULTIPLEX] Now serving profile 'harbor' (0 adapter(s) connected; control-socket)
+2026-10-14 15:10:00,000 WARNING gateway.run: ✗ slack failed to connect (profile: quay)
+2026-10-14 15:23:26,016 INFO gateway.run_profile_reconcile: [MULTIPLEX] Profile 'harbor' unserved — 1 adapter(s) stopped and unrouted
+2026-10-14 15:23:30,401 INFO hermes_plugins.platforms__discord.adapter: [Discord] Connected as Harbor#0042
+2026-10-14 15:23:30,403 INFO gateway.run: ✓ discord connected (profile: harbor)
+2026-10-14 15:23:30,403 INFO gateway.run_profile_reconcile: [MULTIPLEX] Now serving profile 'harbor' (1 adapter(s) connected; control-socket)
+2026-10-14 15:25:00,000 INFO gateway.run: ✓ slack disconnected (0.42s) (profile: quay)
+2026-10-14 15:30:12,250 INFO gateway.run: ✓ telegram connected
+2026-10-14 15:31:0
