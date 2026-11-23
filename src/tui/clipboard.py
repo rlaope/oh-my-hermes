@@ -1,4 +1,5 @@
-"""Where a copy from the OMH TUI's pager goes: OSC 52, or `pbcopy` on the Mac the screen is on.
+"""Where a copy from the OMH TUI's pager goes (OSC 52, or `pbcopy` on the Mac the screen is on), and the clipboard
+text Ctrl+V pastes when the clipboard holds no image.
 
 OSC 52 is never answered, so nothing confirms it reached the clipboard. It
 counts as copied only for a terminal that honours it as it ships (kitty,
@@ -28,12 +29,28 @@ herdr drops it. A pane is herdr's by `TERM_PROGRAM=herdr`, or `HERDR_ENV=1`
 with no `TERM_PROGRAM` at all (another terminal opened from the pane inherits
 `HERDR_ENV` and sets its own). A tmux, screen or zellij started inside the pane
 sets its variable again, and the rules above apply to it as before.
+
+Ctrl+V asks Hermes for the clipboard's image (`clipboard.paste`). A terminal
+that does not paste on Ctrl+V itself sends it on as ^V, so when Hermes finds
+no image the TUI pastes the clipboard's text instead (`clipboard_text`), as
+the terminal's own paste would have. It reads the clipboard of the machine the
+TUI runs on, the one Hermes looked in for the image, and so only while that
+machine's screen is the person's: no SSH variable is set and, inside tmux, the
+last client did not attach over SSH (the same question as the copy's). On
+Windows it reads `CF_UNICODETEXT` through the Win32 clipboard API (no
+process); on a Mac one fixed `pbpaste`; on Linux one fixed `wl-paste
+--no-newline --type text` under Wayland, else `xclip -selection clipboard
+-out`, else `xsel --clipboard --output` under X11, each with a one-second
+timeout and at most CLIPBOARD_TEXT_BYTES of text taken. Nothing it reads goes
+anywhere but the composer, as a paste.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+import ctypes
 import subprocess
+import time
 
 from .terminal import terminal_name
 
@@ -50,6 +67,11 @@ SSH_VARIABLES = ("SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY")  # set: the screen i
 PBCOPY_SECONDS = 2.0
 TMUX_QUERY_SECONDS = 1.0
 TMUX_SSH_VARIABLE = "SSH_CONNECTION"  # the one of SSH_VARIABLES in tmux's default `update-environment`
+PASTE_READ_SECONDS = 1.0  # how long one clipboard reader may take
+CLIPBOARD_TEXT_BYTES = 4 * 1024 * 1024  # the most clipboard text a Ctrl+V takes; more reads as no text
+CF_UNICODETEXT = 13  # the Win32 clipboard format of UTF-16 text
+OPEN_CLIPBOARD_TRIES = 5  # another program may hold the Windows clipboard for a moment
+OPEN_CLIPBOARD_PAUSE = 0.02
 
 
 def tmux_client_over_ssh(environ: Mapping[str, str]) -> bool:
@@ -112,3 +134,81 @@ def pbcopy(text: str, environ: Mapping[str, str]) -> bool:
     except (OSError, subprocess.SubprocessError):
         return False
     return done.returncode == 0
+
+
+def text_readers(environ: Mapping[str, str], platform: str) -> tuple[tuple[str, ...], ...]:
+    """The fixed argvs that print the clipboard's text here, in the order they are tried (none on Windows, which is
+    read in process, or where no display is named)."""
+    if platform == "darwin":
+        return (("pbpaste",),)
+    if not platform.startswith("linux"):
+        return ()
+    readers: list[tuple[str, ...]] = []
+    if environ.get("WAYLAND_DISPLAY"):
+        readers.append(("wl-paste", "--no-newline", "--type", "text"))
+    if environ.get("DISPLAY"):
+        readers += [("xclip", "-selection", "clipboard", "-out"), ("xsel", "--clipboard", "--output")]
+    return tuple(readers)
+
+
+def windows_clipboard_text() -> str | None:
+    """The Windows clipboard's text (`CF_UNICODETEXT`), or None when it holds none or could not be opened."""
+    try:
+        user32 = ctypes.WinDLL("user32", use_last_error=True)  # type: ignore[attr-defined]
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+    except (AttributeError, OSError):
+        return None
+    handle, bool_ = ctypes.c_void_p, ctypes.c_int
+    user32.OpenClipboard.argtypes, user32.OpenClipboard.restype = (handle,), bool_
+    user32.CloseClipboard.argtypes, user32.CloseClipboard.restype = (), bool_
+    user32.GetClipboardData.argtypes, user32.GetClipboardData.restype = (ctypes.c_uint,), handle
+    kernel32.GlobalLock.argtypes, kernel32.GlobalLock.restype = (handle,), handle
+    kernel32.GlobalUnlock.argtypes, kernel32.GlobalUnlock.restype = (handle,), bool_
+    for attempt in range(OPEN_CLIPBOARD_TRIES):
+        if user32.OpenClipboard(None):
+            break
+        if attempt + 1 < OPEN_CLIPBOARD_TRIES:
+            time.sleep(OPEN_CLIPBOARD_PAUSE)
+    else:
+        return None
+    try:
+        data = user32.GetClipboardData(CF_UNICODETEXT)
+        if not data:
+            return None
+        locked = kernel32.GlobalLock(data)
+        if not locked:
+            return None
+        try:
+            return ctypes.wstring_at(locked)
+        finally:
+            kernel32.GlobalUnlock(data)
+    finally:
+        user32.CloseClipboard()
+
+
+def clipboard_text(
+    environ: Mapping[str, str], platform: str, tmux_over_ssh: Callable[[Mapping[str, str]], bool] = tmux_client_over_ssh,
+    run: Callable[..., subprocess.CompletedProcess[bytes]] = subprocess.run,
+    windows_text: Callable[[], str | None] = windows_clipboard_text,
+) -> str | None:
+    """The clipboard's text where the TUI runs, for a Ctrl+V that found no image; None when there is none, it could
+    not be read, or the screen is on another machine (an SSH variable, or tmux's last client over SSH)."""
+    if any(environ.get(name) for name in SSH_VARIABLES) or (environ.get("TMUX") and tmux_over_ssh(environ)):
+        return None
+    if platform == "win32":
+        text = windows_text()
+        return text if text and len(text) <= CLIPBOARD_TEXT_BYTES else None
+    for argv in text_readers(environ, platform):
+        try:
+            done = run(
+                list(argv), env={**environ, "LC_ALL": "en_US.UTF-8"}, stdin=subprocess.DEVNULL, capture_output=True,
+                timeout=PASTE_READ_SECONDS, check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if done.returncode != 0:
+            continue
+        if not done.stdout or len(done.stdout) > CLIPBOARD_TEXT_BYTES:
+            return None
+        return done.stdout.decode("utf-8", "replace")
+    return None

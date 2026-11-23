@@ -13,7 +13,14 @@ All notable changes will be documented here.
   Ctrl+Shift+A selects the whole terminal (Cmd+A), Ctrl+Shift+K clears it (Cmd+K), and Ctrl+Up / Ctrl+Down go to the
   previous or next prompt (Cmd+Up / Cmd+Down; Ctrl+Up and Ctrl+Down go to the program while a full-screen program is
   open or the shell sent no prompt marks). The terminal's right-click menu and Settings › Keyboard show these keys on
-  Windows and Linux, with no ⌘. None of these keys acts while AltGr is held. (`docs/OMHER-BOUNDARY.md` rule 11)
+  Windows and Linux, with no ⌘. None of these keys acts while AltGr is held. (#3131; `docs/OMHER-BOUNDARY.md` rule 11)
+- **The OMH TUI's Ctrl+V pastes the clipboard's text when there is no image.** Ctrl+V asked Hermes only for a
+  clipboard image, and with text on the clipboard said "No image found in clipboard" and inserted nothing. That is
+  what a terminal that sends Ctrl+V on as ^V (instead of pasting) got. Now, when Hermes finds no image, the TUI pastes
+  the clipboard's text into the composer as a paste. An image on the clipboard still attaches as an `[Image #N]`
+  token, and `/paste` stays image only. The text is read only when the screen is this machine's (no SSH, and inside
+  tmux not over SSH): through the Win32 clipboard on Windows, `pbpaste` on a Mac, and `wl-paste`, `xclip` or `xsel`
+  on Linux. (#3131; `docs/OMH-TUI-BOUNDARY.md`)
 
 - **omher: a bot's chat that stopped answering after a crash says why and gets going again.** When Hermes' gateway
   stops in the middle of a turn (a crash, a kill, Windows ending the process), Hermes brings that turn back as lost
