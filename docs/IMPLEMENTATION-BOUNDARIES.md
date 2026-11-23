@@ -172,6 +172,37 @@ stays in `AGENTS.md`, where `tests/test_paired_run_arm_home.py` reads it.
   stand-in skill CLI and a temporary vault, and
   `test_the_monitor_watch_scripts_are_stdlib_only_and_write_nothing` holds the
   import and write surface.
+- **PR delivery grant** (owner-approved, 2026-11-23): a per-profile setting,
+  off by default, that only the person turns on or off at their own terminal
+  (`omh capability-policy pr-delivery on|off`, which refuses to run inside a
+  Hermes session). With it on, that profile's bot, in a run nobody can answer,
+  may push a new branch under the grant's branch prefix, open a pull request
+  from that branch, and push fix commits to and comment on a pull request it
+  opened; nothing else. Merging, force-pushing, pushing to the default branch,
+  and anything on a pull request the bot did not open stay a person's, grant or
+  no grant. `omh` itself runs no forge command and INVARIANT 3 is unchanged:
+  the bot (Hermes, or the coding owner it handed to) runs `git` and `gh` with
+  the person's own login. The grant is a file under the OMH home naming the
+  profile's Hermes home (`src/plugin_bundle/omh/pr_delivery.py`); an
+  unreadable, malformed or foreign file reads as off, a delegated child does
+  not carry it, and its only writer is the CLI. OMH's `pre_tool_call` hook
+  (`src/plugin_bundle/omh/pr_delivery_gate.py`) refuses a command that would
+  change the grant in every session, and in a session where
+  nobody can answer (a programmatic platform, a cron turn, a single-query
+  process, a delegated child) refuses the never-allowed classes whatever the
+  grant says, the allowed ones while it is off, a push or PR that does not
+  name its destination, and a command it cannot classify. It is a guardrail
+  that stops a cooperating agent's mistakes and the common spellings of a
+  forbidden action, failing closed on what it cannot parse; it is not a
+  sandbox against an agent that deliberately evades it from a shell (by
+  unsetting `HERMES_SESSION_ID` to flip the grant, or by writing its own
+  client). Hermes' approval policy and the forge's branch protection are the
+  controls for that, and the operator page recommends branch protection on
+  the default branch.
+  "A PR this bot opened" is OMH's record of the URL a grant-allowed `gh pr
+  create` printed, never the model's word. The matrix and its residuals are in
+  [`docs/PR-DELIVERY-GRANT.md`](PR-DELIVERY-GRANT.md);
+  `tests/test_pr_delivery_grant.py` holds it.
 - **The OMH TUI** (bare `omh`) is a foreground frontend over Hermes' own
   gateway, not an execution surface: it relays only what the person types,
   answers no request on their behalf, and makes no model call; the one switch

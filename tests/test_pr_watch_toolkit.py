@@ -795,9 +795,11 @@ class SkillTextContractTest(unittest.TestCase):
         body = (ROOT / "skills/omh-automation-blueprint/SKILL.md").read_text(encoding="utf-8")
         self.assertIn("file_path='references/pr-watch.md'", body)
 
-    def test_the_unattended_gate_sentence_is_unchanged(self):
+    def test_the_unattended_gate_still_opens_with_its_rule(self):
+        # The PR delivery grant adds one named exception after the rule
+        # (`tests/test_pr_delivery_grant.py` pins it); the rule itself stands.
         from omh.skills.catalog_feature_surfaces import _UNATTENDED_GATE
-        self.assertEqual(_UNATTENDED_GATE, (
+        self.assertTrue(_UNATTENDED_GATE.startswith(
             "With nobody to answer the confirmation (a scheduled job, a one-shot run, a webhook run), an irreversible "
             "or externally visible action is not run: it is handed to a person's turn and its confirmation is "
             "recorded as missing."
