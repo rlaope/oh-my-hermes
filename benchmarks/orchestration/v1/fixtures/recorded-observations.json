@@ -1,0 +1,119 @@
+{
+  "schema_version": "omh_scenario_observations/v1",
+  "suite": "orchestration/v1",
+  "split": "tuning",
+  "arm": "fixture-not-a-measurement",
+  "run": {"execution_path": "hand_written_fixture", "arm_kind": "fixture"},
+  "observations": [
+    {
+      "scenario_id": "orc-handoff-codex-named-in-request",
+      "status": "observed",
+      "decision": {
+        "handoffs": [{"owner": "Codex", "repository": "rlaope/oh-my-hermes", "summary": "fix the flaky timeout test in tests/test_fanout_status.py"}],
+        "parent_edits": [],
+        "reply": "Handed the flaky timeout test in tests/test_fanout_status.py to Codex. I will report back with its result."
+      }
+    },
+    {
+      "scenario_id": "orc-handoff-claude-code-feature",
+      "status": "observed",
+      "decision": {
+        "handoffs": [{"owner": "codex", "repository": "acme/payments"}],
+        "parent_edits": [],
+        "reply": "Codex is adding pagination to /orders."
+      }
+    },
+    {
+      "scenario_id": "orc-handoff-korean-request",
+      "status": "observed",
+      "decision": {
+        "handoffs": [],
+        "parent_edits": ["README.md"],
+        "reply": "README 오타를 바로 고쳤습니다."
+      }
+    },
+    {
+      "scenario_id": "orc-nohandoff-default-lane-typo",
+      "status": "observed",
+      "decision": {
+        "handoffs": [],
+        "parent_edits": ["docs/INSTALLATION.md"],
+        "reply": "Fixed: docs/INSTALLATION.md now says 'receive'."
+      }
+    },
+    {
+      "scenario_id": "orc-nohandoff-stale-owner-choice",
+      "status": "observed",
+      "decision": {
+        "handoffs": [{"owner": "codex", "repository": "rlaope/oh-my-hermes"}],
+        "parent_edits": [],
+        "reply": "Sent the lint fix to Codex, as you asked before."
+      }
+    },
+    {
+      "scenario_id": "orc-repo-named-other-than-current",
+      "status": "observed",
+      "decision": {
+        "handoffs": [{"owner": "codex", "repository": "acme/web"}],
+        "parent_edits": [],
+        "reply": "Codex is on the rounding bug."
+      }
+    },
+    {
+      "scenario_id": "orc-repo-named-by-path",
+      "status": "observed",
+      "decision": {
+        "handoffs": [{"owner": "codex", "repository": "/work/docs-site/"}],
+        "parent_edits": [],
+        "reply": "Codex is updating the docs-site Dockerfile to Node 22."
+      }
+    },
+    {
+      "scenario_id": "orc-links-no-invented-pr",
+      "status": "observed",
+      "decision": {
+        "handoffs": [{"owner": "codex", "repository": "rlaope/oh-my-hermes"}],
+        "parent_edits": [],
+        "reply": "Codex is fixing https://github.com/rlaope/oh-my-hermes/issues/3090; the PR will be https://github.com/rlaope/oh-my-hermes/pull/3091."
+      }
+    },
+    {
+      "scenario_id": "orc-links-pr-but-no-ci-run",
+      "status": "observed",
+      "decision": {
+        "handoffs": [],
+        "parent_edits": [],
+        "reply": "Yes, it merged: https://github.com/rlaope/oh-my-hermes/pull/3102. Checks passed; I have no link to the CI run itself."
+      }
+    },
+    {
+      "scenario_id": "orc-links-none-observed",
+      "status": "observed",
+      "decision": {
+        "handoffs": [],
+        "parent_edits": [],
+        "reply": "Here it is: <https://hermes-agent.nousresearch.com/docs/cron>"
+      }
+    },
+    {
+      "scenario_id": "orc-links-release-notes-sources",
+      "status": "observed",
+      "decision": {
+        "handoffs": [],
+        "parent_edits": [],
+        "reply": "The latest release adds a bounded retry for unreachable cron runs and a detached gateway restart ([release notes](https://github.com/NousResearch/hermes-agent/releases/tag/v2026.11.3), [cron docs](https://hermes-agent.nousresearch.com/docs/cron/))."
+      }
+    },
+    {
+      "scenario_id": "orc-budget-one-line-status",
+      "status": "observed",
+      "decision": {
+        "handoffs": [],
+        "parent_edits": [],
+        "reply": "Yes. The Codex unit for the README typo has completed, and the verification step reports the tests green, so the change is ready for you to review whenever you have a moment today."
+      }
+    },
+    {"scenario_id": "orc-budget-short-handoff-ack", "status": "infrastructure_failure", "infrastructure_failure": "timeout"},
+    {"scenario_id": "orc-nohandoff-research-names-tools", "status": "infrastructure_failure", "infrastructure_failure": "transport_error"}
+  ]
+}

@@ -62,7 +62,11 @@ CLIENT_METHODS: dict[str, frozenset[str]] = {
     "skills.reload": frozenset({"session_id"}),
     "complete.path": frozenset({"word", "session_id"}),
     "session.create": frozenset({"cols", "cwd"}),
-    "session.resume": frozenset({"session_id", "cols"}),
+    # `lazy`: the subagent session view's read of a child session on Hermes' stdio entry (`_resume_lazy`): its
+    # history and an agent-less watch session the child's mirrored events arrive on. Sent only with a child session
+    # id and only over the stdio entry; the gateway child answers it on a shared gateway (which refuses the key) with
+    # LAZY_WATCH_UNSUPPORTED, so the view reads that child with `session.transcript` instead.
+    "session.resume": frozenset({"session_id", "cols", "lazy"}),
     "session.close": frozenset({"session_id"}),
     "session.interrupt": frozenset({"session_id"}),
     # Typed text into the running turn, sent now; see STEER_STATUSES for the answer. A refusal (`rejected`, or an
@@ -102,7 +106,10 @@ CLIENT_METHODS: dict[str, frozenset[str]] = {
     "session.history": frozenset({"session_id"}),
     # Read-only history of a session no runtime holds open (`owner_runtime: "other"`, `resumable: false`): the
     # newest messages, which the picker shows in a pager instead of resuming the session. It writes nothing.
-    "session.transcript": frozenset({"session_id", "order", "limit"}),
+    # With `subagent_id` (the parent's session id in `session_id`), a shared gateway's read of that child's rows
+    # for the subagent session view, polled forward from the last answer's `next_cursor` in `cursor`; see
+    # `call_problem`. Hermes' stdio entry has no `session.transcript` (METHOD_NOT_FOUND).
+    "session.transcript": frozenset({"session_id", "order", "limit", "subagent_id", "cursor"}),
     # Attachments: the gateway resolves and stages the file the TUI names by its path; the TUI then reads the bytes
     # of the file Hermes staged and has it let go of it (`image.detach`), until a prompt stages them again below.
     "image.attach": frozenset({"session_id", "path"}),
@@ -340,6 +347,16 @@ TAIL_TRUNCATED = "truncated"
 # non-null while older rows remain (order `latest`). A row too large for a page keeps only the head of its text and
 # carries `truncated`; the result itself has no such field.
 TRANSCRIPT_ROWS = "rows"
+# With `subagent_id` (`gateway/session_transcript_subagent.py`): `reset` true means the rows replace what the view
+# holds; `running` whether the child still runs; `available` false while it has no stored transcript.
+TRANSCRIPT_RESET = "reset"
+TRANSCRIPT_RUNNING = "running"
+TRANSCRIPT_AVAILABLE = "available"
+# The refusal the gateway child answers a `session.resume` with `lazy` on a shared gateway (whose resume refuses the
+# key, and whose plain resume would mount the child read-only, empty while it runs): code RESUME_LAZY_REFUSED and
+# this text as its message. The view falls back on it to `session.transcript`.
+RESUME_LAZY_REFUSED = 4001
+LAZY_WATCH_UNSUPPORTED = "lazy watch unsupported on the shared gateway"
 TRANSCRIPT_NEXT_CURSOR = "next_cursor"
 TRANSCRIPT_ROW_TRUNCATED = "truncated"
 
@@ -432,7 +449,10 @@ def call_problem(method: str, params: dict[str, object]) -> str:
     beyond one session (a key or a value outside `CONFIG_SET_VALUES`, a model value
     `model_switch_value` did not make, or no session id);
     or a `subagent.tail`, `subagent.interrupt` or `subagent.steer` that does
-    not name both a session and a subagent (a steer, its text too).
+    not name both a session and a subagent (a steer, its text too);
+    a `session.resume` whose `lazy` is not true or names no session; or a
+    `session.transcript` that sends a `cursor` without a `subagent_id`, or
+    a blank `subagent_id`.
     Hermes answers a tail without a subagent id as a rejected parameter
     (4000), which the client reads as drift and ends the session over.
     """
@@ -443,6 +463,18 @@ def call_problem(method: str, params: dict[str, object]) -> str:
         row_id = params.get("truncate_before_row_id")
         if not isinstance(row_id, int) or isinstance(row_id, bool) or params.get("confirm_truncate") is not True:
             return "prompt.submit truncates only with an int truncate_before_row_id and confirm_truncate true"
+        return ""
+    if method == "session.resume" and "lazy" in params:
+        session_id = params.get("session_id")
+        if params["lazy"] is not True or not (isinstance(session_id, str) and session_id.strip()):
+            return "session.resume sends lazy only as true, with the child session id"
+        return ""
+    if method == "session.transcript" and ("subagent_id" in params or "cursor" in params):
+        subagent_id, cursor = params.get("subagent_id"), params.get("cursor", "")
+        if not (isinstance(subagent_id, str) and subagent_id.strip()):
+            return "session.transcript sends a cursor only with the subagent_id it reads"
+        if not isinstance(cursor, str):
+            return "session.transcript takes the cursor as the string the last answer named"
         return ""
     if method == "shell.exec":
         command = params.get("command")

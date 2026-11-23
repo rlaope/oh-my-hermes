@@ -41,13 +41,27 @@ class ToolkitReadmePointerTests(unittest.TestCase):
         owners = sorted(
             {template.skill_name for template in builtin_skill_support_templates() if template.relative_path.startswith("toolkit/")}
         )
+        # Owners whose toolkit is Hermes-only companion data, so a portable pack ships the body without it.
+        hermes_only_toolkits = {"github-event-ops"}
         for pack, files in (("agent-skills", agent_skill_files()), (".claude/agent-skills", claude_skill_files())):
+            unshipped = {
+                owner for owner in owners
+                if f"{omh_skill_display_name(owner)}/SKILL.md" in files
+                and f"{omh_skill_display_name(owner)}/toolkit/README.md" not in files
+            }
+            with self.subTest(pack=pack, check="hermes-only toolkits"):
+                self.assertEqual(unshipped, hermes_only_toolkits)
             for owner in owners:
                 name = omh_skill_display_name(owner)
                 if f"{name}/SKILL.md" not in files:
                     continue
                 with self.subTest(pack=pack, skill=name):
-                    self.assertIn("toolkit/README.md", files[f"{name}/SKILL.md"])
+                    # A toolkit the pack does not ship (Hermes-only companion data) is not named either:
+                    # the pointer would send the host to a file it does not have.
+                    if f"{name}/toolkit/README.md" in files:
+                        self.assertIn("toolkit/README.md", files[f"{name}/SKILL.md"])
+                    else:
+                        self.assertNotIn("toolkit/", files[f"{name}/SKILL.md"])
 
 
 if __name__ == "__main__":
