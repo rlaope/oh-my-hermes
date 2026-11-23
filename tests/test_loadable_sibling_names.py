@@ -36,6 +36,7 @@ EXPECTED_BUNDLED_DEFERRALS = {
     "ai-job-search": ("grounded-citations",),
     "ai-slop-cleaner": ("simplify-code",),
     "app-debugging": ("systematic-debugging",),
+    "app-work-intake": ("email-inbox-triage",),
     "biomedical-evidence": ("grounded-citations",),
     "code-review": ("sdlc-review", "requesting-code-review"),
     "codebase-uml": ("architecture-diagram",),

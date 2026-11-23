@@ -56,7 +56,7 @@ Bad example:
 
 Use when Hermes should prepare or maintain recurring operating records such as meetings, scrums, sprint plans, retrospectives, decisions, and follow-ups.
 
-    Strong routing signals: `operating-rhythm`, `operating rhythm`, `meeting minutes`, `meeting history`, `scrum record`, `sprint planning`, `sprint review`, `sprint retrospective`, `retro history`, `decision log`, `action item history`, `회의록 관리`, `회의 히스토리`, `운영 리듬`, `스크럼`, `스프린트 회고`, `결정 기록`, `액션 아이템`
+    Strong routing signals: `operating-rhythm`, `operating rhythm`, `meeting minutes`, `meeting history`, `scrum record`, `sprint planning`, `sprint review`, `sprint retrospective`, `retro history`, `decision log`, `action item history`, `meeting to issues`, `meeting notes to issues`, `meeting notes into issues`, `transcript to issues`, `transcript into issues`, `meeting notes to tickets`, `action items to issues`, `action items into tickets`, `회의록 관리`, `회의 히스토리`, `운영 리듬`, `스크럼`, `스프린트 회고`, `결정 기록`, `액션 아이템`
 
 ## Catalog Metadata
 
@@ -74,6 +74,7 @@ Quality bar:
 - This skill records an existing cadence; when the user wants a new cadence designed, propose it with owner, frequency, inputs and decision rights, then record minutes here.
 - Record each action item with its outcome, owner, due date, dependency, acceptance condition, and source reference, marking an owner or date the notes do not state as unknown, and keep a proposal that was discussed but not decided out of the decision log.
 - On Hermes, when the bundled `meeting-action-items` skill is available, it may pull decisions, owners, and actions out of the supplied notes; its list is a reading of those notes, so every item keeps its source reference and stays unaccepted until the notes or the owner confirm it, and a ticket or message it drafts is reported as published only after the user approved it and it was read back.
+- Meeting to issues: when a calendar event's notes or a meeting transcript should become issues, read the notes from where the meeting left them through the host's connector for it, create each approved issue in the tracker the person names through its connector, say which connector is missing and stop when one is, and record each created issue's link, read back from the tracker, in the action item history.
 
 Required inputs:
 

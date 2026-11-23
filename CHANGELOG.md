@@ -212,6 +212,19 @@ All notable changes will be documented here.
   `--script`, drops events the bot's own runs caused and more than 5 events per 15 minutes. Both scripts are inert
   package data the person's Hermes runs (owner-approved scoped integration, 2026-11-23); OMH never runs them.
   (`src/skills/pr_watch_toolkit/`, `src/skills/catalog_feature_surfaces.py`, `src/routing/policy.py`)
+- **Work that starts in another app: a spec, a mail, an alert, a meeting, a vault, a Figma frame.** A new skill,
+  `app-work-intake`, reads the item through the bot's own Hermes tool and takes one of three paths: a Notion or
+  Confluence page or a Linear or Jira issue becomes a plan, a fanout run and a PR, with the PR link written back to
+  the source ("turn Linear issue ENG-42 into a PR and link the PR back"); a mail message becomes a work thread or a
+  Needs item instead of a reply; a Sentry or Datadog alert becomes a triage and a fix hand-off, bounded by the PR
+  watch guards in `github-event-ops`. Three existing skills gain the other three: `operating-rhythm` turns a meeting's
+  notes or transcript into tracker issues through Hermes' `meeting-action-items`, `wiki` uses an Obsidian vault for
+  recall, the bot's daily journal and copies of approved `.omh/memory` records (never Hermes' `MEMORY.md`), and
+  `frontend` reads a Figma frame into `DESIGN.md` tokens and a handoff. Each names the Hermes MCP server or bundled
+  skill it needs and stops with `hermes mcp install <name>` when it is missing; every write to an app stays the bot's
+  own approved action, reported only after reading it back. Replies, summaries, one-ticket actions, calendar
+  questions and Figma exports keep their routes. OMH itself calls no app.
+  (`src/skills/catalog_feature_surfaces.py`, `src/skills/render.py`, `src/routing/policy.py`)
 - **OMH TUI: kitty previews inside omher, and a quiet Ctrl+Enter.** Under `TERM_PROGRAM=omher` the OMH TUI asks for
   kitty previews (tmux and screen keep half-blocks). Ctrl+Enter on a prompt with images during a turn now stops the
   turn and sends the prompt without an `Interrupted.` notice, like Claude Code's send-now; Hermes' "Operation

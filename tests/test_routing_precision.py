@@ -113,7 +113,9 @@ class RoutingPrecisionTests(unittest.TestCase):
         # Its verification round adds three: a PR metric and two deploys watched beside a PR.
         # Its final round adds three PR measures watched until a date.
         # Its hold round adds five: four declined watches and CI on main.
-        self.assertEqual(payload["summary"]["case_count"], 1562)
+        # Cross-platform workflows add nine: replies, calendar questions, a reminder alert, a Sentry question,
+        # a bare vault and Figma exports.
+        self.assertEqual(payload["summary"]["case_count"], 1571)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -192,7 +194,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # 364 -> 370: four one-line code backlogs, functions to explain and a one-line typo answer directly.
         # 370 -> 371: the PR watch lane's CI concept question is answered directly.
         # 371 -> 372: its staging deploy beside a merged PR falls back to a direct answer.
-        self.assertEqual(payload["summary"]["direct_answer_count"], 372)
+        # 372 -> 374: the cross-platform calendar question and Sentry concept question are answered directly.
+        self.assertEqual(payload["summary"]["direct_answer_count"], 374)
         # show-reel's README-link control is answered as a file lookup (+1).
         # "Use OMH to fix the failing test in billing.py" names a file: a file lookup (+1).
         # Copying the skills OMH selected and summarizing the files it picked
@@ -294,7 +297,9 @@ class RoutingPrecisionTests(unittest.TestCase):
         # Its verification round adds one: a deploy monitored after a merge keeps deploy-and-monitor.
         # Its final round adds five PR waits that name logs, production, a server or a deploy elsewhere.
         # Its hold round adds two: a declined review, then a PR watch, in English and Korean.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1367)
+        # Cross-platform workflows add twenty-seven: nineteen app items, meeting records, vault uses and Figma
+        # frames that dispatch, and eight sentences in another lane that keep their owner.
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1394)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

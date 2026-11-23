@@ -3871,6 +3871,14 @@ _DEFINITIONS = [
             "retro history",
             "decision log",
             "action item history",
+            "meeting to issues",
+            "meeting notes to issues",
+            "meeting notes into issues",
+            "transcript to issues",
+            "transcript into issues",
+            "meeting notes to tickets",
+            "action items to issues",
+            "action items into tickets",
         ),
         "Use when Hermes should prepare or maintain recurring operating records such as meetings, scrums, sprint plans, retrospectives, decisions, and follow-ups.",
         category="operations",
@@ -3900,6 +3908,10 @@ _DEFINITIONS = [
             "This skill records an existing cadence; when the user wants a new cadence designed, propose it with owner, frequency, inputs and decision rights, then record minutes here.",
             "Record each action item with its outcome, owner, due date, dependency, acceptance condition, and source reference, marking an owner or date the notes do not state as unknown, and keep a proposal that was discussed but not decided out of the decision log.",
             "On Hermes, when the bundled `meeting-action-items` skill is available, it may pull decisions, owners, and actions out of the supplied notes; its list is a reading of those notes, so every item keeps its source reference and stays unaccepted until the notes or the owner confirm it, and a ticket or message it drafts is reported as published only after the user approved it and it was read back.",
+            PortableLine(
+                "Meeting to issues: when a calendar event's notes or a meeting transcript should become issues, read the notes from where the meeting left them (Hermes' bundled `google-workspace` skill for a Google Calendar event and the Doc it links, `teams-meeting-pipeline` for a Teams meeting, the `fireflies` MCP server for a Fireflies transcript), extract with `meeting-action-items` as above, and create each approved issue in the tracker the person names (the `linear` or `atlassian` MCP server, or `gh` for GitHub); when that tool is not in your tool list, say which one and stop (`hermes mcp install <name>`), and record each created issue's link, read back from the tracker, in the action item history.",
+                "Meeting to issues: when a calendar event's notes or a meeting transcript should become issues, read the notes from where the meeting left them through the host's connector for it, create each approved issue in the tracker the person names through its connector, say which connector is missing and stop when one is, and record each created issue's link, read back from the tracker, in the action item history.",
+            ),
         ),
         why_this_exists="`operating-rhythm` exists so recurring operating work has durable minutes, decisions, and follow-up history without pretending a meeting outcome was observed.",
         do_not_use_when=(
@@ -4789,6 +4801,11 @@ _DEFINITIONS = [
             "tui design",
             "terminal ui design",
             "tui layout",
+            "figma frame",
+            "figma to code",
+            "figma design to code",
+            "implement this figma",
+            "build this figma",
         ),
         "Use when Hermes should shape or improve a web/frontend or terminal (TUI) surface before implementation: layout, design system, responsive states, accessibility, performance, motion, and anti-generic visual quality.",
         category="materials",
@@ -4854,6 +4871,10 @@ _DEFINITIONS = [
             "Name the model's own default aesthetic before inheriting it — the editorial prior of cream grounds, serif display faces, and muted terracotta accents suits editorial, portfolio, and hospitality briefs and is a failure mode on dashboards, developer tools, fintech, and data-dense UIs. Treat a generic negation (\"don't make it look AI\", \"make it minimal\") as unactionable: an override counts only when it carries concrete tokens, a hex palette and a typeface stack recorded in DESIGN.md. Run the review prompts in `references/taste-foundations.md` over framework blue, glass and gradient surfaces, default UI typefaces, bounce easing, blanket shadows, eyebrow/title/description stuffing, uniform column grids, and CJK body under the 14px Korean floor.",
             "When the target surface is a terminal UI (TUI), load `references/tui-craft.md` and hold the same bar there: default widgets are scaffolding, not finished UI; borders spent sparingly with spacing and a muted-color ladder doing the hierarchy; one named terminal aesthetic; verification rendered at 80x24 and 120x40 minimum with the pasted output as the screenshot-equivalent.",
             "Use references and domain fit to avoid generic AI-looking frontend output; when the user supplies a visual reference, load `references/reference-token-extraction.md` and extract tokens into the contract instead of eyeballing.",
+            PortableLine(
+                "Design to code: when the reference is a Figma frame (a figma.com link with a node id), read it through Figma's MCP server, on Hermes the `figma` catalog entry (tools `mcp__figma__*`; when they are not in your tool list, say so and stop, naming `hermes mcp install figma`), and follow the Figma frame section of `references/reference-token-extraction.md`; the frame becomes DESIGN.md tokens and a frontend handoff to the coding owner the person chose, never a pixel copy.",
+                "Design to code: when the reference is a Figma frame (a figma.com link with a node id), read it through the host's Figma MCP server (when its tools are not available, say so and stop), and follow the Figma frame section of `references/reference-token-extraction.md`; the frame becomes DESIGN.md tokens and a frontend handoff to the coding owner the person chose, never a pixel copy.",
+            ),
             "Prepare a concrete design-system contract before implementation handoff: load `references/design-system-contract.md` and write DESIGN.md before the first component — no component code before the contract exists. A new DESIGN.md is Google's DESIGN.md format (YAML token front matter, its sections in its order) plus OMH's own sections; a file in OMH's earlier numbered layout stays valid and is converted only when the user asks. When Hermes' bundled `design-md` skill is available, author, lint, diff, or export a file in the format through it, never a file in the earlier layout; lint is evidence only from a run that executed, otherwise `not_observed`.",
             "Query the local design reference data before fixing tokens: `omh design data --kind palette|font|ux --context <product context>` returns curated palettes, font stacks with CJK notes, and UX guidelines offline. Those rows inform DESIGN.md; the contract, not the query, still gates the code.",
             "Scroll-driven motion is a decision with a bill: load `references/scroll-motion-libraries.md`, take the native path (CSS `scroll-behavior`, scroll-driven animations, `IntersectionObserver`, scroll-snap) unless one interpolated scroll position feeds several consumers, and when a library is chosen (Lenis is the reviewed record) name its reduced-motion branch, anchors, nested scroll, teardown, and INP budget in the contract.",
@@ -8849,6 +8870,11 @@ _DEFINITIONS = [
             "markdown vault",
             "Notion knowledge base",
             "Google Drive wiki",
+            "vault as knowledge",
+            "vault as memory",
+            "recall from my vault",
+            "journal in my vault",
+            "daily journal in obsidian",
         ),
         (
             "Use to design a wiki someone can start today - model, skeleton, conventions, seed pages, and "
@@ -8891,6 +8917,10 @@ _DEFINITIONS = [
             "Mark stale or uncertain knowledge instead of presenting it as permanent truth.",
             "Extract separate coding tasks instead of burying them in notes.",
             "Before writing a page to a shared or synced store, strip credentials and personal data from it, or ask: a note's destination decides who can read it.",
+            HermesReferenceLine(
+                "Vault as knowledge: when the person names an Obsidian vault as a source for recall, or as where the bot writes its daily journal and approved `.omh/memory` records, follow `references/vault-knowledge.md` with Hermes' bundled `obsidian` skill; writes go only to the vault folder the person named, only approved records are copied there, and Hermes' `MEMORY.md` and `USER.md` are never written from or to the vault.",
+                "references/vault-knowledge.md",
+            ),
         ),
         why_this_exists=(
             "`wiki` exists because a wiki fails by its audience and its upkeep, not its folder names: it sizes the structure to who reads "

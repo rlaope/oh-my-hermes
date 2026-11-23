@@ -444,7 +444,7 @@
 }
 },
 {
-"anchors":"history item meet minut operat organiz retro retrospectiv rhythm scrum sprint standup",
+"anchors":"history meet minut operat organiz retro retrospectiv rhythm scrum sprint standup",
 "hangul":"결정 관리 기록 리듬 린트 스크 스토 스프 아이 액션 운영 의록 이템 크럼 토리 프린 회고 회의 히스",
 "hangul_anchors":"결정 관리 기록 리듬 린트 스토 스프 아이 액션 운영 의록 이템 크럼 토리 프린 회고 회의 히스",
 "label":"omh-operating-rhythm",
@@ -452,9 +452,9 @@
 "situation":"Team minutes, retros, and decision history to keep",
 "terms":{
 "1":"herm maintain prepar recur ups",
-"2":"across follow note organiz review run standup track writ",
+"2":"across follow issu organiz review run standup ticket track transcript writ",
 "3":"keep minut plan retrospectiv team",
-"4":"action item log record scrum",
+"4":"action item log note record scrum",
 "5":"history retro rhythm",
 "6":"decision meet operat sprint"
 }
@@ -585,10 +585,10 @@
 "situation":"Building or polishing a web or terminal UI",
 "terms":{
 "1":"anti befor creation driven handoff herm implementation improv prepar quality redesign shap stat surfac",
-"2":"add ai animation art beautiful better broken brutalism chang chart color core end feel footer front js land library lighthous logo market marquee neo neobrutalism neobrutalist parallax performanc premium react registry scen scream set shadcn site slop smooth split text them three threej tooltip ux vital voxel wcag webgl websit",
-"3":"build motion polish qa ui",
+"2":"add ai animation art beautiful better broken brutalism chang chart code color core end feel figma footer fram front implement js land library lighthous logo market marquee neo neobrutalism neobrutalist parallax performanc premium react registry scen scream set shadcn site slop smooth split text them three threej tooltip ux vital voxel wcag webgl websit",
+"3":"motion polish qa ui",
 "4":"accessibility app component dashboard design effect hero look page scroll styl system tui visual web",
-"5":"generic layout responsiv",
+"5":"build generic layout responsiv",
 "6":"frontend terminal"
 }
 },
@@ -1163,7 +1163,7 @@
 "situation":"Scattered knowledge needing a wiki",
 "terms":{
 "1":"audienc awar blueprint connection construction convention databas design destination durabl folder group guidanc local maintenanc model need organization page personal retain scatter seed sized skeleton small today",
-"2":"answer base build captur guid handover keep live project question set shar stor system writ",
+"2":"answer base build captur daily guid handover journal keep live memory project question recall set shar stor system writ",
 "3":"doc driv external googl markdown start team",
 "4":"knowledg note organiz",
 "5":"notion obsidian vault",
@@ -2044,6 +2044,23 @@
 "5":"ops webhook",
 "6":"issu",
 "9":"event github"
+}
+},
+{
+"anchors":"becom describ firing pull",
+"hangul":"",
+"hangul_anchors":"",
+"label":"omh-app-work-intake",
+"name":"app-work-intake",
+"situation":"Spec, issue, mail or alert to turn into work",
+"terms":{
+"1":"another bot herm instead open plan read reply through tool written",
+"2":"ask build chang describ firing hand inbox item keep messag pull request task thread triag",
+"3":"becom page turn",
+"4":"back confluenc datadog email error issu linear link mail pr spec ticket",
+"5":"intak",
+"6":"alert app fix jira notion sentry",
+"7":"work"
 }
 },
 {
