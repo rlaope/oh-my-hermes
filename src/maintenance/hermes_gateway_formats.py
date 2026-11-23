@@ -167,6 +167,7 @@ _SCRUBS = (
     (re.compile(r"[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{20,}"), "<redacted>"),  # Discord bot token
     (re.compile(r"xox[a-z]-[A-Za-z0-9-]{10,}"), "<redacted>"),  # Slack token
     (re.compile(r"\b\d{6,}:[A-Za-z0-9_-]{30,}\b"), "<redacted>"),  # Telegram bot token
+    (re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"), "<redacted>"),  # an AWS access key id, with or without a label
     # A webhook address carries its credential in the path: everything after `webhooks/` (Discord) or `services/`
     # (Slack) goes.
     (re.compile(r"(https?://(?:[\w-]+\.)*(?:discord(?:app)?\.com/api(?:/v\d+)?/webhooks|hooks\.slack\.com/services)/)\S+"),

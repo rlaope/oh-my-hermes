@@ -8,8 +8,16 @@ import { t } from "../i18n";
 import { Spinner } from "../ui";
 import { openExternal } from "../lib/openExternal";
 import { CopyButton } from "../chat/parts/Copy";
-import { DISCORD_PORTAL, NOT_CONNECTED, fixSteps, platformName, rowWords, statusWords, whenText, whyWords, type FixStep } from "./platforms";
+import { useNow } from "../elsewhere/useNow";
+import { DISCORD_PORTAL, NOT_CONNECTED, PLATFORMS_POLL_MS, fixSteps, platformName, rowDown, rowWords, statusWords, whenText, whyWords, type FixStep } from "./platforms";
 import "./platforms.css";
+
+/** The sidebar row's platforms from what OMH last said, judged against the clock: it re-renders every
+ *  PLATFORMS_POLL_MS, so a reconnect crosses ROW_RECONNECT_MS onto the row with no new answer. */
+export function RowPlatforms({ bot, read }: { bot: string; read: PlatformsRead | null }) {
+  const now = useNow(true, PLATFORMS_POLL_MS);
+  return <PlatformChip bot={bot} down={rowDown(read, bot, now)} />;
+}
 
 /** The row's state: the first platform that needs the person (else the first not connected), and how many more. */
 export function PlatformChip({ bot, down }: { bot: string; down: PlatformState[] }) {
