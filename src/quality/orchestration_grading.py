@@ -42,7 +42,15 @@ OWNER_CHOICE_SCOPES = ("this_request", "earlier_request")
 DECISION_KEYS = ("handoffs", "parent_edits", "reply")
 HANDOFF_KEYS = frozenset({"owner", "repository", "summary"})
 PROMPT_KEYS = ("request", "prior_state", "evidence")
-SCENARIO_KEYS = frozenset({"id", "category", "request", "why", "prior_state", "evidence", "expect"})
+SCENARIO_KEYS = frozenset({"id", "category", "request", "why", "prior_state", "evidence", "expect", "skill_rule"})
+# Rules a scenario's expectation depends on that the request alone does not
+# carry; see automation_intent_grading.SKILL_RULES.
+SKILL_RULES = {
+    "owner_named_in_this_request": (
+        "skills/dag-ulw/SKILL.md",
+        "No external coding CLI runs unless the person named it as the coding owner in this request.",
+    ),
+}
 EXPECT_KEYS = frozenset({"handoff", "owner", "repository", "parent_may_edit", "word_budget", "must_cite"})
 PRIOR_STATE_KEYS = frozenset({"repositories", "current_repository", "coding_owner_choice", "conversation"})
 EVIDENCE_KEYS = frozenset({"source", "summary", "links"})
@@ -56,6 +64,7 @@ _LINK_TRAILING = ".,;:!?_~"
 _LINK_LEADING = "_~:;,"
 _SCHEMES = ("https://", "http://")
 _HOST_CHARACTERS = frozenset("abcdefghijklmnopqrstuvwxyz0123456789.-")
+_GENERIC_TLDS = frozenset({"com", "org", "net", "edu", "gov", "dev", "app", "info"})
 # File extensions a reply names far more often than a top-level domain. A
 # scheme-less `README.md/CHANGELOG.md` is two file names, not a host; a link to
 # such a host still counts when it carries its scheme.
@@ -94,13 +103,16 @@ evidence the parent has already observed (each item lists the links its tool act
 Decide what the parent does: hand coding to a coding owner (and which owner, in which repository), do the
 work itself, or only answer. Then write the reply the person would read. Record the decision in the
 structured form below; do not perform it.
-A coding owner counts only when the person named it in this request; a choice from an earlier request does
-not carry over. Without one, coding stays with the parent.
 """
 
 
 def prompt_keys() -> tuple[str, ...]:
     return PROMPT_KEYS
+
+
+def harness_evidence_links(scenario: Mapping[str, Any]) -> list[str]:
+    """The scenario's own evidence links, which the live harness records on each observation."""
+    return evidence_links(scenario)
 
 
 def arm_view(scenario: Mapping[str, Any]) -> dict[str, Any]:
@@ -150,11 +162,19 @@ def normalize_link(value: str) -> str:
     host = host.casefold()
     if host in ("github.com", "www.github.com"):
         path = path.casefold()
-    return f"{scheme.casefold()}://{host}{slash}{path}"
+    # http and https name the same page; compare them as one.
+    scheme = "https" if scheme.casefold() in ("http", "https") else scheme.casefold()
+    return f"{scheme}://{host}{slash}{path}"
 
 
 def _bare_host_link(token: str) -> bool:
-    """`example.com/x` or `www.example.com`: a host with a dot and a letter TLD, no scheme."""
+    """A link written without its scheme.
+
+    `www.<host>`, a host of three or more labels (`docs.example.org/x`), or a
+    two-label host on a generic web TLD (`example.com/x`), followed by a path.
+    A two-label name on any other TLD reads as prose more often than as a host
+    (`socket.io/client`, `Node.js/Deno`), so it counts only with its scheme.
+    """
     folded = token.casefold()
     host, slash, _path = folded.partition("/")
     labels = host.split(".")
@@ -163,9 +183,11 @@ def _bare_host_link(token: str) -> bool:
     tld = labels[-1]
     if not (tld.isalpha() and len(tld) >= 2):
         return False
-    if tld in _FILE_EXTENSIONS and not folded.startswith("www."):
+    if folded.startswith("www."):
+        return True
+    if not slash or tld in _FILE_EXTENSIONS:
         return False
-    return bool(slash) or folded.startswith("www.")
+    return len(labels) >= 3 or tld in _GENERIC_TLDS
 
 
 def _token_link(token: str) -> str:
@@ -298,6 +320,8 @@ def scenario_errors(scenario: Mapping[str, Any]) -> list[str]:
     available = set(evidence_links(scenario)) if isinstance(evidence, list) else set()
     if string_list(must_cite) is None or not {normalize_link(link) for link in must_cite} <= available:
         errors.append("expect.must_cite must list links present in the evidence")
+    if "skill_rule" in scenario and scenario["skill_rule"] not in SKILL_RULES:
+        errors.append(f"skill_rule must be one of {', '.join(SKILL_RULES)}")
     category = scenario.get("category")
     if category == "handoff" and handoff != HANDOFF_REQUIRED:
         errors.append("a handoff scenario expects a required hand-off")
@@ -373,7 +397,9 @@ __all__ = [
     "grade_orchestration",
     "normalize_owner",
     "normalize_repository",
+    "SKILL_RULES",
     "arm_view",
+    "harness_evidence_links",
     "prompt_keys",
     "reply_links",
     "reply_words",

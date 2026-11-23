@@ -85,6 +85,7 @@
     {
       "id": "orc-nohandoff-stale-owner-choice",
       "category": "no-handoff",
+      "skill_rule": "owner_named_in_this_request",
       "request": "Now fix the failing lint in src/routing/chat.py.",
       "prior_state": {
         "repositories": [{"slug": "rlaope/oh-my-hermes", "path": "/work/oh-my-hermes"}],
@@ -94,7 +95,7 @@
       },
       "evidence": [{"source": "ruff check src/routing/chat.py", "summary": "1 error: F401 unused import", "links": []}],
       "expect": {"handoff": "forbidden", "parent_may_edit": true, "word_budget": 80},
-      "why": "The owner was named in an earlier request two days ago. A choice counts only for the request it was made in (the suite instructions state it, after the dag-ulw skill text; the router's explicit-choice record also expires after a day), so this one stays in the default lane."
+      "why": "The owner was named in an earlier request two days ago. The dag-ulw skill text counts a choice only for the request it was made in (the router's explicit-choice record also expires after a day), so this one stays in the default lane. The request alone does not carry this rule, so the scenario is reported in the skill_rule group."
     },
     {
       "id": "orc-nohandoff-research-names-tools",

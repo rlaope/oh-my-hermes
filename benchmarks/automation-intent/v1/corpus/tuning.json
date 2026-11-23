@@ -713,7 +713,8 @@
       "expect": {
         "outcome": "no_automation"
       },
-      "why": "A scheduled run never moves money (the suite instructions state it, after the automation-blueprint skill's spend-gate rule), so a recurring payment gets no automation now."
+      "why": "The automation-blueprint skill text sends money-moving recurring work to the spend gate: a scheduled agent run never spends, so no automation is prepared now. The request alone does not carry this rule, so the scenario is reported in the skill_rule group.",
+      "skill_rule": "spend_gate"
     },
     {
       "id": "ai-edit-move-standup-time",

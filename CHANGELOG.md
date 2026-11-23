@@ -148,7 +148,7 @@ All notable changes will be documented here.
   sources by test. The live arm is opt-in and runs only through `omh coding hermes-child dispatch
   --confirm-dispatch`; neither suite has been run live, so both are `prepared_not_observed`.
   (`src/quality/scenario_suite.py`, `src/quality/automation_intent_grading.py`,
-  `src/quality/orchestration_grading.py`; `benchmarks/automation-intent/v1/README.md`,
+  `src/quality/orchestration_grading.py`, `benchmarks/scenario_suite_bench.py`; `benchmarks/automation-intent/v1/README.md`,
   `benchmarks/orchestration/v1/README.md`, `docs/CAPABILITY_IMPACT.md` "Growth Gate")
 - **omher Tasks shows my pull requests, reviews and issues across repositories and GitHub accounts.** The Tasks page
   has a scope toggle, "이 저장소 | 나". "나" lists, across every repository, the open pull requests asking for my

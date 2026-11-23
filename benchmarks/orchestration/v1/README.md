@@ -74,12 +74,16 @@ Links are read by splitting the reply on whitespace after replacing the
 characters that wrap a link in prose or markdown (brackets of every kind,
 quotes, backticks, pipes and asterisks) with spaces. A token carries a link
 from its first `http://` or `https://` in any case, or when it is a bare
-host link (`example.com/x`, `www.example.com`; a host whose last label is a
-common file extension, as in `README.md/CHANGELOG.md`, counts only after
-`www.`); the link ends at the first non-ASCII character
+host link: `www.<host>`, a host of three or more labels followed by a path
+(`docs.example.org/x`), or a two-label host on a generic web TLD followed by a
+path (`example.com/x`). Other two-label names (`socket.io/client`,
+`Node.js/Deno`) and hosts whose last label is a file extension
+(`README.md/CHANGELOG.md`) read as prose and count only with their scheme.
+The link ends at the first non-ASCII character
 (so a Korean particle written onto it is not part of it), and trailing
 punctuation, markdown emphasis and a trailing `/` are dropped. Scheme and host
-compare case-insensitively, and so does a github.com path. Observed evidence is the scenario's own plus
+compare case-insensitively, `http` and `https` count as one link, and a
+github.com path compares case-insensitively too. Observed evidence is the scenario's own plus
 any `evidence_links` the harness recorded on the observation. A link the model
 wrote in its decision file is never evidence: the live harness keeps only the
 decision contract's keys.
@@ -95,12 +99,26 @@ It is enforced by structure and tested by `tests/test_scenario_suites.py`: two
 files, `tuning` read unless `--split held-out` is named, a held-out run over
 the whole split, no shared id or request, every category in both, a held-out
 share between a fifth and three tenths, a held-out report with totals only
-(no per-category rate, scenario id, decision or failure) that needs an
-observation of every held-out scenario, a split-mismatched observations file
-refused, and no
-held-out id or request in any skill, agent-skill, skill producer, routing or
-catalog source. The observations file of a held-out run still holds the arm's
-replies; do not read it while editing skill text.
+(no per-category or per-group rate, scenario id, decision or failure) that
+needs an observation of every held-out scenario and at least three quarters of
+them graded, a split-mismatched observations file refused, and no held-out id
+or request in any skill, agent-skill, skill producer, routing or catalog
+source. None of this is secrecy: the corpus, held-out expectations included,
+is public in this repository, and a held-out run's observations file holds
+the arm's replies. Keeping the held-out split out of tuning is the operator's
+discipline; do not read either while editing skill text.
+
+## Which numbers measure the skill text
+
+A tuning report splits its scenarios into `request_derivable` (any arm can
+derive the expectation from the request, its prior state, its evidence and
+the decision contract) and `skill_rule`. A `skill_rule` scenario rests on a
+rule the request does not carry, which only the skill text states: here
+`owner_named_in_this_request`, from `skills/dag-ulw/SKILL.md` ("No external
+coding CLI runs unless the person named it as the coding owner in this
+request"). The `skill-text` arm gets that file inlined; the `bare` arm is
+never told the rule, so the gap between the arms on that group is what the
+skill text teaches.
 
 ## Observation classes, report, arms, safety
 
@@ -143,7 +161,7 @@ The fixture's numbers measure nothing; do not quote them.
 | `corpus/tuning.json`, `corpus/held-out.json` | the two splits |
 | `manifest.json` | split digests and counts, arms and skill files, execution policy |
 | `fixtures/recorded-observations.json` | hand-written observations exercising every grading path |
-| `bench.py` | `validate`, `grade`, `run` |
+| `bench.py` | `validate`, `grade`, `run`, through the shared `benchmarks/scenario_suite_bench.py` |
 | `src/quality/orchestration_grading.py` | scenario schema and grader |
 | `src/quality/scenario_suite.py` | splits, observation classes, report, prompt, child argv |
 

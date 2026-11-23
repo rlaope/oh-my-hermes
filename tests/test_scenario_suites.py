@@ -14,6 +14,7 @@ import io
 import json
 from pathlib import Path
 import subprocess
+import sys
 from tempfile import TemporaryDirectory
 import unittest
 from unittest import mock
@@ -36,10 +37,15 @@ SUITES = (
 
 
 def _load_bench(lane: Path, name: str):
+    """Load a lane's thin `bench.py`; its shared runner is `module.runner`."""
     spec = importlib.util.spec_from_file_location(name, lane / "bench.py")
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    original_path = list(sys.path)
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.path[:] = original_path
     return module
 
 
@@ -104,7 +110,7 @@ class _FakePopen:
 
 
 def _popen(behaviour, record: list | None = None):
-    """A patch target for `bench.subprocess.Popen` running `behaviour`."""
+    """A patch target for `bench.runner.subprocess.Popen` running `behaviour`."""
 
     def factory(argv, **kwargs):
         process = _FakePopen(behaviour, argv, **kwargs)
@@ -255,7 +261,7 @@ class HeldOutIsolationTests(unittest.TestCase):
                 if needle in text:
                     self.fail(f"held-out text {needle!r} appears in {path.relative_to(ROOT)}")
 
-    def test_held_out_report_withholds_which_scenario_failed(self) -> None:
+    def test_a_held_out_file_padded_with_infrastructure_failures_is_refused(self) -> None:
         module, lane, grade = SUITES[0]
         corpus = shared.load_split(lane, "held_out")
         first = corpus["scenarios"][0]["id"]
@@ -264,15 +270,43 @@ class HeldOutIsolationTests(unittest.TestCase):
             {"scenario_id": row["id"], "status": "infrastructure_failure", "infrastructure_failure": "timeout"}
             for row in corpus["scenarios"][1:]
         )
-        report = shared.build_suite_report(
-            suite=module.SUITE, corpus=corpus, observations=_observations(module.SUITE, "held_out", rows),
-            grade=grade, categories=module.CATEGORIES, artifact="held.json",
-        )
-        self.assertEqual(report["scenario_detail"], "withheld_for_held_out_split")
-        self.assertNotIn("scenarios", report)
-        self.assertNotIn("per_category", report)
-        self.assertNotIn(first, json.dumps(report))
-        self.assertEqual(report["totals"]["failed"], 1)
+        with self.assertRaisesRegex(shared.ScenarioSuiteError, "graded"):
+            shared.build_suite_report(
+                suite=module.SUITE, corpus=corpus, observations=_observations(module.SUITE, "held_out", rows),
+                grade=grade, categories=module.CATEGORIES, artifact="held.json",
+            )
+
+    def test_held_out_report_at_the_graded_floor_carries_totals_only(self) -> None:
+        for module, lane, grade in SUITES:
+            corpus = shared.load_split(lane, "held_out")
+            ids = [row["id"] for row in corpus["scenarios"]]
+            # The smallest graded count the floor allows: three quarters, rounded up.
+            graded = -(-len(ids) * 3 // 4)
+            rows = [{"scenario_id": item, "status": "observed", "decision": {}} for item in ids[:graded]]
+            rows.extend(
+                {"scenario_id": item, "status": "infrastructure_failure", "infrastructure_failure": "timeout"}
+                for item in ids[graded:]
+            )
+            report = shared.build_suite_report(
+                suite=module.SUITE, corpus=corpus, observations=_observations(module.SUITE, "held_out", rows),
+                grade=grade, categories=module.CATEGORIES, artifact="held.json",
+            )
+            with self.subTest(module.SUITE):
+                self.assertEqual(report["scenario_detail"], "withheld_for_held_out_split")
+                for key in ("scenarios", "per_category", "per_group"):
+                    self.assertNotIn(key, report)
+                for item in ids:
+                    self.assertNotIn(item, json.dumps(report))
+                self.assertEqual(report["totals"]["graded"], graded)
+            short = rows[: graded - 1] + [
+                {"scenario_id": item, "status": "infrastructure_failure", "infrastructure_failure": "timeout"}
+                for item in ids[graded - 1 : graded]
+            ] + rows[graded:]
+            with self.subTest(module.SUITE, below_floor=True), self.assertRaisesRegex(shared.ScenarioSuiteError, "graded"):
+                shared.build_suite_report(
+                    suite=module.SUITE, corpus=corpus, observations=_observations(module.SUITE, "held_out", short),
+                    grade=grade, categories=module.CATEGORIES, artifact="held.json",
+                )
 
     def test_a_partial_held_out_file_is_refused(self) -> None:
         module, lane, grade = SUITES[1]
@@ -349,6 +383,25 @@ class ReportShapeTests(unittest.TestCase):
         interval = headline["pass_rate"]["wilson_95"]
         self.assertLessEqual(interval["low"], headline["pass_rate"]["rate"]["percent"])
         self.assertGreaterEqual(interval["high"], headline["pass_rate"]["rate"]["percent"])
+
+    def test_tuning_report_separates_skill_rule_scenarios(self) -> None:
+        for index, (module, lane, _grade) in enumerate(SUITES):
+            corpus = shared.load_split(lane, "tuning")
+            rows = [{"scenario_id": row["id"], "status": "observed", "decision": {}} for row in corpus["scenarios"]]
+            report = self.report(rows, suite_index=index)
+            groups = report["per_group"]
+            ruled = sum(1 for row in corpus["scenarios"] if row.get("skill_rule"))
+            with self.subTest(module.SUITE):
+                self.assertEqual(set(groups), {"request_derivable", "skill_rule"})
+                self.assertEqual(groups["skill_rule"]["scenarios"], ruled)
+                self.assertGreater(ruled, 0)
+                self.assertEqual(groups["request_derivable"]["scenarios"], len(corpus["scenarios"]) - ruled)
+                for block in groups.values():
+                    self.assertEqual(reported_rate_shape_errors(block["pass_rate"]["rate"]), ())
+                rows_by_id = {row["scenario_id"]: row for row in report["scenarios"]}
+                for row in corpus["scenarios"]:
+                    expected = "skill_rule" if row.get("skill_rule") else "request_derivable"
+                    self.assertEqual(rows_by_id[row["id"]]["group"], expected)
 
     def test_observations_file_errors_are_named(self) -> None:
         module = SUITES[0][0]
@@ -443,9 +496,9 @@ class PromptAndArgvTests(unittest.TestCase):
 
     def test_skill_text_arm_inlines_the_named_files_and_bare_does_not(self) -> None:
         bench = _load_bench(SUITES[0][1], "scenario_bench_automation")
-        texts = bench.skill_texts("skill-text")
+        texts = bench.runner.skill_texts(SUITES[0][1], "skill-text")
         self.assertEqual([name for name, _ in texts], json.loads((SUITES[0][1] / "manifest.json").read_text(encoding="utf-8"))["arms"]["skill-text"]["skill_files"])
-        self.assertEqual(bench.skill_texts("bare"), [])
+        self.assertEqual(bench.runner.skill_texts(SUITES[0][1], "bare"), [])
         prompt = shared.scenario_prompt(suite_instructions="i", decision_contract="c", view={"request": "r"}, skill_texts=texts)
         self.assertIn("--- skills/omh-automation-blueprint/SKILL.md ---", prompt)
         self.assertNotEqual(shared.skill_texts_digest(texts), shared.skill_texts_digest([]))
@@ -506,7 +559,7 @@ class BenchCommandTests(unittest.TestCase):
                 [*common, "--allow-paid-live", "--max-paid-calls", "100"],
                 [*common, "--allow-paid-live", "--max-paid-calls", "2", "--confirm"],
             ]
-            with mock.patch.object(bench.subprocess, "Popen", side_effect=AssertionError("spawned")) as spawn:
+            with mock.patch.object(bench.runner.subprocess, "Popen", side_effect=AssertionError("spawned")) as spawn:
                 for argv in attempts:
                     code, _out, err = _run(bench, argv)
                     with self.subTest(argv[len(common):]):
@@ -516,7 +569,7 @@ class BenchCommandTests(unittest.TestCase):
             self.assertFalse(Path(output).exists())
             held_id = shared.load_split(SUITES[0][1], "held_out")["scenarios"][0]["id"]
             held = [*common, "--split", "held-out", "--scenario", held_id, "--allow-paid-live", "--max-paid-calls", "1", "--confirm"]
-            with mock.patch.object(bench.subprocess, "Popen", side_effect=AssertionError("spawned")) as spawn:
+            with mock.patch.object(bench.runner.subprocess, "Popen", side_effect=AssertionError("spawned")) as spawn:
                 code, _out, err = _run(bench, held)
                 spawn.assert_not_called()
             self.assertEqual(code, 2)
@@ -528,7 +581,7 @@ class BenchCommandTests(unittest.TestCase):
             argv = ["run", "--arm", "a", "--arm-kind", "bare", "--scenario", "orc-handoff-codex-named-in-request",
                     "--model", "m", "--provider", "p", "--reasoning", "r", "--workspace", str(lane / "artifacts" / "ws"),
                     "--output", str(Path(tmp) / "o.json"), "--allow-paid-live", "--max-paid-calls", "1", "--confirm"]
-            with mock.patch.object(bench.subprocess, "Popen", side_effect=AssertionError("spawned")) as spawn:
+            with mock.patch.object(bench.runner.subprocess, "Popen", side_effect=AssertionError("spawned")) as spawn:
                 code, _out, err = _run(bench, argv)
                 spawn.assert_not_called()
         self.assertEqual(code, 2)
@@ -552,8 +605,8 @@ class BenchCommandTests(unittest.TestCase):
             processes.append(process)
             return process
 
-        with mock.patch.object(bench.subprocess, "Popen", side_effect=factory):
-            self.assertEqual(bench._dispatch(["omh"], "prompt", 1), (True, True, ""))
+        with mock.patch.object(bench.runner.subprocess, "Popen", side_effect=factory):
+            self.assertEqual(bench.runner._dispatch(["omh"], "prompt", 1), (True, True, ""))
         self.assertEqual(processes[0].signals, ["terminate", "kill"])
 
     def test_a_default_workspace_root_inside_the_checkout_is_refused(self) -> None:
@@ -562,14 +615,32 @@ class BenchCommandTests(unittest.TestCase):
             with TemporaryDirectory() as tmp:
                 argv = ["run", "--arm", "a", "--arm-kind", "bare", "--model", "m", "--provider", "p", "--reasoning", "r",
                         "--output", str(Path(tmp) / "o.json"), "--allow-paid-live", "--max-paid-calls", "100", "--confirm"]
-                with mock.patch.object(bench.subprocess, "Popen", side_effect=AssertionError("spawned")) as spawn, \
-                        mock.patch.object(bench.tempfile, "mkdtemp", return_value=str(inside)):
+                with mock.patch.object(bench.runner.subprocess, "Popen", side_effect=AssertionError("spawned")) as spawn, \
+                        mock.patch.object(bench.runner.tempfile, "mkdtemp", return_value=str(inside)):
                     code, _out, err = _run(bench, argv)
                     spawn.assert_not_called()
             with self.subTest(str(lane)):
                 self.assertEqual(code, 2)
                 self.assertIn("inside this checkout", err)
                 self.assertFalse(inside.exists())
+
+    def test_child_io_is_utf8_whatever_the_locale(self) -> None:
+        _module, _lane, bench = self.benches[0]
+        processes: list = []
+        with mock.patch.object(bench.runner.subprocess, "Popen", side_effect=_popen(lambda argv, prompt: "", processes)):
+            bench.runner._dispatch(["omh"], "매일 아침 9시", 5)
+        kwargs = processes[0].kwargs
+        self.assertEqual(kwargs["encoding"], "utf-8")
+        self.assertEqual(kwargs["env"]["PYTHONIOENCODING"], "utf-8")
+
+    def test_both_lanes_run_through_one_shared_runner(self) -> None:
+        runners = {id(bench.runner) for _module, _lane, bench in self.benches}
+        self.assertEqual(len(runners), 1)
+        for _module, lane, _bench in self.benches:
+            source = (lane / "bench.py").read_text(encoding="utf-8")
+            with self.subTest(str(lane)):
+                self.assertNotIn("import subprocess", source)
+                self.assertLess(len(source.splitlines()), 40)
 
     def test_live_run_ids_are_unique_per_invocation(self) -> None:
         _module, _lane, bench = self.benches[0]
@@ -584,7 +655,7 @@ class BenchCommandTests(unittest.TestCase):
                 argv = ["run", "--arm", "a", "--arm-kind", "bare", "--scenario", "ai-ask-daily-without-time",
                         "--model", "m", "--provider", "p", "--reasoning", "r", "--workspace", str(Path(tmp) / "ws"),
                         "--output", str(Path(tmp) / f"{attempt}.json"), "--allow-paid-live", "--max-paid-calls", "1", "--confirm"]
-                with mock.patch.object(bench.subprocess, "Popen", side_effect=_popen(fake_run)):
+                with mock.patch.object(bench.runner.subprocess, "Popen", side_effect=_popen(fake_run)):
                     code, _out, err = _run(bench, argv)
                 self.assertEqual(code, 0, err)
         self.assertEqual(len(set(run_ids)), 2)
@@ -592,7 +663,7 @@ class BenchCommandTests(unittest.TestCase):
     def test_two_default_runs_succeed_with_workspaces_outside_the_checkout(self) -> None:
         _module, _lane, bench = self.benches[1]
         workspaces: list[Path] = []
-        real_mkdtemp = bench.tempfile.mkdtemp
+        real_mkdtemp = bench.runner.tempfile.mkdtemp
 
         def fake_run(argv, prompt):
             workspaces.append(Path(argv[argv.index("--cwd") + 1]))
@@ -607,8 +678,8 @@ class BenchCommandTests(unittest.TestCase):
                 argv = ["run", "--arm", "a", "--arm-kind", "bare", "--scenario", "orc-handoff-codex-named-in-request",
                         "--model", "m", "--provider", "p", "--reasoning", "r",
                         "--output", str(Path(tmp) / f"{attempt}.json"), "--allow-paid-live", "--max-paid-calls", "1", "--confirm"]
-                with mock.patch.object(bench.subprocess, "Popen", side_effect=_popen(fake_run)), \
-                        mock.patch.object(bench.tempfile, "mkdtemp", side_effect=mkdtemp) as made:
+                with mock.patch.object(bench.runner.subprocess, "Popen", side_effect=_popen(fake_run)), \
+                        mock.patch.object(bench.runner.tempfile, "mkdtemp", side_effect=mkdtemp) as made:
                     code, _out, err = _run(bench, argv)
                 self.assertEqual(code, 0, err)
                 made.assert_called_once()
@@ -642,7 +713,7 @@ class BenchCommandTests(unittest.TestCase):
                 "--output", str(output), "--allow-paid-live", "--max-paid-calls", "1", "--confirm",
             ]
             processes: list = []
-            with mock.patch.object(bench.subprocess, "Popen", side_effect=_popen(fake_run, processes)):
+            with mock.patch.object(bench.runner.subprocess, "Popen", side_effect=_popen(fake_run, processes)):
                 code, _out, err = _run(bench, argv)
             self.assertEqual(code, 0, err)
             self.assertEqual(len(calls), 1)
@@ -685,7 +756,7 @@ class BenchCommandTests(unittest.TestCase):
                     "--allow-paid-live", "--max-paid-calls", "2", "--confirm"]
             for scenario_id in scenario_ids:
                 argv.extend(["--scenario", scenario_id])
-            with mock.patch.object(bench.subprocess, "Popen", side_effect=factory):
+            with mock.patch.object(bench.runner.subprocess, "Popen", side_effect=factory):
                 code, _out, err = _run(bench, argv)
             self.assertEqual(code, 0, err)
             rows = json.loads(output.read_text(encoding="utf-8"))["observations"]

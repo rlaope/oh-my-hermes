@@ -57,6 +57,10 @@ DEFAULT_SPLIT = TUNING_SPLIT
 SPLIT_FILES = {TUNING_SPLIT: "tuning.json", HELD_OUT_SPLIT: "held-out.json"}
 # The share of a suite's scenarios the held-out split holds, as a closed range.
 HELD_OUT_SHARE_RANGE = (0.2, 0.3)
+# A held-out report needs at least this share of the split graded (not
+# excluded). Padding a file with infrastructure failures around one graded
+# scenario would otherwise let the totals name that scenario's verdict.
+HELD_OUT_MIN_GRADED_NUMERATOR, HELD_OUT_MIN_GRADED_DENOMINATOR = 3, 4
 
 OBSERVED = "observed"
 INFRASTRUCTURE_FAILURE = "infrastructure_failure"
@@ -65,6 +69,10 @@ OBSERVATION_STATUSES = (OBSERVED, INFRASTRUCTURE_FAILURE)
 # wrote a decision. None of these says anything about the decision, so each
 # is excluded from the denominator by name rather than graded.
 INFRASTRUCTURE_FAILURE_CLASSES = ("arm_did_not_run", "timeout", "transport_error")
+# The two groups a tuning report splits scenarios into.
+REQUEST_DERIVABLE_GROUP = "request_derivable"
+SKILL_RULE_GROUP = "skill_rule"
+GROUPS = (REQUEST_DERIVABLE_GROUP, SKILL_RULE_GROUP)
 # A scenario of the split with no observation in the file at all.
 NOT_OBSERVED = "not_observed"
 EXCLUDED_CLASSES = (*INFRASTRUCTURE_FAILURE_CLASSES, NOT_OBSERVED)
@@ -371,26 +379,35 @@ def build_suite_report(
     unknown = sorted(set(rows) - set(by_id))
     if unknown:
         raise ScenarioSuiteError(f"observations name scenarios the {split} split does not hold: {', '.join(unknown)}")
-    if split == HELD_OUT_SPLIT and set(rows) != set(by_id):
-        # A partial held-out file would let its totals name one scenario's verdict.
-        raise ScenarioSuiteError(
-            f"a held-out report needs an observation (graded or infrastructure failure) of every one of its "
-            f"{len(by_id)} scenarios; this file has {len(rows)}"
-        )
+    if split == HELD_OUT_SPLIT:
+        # A partial held-out file, or one padded with infrastructure failures,
+        # would let its totals name one scenario's verdict.
+        if set(rows) != set(by_id):
+            raise ScenarioSuiteError(
+                f"a held-out report needs an observation (graded or infrastructure failure) of every one of its "
+                f"{len(by_id)} scenarios; this file has {len(rows)}"
+            )
+        graded_rows = sum(1 for row in rows.values() if row["status"] == OBSERVED)
+        if graded_rows * HELD_OUT_MIN_GRADED_DENOMINATOR < len(by_id) * HELD_OUT_MIN_GRADED_NUMERATOR:
+            raise ScenarioSuiteError(
+                f"a held-out report needs at least {HELD_OUT_MIN_GRADED_NUMERATOR}/{HELD_OUT_MIN_GRADED_DENOMINATOR} "
+                f"of its {len(by_id)} scenarios graded; this file grades {graded_rows}. Rerun the whole split."
+            )
 
     outcomes: list[dict[str, Any]] = []
     for scenario in scenarios:
         scenario_id = str(scenario["id"])
         row = rows.get(scenario_id)
+        group = SKILL_RULE_GROUP if scenario.get("skill_rule") else REQUEST_DERIVABLE_GROUP
+        base = {"scenario_id": scenario_id, "category": scenario["category"], "group": group}
         if row is None:
-            outcomes.append({"scenario_id": scenario_id, "category": scenario["category"], "outcome": NOT_OBSERVED})
+            outcomes.append({**base, "outcome": NOT_OBSERVED})
         elif row["status"] == INFRASTRUCTURE_FAILURE:
-            outcomes.append({"scenario_id": scenario_id, "category": scenario["category"], "outcome": row["infrastructure_failure"]})
+            outcomes.append({**base, "outcome": row["infrastructure_failure"]})
         else:
             failures = grade(scenario, row)
             outcomes.append({
-                "scenario_id": scenario_id,
-                "category": scenario["category"],
+                **base,
                 "outcome": "failed" if failures else "passed",
                 "failures": [failure.to_payload() for failure in failures],
             })
@@ -447,6 +464,11 @@ def build_suite_report(
         report["per_category"] = {
             category: tally([item for item in outcomes if item["category"] == category]) for category in categories
         }
+        # Which numbers measure the skill text: a skill_rule scenario's
+        # expectation rests on a rule only the skill text states, so only the
+        # skill-text arm can derive it; any arm can derive the rest from the
+        # request alone.
+        report["per_group"] = {group: tally([item for item in outcomes if item["group"] == group]) for group in GROUPS}
         report["scenarios"] = outcomes
     return report
 
@@ -461,6 +483,8 @@ def summary_lines(report: Mapping[str, Any]) -> list[str]:
     interval = headline["pass_rate"]["wilson_95"]
     if interval:
         lines.append(f"  wilson 95%: {interval['low']}%-{interval['high']}%")
+    for group, block in report.get("per_group", {}).items():
+        lines.append(f"  [{group}]: {block['pass_rate']['line']}")
     for category, block in report.get("per_category", {}).items():
         lines.append(f"  {category}: {block['pass_rate']['line']}")
     return lines

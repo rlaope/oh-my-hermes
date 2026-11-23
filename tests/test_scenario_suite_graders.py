@@ -9,6 +9,7 @@ on the named check.
 from __future__ import annotations
 
 import copy
+import json
 from pathlib import Path
 import unittest
 
@@ -119,9 +120,25 @@ class AutomationIntentGraderTests(unittest.TestCase):
                 with self.subTest(scenario_id):
                     self.assertNotIn(" both ", f" {scenario['request'].casefold()} ")
 
-    def test_rules_the_corpus_relies_on_are_stated_to_every_arm(self) -> None:
-        self.assertIn("A scheduled run never moves money", automation.SUITE_INSTRUCTIONS)
-        self.assertIn("counts only when the person named it in this request", orchestration.SUITE_INSTRUCTIONS)
+    def test_skill_rules_reach_only_the_skill_text_arm(self) -> None:
+        # The rule a skill_rule scenario rests on is in the skill text the
+        # skill-text arm reads, and in nothing every arm is given.
+        root = Path(__file__).resolve().parents[1]
+        for module, scenarios in ((automation, AUTOMATION), (orchestration, ORCHESTRATION)):
+            for rule, (skill_file, words) in module.SKILL_RULES.items():
+                with self.subTest(rule):
+                    self.assertIn(words, (root / skill_file).read_text(encoding="utf-8"))
+                    for given in (module.SUITE_INSTRUCTIONS, module.DECISION_CONTRACT):
+                        self.assertNotIn("never spends", given)
+                        self.assertNotIn("never moves money", given)
+                        self.assertNotIn("in this request", given)
+                    self.assertTrue(any(row.get("skill_rule") == rule for row in scenarios.values()))
+        for scenario_id, scenario in {**AUTOMATION, **ORCHESTRATION}.items():
+            if "skill_rule" in scenario:
+                with self.subTest(scenario_id):
+                    self.assertNotIn("skill_rule", json.dumps(
+                        automation.arm_view(scenario) if scenario_id.startswith("ai-") else orchestration.arm_view(scenario)
+                    ))
 
     def test_asking_about_every_topic_is_not_a_question(self) -> None:
         everything = {"outcome": "clarifying_question", "asks_about": list(automation.CLARIFY_TOPICS)}
@@ -129,10 +146,13 @@ class AutomationIntentGraderTests(unittest.TestCase):
         self.assertEqual(_checks(self.grade("ai-ask-daily-without-time", {"outcome": "clarifying_question"})), ["asks_about"])
 
     def test_any_open_topic_is_a_right_question(self) -> None:
-        for topics in (["target"], ["schedule"], ["target", "schedule"]):
+        # A synthetic scenario: held-out ids stay out of the tests.
+        scenario = copy.deepcopy(AUTOMATION["ai-ask-which-repository"])
+        scenario["expect"]["clarify_about"] = ["target", "schedule"]
+        for topics, passes in ((["target"], True), (["schedule"], True), (["target", "schedule"], True), (["delivery"], False)):
             decision = {"outcome": "clarifying_question", "asks_about": topics}
             with self.subTest(topics):
-                self.assertEqual(self.grade("ai-ask-monitor-without-target", decision), ())
+                self.assertEqual(automation.grade_automation_intent(scenario, _observed(decision)) == (), passes)
 
     def test_edit_must_not_move_a_state_nobody_changed(self) -> None:
         scenario_id = "ai-edit-move-standup-time"
@@ -169,6 +189,13 @@ class AutomationIntentGraderTests(unittest.TestCase):
         self.assertEqual(self.grade(scenario_id, decision), ())
         blueprint["native_blueprint"]["cronjob_manage_create"]["deliver"] = "slack:release-notes"
         self.assertEqual(self.grade(scenario_id, decision), ())
+
+    def test_zone_abbreviation_the_request_names_is_accepted(self) -> None:
+        decision = self.ideal("ai-schedule-sunday-night-explicit-zone")
+        decision["automation"]["timezone"] = "KST"
+        self.assertEqual(self.grade("ai-schedule-sunday-night-explicit-zone", decision), ())
+        decision["automation"]["timezone"] = "EST"
+        self.assertEqual(_checks(self.grade("ai-schedule-sunday-night-explicit-zone", decision)), ["automation.timezone"])
 
     def test_github_author_spellings_are_one_author(self) -> None:
         for author in ("dependabot[bot]", "@dependabot", "Dependabot"):
@@ -557,6 +584,17 @@ class OrchestrationGraderTests(unittest.TestCase):
         for spelling, owner in (("Claude Code CLI", "claude-code"), ("OpenAI Codex", "codex"), ("코덱스", "codex"), ("클로드 코드", "claude-code")):
             with self.subTest(spelling):
                 self.assertEqual(orchestration.normalize_owner(spelling), owner)
+
+    def test_http_and_https_are_one_link(self) -> None:
+        decision = {"handoffs": [], "parent_edits": [], "reply": "Merged: http://github.com/rlaope/oh-my-hermes/pull/3102"}
+        self.assertEqual(self.grade("orc-links-pr-but-no-ci-run", decision), ())
+
+    def test_library_names_in_prose_are_not_links(self) -> None:
+        for prose in ("uses socket.io/client for the stream", "swap Node.js/Deno later", "see vue.js/react docs"):
+            with self.subTest(prose):
+                self.assertEqual(orchestration.reply_links(prose), [])
+        self.assertEqual(orchestration.reply_links("socket.io/docs at https://socket.io/docs"), ["https://socket.io/docs"])
+        self.assertEqual(orchestration.reply_links("docs.socket.io/v4"), ["https://docs.socket.io/v4"])
 
     def test_github_link_case_is_not_an_invented_link(self) -> None:
         decision = {"handoffs": [], "parent_edits": [], "reply": "Merged: https://github.com/RLAOPE/Oh-My-Hermes/pull/3102"}

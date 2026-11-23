@@ -16,7 +16,7 @@
     "tuning": {
       "file": "corpus/tuning.json",
       "scenarios": 18,
-      "digest": "5039fd4f7035320c01e1ee9c3487f24f51fb0581258635957c6db441f81fe439"
+      "digest": "8e0c983c14acb5357feb08d3195b99b52eeba1f7e60541aa7fef3b223cb64191"
     },
     "held_out": {
       "file": "corpus/held-out.json",
@@ -30,7 +30,9 @@
     "held_out_report_detail": "totals only; no per-category rate, scenario id, decision or failure",
     "never_used_for": "tuning skill text, prompts or the grader",
     "held_out_runs_whole_split": true,
-    "held_out_report_requires_every_scenario": true
+    "held_out_report_requires_an_observation_of_every_scenario": true,
+    "held_out_report_min_graded_share": "3/4",
+    "secrecy": "none: the corpus, held-out expectations included, is public in this repository; keeping the held-out split out of tuning is the operator's discipline, which the structure and tests support but cannot enforce"
   },
   "grader": "src/quality/orchestration_grading.py",
   "shared_shape": "src/quality/scenario_suite.py",
@@ -85,5 +87,9 @@
   "integrity": {
     "algorithm": "sha256",
     "canonical_json": "sorted-keys-compact-ascii"
+  },
+  "report_groups": {
+    "request_derivable": "scenarios any arm can derive from the request, prior state and the contract alone",
+    "skill_rule": "scenarios whose expectation rests on a rule only the skill text states (skill_rule); only the skill-text arm is given it, so this group's gap between the arms measures the skill text"
   }
 }

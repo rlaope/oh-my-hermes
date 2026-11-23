@@ -72,7 +72,7 @@ observation to a list of failures. No failure is a pass. No model judges.
 | --- | --- |
 | `outcome` | it equals the expected outcome; nothing else is checked when it does not |
 | `automation.schedule` | it normalizes to one of the accepted forms (`0 9 * * MON-FRI` = `0 9 * * 1-5`; `every 2 hours` = `every 120m`; cron and interval forms are never converted into each other, so a scenario lists both when both are right) |
-| `automation.timezone` | it is one of the accepted zones, when the scenario names any |
+| `automation.timezone` | it is one of the accepted zones, when the scenario names any (`UTC` aliases, and `KST` or `JST` for the zone they abbreviate, are accepted) |
 | `automation.deliver` | the set of targets equals the expected set (Hermes' comma-joined string is read too; `origin` is this chat; `slack:#eng` and `slack:eng` are one target) |
 | `automation.target` | kind and ref match one accepted target (a feed may be accepted as `rss_feed` or `url`); a GitHub ref may be a URL or end in `.git`, a channel ref may drop its `#`, a URL ref its trailing `/` |
 | `automation.filters.<key>` | each expected key has the same values (case-folded; a path's trailing `/`, an author's `@` and `[bot]` dropped), and no key the request did not state is present, except a scenario's `optional_filters`, which an arm may state with values from the listed ones or leave out |
@@ -96,13 +96,18 @@ That is enforced by structure and tested by `tests/test_scenario_suites.py`:
   scenario failed or why: a held-out run cannot be read back into skill text
   one scenario at a time.
 - An observations file records its split, and grading it against the other
-  split is refused. A held-out file must hold an observation (graded or an
-  infrastructure failure) of every held-out scenario, or it is refused.
+  split is refused. A held-out file must hold an observation of every
+  held-out scenario and grade at least three quarters of them (not excluded),
+  or it is refused: totals over a file padded with infrastructure failures
+  would name one scenario's verdict. The floor is pinned in `manifest.json`.
 - No held-out id or request appears in any skill, agent-skill, skill producer,
   routing or catalog source.
 
-The observations file of a held-out run still holds the arm's decisions. Do
-not read it while editing skill text; grade it and read the report.
+None of this is secrecy. The corpus, held-out expectations included, is public
+in this repository, and the observations file of a held-out run holds the
+arm's decisions. Keeping the held-out split out of tuning is the operator's
+discipline: do not read either while editing skill text; grade the run and
+read the report.
 
 ## Observation classes and the report
 
@@ -119,12 +124,19 @@ no interval. The `headline` names the arm, corpus, split, corpus digest,
 selection rule, and the observations file and its digest; with nothing graded
 its status is `prepared_not_observed`.
 
+A tuning report also splits its scenarios into two groups (`per_group`):
+
+| Group | Scenarios | What the gap between arms means |
+| --- | --- | --- |
+| `request_derivable` | any arm can derive the expectation from the request, its prior state and the decision contract | how well each arm follows the request and the contract |
+| `skill_rule` | the expectation rests on a rule the request does not carry and only the skill text states, named by the scenario's `skill_rule` (here `spend_gate`: a recurring payment gets no automation) | what the skill text teaches; the `bare` arm is never told the rule |
+
 ## Arms
 
 | Arm kind | What answers | How |
 | --- | --- | --- |
-| `skill-text` | a model through the Hermes-native child boundary, with the skill files `manifest.json` names inlined in its prompt | `bench.py run --arm-kind skill-text` |
-| `bare` | the same model and prompt without the skill text | `bench.py run --arm-kind bare` |
+| `skill-text` | a model through the Hermes-native child boundary, given the suite instructions, the decision contract, the scenario (request and prior state), and the skill files `manifest.json` names inlined in its prompt, which state the `skill_rule` rules | `bench.py run --arm-kind skill-text` |
+| `bare` | the same model and prompt without the skill text, so without the `skill_rule` rules | `bench.py run --arm-kind bare` |
 | external | any tool the operator likes | an `omh_scenario_observations/v1` file graded offline |
 
 The live arms measure the named skill text when it is in the prompt. They do
@@ -187,7 +199,7 @@ measurement, never while tuning.
 | `corpus/tuning.json`, `corpus/held-out.json` | the two splits |
 | `manifest.json` | split digests and counts, arms and skill files, execution policy |
 | `fixtures/recorded-observations.json` | hand-written observations exercising every grading path |
-| `bench.py` | `validate`, `grade`, `run` |
+| `bench.py` | `validate`, `grade`, `run`, through the shared `benchmarks/scenario_suite_bench.py` |
 | `src/quality/automation_intent_grading.py` | scenario schema and grader |
 | `src/quality/scenario_suite.py` | splits, observation classes, report, prompt, child argv |
 

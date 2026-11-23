@@ -53,7 +53,17 @@ EXPECT_AUTOMATION_KEYS = (*AUTOMATION_KEYS, "optional_filters")
 DECISION_KEYS = ("outcome", "automation", "asks_about", "artifact")
 # What an arm sees. The id and category name the answer, so neither is shown.
 PROMPT_KEYS = ("request", "prior_state")
-SCENARIO_KEYS = frozenset({"id", "category", "request", "why", "prior_state", "expect"})
+SCENARIO_KEYS = frozenset({"id", "category", "request", "why", "prior_state", "expect", "skill_rule"})
+# Rules a scenario's expectation depends on that the request alone does not
+# carry. Only the skill text states them: the `skill-text` arm reads it, the
+# `bare` arm does not, and the report keeps these scenarios in their own group.
+# Each maps to the skill file and the words there that state the rule.
+SKILL_RULES = {
+    "spend_gate": (
+        "skills/omh-automation-blueprint/SKILL.md",
+        "an agent run on a schedule never spends",
+    ),
+}
 EXPECT_KEYS = frozenset({"outcome", "automation", "clarify_about"})
 PRIOR_STATE_KEYS = frozenset({"automations", "conversation", "user_timezone", "now"})
 
@@ -105,13 +115,17 @@ You are evaluating how a Hermes assistant turns a plain-language request into a 
 Read the scenario: the person's request and any prior state (existing jobs, earlier turns, their timezone).
 Decide what you would do: prepare a new automation, edit the existing one, ask one clarifying question
 because the request leaves a needed value open, or make no automation because the request does not ask
-for recurring work. A scheduled run never moves money: a recurring payment, purchase, renewal or transfer
-gets no automation now. Record that decision in the structured form below; do not perform it.
+for recurring work. Record that decision in the structured form below; do not perform it.
 """
 
 
 def prompt_keys() -> tuple[str, ...]:
     return PROMPT_KEYS
+
+
+def harness_evidence_links(scenario: Mapping[str, Any]) -> list[str]:
+    """Automation scenarios carry no observed evidence links."""
+    return []
 
 
 def arm_view(scenario: Mapping[str, Any]) -> dict[str, Any]:
@@ -227,9 +241,16 @@ def _normalize_ref(kind: str, ref: object) -> str:
     return folded
 
 
+# Abbreviations a request names and an arm may echo back, mapped to the IANA
+# zone a scenario expects.
+_ZONE_ABBREVIATIONS = {"kst": "asia/seoul", "jst": "asia/tokyo"}
+
+
 def _normalize_zone(value: object) -> str:
     folded = _fold(value)
-    return "utc" if folded in _UTC_ZONES else folded
+    if folded in _UTC_ZONES:
+        return "utc"
+    return _ZONE_ABBREVIATIONS.get(folded, folded)
 
 
 def _filter_value(key: str, value: str) -> str:
@@ -335,6 +356,8 @@ def scenario_errors(scenario: Mapping[str, Any]) -> list[str]:
             errors.append(f"expect.clarify_about must list topics from {', '.join(CLARIFY_TOPICS)}")
     elif topics is not None:
         errors.append("expect.clarify_about is only for clarifying_question")
+    if "skill_rule" in scenario and scenario["skill_rule"] not in SKILL_RULES:
+        errors.append(f"skill_rule must be one of {', '.join(SKILL_RULES)}")
     category = scenario.get("category")
     if category == "ask" and outcome != CLARIFY:
         errors.append("an ask scenario expects a clarifying_question")
@@ -490,7 +513,9 @@ __all__ = [
     "grade_automation_intent",
     "normalize_deliver",
     "normalize_schedule",
+    "SKILL_RULES",
     "arm_view",
+    "harness_evidence_links",
     "prompt_keys",
     "scenario_errors",
 ]
