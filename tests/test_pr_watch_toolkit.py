@@ -468,13 +468,57 @@ class WatchTest(unittest.TestCase):
         _, out, _ = self.tick(gh_view(C, [A, B, C], FAIL), now=later)
         self.assertEqual(out.strip().splitlines()[-1], "next=hand_to_person reason=fix_round_cap")
 
-    def test_an_unreadable_state_file_is_kept_and_reads_as_an_unreadable_count(self):
+    def test_an_unreadable_state_file_stops_the_watch_loudly_and_is_kept(self):
         self.state.parent.mkdir(parents=True)
-        for damaged in ("{not json", '{"first_failed_head": "zz"}', '{"rounds_floor": -1}', "[]"):
+        for damaged in ("{not json", '{"first_failed_head": "zz"}', '{"rounds_floor": -1}', "[]",
+                        '{"watches": {"widgets-pr-42": {"started": "x"}}}'):
             self.state.write_text(damaged, encoding="utf-8")
             with self.subTest(damaged=damaged):
-                self.assertEqual(self.next_line(gh_view(A, [A], FAIL)), "next=hand_to_person reason=fix_rounds_unreadable")
+                # No gh read (tick(None) fails the test if the reader is called), the same bytes every tick,
+                # and the 24 h bound cannot be lost to it: the watch is already over.
+                for now in (self.now, self.now + dt.timedelta(days=365 * 72)):
+                    code, out, err = self.tick(None, now=now)
+                    self.assertEqual((code, out), (0, f"{HEADER}\nnext=stop_watch reason=state_unreadable\n"))
+                    self.assertIn(f"reason=state_unreadable path={self.state}", err)
                 self.assertEqual(self.state.read_text(encoding="utf-8"), damaged)
+
+    def test_a_held_lock_repeats_the_last_block_and_reads_nothing(self):
+        settled = self.tick(gh_view(A, [A], FAIL))[1]
+        lock = self.state.with_name("pr-42.json.lock")
+        lock.write_text("", encoding="utf-8")
+        self.mod.LOCK_WAIT_S = 0.2
+        before = self.state.read_bytes()
+        code, out, err = self.tick(None)  # the reader would fail the test
+        self.assertEqual((code, out), (0, settled))
+        self.assertIn("reason=state_busy", err)
+        self.assertEqual(self.state.read_bytes(), before)
+        old = time.time() - 600
+        os.utime(lock, (old, old))  # a stale lock (its holder died) is taken
+        self.assertEqual(self.next_line(gh_view(B, [A, B], FAIL)), "next=fix_round round=2")
+        self.assertFalse(lock.exists())
+
+    def test_writes_leave_no_temporary_files(self):
+        for view in (gh_view(A, [A], FAIL), gh_view(B, [A, B], RUNNING), gh_view(B, [A, B], FAIL)):
+            self.tick(view)
+        self.assertEqual(sorted(p.name for p in self.state.parent.iterdir()), ["pr-42.json"])
+
+    def test_rewriting_the_deadline_does_not_restart_the_24_hour_bound(self):
+        self.write_config(deadline="2099-01-01T00:00:00Z")
+        self.tick(gh_view(A, [A], PASS))
+        self.write_config(deadline="2098-06-01T00:00:00Z")
+        _, out, _ = self.tick(None, now=self.now + dt.timedelta(hours=25))
+        self.assertEqual(out.splitlines(), [HEADER, "next=stop_watch reason=deadline"])
+
+    def test_state_directories_are_safe_names_on_every_platform(self):
+        for repo, parts in (
+            ("acme/widgets", ("acme", "widgets")),
+            ("con/aux.lib", ("_636f6e", "_6175782e6c6962")),
+            ("acme/widgets.", ("acme", "_776964676574732e")),
+            ("Acme/Widgets", ("acme", "widgets")),
+        ):
+            with self.subTest(repo=repo):
+                path = self.mod.state_path(self.config, {"repo": repo, "pr": 7})
+                self.assertEqual(path.relative_to(self.dir / "state").parts, (*parts, "pr-7.json"))
 
     def test_a_second_review_by_the_same_person_is_a_change(self):
         one = self.tick(gh_view(A, [A], PASS, reviews=1))[1]
@@ -581,6 +625,60 @@ class WatchTest(unittest.TestCase):
         shape = [element.value if isinstance(element, ast.Constant) else type(element).__name__
                  for element in lists[0].elts]
         self.assertEqual(shape, ["gh", "pr", "view", "Call", "--repo", "Name", "--json", GH_FIELDS])
+
+
+DRIVER = """
+import datetime as dt, importlib.util, io, json, sys
+from contextlib import redirect_stdout, redirect_stderr
+spec = importlib.util.spec_from_file_location("pr_watch_driver", sys.argv[1])
+mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+views = json.loads(open(sys.argv[3], encoding="utf-8").read())
+now = dt.datetime(2026, 11, 23, 12, 0, tzinfo=dt.timezone.utc)
+for i in range(int(sys.argv[4])):
+    out, err = io.StringIO(), io.StringIO()
+    with redirect_stdout(out), redirect_stderr(err):
+        code = mod.run(["--config", sys.argv[2]], now=now, reader=lambda repo, pr: views[i % len(views)])
+    print(json.dumps([code, out.getvalue()]))
+"""
+
+
+class WatchConcurrencyTest(unittest.TestCase):
+    """Several watches on one PR tick at once, as Hermes' parallel cron pool runs them."""
+
+    def test_the_shared_state_stays_valid_and_counts_never_go_down(self):
+        tmp = TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        views = root / "views.json"
+        views.write_text(json.dumps([gh_view(A, [A], FAIL), gh_view(B, [A, B], FAIL), gh_view(C, [A, C], FAIL),
+                                     gh_view(D, [A, D], RUNNING), gh_view(D, [A, D], FAIL)]), encoding="utf-8")
+        configs = []
+        for name in ("w-one", "w-two", "w-three"):
+            config = root / f"{name}.json"
+            config.write_text(json.dumps({"name": name, "repo": "acme/widgets", "pr": 42,
+                                          "deadline": "2099-01-01T00:00:00Z"}), encoding="utf-8")
+            configs.append(config)
+        procs = []
+        for config in configs:
+            proc = subprocess.Popen([sys.executable, "-I", "-c", DRIVER, str(WATCH), str(config), str(views), "60"],
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            self.addCleanup(proc.kill)  # a no-op once communicate() below has reaped it
+            procs.append(proc)
+        results = [proc.communicate(timeout=300) for proc in procs]
+        for (stdout, stderr), proc in zip(results, procs):
+            self.assertEqual(proc.returncode, 0, stderr[-2000:])
+            used = []
+            for line in stdout.splitlines():
+                code, out = json.loads(line)
+                self.assertEqual(code, 0, out)
+                self.assertNotIn("state_unreadable", out)
+                used += [int(part.split("=")[1]) for part in out.split()
+                         if part.startswith("fix_rounds_used=") and part.split("=")[1].isdigit()]
+            self.assertEqual(used, sorted(used))
+        state = json.loads((root / "state" / "acme" / "widgets" / "pr-42.json").read_text(encoding="utf-8"))
+        self.assertEqual((state["first_failed_head"], state["rounds_floor"]), (A, 3))
+        self.assertEqual(sorted(state["watches"]), ["w-one", "w-three", "w-two"])
+        self.assertEqual([p.name for p in (root / "state" / "acme" / "widgets").iterdir()], ["pr-42.json"])
 
 
 FAKE_GH = """#!{python}

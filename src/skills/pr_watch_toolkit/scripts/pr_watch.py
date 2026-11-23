@@ -37,13 +37,22 @@ head), and the number of commits the PR's commit list holds after that head.
 The commit list is read only when it ends at the current head and holds the
 first failed head; otherwise (history rewritten, a list cut at GitHub's first
 100 commits, a stale list) it is unreadable, and failed checks hand the fix to
-a person. A state file that exists but cannot be read is never overwritten and
-makes the count unreadable too.
+a person.
 
 The state is per pull request, not per watch: `<profile>/pr_watch/state/
 <owner>/<name>/pr-<n>.json`, kept when a watch is removed, so a new watch on
-the same PR keeps the count. Each watch also ends at most 24 hours after its
-first tick, whatever its `deadline` says.
+the same PR keeps the count. Every watch on that PR shares it under one lock
+file beside it: a tick reads, changes and writes it only while holding the lock
+(through a temporary file of its own and one atomic replace). A tick that
+cannot get the lock within 20 seconds repeats its watch's last block, reads
+nothing and writes nothing: no change and no alert. A state file that exists
+but cannot be read is never overwritten: the watch stops with
+`next=stop_watch reason=state_unreadable`, reads nothing from GitHub, and names
+the file on stderr, so a person checks it.
+
+Each watch ends at most 24 hours after its first tick, whatever its `deadline`
+says. The first tick is kept per watch name, so a later watch on the same PR
+takes a new name.
 
 Installed as `<profile>/scripts/pr_watch_<watch>.py`; the file name names the
 watch, whose config is `<profile>/pr_watch/<watch>.json`. `--config PATH`
@@ -70,6 +79,8 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
+import time
 from pathlib import Path
 
 EXIT_OK = 0
@@ -89,6 +100,11 @@ MAX_WATCHES_KEPT = 10
 GH_TIMEOUT_S = 30
 MAX_GH_OUTPUT = 8 * 1024 * 1024
 WAIT_LINE = "next=wait reason=unsettled"
+LOCK_WAIT_S = 20.0
+LOCK_STALE_S = 120.0
+# Names Windows refuses as a file or folder, whatever the extension.
+RESERVED_NAMES = frozenset({"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)),
+                            *(f"lpt{i}" for i in range(1, 10))})
 
 FAILED_CONCLUSIONS = frozenset({"FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE", "STALE"})
 PENDING_CONTEXT_STATES = frozenset({"PENDING", "EXPECTED"})
@@ -144,7 +160,7 @@ def load_config(path: Path) -> dict:
         raise ConfigError(f"fix_round_cap must be an integer from 0 to {MAX_FIX_ROUND_CAP}")
     deadline = raw.get("deadline")
     return {"name": name, "repo": repo, "pr": pr, "fix_round_cap": cap, "deadline": parse_deadline(deadline),
-            "watch_key": f"{name}@{deadline}"}
+            "watch_key": name}
 
 
 def resolve_config(arg: str | None) -> tuple[Path, str | None]:
@@ -161,10 +177,17 @@ def resolve_config(arg: str | None) -> tuple[Path, str | None]:
     return home / "pr_watch" / f"{name}.json", name
 
 
+def _safe_part(part: str) -> str:
+    """A path component every platform accepts: a trailing dot or a Windows device name is hex-encoded."""
+    if part.endswith(".") or part.split(".", 1)[0] in RESERVED_NAMES:
+        return "_" + part.encode("utf-8").hex()
+    return part
+
+
 def state_path(config_path: Path, cfg: dict) -> Path:
     """The PR's own state file, shared by every watch on that PR."""
     owner, name = cfg["repo"].lower().split("/", 1)
-    return config_path.parent / "state" / owner / name / f"pr-{cfg['pr']}.json"
+    return config_path.parent / "state" / _safe_part(owner) / _safe_part(name) / f"pr-{cfg['pr']}.json"
 
 
 # ---------------------------------------------------------------- forge read
@@ -223,20 +246,20 @@ def _valid_watch(entry: object) -> bool:
             and all(isinstance(line, str) and "\n" not in line for line in settled))
 
 
-def read_state(path: Path) -> tuple[dict, bool]:
-    """(state, readable). A missing file is an empty, readable state; anything else unparseable is not."""
+def read_state(path: Path) -> tuple[dict, str]:
+    """(state, status): `ok` (a missing file is an empty state), `unreadable`, or `io_error` (try again)."""
     try:
         raw = path.read_text(encoding="utf-8")
     except FileNotFoundError:
-        return {}, True
+        return {}, "ok"
     except OSError:
-        return {}, False
+        return {}, "io_error"
     try:
         data = json.loads(raw)
     except (ValueError, RecursionError):
-        return {}, False
+        return {}, "unreadable"
     if not isinstance(data, dict):
-        return {}, False
+        return {}, "unreadable"
     first = data.get("first_failed_head")
     heads = data.get("heads_after", [])
     watches = data.get("watches", {})
@@ -247,16 +270,49 @@ def read_state(path: Path) -> tuple[dict, bool]:
         and (data.get("empty_head") is None or (isinstance(data["empty_head"], str) and SHA_RE.match(data["empty_head"])))
         and isinstance(watches, dict) and all(_valid_watch(v) for v in watches.values())
     )
-    return (data, True) if valid else ({}, False)
+    return (data, "ok") if valid else ({}, "unreadable")
 
 
 def write_state(path: Path, data: dict) -> None:
+    """Write through a temporary file of this tick's own (mode 600), then one atomic replace."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        handle.write(json.dumps(data, sort_keys=True) + "\n")
-    os.replace(tmp, path)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(data, sort_keys=True) + "\n")
+        for attempt in range(3):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:  # Windows: a reader still has the file open
+                if attempt == 2:
+                    raise
+                time.sleep(0.05)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
+def take_lock(lock: Path) -> bool:
+    """The PR's lock, so two watches on one PR never interleave read, modify and write."""
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    deadline = time.monotonic() + LOCK_WAIT_S
+    while True:
+        try:
+            fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except FileExistsError:
+            try:
+                if time.time() - lock.stat().st_mtime > LOCK_STALE_S:
+                    lock.unlink()
+                    continue
+            except OSError:
+                pass
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(0.05)
+            continue
+        os.close(fd)
+        return True
 
 
 def watch_entry(state: dict, key: str, now: dt.datetime) -> dict:
@@ -408,30 +464,59 @@ def run(argv: list[str], now: dt.datetime | None = None, reader=read_pr) -> int:
     now = now or dt.datetime.now(dt.timezone.utc)
     header = f"pr-watch: {cfg['name']} {cfg['repo']}#{cfg['pr']}"
     path = state_path(config_path, cfg)
-    loaded, readable = read_state(path)
+    lock = path.with_name(path.name + ".lock")
+    try:
+        locked = take_lock(lock)
+    except OSError as exc:
+        print(f"pr-watch: error reason=state detail={exc.__class__.__name__} path={path}", file=sys.stderr)
+        return EXIT_STATE
+    try:
+        code, lines = tick(cfg, path, now, reader, locked)
+    finally:
+        if locked:
+            try:
+                lock.unlink()
+            except OSError:
+                pass
+    if lines:
+        print("\n".join([header, *lines]))
+    return code
+
+
+def tick(cfg: dict, path: Path, now: dt.datetime, reader, locked: bool) -> tuple[int, list[str]]:
+    """(exit code, lines after the header) for one tick. Only a tick holding the PR's lock reads gh or writes."""
+    loaded, status = read_state(path)  # a lockless read is whole: every write is one atomic replace
+    if status == "unreadable":
+        # Fails loudly and stops: the count cannot be trusted, so nothing is read and nothing is overwritten.
+        print(f"pr-watch: error reason=state_unreadable path={path}", file=sys.stderr)
+        return EXIT_OK, ["next=stop_watch reason=state_unreadable"]
     state = json.loads(json.dumps(loaded))
-    entry = watch_entry(state, cfg["watch_key"], now) if readable else {"started": int(now.timestamp()), "settled": []}
+    entry = watch_entry(state, cfg["watch_key"], now)
     deadline = min(cfg["deadline"], dt.datetime.fromtimestamp(entry["started"] + MAX_WATCH_SECONDS, dt.timezone.utc))
     if now >= deadline:
-        lines = [header, "next=stop_watch reason=deadline"]
+        lines = ["next=stop_watch reason=deadline"]
+    elif not locked or status == "io_error":
+        # Another watch on this PR holds the lock (or the file is briefly unopenable): this tick repeats this
+        # watch's last block, which is no change and no alert, and the next tick reads the PR.
+        print(f"pr-watch: note reason=state_busy path={path}", file=sys.stderr)
+        return EXIT_OK, entry["settled"] or [WAIT_LINE]
     else:
         try:
             data = reader(cfg["repo"], cfg["pr"])
         except GhError as exc:
             print(f"pr-watch: error reason={exc.detail} watch={cfg['name']}", file=sys.stderr)
-            return exc.code
-        block = observe(cfg, data, state, readable)
+            return exc.code, []
+        block = observe(cfg, data, state, True)
         if block is not None:
             entry["settled"] = block
-        lines = [header, *(entry["settled"] or [WAIT_LINE])]
-    if readable and state != loaded:
+        lines = entry["settled"] or [WAIT_LINE]
+    if locked and status == "ok" and state != loaded:
         try:
             write_state(path, state)
         except OSError as exc:
-            print(f"pr-watch: error reason=state detail={exc.__class__.__name__}", file=sys.stderr)
-            return EXIT_STATE
-    print("\n".join(lines))
-    return EXIT_OK
+            print(f"pr-watch: error reason=state detail={exc.__class__.__name__} path={path}", file=sys.stderr)
+            return EXIT_STATE, []
+    return EXIT_OK, lines
 
 
 def main() -> int:

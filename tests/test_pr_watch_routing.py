@@ -41,7 +41,42 @@ class PrWatchRoutingTests(unittest.TestCase):
         "PR 42 체크 끝날 때까지 지켜봐줘",
         "PR 올렸으니 CI 끝날 때까지 지켜봐줘",
         "이 PR 머지될 때까지 지켜보다가 알려줘",
+        "wait for the checks on PR 42 to finish",
+        "PR #12 머지될 때까지 기다려줘",
     )
+
+    # The PR is mentioned, but something else is watched, or the PR is what the
+    # wait produces rather than what it waits on.
+    SOMETHING_ELSE_WATCHED = (
+        "monitor PR review turnaround times until the end of the quarter and report",
+        "배포 끝날 때까지 지켜보다가 PR 올려줘",
+        "PR 머지 완료되면 배포 모니터링해줘",
+        "keep an eye on the staging deploy until it is green, the PR is already merged",
+        "monitor the release until it ships, then open a PR",
+        "watch the build on main until it passes and then merge my PR",
+        "wait for the deploy to finish before you merge the PR",
+        "keep an eye on CI until it's green, I'll open the PR later",
+        "watch the PR count until the sprint is done",
+        "monitor how long PRs wait until review",
+        "monitor PR throughput until Friday",
+        "watch the docs site until it rebuilds after my PR merges",
+        "wait until the migration finishes, then open the PR",
+        "watch the nightly job until it passes; the fix PR is merged",
+        "스테이징 배포 끝날 때까지 지켜보고 PR 머지해줘",
+        "릴리즈 끝날 때까지 기다렸다가 PR 올려줘",
+        "CI 끝날 때까지 기다렸다가 PR 만들어줘",
+        "PR 리뷰 통계 이번 분기 끝날 때까지 모니터링해줘",
+        "PR 올리고 나서 로그 끝날 때까지 지켜봐줘",
+        "테스트 끝날 때까지 기다렸다가 PR 리뷰 요청해줘",
+        "PR 올리기 전에 빌드 끝날 때까지 지켜봐줘",
+    )
+
+    def test_the_pr_must_be_what_is_watched(self) -> None:
+        for message in self.SOMETHING_ELSE_WATCHED:
+            with self.subTest(message=message):
+                self.assertFalse(_applies(message))
+                route = _route(message)
+                self.assertNotEqual((route["action"], route["selected_skill"]), ("dispatch", "github-event-ops"))
 
     def test_waits_on_one_pr_dispatch_github_event_ops(self) -> None:
         for message in self.WATCH_REQUESTS:

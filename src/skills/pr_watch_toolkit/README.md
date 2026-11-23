@@ -49,7 +49,7 @@ Config `<profile>/pr_watch/<watch>.json` (see `examples/pr-watch.json`):
 | `name` | the watch name; must equal `<watch>` in the script's file name |
 | `repo` | `owner/name` |
 | `pr` | the pull request number |
-| `deadline` | UTC time `YYYY-MM-DDTHH:MM:SSZ`; default recipe: two hours after the watch starts. The watch also ends 24 hours after its first tick, whatever this says. From then on the script reads nothing and prints `next=stop_watch reason=deadline` |
+| `deadline` | UTC time `YYYY-MM-DDTHH:MM:SSZ`; default recipe: two hours after the watch starts. The watch also ends 24 hours after its first tick, whatever this says; that first tick is kept per watch name, so rewriting the deadline does not restart it, and a later watch on the same PR takes a new name. From then on the script reads nothing and prints `next=stop_watch reason=deadline` |
 | `fix_round_cap` | optional, default 2, at most 2: fix rounds on a failed check before the fix is a person's |
 
 Then the job, every 5 minutes for 24 ticks (two hours, the same bound as the
@@ -87,6 +87,7 @@ next=fix_round round=2
 | `hand_to_person reason=changes_requested` | the review decision is changes requested, whatever the checks say |
 | `report reason=approved`, `reason=checks_pass`, `reason=checks_none` | nothing to fix |
 | `stop_watch reason=merged`, `closed`, `deadline` | the watch is over |
+| `stop_watch reason=state_unreadable` | the PR's state file exists but cannot be read; nothing is read from GitHub, the file is not overwritten, and stderr names it for a person to check |
 | `wait reason=unsettled` | nothing has settled yet in this watch |
 
 **Unsettled is not a change.** While a check is queued or running, while
@@ -115,9 +116,16 @@ head, and the highest count it ever printed. Rounds used is the largest of:
 The commit list is used only when it ends at the current head and holds the
 first failed head. Otherwise it is unreadable (history rewritten, a list cut
 at GitHub's first 100 commits, a stale list), and failed checks hand the fix to
-a person. A state file that exists but cannot be read is never overwritten and
-makes the count unreadable too. A new PR opened for the same fix starts a new
-count; opening one after the cap is reached is a person's decision.
+a person. A new PR opened for the same fix starts a new count; opening one
+after the cap is reached is a person's decision.
+
+Every watch on one PR shares that file under one lock file beside it: a tick
+reads, changes and writes it only while holding the lock, through a temporary
+file of its own and one atomic replace, so watches that tick together (Hermes
+runs due jobs in parallel) never corrupt it. A tick that cannot get the lock
+within 20 seconds repeats its watch's last block and reads and writes nothing:
+no change, no alert. A state file that exists but cannot be read stops the
+watch (`next=stop_watch reason=state_unreadable`) instead of guessing.
 
 ### Read-only toward the forge
 

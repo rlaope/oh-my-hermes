@@ -10100,6 +10100,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - On Hermes, a webhook run has nobody to answer an approval prompt, so Hermes denies a flagged command there by default (`approvals.unattended_mode`); a fix that needs one becomes a fix hand-off for a person's turn, never a rephrased command.
   - On Hermes, a `github_comment` reply reaches the PR only when the route's delivery names the repository and PR number (`deliver_extra` `repo` and `pr_number`, which the subscribe command does not set); report the comment as posted only after reading it back.
   - On Hermes, a PR watch whose `gh` read fails (gh missing or signed out) shows as a failed monitor tick, not a change, and Hermes delivers each failed tick as an alert: name `gh auth status` as the fix and keep the PR's state not_observed.
+  - On Hermes, a PR watch that prints `next=stop_watch reason=state_unreadable` has stopped because the PR's fix-round evidence cannot be read: name the state file it reports and hand the PR to a person's turn; never delete the file to get the watch going again, which resets the count.
   - On Hermes, a route whose guard config is invalid drops every event (exit 3 in Hermes' log), and so does a GitHub webhook whose content type is not `application/json` and whose payload the guard cannot read; a quiet route is not evidence that nothing arrived.
 - Required inputs:
   - the event type and action, repository, and PR or issue number

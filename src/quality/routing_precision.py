@@ -139,6 +139,14 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
     RoutingPrecisionCase("pr-watch-how-to-question-is-not-a-watch", "Asking how to watch a PR is a question, not a watch", "how do I watch a PR until checks finish?", "answer_clarification", "", "github-event-ops"),
     RoutingPrecisionCase("pr-watch-ci-concept-question-stays-direct", "A CI concept question is answered directly", "how do CI checks work?", "answer_directly", "direct_answer", "github-event-ops"),
     RoutingPrecisionCase("pr-watch-watch-out-is-a-warning", "Watch out for a PR is a warning, not a wait", "watch out for this PR, it breaks the build", "answer_clarification", "", "github-event-ops"),
+    # Verification round: the PR must be what is watched. A metric about PRs, a
+    # deploy watched before a PR is opened, and a deploy watched beside a merged
+    # PR fired the guard on co-occurrence alone. The metric one keeps
+    # github-event-ops as a clarify option through its own `pr review` trigger,
+    # as on main, so it pins the clarify verdict without forbidding it.
+    RoutingPrecisionCase("pr-watch-a-pr-metric-is-not-a-watch", "PR review turnaround as a metric is not a wait on one PR", "monitor PR review turnaround times until the end of the quarter and report", "answer_clarification", ""),
+    RoutingPrecisionCase("pr-watch-korean-pr-as-the-result-is-not-a-watch", "Watching a deploy and then opening a PR is not a PR watch", "배포 끝날 때까지 지켜보다가 PR 올려줘", "answer_clarification", "", "github-event-ops"),
+    RoutingPrecisionCase("pr-watch-a-staging-deploy-beside-a-merged-pr", "A staging deploy watched beside a merged PR is not a PR watch", "keep an eye on the staging deploy until it is green, the PR is already merged", "answer_directly", "direct_answer", "github-event-ops"),
     RoutingPrecisionCase("repro-audit-weather-conditions", "Weather conditions are not evaluation conditions", "Summarize the reported conditions from the weather report", "answer_clarification", "", "repro-audit"),
     RoutingPrecisionCase("repro-audit-soccer-evaluations", "Player evaluations are not benchmark records", "Compare evaluation results for our soccer players this season", "answer_clarification", ""),
     RoutingPrecisionCase("repro-audit-student-evaluations", "Student evaluations are not benchmark records", "Compare evaluation results for my students between midterm and final", "answer_clarification", ""),
@@ -11976,6 +11984,7 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     # code review, and watching CI on a branch with no PR is verification.
     RoutingInterventionCase("pr-watch-review-pr-stays-code-review", "Reviewing a PR is code review, not a PR watch", "review PR 42", "dispatch", "code-review", "prepare_review_or_followup_handoff", "review_check"),
     RoutingInterventionCase("pr-watch-ci-on-main-stays-verification", "Watching CI on main with no PR stays on the verification gate", "monitor CI on main until the build is green", "dispatch", "verification-gate", "prepare_verification_gate", "verification_gate"),
+    RoutingInterventionCase("pr-watch-deploy-after-a-merge-stays-deploy", "Monitoring a deploy after a PR merges stays on deploy-and-monitor", "PR 머지 완료되면 배포 모니터링해줘", "dispatch", "deploy-and-monitor", "prepare_deploy_monitor_plan", "deploy_monitor_plan"),
     RoutingInterventionCase(
         "open-issue-event-stays-event-ops",
         "An already-open issue event with failing CI stays in GitHub event ops",

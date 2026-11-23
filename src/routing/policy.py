@@ -5431,15 +5431,60 @@ _PR_WATCH_SETTLE_CUES = (
     "머지",
     "때까지",
 )
+# The PR must be the thing watched: an English verb takes it as its object
+# within a few words after it, and a Korean verb within a few words after it
+# when a PR-state word (checks, CI, merge, review) or the verb itself follows
+# it closely. "배포 끝날 때까지 지켜보다가 PR 올려줘" names the PR as the result of
+# the wait, not its object.
+_PR_WATCH_EN_VERB_WORDS = (
+    ("watch",),
+    ("watching",),
+    ("monitor",),
+    ("monitoring",),
+    ("babysit",),
+    ("keep", "an", "eye", "on"),
+    ("keep", "watching"),
+    ("keep", "monitoring"),
+    ("wait", "for"),
+    ("wait", "on"),
+    ("wait", "until"),
+)
+_PR_WATCH_KO_VERB_STEMS = ("지켜보", "지켜봐", "기다려", "기다렸", "감시", "모니터링", "주시")
+_PR_WATCH_KO_STATE_WORDS = ("체크", "ci", "머지", "리뷰", "빌드", "테스트", "검사")
+_PR_WATCH_EN_OBJECT_WINDOW = 4
+_PR_WATCH_KO_OBJECT_WINDOW = 6
+# Something else is watched (a deploy, a release, an environment), or the PR is
+# a number to measure, not a thing to wait on.
+_PR_WATCH_BLOCKER_TOKENS = frozenset(
+    {
+        "queue", "backlog", "video", "videos", "youtube",
+        "deploy", "deploys", "deployed", "deploying", "deployment", "deployments", "release", "releases",
+        "staging", "production", "prod", "rollout", "rollouts", "server", "servers", "logs",
+        "turnaround", "metric", "metrics", "times", "throughput", "statistics", "stats", "average", "count",
+        "latency", "velocity", "dashboard",
+    }
+)
 _PR_WATCH_BLOCKERS = (
     *_GREENFIELD_QUESTION_OPENERS,
-    "queue",
-    "backlog",
+    "watch out",
+    "how long",
+    "how many",
     "대기열",
-    "video",
     "영상",
-    "youtube",
     "유튜브",
+    "배포",
+    "릴리즈",
+    "릴리스",
+    "스테이징",
+    "운영 서버",
+    "서버",
+    "로그",
+    "지표",
+    "통계",
+    "평균",
+    "얼마나",
+    "몇 개",
+    "대시보드",
 )
 _ONE_OFF_TOKENS = _normalized_token_set(
     {
@@ -10802,7 +10847,7 @@ def channel_watch_guard_applies(normalized_query: str) -> bool:
 
 
 def pr_watch_guard_applies(normalized_query: str) -> bool:
-    """One pull request, a watch or wait verb, and a settle cue together; none alone."""
+    """One pull request as the object of a watch or wait verb, and a settle cue; none alone."""
     if not (
         any(phrase_is_spoken(normalized_query, noun) for noun in _PR_WATCH_SPOKEN_OBJECTS)
         or _contains_phrase(normalized_query, _PR_WATCH_OBJECTS)
@@ -10818,7 +10863,47 @@ def pr_watch_guard_applies(normalized_query: str) -> bool:
         or _PR_WATCH_SETTLE_TOKENS & routing_terms(normalized_query)
     ):
         return False
-    return not _contains_phrase(normalized_query, _PR_WATCH_BLOCKERS)
+    if _PR_WATCH_BLOCKER_TOKENS & routing_terms(normalized_query) or _contains_phrase(normalized_query, _PR_WATCH_BLOCKERS):
+        return False
+    return _pr_is_the_watched_object(_pr_watch_words(normalized_query))
+
+
+def _pr_watch_words(normalized_query: str) -> list[str]:
+    return [word.strip(".,!?;:()[]{}\"'`") for word in normalized_query.split()]
+
+
+def _is_pr_word(words: list[str], index: int) -> bool:
+    word = words[index]
+    if word in ("pr", "prs") or (word.startswith("pr") and word[2:] and not word[2:].isascii()):
+        return True  # `pr`, or `pr` with a Korean particle written onto it (`pr을`)
+    if word == "pull" and index + 1 < len(words) and words[index + 1].startswith("request"):
+        return True
+    return _contains_phrase(word, _PR_WATCH_OBJECTS)
+
+
+def _english_verb_ends(words: list[str]) -> list[int]:
+    ends = []
+    for start in range(len(words)):
+        for verb in _PR_WATCH_EN_VERB_WORDS:
+            if tuple(words[start:start + len(verb)]) == verb:
+                ends.append(start + len(verb) - 1)
+    return ends
+
+
+def _pr_is_the_watched_object(words: list[str]) -> bool:
+    pr_at = [index for index in range(len(words)) if _is_pr_word(words, index)]
+    for end in _english_verb_ends(words):
+        if any(end < index <= end + _PR_WATCH_EN_OBJECT_WINDOW for index in pr_at):
+            return True
+    korean_verbs = [index for index, word in enumerate(words) if _contains_phrase(word, _PR_WATCH_KO_VERB_STEMS)]
+    for verb in korean_verbs:
+        for index in pr_at:
+            if not index < verb <= index + _PR_WATCH_KO_OBJECT_WINDOW:
+                continue
+            close = words[index + 1:min(index + 3, verb + 1)]
+            if verb <= index + 2 or any(_contains_phrase(word, _PR_WATCH_KO_STATE_WORDS) for word in close):
+                return True
+    return False
 
 
 def credential_rotation_guard_applies(normalized_query: str) -> bool:

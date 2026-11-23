@@ -1018,7 +1018,9 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # Its review round: a person's skill at using Codex stays off it too (+1).
             # PR watch: a PR queue, a video (English and Korean), a how-to question, a CI concept question and a
             # watch-out warning stay off github-event-ops (+6).
-            expected=1551,
+            # Its verification round: a PR metric, a deploy watched before a PR is opened, and a staging deploy
+            # watched beside a merged PR stay off it (+3).
+            expected=1554,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
@@ -1636,7 +1638,8 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # Korean staff assessment keeps deep-interview (+3).
             # PR watch: five waits on one PR (three English, two Korean) reach github-event-ops, and a PR review
             # and CI on main keep code-review and verification-gate (+7).
-            expected=1359,
+            # Its verification round: a deploy monitored after a PR merges keeps deploy-and-monitor (+1).
+            expected=1360,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
