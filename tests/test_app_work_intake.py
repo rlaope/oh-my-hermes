@@ -13,6 +13,8 @@ import re
 import unittest
 from pathlib import Path
 
+from omh.routing import policy
+from omh.routing.localization import normalized_phrase, routing_tokens
 from omh.skill_pack import builtin_skill_reference_templates, builtin_skill_templates
 from omh.skills.catalog_feature_surfaces import _UNATTENDED_GATE
 
@@ -124,6 +126,101 @@ class ExtendedSkillTests(unittest.TestCase):
         portable_body = (ROOT / "agent-skills/omh-frontend/SKILL.md").read_text(encoding="utf-8")
         portable_details = (ROOT / "agent-skills/omh-frontend/references/details.md").read_text(encoding="utf-8")
         self.assertIsNone(re.search(r"hermes mcp install figma", portable_body + portable_details))
+
+
+
+# Each guard, by phrasing: True must fire it, False must not. The False rows are
+# the over-capture a review measured (a phrase inside a longer word, an app name
+# as a common noun, a read, a reply, a cadence, a secrets vault, a question).
+GUARD_TABLE = {
+    "app_work_intake_guard_applies": (
+        (True, "turn Linear issue ENG-42 into a PR and link the PR back"),
+        (True, "implement this Notion spec and open a PR"),
+        (True, "build what this Confluence page describes and open a PR"),
+        (True, "open a PR for Jira ticket PAY-118 and link it back on the ticket"),
+        (True, "Jira 티켓 PAY-118 PR로 만들어줘"),
+        (True, "turn this email into a task instead of replying"),
+        (True, "이 메일 답장하지 말고 작업으로 만들어줘"),
+        (True, "this Sentry alert fired, triage it and hand off a fix"),
+        (True, "the Datadog monitor alert for checkout errors fired, investigate and fix it"),
+        (True, "센트리 에러 알림 왔어 고쳐줘"),
+        (False, "create a private Notion page for the offsite"),
+        (False, "create a pricing page in Notion"),
+        (False, "move this Linear issue to project Apollo"),
+        (False, "help me prioritize these Linear issues to prepare for the sprint"),
+        (False, "make a presentation from this Notion page"),
+        (False, "open a project in Linear for Q3"),
+        (False, "implement linear interpolation for this issue"),
+        (False, "build a linear regression page in my notebook"),
+        (False, "I have a notion that this design is wrong, build the page differently"),
+        (False, "build a Notion page for our team wiki"),
+        (False, "deliver this Confluence page to the client"),
+        (False, "ship the Jira ticket to QA"),
+        (False, "테스트가 실패할지라도 PR 올려줘"),
+        (False, "버그가 있을지라도 PR 만들어줘"),
+        (False, "summarize this Notion page"),
+        (False, "create a PR description for the Linear issue"),
+        (False, "move this email into Workspace folder"),
+        (False, "forward the email into a thread on Slack"),
+        (False, "이 메일 작업으로 바빠서 못 본다고 답장해줘"),
+        (False, "fix the Sentry integration error in our Next.js build"),
+        (False, "debug Datadog agent errors on the staging host"),
+        (False, "the Sentry SDK crashes the app on startup, fix it"),
+        (False, "show me the latest Sentry alert"),
+        (False, "every morning go through my inbox and turn work requests into tasks"),
+        (False, "매일 아침 받은편지함 메일을 작업으로 만들어줘"),
+        (False, "every weekday at 9 turn new Linear issues assigned to me into PRs"),
+        (False, "tell me when a Linear issue is assigned and turn it into a PR"),
+    ),
+    "meeting_to_issues_guard_applies": (
+        (True, "turn the meeting transcript into Linear issues"),
+        (True, "turn yesterday's meeting notes into Jira tickets"),
+        (True, "make issues from the action items in today's standup notes"),
+        (True, "회의록 내용으로 리니어 이슈 만들어줘"),
+        (False, "which issues came up in the meeting notes"),
+        (False, "translate this transcript for the support ticket"),
+        (False, "회의록에서 이슈로 남은 것만 알려줘"),
+        (False, "list the action items and open issues from yesterday"),
+        (False, "summarize the meeting transcript"),
+        (False, "file a GitHub issue for the bug mentioned in the meeting notes"),
+        (False, "transcribe this voice memo and file the action items as Linear issues"),
+    ),
+    "vault_knowledge_guard_applies": (
+        (True, "use my Obsidian vault as memory and write my daily journal there"),
+        (True, "write today's daily journal in obsidian"),
+        (True, "recall from my vault what we decided about pricing"),
+        (True, "옵시디언 볼트에 매일 작업 일지 써줘"),
+        (False, "open my vault"),
+        (False, "HashiCorp Vault memory usage spiked overnight"),
+        (False, "store these DNS records in Vault"),
+        (False, "rotate the Vault audit records"),
+        (False, "Obsidian uses too much memory, why"),
+        (False, "M8 볼트 규격 기억나"),
+        (False, "every morning research AI news and save a summary to my Obsidian vault daily journal"),
+        (False, "every day collect papers on RAG and write them into my obsidian vault memory folder"),
+    ),
+}
+
+
+class GuardTableTests(unittest.TestCase):
+    def test_each_guard_fires_only_on_its_own_shape(self) -> None:
+        for name, rows in GUARD_TABLE.items():
+            guard = getattr(policy, name)
+            for expected, message in rows:
+                with self.subTest(guard=name, message=message):
+                    self.assertIs(guard(normalized_phrase(message)), expected)
+
+    def test_the_lanes_the_guards_stand_down_still_hold_their_own_sentences(self) -> None:
+        # When a guard fires, connector-operator's guard stands down; when it does not, that lane keeps the sentence.
+        for message, connector in (
+            ("turn Linear issue ENG-42 into a PR and link the PR back", False),
+            ("turn the meeting transcript into Linear issues", False),
+            ("create a private Notion page for the offsite", True),
+            ("move this Linear issue to project Apollo", True),
+        ):
+            query = normalized_phrase(message)
+            with self.subTest(message=message):
+                self.assertIs(policy._connector_operator_guard_applies(query, routing_tokens(query)), connector)
 
 
 if __name__ == "__main__":

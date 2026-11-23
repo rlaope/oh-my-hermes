@@ -67,7 +67,7 @@ Bad example:
 
 Use when an item in another app should become work: a Notion or Confluence spec or a Linear or Jira issue to a PR with the link written back, a mail message to a work thread or a Needs item instead of a reply, or a Sentry or Datadog alert to a triage and fix hand-off.
 
-    Strong routing signals: `app-work-intake`, `app work intake`, `spec to pr`, `spec to a pr`, `notion spec`, `confluence spec`, `linear issue to pr`, `linear issue into a pr`, `jira issue to pr`, `jira issue into a pr`, `jira ticket to pr`, `link the pr back`, `inbox to work`, `email to task`, `email into a task`, `mail into a task`, `email into work`, `alert to fix`, `sentry alert`, `sentry error`, `datadog alert`
+    Strong routing signals: `app-work-intake`, `app work intake`, `spec to pr`, `spec to a pr`, `notion spec`, `confluence spec`, `linear issue to pr`, `linear issue into a pr`, `jira issue to pr`, `jira issue into a pr`, `jira ticket to pr`, `link the pr back`, `inbox to work`, `email to task`, `email into a task`, `mail into a task`, `email into work`, `alert to fix`, `sentry alert to fix`, `datadog alert to fix`
 
 ## Catalog Metadata
 

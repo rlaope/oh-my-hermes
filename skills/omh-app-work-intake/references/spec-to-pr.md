@@ -44,13 +44,16 @@ Load `omh-plan` with the source as the brief and the quoted criteria as
 acceptance, then hand the accepted plan to `ulw-work`, which splits it into
 lanes and runs them through the chosen owner. A lane that fails stays failed in
 the report; no PR is opened from a red integration. Draft the PR body with
-`omh-commit-pr-authoring` and put the source's link in it.
+`omh-commit-pr-authoring` and put the source's link in it. The PR is opened with
+`gh` through Hermes' bundled `github` skill; when `gh` is missing or
+`gh auth status` shows it signed out, say so and stop, naming the branch in the
+report, and never reach GitHub another way.
 
 Opening the PR is an externally visible action. In a person's turn it follows
 their confirmation in step 2. In a run nobody answers (a scheduled job, a
-one-shot run, a webhook run), it is handed to a person's turn with the branch
-and the drafted body, as this skill's checklist states. Merge, force push, and
-a push to the default branch are never part of this recipe.
+one-shot run, a webhook run), it follows the unattended rule in this skill's
+checklist. Merge, force push, and a push to the default branch are never part
+of this recipe.
 
 After the PR is open, waiting on its checks is the PR watch, and fixing a red
 check is bounded by its fix-round cap: `skill_view(name='omh-github-event-ops', file_path='references/pr-watch.md')`, sections 1-4.

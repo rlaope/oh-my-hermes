@@ -1026,7 +1026,9 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # Cross-platform workflows: an email reply (English and Korean), a calendar question (English and
             # Korean), a reminder alert, a Sentry concept question, a bare vault, and a Figma export (English and
             # Korean) stay off app-work-intake, operating-rhythm, wiki, and frontend (+9).
-            expected=1571,
+            # Its review round: Linear as a common noun, 지라 inside 지라도, a Sentry alert read, a reply about work in
+            # Korean, a secrets vault, a bolt (볼트), and two questions about meeting notes stay off them (+8).
+            expected=1579,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
@@ -1652,7 +1654,9 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # fix; three Korean), three meeting records reach operating-rhythm and three vault uses reach wiki (one
             # Korean each), two Figma frames reach frontend, and eight sentences in another lane keep their owner
             # (+27).
-            expected=1394,
+            # Its review round: four one-action connector sentences, an inbox on a cadence, research collected into a
+            # vault on a cadence, a transcript to translate, and a Sentry SDK crash keep their owners (+8).
+            expected=1402,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

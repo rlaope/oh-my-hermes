@@ -45,9 +45,13 @@ asks for `omh-app-debugging`'s reproduce-before-fix order.
 - The own-PR guard (section 5) applies by issue: an alert on a Sentry issue or
   monitor that the bot's own open fix PR addresses starts no run; that PR's
   watch wakes the bot.
-- The burst cap (section 5) applies to the alert route as stated there. Its
-  filter script reads GitHub payloads only and drops anything else, so never
-  install it on a Sentry or Datadog route: there the cap is this text alone.
+- A Sentry or Datadog route has no enforced burst cap. Section 5's filter
+  script reads GitHub payloads only and drops anything else, so never
+  install it on a Sentry or Datadog route, and a run cannot count the other
+  runs a webhook started. What does bound it: the re-read rows above (a
+  resolved or ignored alert starts no run; an issue or monitor id a fix PR or
+  thread already covers is linked, not run again), and the app's own alert
+  frequency or renotify setting, which the person sets in Sentry or Datadog.
 - Opening the PR in a run nobody answers follows the unattended rule in this
   skill's checklist. Merge, force push, and a push to the default branch are
   never part of a fix run.

@@ -5529,29 +5529,33 @@ _PR_WATCH_BLOCKERS = (
 # An item in another app that should become work is app-work-intake: a spec page
 # or tracker issue turned into a PR, a mail message turned into a task instead
 # of a reply, or a Sentry or Datadog alert turned into a fix. Each shape needs
-# the app and the work it becomes together. Before this guard the tracker
-# phrasings dispatched connector-operator (a one-action card) or ultrawork (no
-# source read, no write-back), and the alert ones clarified toward
-# build-failure-triage. Reading, summarizing or one action in the app has no
-# work cue and stays with connector-operator.
+# the app item and the work it becomes together, said as whole words. Before
+# this guard the tracker phrasings dispatched connector-operator (a one-action
+# card) or ultrawork (no source read, no write-back), and the alert ones
+# clarified toward build-failure-triage. Reading, summarizing, creating or
+# moving one thing in the app has no work cue and stays with connector-operator,
+# and a cadence or a "tell me when" trigger is automation-blueprint's job, whose
+# run loads this skill.
 _APP_WORK_SPEC_APPS = frozenset({"notion", "confluence", "linear", "jira"})
+# A Korean app name counts only at the start of a word: `지라` also ends
+# `~ㄹ지라도` ("even if"), which is never the tracker.
 _APP_WORK_SPEC_APPS_KO = ("노션", "컨플루언스", "리니어", "지라")
-_APP_WORK_PR_PHRASES = (
-    "into a pr",
-    "into a pull request",
-    "into prs",
-    "to a pr",
-    "to pr",
-    "open a pr",
-    "open a pull request",
-    "raise a pr",
-    "create a pr",
-    "make a pr",
-    "ship a pr",
+_APP_WORK_SPEC_APPS_KO_NOT = ("지라도",)
+# The app name has to name its item: "Linear issue", "Notion spec", "Jira ticket
+# PAY-118". "linear interpolation" and "a notion that" name no item.
+_APP_WORK_SPEC_NOUNS = frozenset(
+    {"spec", "specs", "specification", "page", "pages", "doc", "docs", "issue", "issues", "ticket", "tickets", "story", "epic"}
 )
-_APP_WORK_PR_PHRASES_KO = ("pr로", "pr 로", "pr 올려", "pr 만들", "pr까지", "pr 열어")
-_APP_WORK_BUILD_VERBS = frozenset({"implement", "build", "ship", "deliver"})
-_APP_WORK_SPEC_NOUNS = frozenset({"spec", "specs", "specification", "page", "doc", "issue", "ticket", "story", "epic"})
+_APP_WORK_SPEC_NOUNS_KO = ("티켓", "이슈", "페이지", "스펙", "문서")
+_APP_WORK_ISSUE_KEY = re.compile(r"\b[a-z][a-z0-9]{1,9}-\d+\b")
+_APP_WORK_PR_VERBS = frozenset(
+    {"turn", "turning", "make", "convert", "implement", "implementing", "build", "building", "open", "raise", "create"}
+)
+_APP_WORK_PR_VERBS_KO = ("만들", "올려", "열어", "생성")
+# Building from the item with no PR named needs the item named as one that is
+# read: "implement this Notion spec", "build what this Confluence page describes".
+_APP_WORK_BUILD_VERBS = frozenset({"implement", "implementing", "build", "building"})
+_APP_WORK_READING_DETERMINERS = frozenset({"this", "the", "that"})
 _APP_WORK_MAIL_NOUNS = frozenset({"email", "emails", "e-mail", "mail", "mails", "inbox", "gmail"})
 _APP_WORK_MAIL_NOUNS_KO = ("메일", "이메일", "받은편지함")
 _APP_WORK_MAIL_CUES = (
@@ -5568,12 +5572,19 @@ _APP_WORK_MAIL_CUES = (
     "inbox to work",
 )
 _APP_WORK_MAIL_CUES_KO = ("작업으로", "태스크로", "할 일로", "스레드로", "답장 말고", "답장하지 말고")
+# A reply, a forward or a send asked for outright is a send, which this recipe never makes; it counts only when the
+# sentence declines the reply in so many words.
+_APP_WORK_MAIL_SEND_TERMS = frozenset({"reply", "respond", "forward", "send"})
+_APP_WORK_MAIL_SEND_KO = ("답장해", "회신해", "전달해", "보내")
+_APP_WORK_MAIL_DECLINES = ("instead of replying", "instead of a reply", "rather than replying", "답장하지 말고", "답장 말고")
 _APP_WORK_ALERT_APPS = frozenset({"sentry", "datadog"})
 _APP_WORK_ALERT_APPS_KO = ("센트리", "데이터독")
-_APP_WORK_ALERT_NOUNS = frozenset(
-    {"alert", "alerts", "issue", "issues", "error", "errors", "monitor", "monitors", "exception", "exceptions", "crash", "crashes"}
-)
-_APP_WORK_ALERT_NOUNS_KO = ("알림", "알럿", "에러", "오류", "이슈", "경보")
+# The alert has to be one: an alert or monitor that fired, not an SDK, an
+# integration or an agent that errors.
+_APP_WORK_ALERT_TERMS = frozenset({"alert", "alerts", "monitor", "monitors", "fired", "firing", "triggered"})
+_APP_WORK_ALERT_PHRASES = ("sentry issue",)
+_APP_WORK_ALERT_KO = ("알림", "알럿", "경보")
+_APP_WORK_ALERT_BLOCKERS = frozenset({"sdk", "integration", "agent", "install", "config", "configuration", "setup"})
 _APP_WORK_FIX_VERBS = frozenset({"fix", "triage", "debug", "investigate", "handoff"})
 _APP_WORK_FIX_PHRASES = ("hand off", "hand it off", "fix hand-off", "alert to fix")
 _APP_WORK_FIX_CUES_KO = ("고쳐", "수정해", "수정까지", "트리아지", "분류하고", "넘겨")
@@ -5585,16 +5596,38 @@ _APP_WORK_BLOCKERS = (
     "install",
     "configure",
     "connect my",
+    "pr description",
+    "pr title",
+    "pr body",
     "요약",
     "설치",
     "연결해",
+)
+# A trigger that waits for the item ("tell me when a Linear issue is assigned")
+# is a monitor job; automation-blueprint creates it and its run loads this skill.
+_APP_WORK_TRIGGER_CUES = (
+    "tell me when",
+    "let me know when",
+    "notify me",
+    "whenever",
+    "every time",
+    "each time",
+    "when a new",
+    "as soon as",
+    # `has_cadence` reads no Korean frequency word.
+    "매일",
+    "매주",
+    "매달",
+    "매시간",
+    "마다",
 )
 # A meeting's notes or transcript turned into tracker issues is operating-rhythm's
 # meeting-to-issues recipe, which loads Hermes' `meeting-action-items` and keeps
 # the created links in the action item history. Before this guard a sentence
 # naming Linear or Jira dispatched connector-operator's one-ticket card. It
-# needs the meeting record and the issues together; a transcript to summarize,
-# or one issue filed from a bug report, stays where it was.
+# needs the meeting record, a creation verb and the issues together; a
+# question about the notes, a transcript to translate, or one GitHub issue filed
+# from a report stays where it was.
 _MEETING_RECORD_PHRASES = (
     "meeting notes",
     "meeting transcript",
@@ -5609,18 +5642,61 @@ _MEETING_RECORD_PHRASES = (
     "회의 내용",
     "미팅 노트",
 )
-_MEETING_ISSUE_TERMS = frozenset({"issue", "issues", "ticket", "tickets"})
-_MEETING_ISSUE_PHRASES_KO = ("이슈로", "이슈 만들", "티켓으로", "티켓 만들")
-_MEETING_TO_ISSUES_BLOCKERS = (*_GREENFIELD_QUESTION_OPENERS, "summarize", "summary of", "요약")
+# Not `open`: "open issues" are issues that already exist.
+_MEETING_CREATE_VERBS = frozenset({"turn", "create", "file", "make", "convert", "raise"})
+_MEETING_ISSUE_TERMS = frozenset({"issues", "tickets"})
+_MEETING_ISSUE_PHRASES_KO = ("이슈로 만들", "이슈 만들", "이슈 등록", "이슈 생성", "티켓으로 만들", "티켓 만들", "티켓 등록")
+_MEETING_TO_ISSUES_BLOCKERS = (
+    *_GREENFIELD_QUESTION_OPENERS,
+    "summarize",
+    "summary of",
+    "translate",
+    # A recording to transcribe first is a media input; the issues come after it.
+    "transcribe",
+    "voice memo",
+    "recording",
+    "which",
+    "what",
+    "github",
+    "요약",
+    "번역",
+    "알려줘",
+)
 # An Obsidian vault named as where the bot recalls from, keeps its daily journal,
 # or copies approved memory records is wiki's vault-as-knowledge recipe. Before
 # this guard "daily" and "obsidian" read as a recurring research department.
-# It needs the vault and one of those uses together: "open my vault" or
-# "organize my obsidian vault" keeps its route.
-_VAULT_KNOWLEDGE_VAULTS = ("obsidian", "vault", "옵시디언", "볼트")
-_VAULT_KNOWLEDGE_USES = frozenset({"journal", "journals", "recall", "memory", "memories", "records"})
-_VAULT_KNOWLEDGE_USES_KO = ("일지", "저널", "기억", "메모리")
-_VAULT_KNOWLEDGE_BLOCKERS = (*_GREENFIELD_QUESTION_OPENERS, "research department", "리서치 부서")
+# It needs an Obsidian or notes vault and one of those uses, said as a phrase;
+# a secrets vault, an app's memory use, a bolt (볼트), and research collected on
+# a cadence into the vault keep their routes.
+_VAULT_KNOWLEDGE_VAULTS = ("obsidian", "my vault", "notes vault", "옵시디언")
+_VAULT_KNOWLEDGE_USES = (
+    "as memory",
+    "as my memory",
+    "recall from",
+    "journal in",
+    "journal to",
+    "daily journal",
+    "memory records",
+    "approved records",
+    "일지",
+    "저널",
+    "기억",
+)
+_VAULT_KNOWLEDGE_BLOCKERS = (
+    *_GREENFIELD_QUESTION_OPENERS,
+    "research department",
+    "리서치 부서",
+    "memory usage",
+    "too much memory",
+    "uses memory",
+    "메모리 사용량",
+    "hashicorp",
+    "secret",
+)
+_VAULT_KNOWLEDGE_RESEARCH_TERMS = frozenset(
+    {"research", "collect", "gather", "scan", "news", "papers", "paper", "articles", "digest"}
+)
+_VAULT_KNOWLEDGE_RESEARCH_KO = ("리서치", "수집", "조사", "뉴스", "논문")
 _ONE_OFF_TOKENS = _normalized_token_set(
     {
         "once",
@@ -11035,54 +11111,112 @@ def channel_watch_guard_applies(normalized_query: str) -> bool:
     return not _contains_phrase(normalized_query, _CHANNEL_WATCH_BLOCKERS)
 
 
+def _app_work_words(normalized_query: str) -> list[str]:
+    return [word.strip(".,!?;:()[]{}\"'`#") for word in normalized_query.split()]
+
+
+def _app_work_words_said(words: list[str], phrase: str) -> bool:
+    """The phrase as whole words: "into work" is not said in "into Workspace"."""
+    wanted = normalized_phrase(phrase).split()
+    return any(words[start:start + len(wanted)] == wanted for start in range(len(words) - len(wanted) + 1))
+
+
+def _app_work_trigger_or_cadence(normalized_query: str) -> bool:
+    return has_cadence(normalized_query, routing_tokens(normalized_query)) or _contains_phrase(
+        normalized_query, _APP_WORK_TRIGGER_CUES
+    )
+
+
 def vault_knowledge_guard_applies(normalized_query: str) -> bool:
-    """A vault and a recall, journal, or memory use of it, together."""
+    """An Obsidian or notes vault and a recall, journal, or memory-record use of it, said as a phrase."""
     if _contains_phrase(normalized_query, _VAULT_KNOWLEDGE_BLOCKERS):
         return False
     if not _contains_phrase(normalized_query, _VAULT_KNOWLEDGE_VAULTS):
         return False
-    return bool(_VAULT_KNOWLEDGE_USES & routing_terms(normalized_query)) or _contains_phrase(
-        normalized_query, _VAULT_KNOWLEDGE_USES_KO
+    if not _contains_phrase(normalized_query, _VAULT_KNOWLEDGE_USES):
+        return False
+    # Research collected on a cadence keeps the research department; the vault is only where it lands.
+    research = bool(_VAULT_KNOWLEDGE_RESEARCH_TERMS & routing_terms(normalized_query)) or _contains_phrase(
+        normalized_query, _VAULT_KNOWLEDGE_RESEARCH_KO
     )
+    return not (research and has_cadence(normalized_query, routing_tokens(normalized_query)))
 
 
 def meeting_to_issues_guard_applies(normalized_query: str) -> bool:
-    """A meeting's notes or transcript and the tracker issues it should become, together."""
+    """A meeting's notes or transcript, a creation verb, and the tracker issues it should become, together."""
     if _contains_phrase(normalized_query, _MEETING_TO_ISSUES_BLOCKERS):
         return False
     if not _contains_phrase(normalized_query, _MEETING_RECORD_PHRASES):
         return False
-    return bool(_MEETING_ISSUE_TERMS & routing_terms(normalized_query)) or _contains_phrase(
-        normalized_query, _MEETING_ISSUE_PHRASES_KO
-    )
+    terms = routing_terms(normalized_query)
+    if _MEETING_CREATE_VERBS & terms and _MEETING_ISSUE_TERMS & terms:
+        return True
+    return _contains_phrase(normalized_query, _MEETING_ISSUE_PHRASES_KO)
+
+
+def _app_work_spec_item(words: list[str], normalized_query: str) -> tuple[bool, bool]:
+    """(an app name naming its item, that item read as "this/the/that <app> <noun>")."""
+    item = read = False
+    has_key = bool(_APP_WORK_ISSUE_KEY.search(normalized_query))
+    for index, word in enumerate(words):
+        english = word in _APP_WORK_SPEC_APPS
+        korean = any(word.startswith(normalized_phrase(name)) for name in _APP_WORK_SPEC_APPS_KO) and not any(
+            word.startswith(normalized_phrase(name)) for name in _APP_WORK_SPEC_APPS_KO_NOT
+        )
+        if not (english or korean):
+            continue
+        following = words[index + 1] if index + 1 < len(words) else ""
+        noun = following in _APP_WORK_SPEC_NOUNS or any(
+            following.startswith(normalized_phrase(name)) for name in _APP_WORK_SPEC_NOUNS_KO
+        )
+        if noun or (has_key and english):
+            item = True
+            if index > 0 and words[index - 1] in _APP_WORK_READING_DETERMINERS:
+                read = True
+    return item, read
+
+
+def _app_work_pr_named(words: list[str]) -> bool:
+    return any(_is_pr_word(words, index) for index in range(len(words)))
 
 
 def app_work_intake_guard_applies(normalized_query: str) -> bool:
     """An app item and the work it should become: a spec to a PR, a mail to a task, an alert to a fix."""
     if _contains_phrase(normalized_query, _APP_WORK_BLOCKERS):
         return False
+    if _app_work_trigger_or_cadence(normalized_query):
+        return False
     terms = routing_terms(normalized_query)
-    spec_app = bool(_APP_WORK_SPEC_APPS & terms) or _contains_phrase(normalized_query, _APP_WORK_SPEC_APPS_KO)
-    if spec_app and (
-        _contains_phrase(normalized_query, _APP_WORK_PR_PHRASES)
-        or _contains_phrase(normalized_query, _APP_WORK_PR_PHRASES_KO)
-        or (_APP_WORK_BUILD_VERBS & terms and _APP_WORK_SPEC_NOUNS & terms)
-    ):
-        return True
+    words = _app_work_words(normalized_query)
+    item, read = _app_work_spec_item(words, normalized_query)
+    if item:
+        pr_verb = bool(_APP_WORK_PR_VERBS & terms) or _contains_phrase(normalized_query, _APP_WORK_PR_VERBS_KO)
+        if _app_work_pr_named(words) and pr_verb:
+            return True
+        if read and _APP_WORK_BUILD_VERBS & terms:
+            return True
     mail = bool(_APP_WORK_MAIL_NOUNS & terms) or _contains_phrase(normalized_query, _APP_WORK_MAIL_NOUNS_KO)
     if mail and (
-        _contains_phrase(normalized_query, _APP_WORK_MAIL_CUES)
+        any(_app_work_words_said(words, cue) for cue in _APP_WORK_MAIL_CUES)
         or _contains_phrase(normalized_query, _APP_WORK_MAIL_CUES_KO)
     ):
-        return True
+        send = bool(_APP_WORK_MAIL_SEND_TERMS & terms) or _contains_phrase(normalized_query, _APP_WORK_MAIL_SEND_KO)
+        if not send or _contains_phrase(normalized_query, _APP_WORK_MAIL_DECLINES):
+            return True
     alert_app = bool(_APP_WORK_ALERT_APPS & terms) or _contains_phrase(normalized_query, _APP_WORK_ALERT_APPS_KO)
-    alert = bool(_APP_WORK_ALERT_NOUNS & terms) or _contains_phrase(normalized_query, _APP_WORK_ALERT_NOUNS_KO)
+    if not alert_app or _APP_WORK_ALERT_BLOCKERS & terms:
+        return False
+    alert = (
+        bool(_APP_WORK_ALERT_TERMS & terms)
+        or _contains_phrase(normalized_query, _APP_WORK_ALERT_PHRASES)
+        or _contains_phrase(normalized_query, _APP_WORK_ALERT_KO)
+    )
     fix = (
         bool(_APP_WORK_FIX_VERBS & terms)
         or _contains_phrase(normalized_query, _APP_WORK_FIX_PHRASES)
         or _contains_phrase(normalized_query, _APP_WORK_FIX_CUES_KO)
     )
-    return alert_app and alert and fix
+    return alert and fix
 
 
 def pr_watch_guard_applies(normalized_query: str) -> bool:

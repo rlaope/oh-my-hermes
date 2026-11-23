@@ -176,6 +176,21 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
     RoutingPrecisionCase("vault-knowledge-open-my-vault-is-not-recall", "Opening a vault is not vault as knowledge", "open my vault", "answer_clarification", ""),
     RoutingPrecisionCase("design-to-code-figma-export-is-not-a-build", "Exporting a Figma frame as PNG is not design to code", "export this Figma frame as PNG", "answer_clarification", "", "frontend"),
     RoutingPrecisionCase("design-to-code-korean-figma-export", "A Korean Figma export is not design to code", "피그마 프레임 PNG로 내보내줘", "answer_clarification", "", "frontend"),
+    # Review round: the guards matched inside longer words ("create a pr" in
+    # "create a private", 지라 in 지라도), an app name used as a common noun,
+    # a one-off alert read, a reply, a secrets vault, and questions about meeting
+    # notes. The secrets vault and "M8 볼트 규격 기억나" keep wiki and the
+    # meeting-notes question keeps operating-rhythm as a clarify option through
+    # their own vault and meeting phrases, so those three pin only the verdict;
+    # the sentences that dispatch another lane are intervention cases below.
+    RoutingPrecisionCase("app-work-linear-as-a-common-noun", "Linear interpolation is not a Linear issue", "implement linear interpolation for this issue", "answer_clarification", "", "app-work-intake"),
+    RoutingPrecisionCase("app-work-korean-jira-inside-even-if", "\uc9c0\ub77c\ub3c4 is not Jira", "테스트가 실패할지라도 PR 올려줘", "answer_clarification", "", "app-work-intake"),
+    RoutingPrecisionCase("alert-to-fix-reading-an-alert-is-not-a-fix", "Showing the latest Sentry alert is a read", "show me the latest Sentry alert", "answer_clarification", "", "app-work-intake"),
+    RoutingPrecisionCase("inbox-to-work-korean-reply-about-work", "A Korean reply saying one is busy with work is a reply", "이 메일 작업으로 바빠서 못 본다고 답장해줘", "answer_clarification", "", "app-work-intake"),
+    RoutingPrecisionCase("vault-knowledge-secrets-vault", "DNS records stored in a secrets Vault are not vault knowledge", "store these DNS records in Vault", "answer_clarification", ""),
+    RoutingPrecisionCase("vault-knowledge-korean-bolt", "A bolt (\ubcfc\ud2b8) is not a vault", "M8 볼트 규격 기억나", "answer_clarification", ""),
+    RoutingPrecisionCase("meeting-to-issues-question-about-notes", "Asking which issues came up is a question, not issue creation", "which issues came up in the meeting notes", "answer_clarification", ""),
+    RoutingPrecisionCase("meeting-to-issues-korean-question-about-minutes", "A Korean question about issues left in the minutes is not issue creation", "회의록에서 이슈로 남은 것만 알려줘", "answer_clarification", "", "operating-rhythm"),
     RoutingPrecisionCase("repro-audit-weather-conditions", "Weather conditions are not evaluation conditions", "Summarize the reported conditions from the weather report", "answer_clarification", "", "repro-audit"),
     RoutingPrecisionCase("repro-audit-soccer-evaluations", "Player evaluations are not benchmark records", "Compare evaluation results for our soccer players this season", "answer_clarification", ""),
     RoutingPrecisionCase("repro-audit-student-evaluations", "Student evaluations are not benchmark records", "Compare evaluation results for my students between midterm and final", "answer_clarification", ""),
@@ -12062,6 +12077,16 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     RoutingInterventionCase("alert-to-fix-plain-bug-stays-coding", "A plain bug fix with no alert stays a coding handoff", "fix this bug", "dispatch", "ultrawork", "choose_executor", "handoff"),
     RoutingInterventionCase("spec-to-pr-github-issue-stays-event-ops", "A GitHub issue to a PR stays GitHub event ops", "turn this GitHub issue into a PR", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
     RoutingInterventionCase("meeting-to-issues-summarize-transcript-stays-media", "Summarizing a meeting transcript stays a media input", "summarize the meeting transcript", "dispatch", "media-input-operator", "prepare_media_input_card", "media_input"),
+    # Review round: one action in the app, a cadence, research collected into a
+    # vault, a transcript to translate, and an SDK crash keep their owners.
+    RoutingInterventionCase("app-work-create-private-page-stays-connector", "Creating a private Notion page stays a connector action", "create a private Notion page for the offsite", "dispatch", "connector-operator", "prepare_connector_operator_card", "connector_operator"),
+    RoutingInterventionCase("app-work-move-issue-to-project-stays-connector", "Moving a Linear issue to a project stays a connector action", "move this Linear issue to project Apollo", "dispatch", "connector-operator", "prepare_connector_operator_card", "connector_operator"),
+    RoutingInterventionCase("app-work-presentation-from-page-stays-connector", "A presentation from a Notion page stays a connector action", "make a presentation from this Notion page", "dispatch", "connector-operator", "prepare_connector_operator_card", "connector_operator"),
+    RoutingInterventionCase("app-work-prioritize-issues-stays-connector", "Prioritizing Linear issues stays a connector action", "help me prioritize these Linear issues to prepare for the sprint", "dispatch", "connector-operator", "prepare_connector_operator_card", "connector_operator"),
+    RoutingInterventionCase("inbox-to-work-on-a-cadence-stays-blueprint", "Inbox work turned into tasks every morning is a scheduled job", "every morning go through my inbox and turn work requests into tasks", "dispatch", "automation-blueprint", "prepare_scheduled_ops_blueprint", "automation_blueprint"),
+    RoutingInterventionCase("vault-knowledge-research-on-a-cadence-stays-department", "Research collected into a vault every morning stays a research department", "every morning research AI news and save a summary to my Obsidian vault daily journal", "dispatch", "research-department", "prepare_research_department_plan", "research_department"),
+    RoutingInterventionCase("meeting-to-issues-translate-transcript-stays-media", "Translating a transcript stays a media input", "translate this transcript for the support ticket", "dispatch", "media-input-operator", "prepare_media_input_card", "media_input"),
+    RoutingInterventionCase("alert-to-fix-sdk-crash-stays-feedback", "A Sentry SDK crash report stays feedback triage", "the Sentry SDK crashes the app on startup, fix it", "dispatch", "feedback-triage", "triage_feedback", "feedback_triage"),
     RoutingInterventionCase(
         "open-issue-event-stays-event-ops",
         "An already-open issue event with failing CI stays in GitHub event ops",

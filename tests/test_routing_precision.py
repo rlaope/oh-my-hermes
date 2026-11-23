@@ -115,7 +115,9 @@ class RoutingPrecisionTests(unittest.TestCase):
         # Its hold round adds five: four declined watches and CI on main.
         # Cross-platform workflows add nine: replies, calendar questions, a reminder alert, a Sentry question,
         # a bare vault and Figma exports.
-        self.assertEqual(payload["summary"]["case_count"], 1571)
+        # Its review round adds eight: words matched inside longer words, a common noun, an alert read, a reply,
+        # a secrets vault, a bolt, and two questions about meeting notes.
+        self.assertEqual(payload["summary"]["case_count"], 1579)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -299,7 +301,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # Its hold round adds two: a declined review, then a PR watch, in English and Korean.
         # Cross-platform workflows add twenty-seven: nineteen app items, meeting records, vault uses and Figma
         # frames that dispatch, and eight sentences in another lane that keep their owner.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1394)
+        # Its review round adds eight more sentences in another lane that keep their owner.
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1402)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )
