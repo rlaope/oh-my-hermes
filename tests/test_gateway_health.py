@@ -62,6 +62,7 @@ from omh.maintenance.hermes_gateway_formats import (
     STATUS_MISSING,
     STATUS_READ,
     STATUS_UNRECOGNIZED,
+    AMBIGUOUS_PROFILE,
     AdapterEvent,
     adapter_events,
     bounded_reason,
@@ -238,6 +239,27 @@ class AdapterHistory(unittest.TestCase):
         self.assertEqual(states[("one", "discord")].state, STATE_RETRYING)  # never given a reason it may not own
         self.assertEqual(states[("two", "discord")].state, STATE_CONNECTED)
         self.assertNotIn(("", "discord"), states)
+        unowned = states[(AMBIGUOUS_PROFILE, "discord")]  # kept for the platform: `one` has not connected since
+        self.assertEqual((unowned.candidates, unowned.reason), (("one", "two"), "boom"))
+        lines.append("2026-10-14 08:01:00,000 INFO gateway.run: ✓ discord reconnected (profile: one)")
+        self.assertNotIn((AMBIGUOUS_PROFILE, "discord"), latest(adapter_events(lines)))  # both are back: dropped
+
+    def test_an_unattributable_refusal_is_said_for_the_platform_with_its_fix(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Fleet().home(tmp)
+            (root / "logs").mkdir()
+            (root / "logs" / "gateway.log").write_text("\n".join([
+                "2026-10-14 08:00:00,000 INFO gateway.run: Secondary discord reconnect retry in 30s (profile: harbor)",
+                "2026-10-14 08:00:01,000 INFO gateway.run: Secondary discord reconnect retry in 30s (profile: quay)",
+                "2026-10-14 08:00:05,000 ERROR hermes_plugins.platforms__discord.adapter: [Discord] Failed to connect "
+                "to Discord: Shard ID None is requesting privileged intents that have not been explicitly enabled",
+            ]) + "\n", encoding="utf-8")
+            report = Fleet().run_health(root, {".hermes": Gateway("running", True, 4100, code_sha=COMMIT,
+                                                                    served=("default", "harbor", "quay"))})
+            text = "\n".join(report.lines)
+            self.assertIn("discord: one of the profiles harbor, quay failed to connect at", text)
+            self.assertIn("Privileged Gateway Intents", text)
+            self.assertIn(FINDING_ADAPTER_DOWN, report.findings)
 
     def test_a_reason_with_no_open_reconnect_belongs_to_the_x_line_that_follows(self) -> None:
         lines = [

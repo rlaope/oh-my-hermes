@@ -64,6 +64,7 @@ STATE_DISCONNECTED = "disconnected"  # the adapter was stopped (`✓ … disconn
 # Adapters that carry no messaging platform: Hermes' in-process `local` adapter connects and disconnects with every
 # local session, and is no bot.
 NON_MESSAGING_PLATFORMS = frozenset({"local"})
+AMBIGUOUS_PROFILE = "?"  # a reason line while several profiles' reconnects for its platform were open
 
 REASON_PRIVILEGED_INTENTS = "discord_privileged_intents"
 REASON_TOKEN_REJECTED = "discord_token_rejected"
@@ -107,6 +108,7 @@ class AdapterEvent:
     epoch: float | None
     reason: str = ""  # Hermes' words, bounded and redacted; "" when the log gives none
     code: str = ""  # a fatal error's code
+    candidates: tuple[str, ...] = ()  # for an AMBIGUOUS_PROFILE reason: the profiles whose reconnects were open
 
 
 @dataclass(frozen=True)
@@ -262,8 +264,9 @@ def adapter_events(lines: list[str]) -> list[AdapterEvent]:
     whose reconnect for that platform is open (a `Fatal … multiplexed profile`
     or `Secondary … reconnect retry` line not yet followed by that profile's
     own connected, failed or stopped line); with none open, to the log's own
-    profile (""); with more than one open, to none, since the log cannot say
-    whose it is.
+    profile (""); with more than one open, to `AMBIGUOUS_PROFILE` with those
+    profiles as `candidates`, since the log cannot say whose it is. Such an
+    event is dropped once every candidate has connected again after it.
 
     A `✗ … failed to connect (profile: Q)` within `REASON_WINDOW_SECONDS` after
     the reason takes it only when the reason went to Q or to no one; an
@@ -279,10 +282,11 @@ def adapter_events(lines: list[str]) -> list[AdapterEvent]:
             reason, at = bounded_reason(match["reason"]), _log_epoch(match["stamp"])
             open_now = reconnecting.get(platform, [])
             owner = open_now[0] if len(open_now) == 1 else "" if not open_now else None
-            index = None
-            if owner is not None:
-                index = len(events)
-                events.append(AdapterEvent(owner, platform, STATE_FAILED, match["stamp"], at, reason))
+            index = len(events)
+            events.append(AdapterEvent(
+                AMBIGUOUS_PROFILE if owner is None else owner, platform, STATE_FAILED, match["stamp"], at, reason,
+                candidates=tuple(open_now) if owner is None else (),
+            ))
             pending[platform] = (reason, at, index, owner)
             continue
         event = parse_adapter_line(line)
@@ -303,7 +307,17 @@ def adapter_events(lines: list[str]) -> list[AdapterEvent]:
                 if index is not None and owner != event.profile:
                     events[index] = None
         events.append(event)
-    return [event for event in events if event is not None]
+    kept = [event for event in events if event is not None]
+    return [event for position, event in enumerate(kept) if not _reconnected_since(event, kept[position + 1:])]
+
+
+def _reconnected_since(event: AdapterEvent, later: list[AdapterEvent]) -> bool:
+    """Whether every candidate of an ambiguous reason connected again after it (never true for any other event)."""
+    if event.profile != AMBIGUOUS_PROFILE:
+        return False
+    back = {other.profile for other in later
+            if other.platform == event.platform and other.state in {STATE_CONNECTED, STATE_DEGRADED}}
+    return all(candidate in back for candidate in event.candidates)
 
 
 def parse_adapter_line(line: str) -> AdapterEvent | None:

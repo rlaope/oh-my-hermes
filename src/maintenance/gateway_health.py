@@ -54,6 +54,7 @@ from .hermes_gateway_formats import (
     STATUS_READ,
     STATUS_UNREADABLE,
     STATUS_UNRECOGNIZED,
+    AMBIGUOUS_PROFILE,
     AdapterEvent,
     BuildStamp,
     FleetRestartState,
@@ -272,12 +273,18 @@ def _adapter_states(
     said as such and never as the state now."""
     logs: list[LogRead] = []
     latest: dict[tuple[str, str], tuple[AdapterEvent, str]] = {}
+    ambiguous: list[AdapterState] = []
     for label, home in homes:
         log = read_gateway_log(home / GATEWAY_LOG_RELATIVE, tail_bytes=tail_bytes)
         logs.append(log)
         newest_here: dict[tuple[str, str], AdapterEvent] = {}
+        unowned: dict[str, AdapterEvent] = {}
         for event in log.events:  # within one log, the line written last wins, whatever its stamp says
+            if event.profile == AMBIGUOUS_PROFILE:
+                unowned[event.platform] = event
+                continue
             newest_here[(event.profile or label, event.platform)] = event
+        ambiguous.extend(_ambiguous_state(event, log.path, serving) for event in unowned.values())
         for key, event in newest_here.items():  # across logs, the stamps decide
             held = latest.get(key)
             if held is None or (event.epoch or 0.0) >= (held[0].epoch or 0.0):
@@ -306,7 +313,21 @@ def _adapter_states(
             continue
         current = event if this_run else None
         states.append(_adapter_state(profile, platform, current, log_path, record, restart, started))
-    return logs, states
+    return logs, states + [state for state in ambiguous if state.reason_kind]
+
+
+def _ambiguous_state(event: AdapterEvent, log_path: str, serving: dict[str, _Serving]) -> AdapterState:
+    """A reason the log cannot give one profile: said for the platform, naming the candidates; judged only when it
+    falls in the run of a gateway serving them (else it says nothing about now and is left out)."""
+    info = next((serving[name] for name in event.candidates if name in serving), None)
+    this_run = info is not None and (info.started is None or event.epoch is None or event.epoch >= info.started - 1)
+    kind = classify_reason(event) if this_run else ""
+    restart = _restart_command(info.gateway_profile if info is not None else DEFAULT_PROFILE)
+    fix = _adapter_fix(kind, event, log_path, restart, "") if kind else ""
+    return AdapterState(
+        "/".join(event.candidates), event.platform, event.state, _utc(event), log_path, event.reason, event.code,
+        kind, fix, SOURCE_LOG, logged_as_written=event.logged, last_state=AMBIGUOUS_PROFILE,
+    )
 
 
 def _adapter_state(
@@ -562,6 +583,10 @@ def _adapter_down(state: AdapterState) -> bool:
 def _adapter_line(state: AdapterState) -> str:
     where = f"{state.profile} {state.platform}"
     latest = f"latest line {state.logged}" if state.logged else "no log line in this run"
+    if state.last_state == AMBIGUOUS_PROFILE:
+        return (f"{state.platform}: one of the profiles {state.profile.replace('/', ', ')} failed to connect at "
+                f"{state.logged}, and the log does not say which (their reconnects were open together); each "
+                f"profile's own record entry, when present, is the state now. {state.fix}")
     if state.state == STATE_UNSERVED:
         return (f"{where}: no running gateway serves {state.profile}; its last line, `{state.last_state}` at "
                 f"{state.logged}, says nothing about now.")
