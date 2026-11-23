@@ -414,7 +414,7 @@ export type TermStatus = "busy" | "news" | "bell" | "ok" | "err" | null;
 export function termStatus(rec: Pick<SessionRec, "status" | "exitCode" | "lastOut">, unseen: Unseen | undefined, now: number): TermStatus {
   if (rec.status === "failed") return "err";
   if (rec.status === "exited") return rec.exitCode === 0 ? "ok" : typeof rec.exitCode === "number" ? "err" : null;
-  if (unseen === "bell") return "news";
+  if (isNews(unseen)) return "news";
   if ((rec.status === "running" || rec.status === "starting") && rec.lastOut && now - rec.lastOut < BUSY_MS) return "busy";
   return null;
 }
@@ -514,8 +514,13 @@ export interface ChatLive {
 }
 
 /** What a session did while the person was not looking at it, kept on its row until they open it: its terminal rang
- *  its bell, or it finished (a turn, or the program itself). */
-export type Unseen = "bell" | "end";
+ *  its bell (`bell`, which notifies), its program reported its work done (`quiet`, OSC 9;4 done: news on the row but no
+ *  notification, and gone when the program reports working again), or it finished (a turn, or the program itself). A
+ *  bell after a quiet done is a new ring: it notifies. */
+export type Unseen = "bell" | "quiet" | "end";
+
+/** An unseen ring or quiet done: the row, the card and the chip show it as news. */
+export const isNews = (u: Unseen | undefined): boolean => u === "bell" || u === "quiet";
 
 /** The state a row shows in the time's place, as a sign and a word: it waits for the person (a wait omher knows: an
  *  approval or question, a bot's request to type), it stopped on an error, it rang unseen (news: finished or waiting,
@@ -577,7 +582,7 @@ export function rowModel(
   const broke =
     s.status === "failed" || failedTurn || (s.status === "exited" && !s.paused && (!!s.error || (typeof s.exitCode === "number" && s.exitCode !== 0)));
   // only a wait omher knows is "needs"; a ring is news, since it may as well mean the program finished
-  const mark: RowMark | null = needsYou || (alive && asked) ? "needs" : broke ? "error" : alive && unseen === "bell" ? "news" : unseen === "end" ? "done" : null;
+  const mark: RowMark | null = needsYou || (alive && asked) ? "needs" : broke ? "error" : alive && isNews(unseen) ? "news" : unseen === "end" ? "done" : null;
   // While running the ring (chat) or the live dot (terminal) says it, and while it waits on the person "waiting" and
   // the amber dot say it, so the line is just the agent.
   // The state's sign and word (waiting, error, done) stand in the time's place on line 1, so line 2 is as before.

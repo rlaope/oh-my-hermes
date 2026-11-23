@@ -6,7 +6,7 @@ import { memo, type MouseEvent } from "react";
 import logo from "../../assets/omher-mark.png";
 import { t, type Key } from "../../i18n";
 import { getStore } from "../../state/store";
-import { termFallbackName, termMarkAgent, type SessionRec, type Unseen } from "../../sessions/agents";
+import { isNews, termFallbackName, termMarkAgent, type SessionRec, type Unseen } from "../../sessions/agents";
 import { flowing, useTermFace } from "../../sessions/termActivity";
 import { useSessions } from "../../sessions/sessions";
 import { TermRowMark } from "../../sessions/TermRowMark";
@@ -23,6 +23,9 @@ export function termLinkState(rec: Pick<SessionRec, "status" | "exitCode" | "pau
   if (rec.paused) return "ended";
   if (rec.status === "exited") return rec.exitCode === 0 ? "done" : "ended";
   if (rec.status === "failed" || rec.status === "draft") return "ended";
+  // working while its program reports progress, even over a ring nobody saw (that ring is behind it); a bell just
+  // after output still reads waiting, as an agent rings when it stops for the person
+  if (act.progress) return "working";
   if (unseen === "bell") return "waiting";
   return flowing(act, now) ? "working" : "waiting";
 }
@@ -30,7 +33,7 @@ export function termLinkState(rec: Pick<SessionRec, "status" | "exitCode" | "pau
 /** What the chip's dot says: as the status file, but a running session that rang unseen is news, not waiting. Pure. */
 export function termChipState(rec: Pick<SessionRec, "status" | "exitCode" | "paused">, act: { lastOut?: number; progress?: boolean }, unseen: Unseen | undefined, now: number): TermLinkState {
   const st = termLinkState(rec, act, unseen, now);
-  return st === "waiting" && unseen === "bell" ? "news" : st;
+  return st === "waiting" && isNews(unseen) ? "news" : st;
 }
 
 const STATE_KEY: Record<TermLinkState, Key> = { working: "tlink.st.working", news: "tlink.st.news", waiting: "tlink.st.waiting", done: "tlink.st.done", ended: "tlink.st.ended" };

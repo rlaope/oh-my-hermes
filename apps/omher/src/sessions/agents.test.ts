@@ -17,6 +17,7 @@ import {
   termActivity,
   terminalNote,
   termStatus,
+  isNews,
   tildePath,
   type Recent,
   type SessionRec,
@@ -279,6 +280,12 @@ describe("a ring is news, a known wait is the warning", () => {
     expect(termStatus({ status: "running", lastOut: 4_900 }, "bell", 5_000)).toBe("news");
     expect(termStatus({ status: "exited", exitCode: 0 }, "bell", 5_000)).toBe("ok");
     expect(termStatus({ status: "running" }, "end", 5_000)).toBeNull();
+    // a progress done nobody saw is the same news on the row
+    expect(termStatus({ status: "running" }, "quiet", 5_000)).toBe("news");
+    expect(isNews("quiet")).toBe(true);
+    expect(isNews("bell")).toBe(true);
+    expect(isNews("end")).toBe(false);
+    expect(isNews(undefined)).toBe(false);
   });
   it("rowModel marks an unseen ring news and only a pending request or an open ask needs", () => {
     expect(rowModel(term, undefined, undefined, "bell")).toMatchObject({ mark: "news", needsYou: false });

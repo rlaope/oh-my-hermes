@@ -1776,17 +1776,23 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       };
       wire(first.term);
       // the folder its shell reports (OSC 7): the row's folder line. Progress (OSC 9;4): working while reported; done
-      // after working, unseen, marks the row as the bell does (no notification: a report is not a ring). Both come
+      // after working, unseen, marks the row as news (`quiet`: no notification, a report is not a ring, and a bell
+      // after it still notifies), and working again clears that. Both come
       // on the element, which a parked terminal made again keeps, and go with it.
       onCwd(el, (path) => {
         if (rec(id)) termActs.patch(id, { cwd: path });
       });
       onProgress(el, (st) => {
         if (!rec(id) || tt.closed) return;
-        if (st === "busy") return termActs.patch(id, { progress: true, busySince: nextBusySince(termActs.get(id), Date.now()) });
+        if (st === "busy") {
+          // working again: the done it reported before is behind it (a bell the person has not seen stays)
+          if (state.unseen[id] === "quiet") seen(id);
+          return termActs.patch(id, { progress: true, busySince: nextBusySince(termActs.get(id), Date.now()) });
+        }
         if (!termActs.get(id).progress) return;
         termActs.patch(id, { progress: undefined });
-        flag(id, "bell");
+        // news on the row, no notification; never over a bell nobody has seen, which must keep notifying once
+        if (state.unseen[id] !== "bell") flag(id, "quiet");
       });
     }
     const tt = t;

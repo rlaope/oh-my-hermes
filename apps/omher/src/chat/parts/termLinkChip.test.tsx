@@ -30,6 +30,14 @@ describe("the terminal link chip's state", () => {
     expect(termChipState({ status: "running" }, { lastOut: now - 500 }, undefined, now)).toBe("working");
     expect(termChipState({ status: "exited", exitCode: 0 }, {}, "bell", now)).toBe("done");
   });
+  it("a quiet done (progress reported done, unseen) is news too, and reported working again beats any stale news", () => {
+    expect(termChipState({ status: "running" }, { lastOut: now - 60_000 }, "quiet", now)).toBe("news");
+    expect(termLinkState({ status: "running" }, { lastOut: now - 60_000 }, "quiet", now)).toBe("waiting");
+    // the review's stale case: a ring nobody saw, then the program reports working again
+    expect(termChipState({ status: "running" }, { lastOut: now - 60_000, progress: true }, "bell", now)).toBe("working");
+    expect(termLinkState({ status: "running" }, { lastOut: now - 60_000, progress: true }, "bell", now)).toBe("working");
+    expect(termChipState({ status: "running" }, { lastOut: now - 60_000, progress: true }, "quiet", now)).toBe("working");
+  });
 });
 
 describe("terminal links in messages", () => {
