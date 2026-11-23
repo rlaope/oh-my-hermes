@@ -29,22 +29,6 @@ All notable changes will be documented here.
   open thread at the same time as it listed the bot's threads again. The new bridge knew no thread yet and refused
   it, so the thread showed a false "not reachable" line and a turn Hermes lost there stayed unseen. Threads are now
   listed first and the open ones read after that, on reconnect and when a bot comes back. (Follow-up to #3127)
-- **`omh doctor` says why a Hermes bot went quiet: gateways older than the build, stray gateways, and adapters that
-  failed to connect.** A Discord bot whose profile gained a role allowlist kept working until its next reconnect, when
-  Discord refused the Server Members privileged intent that Hermes then requests, and the bot stayed offline. On the
-  same machine several gateway processes were running, some started before the installed Hermes build, and nothing
-  in OMH said so. Doctor now prints a **Hermes gateways (read-only)** section, also carried as the `gateway_health`
-  row's `detail` in `--json` (`omh_gateway_health/v1`). It lists each running gateway with the profiles it serves and
-  its start time, and flags one started before the installed build stamp unless its own record stamps the installed
-  commit. It reports Hermes' own pending-fleet-restart record and its last update receipt's restart outcome, any
-  `hermes gateway run` process no record names, and a profile two gateways serve, by PID. For each profile and
-  platform it gives the state now: the serving gateway's own record entry first, else the newest gateway log line
-  of this gateway run (a served profile's reconnect that ends in the adapter's own failure line counts); a line
-  from an earlier run is said as such, never as connected. A privileged-intents refusal names the intents and the Developer Portal page that enables them;
-  a rejected token is named, and any other reason is shown, bounded, as unrecognized. Missing evidence is said as
-  missing, never as healthy. The fix is always Hermes' own command; OMH stops and restarts nothing.
-  (`src/maintenance/gateway_health.py`, `src/maintenance/hermes_gateway_formats.py`,
-  `src/system/process_listing.py`; `docs/INSTALLATION.md` "Bot Profiles")
 - **omher: a bot's chat that stopped answering after a crash says why and gets going again.** When Hermes' gateway
   stops in the middle of a turn (a crash, a kill, Windows ending the process), Hermes brings that turn back as lost
   and keeps every later message of the chat in its own queue until someone acknowledges it, because the lost turn may
@@ -115,6 +99,22 @@ All notable changes will be documented here.
   `_section_node_is_sequence`, `_block_header`, `_skills_document_parts`)
   `enabled:` or `provider:` key written above it, which Hermes could not load. Reported by @chhxbchhxb in #3075.
   (`src/install/config_adapter.py` `_root_is_plain_block_mapping`, `_section_node_is_sequence`)
+- **`omh doctor` says why a Hermes bot went quiet: gateways older than the build, stray gateways, and adapters that
+  failed to connect.** A Discord bot whose profile gained a role allowlist kept working until its next reconnect, when
+  Discord refused the Server Members privileged intent that Hermes then requests, and the bot stayed offline. On the
+  same machine several gateway processes were running, some started before the installed Hermes build, and nothing
+  in OMH said so. Doctor now prints a **Hermes gateways (read-only)** section, also carried as the `gateway_health`
+  row's `detail` in `--json` (`omh_gateway_health/v1`). It lists each running gateway with the profiles it serves and
+  its start time, and flags one started before the installed build stamp unless its own record stamps the installed
+  commit. It reports Hermes' own pending-fleet-restart record and its last update receipt's restart outcome, any
+  `hermes gateway run` process no record names, and a profile two gateways serve, by PID. For each profile and
+  platform it gives the state now: the serving gateway's own record entry first, else the newest gateway log line
+  of this gateway run (a served profile's reconnect that ends in the adapter's own failure line counts); a line
+  from an earlier run is said as such, never as connected. A privileged-intents refusal names the intents and the Developer Portal page that enables them;
+  a rejected token is named, and any other reason is shown, bounded, as unrecognized. Missing evidence is said as
+  missing, never as healthy. The fix is always Hermes' own command; OMH stops and restarts nothing.
+  (`src/maintenance/gateway_health.py`, `src/maintenance/hermes_gateway_formats.py`,
+  `src/system/process_listing.py`; `docs/INSTALLATION.md` "Bot Profiles")
 - **omher 1.1.3.** GitHub across your repositories and accounts, a Claude usage meter that shows numbers, and terminals
   and bridges that recover by themselves.
   - **GitHub:** Tasks gains a "나" scope: your review requests, your pull requests, issues assigned to you and mentions,
