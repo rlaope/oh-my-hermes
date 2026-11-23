@@ -1,0 +1,297 @@
+/* The TERMINALS split card (SplitCard.tsx). Theme tokens only; the attention colour is the row's bell colour, with a
+   darker one on light. Motion: keyframes on SVG strokes (pathLength 100 for the orbit) and on opacity, nothing else. */
+.split-card {
+  --sc-attn: #e8a33c;
+  --sc-orbit: var(--accent);
+  margin: 2px 0 2px;
+  padding: 4px 4px 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  transition: opacity 0.12s;
+}
+[data-theme="light"] .split-card {
+  --sc-attn: #c47a00;
+}
+/* a split the open session is not in */
+.split-card[data-away="true"] {
+  opacity: 0.75;
+}
+.split-card[data-away="true"]:hover,
+.split-card[data-away="true"]:focus-within {
+  opacity: 1;
+}
+.sc-map {
+  position: relative;
+  width: 100%;
+}
+.sc-cell {
+  position: absolute;
+  border-radius: 6px;
+  background: var(--side);
+  overflow: hidden;
+}
+/* the tint under a focused or waiting cell, on its own layer so the wait can blink it */
+.sc-cell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--accent);
+  opacity: 0;
+  pointer-events: none;
+}
+.sc-cell[data-focused="true"]::before {
+  opacity: 0.12;
+}
+.sc-cell[data-state="wait"]::before {
+  background: var(--sc-attn);
+  opacity: 0.12;
+  animation: sc-blink-tint 1.1s ease-in-out infinite;
+}
+.sc-cell[data-state="wait"][data-focused="true"]::before {
+  animation: none;
+  opacity: 0.14;
+}
+.sc-svg {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.sc-svg rect {
+  fill: none;
+}
+.sc-edge {
+  stroke: var(--line-strong);
+  stroke-width: 1.2;
+}
+.sc-cell[data-focused="true"] .sc-edge {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+.sc-cell[data-state="err"] .sc-edge {
+  stroke: var(--danger);
+  stroke-width: 1.5;
+}
+/* work: a segment orbits the edge clockwise from the top-left, one lap per 2 s; three strokes, heads aligned */
+.sc-orbit {
+  stroke: var(--sc-orbit);
+  stroke-linecap: round;
+  animation: 2s linear infinite;
+}
+.sc-cell[data-focused="true"] .sc-orbit {
+  stroke: color-mix(in srgb, var(--accent) 60%, var(--ink));
+}
+.sc-o20 {
+  stroke-dashoffset: 20;
+  animation-name: sc-orbit-20;
+}
+.sc-o12 {
+  stroke-dashoffset: 12;
+  animation-name: sc-orbit-12;
+}
+.sc-o5 {
+  stroke-dashoffset: 5;
+  animation-name: sc-orbit-5;
+}
+@keyframes sc-orbit-20 {
+  from {
+    stroke-dashoffset: 20;
+  }
+  to {
+    stroke-dashoffset: -80;
+  }
+}
+@keyframes sc-orbit-12 {
+  from {
+    stroke-dashoffset: 12;
+  }
+  to {
+    stroke-dashoffset: -88;
+  }
+}
+@keyframes sc-orbit-5 {
+  from {
+    stroke-dashoffset: 5;
+  }
+  to {
+    stroke-dashoffset: -95;
+  }
+}
+/* bg: a dashed edge flowing clockwise, one dash cell a second */
+.sc-dash {
+  stroke: var(--accent);
+  stroke-width: 1.2;
+  opacity: 0.85;
+  stroke-dasharray: 3.6 2.4;
+  animation: sc-dash 1s linear infinite;
+}
+@keyframes sc-dash {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -6;
+  }
+}
+/* wait: an attention edge blinking; held on the focused cell (the person is looking at it) */
+.sc-wait {
+  stroke: var(--sc-attn);
+  stroke-width: 1.5;
+  animation: sc-blink 1.1s ease-in-out infinite;
+}
+.sc-cell[data-focused="true"] .sc-wait {
+  animation: none;
+  opacity: 1;
+}
+@keyframes sc-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+@keyframes sc-blink-tint {
+  0%,
+  100% {
+    opacity: 0.14;
+  }
+  50% {
+    opacity: 0.04;
+  }
+}
+/* the cell's button: the whole cell, its text laid out for the cell's size (data-text) */
+.sc-open {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  min-width: 0;
+}
+.sc-open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.sc-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  width: 100%;
+}
+.sc-t {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.sc-t .trm {
+  flex: none;
+}
+.sc-n,
+.sc-l {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sc-l {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--muted);
+}
+.sc-open.beside .sc-l {
+  padding-inline-start: 18px;
+}
+.sc-open.stack .sc-body {
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+}
+.sc-open.stack .sc-t {
+  flex-direction: column;
+  gap: 5px;
+  max-width: 100%;
+}
+.sc-open.stack .sc-l {
+  max-width: 100%;
+}
+.sc-editing .ss-name-in {
+  min-width: 0;
+  width: 100%;
+  font-size: 11px;
+}
+/* the time a cell has been working, top right */
+.sc-el {
+  position: absolute;
+  top: 3px;
+  inset-inline-end: 6px;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--muted);
+  pointer-events: none;
+}
+.sc-el[data-old="true"] {
+  color: var(--quiet);
+  opacity: 0.7;
+}
+/* the height grip under the card (kasaterm's room-card grip): a 10px band, a 28x3 handle */
+.sc-grip {
+  height: 10px;
+  display: grid;
+  place-items: center;
+  cursor: row-resize;
+  touch-action: none;
+  border-radius: 0 0 9px 9px;
+}
+.sc-grip i {
+  width: 28px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+.sc-grip:hover i,
+.sc-grip.on i,
+.sc-grip:focus-visible i {
+  background: var(--accent);
+}
+.sc-grip:focus-visible {
+  outline: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .split-card,
+  .sc-orbit,
+  .sc-dash,
+  .sc-wait,
+  .sc-cell::before {
+    animation: none !important;
+    transition: none;
+  }
+  /* work: the whole edge, thin and still */
+  .sc-orbit {
+    stroke-dasharray: none;
+    stroke-width: 1px;
+    opacity: 0.6;
+  }
+  .sc-o12,
+  .sc-o5 {
+    display: none;
+  }
+  .sc-wait {
+    opacity: 1;
+  }
+}
