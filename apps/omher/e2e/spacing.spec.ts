@@ -291,10 +291,10 @@ test("BOTS | TERMINALS divider: a drag moves the line, keeps 120px each, persist
   expect(await page.evaluate(() => localStorage.getItem("omher.side.split"))).toBeNull();
 });
 
-test("footer: Automations, Plugins and Settings in one row of icon buttons, named for a screen reader and in a tooltip, reachable by Tab; the whole footer at most 90px", async ({ page }) => {
+test("footer: Automations, Plugins, Apps and Settings in one row of icon buttons, named for a screen reader and in a tooltip, reachable by Tab; the whole footer at most 90px", async ({ page }) => {
   await open(page);
   const row = page.getByTestId("foot-row");
-  for (const [id, name] of [["nav-automations", "Automations"], ["nav-plugins", "Plugins"], ["nav-settings", "Settings"]] as const) {
+  for (const [id, name] of [["nav-automations", "Automations"], ["nav-plugins", "Plugins"], ["nav-apps", "Apps"], ["nav-settings", "Settings"]] as const) {
     await expect(row.getByTestId(id)).toBeVisible();
     await expect(row.getByRole("button", { name: new RegExp(`^${name}`) })).toHaveCount(1);
     await expect(row.getByTestId(id)).toHaveAttribute("title", new RegExp(`^${name}`));
@@ -302,8 +302,8 @@ test("footer: Automations, Plugins and Settings in one row of icon buttons, name
   // the Automations count stays on its icon
   await expect(row.getByTestId("nav-automations").locator(".nav-count")).toHaveText("6");
   await expect(row.getByTestId("nav-automations")).toHaveAttribute("title", "Automations · 6");
-  // one row: the three share a line, and the usage marks sit on it too
-  const ys = await page.evaluate(() => ["nav-automations", "nav-plugins", "nav-settings"].map((id) => Math.round(document.querySelector(`[data-testid="${id}"]`)!.getBoundingClientRect().top)));
+  // one row: the four share a line, and the usage marks sit on it too
+  const ys = await page.evaluate(() => ["nav-automations", "nav-plugins", "nav-apps", "nav-settings"].map((id) => Math.round(document.querySelector(`[data-testid="${id}"]`)!.getBoundingClientRect().top)));
   expect(new Set(ys).size).toBe(1);
   await expect(row.getByTestId("usage")).toBeVisible();
   const foot = (await page.locator(".side-foot").boundingBox())!;
@@ -316,6 +316,10 @@ test("footer: Automations, Plugins and Settings in one row of icon buttons, name
   await expect(page.getByTestId("nav-plugins")).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("nav-plugins")).toHaveAttribute("aria-current", "page");
+  await page.keyboard.press("Tab");
+  await expect(page.getByTestId("nav-apps")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("nav-apps")).toHaveAttribute("aria-current", "page");
   await page.keyboard.press("Tab");
   await expect(page.getByTestId("nav-settings")).toBeFocused();
   await page.keyboard.press("Enter");

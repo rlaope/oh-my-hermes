@@ -6,7 +6,10 @@
 // read-only too. A chat agent's composer takes files as the bot chat's does (paste, the + menu, a drop on the chat),
 // in a draft too; a file dropped or pasted on a terminal is saved and its path typed at the prompt. A TERMINALS session
 // can split with up to three others on any side (SplitView: ⌘D / ⌘⇧D in its terminal, or a TERMINALS row dragged onto it).
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+// Its header drags (splitDrag.ts): onto its own terminal it merges with the next session of its folder, in a split it
+// moves the focused pane as its grip does; the header's x closes the focused pane, or the session on its own as its
+// row's x does.
+import { useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { getStore, selectAsks, useStore, type OutFile } from "../state/store";
 import { useResolvedTheme } from "../app/theme";
 import { Timeline } from "../chat/parts/Timeline";
@@ -15,7 +18,7 @@ import { Composer } from "../chat/parts/Composer";
 import { CheckIcon } from "../chat/model/CheckIcon";
 import { Seg } from "../chat/model/Seg";
 import "../chat/model/model.css";
-import { ArrowUp, ChatIcon, ChevronDown, ModelIcon, Popover, SearchIcon, TerminalIcon } from "../ui";
+import { ArrowUp, ChatIcon, ChevronDown, CloseIcon, ModelIcon, Popover, SearchIcon, TerminalIcon } from "../ui";
 import { composing } from "../lib/ime";
 import { levelLabel, levelOptions, modeHint, modeLabel, modesOf, queueOff, usageText } from "./controls";
 import type { SessionQueue } from "../chat/parts/Timeline";
@@ -31,7 +34,7 @@ import { windowWatched } from "../lib/notify";
 import { getSessions, useSessions, type ModelOption } from "./sessions";
 import { FindBar } from "./term/find-bar";
 import { FIND_EVENT, type FindRequest } from "./term/engine-find";
-import { sessionAccountSuffix } from "./SessionsSection";
+import { askCloseRow, sessionAccountSuffix } from "./SessionsSection";
 import { PanelToggle } from "../chat/parts/PanelButton";
 import { workingSubagents } from "./SessionPlans";
 import { waitingSubs } from "../chat/activity/Subagents";
@@ -40,8 +43,9 @@ import { useAccounts } from "../settings/accounts/useAccounts";
 import { t } from "../i18n";
 import { wireFileDrop, isWindows } from "../terminal/terms";
 import { isMac } from "../app/shortcuts";
-import { SplitView, useSplit, useSplitKeys } from "./SplitView";
-import { groupOf } from "./splitState";
+import { closeLone, leaveSplit, SplitView, splitWith, useSplit, useSplitKeys } from "./SplitView";
+import { getSplit, groupOf } from "./splitState";
+import { mergePartner, mergeTargetAt, pressToSplit } from "./splitDrag";
 import { isCopyLinkKey, LINK_COPIED_EVENT } from "./termLink";
 import { TermShareCards } from "./TermShareCard";
 
@@ -630,7 +634,7 @@ function PausedHistory({ rec }: { rec: SessionRec }) {
 function TerminalIdle({ rec }: { rec: SessionRec }) {
   const label = agentDef(rec.agent).label;
   return (
-    <div className="pane ss-chat ss-idle" data-testid="session-idle">
+    <div className="pane ss-chat ss-idle" data-testid="session-idle" data-session={rec.id}>
       {rec.paused ? <PausedHistory rec={rec} /> : <div className="chat-empty">{tr("ss.agentEnded", { agent: label })}</div>}
       {rec.paused ? <Paused rec={rec} /> : <Ended rec={rec} />}
       {/* a bot's request waits here too: Deny, or Resume and send (termShare.ts) */}
@@ -930,9 +934,36 @@ export function SessionView() {
           : STATUS[rec.status]
             ? tr(STATUS[rec.status])
             : rec.status;
+  // A TERMINALS session's header (Otty's) drags: in a split it moves the focused pane as its grip does (not while
+  // the split is zoomed: no other pane shows to drop on); on its own it merges with the next session of its folder
+  // (mergePartner), onto its own terminal. A grab cursor only when a drag can do something. Its x closes the focused
+  // pane (the session stays in TERMINALS), or the session on its own as ⌘W does (closeLone); when that close cannot
+  // be undone and the program runs, the row's own "Stop?" asks instead (askCloseRow), so the x always closes or asks.
+  const termHead = mode === "terminal" && !showChat;
+  const group = termHead ? groupOf(sp.groups, rec.id) : null;
+  const inSplit = !!group;
+  const partner = termHead && !inSplit ? mergePartner(ss.list, ss.agents, sp.groups, rec.id) : null;
+  const drags = group ? (group.zoom ? undefined : "move") : partner ? "merge" : undefined;
+  const grab = (e: PointerEvent<HTMLElement>) => {
+    if (!drags || (e.target as Element).closest("button, a, input, [role=menu]")) return;
+    const p = partner ? ss.list.find((r) => r.id === partner) : undefined;
+    const pname = p ? pickTitle(p, termFallbackName(p, ss.agents)).title : "";
+    // a merge lands only while the partner the preview named is still the one (nothing changed under the drag)
+    const still = () => !partner || mergePartner(getSessions().getState().list, getSessions().getState().agents, getSplit().groups, rec.id) === partner;
+    pressToSplit(e, rec.id, (d) => void (still() && splitWith(d.at, rec.id, d.side)), undefined, {
+      keepFocus: true,
+      // the preview goes at once when the partner it names is no longer the one (closed or moved under the drag)
+      aim: partner ? (x, y) => (still() ? mergeTargetAt(x, y, rec.id, partner, pname) : null) : undefined,
+    });
+  };
+  const closeHead = () => {
+    if (inSplit) leaveSplit(rec.id);
+    else if (!closeLone(rec.id)) askCloseRow(rec.id);
+  };
+  const closeTip = inSplit ? tr("split.closePane", { name }) : tr("ss.closeNamed", { name });
   return (
     <>
-      <header className="head" data-testid="header">
+      <header className={`head${drags ? " ss-head-drag" : ""}`} data-testid="header" data-drag={drags} onPointerDown={termHead ? grab : undefined}>
         <span className="ss-head-mark">
           {mode === "terminal" ? <TermRowMark agent={termMarkAgent(rec)} size={18} /> : <AgentMark agent={rec.agent} size={18} />}
         </span>
@@ -1000,6 +1031,20 @@ export function SessionView() {
             )}
             {showChat && <SessionModel rec={rec} options={ss.models[rec.id]} note={ss.notes[rec.id]} />}
             {showChat && <PanelToggle working={workingSubagents(c)} />}
+          </div>
+        )}
+        {termHead && (
+          <div className="head-right ss-head-right">
+            <button
+              type="button"
+              className="ss-toggle"
+              aria-label={closeTip}
+              title={closeTip}
+              onClick={closeHead}
+              data-testid="session-head-close"
+            >
+              <CloseIcon />
+            </button>
           </div>
         )}
       </header>
