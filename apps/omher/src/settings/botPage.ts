@@ -22,10 +22,12 @@ export function fileProblem(f: Pick<BotSoul, "state" | "size" | "file">): string
   }
 }
 
-/** A memory target's use of its limit: the share (0-100, rounded) and whether it is over (Hermes refuses adds then). */
+/** A memory target's use of its limit: the share (0-100, rounded) and whether it is over (Hermes refuses adds then).
+ *  A limit of 0 or below is what Hermes enforces too: nothing fits, so any entry is over it. */
 export function memoryUse(m: Pick<MemoryTarget, "chars" | "limit">): { pct: number; over: boolean } {
-  if (m.limit <= 0) return { pct: 0, over: false };
-  return { pct: Math.min(100, Math.round((m.chars / m.limit) * 100)), over: m.chars > m.limit };
+  const over = m.chars > m.limit;
+  if (m.limit <= 0) return { pct: m.chars > 0 ? 100 : 0, over };
+  return { pct: Math.min(100, Math.round((m.chars / m.limit) * 100)), over };
 }
 
 /** This bot's automations, by name. */

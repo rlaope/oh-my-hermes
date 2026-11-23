@@ -849,8 +849,10 @@ def read_bot_facts(profile_dir: Path) -> dict:
 # switched by `memory.<switch key>` in config.yaml (Hermes' `tools/memory_tool_store.py` and `tools/memory_tool.py`,
 # whose defaults are 2200 and 1375 characters, on unless the switch says otherwise). The names and the size cap are
 # the ones OMH's own reader uses (`src/tui/bot_board.py`: MEMORY_DIR, MEMORY_TARGETS, MEMORY_ENTRY_DELIMITER,
-# MEMORY_FILE_BYTES); the bridge does not import omh, so they are repeated here. These files hold the person's own
-# words: they are read only for `bots.page`, sent only in its answer, never logged and never written.
+# MEMORY_FILE_BYTES); the bridge does not import omh, so they are repeated here. Unlike that reader it also turns a
+# lone CR into LF, as Hermes' own text-mode read does (entry counts are the same: entries are stripped). These files
+# hold the person's own words: they are read only for `bots.page`, sent only in its answer, never logged and never
+# written.
 SOUL_FILE = "SOUL.md"
 MEMORY_DIR = "memories"
 MEMORY_TARGETS = (
@@ -895,8 +897,8 @@ def read_page_file(profile_dir: Path, *parts: str) -> dict:
     """One file of the profile for the bot page: `{state, size, text, lossy}`. `state` is `ok`, `missing`,
     `too_big` (sized, not read), `unreadable` (not a regular file, or the read failed) or `link` (the path or a
     folder on it is a link: never followed, wherever it leads). Only the fixed path is read. The text is
-    decoded as Hermes reads it (UTF-8, a leading BOM dropped, line ends as LF); bytes that are not UTF-8 become
-    U+FFFD and `lossy` says so."""
+    decoded as Hermes reads it (UTF-8, a leading BOM dropped, line ends as LF), except that bytes that are not UTF-8
+    become U+FFFD and `lossy` says so, where Hermes reads no entries from the file."""
     out = {"state": "missing", "size": None, "text": "", "lossy": False}
     here = profile_dir
     for part in parts:
@@ -945,13 +947,15 @@ def read_page_file(profile_dir: Path, *parts: str) -> dict:
 
 
 def _memory_limit(value, default: int) -> int:
-    if isinstance(value, bool):
+    """Hermes' `int(memory.get(key, default))`: a configured value is the limit it enforces, 0 or below included (and
+    `true` is 1, as Python's int makes it); the default only when the key is unset, empty or not a number (where
+    Hermes itself would fail to build the store)."""
+    if value is None:
         return default
     try:
-        n = int(value)
+        return int(value)
     except (TypeError, ValueError):
         return default
-    return n if n > 0 else default
 
 
 def _memory_on(value) -> bool:

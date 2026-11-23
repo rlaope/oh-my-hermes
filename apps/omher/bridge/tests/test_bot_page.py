@@ -68,6 +68,15 @@ class Reader(unittest.TestCase):
         self.assertFalse(_target(page, "user")["enabled"])
         self.assertEqual(_target(page, "memory")["limit"], 2200)
 
+    def test_a_limit_of_zero_or_below_is_the_limit_hermes_enforces(self):
+        # Hermes takes int(memory.get(key, default)): 0 or a negative number is the limit, not the default
+        d = _profile(self.root, "memory:\n  memory_char_limit: 0\n  user_char_limit: -5\n")
+        page = ob.read_bot_page(d)
+        self.assertEqual((_target(page, "memory")["limit"], _target(page, "user")["limit"]), (0, -5))
+        (d / "config.yaml").write_text("memory:\n  memory_char_limit: '0'\n  user_char_limit:\n", encoding="utf-8")
+        page = ob.read_bot_page(d)
+        self.assertEqual((_target(page, "memory")["limit"], _target(page, "user")["limit"]), (0, 1375))
+
     def test_a_disabled_target_is_still_shown_as_it_is_on_disk(self):
         d = _profile(self.root, "memory:\n  user_profile_enabled: no\n")
         (d / "memories" / "USER.md").write_text("prefers Korean", encoding="utf-8")
@@ -157,6 +166,14 @@ class Reader(unittest.TestCase):
         (d / "memories").rmdir()
         os.symlink(d / "inner", d / "memories")
         self.assertEqual(_target(ob.read_bot_page(d), "memory")["state"], "link")
+        # under the default profile, a link into another bot's folder is just as much a link
+        other = self.root / "profiles" / "other"
+        (other / "memories").mkdir(parents=True)
+        (other / "memories" / "USER.md").write_text("the other bot's notes about its person", encoding="utf-8")
+        (self.root / "memories").mkdir()
+        os.symlink(other / "memories" / "USER.md", self.root / "memories" / "USER.md")
+        u = _target(ob.read_bot_page(self.root), "user")
+        self.assertEqual((u["state"], u["entries"]), ("link", []))
         # a dangling link reads the same
         (d / "SOUL.md").unlink()
         os.symlink(d / "nowhere.md", d / "SOUL.md")

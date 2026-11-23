@@ -155,9 +155,12 @@ function Memory({ m, onEdit }: { m: MemoryTarget; onEdit: () => void }) {
             </span>
           )}
         </div>
-        <button type="button" className="bp-link" onClick={onEdit} title={t("bp.editTip")} data-testid={`bp-edit-${m.target}`}>
-          {t("bp.edit")}
-        </button>
+        {/* a switched-off target: the bot cannot change it, so Edit is not offered (the note below says why) */}
+        {m.enabled && (
+          <button type="button" className="bp-link" onClick={onEdit} title={t("bp.editTip")} data-testid={`bp-edit-${m.target}`}>
+            {t("bp.edit")}
+          </button>
+        )}
       </div>
       {!problem && (
         <div className="bp-use" data-testid={`bp-use-${m.target}`}>

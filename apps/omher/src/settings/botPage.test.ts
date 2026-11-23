@@ -49,7 +49,9 @@ describe("bot page helpers", () => {
     expect(memoryUse({ chars: 1100, limit: 2200 })).toEqual({ pct: 50, over: false });
     expect(memoryUse({ chars: 2200, limit: 2200 })).toEqual({ pct: 100, over: false });
     expect(memoryUse({ chars: 2500, limit: 2200 })).toEqual({ pct: 100, over: true });
-    expect(memoryUse({ chars: 5, limit: 0 })).toEqual({ pct: 0, over: false });
+    // a limit of 0 (or below) is the limit Hermes enforces: nothing fits
+    expect(memoryUse({ chars: 5, limit: 0 })).toEqual({ pct: 100, over: true });
+    expect(memoryUse({ chars: 0, limit: 0 })).toEqual({ pct: 0, over: false });
   });
 
   it("keeps only this bot's automations, by name", () => {

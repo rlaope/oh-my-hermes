@@ -129,6 +129,9 @@ test("Edit puts a request in the bot's main chat and sends nothing", async ({ pa
   await botPage(page, "kami");
   await page.getByTestId("bp-edit-memory").click();
   await expect(page.getByTestId("composer")).toHaveValue("Update your memory (memories/MEMORY.md): ");
+  // the composer puts the caret at the end on the next frame; type after it, as a person does
+  await expect(page.getByTestId("composer")).toBeFocused();
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   await page.getByTestId("composer").pressSequentially("drop the CHANGELOG line");
   await expect(page.getByTestId("composer")).toHaveValue("Update your memory (memories/MEMORY.md): drop the CHANGELOG line");
   expect((await submits()).length).toBe(before);
@@ -165,7 +168,10 @@ test("empty and error states say what is there", async ({ page }) => {
   await expect(page.getByTestId("bp-mem-memory")).toContainText("memories/MEMORY.md is 3.0 MB, larger than the 1.0 MB omher reads, so it was not read.");
   await expect(page.getByTestId("bp-use-memory")).toHaveCount(0);
   await expect(page.getByTestId("bp-off-user")).toHaveText("Off");
-  await expect(page.getByTestId("bp-mem-user")).toContainText("Hermes does not use this memory: it is switched off in the profile's config.yaml.");
+  await expect(page.getByTestId("bp-mem-user")).toContainText("Hermes does not use this memory: it is switched off in the profile's config.yaml, so the bot cannot change it until it is on.");
+  // the bot cannot change a switched-off target, so Edit is not offered there
+  await expect(page.getByTestId("bp-edit-user")).toHaveCount(0);
+  await expect(page.getByTestId("bp-edit-memory")).toBeVisible();
   await expect(page.getByTestId("bp-mem-empty-user")).toHaveText("Nothing remembered yet.");
   await expect(page.getByTestId("bp-threads")).toHaveText("No open threads.");
   await expect(page.getByTestId("bp-away")).toHaveCount(1);
@@ -174,7 +180,7 @@ test("empty and error states say what is there", async ({ page }) => {
   await botPage(page, "default");
   await expect(page.getByTestId("bp-persona")).toHaveText("SOUL.md is a link, so omher does not read it.");
   await expect(page.getByTestId("bp-mem-memory")).toContainText("memories/MEMORY.md could not be read.");
-  await expect(page.getByTestId("bp-elsewhere")).toHaveText("No sessions in Slack, Discord, Telegram or cron yet.");
+  await expect(page.getByTestId("bp-elsewhere")).toHaveText("No sessions elsewhere yet.");
 
   // nothing at all
   await botPage(page, "omh-tui");
@@ -215,6 +221,27 @@ test("a bot on another computer is read there, and its page says so", async ({ p
   await expect(page.getByTestId("bot-sections")).toContainText("Read on Build box by omher's bridge there and sent over SSH.");
   await expect(page.getByTestId("bp-soul-text")).toHaveText("The persona kept on the other computer.");
   await expect(page.getByTestId("bp-threads")).toHaveText("Threads run on this computer only, so a bot on another computer has none here.");
+
+  // Edit lands in that bot's own main chat, unsent
+  const before = (await submits()).length;
+  await page.getByTestId("bp-edit-soul").click();
+  await expect(page.getByTestId("settings-view")).toHaveCount(0);
+  await expect(page.getByTestId(`bot-${id}`)).toHaveAttribute("aria-current", "true");
+  await expect(page.getByTestId("composer")).toHaveValue("Update your SOUL.md: ");
+  expect((await submits()).length).toBe(before);
+});
+
+test("a failed read says why in persona and memory, and Read again recovers", async ({ page }) => {
+  await mock("mock.botPageFail", { bot: "kami", on: true });
+  await open(page);
+  await botPage(page, "kami");
+  await expect(page.getByTestId("bp-persona")).toHaveText("Kami is offline. Start its gateway, then try again.");
+  await expect(page.getByTestId("bp-memory")).toHaveText("Kami is offline. Start its gateway, then try again.");
+  await expect(page.getByTestId("bp-edit-soul")).toHaveCount(0);
+  await mock("mock.botPageFail", { bot: "kami", on: false });
+  await page.getByTestId("bp-refresh").click();
+  await expect(page.getByTestId("bp-soul-text")).toContainText("A calm, direct helper.");
+  await expect(page.getByTestId("bp-entries-memory").locator("li")).toHaveCount(2);
 });
 
 test("in Korean every section is in Korean", async ({ page }) => {

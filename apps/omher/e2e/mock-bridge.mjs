@@ -43,6 +43,7 @@
 // mock.ready {bot, ok, signIn?} (what `bots.ready` answers for a bot: ok false = Hermes says it cannot answer; with
 // signIn: the strict check for that provider passes, as after `hermes auth add <id>`, and its models show in
 // models.options),
+// mock.botPageFail {bot, on} (the bot page's bots.page read fails for that bot until turned off),
 // mock.move {on} (the bridge died and came back on a new port: answers `{port}` once a second listener is up, then drops
 // every connection to the first port, which refuses WebSockets until `mock.move {on: false}` or mock.reset).
 import http from "node:http";
@@ -640,6 +641,8 @@ let lostTurns = new Map();
 let lostQueue = new Map();
 // Bots whose skills.list is empty (mock.noSkills).
 let noSkills;
+// Bots whose bots.page read fails (mock.botPageFail {bot, on}), as a peer whose link dropped answers.
+let botPageFail;
 // Tasks › Linear: the bots whose config names a Linear MCP server (mock.linear {bot, server|null})
 let linearMcp;
 let notReady = new Map();
@@ -873,6 +876,7 @@ function reset() {
   lostTurns = new Map();
   lostQueue = new Map();
   noSkills = new Set();
+  botPageFail = new Set();
   linearMcp = new Map();
   notReady = new Map(); // bot -> the sign-in provider that now passes its strict check ("" = none)
   idSeq = 0;
@@ -1519,6 +1523,7 @@ const OPS = {
   },
   "bots.page": (p) => {
     const b = needBotAny(p);
+    if (botPageFail.has(b.name)) throw new OpError("bot_offline", `${b.name} is offline`);
     const seed = b.host ? remotePage : (BOT_PAGE_SEED[b.name] ?? (() => ({ soul: pageFile("SOUL.md", "missing"), memory: [memTarget("memory", "MEMORY.md", "missing", [], 2200), memTarget("user", "USER.md", "missing", [], 1375)] })));
     return seed();
   },
@@ -2061,6 +2066,12 @@ const OPS = {
     const b = needBot(p);
     if (p.server) linearMcp.set(b.name, String(p.server));
     else linearMcp.delete(b.name);
+    return {};
+  },
+  "mock.botPageFail": (p) => {
+    const b = needBotAny(p);
+    if (p.on) botPageFail.add(b.name);
+    else botPageFail.delete(b.name);
     return {};
   },
   "mock.reset": () => {
