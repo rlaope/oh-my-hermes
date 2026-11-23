@@ -16,6 +16,7 @@ import { SessionList, SessionsHeader } from "../sessions/SessionsSection";
 import { SessionBackgroundMenu } from "../sessions/SessionBackgroundMenu";
 import { SESSIONS_ENTRY } from "../sessions/entry";
 import { NeedsStrip } from "./Needs";
+import { useThreadPrs } from "../threads/ThreadPrs";
 import { UpdateButton } from "./UpdateButton";
 import { FirstRunHint } from "../onboarding/FirstRun";
 import { OmhNotice } from "./OmhNotice";
@@ -57,6 +58,10 @@ export function Sidebar() {
     ? listed.filter((b) => b.display_name.toLowerCase().includes(needle) || b.name.toLowerCase().includes(needle))
     : listed;
   const asks = selectAsks(s);
+  // threads whose pull request is open with failing checks, still listed (rule 40: shown, never acted on)
+  const failing = useThreadPrs()
+    .failing()
+    .filter((f) => (s.threads[f.bot] ?? []).some((r) => r.thread === f.thread));
   // hold a row to drag it; off while searching, where a row's place in the filtered list is not its sidebar place
   const drag = useRowDrag(
     listed.map((b) => b.name),
@@ -108,7 +113,7 @@ export function Sidebar() {
         />
       </label>
       <TasksBar />
-      <NeedsStrip asks={asks} />
+      <NeedsStrip asks={asks} prs={failing} />
       <section ref={botSec} className={`side-sec${needle && bots.length === 0 ? " side-sec-fit" : ""}`} data-testid="side-bots" style={needle ? undefined : split.bots}>
         <div className="side-sh">{t("nav.bots")}</div>
         <nav ref={botNav} className="bot-list" aria-label={t("nav.bots")} role="tree">

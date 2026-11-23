@@ -1977,7 +1977,7 @@ export interface Actions {
   pluginsToggle(bot: string, key: string, enable: boolean): Promise<OpMap["plugins.toggle"]["result"]>;
   pluginsUpdate(bot: string, name: string): Promise<OpMap["plugins.update"]["result"]>;
   pluginsRemove(bot: string, name: string): Promise<void>;
-  /** Apps (BOUNDARY rule 42): Hermes' MCP catalog and the bot's integration skills, read from files; a press runs one
+  /** Apps (BOUNDARY rule 41): Hermes' MCP catalog and the bot's integration skills, read from files; a press runs one
    *  of `hermes -p <bot> mcp install|login|remove <name>`. */
   appsList(bot: string): Promise<OpMap["apps.list"]["result"]>;
   appsRun(verb: "install" | "login" | "remove", bot: string, name: string): Promise<AppRun>;
@@ -2052,6 +2052,8 @@ export interface Actions {
   runsGet(bot: string, run: string): Promise<RunDetail>;
   /** The GitHub state of the PRs a run's nodes name (the bridge asks `gh`, apart from `runsGet`). */
   runsPrs(bot: string, run: string): Promise<{ prs: Record<string, NodePr> }>;
+  /** The PRs a thread's bot named and GitHub's state and checks for each (the bridge's `thread.prs`, rule 40). */
+  threadPrs(bot: string, thread: string, fresh: boolean): Promise<ThreadOps["thread.prs"]["result"]>;
   runsCli(params?: { agent?: CliAgent; cwd?: string; since?: number }): Promise<{ runs: AgentRunSummary[] }>;
   /** A SESSIONS chat's title from the agent's own session files (`cli.title`). */
   cliTitle(agent: "claude" | "codex", session: string, cwd?: string): Promise<{ title: string }>;
@@ -3026,6 +3028,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     runsList: (bot) => bridge.request("runs.list", { bot }),
     runsGet: (bot, run) => bridge.request("runs.get", { bot, run }),
     runsPrs: (bot, run) => bridge.request("runs.prs", { bot, run }),
+    threadPrs: (bot, thread, fresh) => threadReq("thread.prs", { bot, thread, ...(fresh ? { fresh } : {}) }),
     runsCli: (params = {}) => bridge.request("runs.cli", params),
     cliTitle: (agent, session, cwd) => bridge.request("cli.title", { agent, session, ...(cwd ? { cwd } : {}) }),
     usage: () => bridge.request("usage.read", {}),

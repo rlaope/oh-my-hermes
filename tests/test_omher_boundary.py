@@ -233,8 +233,13 @@ RULES = (
     "omher updates itself only through Tauri's updater, and only from one fixed address:",
     "It installs a build only when its signature matches the public key pinned in `tauri.conf.json`,"
     " and only after the person presses the update button and confirms the restart; then it restarts omher.",
-    "For the Plans graph the bridge asks the person's own GitHub CLI for the state of a pull request a plan node names",
-    "with one fixed read: `gh pr view <number> -R <owner>/<repo> --json state,isDraft,mergedAt,url`.",
+    "For the Plans graph the bridge asks the person's own GitHub CLI for the state and check result of a pull request a"
+    " plan node names",
+    "with one fixed read: `gh pr view <number> -R <owner>/<repo> --json state,isDraft,mergedAt,url,statusCheckRollup,headRefOid`.",
+    "This is the bridge's only `gh` argv; rule 40 uses the same read for threads.",
+    "it never asks for a title, a body or an author, and never reads a check's name.",
+    "at most 4 calls run at once and at most 30 start in any minute, for plans and threads together, of which threads"
+    " take at most 20",
     "Tasks (the sidebar's Tasks row and the Tasks page) list open issues and pull or merge requests read-only,"
     " through the person's own GitHub CLI (`gh`) and GitLab CLI (`glab`) under their own logins:",
     "The only argv are `auth status` (only its exit code is read; its output, which can name a token, goes nowhere:"
@@ -460,8 +465,8 @@ RULES = (
     " judged by Hermes' own `_update_fenced`, which reads the markers and, only when a stale one is left, briefly tries a"
     " shared lock; it writes nothing) the bridge does not look, as Hermes' own"
     " `ensure_gateway_runtime` does not.",
-    # rule 42: the Apps page, through the bot's own `hermes mcp`
-    "42. omher connects a bot to an app of Hermes' MCP catalog only through that bot's own Hermes command, only when the"
+    # rule 41: the Apps page, through the bot's own `hermes mcp`
+    "41. omher connects a bot to an app of Hermes' MCP catalog only through that bot's own Hermes command, only when the"
     " person presses a button on the Apps page:",
     "This follows the owner's answer that omher may run a fixed Hermes command on a button press.",
     "each is a fixed argv with no shell and nothing on stdin, the Hermes root as `HERMES_HOME`, stopped after 300, 330"
@@ -474,7 +479,7 @@ RULES = (
     "omher never runs another `hermes mcp` verb (`add`, `configure`, `test`, `reauth`, `catalog`), never passes Hermes a"
     " value an install asks for, never reads, writes or shows a key or a token, never edits `config.yaml`, `.env` or"
     " `mcp-tokens/` itself, and never reloads or restarts anything after a change:",
-    "to connect Linear the page opens the Apps page for that bot (rule 42); it lists nothing from Linear itself.",
+    "to connect Linear the page opens the Apps page for that bot (rule 41); it lists nothing from Linear itself.",
 )
 TAURI_CONF = ROOT / "apps" / "omher" / "src-tauri" / "tauri.conf.json"
 CAPABILITIES = ROOT / "apps" / "omher" / "src-tauri" / "capabilities" / "default.json"
@@ -598,11 +603,13 @@ class DocPins(unittest.TestCase):
         # awake: one idle-sleep assertion while agents work); 38: rule 38 (a program's OSC 52 copy to the clipboard,
         # copy only, never a read, off in Settings › Terminal); 39: rule 39 (a bot whose gateway went away without
         # omher restarting it is looked for through Hermes' own discovery, which starts nothing, and attached again
-        # once ready); 42: rule 42 (the Apps page: three fixed `hermes -p <bot> mcp install|login|remove <name>` argvs
-        # on a press, the catalog and the bot's MCP state read from files). The rules stay numbered 1..n with no gap
-        # or repeat.
+        # once ready); 40: rule 40 (a thread's PRs: links in the bot's own answers read from its state.db, their
+        # state and checks through rule 21's one `gh pr view`, now with statusCheckRollup and headRefOid, on open,
+        # turn end, Refresh and a visible row's bounded tick; Needs you and one notification per failing head);
+        # 41: rule 41 (the Apps page: three fixed `hermes -p <bot> mcp install|login|remove <name>` argvs on a press,
+        # the catalog and the bot's MCP state read from files). The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 42, len(rules))
+        self.assertTrue(6 <= len(rules) <= 41, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -1184,7 +1191,7 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         fns = {f.name: f for f in ast.walk(self.tree) if isinstance(f, ast.FunctionDef)}
         calls = [(fn.name, c) for fn in fns.values() for c in ast.walk(fn)
                  if isinstance(c, ast.Call) and ast.unparse(c.func) == "subprocess.run"]
-        # _hermes_run: rule 24's one `hermes -p <bot> cron create` for the briefing; run_hermes_mcp: rule 42
+        # _hermes_run: rule 24's one `hermes -p <bot> cron create` for the briefing; run_hermes_mcp: rule 41
         self.assertEqual(sorted(name for name, _ in calls),
                          ["_git", "_hermes_run", "gh_pr_view", "run_hermes_mcp", "run_hermes_restart"])
         fn = fns["gh_pr_view"]
@@ -1196,11 +1203,45 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
             self.assertNotIn(word, body)
         self.assertIn("PR_TIMEOUT = 3.0", self.source)
         self.assertIn("PR_TTL = 300.0", self.source)
+        self.assertIn("PR_POOL = 4", self.source)
+        self.assertIn("PR_CALLS_PER_MIN = 30", self.source)
+        self.assertIn("PR_THREAD_CALLS_PER_MIN = 20", self.source)
+        self.assertIn("PR_TTL_MISS = 60.0", self.source)
+        self.assertIn("PR_THREAD_MAX = 3", self.source)
         refs = [c for c in ast.walk(self.tree) if isinstance(c, ast.Name) and c.id == "gh_pr_view"]
         prstates = next(c for c in ast.walk(self.tree) if isinstance(c, ast.ClassDef) and c.name == "PrStates")
-        # one use: PrStates' default look-up; op_runs_prs reaches it only through PrStates
+        # one use: PrStates' default look-up; op_runs_prs and op_thread_prs reach it only through PrStates
         self.assertEqual(len(refs), 1)
         self.assertIn(refs[0], list(ast.walk(prstates)))
+        one = ast.unparse(next(f for f in ast.walk(prstates) if isinstance(f, ast.FunctionDef) and f.name == "_one"))
+        self.assertIn("with self._gate:", one)  # at most PR_POOL at once
+        self.assertIn("if not self._may_call(now, thread):", one)  # at most PR_CALLS_PER_MIN a minute, threads fewer
+        self.assertIn("pr_checks_of(view.get('statusCheckRollup'))", one)  # the rollup reduced to one word
+        users = sorted(f.name for f in ast.walk(self.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))
+                       and any(isinstance(c, ast.Attribute) and c.attr == "prs" and ast.unparse(c) == "self.prs"
+                               for c in ast.walk(f)))
+        self.assertEqual(users, ["__init__", "op_runs_prs", "op_thread_prs"])  # __init__: the one shared PrStates
+
+    def test_no_gh_verb_that_changes_github(self) -> None:
+        """Rules 21 and 33: nothing in the bridge or the desktop shell asks `gh` (or `glab`) to merge, close, comment,
+        edit, review or otherwise write: no such argv word appears outside comments and tests."""
+        verbs = ("merge", "close", "reopen", "comment", "edit", "ready", "create", "delete", "lock", "unlock",
+                 "transfer", "approve", "--method", "-X", "--input", "--body", "--add-label")
+        bridge = [ln for ln in self.source.splitlines() if not ln.lstrip().startswith("#")]
+        gh_lines = [ln for ln in bridge if "gh" in ln and "[" in ln]
+        for ln in gh_lines:
+            for v in verbs:
+                self.assertNotIn(f"'{v}'", ln)
+                self.assertNotIn(f'"{v}"', ln)
+        for path in sorted(SHELL.glob("*.rs")):
+            text = path.read_text(encoding="utf-8")
+            if not re.search(r'"(?:gh|gh\.exe|glab)"', text):
+                continue
+            code = text.split("#[cfg(test)]", 1)[0]
+            lines = [ln for ln in code.splitlines() if not ln.lstrip().startswith("//")]
+            for v in verbs:
+                hits = [ln.strip() for ln in lines if f'"{v}"' in ln]
+                self.assertEqual(hits, [], f"{path.name}: {v}")
 
     def test_bridge_never_posts_to_a_messenger(self) -> None:
         """Rule 2: a reply target is text handed to the bot. The bridge imports no sender (Hermes'
@@ -1220,9 +1261,10 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         self.assertEqual(offenders, [])
         runs = [c for c in ast.walk(self.tree) if isinstance(c, ast.Call) and ast.unparse(c.func).startswith("subprocess.")]
         self.assertEqual(sorted(ast.unparse(c.args[0]) for c in runs),
-                         ["['git', *pre, *args]", "[gh, 'pr', 'view', str(number), '-R', repo, '--json', 'state,isDraft,mergedAt,url']",
+                         ["['git', *pre, *args]",
+                          "[gh, 'pr', 'view', str(number), '-R', repo, '--json', 'state,isDraft,mergedAt,url,statusCheckRollup,headRefOid']",
                           "argv", "argv", "argv"])  # argv: rule 29's restart_argv (RestartOneBotOnAPress), rule 24's
-        # brief_create_argv (`hermes -p <bot> cron create`, pinned in bridge/tests/test_brief_setup.py) and rule 42's
+        # brief_create_argv (`hermes -p <bot> cron create`, pinned in bridge/tests/test_brief_setup.py) and rule 41's
         # mcp_argv (AppsThroughTheBotsOwnHermes)
         for host in ("slack.com/api", "discord.com/api", "api.telegram.org", "hooks.slack.com"):
             self.assertNotIn(host, self.source)
@@ -1234,6 +1276,84 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
             if isinstance(call, ast.Call):
                 self.assertFalse(any(isinstance(a, ast.Constant) and a.value in {"send_message", "send.message"}
                                      for a in call.args), ast.unparse(call))
+
+
+class ThreadPullRequests(unittest.TestCase):
+    """Rule 40: a thread's PRs. The links come from the bot's own answers of a thread the bridge created or listed, read
+    from its state.db with no gateway call; their state comes only through rule 21's one `gh pr view`; a check's name is
+    never read; a peer bot's threads are never read."""
+
+    RULE_40 = (
+        "40. A bot's thread shows the pull requests its bot linked there, through rule 21's one fixed `gh pr view` read,"
+        " under its cache and limits.",
+        "A thread's pull request is any full pull request link the bot wrote in its own answer in that thread, whoever's"
+        " pull request it is, never one in the person's message, a tool's output or the summary Hermes writes when it"
+        " compresses a conversation",
+        "read only and only for a thread it created or listed, and makes no gateway call for it, so a thread that is not"
+        " open in omher is never resumed or attached to be read.",
+        "To find them the bridge reads that thread's saved user and assistant rows across Hermes' compression of it",
+        "only to follow the sessions a compression made one conversation, both ways, 32 steps and 64 sessions at most)",
+        "a number of one to seven digits with no leading zero, the newest three of a thread, and keeps only those links,"
+        " until the thread has a new row.",
+        "The tick runs while omher's window is hidden too (rule 36), so a pull request that starts failing can still notify.",
+        "A thread whose row was never in view and that was never opened is not read. At most two threads are read at a time.",
+        "A Refresh asks GitHub again only once the kept answer is 10 seconds old.",
+        "A bot on another computer has no threads in omher (rule 31 forwards no thread request), and a thread of such a bot"
+        " is never read this way.",
+        "raises at most one system notification for each failing head commit and never two for the same pull request"
+        " within 6 hours",
+        "in this computer's storage for the app (`omher.prNotified`), and nothing else.",
+        "This changes no thread's state and starts, steers or stops nothing.",
+    )
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.source = BRIDGE.read_text(encoding="utf-8")
+        cls.tree = ast.parse(cls.source)
+
+    def test_the_doc_states_rule_40(self) -> None:
+        text = _flat(DOC.read_text(encoding="utf-8"))
+        for sentence in self.RULE_40:
+            self.assertIn(_flat(sentence), text)
+
+    def test_a_threads_pr_comes_from_the_bots_own_answers_only(self) -> None:
+        """Rule 40: a thread's PR is a full link in one of the bot's own answers of that thread, read from its state.db
+        with no gateway call (never resumed), only for a thread this bridge created or listed; the link is checked
+        strictly before any call; a check's name is never read."""
+        fns = {f.name: f for f in ast.walk(self.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))}
+        op = ast.unparse(fns["op_thread_prs"])
+        self.assertIn("tid = self._thread_known(conn, p.get('thread'))", op)
+        self.assertIn("sid, running = (chat.stored_id if chat else tid, bool(chat and chat.in_turn))", op)
+        self.assertIn("await asyncio.to_thread(thread_last_row, conn.bot['path'], sid)", op)
+        self.assertIn("await asyncio.to_thread(read_thread_rows, conn.bot['path'], sid)", op)
+        self.assertIn("thread_pr_refs(chat_messages(rows", op)
+        self.assertNotIn("self._call(", op)  # no gateway call: never a history read of a stored id, never a resume
+        for name in ("read_thread_rows", "thread_last_row", "thread_lineage"):
+            rows = ast.unparse(ast.Module(body=fns[name].body[1:], type_ignores=[]))  # without its docstring
+            if name != "thread_lineage":  # it reads through the caller's read-only connection
+                self.assertIn("ro_uri(db)", rows)  # read-only
+                self.assertIn("ids = thread_lineage(con, session_id)", rows)  # across Hermes' compression of it
+                self.assertIn("WHERE session_id IN (", rows)
+            for word in ("INSERT", "UPDATE", "DELETE", "reasoning", "tool_calls", "api_content", "commit"):
+                self.assertNotIn(word, rows)
+        self.assertIn("LINEAGE_STEPS = 32", self.source)
+        self.assertIn("LINEAGE_MAX = 64", self.source)
+        self.assertIn("role IN ('user', 'assistant')", ast.unparse(fns["read_thread_rows"]))
+        self.assertIn("if text.lstrip().startswith(COMPACTION_PREFIXES) or any((m in text for m in COMPACTION_MARKERS)):\n"
+                      "            text = ''", ast.unparse(fns["read_thread_rows"]))  # Hermes' compaction summary is never the bot's answer
+        refs = ast.unparse(fns["thread_pr_refs"])
+        self.assertIn("m.get('role') != 'assistant'", refs)
+        self.assertIn("THREAD_PR_URL.finditer", refs)
+        url = re.search(r'THREAD_PR_URL = re\.compile\((.*?)\)\n', self.source, re.S).group(1)
+        self.assertIn(r"https://github\.com/", url)
+        self.assertIn("[1-9][0-9]{0,6}", url)
+        self.assertIn("(?![A-Za-z0-9_/])", url)
+        checks = ast.unparse(fns["pr_checks_of"])
+        for word in ("'name'", "'context'", "'description'", "'detailsUrl'", "'targetUrl'", "'workflowName'"):
+            self.assertNotIn(word, checks)
+        # thread ops never cross to a peer: a peer bot's threads are not read (rule 31)
+        forward = re.search(r"PEER_FORWARD = frozenset\(\{(.*?)\}\)", self.source, re.S).group(1)
+        self.assertNotIn('"thread.', forward)
 
 
 class AccountsNeverCarryAToken(unittest.TestCase):
@@ -2701,7 +2821,7 @@ class TasksReadOnly(unittest.TestCase):
         self.assertIn("yaml.parse(stream, Loader=loader)", events)
         self.assertIn('YAML(typ="safe", pure=True).parse(stream)', events)
         # the keys it keeps: `mcp_servers`, then of each server only the *keys* asked for (`enabled`; the Apps page of
-        # rule 42 also the legacy `disabled`), each read as a bool
+        # rule 41 also the legacy `disabled`), each read as a bool
         self.assertEqual(sorted(set(re.findall(r'== "([a-z_]+)"', names))), ["disabled", "mcp_servers"])
         self.assertIn('keys: tuple[str, ...] = ("enabled",)', names)
         self.assertIn("top[1] = ev.value if ev.value in keys else None", names)
@@ -2979,7 +3099,7 @@ class DiskTrayAndKeepAwake(unittest.TestCase):
 
 
 class AppsThroughTheBotsOwnHermes(unittest.TestCase):
-    """Rule 42: the Apps page changes a bot's MCP apps only through three fixed `hermes -p <bot> mcp` argvs on a press,
+    """Rule 41: the Apps page changes a bot's MCP apps only through three fixed `hermes -p <bot> mcp` argvs on a press,
     with a checked profile and a catalog name; reads are files only (the catalog's manifests, the bot's `mcp_servers`
     names and switches, a token file's stat); nothing is reloaded, restarted or written by omher itself."""
 

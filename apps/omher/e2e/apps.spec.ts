@@ -1,4 +1,4 @@
-// Apps (src/apps, BOUNDARY rule 42), against the mock bridge: one bot's view of Hermes' MCP catalog and its
+// Apps (src/apps, BOUNDARY rule 41), against the mock bridge: one bot's view of Hermes' MCP catalog and its
 // integration skills, grouped by tier, each with its state; Connect, Sign in and Remove send `apps.install`,
 // `apps.login` and `apps.remove` with the bot and the catalog name only; Hermes' own words when a run did not work, and
 // the terminal command for an app whose install asks for a value.

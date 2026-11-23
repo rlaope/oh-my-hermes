@@ -143,6 +143,23 @@ All notable changes will be documented here.
   come from chats only. Before the first reading the meter says it shows after your next
   Claude turn in omher. Local only: nothing is sent and no token is read.
   (`docs/OMHER-BOUNDARY.md` rules 11, 17 and 18)
+- **omher: a thread shows the pull requests its bot linked, and whether their checks pass.** A bot's thread often
+  ends with "opened https://github.com/<owner>/<repo>/pull/<n>", and omher showed only a link: the thread list could
+  not say whether that PR was open, merged or failing. Now a thread's row carries a small mark for the newest PR link
+  the bot wrote in its answers there (number, state, and the checks for an open PR or a draft: passing, failing or
+  running), and the transcript shows a card under the answer that named each one (the newest three), with the
+  repository; a click opens the PR on GitHub, Refresh asks again. Any full PR link in the bot's own answers counts,
+  whoever's PR it is; the person's words and a tool's output never do. They are read from the thread's saved rows in
+  the bot's `state.db` (across Hermes' compression of a long thread), with no gateway call, so a thread is never resumed for it. An open PR with failing checks
+  puts its thread in Needs you ("checks failing on #n") until the checks pass or it is merged or closed, and rings
+  at most once per failing head commit and never twice for the same PR within 6 hours. The state comes from the same
+  one `gh pr view` the Plans graph uses, now with `statusCheckRollup` and `headRefOid`, reduced to one word from the
+  checks' status fields (a check's name is never read); answers are kept 5 minutes, at most 4 calls run at once and
+  30 a minute, of which threads take at most 20. A row in view, or a thread in Needs you, is read again every
+  5 minutes at the soonest, only while its PR may still change, also while the window is hidden, with a doubling
+  wait after a failed read. Without `gh`, a login or the network the mark shows the number with no state; a bot on
+  another computer has no threads in omher. This is a display: it never changes a thread's state and starts, steers
+  or stops nothing. (`docs/OMHER-BOUNDARY.md` rules 21 and 40)
 - **omher Tasks shows my pull requests, reviews and issues across repositories and GitHub accounts.** The Tasks page
   has a scope toggle, "이 저장소 | 나". "나" lists, across every repository, the open pull requests asking for my
   review, my open pull requests, the open issues assigned to me and the last 7 days' mentions (folded until opened).
@@ -362,7 +379,7 @@ All notable changes will be documented here.
   within about a minute (Hermes' gateway reconciles its MCP servers on its own); an open chat gets them after
   `/reload-mcp`. The Tasks page's Linear screen now opens this page instead of printing the command. omher reads the
   catalog files, the bot's `mcp_servers` names and switches and whether a sign-in token file exists, and never sees a
-  key or a token (`docs/OMHER-BOUNDARY.md` rule 42). (`apps/omher/src/apps/`)
+  key or a token (`docs/OMHER-BOUNDARY.md` rule 41). (`apps/omher/src/apps/`)
 
 - The OMH TUI no longer asks for kitty image previews in an omher terminal that cannot paint them. omher 1.1.3
   and earlier set `TERM_PROGRAM=omher` but draw no kitty Unicode placeholders, so pasting an image showed a block of

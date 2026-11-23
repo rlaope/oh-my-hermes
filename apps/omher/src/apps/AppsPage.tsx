@@ -1,4 +1,4 @@
-// Apps: one bot's apps (BOUNDARY rule 42). Hermes' MCP catalog and its integration skills, grouped by tier, each with
+// Apps: one bot's apps (BOUNDARY rule 41). Hermes' MCP catalog and its integration skills, grouped by tier, each with
 // its state for that bot, read from files by the bridge. Connect, Sign in and Remove run the bot's own
 // `hermes -p <bot> mcp install|login|remove <name>`; the sign-in itself is Hermes' own browser flow, and omher never
 // sees a key or a token. Skills only show their state: the bot sets one up when asked in chat.

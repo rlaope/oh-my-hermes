@@ -481,7 +481,7 @@ export function Drawer({ source, repo, kind, item, folder, account, onClose }: {
 
 /** Linear: omher holds no Linear key. It asks whether the bot has a Linear MCP server in its Hermes config; Hermes'
  *  gateway has no call that runs an MCP tool for an app, so omher lists nothing itself. Connecting is the Apps page's
- *  (src/apps, BOUNDARY rule 42), which this pane opens for the picked bot. */
+ *  (src/apps, BOUNDARY rule 41), which this pane opens for the picked bot. */
 function LinearPane() {
   const s = useStore();
   const local = s.bots.filter((b) => !b.host);

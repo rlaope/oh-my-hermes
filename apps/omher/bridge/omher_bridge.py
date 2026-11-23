@@ -7,8 +7,8 @@ profile's own gateway through Hermes' ``connect_gateway``.
 
 Prints one line ``OMHER_BRIDGE_READY {"port": N}`` on stdout once listening; everything else goes
 to stderr. Binds 127.0.0.1 only and refuses (403) any connection whose ``token`` query parameter
-differs. Makes no model or network call of its own; the one outside read is a PR's state through the
-person's own `gh` (``runs.prs``).
+differs. Makes no model or network call of its own; the one outside read is a PR's state and check result through
+the person's own `gh` (``runs.prs`` for a plan, ``thread.prs`` for a thread).
 
 Boundary rules the code keeps:
 * One gateway connection per profile, opened lazily (``--eager`` opens them all at start).
@@ -2083,8 +2083,19 @@ PR_REPO = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9_.-]{1,100}$
 PR_TTL = 300.0          # seconds a PR state is reused
 PR_TTL_MISS = 60.0      # and a failed look-up (no gh, no network): tried again sooner
 PR_TIMEOUT = 3.0        # seconds one `gh pr view` may take
-PR_POOL = 4             # look-ups at once
+PR_POOL = 4             # look-ups at once, across every plan and thread
+PR_CALLS_PER_MIN = 30   # `gh pr view` runs in any 60 seconds, across every plan and thread; past it, the kept answer
+PR_THREAD_CALLS_PER_MIN = 20  # of those, at most this many for threads: the rest stays for the plan the person opened
+PR_FRESH_MIN = 10.0     # an explicit refresh asks again only when the kept answer is older than this
 PR_STATES = ("open", "merged", "closed", "draft", "unknown")
+PR_CHECKS = ("passing", "failing", "running", "none")
+PR_HEAD = re.compile(r"^[0-9a-f]{40}$")
+PR_ROLLUP_MAX = 500     # rollup entries looked at
+# A thread's PR: a full link in one of the bot's own answers, stricter than PR_URL (BOUNDARY rule 40): https only, the
+# host exactly `github.com`, nothing glued before it, a number with no leading zero, and no further path segment.
+THREAD_PR_URL = re.compile(r"(?<![A-Za-z0-9.@/-])https://github\.com/([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))/"
+                           r"([A-Za-z0-9_.-]{1,100})/pull/([1-9][0-9]{0,6})(?![A-Za-z0-9_/])")
+PR_THREAD_MAX = 3       # a thread's newest PRs read and shown
 
 
 def _pr_refs(text: str) -> list[tuple[int, int, str | None]]:
@@ -2129,8 +2140,60 @@ def attach_prs(run: dict, texts: dict[str, str]) -> dict:
     return run
 
 
+def thread_pr_refs(messages, limit: int = PR_THREAD_MAX) -> list[dict]:
+    """The PRs a thread's bot named, newest first, each once, at most ``limit``: full THREAD_PR_URL links in the
+    bot's own answers only (``chat_messages`` rows of role ``assistant``: the person's words and tool output never
+    count). {number, repo, url} each."""
+    seen: dict[tuple[str, int], int] = {}
+    order = 0
+    for m in messages or []:
+        if not isinstance(m, dict) or m.get("role") != "assistant" or not isinstance(m.get("text"), str):
+            continue
+        for hit in THREAD_PR_URL.finditer(m["text"]):
+            if hit.group(2) in (".", ".."):
+                continue
+            key = (f"{hit.group(1)}/{hit.group(2)}", int(hit.group(3)))
+            seen[key] = order
+            order += 1
+    newest = sorted(seen, key=lambda k: -seen[k])[:limit]
+    return [{"number": n, "repo": r, "url": f"https://github.com/{r}/pull/{n}"} for r, n in newest]
+
+
+def pr_checks_of(rollup) -> str:
+    """The checks of `gh pr view --json statusCheckRollup` as one of PR_CHECKS, from GitHub's enum fields only (a
+    check run's `status` and `conclusion`, a status context's `state`); a check's name, URL or any other text is never
+    read, so no name can make a state. Any failed: failing; else any not finished (or not understood): running; else
+    any passed: passing; else (none, or only skipped and neutral ones): none. Past PR_ROLLUP_MAX entries the rest are
+    not looked at and a result that would be passing or none reads running."""
+    if not isinstance(rollup, list):
+        return "none"
+    failed = running = passed = False
+    if len(rollup) > PR_ROLLUP_MAX:
+        running = True  # an entry not looked at may have failed: never "passing" without seeing every one
+    for c in rollup[:PR_ROLLUP_MAX]:
+        if not isinstance(c, dict):
+            continue
+        status, conclusion, state = (str(c.get(k) or "").upper() for k in ("status", "conclusion", "state"))
+        if c.get("__typename") == "StatusContext" or (state and not status):
+            if state == "SUCCESS":
+                passed = True
+            elif state in ("FAILURE", "ERROR"):
+                failed = True
+            else:  # PENDING, EXPECTED, anything else
+                running = True
+        elif status != "COMPLETED":
+            running = True
+        elif conclusion == "SUCCESS":
+            passed = True
+        elif conclusion in ("FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "STARTUP_FAILURE"):
+            failed = True
+        elif conclusion not in ("NEUTRAL", "SKIPPED", "STALE"):
+            running = True
+    return "failing" if failed else "running" if running else "passing" if passed else "none"
+
+
 def pr_state_of(view: dict) -> str:
-    """GitHub's answer (`gh pr view --json state,isDraft,mergedAt,url`) as one of PR_STATES."""
+    """GitHub's answer (`gh pr view --json state,isDraft,mergedAt,...`) as one of PR_STATES."""
     state = str(view.get("state") or "").upper()
     if state == "MERGED" or (state == "CLOSED" and view.get("mergedAt")):
         return "merged"
@@ -2163,9 +2226,11 @@ def _gh_path(which=None) -> str | None:
 
 def gh_pr_view(repo: str, number: int, *, gh: str | None = None, timeout: float = PR_TIMEOUT) -> dict | None:
     """One fixed read through the person's own `gh`: `gh pr view <n> -R <owner>/<repo> --json
-    state,isDraft,mergedAt,url`. None when gh is missing, slow, signed out or offline. omher passes no token and
+    state,isDraft,mergedAt,url,statusCheckRollup,headRefOid` (no title, body, author; the rollup's check names are
+    never read, see pr_checks_of). None when gh is missing, slow, signed out or offline. omher passes no token and
     reads none; gh uses its own login."""
-    if not PR_REPO.match(repo) or not isinstance(number, int) or isinstance(number, bool) or not 0 < number < 10**7:
+    if (not PR_REPO.match(repo) or repo.split("/")[1] in (".", "..") or not isinstance(number, int)
+            or isinstance(number, bool) or not 0 < number < 10**7):
         raise ValueError(f"not a PR: {repo}#{number}")
     gh = gh or _gh_path()
     if not gh:
@@ -2174,7 +2239,8 @@ def gh_pr_view(repo: str, number: int, *, gh: str | None = None, timeout: float 
     if os.name == "nt":
         kw["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
     try:
-        r = subprocess.run([gh, "pr", "view", str(number), "-R", repo, "--json", "state,isDraft,mergedAt,url"],
+        r = subprocess.run([gh, "pr", "view", str(number), "-R", repo, "--json",
+                            "state,isDraft,mergedAt,url,statusCheckRollup,headRefOid"],
                            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout,
                            stdin=subprocess.DEVNULL, env={**os.environ, "GH_PROMPT_DISABLED": "1",
                                                           "GH_NO_UPDATE_NOTIFIER": "1", "NO_COLOR": "1"}, **kw)
@@ -2398,7 +2464,7 @@ def reload_plugins(home: Path, root: Path):
     return answer
 
 
-# ---------------------------------------------------------------- apps (Hermes' MCP catalog, BOUNDARY rule 42)
+# ---------------------------------------------------------------- apps (Hermes' MCP catalog, BOUNDARY rule 41)
 # The Apps page reads Hermes' MCP catalog (the `optional-mcps/<name>/manifest.yaml` files Hermes ships), the names and
 # on/off switches of the bot's `mcp_servers`, whether Hermes keeps an OAuth token file for a server (a stat, the file is
 # never opened) and the bot's integration skills. A press runs one of three fixed argvs, `hermes -p <bot> mcp
@@ -2594,36 +2660,61 @@ def run_hermes_mcp(hermes: str, bot: str, verb: str, name: str, home: Path, time
 
 
 class PrStates:
-    """PR states by (repo, number), each kept PR_TTL seconds (a failed look-up PR_TTL_MISS). `view` is the look-up
-    (gh_pr_view; tests pass a stub)."""
+    """PR states and check results by (repo, number), each kept PR_TTL seconds (a failed look-up PR_TTL_MISS). `view`
+    is the look-up (gh_pr_view; tests pass a stub). Every plan and thread shares one instance, so the limits hold for
+    all of them together: at most PR_POOL look-ups at once and PR_CALLS_PER_MIN in any 60 seconds, of which threads
+    take at most PR_THREAD_CALLS_PER_MIN, so a plan always has room. Past that a PR keeps its last answer, or reads
+    `unknown` with `limited: true` (not kept, and not a failed look-up: the page asks again a minute later)."""
 
     def __init__(self, view=None, clock=time.monotonic):
         self._view = view or gh_pr_view
         self._clock = clock
-        self._cache: dict[tuple[str, int], tuple[float, dict]] = {}
+        self._cache: dict[tuple[str, int], tuple[float, dict, float]] = {}
         self._lock = threading.Lock()
+        self._gate = threading.BoundedSemaphore(PR_POOL)
+        self._calls: list[tuple[float, bool]] = []  # (when, for a thread) of each look-up in the last 60 seconds
 
-    def _one(self, repo: str, number: int) -> dict:
+    def _may_call(self, now: float, thread: bool) -> bool:
+        with self._lock:
+            self._calls = [c for c in self._calls if now - c[0] < 60.0]
+            if len(self._calls) >= PR_CALLS_PER_MIN:
+                return False
+            if thread and sum(1 for _, th in self._calls if th) >= PR_THREAD_CALLS_PER_MIN:
+                return False
+            self._calls.append((now, thread))
+            return True
+
+    def _one(self, repo: str, number: int, fresh: bool = False, thread: bool = False) -> dict:
         key = (repo, number)
         now = self._clock()
         with self._lock:
             hit = self._cache.get(key)
-        if hit and now < hit[0]:
+        if hit and now < hit[0] and not (fresh and now - hit[2] >= PR_FRESH_MIN):
             return hit[1]
+        if not self._may_call(now, thread):
+            return hit[1] if hit else {"state": "unknown", "checks": "none", "limited": True}
         try:
-            view = self._view(repo, number)
+            with self._gate:
+                view = self._view(repo, number)
         except ValueError:
             view = None
         state = pr_state_of(view) if view else "unknown"
-        out = {"state": state}
+        out = {"state": state, "checks": pr_checks_of(view.get("statusCheckRollup")) if view else "none"}
         url = view.get("url") if view else None
         if isinstance(url, str) and url == f"https://github.com/{repo}/pull/{number}":
             out["url"] = url
+        head = view.get("headRefOid") if view else None
+        if isinstance(head, str) and PR_HEAD.match(head):
+            out["head"] = head
         with self._lock:
-            self._cache[key] = (now + (PR_TTL if state != "unknown" else PR_TTL_MISS), out)
+            self._cache[key] = (now + (PR_TTL if state != "unknown" else PR_TTL_MISS), out, now)
             if len(self._cache) > 2000:
                 self._cache.clear()
         return out
+
+    def thread(self, refs: list[dict], fresh: bool = False) -> list[dict]:
+        """Each of a thread's PRs (thread_pr_refs) with its state and checks, in the same order."""
+        return [{**r, **{k: v for k, v in self._one(r["repo"], r["number"], fresh, True).items() if k != "url"}} for r in refs]
 
     def states(self, run: dict) -> dict[str, dict]:
         """{node id: {number, repo?, url?, state}} for every node of `run` that names a PR; a PR with no repo is
@@ -2638,7 +2729,7 @@ class PrStates:
         out = {}
         for n in nodes:
             pr = dict(n["pr"])
-            pr.update(got.get((pr.get("repo"), pr["number"]), {"state": "unknown"}))
+            pr.update(got.get((pr.get("repo"), pr["number"]), {"state": "unknown", "checks": "none"}))
             out[n["id"]] = pr
         return out
 
@@ -4914,6 +5005,120 @@ def read_session_cwds(profile_dir: Path, ids: list[str]) -> dict[str, str]:
     return {str(sid): str(cwd) for sid, cwd in rows if isinstance(cwd, str) and cwd}
 
 
+THREAD_ROWS_MAX = 2000  # a thread's newest user and assistant rows read for its PR links
+# The summary "carrier" row Hermes writes when it compresses a conversation (session_rules/turns.py: SUMMARY_PREFIX and
+# every shipped prefix begin "[CONTEXT COMPACTION", the legacy one "[CONTEXT SUMMARY]:"; _SUMMARY_END_MARKER,
+# _MERGED_PRIOR_CONTEXT_HEADER and _MERGED_SUMMARY_DELIMITER mark the merged forms). It is the compression model's
+# summary of earlier turns, which can quote the person's or a tool's links, never the bot's answer: such a row is read
+# with no text at all (the turns it summarises are read from the sessions before it).
+COMPACTION_PREFIXES = ("[CONTEXT COMPACTION", "[CONTEXT SUMMARY]:")
+COMPACTION_MARKERS = ("--- END OF CONTEXT SUMMARY", "[PRIOR CONTEXT — for reference only; not a new message]",
+                      "[END OF PRIOR CONTEXT — COMPACTION SUMMARY BELOW]")
+LINEAGE_STEPS = 32      # compression steps followed from a thread's id, each way
+LINEAGE_MAX = 64        # sessions of one thread's compression lineage read at most
+
+
+def _continues(model_config, source) -> bool:
+    """A child session that continues its parent's conversation after Hermes compressed it, as Hermes' own lineage
+    walk decides: not a branch, a reset, a delegated subagent or a tool session."""
+    if source == "tool":
+        return False
+    try:
+        mc = json.loads(model_config) if isinstance(model_config, str) and model_config else {}
+    except ValueError:
+        mc = {}
+    return not (isinstance(mc, dict) and any(mc.get(k) is not None for k in ("_branched_from", "_delegate_from", "_reset_from")))
+
+
+def thread_lineage(con, session_id: str) -> list[str]:
+    """`session_id` and the sessions Hermes' compression of it made one conversation with (`sessions`: a parent that
+    ended with `end_reason = 'compression'` and its continuing child, followed both ways, LINEAGE_STEPS at most, as
+    Hermes' own history read does), through an open read-only connection. Only `session_id` when the table has no
+    such columns."""
+    import sqlite3
+    seen, frontier = [session_id], [session_id]
+    try:
+        for _ in range(LINEAGE_STEPS):
+            found = []
+            for sid in frontier:
+                end = con.execute("SELECT end_reason FROM sessions WHERE id = ?", (sid,)).fetchone()
+                if end and end[0] == "compression":
+                    found += [cid for cid, mc, src in con.execute(
+                        "SELECT id, model_config, source FROM sessions WHERE parent_session_id = ?", (sid,)).fetchall()
+                        if _continues(mc, src)]
+                up = con.execute("SELECT c.parent_session_id, c.model_config, c.source, p.end_reason FROM sessions c"
+                                 " JOIN sessions p ON p.id = c.parent_session_id WHERE c.id = ?", (sid,)).fetchone()
+                if up and up[3] == "compression" and _continues(up[1], up[2]):
+                    found.append(up[0])
+            frontier = [x for x in dict.fromkeys(found) if isinstance(x, str) and x not in seen]
+            seen += frontier[:LINEAGE_MAX - len(seen)]
+            if not frontier or len(seen) >= LINEAGE_MAX:
+                break
+    except sqlite3.Error:
+        return [session_id]
+    return seen
+
+
+def thread_last_row(profile_dir: Path, session_id: str) -> int | None:
+    """The id of the newest saved row (`messages`) of a thread across Hermes' compression of it (thread_lineage), from
+    the profile's state.db opened read-only: when it has not moved, the thread's PR links have not either. None when
+    it has none (or no state.db). Nothing is written."""
+    import sqlite3
+    db = profile_dir / "state.db"
+    if not session_id or not db.is_file():
+        return None
+    try:
+        con = sqlite3.connect(ro_uri(db), uri=True, timeout=1.0)
+        try:
+            ids = thread_lineage(con, session_id)
+            row = con.execute(f"SELECT MAX(id) FROM messages WHERE session_id IN ({','.join('?' * len(ids))})",
+                              ids).fetchone()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return None
+    return row[0] if row and isinstance(row[0], int) else None
+
+
+def read_thread_rows(profile_dir: Path, session_id: str) -> list[dict]:
+    """One thread's saved user and assistant rows (`messages`: id, role, content, timestamp, and display_kind where the
+    column exists) across Hermes' compression of it (thread_lineage), oldest first, the newest THREAD_ROWS_MAX, from
+    the profile's state.db opened read-only; [] when it has none (or no state.db). Never a tool row, Hermes'
+    compaction summary (COMPACTION_PREFIXES, COMPACTION_MARKERS), reasoning or any other column. Nothing is written."""
+    import sqlite3
+    db = profile_dir / "state.db"
+    if not session_id or not db.is_file():
+        return []
+    cols = ("id", "role", "content", "timestamp", "display_kind")
+    try:
+        con = sqlite3.connect(ro_uri(db), uri=True, timeout=1.0)
+        try:
+            ids = thread_lineage(con, session_id)
+            for use in (cols, cols[:4]):  # an older state.db has no display_kind
+                try:
+                    got = con.execute(f"SELECT {', '.join(use)} FROM messages WHERE session_id IN"
+                                      f" ({','.join('?' * len(ids))}) AND role IN ('user', 'assistant')"
+                                      " ORDER BY id DESC LIMIT ?", (*ids, THREAD_ROWS_MAX)).fetchall()
+                    break
+                except sqlite3.OperationalError:
+                    if use is not cols:
+                        raise
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return []
+    out = []
+    for r in reversed(got):
+        text = r[2] if isinstance(r[2], str) else ""
+        if text.lstrip().startswith(COMPACTION_PREFIXES) or any(m in text for m in COMPACTION_MARKERS):
+            text = ""  # Hermes' compaction summary, nobody's message: kept empty, so a user row still ends a turn
+        row = {"row_id": r[0], "role": r[1], "content": text, "timestamp": r[3]}
+        if len(r) > 4 and isinstance(r[4], str):
+            row["display_kind"] = r[4]
+        out.append(row)
+    return out
+
+
 def read_session_title(profile_dir: Path, session_id: str) -> tuple[str, str] | None:
     """One session's saved title and folder (`sessions.title`, `sessions.cwd`) from the profile's state.db, opened
     read-only; None when it has no such row (or no state.db). Nothing is written."""
@@ -6092,7 +6297,7 @@ class Bridge:
             "folder.open": self.op_folder_open, "folder.close": self.op_folder_close,
             "folder.resume": self.op_folder_resume,
             "thread.create": self.op_thread_create, "thread.list": self.op_thread_list,
-            "thread.open": self.op_thread_open, "thread.remove": self.op_thread_remove,
+            "thread.open": self.op_thread_open, "thread.remove": self.op_thread_remove, "thread.prs": self.op_thread_prs,
             "panel.terminal": self.op_panel_terminal, "panel.worktrees": self.op_panel_worktrees,
             "panel.diff": self.op_panel_diff, "media.read": self.op_media_read,
             "chat.attach": self.op_chat_attach, "runs.list": self.op_runs_list, "runs.get": self.op_runs_get,
@@ -6117,7 +6322,7 @@ class Bridge:
         self._peers_seen: set[str] = set()  # peer ids attached before: a later attach is the same bots coming back
         self.announce_media = False  # amain: tell the app (stdout) which files it may open
         self._restarting: set[str] = set()      # bots whose restart command runs now
-        self._apps_busy: set[str] = set()       # bots whose `hermes mcp` run (rule 42) runs now
+        self._apps_busy: set[str] = set()       # bots whose `hermes mcp` run (rule 41) runs now
         self._refused: dict[str, float] = {}     # bot -> when Hermes last refused its restart (live work)
         self._reattaching: set[str] = set()     # bots that omher's own restart attaches again (`_reattach`)
         self._recovering: set[str] = set()      # bots a `_recover` looks for
@@ -6125,6 +6330,9 @@ class Bridge:
         self.cli = CliRuns()
         self.node_sessions = NodeSessions(delegations=self.runs.delegations)
         self.prs = PrStates()
+        # a thread's PR links by (bot, thread): (its newest row id, whether a turn ran, the links), so a re-read whose
+        # thread has no new row goes straight to the PR states
+        self._thread_refs: dict[tuple[str, str], tuple[int, bool, list[dict]]] = {}
 
     # ------------------------------------------------------------ lifecycle
 
@@ -7377,6 +7585,30 @@ class Bridge:
                 await self._batch_clarify(conn, x)
         return Reply(result, replay if prompts or asks else None)
 
+    async def op_thread_prs(self, p) -> dict:
+        """The PRs a thread's bot named and GitHub's word on each (BOUNDARY rules 21 and 40): the thread's saved
+        messages read, never written, from the bot's own state.db (read_thread_rows; no gateway call, so a thread not
+        attached in this bridge is never resumed for it), the full PR links in the bot's answers there (thread_pr_refs:
+        newest first, at most PR_THREAD_MAX), then each one's state and checks through the shared PrStates (its cache,
+        pool and per-minute cap). ``fresh``: the person asked for a refresh. {prs: [{number, repo, url, state, checks,
+        head?}]}. Only a thread this bridge created or listed."""
+        conn = await self._conn(p.get("bot"))
+        tid = self._thread_known(conn, p.get("thread"))
+        chat = conn.folders.get(tid)
+        sid, running = chat.stored_id if chat else tid, bool(chat and chat.in_turn)
+        last = await asyncio.to_thread(thread_last_row, conn.bot["path"], sid)
+        kept = self._thread_refs.get((conn.name, tid))
+        if last is not None and kept and kept[:2] == (last, running):
+            refs = kept[2]
+        else:
+            rows = await asyncio.to_thread(read_thread_rows, conn.bot["path"], sid)
+            refs = thread_pr_refs(chat_messages(rows, running=running))
+            if last is not None:
+                if len(self._thread_refs) > 500:
+                    self._thread_refs.clear()
+                self._thread_refs[(conn.name, tid)] = (last, running, refs)
+        return {"prs": await asyncio.to_thread(self.prs.thread, refs, p.get("fresh") is True) if refs else []}
+
     def _hint_rows(self, conn: Conn) -> list[dict]:
         """The bot's open threads for the note, newest activity first: attached ones with their latest answer's last
         line, then listed ones with Hermes' preview."""
@@ -8086,7 +8318,7 @@ class Bridge:
         await self._plugins(conn, "remove", name=name)
         return {"name": name}
 
-    # ------------------------------------------------------------ apps (BOUNDARY rule 42)
+    # ------------------------------------------------------------ apps (BOUNDARY rule 41)
     # Reads are files only (Hermes' MCP catalog, the bot's `mcp_servers` names and switches, a token file's stat).
     # A press runs `hermes -p <bot> mcp install|login|remove <name>`: one run at a time per bot, the name from the
     # catalog just read, and the outcome read back from the files, never from Hermes' exit code alone.

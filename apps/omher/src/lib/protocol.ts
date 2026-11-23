@@ -223,7 +223,7 @@ export interface PluginRow {
   needs_env: string[];
 }
 
-/** One entry of Hermes' MCP catalog for one bot (`apps.list`, BOUNDARY rule 42). `state` comes from the bot's
+/** One entry of Hermes' MCP catalog for one bot (`apps.list`, BOUNDARY rule 41). `state` comes from the bot's
  *  `mcp_servers` and whether Hermes keeps a sign-in for it; `unknown` when the bot's config could not be read. */
 export type AppState = "available" | "installed" | "disabled" | "needs_signin" | "unknown";
 export interface AppRow {

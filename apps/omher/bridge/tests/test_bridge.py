@@ -1627,7 +1627,7 @@ class ReadOnlyRule(BridgeCase):
                             and n.attr in ("run", "Popen", "call", "check_call", "check_output"):
                         uses.append(fn.name)
         # _hermes_run: rule 24's one `hermes -p <bot> cron create` for the briefing (test_brief_setup pins its argv);
-        # run_hermes_mcp: rule 42's `hermes -p <bot> mcp install|login|remove <name>` (test_apps pins its argv)
+        # run_hermes_mcp: rule 41's `hermes -p <bot> mcp install|login|remove <name>` (test_apps pins its argv)
         self.assertEqual(uses, ["_git", "_hermes_run", "gh_pr_view", "run_hermes_restart", "run_hermes_mcp"])
         self.assertNotIn("create_subprocess", src)
         self.assertNotIn("os.system", src)
@@ -3394,9 +3394,10 @@ class RunsPr(unittest.TestCase):
         run = {"nodes": [{"id": "a", "pr": {"number": 101, "repo": "o/r"}}, {"id": "b", "pr": {"number": 102, "repo": "o/r"}},
                          {"id": "c", "pr": {"number": 7}}, {"id": "d"}]}
         got = prs.states(run)
-        self.assertEqual(got, {"a": {"number": 101, "repo": "o/r", "state": "merged", "url": "https://github.com/o/r/pull/101"},
-                               "b": {"number": 102, "repo": "o/r", "state": "unknown"},
-                               "c": {"number": 7, "state": "unknown"}})  # no repo: not asked
+        self.assertEqual(got, {"a": {"number": 101, "repo": "o/r", "state": "merged", "checks": "none",
+                                     "url": "https://github.com/o/r/pull/101"},
+                               "b": {"number": 102, "repo": "o/r", "state": "unknown", "checks": "none"},
+                               "c": {"number": 7, "state": "unknown", "checks": "none"}})  # no repo: not asked
         self.assertEqual(sorted(calls), [("o/r", 101), ("o/r", 102)])
         now[0] += ob.PR_TTL_MISS + 1
         prs.states(run)
@@ -3415,7 +3416,8 @@ class RunsPr(unittest.TestCase):
 
         with mock.patch.object(ob.subprocess, "run", run):
             self.assertEqual(ob.gh_pr_view("rlaope/oh-my-hermes", 2360, gh="/bin/gh")["isDraft"], True)
-        self.assertEqual(seen["argv"], ["/bin/gh", "pr", "view", "2360", "-R", "rlaope/oh-my-hermes", "--json", "state,isDraft,mergedAt,url"])
+        self.assertEqual(seen["argv"], ["/bin/gh", "pr", "view", "2360", "-R", "rlaope/oh-my-hermes", "--json",
+                                        "state,isDraft,mergedAt,url,statusCheckRollup,headRefOid"])
         self.assertEqual(seen["timeout"], ob.PR_TIMEOUT)
         self.assertEqual(seen["env"]["GH_PROMPT_DISABLED"], "1")
 
@@ -3427,7 +3429,8 @@ class RunsPr(unittest.TestCase):
                 self.assertIsNone(ob.gh_pr_view("o/r", 1, gh="/bin/gh"))
         with mock.patch.object(ob, "_gh_path", return_value=None):
             self.assertIsNone(ob.gh_pr_view("o/r", 1))  # no gh: no state, nothing run
-        for repo, n in (("o/r; rm -rf /", 1), ("-R/x", 1), ("o/r", 0), ("o/r", True), ("o/r", "1")):
+        for repo, n in (("o/r; rm -rf /", 1), ("-R/x", 1), ("o/r", 0), ("o/r", True), ("o/r", "1"), ("o/..", 1),
+                        ("o/.", 1), ("o/r", 10**7), ("o/r/x", 1)):
             with self.assertRaises(ValueError):
                 ob.gh_pr_view(repo, n, gh="/bin/gh")
 
@@ -3450,7 +3453,8 @@ class RunsPrOps(BridgeCase):
             self.assertEqual({n["id"]: n.get("pr", {}).get("number") for n in r["result"]["run"]["nodes"]}, {"implement": None, "verify": 9})
             r = await s.req("runs.prs", bot="kami", run=run_id)
             self.assertTrue(r["ok"], r)
-            self.assertEqual(r["result"], {"prs": {"verify": {"number": 9, "repo": "o/r", "url": "https://github.com/o/r/pull/9", "state": "draft"}}})
+            self.assertEqual(r["result"], {"prs": {"verify": {"number": 9, "repo": "o/r", "url": "https://github.com/o/r/pull/9",
+                                                              "state": "draft", "checks": "none"}}})
             self.assertEqual((await s.req("runs.prs", bot="kami"))["error"]["code"], "bad_request")
             self.assertEqual((await s.req("runs.prs", bot="kami", run="dag:x/y"))["error"]["code"], "not_found")
             self.assertEqual((await s.req("runs.prs", bot="kami", run="claude:abc"))["result"], {"prs": {}})

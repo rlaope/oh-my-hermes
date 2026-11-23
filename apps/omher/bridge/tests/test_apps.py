@@ -1,4 +1,4 @@
-"""The Apps page (BOUNDARY rule 42): Hermes' MCP catalog read from its manifest files, each entry's state for one bot
+"""The Apps page (BOUNDARY rule 41): Hermes' MCP catalog read from its manifest files, each entry's state for one bot
 from the bot's `mcp_servers` names and switches and a token file's stat, the bot's integration skills, and the three
 fixed `hermes -p <bot> mcp install|login|remove <name>` argvs a press runs. Every test uses a temp Hermes home, a temp
 catalog and a fake runner: no real profile, no real `hermes`."""

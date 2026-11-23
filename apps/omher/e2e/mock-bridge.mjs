@@ -33,6 +33,11 @@
 // Threads under a bot: thread.create / thread.list / thread.open / thread.remove as the bridge answers them (a thread
 // is a folder entry with `thread: true`, so chat.send / interrupt / approval take `session=<thread>` as for a folder
 // chat); mock.threads {bot, threads: [{title, ago?}]} seeds a bot's threads (listed newest first).
+// A thread's pull requests (rule 40): thread.prs reads the full PR links in the thread's assistant rows (newest first,
+// three at most) and answers each one's state from mock.prs {prs: {"<owner>/<repo>#<n>": {state, checks, head?}}}
+// (a PR it has not been told about reads `unknown` with no checks, as without gh); a peer bot is refused, as the real
+// bridge refuses every thread op for one. mock.threadAnswer {bot, thread, text} is a bot answer in that thread: saved
+// in its history, then turn.start, message and turn.end as a real turn sends them.
 // The bot opens threads itself (bridge `split`): once the app read a bot's threads, its main-chat turns carry the
 // threads note (recorded as `hint: true` on mock.submits, the text left as typed; a thread's submit carries `session`); mock.answer {bot, text} queues a
 // recorded answer for the bot's next main-chat turn. Its top-level ```omher-thread``` blocks open a thread each (task
@@ -624,6 +629,7 @@ const restartTimers = new Set();
 // Every ask event sent, by request id: chat.open sends the ones still pending again, as the bridge does.
 let asked;
 let threadHistory = new Map(); // thread id -> its messages (as thread.open returns them)
+let prStates = new Map(); // "<owner>/<repo>#<n>" -> {state, checks, head?} (what `gh` would say; mock.prs)
 let threadsShown = new Set(); // bots whose threads the app read (thread.list): their main-chat turns carry the note
 let answers = {}; // bot -> recorded answers for its next main-chat turns (mock.answer)
 // Bots that have no Bot Chat yet (mock.noBotChat): chat.open with existing_only answers not_found for them.
@@ -644,7 +650,7 @@ let lostQueue = new Map();
 let noSkills;
 // Tasks › Linear: the bots whose config names a Linear MCP server (mock.linear {bot, server|null})
 let linearMcp;
-// Apps (apps.*, BOUNDARY rule 42): Hermes' MCP catalog (APP_CATALOG) and each bot's state per entry (`<bot>:<name>` ->
+// Apps (apps.*, BOUNDARY rule 41): Hermes' MCP catalog (APP_CATALOG) and each bot's state per entry (`<bot>:<name>` ->
 // installed | needs_signin | disabled | unknown; absent = available); appsNext {verb: {line}} makes that verb's next run
 // fail with Hermes' text (mock.appsNext {verb, line}); mock.apps {bot, name, state} sets one state. Each run answers
 // after APPS_RUN_MS, so a test sees the page while it runs.
@@ -827,6 +833,7 @@ function reset() {
   queues = {};
   avatars = {};
   threadHistory = new Map();
+  prStates = new Map();
   threadsShown = new Set();
   answers = {};
   folders = new Map(); // folder chat id -> { bot, cwd, open }; a thread also has thread, title, started, archived
@@ -1058,6 +1065,8 @@ function needFolder(p, b) {
 }
 // A folder chat's scripted turn runs under its own key; its events go out as the bot's, tagged `session`.
 const folderTurnKey = (bot, session) => `${bot}\u0000${session}`;
+// the bridge's THREAD_PR_URL: a full github.com PR link, nothing glued before it, no further path segment
+const THREAD_PR_URL = /(?<![A-Za-z0-9.@/-])https:\/\/github\.com\/([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))\/([A-Za-z0-9_.-]{1,100})\/pull\/([1-9][0-9]{0,6})(?![A-Za-z0-9_/])/g;
 function needStr(p, k) {
   if (typeof p[k] !== "string" || !p[k]) throw new OpError("bad_request", `missing ${k}`);
   return p[k];
@@ -1338,6 +1347,24 @@ const OPS = {
       messages: [...(threadHistory.get(p.thread) ?? []), ...(lostQueue.get(key) ?? []).map((q) => ({ id: q.id, role: "user", text: q.text, ts: q.ts, queued: true }))],
       lost: lostTurns.get(key) ?? [],
       running: Boolean(turns[key]), model: m.model, provider: m.provider, reasoning: m.reasoning };
+  },
+  "thread.prs": (p) => {
+    const b = needBot(p);
+    if (b.host) throw new OpError("remote_bot", "thread.prs is not available for a bot on another computer");
+    needThread(p, b);
+    const seen = new Map();
+    for (const m of threadHistory.get(p.thread) ?? []) {
+      if (m.role !== "assistant" || typeof m.text !== "string") continue;
+      for (const hit of m.text.matchAll(THREAD_PR_URL)) {
+        if (hit[2] === "." || hit[2] === "..") continue;
+        const key = `${hit[1]}/${hit[2]}#${Number(hit[3])}`;
+        seen.delete(key);
+        seen.set(key, { number: Number(hit[3]), repo: `${hit[1]}/${hit[2]}`, url: `https://github.com/${hit[1]}/${hit[2]}/pull/${Number(hit[3])}` });
+      }
+    }
+    const prs = [...seen.entries()].reverse().slice(0, 3)
+      .map(([key, ref]) => ({ ...ref, ...(prStates.get(key) ?? { state: "unknown", checks: "none" }) }));
+    return { prs };
   },
   "thread.remove": (p) => {
     const b = needBot(p);
@@ -2064,6 +2091,23 @@ const OPS = {
     }
     setTimeout(() => broadcast({ event: "thread.added", bot: b.name, thread: ids[0] ?? "", title: "" }), 0);
     return { threads: ids };
+  },
+  "mock.prs": (p) => {
+    if (!p.prs || typeof p.prs !== "object") throw new OpError("bad_request", "prs must be an object");
+    for (const [key, v] of Object.entries(p.prs)) prStates.set(key, v);
+    return {};
+  },
+  "mock.threadAnswer": (p) => {
+    const b = needBot(p);
+    needThread(p, b);
+    const text = needStr(p, "text");
+    const id = nextId("a");
+    threadHistory.get(p.thread)?.push({ id, role: "assistant", text, ts: now() });
+    const key = folderTurnKey(b.name, p.thread);
+    ev(key, "turn.start", {});
+    ev(key, "message", { id, text });
+    ev(key, "turn.end", { outcome: "done" });
+    return { id };
   },
   "mock.answer": (p) => {
     const b = needBot(p);
