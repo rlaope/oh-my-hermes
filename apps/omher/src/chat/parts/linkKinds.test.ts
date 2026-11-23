@@ -113,6 +113,11 @@ const CASES: Case[] = [
   ["https://calendar.google.com/calendar/appointments/schedules/AcZssZ1abc", "googlecalendar", "booking", "Calendar booking page", { schedule: "AcZssZ1abc" }],
   ["https://www.figma.com/make/AbC123xYz/retry-ui", "figma", "make", "Figma · retry ui", { key: "AbC123xYz" }],
   ["https://www.figma.com/site/AbC123xYz/landing", "figma", "site", "Figma · landing"],
+  ["https://www.figma.com/design/AbC123xYz/C%2B%2B-Guide", "figma", "design", "Figma · C++ Guide"],
+  ["https://www.notion.so/C%2B%2B-Notes-0f1e2d3c4b5a69788796a5b4c3d2e1f0", "notion", "page", "Notion · C++ Notes"],
+  ["https://www.google.com/maps/place/C%2B%2B+Cafe/@37.49,127.02,17z", "googlemaps", "place", "Maps · C++ Cafe"],
+  ["https://docs.google.com/constructor", "googledrive", "page", "Google Docs"],
+  ["https://docs.google.com/__proto__/d/1", "googledrive", "page", "Google Docs"],
   // ---- Jira (Cloud only: <site>.atlassian.net)
   ["https://acme.atlassian.net/browse/ACME-123", "jira", "issue", "ACME-123", { site: "acme", issue: "ACME-123", project: "ACME" }],
   ["https://acme.atlassian.net/browse/acme-7?focusedCommentId=10001", "jira", "issue", "ACME-7"],
@@ -127,7 +132,10 @@ const CASES: Case[] = [
   ["https://acme.atlassian.net/jira/your-work", "jira", "page", "Jira"],
   ["https://acme.atlassian.net/browse/12-ACME", "jira", "page", "Jira"],
   ["https://acme.atlassian.net/jira/software/projects/ACME/boards/x?selectedIssue=nope", "jira", "project", "Jira project · ACME"],
-  ["https://acme.atlassian.net/", "jira", "page", "Jira", { site: "acme" }],
+  ["https://acme.atlassian.net/", "atlassian", "page", "Atlassian", { site: "acme" }],
+  ["https://acme.atlassian.net/compass/component/abc", "atlassian", "page", "Atlassian"],
+  ["https://acme.atlassian.net/WIKI/spaces/ENG", "atlassian", "page", "Atlassian"],
+  ["https://acme.atlassian.net/jira", "jira", "page", "Jira"],
   // ---- Confluence (<site>.atlassian.net/wiki)
   ["https://acme.atlassian.net/wiki/spaces/ENG/pages/123456/Release+Checklist", "confluence", "page", "Confluence · Release Checklist", { site: "acme", space: "ENG", page: "123456" }],
   ["https://acme.atlassian.net/wiki/spaces/ENG/pages/123456/Q4%20Plan%20%E2%80%94%20Draft", "confluence", "page", "Confluence · Q4 Plan — Draft"],
@@ -213,6 +221,7 @@ const CASES: Case[] = [
   ["obsidian://vault/Work", "obsidian", "vault", "Obsidian vault · Work"],
   ["OBSIDIAN://Open?vault=Work&file=Ideas", "obsidian", "note", "Obsidian · Ideas"],
   ["obsidian://open", "obsidian", "page", "Obsidian"],
+  ["Obsidian://open?vault=Work&file=Ideas", "obsidian", "note", "Obsidian · Ideas"],
   ["obsidian://hook-get-address", "obsidian", "page", "Obsidian"],
   ["obsidian://someone@open?vault=Work&file=Ideas", "obsidian", "page", "Obsidian"],
   // ---- lookalikes and anything else: a plain web link named by its real host
@@ -325,6 +334,20 @@ describe("times and URL finding", () => {
   it("lists a handoff's links once, from bare and markdown links, skipping code", () => {
     const md = "PR [#12](https://github.com/o/r/pull/12) and https://github.com/o/r/pull/12 again, `https://in.code/x`\n```\nhttps://in.fence/y\n```\nhttps://meet.google.com/abc-defg-hij";
     expect(linksIn(md)).toEqual(["https://github.com/o/r/pull/12", "https://meet.google.com/abc-defg-hij"]);
+  });
+  it("trims trailing punctuation in linear time", () => {
+    const t0 = performance.now();
+    expect(findUrls("https://a" + ")".repeat(50_000))[0].url).toBe("https://a");
+    expect(findUrls("obsidian://a" + "(".repeat(25_000) + ")".repeat(25_000))[0].url).toHaveLength("obsidian://a".length + 50_000);
+    expect(performance.now() - t0).toBeLessThan(150);
+  });
+  it("reads the obsidian scheme in any case; http(s) stays lowercase, as the opener takes it", () => {
+    expect(findUrls("a OBSIDIAN://open?vault=W b Obsidian://vault/W c").map((u) => u.url)).toEqual(["OBSIDIAN://open?vault=W", "Obsidian://vault/W"]);
+    expect(findUrls("HTTPS://github.com/o/r")).toEqual([]);
+  });
+  it("takes a Sentry org only from a subdomain that names one", () => {
+    for (const host of ["www", "docs", "blog", "status"]) expect(classifyLink(`https://${host}.sentry.io/issues/1/`)!.meta.org, host).toBeUndefined();
+    expect(classifyLink("https://acme.sentry.io/issues/1/")!.meta.org).toBe("acme");
   });
   it("finds a bare obsidian:// link, sentence punctuation left out, and no other custom scheme", () => {
     const text = "Saved to obsidian://open?vault=Work&file=Ideas. Also slack://channel?id=C1 and notion://x.";

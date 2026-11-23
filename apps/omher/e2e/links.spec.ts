@@ -188,7 +188,10 @@ test("work-tool chips: Jira, Confluence, Sentry, Asana, Todoist, ClickUp, GitLab
   await expect.poll(() => opened).toEqual(["https://acme.atlassian.net/browse/ACME-123"]);
   // a lookalike stays a plain link named by its real host
   await expect(b.getByTestId("link-plain")).toHaveText("gitlab.com.evil.io/acme/widgets/-/issues/1");
-  await expect(b).not.toContainText("obsidian://");
+  // the address is not shown as text, only read out to assistive tech (visually hidden)
+  await expect(note.locator(".vh")).toHaveText("obsidian://open?vault=Work&file=Projects%2FLaunch%20Plan.md");
+  expect(await note.locator(".vh").evaluate((e) => e.getBoundingClientRect().width)).toBeLessThanOrEqual(1);
+  await expect(b.locator("a[href^='obsidian'], a[href^='OBSIDIAN']")).toHaveCount(0);
 });
 
 test("labels are readable at rest and ink on hover; no pill fill at rest", async ({ page }) => {

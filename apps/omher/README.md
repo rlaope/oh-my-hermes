@@ -129,7 +129,8 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   and what it points at, read from the address alone (nothing is fetched): GitHub, Slack, Discord, Google (Docs,
   Sheets, Slides, Forms, Drive, Calendar events and booking pages, Meet, Gmail, Maps, Search), X, LinkedIn, YouTube,
   Notion, Linear, Figma, npm, Jira and Confluence Cloud (`*.atlassian.net`), Sentry, Asana, Todoist, ClickUp and
-  GitLab (`gitlab.com`). A self-hosted Jira or GitLab, or a lookalike host, stays a plain link named by its real host.
+  GitLab (`gitlab.com`); another page on an Atlassian site is a generic Atlassian chip. A self-hosted Jira or GitLab,
+  or a lookalike host, stays a plain link named by its real host.
   An `obsidian://` note link is named the same way but is text: omher opens only web links and messenger threads.
 - **Remote machines over SSH** (`src-tauri/src/peers.rs`, `src/peers/`): the sidebar `+` › Connect over SSH (or the
   chip under a bot's `omher-peer` reply, or Settings › Remote machines) takes a host from `~/.ssh/config` or

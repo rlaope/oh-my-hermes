@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Markdown } from "./Markdown";
 import { LinkChip, withLinks } from "./LinkChip";
 import { keepTermLinks } from "./remarkTermLinks";
+import { MentionContext, type Mentions } from "./Mention";
 
 const html = (md: string) => renderToStaticMarkup(<Markdown text={md} />);
 const NOTE = "obsidian://open?vault=Work&file=Projects%2FLaunch%20Plan.md";
@@ -60,6 +61,29 @@ describe("obsidian:// links", () => {
     const two = html("obsidian://open?vault=x&file=a https://example.com/b");
     expect(two).toContain('href="https://example.com/b"');
     expect(two).toContain('title="obsidian://open?vault=x&amp;file=a"');
+  });
+
+  it("a reference-style link and an upper-case scheme are chips too, never an href", () => {
+    const ref = html("Read [the note][n] and [it][n].\n\n[n]: obsidian://open?vault=Work&file=Ideas.md");
+    expect(ref.match(/data-service="obsidian"/g)).toHaveLength(2);
+    expect(ref).toContain("the note");
+    expect(ref).not.toMatch(/<a |href=/);
+    const upper = html("see OBSIDIAN://open?vault=Work&file=Ideas now");
+    expect(upper).toContain("Obsidian · Ideas");
+    expect(upper).not.toContain("<a");
+  });
+
+  it("names its address to assistive tech, not only in the tooltip", () => {
+    expect(html(`see ${NOTE}`)).toContain(`<span class="vh">${NOTE.replace(/&/g, "&amp;")}</span>`);
+  });
+
+  it("a mention inside its text stays text: the chip opens nothing", () => {
+    const m: Mentions = { resolve: (n) => (n === "kami" ? "kami" : null), nameOf: (b) => b, current: null, open: () => {} };
+    const render = (md: string) => renderToStaticMarkup(<MentionContext.Provider value={m}><Markdown text={md} /></MentionContext.Provider>);
+    expect(render("ask @kami")).toContain('data-testid="mention"');
+    const out = render(`[ask @kami](${NOTE})`);
+    expect(out).toContain('data-service="obsidian"');
+    expect(out).not.toContain('data-testid="mention"');
   });
 
   it("leaves the text of a web link alone", () => {

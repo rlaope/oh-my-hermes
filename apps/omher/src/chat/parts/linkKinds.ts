@@ -33,6 +33,7 @@ export type LinkService =
   | "linear"
   | "figma"
   | "npm"
+  | "atlassian"
   | "jira"
   | "confluence"
   | "sentry"
@@ -87,6 +88,8 @@ const decode = (s: string) => {
 };
 
 const seg = (path: string) => path.split("/").filter(Boolean).map(decode);
+/** The path's segments as written, not decoded (same indexes as `seg`): where `+` means a space, read it here. */
+const rawSeg = (u: URL) => u.pathname.split("/").filter(Boolean);
 
 /** "83", "83s", "1m23s", "1h2m3s" -> seconds; null when it is not a time. */
 export function parseT(t: string | null): number | null {
@@ -269,7 +272,7 @@ function google(u: URL, p0: string[]): LinkInfo | null {
   const meta: Record<string, string> = {};
   if (host === "docs.google.com") {
     const p = dropAccount(p0);
-    const ed = GOOGLE_EDITORS[p[0]];
+    const ed = Object.hasOwn(GOOGLE_EDITORS, p[0]) ? GOOGLE_EDITORS[p[0]] : undefined;
     if (ed) {
       const at = p.indexOf("d");
       if (at >= 0 && p[at + 1]) meta.id = p[at + 1] === "e" && p[at + 2] ? p[at + 2] : p[at + 1];
@@ -329,7 +332,8 @@ function google(u: URL, p0: string[]): LinkInfo | null {
   if (isGoogle || host === "maps.google.com") {
     if (host === "maps.google.com" || p0[0] === "maps") {
       const pi = p0.indexOf("place");
-      const name = pi >= 0 && p0[pi + 1] ? p0[pi + 1].replace(/\+/g, " ") : "";
+      const raw = rawSeg(u);
+      const name = pi >= 0 && raw[pi + 1] ? clean(decode(raw[pi + 1].replace(/\+/g, " ")), NAME_MAX) : "";
       if (name) meta.place = name;
       return { service: "googlemaps", kind: name ? "place" : "map", label: name ? `Maps · ${name}` : "Google Maps", meta };
     }
@@ -418,20 +422,18 @@ function youtube(u: URL, p: string[]): LinkInfo {
   return { service: "youtube", kind: "page", label: "YouTube", meta };
 }
 
-/** "Release-Notes-0f1e…" -> "Release Notes" (Notion and Figma put a readable name in the path). */
+/** "Release-Notes-0f1e…" -> "Release Notes" (Notion and Figma put a readable name in the path). `slug` is the
+ * segment as written: `-`, `_` and `+` are spaces there, and an escaped one (`%2B`) is the character itself. */
 const titleOf = (slug: string) =>
   clean(
-    slug
-      .replace(/-?[0-9a-f]{32}$/i, "")
-      .replace(/[-_+]+/g, " ")
-      .trim(),
+    decode(slug.replace(/-?[0-9a-f]{32}$/i, "").replace(/[-_+]+/g, " ")).trim(),
     NAME_MAX,
   );
 
-function notion(_u: URL, p: string[]): LinkInfo {
+function notion(u: URL, p: string[]): LinkInfo {
   const last = p[p.length - 1] ?? "";
   const id = /([0-9a-f]{32})$/i.exec(last)?.[1];
-  const name = titleOf(last);
+  const name = titleOf(rawSeg(u)[p.length - 1] ?? "");
   const meta: Record<string, string> = id ? { id } : {};
   return { service: "notion", kind: id ? "page" : "site", label: name && id ? `Notion · ${name}` : "Notion", meta };
 }
@@ -447,11 +449,11 @@ function linear(_u: URL, p: string[]): LinkInfo {
   return { service: "linear", kind: "page", label: "Linear", meta };
 }
 
-function figma(_u: URL, p: string[]): LinkInfo {
+function figma(u: URL, p: string[]): LinkInfo {
   const meta: Record<string, string> = {};
   if (["file", "design", "proto", "board", "slides", "make", "site"].includes(p[0]) && p[1]) {
     meta.key = p[1];
-    const name = p[2] ? titleOf(p[2]) : "";
+    const name = p[2] ? titleOf(rawSeg(u)[2]) : "";
     return { service: "figma", kind: p[0], label: name ? `Figma · ${name}` : k("Figma", "lk.k.file"), meta };
   }
   return { service: "figma", kind: "page", label: "Figma", meta };
@@ -503,7 +505,7 @@ function jira(u: URL, p: string[], site: string): LinkInfo {
 function confluence(u: URL, p: string[], site: string): LinkInfo {
   const meta: Record<string, string> = { site };
   // a title's `+` is a space and `%2B` a plus: read it from the raw path, before decoding (same indexes as `p`)
-  const raw = u.pathname.split("/").filter(Boolean);
+  const raw = rawSeg(u);
   const page = (at?: number): LinkInfo => {
     const name = at !== undefined && raw[at] ? clean(decode(raw[at].replace(/\+/g, " ")), NAME_MAX) : "";
     return { service: "confluence", kind: "page", label: name ? `Confluence · ${name}` : k("Confluence", "lk.k.page"), meta };
@@ -534,6 +536,9 @@ function confluence(u: URL, p: string[], site: string): LinkInfo {
   return { service: "confluence", kind: "page", label: "Confluence", meta };
 }
 
+// Subdomains of sentry.io that are Sentry's own sites or regions, not an organisation.
+const SENTRY_SITE = new Set(["www", "docs", "blog", "status", "develop", "open", "us", "de"]);
+
 function sentry(p: string[], host: string): LinkInfo {
   const meta: Record<string, string> = {};
   // sentry.io/organizations/<org>/…, or <org>.sentry.io/…
@@ -542,7 +547,7 @@ function sentry(p: string[], host: string): LinkInfo {
   if (p[0] === "organizations" && p[1]) {
     org = p[1];
     q = p.slice(2);
-  } else if (/^[a-z0-9][a-z0-9-]*\.sentry\.io$/.test(host)) {
+  } else if (/^[a-z0-9][a-z0-9-]*\.sentry\.io$/.test(host) && !SENTRY_SITE.has(host.slice(0, -".sentry.io".length))) {
     org = host.slice(0, -".sentry.io".length);
   }
   if (org) meta.org = org;
@@ -753,10 +758,13 @@ function classify(url: string): LinkInfo | null {
   if (bare === "linear.app") return linear(u, p);
   if (bare === "figma.com") return figma(u, p);
   if (bare === "npmjs.com") return npm(u, p);
-  // Jira and Confluence Cloud: <site>.atlassian.net, Confluence under /wiki
+  // Jira and Confluence Cloud: <site>.atlassian.net, Confluence under /wiki, Jira under /browse, /jira and /projects;
+  // anything else there (Compass, the site's home, admin) is the site's generic Atlassian chip
   if (on(host, "atlassian.net") && host !== "atlassian.net") {
     const site = host.slice(0, -".atlassian.net".length);
-    return p[0] === "wiki" ? confluence(u, p, site) : jira(u, p, site);
+    if (p[0] === "wiki") return confluence(u, p, site);
+    if (p[0] === "browse" || p[0] === "jira" || p[0] === "projects") return jira(u, p, site);
+    return { service: "atlassian", kind: "page", label: "Atlassian", meta: { site } };
   }
   if (on(host, "sentry.io")) return sentry(p, host);
   if (on(host, "asana.com")) return asana(p);
@@ -766,19 +774,33 @@ function classify(url: string): LinkInfo | null {
   return web(host.replace(/^www\./, ""), u.pathname);
 }
 
-/** The http(s) and `obsidian://` URLs in a piece of plain text, with where each sits (trailing punctuation left out). */
+const TRAILING = new Set([...".,;:!?)]}>…"]);
+
+/** The http(s) and `obsidian://` URLs in a piece of plain text, with where each sits (trailing punctuation left out).
+ * `obsidian:` is read in any case; `http(s)` only in lower case, the form the desktop opener takes. */
 export function findUrls(text: string): { url: string; start: number; end: number }[] {
   const out: { url: string; start: number; end: number }[] = [];
-  const re = /(?:https?|obsidian):\/\/[^\s<>"'`]+/g;
+  const re = /(?:https?:|obsidian:)\/\/[^\s<>"'`]+/gi;
   for (let m = re.exec(text); m; m = re.exec(text)) {
-    let url = m[0];
-    // keep a closing bracket that has its opening one in the URL (wiki-style links), drop sentence punctuation
-    while (/[.,;:!?)\]}>…]$/.test(url)) {
-      const ch = url[url.length - 1];
-      if ((ch === ")" && (url.match(/\(/g)?.length ?? 0) >= (url.match(/\)/g)?.length ?? 0)) || (ch === "]" && url.includes("["))) break;
-      url = url.slice(0, -1);
+    const raw = m[0];
+    if (/^https?:/i.test(raw) && !/^https?:/.test(raw)) continue;
+    // keep a closing bracket that has its opening one in the URL (wiki-style links), drop sentence punctuation;
+    // the brackets are counted once, so a long run of them costs one pass
+    let open = 0;
+    let close = 0;
+    for (const ch of raw) {
+      if (ch === "(") open += 1;
+      else if (ch === ")") close += 1;
     }
-    out.push({ url, start: m.index, end: m.index + url.length });
+    const square = raw.includes("[");
+    let end = raw.length;
+    while (end > 0 && TRAILING.has(raw[end - 1])) {
+      const ch = raw[end - 1];
+      if ((ch === ")" && open >= close) || (ch === "]" && square)) break;
+      if (ch === ")") close -= 1;
+      end -= 1;
+    }
+    out.push({ url: raw.slice(0, end), start: m.index, end: m.index + end });
   }
   return out;
 }

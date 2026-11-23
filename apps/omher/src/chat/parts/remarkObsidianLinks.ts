@@ -1,5 +1,5 @@
-// remark plugin: each `obsidian://` link in markdown, bare in the text or written as a link (`[text](obsidian://…)`,
-// `<obsidian://…>`), becomes a `span[data-obsidian]`, which Markdown draws as a chip that names the note and opens
+// remark plugin: each `obsidian://` link in markdown (the scheme in any case), bare in the text or written as a link
+// (`[text](obsidian://…)`, `<obsidian://…>`, `[text][ref]` with `[ref]: obsidian://…`), becomes a `span[data-obsidian]`, which Markdown draws as a chip that names the note and opens
 // nothing (rule 22: omher opens only web links and messenger threads). It never stays a link node, so the address
 // never reaches an href or the url transform. Code (inline and fenced) is never text in mdast, and the text of an
 // http(s) link is left alone.
@@ -14,6 +14,7 @@ interface MdNode {
   type: string;
   value?: string;
   url?: string;
+  identifier?: string;
   children?: MdNode[];
   data?: { hName?: string; hProperties?: Record<string, string> };
   position?: { start: { offset?: number }; end: { offset?: number } };
@@ -21,6 +22,8 @@ interface MdNode {
 
 const SKIP = new Set(["link", "linkReference", "definition", "inlineCode", "code", "html"]);
 const OBSIDIAN = /^obsidian:\/\//i;
+const HAS_OBSIDIAN = /obsidian:\/\//i;
+const WORD_END = /[\s<>"'`]/g;
 
 const chip = (url: string, children?: MdNode[]): MdNode => ({
   type: "obsidianLink",
@@ -32,8 +35,18 @@ const span = (n: MdNode) => [n.position?.start.offset, n.position?.end.offset] a
 /** A node's text as shown (a link's text, an emphasis's words). */
 const plain = (n: MdNode): string => n.value ?? (n.children ?? []).map(plain).join("");
 
+/** The `[ref]: obsidian://…` definitions, by their (already normalised) identifier. */
+function obsidianDefinitions(node: MdNode, out = new Map<string, string>()): Map<string, string> {
+  for (const child of node.children ?? []) {
+    if (child.type === "definition" && child.identifier && child.url && OBSIDIAN.test(child.url.trim())) out.set(child.identifier, child.url.trim());
+    else obsidianDefinitions(child, out);
+  }
+  return out;
+}
+
 export function remarkObsidianLinks() {
   let src = "";
+  let defs = new Map<string, string>();
   const walk = (node: MdNode) => {
     if (!node.children || SKIP.has(node.type)) return;
     const kids = node.children;
@@ -44,7 +57,12 @@ export function remarkObsidianLinks() {
         next.push(chip(child.url.trim(), child.children ?? []));
         continue;
       }
-      if (child.type !== "text" || !child.value?.includes("obsidian://")) {
+      const ref = child.type === "linkReference" && child.identifier ? defs.get(child.identifier) : undefined;
+      if (ref) {
+        next.push(chip(ref, child.children ?? []));
+        continue;
+      }
+      if (child.type !== "text" || !child.value || !HAS_OBSIDIAN.test(child.value)) {
         walk(child);
         next.push(child);
         continue;
@@ -67,7 +85,9 @@ export function remarkObsidianLinks() {
         }
         // the address may go on past this node: its end comes from the source, then the siblings that lie inside it
         const start = s + f.start;
-        const word = src.slice(start).split(/[\s<>"'`]/, 1)[0];
+        WORD_END.lastIndex = start;
+        const stop = WORD_END.exec(src);
+        const word = src.slice(start, stop ? stop.index : src.length);
         const end = start + (findUrls(word)[0]?.url.length ?? f.url.length);
         let reach = e;
         while (i + 1 < kids.length && reach < end) {
@@ -102,6 +122,7 @@ export function remarkObsidianLinks() {
   };
   return (tree: MdNode, file?: { value?: unknown }) => {
     src = typeof file?.value === "string" ? file.value : "";
+    defs = obsidianDefinitions(tree);
     walk(tree);
   };
 }

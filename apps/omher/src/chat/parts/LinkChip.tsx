@@ -94,6 +94,7 @@ export const LinkChip = memo(function LinkChip({ url, children, prState }: { url
       <span className="lk lk-static" data-testid="link-chip" data-service={info.service} data-kind={info.kind} title={url}>
         <BrandIcon service={info.service} size={12} />
         <span className="lk-t">{children ?? info.label}</span>
+        <span className="vh">{url}</span>
       </span>
     );
   }
