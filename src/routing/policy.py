@@ -37,6 +37,12 @@ from .skill_eval_cues import (
     skill_eval_person_sense,
     skill_eval_phrase_spoken,
 )
+from .bot_template_cues import (
+    BOT_TEMPLATE_ANCHORS,
+    BOT_TEMPLATE_SHARED_PHRASES,
+    bot_template_code_sense,
+    bot_template_phrase_spoken,
+)
 from ..plugin_bundle.omh.dag_ulw_cues import DAG_ULW, asks_about_dag_ulw, dag_ulw_control, declines_dag_ulw, invokes_dag_ulw
 from ..plugin_bundle.omh.invocation_cues import invoked_instruction
 from ..coding.pi_family_interop import PI_DISTRIBUTION_HOST, RUNTIME_SHORT_NAME
@@ -2265,6 +2271,11 @@ EVERYDAY_SENSE_PHRASES: dict[str, tuple[tuple[str, ...], frozenset[str]]] = {
     # person's ability; each phrase keeps this route only alone or beside a
     # word of agent skills or their hosts.
     "skill-eval": (SKILL_EVAL_SHARED_PHRASES, SKILL_EVAL_ANCHORS),
+    # "create a discord bot template in python" and "slack bot template repo"
+    # ask for a starter project; each phrase keeps this route only alone or
+    # beside a template id or a word that applies, lists or shows one, and
+    # never beside a word of code (`bot_template_code_sense`).
+    "bot-template": (BOT_TEMPLATE_SHARED_PHRASES, BOT_TEMPLATE_ANCHORS),
     # "we need to backfill the open position on the team", "my family lineage
     # goes back to scotland", "duplicate events in my calendar" and "the batch
     # job at the bakery" are not pipelines; each phrase keeps this route only
@@ -2409,6 +2420,12 @@ def everyday_sense_phrase_unanchored(skill: str, normalized_query: str) -> bool:
     # "evaluate my skill at using Codex for Python": a host word sits beside
     # the phrase, but the skill is the person's (`skill_eval_person_sense`).
     if skill == "skill-eval" and skill_eval_phrase_spoken(normalized_query) and skill_eval_person_sense(
+        normalized_query
+    ):
+        return True
+    # "apply a discord bot template in python": an anchor sits beside the
+    # phrase, but the template is a starter project (`bot_template_code_sense`).
+    if skill == "bot-template" and bot_template_phrase_spoken(normalized_query) and bot_template_code_sense(
         normalized_query
     ):
         return True

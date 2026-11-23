@@ -330,7 +330,9 @@ class RouterContentTests(unittest.TestCase):
         # 33,486 measured, +348); the existing allowance is kept, not widened.
         # 33,622 -> 33,892: `skill-eval` adds its index entry (33,486 -> 33,756
         # measured, +270); the existing allowance is kept, not widened.
-        self.assertLess(len(rendered.encode("utf-8")), 33_892)
+        # 33,892 -> 34,142: `bot-template` adds its index entry (33,714 -> 33,964
+        # measured, +250); the existing allowance is kept, not widened.
+        self.assertLess(len(rendered.encode("utf-8")), 34_142)
         for line in rendered.splitlines():
             self.assertLess(len(line.encode("utf-8")), 400, line)
 
@@ -537,9 +539,11 @@ class RouterContentTests(unittest.TestCase):
                 # the existing headroom is kept.
                 # 34,079 -> 34,283: `skill-eval` adds its 190-byte trigger row and
                 # 14-byte tracker token (34,046 -> 34,250 measured, +204).
-                limit = 34_283
+                # 34,283 -> 34,432: `bot-template` adds its 133-byte trigger row and
+                # 16-byte operator token (34,250 -> 34,399 measured, +149).
+                limit = 34_432
             elif template.skill_name == "oh-my-hermes" and template.relative_path == "references/catalog-index.md":
-                limit = 33_892
+                limit = 34_142
             else:
                 limit = 33_100
             self.assertLess(len(template.content.encode("utf-8")), limit, template.relative_path)

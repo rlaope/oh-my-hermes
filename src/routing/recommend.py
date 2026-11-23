@@ -38,6 +38,12 @@ from .trigger_language_packs import (
     shipped_trigger_language_packs,
 )
 from .model_compression_cues import names_a_model_by_parameter_count
+from .bot_template_cues import (
+    BOT_TEMPLATE_SHARED_PHRASES,
+    bot_template_korean_match,
+    bot_template_korean_unanchored,
+    bot_template_names_the_job,
+)
 from .skill_eval_cues import (
     SKILL_EVAL_JOB_PHRASES,
     SKILL_EVAL_SHARED_PHRASES,
@@ -1735,6 +1741,17 @@ _SKILL_POLICIES = {
         wrapper_guidance=(
             "Run `omh skill-eval <dir>` offline with the install root, quote each host row and the count line, list "
             "fixes at their source (not_loaded first), and offer the with/without reference only for a lift question."
+        ),
+    ),
+    "bot-template": RecommendationPolicy(
+        next_action="prepare_bot_template",
+        evidence_boundary=(
+            "An applied bot template is not a written persona, an installed skill or a created job until Hermes shows "
+            "them; every job it creates is paused until the person turns it on."
+        ),
+        wrapper_guidance=(
+            "Load the template from the skill's references, stop at the first missing skill with its one line, append "
+            "the persona only after Hermes' approval, create each schedule paused, and list webhooks and apps."
         ),
     ),
     "context-budget-review": RecommendationPolicy(
@@ -4814,6 +4831,10 @@ def _score_definition(
         normalized_query
     ):
         return None
+    if explicit_skill != definition.name and definition.name == "bot-template" and bot_template_korean_unanchored(
+        normalized_query
+    ):
+        return None
 
     if definition.name == explicit_skill:
         score += 12
@@ -5011,6 +5032,9 @@ def _score_definition(
     if definition.name == "skill-eval" and _skill_eval_explicit_match(normalized_query):
         score += 30
         matched.add("direct:skill_eval")
+    if definition.name == "bot-template" and _bot_template_explicit_match(normalized_query):
+        score += 30
+        matched.add("direct:bot_template")
     if definition.name == "data-pipelines" and _data_pipelines_explicit_match(normalized_query):
         score += 30
         matched.add("direct:data_pipelines")
@@ -5938,6 +5962,16 @@ def _skill_eval_explicit_match(normalized_query: str) -> bool:
     return skill_eval_korean_match(normalized_query)
 
 
+def _bot_template_explicit_match(normalized_query: str) -> bool:
+    """A template id named as a template, an anchored "bot template" (the unanchored and code senses returned None
+    before scoring), or the Korean phrase beside an anchor."""
+    if bot_template_names_the_job(normalized_query):
+        return True
+    if any(phrase_is_spoken(normalized_query, normalized_phrase(phrase)) for phrase in BOT_TEMPLATE_SHARED_PHRASES):
+        return True
+    return bot_template_korean_match(normalized_query)
+
+
 def _data_pipelines_explicit_match(normalized_query: str) -> bool:
     return any(_explicit_phrase_match(normalized_query, phrase) for phrase in _DATA_PIPELINES_EXPLICIT_PHRASES)
 
@@ -6580,6 +6614,11 @@ _SKILL_OFFERS_ITSELF: dict[str, Callable[[str, set[str]], bool]] = {
     # (`show_reel_cues.show_reel_request_admitted`). It stands down no guard:
     # a film named inside another request stays that request's.
     "show-reel": lambda normalized_query, query_tokens: show_reel_request_admitted(normalized_query),
+    # `bot-template`: only a spoken template phrase (a template id named as a
+    # template, an anchored "bot template", or the anchored Korean phrase), so
+    # "template" or "bot" alone in "create a prompt template" or "jinja 템플릿
+    # 수정해줘" never makes it the clarify candidate.
+    "bot-template": lambda normalized_query, query_tokens: _bot_template_explicit_match(normalized_query),
     # Changing how a page looks is not operating a browser on it, even when
     # the page is named by a browser phrase ("login page").
     "browser-operator": lambda normalized_query, query_tokens: not appearance_edit_request(query_tokens),

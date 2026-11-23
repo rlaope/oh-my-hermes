@@ -1,0 +1,274 @@
+"""Bot templates: the `bot_template/v1` catalog, its read path, the skill that applies one, and its routing."""
+from __future__ import annotations
+
+import contextlib
+import io
+import json
+import re
+import unittest
+
+from _local_package import load_local_package
+
+load_local_package()
+
+from omh.catalogs.bot_templates import (  # noqa: E402
+    APPLY_SKILL,
+    BOT_TEMPLATE_CATALOG_SCHEMA_VERSION,
+    BOT_TEMPLATE_SCHEMA_VERSION,
+    BOT_TEMPLATES,
+    BotTemplateError,
+    apply_message,
+    bot_template,
+    bot_template_ids,
+    bot_templates_payload,
+)
+from omh.catalogs.playbooks import list_playbooks  # noqa: E402
+from omh.commands.main import build_parser  # noqa: E402
+from omh.core.errors import OmhError  # noqa: E402
+from omh.routing.bot_template_cues import (  # noqa: E402
+    bot_template_code_sense,
+    bot_template_korean_match,
+    bot_template_names_the_job,
+)
+from omh.routing.localization import normalized_phrase  # noqa: E402
+from omh.routing.policy import everyday_sense_phrase_unanchored  # noqa: E402
+from omh.skills.catalog import installable_skill_names  # noqa: E402
+from omh.skills.packaging import builtin_skill_reference_templates, builtin_skill_templates  # noqa: E402
+from omh.team_profiles import list_team_profile_packs  # noqa: E402
+
+SKILL = "bot-template"
+REFERENCE_PATH = "references/templates.md"
+# Hermes' cron job name for a watch (`references/pr-watch.md`, `references/channel-watch.md`) and its profile id
+# grammar (`hermes_constants.PROFILE_ID_RE`); a template's job name is also a recipe's `<watch>`.
+WATCH_NAME = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
+# Hermes' MCP catalog entry names the templates use, read from `optional-mcps/` of a Hermes checkout (caafe5389a,
+# 2026-11-19). The catalog is Hermes' own and is never read by core `omh`; this list only pins that a template names
+# an entry that existed when it was written.
+HERMES_MCP_CATALOG_NAMES = frozenset({"atlassian", "datadog", "grafana", "linear", "notion", "sentry"})
+# Hermes' bundled skills the templates use, by folder name under `skills/<category>/` of the same checkout.
+HERMES_BUNDLED_SKILLS = frozenset(
+    {"email-inbox-triage", "github", "google-workspace", "meeting-action-items", "obsidian"}
+)
+
+
+def _reference(skill: str, path: str) -> str | None:
+    return next(
+        (t.content for t in builtin_skill_reference_templates() if t.skill_name == skill and t.relative_path == path),
+        None,
+    )
+
+
+def _run(*argv: str) -> tuple[int, str]:
+    args = build_parser().parse_args(["profile", "bot-templates", *argv])
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        code = args.func(args)
+    return code, out.getvalue()
+
+
+class BotTemplateCatalogTests(unittest.TestCase):
+    def test_the_set_is_small_and_every_id_is_unique(self) -> None:
+        ids = bot_template_ids()
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertGreaterEqual(len(ids), 6)
+        self.assertLessEqual(len(ids), 8)
+        for template_id in ids:
+            self.assertRegex(template_id, WATCH_NAME)
+
+    def test_payload_is_versioned_and_byte_stable(self) -> None:
+        payload = bot_templates_payload()
+        self.assertEqual(payload["schema_version"], BOT_TEMPLATE_CATALOG_SCHEMA_VERSION)
+        self.assertEqual(payload["apply_skill"], APPLY_SKILL)
+        self.assertEqual([t["id"] for t in payload["templates"]], list(bot_template_ids()))
+        for row in payload["templates"]:
+            self.assertEqual(row["schema_version"], BOT_TEMPLATE_SCHEMA_VERSION)
+            self.assertEqual(row["coding_owner"], "selected")
+        self.assertEqual(
+            json.dumps(payload, sort_keys=True, ensure_ascii=False),
+            json.dumps(bot_templates_payload(), sort_keys=True, ensure_ascii=False),
+        )
+
+    def test_every_schedule_is_paused_delivered_to_the_bot_and_named_as_a_watch(self) -> None:
+        seen: set[str] = set()
+        for row in bot_templates_payload()["templates"]:
+            for schedule in row["schedules"]:
+                self.assertIs(schedule["paused"], True)
+                self.assertEqual(schedule["deliver"], "bot-chat")
+                self.assertEqual(schedule["job_name"], f"{row['id']}-{schedule['id']}")
+                self.assertRegex(schedule["job_name"], WATCH_NAME)
+                self.assertNotIn(schedule["job_name"], seen)
+                seen.add(schedule["job_name"])
+
+    def test_a_plain_prompt_is_self_contained_and_silent_when_nothing_is_new(self) -> None:
+        for template in BOT_TEMPLATES:
+            for schedule in template.schedules:
+                if schedule.reference is not None:
+                    continue
+                with self.subTest(job=f"{template.id}-{schedule.id}"):
+                    self.assertEqual(len(schedule.cron.split()), 5)
+                    self.assertIn("[SILENT]", schedule.prompt)
+                    # A cron run has no chat context: every placeholder is filled from the person's answer.
+                    if re.search(r"<[a-z]+>", schedule.prompt):
+                        self.assertTrue(schedule.asks)
+                    self.assertNotIn("named to you", schedule.prompt)
+
+    def test_every_skill_reference_resolves_to_an_installable_skill(self) -> None:
+        installable = set(installable_skill_names())
+        for template in BOT_TEMPLATES:
+            names = {*template.skills, *(s for schedule in template.schedules for s in schedule.skills)}
+            with self.subTest(template=template.id):
+                self.assertTrue(template.skills)
+                self.assertLessEqual(names, installable)
+                self.assertNotIn(SKILL, names)
+
+    def test_hermes_skills_and_apps_are_names_hermes_ships(self) -> None:
+        for template in BOT_TEMPLATES:
+            hermes = {*template.hermes_skills, *(s for schedule in template.schedules for s in schedule.hermes_skills)}
+            apps = {app.name for app in template.apps} | {a for schedule in template.schedules for a in schedule.apps}
+            with self.subTest(template=template.id):
+                self.assertLessEqual(hermes, HERMES_BUNDLED_SKILLS)
+                self.assertLessEqual(apps, HERMES_MCP_CATALOG_NAMES)
+                for app in template.apps:
+                    self.assertIn(app.need, {"required", "optional"})
+                # A schedule's app is one the template lists, so a surface can offer it.
+                self.assertLessEqual({a for s in template.schedules for a in s.apps}, {app.name for app in template.apps})
+
+    def test_team_roles_and_playbooks_are_existing_catalog_ids(self) -> None:
+        packs = {pack["id"]: {role["id"] for role in pack["roles"]} for pack in list_team_profile_packs()["packs"]}
+        playbooks = {playbook["id"] for playbook in list_playbooks()["playbooks"]}
+        for template in BOT_TEMPLATES:
+            with self.subTest(template=template.id):
+                if template.team_role is not None:
+                    pack, role = template.team_role
+                    self.assertIn(pack, packs)
+                    self.assertIn(role, packs[pack])
+                self.assertTrue(template.playbooks)
+                self.assertLessEqual(set(template.playbooks), playbooks)
+
+    def test_recipe_and_webhook_references_name_shipped_reference_sections(self) -> None:
+        for template in BOT_TEMPLATES:
+            for webhook in template.webhooks:
+                content = _reference(*webhook.reference)
+                with self.subTest(webhook=webhook.id):
+                    self.assertIsNotNone(content)
+                    self.assertIn(f"## {webhook.section}\n", content)
+            for schedule in template.schedules:
+                if schedule.reference is None or schedule.recipe:
+                    continue
+                with self.subTest(schedule=schedule.id):
+                    self.assertIsNotNone(_reference(*schedule.reference))
+                    self.assertTrue(schedule.asks)
+
+    def test_persona_seeds_are_generic_and_never_open_a_link_or_name_a_person(self) -> None:
+        for template in BOT_TEMPLATES:
+            seed = template.to_dict()["persona_seed"]
+            with self.subTest(template=template.id):
+                self.assertTrue(seed.startswith(f"## Bot template: {template.title}\n\n"))
+                self.assertNotRegex(seed, r"https?://|@|[A-Z][a-z]+ [A-Z][a-z]+ (?:Inc|LLC|Corp)")
+                self.assertIn("never", seed)
+
+    def test_apply_message_opens_with_the_skill_command_and_names_the_id(self) -> None:
+        for template_id in bot_template_ids():
+            message = apply_message(template_id)
+            self.assertTrue(message.startswith("/omh-bot-template "))
+            self.assertIn(f"`{template_id}`", message)
+            self.assertEqual(bot_template(template_id).to_dict()["apply_message"], message)
+        with self.assertRaises(BotTemplateError):
+            bot_template("not-a-template")
+
+
+class BotTemplateCommandTests(unittest.TestCase):
+    def test_json_listing_is_the_catalog_payload(self) -> None:
+        code, out = _run("--json")
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out), bot_templates_payload())
+
+    def test_one_template_by_id(self) -> None:
+        code, out = _run("pr-review", "--json")
+        self.assertEqual(code, 0)
+        payload = json.loads(out)
+        self.assertEqual(payload["id"], "pr-review")
+        self.assertIn("claim_boundary", payload)
+
+    def test_an_unknown_id_is_an_error_naming_the_ids(self) -> None:
+        with self.assertRaises(OmhError) as raised:
+            _run("not-a-template", "--json")
+        self.assertIn("pr-review", str(raised.exception))
+
+    def test_text_listing_names_each_template_and_how_to_apply_it(self) -> None:
+        code, out = _run()
+        self.assertEqual(code, 0)
+        for template_id in bot_template_ids():
+            self.assertIn(f"{template_id}: ", out)
+        self.assertIn("/omh-bot-template", out)
+
+
+class BotTemplateSkillTests(unittest.TestCase):
+    def _body(self) -> str:
+        return next(t.content for t in builtin_skill_templates() if t.name == SKILL)
+
+    def test_reference_lists_every_template_with_its_persona_and_paused_jobs(self) -> None:
+        reference = _reference(SKILL, REFERENCE_PATH)
+        self.assertIsNotNone(reference)
+        for template in BOT_TEMPLATES:
+            self.assertIn(f"## `{template.id}`: {template.title}", reference)
+            self.assertIn(template.persona_heading(), reference)
+            for schedule in template.schedules:
+                self.assertIn(f"`{template.id}-{schedule.id}`", reference)
+        self.assertIn("`paused: true`", reference)
+
+    def test_body_keeps_every_write_with_the_bot_and_nothing_turned_on(self) -> None:
+        body = self._body()
+        for required in (
+            "`paused: true`",
+            "Append the persona seed to SOUL.md",
+            "never write `MEMORY.md` or `USER.md`",
+            "`omh update`",
+            "already there",
+            "Create no webhook route, install no skill and connect no app",
+            "`mcp__<app>__`",
+            "(`/new`)",
+        ):
+            self.assertIn(required, body)
+
+    def test_hermes_only_and_absent_from_the_portable_projection(self) -> None:
+        from omh.skills.catalog_portable import PORTABILITY_HERMES_ONLY, skill_portability
+
+        self.assertEqual(skill_portability("omh-bot-template"), PORTABILITY_HERMES_ONLY)
+
+
+class BotTemplateRoutingTests(unittest.TestCase):
+    def test_code_and_messenger_senses_keep_the_phrase_off(self) -> None:
+        for message in (
+            "create a discord bot template in python",
+            "slack bot template repo on github",
+            "use a bot template for my discord server",
+        ):
+            with self.subTest(message=message):
+                self.assertTrue(everyday_sense_phrase_unanchored(SKILL, normalized_phrase(message)))
+        # A template id beside a messenger is still the template.
+        self.assertFalse(bot_template_code_sense(normalized_phrase("apply the channel-watch bot template for slack")))
+
+    def test_anchored_english_and_job_phrases_keep_it(self) -> None:
+        for message in ("apply the pr-review bot template", "list the bot templates", "bot template"):
+            with self.subTest(message=message):
+                self.assertFalse(everyday_sense_phrase_unanchored(SKILL, normalized_phrase(message)))
+        self.assertTrue(bot_template_names_the_job(normalized_phrase("apply the release-notes template")))
+        self.assertFalse(bot_template_names_the_job(normalized_phrase("release notes template for the changelog")))
+
+    def test_korean_counts_alone_or_anchored_and_never_as_code(self) -> None:
+        for message, expected in (
+            ("봇 템플릿", True),
+            ("봇 템플릿 적용해줘", True),
+            ("어떤 봇 템플릿 있어?", True),
+            ("이 봇에 pr-review 봇 템플릿 적용해줘", True),
+            ("봇 템플릿 만들어줘", False),
+            ("디스코드 봇 템플릿 코드 짜줘", False),
+            ("슬랙 봇 템플릿 레포 찾아줘", False),
+        ):
+            with self.subTest(message=message):
+                self.assertIs(bot_template_korean_match(normalized_phrase(message)), expected)
+
+
+if __name__ == "__main__":
+    unittest.main()

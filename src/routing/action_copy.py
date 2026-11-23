@@ -163,6 +163,7 @@ NEXT_ACTION_LABELS: dict[str, str] = {
     "prepare_skill_scout": "preparing a skill candidate scout",
     "prepare_skill_health": "preparing a skill health dashboard",
     "prepare_skill_eval": "checking a skill against its hosts",
+    "prepare_bot_template": "applying a bot template",
     "prepare_source_finder_plan": "scoping source candidates",
     "prepare_strategy_brief": "preparing a strategy brief",
     "prepare_handoff": "preparing the coding handoff",

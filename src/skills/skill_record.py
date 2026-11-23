@@ -70,6 +70,7 @@ from .molecular_docking_skill import molecular_docking_reference_templates
 from .ai_job_search_skill import ai_job_search_reference_templates
 from .model_compression_skill import model_compression_reference_templates
 from .skill_eval_skill import skill_eval_reference_templates
+from .bot_template_skill import bot_template_reference_templates
 from .render import (
     SkillReferenceTemplate,
     SkillTemplate,
@@ -261,6 +262,7 @@ REFERENCE_PRODUCERS: tuple[Callable[[], list[SkillReferenceTemplate]], ...] = (
     model_finetuning_reference_templates,
     model_compression_reference_templates,
     skill_eval_reference_templates,
+    bot_template_reference_templates,
     mobile_release_reference_templates,
     internal_audit_reference_templates,
     data_share_review_reference_templates,

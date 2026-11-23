@@ -57,6 +57,7 @@ from .repro_audit_skill import DEFINITION as REPRO_AUDIT_DEFINITION
 from .systematic_review_skill import DEFINITION as SYSTEMATIC_REVIEW_DEFINITION
 from .model_compression_skill import DEFINITION as MODEL_COMPRESSION_DEFINITION
 from .skill_eval_skill import DEFINITION as SKILL_EVAL_DEFINITION
+from .bot_template_skill import DEFINITION as BOT_TEMPLATE_DEFINITION
 from .dag_ulw_skill import DEFINITION as DAG_ULW_DEFINITION
 from .decision_prototype_skill import DEFINITION as DECISION_PROTOTYPE_DEFINITION
 from .jev_skills import JEV_DEFINITIONS
@@ -12525,6 +12526,7 @@ _DEFINITIONS.extend(
         SYSTEMATIC_REVIEW_DEFINITION,
         MODEL_COMPRESSION_DEFINITION,
         SKILL_EVAL_DEFINITION,
+        BOT_TEMPLATE_DEFINITION,
         GEOSPATIAL_ANALYSIS_DEFINITION,
         SPRITE_FORGE_DEFINITION,
         BIOMEDICAL_EVIDENCE_DEFINITION,

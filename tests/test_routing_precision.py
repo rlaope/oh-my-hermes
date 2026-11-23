@@ -113,7 +113,9 @@ class RoutingPrecisionTests(unittest.TestCase):
         # Its verification round adds three: a PR metric and two deploys watched beside a PR.
         # Its final round adds three PR measures watched until a date.
         # Its hold round adds five: four declined watches and CI on main.
-        self.assertEqual(payload["summary"]["case_count"], 1562)
+        # bot-template adds eight: four bot templates coded for a messenger or in a language, a Korean one,
+        # and a Jinja and two prompt templates.
+        self.assertEqual(payload["summary"]["case_count"], 1570)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -294,7 +296,9 @@ class RoutingPrecisionTests(unittest.TestCase):
         # Its verification round adds one: a deploy monitored after a merge keeps deploy-and-monitor.
         # Its final round adds five PR waits that name logs, production, a server or a deploy elsewhere.
         # Its hold round adds two: a declined review, then a PR watch, in English and Korean.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1367)
+        # bot-template adds eleven: eight applies and lists (five English with omher's message, three Korean)
+        # that dispatch, and a PR, a release notes and an issue template that keep their owners.
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1378)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

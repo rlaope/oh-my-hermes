@@ -10692,6 +10692,41 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "skill-at-using-codex-is-not-skill-eval", "A person's skill at using Codex is not an agent skill check",
         "evaluate my skill at using Codex for Python", "answer_clarification", "", "skill-eval",
     ),
+    # bot-template: a bot template coded for a messenger, in a language or a
+    # repository is a starter project, and an everyday template (Jinja, a
+    # prompt) never makes it the clarify candidate.
+    RoutingPrecisionCase(
+        "discord-bot-template-in-python-is-not-bot-template", "A Discord bot template in Python is a starter project",
+        "create a discord bot template in python", "answer_clarification", "", "bot-template",
+    ),
+    RoutingPrecisionCase(
+        "slack-bot-template-repo-is-not-bot-template", "A Slack bot template repository is a starter project",
+        "slack bot template repo on github", "answer_clarification", "", "bot-template",
+    ),
+    RoutingPrecisionCase(
+        "telegram-bot-template-scaffold-is-not-bot-template", "Scaffolding a Telegram bot template is a starter project",
+        "scaffold a telegram bot template with aiogram", "answer_clarification", "", "bot-template",
+    ),
+    RoutingPrecisionCase(
+        "bot-template-for-discord-server-is-not-bot-template", "A bot template for a Discord server is a starter project",
+        "use a bot template for my discord server", "answer_clarification", "", "bot-template",
+    ),
+    RoutingPrecisionCase(
+        "ko-discord-bot-template-code-is-not-bot-template", "Korean Discord bot template code is a starter project",
+        "디스코드 봇 템플릿 코드 짜줘", "answer_clarification", "", "bot-template",
+    ),
+    RoutingPrecisionCase(
+        "jinja-template-fix-is-not-bot-template", "Fixing a Jinja template is not a bot template",
+        "fix the jinja template that renders the header", "answer_clarification", "", "bot-template",
+    ),
+    RoutingPrecisionCase(
+        "prompt-template-is-not-bot-template", "A prompt template is not a bot template",
+        "create a prompt template for the classifier", "answer_clarification", "", "bot-template",
+    ),
+    RoutingPrecisionCase(
+        "ko-prompt-template-is-not-bot-template", "A Korean prompt template is not a bot template",
+        "프롬프트 템플릿 정리해줘", "answer_clarification", "", "bot-template",
+    ),
 )
 
 
@@ -21828,6 +21863,20 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     RoutingInterventionCase("skill-eval-agent-skill-loads-in-codex", "Asking whether this agent skill loads in Codex reaches the host-fit check", "Please evaluate whether this agent skill loads in Codex", "dispatch", "skill-eval", "prepare_skill_eval", "skill_eval", "skill-eval"),
     RoutingInterventionCase("skill-eval-skill-md-compatibility", "SKILL.md compatibility reaches the host-fit check, not a file lookup", "check SKILL.md compatibility", "dispatch", "skill-eval", "prepare_skill_eval", "skill_eval", "skill-eval"),
     RoutingInterventionCase("ko-staff-skill-criteria-keeps-deep-interview", "A Korean staff skill assessment beside this skill keeps deep interview", "이 스킬로 일하는 직원 스킬 평가 기준 만들어줘", "dispatch", "deep-interview", "answer_clarification", "clarification", "deep-interview"),
+    # bot-template: applying or listing a bot template, in English and Korean,
+    # and omher's own apply message reach it; a PR template, a release notes
+    # template and an issue template keep their owners.
+    RoutingInterventionCase("bot-template-apply-pr-review", "Applying a bot template by id reaches the bot template skill", "apply the pr-review bot template", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
+    RoutingInterventionCase("bot-template-id-named-as-template", "A template id named as a template reaches it without the word bot", "apply the release-notes template", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
+    RoutingInterventionCase("bot-template-list", "Listing the bot templates reaches the bot template skill", "list the bot templates", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
+    RoutingInterventionCase("bot-template-set-this-bot-up", "Setting this bot up from a bot template reaches it", "set this bot up as a PR reviewer bot from the bot template", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
+    RoutingInterventionCase("bot-template-omher-apply-message", "omher's one apply message reaches the bot template skill", "/omh-bot-template Apply the bot template `pr-review` to this bot.", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
+    RoutingInterventionCase("ko-bot-template-apply", "The Korean ask to apply a bot template reaches it", "봇 템플릿 적용해줘", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
+    RoutingInterventionCase("ko-bot-template-id-apply", "A Korean ask naming a template id reaches it", "research-vault 템플릿 적용해줘", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
+    RoutingInterventionCase("ko-bot-template-which", "A Korean ask for which bot templates exist reaches it", "어떤 봇 템플릿 있어?", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
+    RoutingInterventionCase("pr-template-keeps-commit-pr-authoring", "A PR template for a repository stays with commit and PR authoring", "write a PR template for this repo", "dispatch", "commit-pr-authoring", "prepare_commit_pr_text", "commit_pr_draft"),
+    RoutingInterventionCase("release-notes-template-keeps-content-operator", "A release notes template stays with the content operator", "release notes template for the changelog", "dispatch", "content-operator", "prepare_content_operator_card", "content_operator"),
+    RoutingInterventionCase("github-issue-template-keeps-github-event-ops", "A GitHub issue template stays with GitHub event ops", "github issue template for feature requests", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
 )
 
 

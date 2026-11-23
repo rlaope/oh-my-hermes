@@ -158,6 +158,7 @@ _FAMILY_DEFINITIONS = (
             "skill-scout",
             "skill-health",
             "skill-eval",
+            "bot-template",
             "workflow-learning",
         ),
         "next_action": "show_status_or_prepare_operating_card",
