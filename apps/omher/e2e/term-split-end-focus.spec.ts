@@ -4,6 +4,7 @@
 // a different session than the split's heir.
 import { expect, test, type Page } from "@playwright/test";
 import { mock, openApp, platformIsMac } from "./term-find-helpers";
+import { closeFromSidebar } from "./split-drag-helpers";
 
 type Call = { op: string; id?: number; data?: string };
 type W = { __omherSessions: { startTerminal(a: string, c: string): string; ptyOf(id: string): number | null; getState(): { list: { id: string }[] } }; __omherCloseGraceMs?: number; __omherSessionCalls?: Call[]; __omherShellCalls?: Call[] };
@@ -16,6 +17,8 @@ const start = (page: Page, agent: string, cwd: string) => page.evaluate(([a, c])
 const list = (page: Page) => page.evaluate(() => (window as unknown as W).__omherSessions.getState().list.map((r) => r.id));
 const term = (page: Page, id: string) => page.locator(`[data-testid="terminal"][data-session="${id}"]`);
 const row = (page: Page, id: string) => page.getByTestId(`session-${id}`);
+// a split's session is its cell in the split's card, not a row
+const cell = (page: Page, id: string) => page.locator(`[data-testid="split-cell"][data-session="${id}"]`);
 const split = (page: Page) => page.getByTestId("session-split");
 const focusedTerm = (page: Page) => page.evaluate(() => document.activeElement?.closest('[data-testid="terminal"]')?.getAttribute("data-session") ?? null);
 const uiSession = (page: Page) =>
@@ -88,7 +91,9 @@ async function ends(page: Page, id: string) {
 async function expectHas(page: Page, id: string) {
   await expect.poll(() => uiSession(page)).toBe(id);
   await expect.poll(() => focusedTerm(page)).toBe(id);
-  await expect(row(page, id)).toHaveClass(/\bactive\b/);
+  // the sidebar marks it: its row, or its cell while it is in a split
+  if (await cell(page, id).count()) await expect(cell(page, id)).toHaveAttribute("data-focused", "true");
+  else await expect(row(page, id)).toHaveClass(/\bactive\b/);
   const p = await ptyOf(page, id);
   const mark = `Z${Date.now() % 1_000_000}`;
   await page.keyboard.type(mark);
@@ -129,11 +134,10 @@ test("a zoomed pane that ends hands the view to the other pane", async ({ page }
   await expectHas(page, p);
 });
 
-test("closing the pane in view from its row (no undo window) hands the view to the other pane", async ({ page }) => {
+test("closing the pane in view from its cell's menu (no undo window) hands the view to the other pane", async ({ page }) => {
   const { p } = await world(page);
   const n = await splitBy(page, p, (await keys(page)).right);
-  await row(page, n).hover();
-  await row(page, n).getByTestId("session-close").click();
+  await closeFromSidebar(page, n);
   await page.getByTestId("session-stop").click();
   await expect.poll(async () => (await list(page)).includes(n)).toBe(false);
   await expectHas(page, p);
@@ -142,8 +146,7 @@ test("closing the pane in view from its row (no undo window) hands the view to t
 test("with the undo window on, closing the pane in view hands the view to the other pane, and Undo puts it back", async ({ page }) => {
   const { p } = await world(page, { grace: 10_000 });
   const n = await splitBy(page, p, (await keys(page)).right);
-  await row(page, n).hover();
-  await row(page, n).getByTestId("session-close").click();
+  await closeFromSidebar(page, n);
   await expect.poll(async () => (await list(page)).includes(n)).toBe(false);
   await expectHas(page, p);
   await page.getByTestId(`close-toast-${n}`).getByTestId("close-toast-undo").click();
