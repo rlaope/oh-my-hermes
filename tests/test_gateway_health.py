@@ -716,7 +716,7 @@ class GatewayProcessListing(unittest.TestCase):
             (proc / "4100" / "cmdline").write_bytes(b"python3\0-m\0hermes_cli.main\0gateway\0run\0")
             (proc / "self").mkdir()
             (proc / "4200").mkdir()  # no cmdline: a process that exited mid-walk
-            uid = os.getuid()
+            uid = (proc / "4100").stat().st_uid  # the fixture's own owner: `os.getuid` does not exist on Windows
             self.assertEqual(process_listing._linux_argvs(proc, uid),
                              [(4100, ["python3", "-m", "hermes_cli.main", "gateway", "run"])])
             self.assertEqual(process_listing._linux_argvs(proc, uid + 1), [])  # another user's process is not listed
