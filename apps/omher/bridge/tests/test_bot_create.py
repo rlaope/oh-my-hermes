@@ -61,7 +61,8 @@ class Argv(unittest.TestCase):
         self.assertIs(seen["stdin"], subprocess.DEVNULL)
         self.assertNotIn("shell", seen)
         self.assertEqual(seen["timeout"], 120.0)
-        self.assertEqual(seen["env"]["HERMES_HOME"], "/home/h")
+        # str(Path(...)): Windows writes the separator as `\\` (the same fix #3152 made in test_apps)
+        self.assertEqual(seen["env"]["HERMES_HOME"], str(Path("/home/h")))
         # a gateway's marker or a TUI gateway address would make Hermes act through a gateway, not here
         self.assertNotIn("_HERMES_GATEWAY", seen["env"])
         self.assertNotIn("HERMES_TUI_GATEWAY_URL", seen["env"])
