@@ -1,0 +1,8 @@
+{
+  "name": "widgets-events",
+  "own_logins": ["widgets-bot[bot]"],
+  "own_branch_prefixes": ["bot/"],
+  "own_comment_marker": "<!-- bot-run -->",
+  "max_events": 5,
+  "window_minutes": 15
+}
