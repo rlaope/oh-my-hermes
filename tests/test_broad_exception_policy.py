@@ -68,6 +68,12 @@ class ClassifiedSite(NamedTuple):
 
 CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
     ClassifiedSite(
+        "src/maintenance/doctor.py", "_gateway_health_check", INTENTIONAL,
+        "The gateway health row reads Hermes' files and the kernel's process table; an unexpected failure becomes "
+        "an observed=False warning row naming the exception class ('gateway health could not be read'), never a "
+        "healthy report, and the other doctor rows still run.",
+    ),
+    ClassifiedSite(
         "src/tui/proofread.py", "_run", INTENTIONAL,
         "The daemon worker surfaces an unexpected failure as Outcome.error naming the exception class; "
         "the main loop displays that failure instead of claiming a clean draft or applying corrections.",
@@ -1139,8 +1145,8 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # 114 -> 115 / 103 -> 104: the channel-watch collector's `main` (an unexpected error names its class only, exit 1;
 # a traceback could quote the bot token).
 # 115 -> 116 / 104 -> 105: proofread.Worker._run reports unexpected failure as Outcome.error.
-EXPECTED_HANDLER_COUNT = 116
-EXPECTED_ANCHOR_COUNT = 105
+EXPECTED_HANDLER_COUNT = 117
+EXPECTED_ANCHOR_COUNT = 106
 
 
 class DerivedSite(NamedTuple):

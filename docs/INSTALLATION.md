@@ -4281,14 +4281,25 @@ answers three questions for the root Hermes home and every profile under it
   interrupts them only with `--yes`.
 - **Fleet shape.** A gateway process no record under this Hermes root names
   (another Hermes home's, such as a scratch or test home, or one left
-  running), and a profile two recorded gateways both serve, by PID.
+  running), and a profile two recorded gateways both serve, by PID. Which
+  home and which checkout an unrecorded process runs is not known, so it is
+  never counted as a stale gateway: its start is only compared with this
+  install's build, and a profile name it shares with a recorded gateway is
+  said as a shared name. The listing recognizes `python -m hermes_cli.main …
+  gateway run`, `python …/hermes-agent/hermes gateway run` and Hermes' own
+  launcher (`python -I -c <bootstrap> … gateway run`, which service units
+  use). A process Hermes retitled to just `hermes` is named as unreadable,
+  not counted.
 - **Messaging adapters.** Per profile and platform, the state now: the
   serving gateway's own entry in its `gateway_state.json` when that process
   stamped it (its state, error code and Hermes' "needs attention" flag),
-  else the newest line of this gateway run in the gateway log tails
-  (`<home>/logs/gateway.log` of the host and of the profile, read with the
-  rotated `.1` when short), where a later "connected" supersedes an earlier
-  failure and a later failure or stop supersedes a "connected". The log also
+  else the newest line of this gateway run in the gateway log tails, read
+  with the rotated `.1` when short. Both the host's `<home>/logs/gateway.log`
+  and each profile's own are read, because a served profile's lines land in
+  either: its reconnect lines, for one, are only in the profile's own log.
+  Within one log the line written last wins; across logs, the stamps decide.
+  A later "connected" supersedes an earlier failure, and a later failure or
+  stop supersedes a "connected". The log also
   supplies the reason: a served profile's reconnect writes only the
   adapter's own failure line, with no `✗` line, and that line counts. A line
   from before the serving gateway started, or for a profile no running
@@ -4309,13 +4320,16 @@ receipt, no running gateway, a log that is absent, unreadable or not in
 Hermes' format, and a process table that cannot be read (on Windows, where
 only recorded gateways are counted). Nothing is reported healthy from what
 was not read. Doctor spawns no process for this: the process table is read
-from the kernel (`/proc/<pid>/cmdline` on Linux; `proc_listallpids` and
-`sysctl(KERN_PROCARGS2)` on macOS, which answers for your own processes
-only), and only each process's command-line arguments are decoded, never
-its environment. Log reads are
+from the kernel, for your own processes only (`/proc/<pid>/cmdline` of the
+processes you own on Linux; `proc_listallpids` and `sysctl(KERN_PROCARGS2)`
+on macOS), and only each process's command-line arguments are decoded,
+never its environment. Times are shown in UTC; a log stamp is read in this
+machine's local time, as Hermes wrote it. Log reads are
 bounded tails that tolerate a cut first line and bytes that are not UTF-8;
 only lines in an adapter-state shape are kept, never a message, and a reason
-text loses long ids and token-shaped strings. `--no-personal-files` does not
+text loses Discord, Slack and Telegram bot tokens, Discord and Slack ids,
+email addresses and a URL's query. A failure to read any of it costs only
+this section: doctor prints it as not read and runs every other row. `--no-personal-files` does not
 change this section: it names SOUL.md and Hermes' memory files, and the
 gateway log is read here as the `hermes_gateway` row already reads it.
 

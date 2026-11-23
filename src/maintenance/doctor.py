@@ -912,7 +912,16 @@ def _gateway_health_check(paths: OmhPaths) -> Check:
     """
     from .gateway_health import gateway_health
 
-    report = gateway_health(Path(paths.hermes_home))
+    try:
+        report = gateway_health(Path(paths.hermes_home))
+    except Exception as error:  # noqa: BLE001 -- classified below: an unread section, never the whole report
+        # Hermes' files and the kernel's process table are outside OMH's control; a shape no reader expected must
+        # cost this row, not every other row of `omh doctor`.
+        return Check(
+            "gateway_health", True, f"gateway health could not be read: {type(error).__name__}",
+            severity="warning", observed=False,
+            next_action="run `omh doctor --json` and report the `gateway_health` row; the other rows are unaffected",
+        )
     observed = bool(report.gateways) or report.build.get("status") == "read"
     message = " ".join(report.lines[:3]) if not report.findings else (
         "Hermes gateways need attention: " + ", ".join(report.findings)

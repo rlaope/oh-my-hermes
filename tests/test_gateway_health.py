@@ -66,13 +66,14 @@ from omh.maintenance.hermes_gateway_formats import (
     adapter_events,
     bounded_reason,
     classify_reason,
+    iso_utc,
     parse_adapter_line,
     read_build_stamp,
     read_fleet_restart_state,
     read_gateway_log,
 )
 from omh.system import process_listing
-from omh.system.process_listing import gateway_runs, procargs2_argv
+from omh.system.process_listing import GatewayListing, gateway_runs, procargs2_argv
 from omh.tui.bot_board import Gateway, Platform
 
 FIXTURE = Path(__file__).parent / "fixtures" / "gateway_health" / "host_gateway.log"
@@ -82,6 +83,11 @@ BUILT_EPOCH = datetime(2026, 11, 21, 11, 6, 39, 131982, tzinfo=UTC).timestamp()
 NO_RECORD = Gateway("", False, problem="no gateway record")
 # Token-shaped, built at run time so no literal in the tree looks like a real credential.
 TOKEN = ".".join(("x" * 24, "y" * 6, "z" * 27))
+
+
+def utc(stamp: str) -> str:
+    """A log stamp as the section shows it: read in this machine's local time, printed in UTC."""
+    return iso_utc(datetime.strptime(stamp, "%Y-%m-%d %H:%M:%S").timestamp())
 
 
 def fixture_lines() -> list[str]:
@@ -98,27 +104,27 @@ def latest(events: list[AdapterEvent]) -> dict[tuple[str, str], AdapterEvent]:
 class AdapterLineShapes(unittest.TestCase):
     def test_every_quoted_shape_is_read(self) -> None:
         cases = {
-            "2026-11-23 17:05:01,462 WARNING gateway.run: ✗ discord failed to connect (profile: harbor)":
+            "2026-10-14 15:05:01,231 WARNING gateway.run: ✗ discord failed to connect (profile: harbor)":
                 ("harbor", "discord", STATE_FAILED, "", ""),
-            "2026-11-23 17:23:30,806 INFO gateway.run: ✓ discord connected (profile: harbor)":
+            "2026-10-14 15:23:30,403 INFO gateway.run: ✓ discord connected (profile: harbor)":
                 ("harbor", "discord", STATE_CONNECTED, "", ""),
-            "2026-11-23 15:02:41,906 INFO gateway.run: ✓ discord reconnected (profile: harbor)":
+            "2026-10-14 13:02:41,453 INFO gateway.run: ✓ discord reconnected (profile: harbor)":
                 ("harbor", "discord", STATE_CONNECTED, "", ""),
-            "2026-11-23 15:02:10,118 ERROR gateway.run: Fatal discord adapter error for multiplexed profile harbor "
+            "2026-10-14 13:02:10,059 ERROR gateway.run: Fatal discord adapter error for multiplexed profile harbor "
             "(discord_websocket_health_stale)": ("harbor", "discord", STATE_FATAL, "", "discord_websocket_health_stale"),
-            "2026-11-23 17:30:12,500 INFO gateway.run: ✓ telegram connected": ("", "telegram", STATE_CONNECTED, "", ""),
-            "2026-11-23 17:30:12,500 INFO gateway.run: ✓ telegram reconnected successfully":
+            "2026-10-14 15:30:12,250 INFO gateway.run: ✓ telegram connected": ("", "telegram", STATE_CONNECTED, "", ""),
+            "2026-10-14 15:30:12,250 INFO gateway.run: ✓ telegram reconnected successfully":
                 ("", "telegram", STATE_CONNECTED, "", ""),
-            "2026-11-23 17:30:12,500 WARNING gateway.run: ✗ telegram failed to connect": ("", "telegram", STATE_FAILED, "", ""),
-            "2026-11-23 17:30:12,500 ERROR gateway.run: ✗ slack error (profile: quay): invalid_auth":
+            "2026-10-14 15:30:12,250 WARNING gateway.run: ✗ telegram failed to connect": ("", "telegram", STATE_FAILED, "", ""),
+            "2026-10-14 15:30:12,250 ERROR gateway.run: ✗ slack error (profile: quay): invalid_auth":
                 ("quay", "slack", STATE_FAILED, "invalid_auth", ""),
-            "2026-11-23 17:30:12,500 ERROR gateway.run: ✗ slack error: invalid_auth": ("", "slack", STATE_FAILED, "invalid_auth", ""),
-            "2026-11-23 17:30:12,500 ERROR gateway.run: Fatal slack adapter error (slack_socket_closed): socket closed":
+            "2026-10-14 15:30:12,250 ERROR gateway.run: ✗ slack error: invalid_auth": ("", "slack", STATE_FAILED, "invalid_auth", ""),
+            "2026-10-14 15:30:12,250 ERROR gateway.run: Fatal slack adapter error (slack_socket_closed): socket closed":
                 ("", "slack", STATE_FATAL, "socket closed", "slack_socket_closed"),
-            "2026-11-23 17:30:12,500 INFO gateway.run: ✓ telegram connected (degraded)": ("", "telegram", STATE_DEGRADED, "", ""),
-            "2026-11-23 17:30:12,500 INFO gateway.run: ⚠ telegram reconnected in degraded mode (receive path not yet "
+            "2026-10-14 15:30:12,250 INFO gateway.run: ✓ telegram connected (degraded)": ("", "telegram", STATE_DEGRADED, "", ""),
+            "2026-10-14 15:30:12,250 INFO gateway.run: ⚠ telegram reconnected in degraded mode (receive path not yet "
             "confirmed)": ("", "telegram", STATE_DEGRADED, "", ""),
-            "2026-11-23 15:58:43,980 INFO gateway.run: Secondary discord reconnect retry in 30s (profile: harbor)":
+            "2026-10-14 13:58:43,490 INFO gateway.run: Secondary discord reconnect retry in 30s (profile: harbor)":
                 ("harbor", "discord", STATE_RETRYING, "", ""),
             "2026-11-11 11:45:21,000 INFO gateway.run: ✓ slack disconnected (0.42s) (profile: quay)":
                 ("quay", "slack", STATE_DISCONNECTED, "", ""),
@@ -135,14 +141,14 @@ class AdapterLineShapes(unittest.TestCase):
 
     def test_other_lines_are_not_adapter_states(self) -> None:
         for line in (
-            "2026-11-23 17:23:30,802 INFO hermes_plugins.platforms__discord.adapter: [Discord] Connected as Harbor#0042",
-            "2026-11-23 17:05:01,467 INFO gateway.run_profile_reconcile: [MULTIPLEX] Now serving profile 'harbor' "
+            "2026-10-14 15:23:30,401 INFO hermes_plugins.platforms__discord.adapter: [Discord] Connected as Harbor#0042",
+            "2026-10-14 15:05:01,233 INFO gateway.run_profile_reconcile: [MULTIPLEX] Now serving profile 'harbor' "
             "(0 adapter(s) connected; control-socket)",
             "discord.errors.PrivilegedIntentsRequired: Shard ID None is requesting privileged intents",
-            "2026-11-23 17:05:01,462 WARNING gateway.run: ✗ discord failed to connect (profile: harbor) and more",
-            "2026-11-23 17:31:0",
+            "2026-10-14 15:05:01,231 WARNING gateway.run: ✗ discord failed to connect (profile: harbor) and more",
+            "2026-10-14 15:31:0",
             "✓ discord connected (profile: harbor)",
-            "2026-11-23 17:04:59,105 INFO gateway.run: ✓ local disconnected (0.00s) (profile: harbor)",  # no bot
+            "2026-10-14 15:04:59,052 INFO gateway.run: ✓ local disconnected (0.00s) (profile: harbor)",  # no bot
             "",
         ):
             with self.subTest(line=line):
@@ -154,24 +160,24 @@ class AdapterHistory(unittest.TestCase):
         states = latest(adapter_events(fixture_lines()))
         harbor = states[("harbor", "discord")]
         self.assertEqual(harbor.state, STATE_CONNECTED)
-        self.assertEqual(harbor.logged, "2026-11-23 17:23:30")
+        self.assertEqual(harbor.logged, "2026-10-14 15:23:30")
 
     def test_a_success_followed_by_a_later_failure_reads_failed_with_the_adapters_reason(self) -> None:
         lines = fixture_lines()
-        cut = next(index for index, line in enumerate(lines) if "17:23:26" in line)
+        cut = next(index for index, line in enumerate(lines) if "15:23:26" in line)
         states = latest(adapter_events(lines[:cut]))
         harbor = states[("harbor", "discord")]
         self.assertEqual(harbor.state, STATE_FAILED)
-        self.assertEqual(harbor.logged, "2026-11-23 17:05:01")
+        self.assertEqual(harbor.logged, "2026-10-14 15:05:01")
         self.assertIn("requesting privileged intents", harbor.reason)  # attributed across the traceback lines
         self.assertEqual(classify_reason(harbor), REASON_PRIVILEGED_INTENTS)
 
     def test_the_incidents_served_profile_reconnect_fails_with_no_x_line(self) -> None:
         # Hermes' secondary reconnect writes only the adapter's reason; it supersedes the transient fatal before it.
         lines = fixture_lines()
-        cut = next(index for index, line in enumerate(lines) if line.startswith("2026-11-23 16:30"))
+        cut = next(index for index, line in enumerate(lines) if line.startswith("2026-10-14 14:30"))
         harbor = latest(adapter_events(lines[:cut]))[("harbor", "discord")]
-        self.assertEqual((harbor.state, harbor.logged), (STATE_FAILED, "2026-11-23 16:08:17"))
+        self.assertEqual((harbor.state, harbor.logged), (STATE_FAILED, "2026-10-14 14:08:17"))
         self.assertEqual(classify_reason(harbor), REASON_PRIVILEGED_INTENTS)
         retry = adapter_events(lines[:7])[-1]
         self.assertEqual((retry.profile, retry.state), ("harbor", STATE_RETRYING))
@@ -181,7 +187,7 @@ class AdapterHistory(unittest.TestCase):
 
     def test_interleaved_profiles_keep_their_own_states_and_reasons(self) -> None:
         lines = fixture_lines()
-        cut = next(index for index, line in enumerate(lines) if line.startswith("2026-11-23 17:25"))
+        cut = next(index for index, line in enumerate(lines) if line.startswith("2026-10-14 15:25"))
         states = latest(adapter_events(lines[:cut]))
         quay = states[("quay", "slack")]
         self.assertEqual(quay.state, STATE_FAILED)  # connected at 16:30, failed at 17:10
@@ -190,24 +196,49 @@ class AdapterHistory(unittest.TestCase):
         self.assertEqual(latest(adapter_events(lines))[("", "telegram")].state, STATE_CONNECTED)
 
     def test_a_reason_goes_to_one_failure_only_and_only_close_after_it(self) -> None:
-        reason = ("2026-11-23 10:00:00,000 ERROR hermes_plugins.platforms__discord.adapter: [Discord] Failed to connect "
+        reason = ("2026-10-14 08:00:00,000 ERROR hermes_plugins.platforms__discord.adapter: [Discord] Failed to connect "
                   "to Discord: boom")
-        first = "2026-11-23 10:00:01,000 WARNING gateway.run: ✗ discord failed to connect (profile: one)"
-        second = "2026-11-23 10:00:02,000 WARNING gateway.run: ✗ discord failed to connect (profile: two)"
-        late = "2026-11-23 10:10:00,000 WARNING gateway.run: ✗ discord failed to connect (profile: one)"
+        first = "2026-10-14 08:00:01,000 WARNING gateway.run: ✗ discord failed to connect (profile: one)"
+        second = "2026-10-14 08:00:02,000 WARNING gateway.run: ✗ discord failed to connect (profile: two)"
+        late = "2026-10-14 08:10:00,000 WARNING gateway.run: ✗ discord failed to connect (profile: one)"
         events = adapter_events([reason, first, second])
         # The reason is its own failure until `first` takes it; given to no profile, it is then withdrawn.
         self.assertEqual([(event.profile, event.reason) for event in events], [("one", "boom"), ("two", "")])
         self.assertEqual([event.reason for event in adapter_events([reason, late])], ["boom", ""])
 
     def test_a_reason_given_to_the_wrong_profile_is_withdrawn_when_the_x_line_names_another(self) -> None:
-        retry = "2026-11-23 10:00:00,000 INFO gateway.run: Secondary discord reconnect retry in 30s (profile: one)"
-        reason = ("2026-11-23 10:00:05,000 ERROR hermes_plugins.platforms__discord.adapter: [Discord] Failed to connect "
+        retry = "2026-10-14 08:00:00,000 INFO gateway.run: Secondary discord reconnect retry in 30s (profile: one)"
+        reason = ("2026-10-14 08:00:05,000 ERROR hermes_plugins.platforms__discord.adapter: [Discord] Failed to connect "
                   "to Discord: boom")
-        failed = "2026-11-23 10:00:05,100 WARNING gateway.run: ✗ discord failed to connect (profile: two)"
+        failed = "2026-10-14 08:00:05,050 WARNING gateway.run: ✗ discord failed to connect (profile: two)"
         events = adapter_events([retry, reason, failed])
+        # `one`'s reconnect is open, so the reason is its; `two`'s startup failure does not take it.
         self.assertEqual([(event.profile, event.state, event.reason) for event in events],
-                         [("one", STATE_RETRYING, ""), ("two", STATE_FAILED, "boom")])
+                         [("one", STATE_RETRYING, ""), ("one", STATE_FAILED, "boom"), ("two", STATE_FAILED, "")])
+
+    def test_two_open_reconnects_leave_a_reason_unattributed(self) -> None:
+        lines = [
+            "2026-10-14 08:00:00,000 INFO gateway.run: Secondary discord reconnect retry in 30s (profile: one)",
+            "2026-10-14 08:00:01,000 INFO gateway.run: Secondary discord reconnect retry in 30s (profile: two)",
+            "2026-10-14 08:00:05,000 ERROR hermes_plugins.platforms__discord.adapter: [Discord] Failed to connect to "
+            "Discord: boom",
+            "2026-10-14 08:00:40,000 INFO gateway.run: ✓ discord reconnected (profile: two)",
+        ]
+        states = latest(adapter_events(lines))
+        self.assertEqual(states[("one", "discord")].state, STATE_RETRYING)  # never given a reason it may not own
+        self.assertEqual(states[("two", "discord")].state, STATE_CONNECTED)
+        self.assertNotIn(("", "discord"), states)
+
+    def test_a_reason_with_no_open_reconnect_belongs_to_the_x_line_that_follows(self) -> None:
+        lines = [
+            "2026-10-14 08:00:00,000 INFO gateway.run: ✓ discord connected (profile: one)",  # closed, not open
+            "2026-10-14 08:00:05,000 ERROR hermes_plugins.platforms__discord.adapter: [Discord] Failed to connect to "
+            "Discord: boom",
+            "2026-10-14 08:00:05,100 WARNING gateway.run: ✗ discord failed to connect (profile: two)",
+        ]
+        events = adapter_events(lines)
+        self.assertEqual([(event.profile, event.state, event.reason) for event in events],
+                         [("one", STATE_CONNECTED, ""), ("two", STATE_FAILED, "boom")])
 
     def test_the_transient_fatal_code_is_known(self) -> None:
         event = adapter_events(fixture_lines())[0]
@@ -229,8 +260,8 @@ class GatewayLogRead(unittest.TestCase):
     def test_a_huge_line_and_bytes_that_are_not_utf8_neither_raise_nor_hide_the_lines_around_them(self) -> None:
         with TemporaryDirectory() as tmp:
             raw = FIXTURE.read_bytes()
-            data = raw + b"2026-11-23 17:40:00,000 INFO gateway.run: " + b"x" * (3 << 20) + b"\n\xff\xfe\n" + (
-                "2026-11-23 17:41:00,000 WARNING gateway.run: ✗ discord failed to connect (profile: harbor)\n".encode()
+            data = raw + b"2026-10-14 15:40:00,000 INFO gateway.run: " + b"x" * (3 << 20) + b"\n\xff\xfe\n" + (
+                "2026-10-14 15:41:00,000 WARNING gateway.run: ✗ discord failed to connect (profile: harbor)\n".encode()
             )
             log = read_gateway_log(self.write(Path(tmp), data))
             self.assertEqual(log.status, STATUS_READ)
@@ -241,7 +272,7 @@ class GatewayLogRead(unittest.TestCase):
 
     def test_a_tail_that_starts_mid_line_drops_the_cut_line(self) -> None:
         with TemporaryDirectory() as tmp:
-            line = "2026-11-23 17:41:00,000 WARNING gateway.run: ✗ discord failed to connect (profile: harbor)\n"
+            line = "2026-10-14 15:41:00,000 WARNING gateway.run: ✗ discord failed to connect (profile: harbor)\n"
             path = self.write(Path(tmp), ("noise " * 40 + "\n").encode() + line.encode())
             log = read_gateway_log(path, tail_bytes=len(line.encode()) + 10)
             self.assertEqual([event.profile for event in log.events], ["harbor"])
@@ -250,7 +281,7 @@ class GatewayLogRead(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             self.write(root, FIXTURE.read_bytes(), "gateway.log.1")
-            path = self.write(root, b"2026-11-23 18:00:00,000 INFO gateway.run: Gateway running\n")
+            path = self.write(root, b"2026-10-14 16:00:00,000 INFO gateway.run: Gateway running\n")
             states = latest(list(read_gateway_log(path).events))
             self.assertEqual(states[("harbor", "discord")].state, STATE_CONNECTED)
 
@@ -271,9 +302,19 @@ class Reasons(unittest.TestCase):
         self.assertIn("<redacted>", text)
         self.assertLessEqual(len(text), REASON_CHARS)
 
+    def test_slack_telegram_ids_emails_and_queries_are_scrubbed(self) -> None:
+        slack = "xoxb-" + "-".join(("1234567890", "1234567890123", "AbCdEfGhIjKlMnOpQrStUvWx"))
+        telegram = "123456789:" + "A" * 35
+        text = bounded_reason(f"invalid_auth for team T01ABCDEF2 user U01ABCDEFG owner a.person@example.com {slack} "
+                              f"bot {telegram} at https://api.example.com/x?token=abc#frag; UNAVAILABLE stays")
+        for secret in ("T01ABCDEF2", "U01ABCDEFG", "a.person@example.com", slack, telegram, "token=abc"):
+            self.assertNotIn(secret, text)
+        self.assertIn("https://api.example.com/x?<redacted>", text)
+        self.assertIn("UNAVAILABLE stays", text)  # a capitalized word is not an id
+
     def test_known_and_unknown_reasons(self) -> None:
         def event(reason: str = "", code: str = "", platform: str = "discord") -> AdapterEvent:
-            return AdapterEvent("p", platform, STATE_FAILED, "2026-11-23 10:00:00", 0.0, reason, code)
+            return AdapterEvent("p", platform, STATE_FAILED, "2026-10-14 08:00:00", 0.0, reason, code)
 
         self.assertEqual(classify_reason(event(code="discord_intents_required")), REASON_PRIVILEGED_INTENTS)
         self.assertEqual(classify_reason(event("LoginFailure: Improper token has been passed.")), REASON_TOKEN_REJECTED)
@@ -362,7 +403,8 @@ class Fleet(unittest.TestCase):
 
         return gateway_health(
             root, environ={"HERMES_GATEWAY_LOCK_DIR": str(root / "locks")}, gateway_reader=reader,
-            list_processes=lambda: listed, process_start=lambda pid: (starts or {}).get(pid),
+            list_processes=lambda: GatewayListing(listed[0], tuple(listed[1])),
+            process_start=lambda pid: (starts or {}).get(pid),
         )
 
     def test_a_gateway_started_before_the_build_is_named_with_hermes_restart(self) -> None:
@@ -386,6 +428,9 @@ class Fleet(unittest.TestCase):
             other = self.run_health(root, {".hermes": Gateway("running", True, 4100, started=BUILT_EPOCH + 60,
                                                                code_sha="deadbeef")})
             self.assertEqual(other.gateways[0].build, BUILD_OTHER_COMMIT)
+            (root / "hermes-agent" / "install-stamp.json").write_text(json.dumps({"commit": COMMIT[:8], "builtAt": BUILT_AT}))
+            short = self.run_health(root, {".hermes": Gateway("running", True, 4100, started=early, code_sha=COMMIT)})
+            self.assertEqual(short.gateways[0].build, BUILD_CURRENT)  # a short stamp and a full record agree
 
     def test_unrecorded_processes_and_a_profile_served_twice_are_named_by_pid(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -404,8 +449,21 @@ class Fleet(unittest.TestCase):
                           "Hermes root; 1 profile(s) served by more than one.", report.lines)
             text = "\n".join(report.lines)
             self.assertIn("PID 5100 runs `hermes gateway run` (`--profile default` on its command line)", text)
-            self.assertIn("PID 4100 already serves that profile here", text)
+            self.assertIn("same profile name as PID 4100 here", text)
             self.assertIn("find what started PID 5100, 5200", "\n".join(report.next_actions))
+
+    def test_an_unrecorded_process_is_never_called_stale_or_this_homes(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = self.home(tmp)
+            records = {".hermes": Gateway("running", True, 4100, served=("default",), code_sha=COMMIT)}
+            report = self.run_health(root, records, (True, [(5100, "default")]), {5100: BUILT_EPOCH - 86400})
+            self.assertEqual(report.findings, (FINDING_UNRECORDED,))
+            text = "\n".join(report.lines)
+            self.assertIn("that is before this install's build (2026-11-21T11:06:39Z): if it runs this install, it "
+                          "serves pre-update code", text)
+            self.assertIn("carries the same profile name as PID 4100 here, and which home it serves is not recorded", text)
+            self.assertNotIn("already serves", text)
+            self.assertIn("the process listing recognizes", text)
 
     def test_honest_absence(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -443,12 +501,12 @@ class Fleet(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             root = self.home(tmp)
             lines = fixture_lines()
-            cut = next(index for index, line in enumerate(lines) if "17:23:26" in line)
+            cut = next(index for index, line in enumerate(lines) if "15:23:26" in line)
             (root / "logs").mkdir()
             (root / "logs" / "gateway.log").write_text("\n".join(lines[:cut]) + "\n", encoding="utf-8")
             (root / "profiles" / "quay" / "logs").mkdir()
             (root / "profiles" / "quay" / "logs" / "gateway.log").write_text(
-                "2026-11-23 18:00:00,000 INFO gateway.run: ✓ slack connected\n", encoding="utf-8")
+                "2026-10-14 16:00:00,000 INFO gateway.run: ✓ slack connected\n", encoding="utf-8")
             record_error = ("Discord rejected the connection because privileged Gateway Intents are not enabled. "
                             "Hermes is requesting: - Message Content Intent - Server Members Intent (required for "
                             "username allowlists and/or DISCORD_ALLOWED_ROLES)")
@@ -465,11 +523,11 @@ class Fleet(unittest.TestCase):
             self.assertIn("`hermes gateway restart`", harbor.fix)
             self.assertEqual(by_key[("quay", "slack")].state, STATE_CONNECTED)  # its own log's newer line wins
             self.assertIn(FINDING_ADAPTER_DOWN, report.findings)
-            self.assertIn("harbor discord: `fatal` by the serving gateway's own record (latest line 2026-11-23 17:05:01); "
-                          "Hermes flags it as needing attention.", "\n".join(report.lines))
+            self.assertIn(f"harbor discord: `fatal` by the serving gateway's own record (latest line "
+                          f"{utc('2026-10-14 15:05:01')}); Hermes flags it as needing attention.", "\n".join(report.lines))
             # Without Hermes' own guidance in the record, the rule is stated rather than guessed.
             unguided = self.run_health(root, {".hermes": Gateway("running", True, 4100, served=("default", "harbor", "quay"))})
-            self.assertIn("harbor discord: failed to connect at 2026-11-23 17:05:01", "\n".join(unguided.lines))
+            self.assertIn(f"harbor discord: failed to connect at {utc('2026-10-14 15:05:01')}", "\n".join(unguided.lines))
             fix = {(s.profile, s.platform): s for s in unguided.adapters}[("harbor", "discord")].fix
             self.assertIn("and Server Members too when the profile has a role allowlist", fix)
 
@@ -478,8 +536,8 @@ class Fleet(unittest.TestCase):
             root = self.home(tmp)
             (root / "logs").mkdir()
             log = root / "logs" / "gateway.log"
-            log.write_text("2026-11-23 18:00:00,000 WARNING gateway.run: ✗ slack failed to connect (profile: quay)\n"
-                           "2026-11-23 18:00:00,000 INFO gateway.run: ✓ discord connected (profile: harbor)\n",
+            log.write_text("2026-10-14 16:00:00,000 WARNING gateway.run: ✗ slack failed to connect (profile: quay)\n"
+                           "2026-10-14 16:00:00,000 INFO gateway.run: ✓ discord connected (profile: harbor)\n",
                            encoding="utf-8")
             platforms = (Platform("quay:slack", "connected", "", False, True),
                          Platform("harbor:discord", "fatal", "Discord bot token rejected: x", False, True, "discord_auth_error"),
@@ -529,12 +587,25 @@ class Fleet(unittest.TestCase):
             self.assertEqual(calm.findings, ())
             self.assertIn("harbor discord: reconnecting; Hermes retries it on its own", "\n".join(calm.lines))
 
+    def test_within_one_log_the_line_written_last_wins_whatever_its_stamp(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = self.home(tmp)
+            (root / "logs").mkdir()
+            (root / "logs" / "gateway.log").write_text(
+                "2027-01-01 00:00:00,000 INFO gateway.run: ✓ discord connected (profile: harbor)\n"
+                "2026-10-14 08:00:00,000 WARNING gateway.run: ✗ discord failed to connect (profile: harbor)\n",
+                encoding="utf-8")
+            report = self.run_health(root, {".hermes": Gateway("running", True, 4100, served=("default", "harbor"))})
+            self.assertEqual(report.adapters[0].state, STATE_FAILED)
+            self.assertEqual(report.adapters[0].logged_as_written, "2026-10-14 08:00:00")
+            self.assertTrue(report.adapters[0].logged.endswith("Z"))  # shown in UTC, as the gateway starts are
+
     def test_a_standalone_profiles_adapter_fix_names_its_own_restart(self) -> None:
         with TemporaryDirectory() as tmp:
             root = self.home(tmp)
             log = root / "profiles" / "harbor" / "logs" / "gateway.log"
             log.parent.mkdir()
-            log.write_text("2026-11-23 18:00:00,000 ERROR gateway.run: ✗ discord error: LoginFailure: Improper token "
+            log.write_text("2026-10-14 16:00:00,000 ERROR gateway.run: ✗ discord error: LoginFailure: Improper token "
                            f"has been passed. {TOKEN}\n", encoding="utf-8")
             report = self.run_health(root, {"harbor": Gateway("running", True, 4200, code_sha=COMMIT)})
             state = report.adapters[0]
@@ -558,9 +629,21 @@ class GatewayProcessListing(unittest.TestCase):
             (109, ["/bin/zsh", "-c", "hermes gateway run"]),
             (110, [py, "-m", "hermes_cli.main", "--profile", "gateway", "run"]),
             (111, [py]),
+            # Hermes' launcher (`.hermes/bin/hermes`): `exec python -I -c '<bootstrap>' "$@"`.
+            (112, [py, "-I", "-c", "import sys\nsys.path.insert(0, '/x/hermes-agent')\nfrom hermes_cli.main import main",
+                   "gateway", "run", "--external-supervisor"]),
+            (113, [py, "-I", "-c", "...hermes_cli...", "--profile", "harbor", "gateway", "run", "--replace"]),
+            # Hermes' stderr stamper around the launcher is a wrapper, not a gateway.
+            (114, [py, "-I", "-c", "...hermes_cli...", "--run-module", "hermes_cli.stderr_timestamp", "--",
+                   "/x/.hermes/bin/hermes", "gateway", "run"]),
         ]
-        self.assertEqual(gateway_runs(argvs),
-                         [(101, "default"), (102, ""), (103, "harbor"), (104, "quay"), (105, "")])
+        self.assertEqual(gateway_runs(argvs), [(101, "default"), (102, ""), (103, "harbor"), (104, "quay"), (105, ""),
+                                               (112, ""), (113, "harbor")])
+
+    def test_a_retitled_hermes_is_said_and_not_counted(self) -> None:
+        argvs = [(201, ["hermes"]), (202, ["python3", "-m", "hermes_cli.main", "gateway", "run"])]
+        with mock.patch.object(process_listing, "process_argvs", return_value=argvs):
+            self.assertEqual(process_listing.hermes_gateway_processes(), GatewayListing(True, ((202, ""),), (201,)))
 
     def test_a_kernel_argument_buffer_yields_its_arguments_and_never_its_environment(self) -> None:
         raw = (struct.pack("i", 3) + b"/opt/py/bin/python3\0\0\0\0" + b"python3\0-m\0hermes_cli.main\0"
@@ -577,11 +660,14 @@ class GatewayProcessListing(unittest.TestCase):
             (proc / "4100" / "cmdline").write_bytes(b"python3\0-m\0hermes_cli.main\0gateway\0run\0")
             (proc / "self").mkdir()
             (proc / "4200").mkdir()  # no cmdline: a process that exited mid-walk
-            self.assertEqual(process_listing._linux_argvs(proc), [(4100, ["python3", "-m", "hermes_cli.main", "gateway", "run"])])
+            uid = os.getuid()
+            self.assertEqual(process_listing._linux_argvs(proc, uid),
+                             [(4100, ["python3", "-m", "hermes_cli.main", "gateway", "run"])])
+            self.assertEqual(process_listing._linux_argvs(proc, uid + 1), [])  # another user's process is not listed
 
     def test_no_listing_is_not_an_empty_listing(self) -> None:
         with mock.patch.object(process_listing.sys, "platform", "win32"):
-            self.assertEqual(process_listing.hermes_gateway_processes(), (False, []))
+            self.assertEqual(process_listing.hermes_gateway_processes(), GatewayListing(False))
 
     @unittest.skipUnless(process_listing.sys.platform in {"darwin", "linux"}, "the kernel listing is macOS and Linux")
     def test_the_real_listing_finds_this_process_without_spawning(self) -> None:
@@ -616,6 +702,22 @@ class DoctorRow(unittest.TestCase):
             self.assertIn("PID 5100 runs `hermes gateway run`", text)
             self.assertIn("Fix: find what started PID 5100", text)
             self.assertNotIn("- gateway_health:", text)
+
+    def test_a_reader_that_raises_costs_only_this_row(self) -> None:
+        from omh.maintenance.doctor import _gateway_health_check, run_doctor
+        from omh.paths import OmhPaths
+
+        with TemporaryDirectory() as tmp:
+            paths = OmhPaths(omh_home=Path(tmp) / ".omh", hermes_home=Path(tmp) / ".hermes")
+            with mock.patch.object(health, "gateway_health", side_effect=TypeError("reshaped record")):
+                check = _gateway_health_check(paths)
+                rows = run_doctor(paths, state_write=False)
+            self.assertEqual((check.ok, check.severity, check.observed), (True, "warning", False))
+            self.assertEqual(check.message, "gateway health could not be read: TypeError")
+            names = [row.name for row in rows]
+            self.assertIn("gateway_health", names)
+            self.assertIn("hermes_gateway", names)  # the rows around it still ran
+            self.assertIn("plugin_delegation_protocol", names)
 
 
 if __name__ == "__main__":

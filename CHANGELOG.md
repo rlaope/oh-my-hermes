@@ -44,7 +44,7 @@ All notable changes will be documented here.
   a rejected token is named, and any other reason is shown, bounded, as unrecognized. Missing evidence is said as
   missing, never as healthy. The fix is always Hermes' own command; OMH stops and restarts nothing.
   (`src/maintenance/gateway_health.py`, `src/maintenance/hermes_gateway_formats.py`,
-  `src/surfaces/hermes_processes.py`; `docs/INSTALLATION.md` "Bot Profiles")
+  `src/system/process_listing.py`; `docs/INSTALLATION.md` "Bot Profiles")
 - **omher: a bot's chat that stopped answering after a crash says why and gets going again.** When Hermes' gateway
   stops in the middle of a turn (a crash, a kill, Windows ending the process), Hermes brings that turn back as lost
   and keeps every later message of the chat in its own queue until someone acknowledges it, because the lost turn may

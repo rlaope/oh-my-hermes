@@ -4,7 +4,8 @@
 it with `subprocess.Popen` forbidden), so the gateway health row cannot run
 `ps`. Each process's argument vector is read where the OS keeps it:
 
-- Linux: `/proc/<pid>/cmdline` (NUL-separated arguments);
+- Linux: `/proc/<pid>/cmdline` (NUL-separated arguments) of this user's
+  processes only (the `/proc/<pid>` owner), as macOS answers;
 - macOS: `proc_listallpids` (libproc) for the pids, then
   `sysctl(KERN_PROCARGS2)` per pid, which answers only for this user's
   processes. The kernel returns the argument count, the executable path, the
@@ -19,6 +20,8 @@ Nothing is signalled, written or spawned; every read is bounded.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+import os
 from pathlib import Path
 import struct
 import sys
@@ -30,21 +33,36 @@ KERN_PROCARGS2 = 49
 INTERPRETER_FLAGS = frozenset({"-I", "-B", "-E", "-s", "-S", "-u", "-O", "-OO", "-P"})  # flags before `-m`
 
 
+RETITLED_ARGV = ["hermes"]  # Hermes' optional `setproctitle("hermes")` replaces the whole command line with this
+LAUNCH_SHAPES = (
+    "`python -m hermes_cli.main [--profile N] gateway run`, `python …/hermes-agent/hermes gateway run` and Hermes' "
+    "launcher `python -I -c <bootstrap> [--profile N] gateway run`"
+)
+
+
+@dataclass(frozen=True)
+class GatewayListing:
+    listed: bool  # False where this platform offers no listing: never read as an empty one
+    gateways: tuple[tuple[int, str], ...] = ()  # (pid, the profile its command line names, "" for none)
+    retitled: tuple[int, ...] = ()  # this user's processes titled just `hermes`, whose arguments cannot be read
+
+
 def process_argvs() -> list[tuple[int, list[str]]] | None:
-    """Every readable process as `(pid, argv)`, or None where this platform offers no listing."""
+    """Every readable process of this user as `(pid, argv)`, or None where this platform offers no listing."""
     if sys.platform.startswith("linux"):
-        return _linux_argvs(Path("/proc"))
+        return _linux_argvs(Path("/proc"), os.getuid())
     if sys.platform == "darwin":
         return _darwin_argvs()
     return None
 
 
-def hermes_gateway_processes() -> tuple[bool, list[tuple[int, str]]]:
-    """`(listed, [(pid, profile)])` for every `hermes gateway run`; `listed` is False when no listing exists here."""
+def hermes_gateway_processes() -> GatewayListing:
+    """Every `hermes gateway run` of this user the kernel's process table shows."""
     argvs = process_argvs()
     if argvs is None:
-        return False, []
-    return True, gateway_runs(argvs)
+        return GatewayListing(False)
+    retitled = tuple(pid for pid, argv in argvs if argv == RETITLED_ARGV)
+    return GatewayListing(True, tuple(gateway_runs(argvs)), retitled)
 
 
 def gateway_runs(argvs: list[tuple[int, list[str]]]) -> list[tuple[int, str]]:
@@ -52,9 +70,11 @@ def gateway_runs(argvs: list[tuple[int, list[str]]]) -> list[tuple[int, str]]:
 
     Recognized: `python -m hermes_cli.main [--profile N|-p N|--profile=N] gateway run …`
     and `python …/hermes-agent/hermes [profile] gateway run …`, after any interpreter
-    flags (`INTERPRETER_FLAGS`). A gateway started
-    through `python -c` (a bootstrap script) carries no such argv; its own
-    record is what names it.
+    flags (`INTERPRETER_FLAGS`), and Hermes' own launcher (`.hermes/bin/hermes`,
+    which service units and a typed `hermes gateway run` use):
+    `python -I -c <bootstrap naming hermes_cli> [profile] gateway run …`. A
+    wrapper whose arguments start otherwise (Hermes' `--run-module` stderr
+    stamper around the launcher) is not a gateway itself.
     """
     found: list[tuple[int, str]] = []
     for pid, argv in argvs:
@@ -64,6 +84,8 @@ def gateway_runs(argvs: list[tuple[int, list[str]]]) -> list[tuple[int, str]]:
         while rest and rest[0] in INTERPRETER_FLAGS:
             rest = rest[1:]
         if len(rest) >= 2 and rest[0] == "-m" and rest[1] == "hermes_cli.main":
+            arguments = rest[2:]
+        elif len(rest) >= 2 and rest[0] == "-c" and "hermes_cli" in rest[1]:
             arguments = rest[2:]
         elif rest and Path(rest[0]).parts[-2:] == ("hermes-agent", "hermes"):
             arguments = rest[1:]
@@ -86,7 +108,7 @@ def _profile_and_command(arguments: list[str]) -> tuple[str, list[str]] | None:
     return "", arguments
 
 
-def _linux_argvs(proc: Path) -> list[tuple[int, list[str]]]:
+def _linux_argvs(proc: Path, uid: int) -> list[tuple[int, list[str]]]:
     found: list[tuple[int, list[str]]] = []
     try:
         entries = [entry for entry in proc.iterdir() if entry.name.isdigit()]
@@ -94,6 +116,8 @@ def _linux_argvs(proc: Path) -> list[tuple[int, list[str]]]:
         return found
     for entry in entries[:PROCESS_CAP]:
         try:
+            if entry.stat().st_uid != uid:
+                continue  # another user's: `/proc` shows it, but its gateways are not this person's
             with (entry / "cmdline").open("rb") as handle:
                 raw = handle.read(ARGS_BYTES)
         except OSError:

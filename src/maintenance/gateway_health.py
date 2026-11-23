@@ -37,7 +37,7 @@ import time
 from ..install.skill_registration import hermes_profile_dirs
 from ..skin_pack import TUI_PROFILE
 from ..system.hermes_install import hermes_install_dir
-from ..system.process_listing import hermes_gateway_processes
+from ..system.process_listing import LAUNCH_SHAPES, GatewayListing, hermes_gateway_processes
 from ..tui.bot_board import ON_POSIX, Gateway, Platform, process_facts, read_gateway, started_at
 from .hermes_gateway_formats import (
     GATEWAY_LOG_RELATIVE,
@@ -75,7 +75,7 @@ BUILD_UNKNOWN = "unknown"
 FINDING_STALE_GATEWAY = "gateway_older_than_build"
 FINDING_PENDING_RESTART = "hermes_pending_fleet_restart"
 FINDING_INCOMPLETE_RESTART = "hermes_restart_incomplete"
-FINDING_UNRECORDED = "unrecorded_gateway_process"
+FINDING_UNRECORDED = "unrecorded_gateway_process"  # its build and its home are unknown: never counted as stale
 FINDING_SHARED_PROFILE = "profile_served_twice"
 FINDING_ADAPTER_DOWN = "adapter_not_connected"
 STATE_STALE = "no_line_this_run"  # every adapter line for it predates the start of the gateway serving it
@@ -109,7 +109,7 @@ class AdapterState:
     profile: str
     platform: str
     state: str  # the record's state when it has a current entry, else the newest log line's; or STATE_STALE/UNSERVED
-    logged: str  # the newest log line's stamp in this gateway run ("" when none)
+    logged: str  # the newest log line's time in UTC (its stamp read in this machine's local time), "" when none
     log: str
     reason: str = ""
     code: str = ""
@@ -119,6 +119,7 @@ class AdapterState:
     needs_attention: bool = False  # Hermes' own flag: it has retried long enough to want a person
     last_state: str = ""  # for STATE_STALE and STATE_UNSERVED: what the newest (older) line said
     gateway_started: str = ""  # when the gateway serving the profile started
+    logged_as_written: str = ""  # the same line's stamp as Hermes wrote it, in the writing process's local time
 
 
 @dataclass(frozen=True)
@@ -175,7 +176,7 @@ def gateway_health(
     *,
     environ: Mapping[str, str] | None = None,
     gateway_reader: Callable[[Path], Gateway] = read_gateway,
-    list_processes: Callable[[], tuple[bool, list[tuple[int, str]]]] = hermes_gateway_processes,
+    list_processes: Callable[[], GatewayListing] = hermes_gateway_processes,
     process_start: Callable[[int], float | None] = _process_start,
     log_tail_bytes: int = GATEWAY_LOG_TAIL_BYTES,
 ) -> GatewayHealth:
@@ -186,7 +187,8 @@ def gateway_health(
     restart = read_fleet_restart_state(root, install_dir, os.environ if environ is None else environ)
     homes = gateway_homes(root)
     recorded, unverified, serving = _recorded_gateways(homes, gateway_reader, build)
-    listed_ok, listed = list_processes()
+    listing = list_processes()
+    listed_ok, listed = listing.listed, listing.gateways
     recorded_pids = {process.pid for process in recorded}
     unrecorded = []
     for pid, profile in listed:
@@ -198,8 +200,8 @@ def gateway_health(
     logs, adapters = _adapter_states(homes, serving, log_tail_bytes)
     gateways = (*recorded, *unrecorded)
     findings = _findings(gateways, restart, shared, adapters)
-    lines, actions = _report(root, install_found, install_dir, build, restart, listed_ok, recorded, unrecorded,
-                             unverified, shared, adapters, logs)
+    lines, actions = _report(root, install_found, install_dir, build, restart, listing, recorded, unrecorded,
+                             unverified, shared, adapters, logs, homes, serving)
     return GatewayHealth(
         GATEWAY_HEALTH_SCHEMA, str(root), install_found, asdict(build), asdict(restart),
         "observed" if listed_ok else "not_available", gateways, tuple(unverified), shared, tuple(adapters),
@@ -240,7 +242,8 @@ def _build_verdict(build: BuildStamp, code_sha: str, started: float | None) -> s
     if build.status != STATUS_READ:
         return BUILD_UNKNOWN
     if code_sha and build.commit:
-        return BUILD_CURRENT if build.commit.startswith(code_sha) else BUILD_OTHER_COMMIT
+        same = build.commit.startswith(code_sha) or code_sha.startswith(build.commit)  # either may be the short one
+        return BUILD_CURRENT if same else BUILD_OTHER_COMMIT
     if started is None or build.built_at is None:
         return BUILD_UNKNOWN
     return BUILD_BEFORE if started < build.built_at else BUILD_CURRENT
@@ -265,8 +268,10 @@ def _adapter_states(
     for label, home in homes:
         log = read_gateway_log(home / GATEWAY_LOG_RELATIVE, tail_bytes=tail_bytes)
         logs.append(log)
-        for event in log.events:
-            key = (event.profile or label, event.platform)
+        newest_here: dict[tuple[str, str], AdapterEvent] = {}
+        for event in log.events:  # within one log, the line written last wins, whatever its stamp says
+            newest_here[(event.profile or label, event.platform)] = event
+        for key, event in newest_here.items():  # across logs, the stamps decide
             held = latest.get(key)
             if held is None or (event.epoch or 0.0) >= (held[0].epoch or 0.0):
                 latest[key] = (event, log.path)
@@ -279,8 +284,8 @@ def _adapter_states(
         event, log_path = latest.get((profile, platform), (None, ""))
         if info is None:
             if event is not None:
-                states.append(AdapterState(profile, platform, STATE_UNSERVED, event.logged, log_path,
-                                           last_state=event.state))
+                states.append(AdapterState(profile, platform, STATE_UNSERVED, _utc(event), log_path,
+                                           last_state=event.state, logged_as_written=event.logged))
             continue
         record = info.platforms.get(f"{profile}:{platform}")
         this_run = event is not None and (info.started is None or event.epoch is None or event.epoch >= info.started - 1)
@@ -288,8 +293,9 @@ def _adapter_states(
         started = iso_utc(info.started)
         if record is None and not this_run:
             if event is not None:
-                states.append(AdapterState(profile, platform, STATE_STALE, event.logged, log_path,
-                                           last_state=event.state, gateway_started=started))
+                states.append(AdapterState(profile, platform, STATE_STALE, _utc(event), log_path,
+                                           last_state=event.state, gateway_started=started,
+                                           logged_as_written=event.logged))
             continue
         current = event if this_run else None
         states.append(_adapter_state(profile, platform, current, log_path, record, restart, started))
@@ -316,10 +322,14 @@ def _adapter_state(
     fix = _adapter_fix(kind, probe, log_path, restart, record.error if record else "",
                        record is not None and record.needs_attention) if kind else ""
     return AdapterState(
-        profile, platform, state, logged, log_path, reason, code, kind, fix,
+        profile, platform, state, _utc(event) if event is not None else "", log_path, reason, code, kind, fix,
         SOURCE_RECORD if record is not None else SOURCE_LOG, record is not None and record.needs_attention,
-        gateway_started=started,
+        gateway_started=started, logged_as_written=logged,
     )
+
+
+def _utc(event: AdapterEvent) -> str:
+    return iso_utc(event.epoch) or f"{event.logged} (local time)"
 
 
 def _restart_command(gateway_profile: str) -> str:
@@ -336,8 +346,8 @@ def _adapter_fix(
             "Message Content and Server Members"
             if "Server Members Intent" in record_error
             else "Message Content, and Server Members too when the profile has a role allowlist "
-            "(`DISCORD_ALLOWED_ROLES` or `discord.allowed_roles`) or a username rather than a numeric id in "
-            "`DISCORD_ALLOWED_USERS`"
+            "(`DISCORD_ALLOWED_ROLES`, or `allowed_roles` in its Discord config) or a username rather than a numeric "
+            "id in its user allowlist (`DISCORD_ALLOWED_USERS`, or `allow_from`/`allowed_users` in its Discord config)"
         )
         return (
             f"Discord refused the bot's privileged gateway intents; Hermes requests {intents}. Enable them in "
@@ -367,7 +377,7 @@ def _findings(
     adapters: list[AdapterState],
 ) -> tuple[str, ...]:
     found: list[str] = []
-    if any(process.build in {BUILD_BEFORE, BUILD_OTHER_COMMIT} for process in gateways):
+    if any(process.recorded and process.build in {BUILD_BEFORE, BUILD_OTHER_COMMIT} for process in gateways):
         found.append(FINDING_STALE_GATEWAY)
     if restart.obligation:
         found.append(FINDING_PENDING_RESTART)
@@ -388,14 +398,17 @@ def _report(
     install_dir: Path,
     build: BuildStamp,
     restart: FleetRestartState,
-    listed_ok: bool,
+    listing: GatewayListing,
     recorded: list[GatewayProcess],
     unrecorded: list[GatewayProcess],
     unverified: list[str],
     shared: dict[str, list[int]],
     adapters: list[AdapterState],
     logs: list[LogRead],
+    homes: list[tuple[str, Path]],
+    serving: dict[str, _Serving],
 ) -> tuple[list[str], list[str]]:
+    listed_ok = listing.listed
     lines: list[str] = []
     actions: list[str] = []
     built = iso_utc(build.built_at)
@@ -432,6 +445,12 @@ def _report(
     if not listed_ok:
         lines.append("no process listing is available on this platform, so only gateways Hermes' own records "
                      "name are counted; a gateway no record names would not show.")
+    else:
+        lines.append(f"the process listing recognizes {LAUNCH_SHAPES}; a gateway started any other way is counted "
+                     "only when a record names it.")
+    if listing.retitled:
+        lines.append(f"PID {', '.join(map(str, listing.retitled))}: titled just `hermes` (Hermes' optional "
+                     "setproctitle), so whether each is a gateway cannot be read from its command line.")
     lines.append(_fleet_line(root, listed_ok, recorded, unrecorded, shared))
     for profile, pids in shared.items():
         actions.append(f"profile `{profile}` is served by PIDs {', '.join(map(str, pids))}; keep one gateway for it")
@@ -439,7 +458,7 @@ def _report(
         lines.append(_adapter_line(state))
         if _adapter_down(state):
             actions.append(f"{state.profile} {state.platform}: {state.fix}")
-    silent = _silent_logs(logs)
+    silent = _silent_logs(homes, logs, serving)
     if silent:
         lines.append("no adapter state read from: " + "; ".join(silent) + ".")
     return lines, list(dict.fromkeys(actions))
@@ -490,12 +509,21 @@ def _recorded_line(process: GatewayProcess, built: str) -> str:
 
 
 def _unrecorded_line(process: GatewayProcess, built: str, recorded: list[GatewayProcess]) -> str:
+    """Which home and which checkout an unrecorded process runs is not known: nothing here claims either."""
     named = f"`--profile {process.profile}` on its command line" if process.profile else "no profile on its command line"
     started = f", started {process.started_at}" if process.started_at else ""
+    if process.build == BUILD_BEFORE:
+        build = (f"; that is before this install's build ({built}): if it runs this install, it serves "
+                 "pre-update code")
+    elif process.build == BUILD_CURRENT:
+        build = "; that is after this install's build"
+    else:
+        build = ""
     owner = next((other.pid for other in recorded if (process.profile or DEFAULT_PROFILE) in other.serves), None)
-    also = f"; PID {owner} already serves that profile here" if owner is not None else ""
+    also = (f"; it carries the same profile name as PID {owner} here, and which home it serves is not recorded"
+            if owner is not None else "")
     return (f"PID {process.pid} runs `hermes gateway run` ({named}) and no record under this Hermes root names it"
-            f"{started}; {_build_words(process, built)}{also}.")
+            f"{started}{build}{also}.")
 
 
 def _fleet_line(
@@ -504,7 +532,8 @@ def _fleet_line(
 ) -> str:
     total = len(recorded) + len(unrecorded)
     if not total:
-        source = "and none in the process listing" if listed_ok else "(the process listing was not available)"
+        source = ("and none the process listing recognizes" if listed_ok
+                  else "(the process listing was not available)")
         return f"no running Hermes gateway: no live gateway record under {root} {source}."
     served = {profile for process in recorded for profile in process.serves}
     shape = f"{total} gateway process(es) running, {len(recorded)} recorded, serving {len(served)} profile(s)"
@@ -545,16 +574,21 @@ def _adapter_line(state: AdapterState) -> str:
     return f"{where}: {verb} at {state.logged}, and no later line says it connected. {state.fix}"
 
 
-def _silent_logs(logs: list[LogRead]) -> list[str]:
+def _silent_logs(homes: list[tuple[str, Path]], logs: list[LogRead], serving: dict[str, _Serving]) -> list[str]:
     words = {
         STATUS_MISSING: "no log",
         STATUS_UNREADABLE: "the log could not be read",
         STATUS_UNRECOGNIZED: "no line is in Hermes' log format",
     }
     silent = []
-    for log in logs:
+    for (label, _home), log in zip(homes, logs, strict=True):
+        info = serving.get(label)
         if log.status in words:
             silent.append(f"{log.path} ({words[log.status]})")
-        elif not log.events:
+        elif log.events:
+            continue
+        elif info is not None and not any(key.startswith(f"{label}:") for key in info.platforms):
+            silent.append(f"{label} (no adapter line, and no messaging platform in its gateway's record)")
+        else:
             silent.append(f"{log.path} (no adapter line in its last {log.bytes_read // 1024} KiB)")
     return silent

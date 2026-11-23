@@ -144,8 +144,16 @@ _SECONDARY_RETRY = re.compile(_RUN + "Secondary " + _PLATFORM + r" reconnect ret
 _ADAPTER_REASON = re.compile(
     _STAMP + r"hermes_plugins\.platforms__" + _PLATFORM + r"\.adapter: \[[^\]]+\] Failed to connect to [^:]+: (?P<reason>.+)$"
 )
-_LONG_ID = re.compile(r"\d{15,}")  # Discord and Slack ids; never shown
-_TOKEN_LIKE = re.compile(r"[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{20,}")
+# What a reason text never keeps, replaced in this order: credentials first, then ids, addresses and queries.
+_SCRUBS = (
+    (re.compile(r"[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{20,}"), "<redacted>"),  # Discord bot token
+    (re.compile(r"xox[a-z]-[A-Za-z0-9-]{10,}"), "<redacted>"),  # Slack token
+    (re.compile(r"\b\d{6,}:[A-Za-z0-9_-]{30,}\b"), "<redacted>"),  # Telegram bot token
+    (re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+"), "<email>"),
+    (re.compile(r"(https?://[^\s?#]+)[?#]\S*"), r"\1?<redacted>"),  # a URL's query or fragment
+    (re.compile(r"\b[UCWTGBDE](?=[A-Z0-9]*\d)[A-Z0-9]{8,}\b"), "<id>"),  # Slack team, user and channel ids
+    (re.compile(r"\d{15,}"), "<id>"),  # Discord ids
+)
 
 
 def read_build_stamp(install_dir: Path) -> BuildStamp:
@@ -245,38 +253,54 @@ def read_gateway_log(log_path: Path, *, tail_bytes: int = GATEWAY_LOG_TAIL_BYTES
 
 
 def adapter_events(lines: list[str]) -> list[AdapterEvent]:
-    """Every adapter state line in `lines`, oldest first.
+    """Every adapter state line in `lines`, in file order.
 
     The Discord adapter logs why it failed (`[Discord] Failed to connect to
     Discord: …`) without naming the profile. That line is a failure in its own
     right: a served profile's reconnect (`Secondary discord reconnect retry …
-    (profile: P)`) writes no `✗` line after it. It goes to the profile the
-    newest earlier line for the same platform named ("" for none: the log's
-    own profile). When the gateway's `✗ discord failed to connect (profile: Q)`
-    follows within `REASON_WINDOW_SECONDS`, that line takes the reason, and a
-    reason event given to another profile than Q is withdrawn.
+    (profile: P)`) writes no `✗` line after it. It goes to the one profile
+    whose reconnect for that platform is open (a `Fatal … multiplexed profile`
+    or `Secondary … reconnect retry` line not yet followed by that profile's
+    own connected, failed or stopped line); with none open, to the log's own
+    profile (""); with more than one open, to none, since the log cannot say
+    whose it is.
+
+    A `✗ … failed to connect (profile: Q)` within `REASON_WINDOW_SECONDS` after
+    the reason takes it only when the reason went to Q or to no one; an
+    unattributed reason event is then withdrawn, as it was Q's. A reason
+    given to another profile's open reconnect stays there.
     """
     events: list[AdapterEvent | None] = []
-    context: dict[str, str] = {}  # platform -> the profile its newest line named
-    pending: dict[str, tuple[str, float | None, int]] = {}  # platform -> (reason, epoch, its event's index)
+    reconnecting: dict[str, list[str]] = {}  # platform -> profiles whose reconnect is open, oldest first
+    pending: dict[str, tuple[str, float | None, int | None, str | None]] = {}  # platform -> (reason, epoch, index, owner)
     for line in lines:
         if (match := _ADAPTER_REASON.match(line)) is not None:
             platform = match["platform"]
             reason, at = bounded_reason(match["reason"]), _log_epoch(match["stamp"])
-            pending[platform] = (reason, at, len(events))
-            events.append(AdapterEvent(context.get(platform, ""), platform, STATE_FAILED, match["stamp"], at, reason))
+            open_now = reconnecting.get(platform, [])
+            owner = open_now[0] if len(open_now) == 1 else "" if not open_now else None
+            index = None
+            if owner is not None:
+                index = len(events)
+                events.append(AdapterEvent(owner, platform, STATE_FAILED, match["stamp"], at, reason))
+            pending[platform] = (reason, at, index, owner)
             continue
         event = parse_adapter_line(line)
         if event is None:
             continue
-        if event.profile:
-            context[event.platform] = event.profile
+        open_now = reconnecting.setdefault(event.platform, [])
+        if event.profile and event.state in {STATE_RETRYING, STATE_FATAL}:
+            if event.profile not in open_now:
+                open_now.append(event.profile)
+        elif event.profile in open_now:
+            open_now.remove(event.profile)
         if event.state == STATE_FAILED and not event.reason and event.platform in pending:
-            reason, at, index = pending.pop(event.platform)
-            if at is not None and event.epoch is not None and 0 <= event.epoch - at <= REASON_WINDOW_SECONDS:
+            reason, at, index, owner = pending[event.platform]
+            close = at is not None and event.epoch is not None and 0 <= event.epoch - at <= REASON_WINDOW_SECONDS
+            if close and owner in {None, "", event.profile}:
+                del pending[event.platform]
                 event = AdapterEvent(event.profile, event.platform, event.state, event.logged, event.epoch, reason)
-                held = events[index]
-                if held is not None and held.profile != event.profile:
+                if index is not None and owner != event.profile:
                     events[index] = None
         events.append(event)
     return [event for event in events if event is not None]
@@ -329,9 +353,11 @@ def classify_reason(event: AdapterEvent) -> str:
 
 
 def bounded_reason(text: str) -> str:
-    """Hermes' reason text on one line, long ids and token-shaped strings replaced, at most `REASON_CHARS`."""
-    folded = " ".join(text.split())
-    cleaned = _LONG_ID.sub("<id>", _TOKEN_LIKE.sub("<redacted>", folded))
+    """Hermes' reason text on one line, at most `REASON_CHARS`, without Discord, Slack or Telegram bot tokens, Discord
+    and Slack ids, email addresses, or a URL's query (`_SCRUBS`)."""
+    cleaned = " ".join(text.split())
+    for pattern, replacement in _SCRUBS:
+        cleaned = pattern.sub(replacement, cleaned)
     return cleaned if len(cleaned) <= REASON_CHARS else cleaned[: REASON_CHARS - 1].rstrip() + "…"
 
 
