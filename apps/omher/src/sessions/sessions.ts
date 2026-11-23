@@ -724,7 +724,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       store().dispatch({
         type: "chat.opened",
         bot: key,
-        res: { session_id: key, messages: res.messages ?? [], running: !!res.running, model: res.model, provider: res.provider, reasoning: res.reasoning },
+        res: { session_id: key, messages: res.messages ?? [], running: !!res.running, lost: res.lost ?? [], model: res.model, provider: res.provider, reasoning: res.reasoning },
         now: Date.now(),
       });
       patchRec(id, { status: "running", model: res.model, agentSession: res.stored || stored, paused: undefined, error: undefined, exitCode: null });
@@ -749,7 +749,12 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const bot = proc.bot!;
     const fid = proc.fid;
     if (!fid) throw new Error(tr("ss.stillStarting"));
-    if (i.kind === "send") await a.folderSend(bot, fid, i.text);
+    if (i.kind === "send") {
+      // behind a turn Hermes lost: it waits in Hermes' queue, not read (the chat's note says why)
+      const r = await a.folderSend(bot, fid, i.text);
+      const key = keys.get(id);
+      if (r?.paused && key && i.id) store().dispatch({ type: "send.ok", bot: key, id: i.id, now: Date.now(), paused: true });
+    }
     else if (i.kind === "interrupt") await a.folderInterrupt(bot, fid);
     else if (i.kind === "approve") await a.folderApprove(bot, fid, i.request_id, i.choice);
     else if (i.kind === "clarify") await a.folderClarify(bot, fid, i.request_id, i.answer);

@@ -74,7 +74,9 @@ impact and prerequisites, not from the validator's confidence alone.
 
 Stop the candidate trace at the first inaccessible caller, unknown precondition,
 or missing revision and record that exact gap as unresolved. Do not turn an
-unread path into checked-clean coverage. If no separate reader is available,
+unread path into checked-clean coverage. Open every provided file that defines,
+constructs or calls what the diff touches before deciding; a file you could read
+never goes under Not checked. If no separate reader is available,
 write "independent validation unavailable" and name any self-recheck actually
 performed: the same reader's second pass is not independent. Do not claim an
 independent confirmation in that case. Protected risks remain visible even

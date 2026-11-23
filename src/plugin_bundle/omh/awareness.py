@@ -8019,8 +8019,9 @@ _CODE_REVIEW_REQUEST_REASON = (
 _CODE_REVIEW_REQUEST_RESPONSE = (
     "Report a bug only with a step-by-step trace: concrete input or state -> path:line -> wrong output or state. "
     "First read the callers and tests the diff relies on; drop a finding that is guarded, intended or documented "
-    "there, or theoretical only. End the review body with a `Not checked:` line naming what you did not read or "
-    "run. A reply format the request sets, such as a required last line, still comes last. Full method "
+    "there, or theoretical only. Open every provided file that defines, constructs or calls what the diff touches "
+    "before deciding; a file you could read never goes under Not checked. End the review body with a `Not checked:` "
+    "line naming what you did not read or run. A reply format the request sets, such as a required last line, still comes last. Full method "
     f"(optional): skill_view(name='{_loadable_skill_label('code-review')}')."
 )
 

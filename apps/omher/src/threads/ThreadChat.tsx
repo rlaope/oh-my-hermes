@@ -4,6 +4,7 @@ import { selectAsks, useStore } from "../state/store";
 import type { Bot } from "../lib/protocol";
 import { Timeline } from "../chat/parts/Timeline";
 import { Composer } from "../chat/parts/Composer";
+import { LostTurnBlock } from "../chat/parts/LostTurnBlock";
 import { promptsOf } from "../chat/parts/promptHistory";
 import { Avatar } from "../ui";
 import { t } from "../i18n";
@@ -48,6 +49,7 @@ export function ThreadChat({ bot, thread }: { bot: Bot; thread: string }) {
             )
           }
         />
+        <LostTurnBlock bot={bot.name} session={thread} name={bot.display_name} chat={chat} offline={bot.status === "offline"} />
         <Composer
           key={key}
           bot={as}

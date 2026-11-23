@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getStore, selectAsks, useStore, type OutFile } from "../state/store";
 import { useResolvedTheme } from "../app/theme";
 import { Timeline } from "../chat/parts/Timeline";
+import { LostTurnBlock } from "../chat/parts/LostTurnBlock";
 import { Composer } from "../chat/parts/Composer";
 import { CheckIcon } from "../chat/model/CheckIcon";
 import { Seg } from "../chat/model/Seg";
@@ -178,6 +179,10 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
         onEditLast={ss.live[rec.id]?.rewind && rec.status === "running" && !chat?.turn ? () => void getSessions().rewind(rec.id) : undefined}
       />
       {rec.paused ? <Paused rec={rec} /> : ended && <Ended rec={rec} />}
+      {/* a Hermes folder chat whose turn Hermes lost when it stopped mid-turn: paused until the person discards it */}
+      {rec.bot && chatKey.startsWith(`fold:${rec.bot}:`) && (
+        <LostTurnBlock bot={rec.bot} session={chatKey.slice(`fold:${rec.bot}:`.length)} name={label} chat={chat} offline={rec.status !== "running"} />
+      )}
       <OwnApprovals agent={rec.agent} />
       <Composer
         key={chatKey}
