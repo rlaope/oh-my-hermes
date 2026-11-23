@@ -4,6 +4,31 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`omh_delegate_route` can hand a child the rest of its chain, each step at its own effort (opt-in).** With
+  `{"schema_version": "delegate_route_options/v1", "write_fallback_providers": true}` in
+  `~/.omh/routing/delegate-route.json`, `set` also writes the positions after the head into
+  `delegation.fallback_providers` (`{provider, model, reasoning_effort}` each, in chain order). A child whose head
+  fails, a quota 429 included, then moves on inside the same dispatch instead of waiting out the head's retries.
+  It is off by default. It applies only on a Hermes whose source has hermes-agent PR #144787's
+  `agent/fallback_reasoning.py`, because an older Hermes runs every fallback at `agent.reasoning_overrides` rather
+  than the entry's effort. On such a Hermes only the three scalars are written, and the result's `in_child_fallback`
+  and `omh doctor` (`plugin_delegate_route_fallback_chain`) say why. A Hermes updated on disk but still running the
+  old code reads as `restart_pending` and writes no chain until it restarts. Positions whose provider you have not
+  configured are skipped. Writing stops at the first position Hermes would not try: one with no provider route, or one
+  whose provider and model the head or an earlier entry already has. That keeps the re-dispatch's starting point
+  exact. OMH records the chain it wrote with the route and takes it back out at turn end and on
+  `clear` (an absent key stays absent), and the lost-update and per-conversation guards cover it. Your own
+  `delegation.fallback_providers` (`[]` included) is never overwritten, and an edit you make to OMH's chain mid-turn is
+  kept while the scalars still come back out (`chain_foreign_edit`). The list writer keeps the scalar writer's
+  rules: plain tokens only, an atomic replace, a symlinked config refused. `action=fallback` still re-dispatches,
+  continuing after the positions the child already walked (`walked_in_child`). Requested by @rafaelmoreiraai in
+  #3124. (`src/plugin_bundle/omh/delegation_fallback_chain.py`, `src/plugin_bundle/omh/delegation_routing.py`,
+  `src/plugin_bundle/omh/delegation_route_restore.py`, `src/plugin_bundle/omh/tools/delegate_route_tool.py`,
+  `src/maintenance/doctor.py`; `docs/INSTALLATION.md` "The rest of the chain inside the child")
+- **omher: an open thread reads again cleanly after the bridge comes back.** After a bridge restart, the page re-read an
+  open thread at the same time as it listed the bot's threads again. The new bridge knew no thread yet and refused
+  it, so the thread showed a false "not reachable" line and a turn Hermes lost there stayed unseen. Threads are now
+  listed first and the open ones read after that, on reconnect and when a bot comes back. (Follow-up to #3127)
 - **omher: a bot's chat that stopped answering after a crash says why and gets going again.** When Hermes' gateway
   stops in the middle of a turn (a crash, a kill, Windows ending the process), Hermes brings that turn back as lost
   and keeps every later message of the chat in its own queue until someone acknowledges it, because the lost turn may
