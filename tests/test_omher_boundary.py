@@ -334,9 +334,11 @@ RULES = (
     "The provider id is checked against `^[a-z0-9][a-z0-9_-]{0,40}$` and passed as one argument;",
     "Hermes asks for the key in that terminal and stores it itself: omher never sees the key.",
     "never runs this in its own pseudo-terminal, so no keystroke passes through omher.",
-    "The two exceptions are a bot's automations and plugins, which omher changes only by asking that bot's own gateway"
-    " (rules 24 and 25); omher writes no file of either itself, with one exception of its own:",
-    "The third exception is a bot's MCP apps (rule 41): on the person's press, Hermes' own `hermes -p <bot> mcp"
+    "There are three exceptions. The first two are a bot's automations and plugins, which omher changes only by asking"
+    " that bot's own gateway (rules 24 and 25); omher writes no file of either itself, with one exception of its own:",
+    "never signals a process (the one exception is rule 41's stop of its own `hermes mcp` run past its time), never"
+    " calls a service manager",
+    "The third is a bot's MCP apps (rule 41): on the person's press, Hermes' own `hermes -p <bot> mcp"
     " install|login|remove <name>` writes that profile's `config.yaml` `mcp_servers`, its `.env` and its `mcp-tokens/`;"
     " omher itself writes none of them.",
     "omher changes a bot's automations only through Hermes' own `cron.manage` on that bot's gateway (`add`, `pause`,"
@@ -479,6 +481,9 @@ RULES = (
     "and Connect needs it not to be there: Hermes' install replaces a server's whole block and turns it on, so a server"
     " that is already there (on, off or set up by hand), or a config omher cannot read, is never installed over.",
     "Sign in again first asks the person, since Hermes drops the current sign-in before the new one;",
+    "when the bot's own config sets a server's sign-in to a device code (`oauth.flow: device`), which Hermes shows only"
+    " in a terminal, the page offers no Sign in for it and shows `hermes -p <bot> mcp login <name>` to run there, and"
+    " the bridge refuses that sign-in.",
     "the name is checked against `^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$` (so it never reads as an option) and must be an"
     " entry of the catalog the bridge has just read;",
     "whether Hermes keeps a sign-in for a server it learns from a stat of `<profile>/mcp-tokens/<name>.json`, a file it"
@@ -2836,14 +2841,19 @@ class TasksReadOnly(unittest.TestCase):
         self.assertIn('YAML(typ="safe", pure=True).parse(stream)', events)
         # the keys it keeps: `mcp_servers`, then of each server only the *keys* asked for (`enabled`; the Apps page of
         # rule 41 also the legacy `disabled`), each turned into True, False or "?" by mcp_switch as Hermes reads it
-        self.assertEqual(sorted(set(re.findall(r'== "([a-z_]+)"', names))), ["mcp_servers"])
+        # (`oauth` and its `flow` only when the caller asks for `oauth.flow`: the Apps page, never the Linear source)
+        self.assertEqual(sorted(set(re.findall(r'== "([a-z_]+)"', names))), ["flow", "mcp_servers", "oauth"])
         self.assertIn('got = mcp_switch(ev.value, ev.implicit[0], ruamel) if isinstance(ev, yaml.ScalarEvent) else "?"', names)
         switch = src.split("def mcp_switch(", 1)[1].split("\ndef ", 1)[0]
         for word in ("open(", "read", "log.", "_YAML_CACHE", "write"):
             self.assertNotIn(word, switch.split('"""', 2)[2], word)
         self.assertIn('keys: tuple[str, ...] = ("enabled",)', names)
-        self.assertIn("top[1] = ev.value if ev.value in keys else None", names)
-        self.assertIn('mcp_server_names(profile_dir / "config.yaml", ("enabled", "disabled"))', src)
+        self.assertIn('top[1] = ev.value if ev.value in keys or (ev.value == "oauth" and "oauth.flow" in keys) else None', names)
+        # under `oauth` only its `flow` is kept, and only as one of Hermes' two words or "?"
+        self.assertIn('top[1] = "oauth.flow" if ev.value == "flow" else None', names)
+        self.assertIn('out[stack[1][1]]["oauth.flow"] = flow if flow in ("browser", "device") else "?"', names)
+        self.assertIn('MCP_KEYS = ("enabled", "disabled", "oauth.flow")', src)
+        self.assertIn('mcp_server_names(profile_dir / "config.yaml", MCP_KEYS)', src)
         body = src.split("def linear_server(", 1)[1].split("\ndef ", 1)[0].split('"""', 2)[2]
         # the keys, then of the Linear-named server only its `enabled`: no url, no values(), no items()
         self.assertIn("for name in servers.keys():", body)
@@ -3191,6 +3201,7 @@ class AppsThroughTheBotsOwnHermes(unittest.TestCase):
         # Connect never goes over a server that is there, nor over a config omher cannot read
         self.assertIn("if verb == 'install' and servers is None:", body)
         self.assertIn("if verb == 'install' and app in servers:", body)
+        self.assertIn("if verb == 'login' and _device_signin(servers, app):", body)
         # each op is one press from the UI: the op table, one verb each
         for verb in ("install", "login", "remove"):
             self.assertEqual(self._body(f"op_apps_{verb}"), f"return await self._apps_run(p, '{verb}')")

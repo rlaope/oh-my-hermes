@@ -131,8 +131,10 @@ test("Sign in again asks first and says the current sign-in is dropped", async (
 
 test("a run that ends while the page shows another bot leaves that bot's cards alone", async ({ page }) => {
   await openApps(page);
-  await mock("mock.appsDelay", { verb: "login", ms: 1500 });
-  await page.getByTestId("app-login-figma").click();   // Kami's Figma needs a sign-in: no confirm
+  await mock("mock.appsDelay", { verb: "login", ms: 800 });
+  // Kami's reload after its run is held until the test lets it go, so the order below is fixed, not timed
+  await mock("mock.appsHold", { bot: "kami" });
+  await page.getByTestId("app-login-figma").click(); // Kami's Figma needs a sign-in: no confirm
   await expect(page.getByTestId("apps-signing")).toBeVisible();
   await page.getByTestId("apps-scope").click();
   await page.getByTestId("apps-scope-friren").click();
@@ -141,12 +143,17 @@ test("a run that ends while the page shows another bot leaves that bot's cards a
   // Friren is not busy: its buttons work while Kami's sign-in runs, and no sign-in note is shown for it
   await expect(page.getByTestId("app-install-linear")).toBeEnabled();
   await expect(page.getByTestId("apps-signing")).toHaveCount(0);
-  // Kami's run ends: Friren's states and buttons stay Friren's, and Kami's line is not shown here
+  // Kami's run has ended and its reload is waiting at the bridge; let it land
   await expect.poll(async () => (await calls("apps.list")).filter((c) => c.params.bot === "kami").length, { timeout: 5000 }).toBe(2);
+  expect((await mock("mock.appsRelease", { bot: "kami" })).arrived).toBe(true);
+  // a Friren request sent after the release answers after Kami's list on the same socket: once its line shows, the page
+  // has handled Kami's list, and Friren's states and buttons are still Friren's
+  await page.getByTestId("app-install-linear").click();
+  await expect(page.getByTestId("apps-result")).toHaveText("Linear is added to Friren. Sign in to finish.");
   await expect(page.getByTestId("app-state-figma")).toHaveText("Not connected");
-  await expect(page.getByTestId("app-state-linear")).toHaveText("Not connected");
+  await expect(page.getByTestId("app-state-datadog")).toHaveText("Not connected"); // Kami's is turned off
   await expect(page.getByTestId("app-install-figma")).toBeEnabled();
-  await expect(page.getByTestId("apps-result")).toHaveCount(0);
+  await expect(page.getByTestId("app-card-google-workspace")).toHaveCount(0); // a Kami-only skill
   // back on Kami: its own result and state
   await page.getByTestId("apps-scope").click();
   await page.getByTestId("apps-scope-kami").click();

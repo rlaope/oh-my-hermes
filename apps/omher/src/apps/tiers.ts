@@ -76,15 +76,17 @@ export const markOf = (name: string): string => MARKS[name] ?? name;
 /** What a catalog entry's card offers: Connect, Sign in (again) and Remove, each only where it means something. A state
  *  omher could not read offers nothing, and neither does an install only a terminal can answer (the card shows its
  *  command). */
-export function actionsOf(app: Pick<AppRow, "auth" | "state" | "terminal">): ("install" | "login" | "remove")[] {
+export function actionsOf(app: Pick<AppRow, "auth" | "state" | "terminal" | "device">): ("install" | "login" | "remove")[] {
+  // a device-code sign-in shows its code only in a terminal: the card shows `hermes mcp login` instead of Sign in
+  const login = app.auth === "oauth" && !app.device ? (["login"] as const) : [];
   switch (app.state) {
     case "available":
       // a value Hermes can only ask in a terminal: Connect would always fail, so the card shows the command instead
       return app.terminal ? [] : ["install"];
     case "needs_signin":
-      return ["login", "remove"];
+      return [...login, "remove"];
     case "installed":
-      return app.auth === "oauth" ? ["login", "remove"] : ["remove"];
+      return [...login, "remove"];
     case "disabled":
       return ["remove"];
     default:

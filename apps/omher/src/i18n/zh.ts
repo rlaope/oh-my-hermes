@@ -844,6 +844,7 @@ export const zh: Record<Key, string> = {
   "apps.terminalHint": "Hermes 安装这个应用时会在终端里询问 {env}。请在终端中运行：",
   "apps.confirmSignin": "要为 {bot} 重新登录 {name} 吗？Hermes 会先删除当前的登录，在新的登录完成前 {bot} 无法使用 {name}。",
   "apps.terminalOnly": "Hermes 安装这个应用时只会在终端里询问 {env}。请在终端中运行：",
+  "apps.deviceOnly": "{name} 在这里用设备码登录，Hermes 只会在终端里显示这个码。请在终端中运行：",
   "apps.skillNote": "技能在对话中使用。如需设置，请在上方输入框里让 {bot} 来做。",
   "tl.offline": "{bot} 未连接。",
   "needs.one": "1 项待你处理",

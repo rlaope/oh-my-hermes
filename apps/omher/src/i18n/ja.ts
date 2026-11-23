@@ -844,6 +844,7 @@ export const ja: Record<Key, string> = {
   "apps.terminalHint": "Hermes はこのアプリのインストール時にターミナルで {env} を尋ねます。ターミナルで次を実行してください:",
   "apps.confirmSignin": "{bot} の {name} にもう一度サインインしますか？ Hermes は先に今のサインインを消すので、新しいサインインが済むまで {bot} は {name} を使えません。",
   "apps.terminalOnly": "Hermes はこのアプリのインストール時に {env} をターミナルでだけ尋ねます。ターミナルで次を実行してください:",
+  "apps.deviceOnly": "{name} はここではデバイスコードでサインインします。Hermes はそのコードをターミナルでだけ表示します。ターミナルで次を実行してください:",
   "apps.skillNote": "スキルはチャットで使います。設定するには上の欄で {bot} に頼んでください。",
   "tl.offline": "{bot} は接続されていません。",
   "needs.one": "1 件の確認待ち",

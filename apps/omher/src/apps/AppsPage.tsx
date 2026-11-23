@@ -21,6 +21,8 @@ type Busy = { name: string; verb: Verb };
 
 /** The command Hermes asks its values in, for the person to run in a terminal. */
 export const installCmd = (bot: string, name: string) => `hermes -p ${bot} mcp install ${name}`;
+/** The sign-in command for a server whose config asks for a device code, which Hermes shows only in a terminal. */
+export const loginCmd = (bot: string, name: string) => `hermes -p ${bot} mcp login ${name}`;
 
 /** The line after a run that worked: what changed, and when the bot has the app's tools (Hermes' gateway connects a new
  *  server on its own about once a minute; a chat already open gets its tools after `/reload-mcp`). */
@@ -40,6 +42,8 @@ export function AppsPage() {
   // another bot when it ends. Only the shown bot's list is ever put on the page (`shownRef`).
   const shownRef = useRef(scopeName);
   shownRef.current = scopeName;
+  // each bot's latest load: an older one that answers later (A, B, A again while a run goes on) is dropped
+  const loadSeq = useRef<Record<string, number>>({});
   const [data, setData] = useState<Data | null>(null);
   const [err, setErr] = useState<{ bot: string; text: string } | null>(null);
   const [query, setQuery] = useState("");
@@ -50,13 +54,15 @@ export function AppsPage() {
   const askTo = local.find((b) => b.name === askBot) ?? scope;
 
   const load = async (bot: string) => {
+    const n = (loadSeq.current[bot] = (loadSeq.current[bot] ?? 0) + 1);
+    const current = () => shownRef.current === bot && loadSeq.current[bot] === n;
     try {
       const got = await s.appsList(bot);
-      if (shownRef.current !== bot) return;
+      if (!current()) return;
       setData({ bot, ...got });
       setErr(null);
     } catch (e) {
-      if (shownRef.current !== bot) return;
+      if (!current()) return;
       setData({ bot, catalog: true, apps: [], skills: [] });
       setErr({ bot, text: errorLine(e, local.find((b) => b.name === bot)?.display_name ?? bot) });
     }
@@ -227,7 +233,9 @@ export function AppCard({
   const acts = card.kind === "mcp" ? actionsOf(card.app) : [];
   // an install whose values Hermes can only ask in a terminal: the command, up front, instead of a Connect that fails
   const terminal = card.kind === "mcp" && card.app.state === "available" && card.app.terminal;
-  const cmd = installCmd(bot.name, name);
+  // a sign-in with a device code (the bot's own `oauth.flow: device`): its command, since the code shows only there
+  const device = card.kind === "mcp" && card.app.auth === "oauth" && card.app.device && (state === "needs_signin" || state === "installed");
+  const cmd = device ? loginCmd(bot.name, name) : installCmd(bot.name, name);
   const asks = (verb: Verb) => verb === "remove" || (verb === "login" && state !== "needs_signin");
   const confirmText = (verb: Verb) =>
     verb === "remove"
@@ -259,9 +267,9 @@ export function AppCard({
             <span className="need">{t("apps.asks", { env: card.app.asks.join(", ") })}</span>
           )}
         </div>
-        {terminal && (
+        {(terminal || device) && (
           <div className="ap-term ap-card-term" data-testid={`app-terminal-${name}`}>
-            <span>{t("apps.terminalOnly", { env: card.kind === "mcp" ? card.app.asks.join(", ") : "" })}</span>
+            <span>{device ? t("apps.deviceOnly", { name: label }) : t("apps.terminalOnly", { env: card.kind === "mcp" ? card.app.asks.join(", ") : "" })}</span>
             <code className="ap-cmd" data-testid={`app-cmd-${name}`}>
               {cmd}
               <CopyButton text={() => cmd} />
@@ -269,7 +277,7 @@ export function AppCard({
           </div>
         )}
       </div>
-      {card.kind === "mcp" && terminal && (
+      {card.kind === "mcp" && (terminal || device) && (
         <div className="pl-ctl">
           <button type="button" className="pg-btn" onClick={() => openShellAt(null)} data-testid={`app-open-terminal-${name}`}>
             {t("tasks.openTerminal")}

@@ -165,6 +165,21 @@ class States(Base):
         got = ob.read_apps(self.profile)
         self.assertEqual((got["catalog"], got["apps"]), (False, []))
 
+    def test_a_device_code_sign_in_is_read_from_the_bots_own_config_and_nothing_else_of_oauth(self):
+        fake = "client-" + "S" * 24
+        self.config(f"  notion:\n    url: https://mcp.example.org/mcp\n    auth: oauth\n    oauth:\n      client_secret: {fake}\n"
+                    f"      flow: device\n  linear:\n    url: https://x\n    oauth: {{flow: browser}}\n"
+                    f"  figma:\n    url: https://x\n    oauth: {{flow: magic}}\n  sentry:\n    url: https://x\n    flow: device\n")
+        servers = ob.mcp_server_names(self.profile / "config.yaml", ob.MCP_KEYS)
+        self.assertEqual(servers, {"notion": {"oauth.flow": "device"}, "linear": {"oauth.flow": "browser"},
+                                   "figma": {"oauth.flow": "?"}, "sentry": {}})
+        self.assertNotIn(fake, repr(servers))
+        got = {a["name"]: a["device"] for a in ob.read_apps(self.profile)["apps"]}
+        self.assertEqual(got["notion"], True)
+        self.assertEqual((got["asana"], got["deepwiki"]), (False, False))
+        # the Linear source asks for `enabled` only: `oauth` is never followed for it
+        self.assertEqual(ob.mcp_server_names(self.profile / "config.yaml"), {"notion": {}, "linear": {}, "figma": {}, "sentry": {}})
+
     def test_no_server_value_and_no_token_byte_is_returned(self):
         fake = "glpat-" + "Z" * 24
         self.config(f"  notion:\n    url: https://mcp.example.org/mcp?t={fake}\n    headers: {{Authorization: Bearer {fake}}}\n"
@@ -177,7 +192,7 @@ class States(Base):
         got = ob.read_apps(self.profile)
         self.assertNotIn(fake, repr(got))
         self.assertEqual(got["apps"][-1], {"name": "notion", "description": "notion issues and pages.", "auth": "oauth",
-                                           "asks": [], "terminal": False, "state": "installed"})
+                                           "asks": [], "terminal": False, "state": "installed", "device": False})
         self.assertEqual(repr(ob._YAML_CACHE), before)
 
     def test_the_token_file_name_is_hermes_safe_name(self):
@@ -270,6 +285,17 @@ class Argv(unittest.TestCase):
         else:
             self.assertEqual(killed, [(4242, ob.signal.SIGKILL)])
 
+    def test_the_end_of_a_long_output_is_kept(self):
+        # Hermes' error line comes last: a run that printed more than the cap keeps its tail, not its head
+        seen: dict = {}
+        said = b"noise line\n" * (ob.MCP_OUTPUT_MAX // 8) + "  ✗ install failed: the end\n".encode()
+        with mock.patch.object(ob.subprocess, "Popen", self.fake_popen(seen, said=said)):
+            code, out = ob.run_hermes_mcp("/h/hermes", BOT, "install", "notion", Path("/h"), 1.0)
+        self.assertEqual(code, 0)
+        self.assertLessEqual(len(out.encode()), ob.MCP_OUTPUT_MAX)
+        self.assertTrue(out.endswith("✗ install failed: the end\n"))
+        self.assertEqual(ob.hermes_said(out), "✗ install failed: the end")
+
     def test_a_program_that_cannot_start(self):
         def missing(argv, **kw):
             raise FileNotFoundError(2, "No such file", argv[0])
@@ -351,6 +377,17 @@ class Ops(Base):
         write(self.profile / "config.yaml", "mcp_servers: {notion: {enabled: false}\n")
         self.refused("install", "bad_request", name="deepwiki")
         self.assertEqual(self.runs, [])
+
+    def test_sign_in_is_refused_for_a_device_code_server(self):
+        self.config("  notion:\n    url: https://mcp.example.org/mcp\n    auth: oauth\n    oauth: {flow: device}\n")
+        with self.assertRaises(ob.BridgeError) as cm:
+            self.op("login", name="notion")
+        self.assertEqual(cm.exception.code, "bad_request")
+        self.assertIn(f"hermes -p {BOT} mcp login notion", cm.exception.message)
+        self.assertEqual(self.runs, [])
+        # Remove still works for it
+        self.effect = lambda verb, name: (self.config(""), (0, ""))[1]
+        self.assertEqual(self.op("remove", name="notion")["outcome"], "ok")
 
     def test_refusals_run_nothing(self):
         self.refused("install", "not_found", name="linear")                # not in the catalog read just now

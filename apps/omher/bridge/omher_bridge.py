@@ -943,8 +943,9 @@ def mcp_server_names(path: Path, keys: tuple[str, ...] = ("enabled",)) -> dict |
     cannot be read or parsed. The file goes through the safe loader's event stream and nothing is built from it: a
     scalar is kept only when it is a top-level key equal to `mcp_servers`, a key directly under it (a server name), or
     the value of one of *keys* in one (`enabled`, and for the Apps page also the legacy `disabled`, each read by
-    `mcp_switch` as Hermes reads it: True, False, or "?" for a value Hermes would not take; an empty one is left out);
-    every other scalar (a url, headers, env, auth: a credential
+    `mcp_switch` as Hermes reads it: True, False, or "?" for a value Hermes would not take; an empty one is left out),
+    and, when *keys* names `oauth.flow`, the `flow` under a server's `oauth` as `browser`, `device` or "?"; every other
+    scalar (a url, headers, env, auth: a credential
     may sit there) is dropped as it passes, so no other value of the file is kept, returned or cached."""
     try:
         out: dict[str, dict] = {}
@@ -971,7 +972,10 @@ def mcp_server_names(path: Path, keys: tuple[str, ...] = ("enabled",)) -> dict |
                         top[1] = ev.value
                         out.setdefault(ev.value, {})
                     elif depth == 3 and servers and stack[1][1] is not None:
-                        top[1] = ev.value if ev.value in keys else None
+                        # `oauth` is followed only to reach its `flow` (rule 41); nothing else under it is kept
+                        top[1] = ev.value if ev.value in keys or (ev.value == "oauth" and "oauth.flow" in keys) else None
+                    elif depth == 4 and servers and stack[1][1] is not None and stack[2][1] == "oauth":
+                        top[1] = "oauth.flow" if ev.value == "flow" else None
                     else:
                         top[1] = None
                 elif as_key:
@@ -981,6 +985,11 @@ def mcp_server_names(path: Path, keys: tuple[str, ...] = ("enabled",)) -> dict |
                     got = mcp_switch(ev.value, ev.implicit[0], ruamel) if isinstance(ev, yaml.ScalarEvent) else "?"
                     if got is not None:
                         out[stack[1][1]][top[1]] = got
+                elif (depth == 4 and servers and top[0] and top[1] == "oauth.flow" and stack[2][1] == "oauth"
+                      and stack[1][1] is not None):
+                    # Hermes' `hermes mcp login` takes the flow from here: `browser` or `device`, anything else it refuses
+                    flow = ev.value if isinstance(ev, yaml.ScalarEvent) else None
+                    out[stack[1][1]]["oauth.flow"] = flow if flow in ("browser", "device") else "?"
                 if isinstance(ev, (yaml.MappingStartEvent, yaml.SequenceStartEvent)):
                     stack.append([isinstance(ev, yaml.MappingStartEvent), None, True, as_key])
                 elif top and top[0]:
@@ -2583,6 +2592,16 @@ def _token_stamp(profile_dir: Path, name: str) -> tuple[int, int] | None:
     return st.st_mtime_ns, st.st_size
 
 
+# What the Apps page reads of each server: its switches, and the `oauth.flow` Hermes' sign-in follows
+MCP_KEYS = ("enabled", "disabled", "oauth.flow")
+
+
+def _device_signin(servers: dict | None, name: str) -> bool:
+    """Whether the bot's own config sets this server's sign-in to a device code (`oauth.flow: device`): Hermes then
+    prints a code for the person to type elsewhere, which only a terminal shows, so the page does not offer Sign in."""
+    return bool(servers) and (servers.get(name) or {}).get("oauth.flow") == "device"
+
+
 def app_state(entry: dict, servers: dict | None, signed_in: bool) -> str:
     """One catalog entry for one bot: `unknown` when its config could not be read, `available` when its `mcp_servers`
     has no server by that name, `disabled` when that server is switched off, `unknown` when its switch holds a value
@@ -2650,8 +2669,9 @@ def read_apps(profile_dir: Path, root: Path | None = None, environ=None) -> dict
     """`apps.list`: Hermes' MCP catalog with each entry's state for this bot, and its integration skills. `catalog`
     is False when this Hermes has no catalog folder."""
     catalog = read_mcp_catalog(_hermes_dir("HERMES_OPTIONAL_MCPS", "optional-mcps", root, environ))
-    servers = mcp_server_names(profile_dir / "config.yaml", ("enabled", "disabled"))
-    apps = [{**e, "state": app_state(e, servers, _token_stamp(profile_dir, e["name"]) is not None)} for e in catalog or []]
+    servers = mcp_server_names(profile_dir / "config.yaml", MCP_KEYS)
+    apps = [{**e, "state": app_state(e, servers, _token_stamp(profile_dir, e["name"]) is not None),
+             "device": _device_signin(servers, e["name"])} for e in catalog or []]
     return {"catalog": catalog is not None, "apps": apps, "skills": read_app_skills(profile_dir, root, environ)}
 
 
@@ -2724,7 +2744,9 @@ def run_hermes_mcp(hermes: str, bot: str, verb: str, name: str, home: Path, time
         except subprocess.TimeoutExpired:
             _stop_run(proc)
             code = None
-        out.seek(0)
+        # the end of what Hermes printed: its error lines come last
+        size = out.seek(0, os.SEEK_END)
+        out.seek(max(0, size - MCP_OUTPUT_MAX))
         text = out.read(MCP_OUTPUT_MAX).decode("utf-8", errors="replace")
     return code, text
 
@@ -8418,7 +8440,7 @@ class Bridge:
         if entry is None:
             raise BridgeError("not_found", f"{app} is not in Hermes' MCP catalog")
         config = bot["path"] / "config.yaml"
-        servers = await asyncio.to_thread(mcp_server_names, config, ("enabled", "disabled"))
+        servers = await asyncio.to_thread(mcp_server_names, config, MCP_KEYS)
         if verb != "install" and (servers is None or app not in servers):
             raise BridgeError("not_found", f"{bot['display_name']} has no {app}")
         # Connect only what the page offers it for: Hermes' install replaces a server's whole block and turns it on,
@@ -8429,6 +8451,8 @@ class Bridge:
             raise BridgeError("exists", f"{bot['display_name']} already has {app}")
         if verb == "login" and entry["auth"] != "oauth":
             raise BridgeError("bad_request", f"{app} has no sign-in")
+        if verb == "login" and _device_signin(servers, app):
+            raise BridgeError("bad_request", f"{app} signs in with a device code here: run `hermes -p {name} mcp login {app}` in a terminal")
         if name in self._apps_busy:
             raise BridgeError("busy", f"{bot['display_name']} is still changing an app")
         hermes = hermes_path()
@@ -8440,7 +8464,7 @@ class Bridge:
             code, output = await asyncio.to_thread(run_hermes_mcp, hermes, name, verb, app, self.home, MCP_TIMEOUT[verb])
         finally:
             self._apps_busy.discard(name)
-        servers = await asyncio.to_thread(mcp_server_names, config, ("enabled", "disabled"))
+        servers = await asyncio.to_thread(mcp_server_names, config, MCP_KEYS)
         after = _token_stamp(bot["path"], app)
         state = app_state(entry, servers, after is not None)
         # Hermes' `mcp login` and `mcp remove` exit 0 whatever happened: the files say whether it did

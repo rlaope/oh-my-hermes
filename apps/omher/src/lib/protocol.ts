@@ -236,6 +236,9 @@ export interface AppRow {
   /** One of them can only be typed in a terminal (Hermes never takes a non-secret value from `.env`, and with no stdin
    *  its prompt answers nothing): Connect from omher always fails, so the card shows the command instead. */
   terminal: boolean;
+  /** The bot's own config sets this server's sign-in to a device code (`oauth.flow: device`): Hermes shows the code
+   *  only in a terminal, so the page offers no Sign in and shows the command instead. */
+  device: boolean;
   state: AppState;
 }
 /** One of Hermes' integration skills for one bot: the bot has it (installed or turned off) or Hermes ships it. */

@@ -4,12 +4,13 @@ import type { AppRow, AppSkill, AppState, Bot } from "../lib/protocol";
 import { AppCard, doneWords } from "./AppsPage";
 import { actionsOf, markOf, sections, tierOf, titleOf, type Card } from "./tiers";
 
-const app = (name: string, state: AppState, auth: AppRow["auth"] = "oauth", asks: string[] = [], terminal = false): AppRow => ({
+const app = (name: string, state: AppState, auth: AppRow["auth"] = "oauth", asks: string[] = [], terminal = false, device = false): AppRow => ({
   name,
   description: `${name} things.`,
   auth,
   asks,
   terminal,
+  device,
   state,
 });
 const skill = (name: string, state: AppSkill["state"]): AppSkill => ({ name, description: `${name} skill.`, state });
@@ -32,6 +33,19 @@ describe("what a card offers for each state", () => {
     // a value only a terminal can give: no Connect (it would always fail); once added, Sign in and Remove as usual
     expect(actionsOf(app("asana", "available", "oauth", ["ASANA_CLIENT_ID"], true))).toEqual([]);
     expect(actionsOf(app("asana", "needs_signin", "oauth", ["ASANA_CLIENT_ID"], true))).toEqual(["login", "remove"]);
+  });
+
+  it("a device-code sign-in (the bot's oauth.flow) is never offered from the page: its login command instead", () => {
+    const dev = (st: AppState) => app("notion", st, "oauth", [], false, true);
+    expect(actionsOf(dev("needs_signin"))).toEqual(["remove"]);
+    expect(actionsOf(dev("installed"))).toEqual(["remove"]);
+    const html = card(mcp(dev("needs_signin")));
+    expect(buttons(html)).toEqual(["remove"]);
+    expect(html).toContain("hermes -p demo-bot mcp login notion");
+    expect(html).toContain("device code");
+    expect(html).not.toContain("mcp install notion");
+    // not added yet: Connect as usual (the flow is the bot's own config, which has no server yet)
+    expect(buttons(card(mcp(app("notion", "available"))))).toEqual(["install"]);
   });
 
   it("shows the terminal command up front for an install only a terminal can answer", () => {

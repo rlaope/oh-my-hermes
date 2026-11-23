@@ -156,16 +156,16 @@ const plugins: Record<string, PluginRow[]> = {
 // Apps (BOUNDARY rule 41): a slice of Hermes' MCP catalog and its integration skills, each bot's state as the bridge's
 // apps.list reads it. Connect, Sign in and Remove are held back (guard.ts) and refused below.
 const APP_CATALOG = [
-  { name: "notion", description: "Search, read and write Notion pages and databases.", auth: "oauth", asks: [], terminal: false },
-  { name: "linear", description: "Find, create, and update Linear issues, projects, and comments.", auth: "oauth", asks: [], terminal: false },
-  { name: "atlassian", description: "Jira issues and Confluence pages.", auth: "oauth", asks: [], terminal: false },
-  { name: "figma", description: "Figma files, frames and comments.", auth: "oauth", asks: [], terminal: false },
-  { name: "sentry", description: "Sentry issues, events and releases.", auth: "oauth", asks: [], terminal: false },
-  { name: "asana", description: "Asana tasks, projects and goals.", auth: "oauth", asks: ["ASANA_CLIENT_ID", "ASANA_CLIENT_SECRET"], terminal: true },
-  { name: "datadog", description: "Datadog monitors, logs and incidents.", auth: "oauth", asks: [], terminal: false },
-  { name: "vercel", description: "Vercel projects, deployments and logs.", auth: "oauth", asks: [], terminal: false },
-  { name: "deepwiki", description: "Ask questions about public GitHub repositories.", auth: "none", asks: [], terminal: false },
-  { name: "wolfram", description: "Wolfram Alpha answers and computations.", auth: "none", asks: [], terminal: false },
+  { name: "notion", description: "Search, read and write Notion pages and databases.", auth: "oauth", asks: [], terminal: false, device: false },
+  { name: "linear", description: "Find, create, and update Linear issues, projects, and comments.", auth: "oauth", asks: [], terminal: false, device: false },
+  { name: "atlassian", description: "Jira issues and Confluence pages.", auth: "oauth", asks: [], terminal: false, device: false },
+  { name: "figma", description: "Figma files, frames and comments.", auth: "oauth", asks: [], terminal: false, device: false },
+  { name: "sentry", description: "Sentry issues, events and releases.", auth: "oauth", asks: [], terminal: false, device: false },
+  { name: "asana", description: "Asana tasks, projects and goals.", auth: "oauth", asks: ["ASANA_CLIENT_ID", "ASANA_CLIENT_SECRET"], terminal: true, device: false },
+  { name: "datadog", description: "Datadog monitors, logs and incidents.", auth: "oauth", asks: [], terminal: false, device: false },
+  { name: "vercel", description: "Vercel projects, deployments and logs.", auth: "oauth", asks: [], terminal: false, device: false },
+  { name: "deepwiki", description: "Ask questions about public GitHub repositories.", auth: "none", asks: [], terminal: false, device: false },
+  { name: "wolfram", description: "Wolfram Alpha answers and computations.", auth: "none", asks: [], terminal: false, device: false },
 ];
 const APP_STATES: Record<string, Record<string, string>> = {
   kami: { linear: "installed", notion: "needs_signin", deepwiki: "installed" },

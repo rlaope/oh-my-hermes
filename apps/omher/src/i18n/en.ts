@@ -846,6 +846,7 @@ export const en = {
   "apps.terminalHint": "Hermes asks for {env} in a terminal when it installs this app. Run this there:",
   "apps.confirmSignin": "Sign in to {name} again for {bot}? Hermes drops the current sign-in first, so {bot} cannot use {name} until the new one finishes.",
   "apps.terminalOnly": "Hermes asks for {env} when it installs this app, and only in a terminal. Run this there:",
+  "apps.deviceOnly": "{name} signs in with a device code here, which Hermes shows only in a terminal. Run this there:",
   "apps.skillNote": "Skills are used in chat. To set one up, ask {bot} in the box above.",
   "tl.offline": "{bot} is not connected.",
   "needs.one": "1 needs you",
