@@ -5,7 +5,7 @@
 // a worktree in it (BOUNDARY.md rule 10). Cancel, Escape or a press outside sends nothing.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { Bot, Worktree, WorktreeDiff } from "../lib/protocol";
+import { isBridgeError, type Bot, type Worktree, type WorktreeDiff } from "../lib/protocol";
 import { getStore, useStore } from "../state/store";
 import { loadTrees } from "../elsewhere/trees";
 import { BotChip } from "../pages/kit";
@@ -30,8 +30,11 @@ export function handLabel(): string {
 
 const W = 380;
 
-/** `gone`: the bridge no longer finds that worktree (removed since the list was read): nothing can be sent. */
-type Facts = { key: string; worktree: Worktree | null; diff: WorktreeDiff | null; gone: boolean };
+/** `blocked`: nothing can be sent. "gone": the bridge no longer finds that worktree (removed since the list was
+ *  read); "unreadable": a Worktrees row's diff could not be read at all (a folder removed inside the bridge's own
+ *  10 s scan reads as unavailable), so the card cannot say what it hands over. A TERMINALS folder whose diff fails
+ *  any other way still goes, with no git facts, as one outside every worktree does. */
+type Facts = { key: string; worktree: Worktree | null; diff: WorktreeDiff | null; blocked: "gone" | "unreadable" | null };
 
 export function HandoverCard({ at, from, onClose }: { at: { x: number; y: number }; from: HandoverFrom; onClose: () => void }) {
   const s = useStore();
@@ -56,16 +59,17 @@ export function HandoverCard({ at, from, onClose }: { at: { x: number; y: number
       let worktree: Worktree | null = null;
       if (from.kind === "worktree") worktree = from.worktree;
       else worktree = worktreeOf(folder, (await loadTrees(reader).catch(() => ({ worktrees: [] }))).worktrees);
-      let gone = false;
+      let blocked: Facts["blocked"] = null;
       const diff = !worktree
         ? null
         : await getStore()
             .actions.panelDiff(reader, worktree.path)
-            .catch((e: { code?: string }) => {
-              gone = e?.code === "not_found";
+            .catch((e: unknown) => {
+              if (isBridgeError(e) && e.code === "not_found") blocked = "gone";
+              else if (from.kind === "worktree") blocked = "unreadable";
               return null;
             });
-      if (live) setFacts({ key, worktree, diff, gone });
+      if (live) setFacts({ key, worktree, diff, blocked });
     })();
     return () => {
       live = false;
@@ -95,7 +99,7 @@ export function HandoverCard({ at, from, onClose }: { at: { x: number; y: number
     setTop(Math.max(6, Math.min(at.y, window.innerHeight - h - 6)));
   }, [at.y, text]);
   const send = async () => {
-    if (!to || !ready || ready.gone || busy) return;
+    if (!to || !ready || ready.blocked || busy) return;
     setBusy(true);
     const made = await s.startTaskThread(to.name, handoverTitle({ folder, worktree: ready.worktree }), text);
     setBusy(false);
@@ -155,9 +159,9 @@ export function HandoverCard({ at, from, onClose }: { at: { x: number; y: number
       <div className="ho-sub">{t("hand.preview")}</div>
       {!to ? (
         <div className="ho-prev ho-wait">{t("hand.noBot")}</div>
-      ) : ready?.gone ? (
-        <div className="ho-prev ho-wait ho-gone" data-testid="handover-gone">
-          {t("hand.gone")}
+      ) : ready?.blocked ? (
+        <div className="ho-prev ho-wait ho-gone" data-testid={`handover-${ready.blocked}`}>
+          {t(ready.blocked === "gone" ? "hand.gone" : "hand.unreadable")}
         </div>
       ) : ready ? (
         <pre className="ho-prev" data-testid="handover-preview">
@@ -173,7 +177,7 @@ export function HandoverCard({ at, from, onClose }: { at: { x: number; y: number
         <button type="button" onClick={onClose} data-testid="handover-cancel">
           {t("hand.cancel")}
         </button>
-        <button type="button" className="primary" disabled={!to || !ready || ready.gone || busy} onClick={() => void send()} data-testid="handover-send">
+        <button type="button" className="primary" disabled={!to || !ready || !!ready.blocked || busy} onClick={() => void send()} data-testid="handover-send">
           {t("hand.send")}
         </button>
       </div>

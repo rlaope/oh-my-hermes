@@ -209,6 +209,22 @@ test("a worktree removed since the list was read: the card says so and Open thre
   expect(await calls("chat.send")).toHaveLength(0);
 });
 
+test("a Worktrees row whose diff cannot be read at all (removed inside the bridge's scan) sends nothing", async ({ page }) => {
+  await open(page, "/home/you/code/web-app");
+  await openWorktrees(page);
+  await expect(page.getByTestId("panel-tree")).toHaveCount(2);
+  await mock("mock.treeGone", { path: "/w/gateway-keepalive", code: "unavailable" });
+  await page.getByTestId("panel-tree").nth(0).click({ button: "right" });
+  await page.getByTestId("session-hand").click();
+  await expect(page.getByTestId("handover-unreadable")).toHaveText("omher could not read this worktree, so nothing was sent. Refresh the Worktrees tab and try again.");
+  await expect(page.getByTestId("handover-preview")).toHaveCount(0);
+  await expect(page.getByTestId("handover-send")).toBeDisabled();
+  await page.getByTestId("handover-goal").press("Enter");
+  await page.waitForTimeout(300);
+  expect(await calls("thread.create")).toHaveLength(0);
+  expect(await calls("chat.send")).toHaveLength(0);
+});
+
 test("no Hand on a Worktrees row of a bot over SSH", async ({ page }) => {
   await open(page, "/home/you/code/web-app");
   await page.getByRole("button", { name: "Add a bot" }).click();

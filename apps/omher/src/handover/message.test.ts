@@ -180,7 +180,8 @@ describe("names from disk cannot add lines to the message", () => {
     expect([...cut]).toHaveLength(NAME_CHARS);
     expect(cut.endsWith("…")).toBe(true);
     const text = handoverMessage({ folder: "/" + "d".repeat(5000), worktree: null, diff: null, goal: "" });
-    expect(text).toContain("- Folder: `/" + "d".repeat(NAME_CHARS - 2) + "…`");
+    // the code span's fences count: the whole span is NAME_CHARS
+    expect(text).toContain("- Folder: `/" + "d".repeat(NAME_CHARS - 4) + "…`\n");
   });
 
   it("many long names and the longest goal stay under MESSAGE_CHARS", () => {
@@ -195,6 +196,22 @@ describe("names from disk cannot add lines to the message", () => {
     expect(text.length).toBeLessThanOrEqual(MESSAGE_CHARS);
     expect(text).toContain("  - and 4980 more");
     expect(text.split("\n").length).toBeLessThan(40);
+  });
+
+  it("a name of backticks needs a long fence; the span with its fences still fits NAME_CHARS and the message its bound", () => {
+    const ticks = "`".repeat(NAME_CHARS - 1);
+    const files = Array.from({ length: 50 }, (_, i) => ({ path: ticks + i, add: 1, del: 1, untracked: i % 2 === 1 }));
+    const text = handoverMessage({ folder: ticks, worktree: { path: ticks + "w", branch: ticks + "b", head: "3f2c1a9e0" }, diff: { scope: "uncommitted", truncated: false, files }, goal: "`".repeat(GOAL_CHARS) });
+    expect(text.length).toBeLessThanOrEqual(MESSAGE_CHARS);
+    for (const line of text.split("\n").filter((l) => /^\s*- /.test(l) && l.includes("``"))) {
+      const span = line.slice(line.indexOf("`"), line.lastIndexOf("`") + 1);
+      expect([...span].length, line.slice(0, 40)).toBeLessThanOrEqual(NAME_CHARS);
+      // still one well-formed span: it opens and closes with the same fence
+      const open = /^`+/.exec(span)![0];
+      expect(span.endsWith(open)).toBe(true);
+    }
+    // a short name keeps every character
+    expect(handoverMessage({ folder: "a``b", worktree: null, diff: null, goal: "" })).toContain("- Folder: ```a``b```");
   });
 
   it("the title is printable and short", () => {

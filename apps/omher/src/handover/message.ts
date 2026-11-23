@@ -6,8 +6,9 @@
 // with its own tools. Paths and branch names go in code spans, so spaces, backslashes and `_` show as written.
 // Every name in it (folder, worktree, branch, file) comes from disk or from a repository someone else may have
 // written, so each goes through printable() first: a control character, a line or paragraph separator or a bidi
-// control becomes a visible escape and cannot start a line of its own (a forged "Goal:"), and each name is cut to
-// NAME_CHARS. The goal is one line the same way. The whole message stays under MESSAGE_CHARS by construction.
+// control becomes a visible escape and cannot start a line of its own (a forged "Goal:"), and each name, its code
+// span's fences included, is at most NAME_CHARS. The goal is one line the same way. The whole message stays under
+// MESSAGE_CHARS by construction.
 import { pathKey } from "../sessions/folders";
 import type { Worktree, WorktreeDiff } from "../lib/protocol";
 
@@ -15,9 +16,10 @@ import type { Worktree, WorktreeDiff } from "../lib/protocol";
 export const STAT_FILES = 20;
 /** The most characters of the goal line. */
 export const GOAL_CHARS = 500;
-/** The most characters of one name (a path, a branch, a file) after its escapes. */
+/** The most characters of one name (a path, a branch, a file) as written: its escapes and its code span's fences. */
 export const NAME_CHARS = 240;
-/** What the whole message stays under: the fixed lines, five names, STAT_FILES file lines and the goal at their caps. */
+/** What the whole message stays under: the fixed lines, three names (folder, worktree, branch), STAT_FILES file names
+ *  (each at most NAME_CHARS, fences included) and the goal at its cap come to under 7,500. */
 export const MESSAGE_CHARS = 8192;
 
 /** C0 and C1 controls, DEL, the line and paragraph separators and the bidi controls (U+200E/F, U+202A-202E,
@@ -33,8 +35,15 @@ export function printable(s: string, max = NAME_CHARS): string {
   return chars.length <= max ? out : `${chars.slice(0, max - 1).join("")}…`;
 }
 
-/** A name as the message writes it: printable, in a code span. */
-const name = (s: string) => codeSpan(printable(s));
+/** A name as the message writes it: printable, in a code span, the whole span at most NAME_CHARS (a name full of
+ *  backticks needs a long fence, so the text inside is cut until the span fits). */
+function name(s: string): string {
+  const chars = [...printable(s, Number.MAX_SAFE_INTEGER)];
+  for (let n = Math.min(chars.length, NAME_CHARS); ; n--) {
+    const span = codeSpan(n < chars.length ? `${chars.slice(0, Math.max(0, n - 1)).join("")}…` : chars.join(""));
+    if ([...span].length <= NAME_CHARS || n <= 1) return span;
+  }
+}
 
 export interface HandoverFacts {
   /** The folder handed over: a TERMINALS session's own folder, or the worktree's path. */

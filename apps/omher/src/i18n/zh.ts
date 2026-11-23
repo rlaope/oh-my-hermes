@@ -1545,6 +1545,7 @@ export const zh: Record<Key, string> = {
   "hand.cancel": "取消",
   "hand.send": "打开会话",
   "hand.gone": "这个文件夹已经不在了。没有发送任何内容。",
+  "hand.unreadable": "omher 无法读取这个文件夹，所以没有发送任何内容。请刷新该标签页后重试。",
   "tshare.wants": "{bot} 想在 {title} 中输入",
   "tshare.resumeSend": "继续并发送",
   "tshare.notTyped": "未能输入：终端当前不接受输入。请继续该会话，或拒绝。",

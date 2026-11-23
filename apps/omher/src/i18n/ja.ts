@@ -1545,6 +1545,7 @@ export const ja: Record<Key, string> = {
   "hand.cancel": "キャンセル",
   "hand.send": "スレッドを開く",
   "hand.gone": "このフォルダーはもうありません。何も送っていません。",
+  "hand.unreadable": "omher がこのフォルダーを読めなかったため、何も送っていません。タブを更新してからもう一度試してください。",
   "tshare.wants": "{bot} が {title} に入力しようとしています",
   "tshare.resumeSend": "再開して送信",
   "tshare.notTyped": "入力できませんでした: ターミナルが入力を受け付けていません。再開するか、拒否してください。",
