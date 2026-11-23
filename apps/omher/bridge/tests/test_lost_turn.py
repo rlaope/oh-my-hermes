@@ -7,6 +7,7 @@ does, and the test kills the gateway (and the bridge) in the middle of a turn. N
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -15,8 +16,10 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
 
 import omher_bridge as ob  # noqa: E402
-from test_bridge import TOKEN, BridgeCase, Env, GatewayRPCError, MAIN_RUNTIME  # noqa: E402
+from test_bridge import TOKEN, BridgeCase, Env, GatewayRPCError, MAIN_RUNTIME, MAIN_STORED  # noqa: E402
+from test_folder_resume import ResumeClient, ResumeEnv  # noqa: E402
 from test_threads import HermesStore, ThreadClient  # noqa: E402
+
 
 
 class Ledger:
@@ -207,6 +210,96 @@ class LostTurnAfterCrash(BridgeCase):
             self.assertEqual(env.ledger.rows[-1]["status"], "started")
 
 
+class QueuedWithoutLostTurn(BridgeCase):
+    async def test_a_follow_up_queued_behind_a_running_turn_is_shown_without_a_pause(self):
+        """A normal chat: a turn runs and a follow-up waits in Hermes' queue behind it. Nothing is lost, so nothing is
+        paused; a reopen still shows the follow-up (it is not in the transcript yet), at the same time every read."""
+        async with LedgerEnv() as env:
+            s = await self.open(env)
+            await s.req("chat.send", bot="kami", text="first")
+            r = await s.req("chat.send", bot="kami", text="second", queued=True)
+            self.assertEqual(set(r["result"]), {"input_id"})  # no `paused`
+            opened = (await s.req("chat.open", bot="kami"))["result"]
+            self.assertTrue(opened["running"])
+            self.assertEqual(opened["lost"], [])
+            q = [m for m in opened["messages"] if m.get("queued")]
+            self.assertEqual([(m["id"], m["text"]) for m in q], [("q-a2", "second")])
+            again = [m for m in (await s.req("chat.open", bot="kami"))["result"]["messages"] if m.get("queued")]
+            self.assertEqual(again[0]["ts"], q[0]["ts"])  # Hermes gives it no time: the bridge keeps one
+
+    async def test_hermes_saying_the_lost_turn_is_gone_unpauses_the_chat_at_once(self):
+        """Discarded elsewhere (Hermes' Desktop, `/discard`): Hermes' `session.info` carries the new `pending`."""
+        async with LedgerEnv() as env:
+            s = await self.open(env)
+            await s.req("chat.send", bot="kami", text="hello")
+            await env.restart_after_crash()
+            s = await self.open(env)
+            self.assertEqual(len((await s.req("chat.open", bot="kami"))["result"]["lost"]), 1)
+            c = env.clients["kami"]
+            c.push("session.info", {"pending": [], "running": False})
+            await s.until(lambda ev: any(e["event"] == "chat.lost" for e in ev))
+            self.assertEqual([e["lost"] for e in s.events if e["event"] == "chat.lost"], [[]])
+            r = await s.req("chat.send", bot="kami", text="you there?")
+            self.assertNotIn("paused", r["result"])
+            # a new lost turn reaches the page the same way; the same pending again sends nothing
+            row = {"admission_id": "a9", "sequence": 9, "status": "unknown", "text": "later", "execution_generation": 8}
+            c.push("session.info", {"pending": [row]})
+            c.push("session.info", {"pending": [row]})
+            c.push("session.info", {"running": True})  # no `pending`: changes nothing
+            await s.until(lambda ev: sum(e["event"] == "chat.lost" for e in ev) >= 2)
+            await s.req("hello")
+            self.assertEqual([e["lost"] for e in s.events if e["event"] == "chat.lost"],
+                             [[], [{"id": "a9", "text": "later"}]])
+
+
+class PendingResumeClient(ResumeClient):
+    """ResumeClient whose folder chats come back with Hermes' `pending` list, and which takes `prompt.resolve_unknown`."""
+
+    pending: list = []
+
+    async def rpc(self, method, *, _timeout=None, **params):
+        if method == "prompt.resolve_unknown":
+            self.calls.append((method, params))
+            return {"admission_id": params["admission_id"], "status": "terminal", "outcome": "interrupted"}
+        snap = await super().rpc(method, _timeout=_timeout, **params)
+        if method == "session.resume" and params.get("session_id") != MAIN_STORED:
+            snap["pending"] = [dict(r) for r in self.pending]
+        return snap
+
+
+class PendingResumeEnv(ResumeEnv):
+    async def factory(self, stack, path: Path):
+        name = "default" if path == self.home else path.name
+        self.connects.append(name)
+        c = self.clients[name] = PendingResumeClient(name, **self.client_kw)
+        return c
+
+
+class FolderChatLostTurn(BridgeCase):
+    async def test_a_folder_chat_resumed_after_a_crash_shows_its_lost_turn_and_discards_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = str(Path(tmp) / "web-app")
+            Path(folder).mkdir()
+            self.addCleanup(setattr, PendingResumeClient, "pending", [])
+            PendingResumeClient.pending = [
+                {"admission_id": "f1", "sequence": 1, "status": "unknown", "text": "build it", "execution_generation": 6},
+                {"admission_id": "f2", "sequence": 2, "status": "queued", "text": "still there?"}]
+            async with PendingResumeEnv() as env:
+                env.saved([("stored-folder-0", "tui", "omher · web-app", folder)])
+                env.recorded((folder, "stored-folder-0"))
+                s = await self.open(env)
+                r = (await s.req("folder.resume", bot="kami", cwd=folder, stored="stored-folder-0"))["result"]
+                self.assertEqual(r["lost"], [{"id": "f1", "text": "build it"}])
+                self.assertEqual([(m["id"], m["text"]) for m in r["messages"] if m.get("queued")], [("q-f2", "still there?")])
+                sent = await s.req("chat.send", bot="kami", session=r["session"], text="hello?")
+                self.assertIs(sent["result"]["paused"], True)
+                d = await s.req("chat.discard", bot="kami", session=r["session"])
+                self.assertEqual(d["result"], {"discarded": 1})
+                self.assertEqual(env.clients["kami"].find("prompt.resolve_unknown"),
+                                 [{"session_id": "rt-stored-folder-0", "admission_id": "f1", "execution_generation": 6}])
+                self.assertNotIn("paused", (await s.req("chat.send", bot="kami", session=r["session"], text="go"))["result"])
+
+
 class PendingTurns(unittest.TestCase):
     def test_reads_lost_and_waiting_rows_in_order_and_strips_what_the_bridge_added(self):
         hinted = "you there?\n\n" + ob.PEER_HINT
@@ -219,6 +312,23 @@ class PendingTurns(unittest.TestCase):
         self.assertEqual(lost, {"a1": 7})
         self.assertEqual(shown, [{"id": "a1", "text": "hello"}])
         self.assertEqual([(w["id"], w["text"], w["queued"]) for w in waiting], [("q-a3", "you there?", True)])
+
+    def test_a_watch_delivery_is_left_out_and_a_reply_target_comes_back(self):
+        watch = '[Cronjob "inbox" output — scheduled job, not the user.]\nnew mail'
+        reply = "post it\n\n" + ob.reply_block("slack:C1:171.2", "#ops")
+        _, _, queued = ob.pending_turns({"pending": [
+            {"admission_id": "w1", "sequence": 1, "status": "queued", "text": watch},
+            {"admission_id": "r1", "sequence": 2, "status": "queued", "text": reply}]}, watch_names={"inbox"})
+        self.assertEqual([(q["id"], q["text"], q.get("reply_to")) for q in queued],
+                         [("q-r1", "post it", {"target": "slack:C1:171.2", "label": "#ops"})])
+
+    def test_a_queued_row_keeps_the_time_it_was_first_seen_and_a_gone_one_is_forgotten(self):
+        seen: dict[str, float] = {"old": 1.0}
+        row = {"admission_id": "a2", "sequence": 2, "status": "queued", "text": "second"}
+        first = ob.pending_turns({"pending": [row]}, seen=seen)[2][0]["ts"]
+        second = ob.pending_turns({"pending": [row]}, seen=seen)[2][0]["ts"]
+        self.assertEqual(first, second)
+        self.assertEqual(set(seen), {"a2"})
 
     def test_a_snapshot_without_pending_has_none(self):
         self.assertEqual(ob.pending_turns({}), ({}, [], []))

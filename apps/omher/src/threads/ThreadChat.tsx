@@ -49,7 +49,7 @@ export function ThreadChat({ bot, thread }: { bot: Bot; thread: string }) {
             )
           }
         />
-        <LostTurnBlock bot={bot} chat={chat} thread={thread} />
+        <LostTurnBlock bot={bot.name} session={thread} name={bot.display_name} chat={chat} offline={bot.status === "offline"} />
         <Composer
           key={key}
           bot={as}

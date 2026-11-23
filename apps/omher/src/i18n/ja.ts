@@ -1373,6 +1373,7 @@ export const ja: Record<Key, string> = {
   "lost.discarding": "破棄しています…",
   "lost.failed": "破棄できませんでした: {error}",
   "bub.waiting": "待機中 · 失われたターンを破棄すると実行されます",
+  "bub.queued": "待機中 · 今のターンの後に実行されます",
   "sq.unknown": "すでに回答に入っているかもしれません",
   "sq.unused": "使われませんでした · 回答が先に止まりました",
   "sq.send": "送信",

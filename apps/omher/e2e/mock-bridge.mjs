@@ -629,8 +629,9 @@ let manual;
 // chat.steer: per bot "accept" (default) or "reject" (mock.steerMode), and every steer taken (mock.steers)
 let steerMode = new Map();
 let steers = [];
-// #3123: a main-chat turn Hermes lost when its gateway was killed (`mock.lostTurn`), bot -> [{ id, text }], and the
-// messages Hermes keeps queued behind it, bot -> [{ id, text, ts }]. Nothing runs until `chat.discard`.
+// #3123: a turn Hermes lost when its gateway was killed (`mock.lostTurn`), chat key (the bot, or its thread's
+// folderTurnKey) -> [{ id, text }], and the messages Hermes keeps queued behind it, chat key -> [{ id, text, ts }].
+// Nothing runs until `chat.discard`.
 let lostTurns = new Map();
 let lostQueue = new Map();
 // Bots whose skills.list is empty (mock.noSkills).
@@ -1275,8 +1276,11 @@ const OPS = {
     const b = needBot(p);
     const f = needThread(p, b);
     const m = models[b.name];
-    return { thread: p.thread, session_id: p.thread, title: f.title, cwd: f.cwd, messages: threadHistory.get(p.thread) ?? [],
-      running: Boolean(turns[folderTurnKey(b.name, p.thread)]), model: m.model, provider: m.provider, reasoning: m.reasoning };
+    const key = folderTurnKey(b.name, p.thread);
+    return { thread: p.thread, session_id: p.thread, title: f.title, cwd: f.cwd,
+      messages: [...(threadHistory.get(p.thread) ?? []), ...(lostQueue.get(key) ?? []).map((q) => ({ id: q.id, role: "user", text: q.text, ts: q.ts, queued: true }))],
+      lost: lostTurns.get(key) ?? [],
+      running: Boolean(turns[key]), model: m.model, provider: m.provider, reasoning: m.reasoning };
   },
   "thread.remove": (p) => {
     const b = needBot(p);
@@ -1327,6 +1331,12 @@ const OPS = {
       const f = needFolder(p, b);
       const key = folderTurnKey(b.name, p.session);
       if (turns[key] && p.queued !== true) throw new OpError("busy", "a turn is running");
+      if (lostTurns.get(key)?.length) {
+        const q = lostQueue.get(key) ?? [];
+        q.push({ id: `q-${nextId("adm")}`, text, ts: now() });
+        lostQueue.set(key, q);
+        return { input_id, paused: true };
+      }
       if (f.thread) {
         threadHistory.get(p.session)?.push({ id: nextId("u"), role: "user", text, ts: now() });
         if (!f.title) {
@@ -1905,17 +1915,26 @@ const OPS = {
     lostTurns.delete(key);
     const q = lostQueue.get(key) ?? [];
     lostQueue.delete(key);
-    for (const { text, ts } of q) history[b.name].push({ id: nextId("u"), role: "user", text, ts });
+    const f = p.session !== undefined ? folders.get(p.session) : null;
+    const rows = f ? threadHistory.get(p.session) : history[b.name];
+    for (const { text, ts } of q) rows?.push({ id: nextId("u"), role: "user", text, ts });
     if (q.length) {
-      queues[b.name] = [...q.slice(1).map((x) => x.text), ...(queues[b.name] ?? [])];
-      setTimeout(() => startTurn(b.name, q[0].text), 0);
+      queues[key] = [...q.slice(1).map((x) => x.text), ...(queues[key] ?? [])];
+      setTimeout(() => (f ? startTurn(key, q[0].text, f) : startTurn(key, q[0].text)), 0);
     }
     return { discarded: n };
   },
   // the bot's main chat comes back with a turn Hermes lost mid-stream (its gateway was killed): `text` was that turn
+  // (`session`: a thread of the bot instead of its main chat)
   "mock.lostTurn": (p) => {
     const b = needBot(p);
     const text = needStr(p, "text");
+    if (p.session !== undefined) {
+      needFolder(p, b);
+      threadHistory.get(p.session)?.push({ id: nextId("u"), role: "user", text, ts: now() });
+      lostTurns.set(folderTurnKey(b.name, p.session), [{ id: nextId("adm"), text }]);
+      return {};
+    }
     history[b.name].push({ id: nextId("u"), role: "user", text, ts: now() });
     lostTurns.set(b.name, [{ id: nextId("adm"), text }]);
     return {};

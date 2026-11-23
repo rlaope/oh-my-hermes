@@ -317,6 +317,8 @@ export interface FolderResumeResult extends FolderOpenResult {
   stored: string;
   messages: Msg[];
   running: boolean;
+  /** Turns of this folder chat Hermes lost in a restart (as `chat.open`'s). */
+  lost?: LostTurn[];
 }
 
 /** op name -> { params, result }. `bot` is always the profile name. `session` (optional) names a folder chat
@@ -624,6 +626,8 @@ export type AskSubagent = { id: string; name: string };
 
 export type BridgeEvent =
   | (EventBase & { event: "turn.start" })
+  /** What Hermes now says of the chat's lost turns (`session.info`'s `pending`): one discarded elsewhere, or a new one. */
+  | (EventBase & { event: "chat.lost"; lost: LostTurn[] })
   /** `retry`: the agent tries the turn again by itself (OmO's `auto_retry_start`); the line says which try. */
   | (EventBase & { event: "status"; text: string; retry?: { attempt: number; max: number } })
   /** The agent is thinking; `text` is what it thought, when the agent sends it (SESSIONS agents). */

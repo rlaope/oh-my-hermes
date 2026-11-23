@@ -858,13 +858,16 @@ function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string, 
   const lastUser = [...server].reverse().find((m) => m.kind === "user" && !m.waiting);
   if (res.running && lastUser && lastUser.readAt === undefined) lastUser.readAt = 0;
   const ids = new Set(server.map((m) => m.id));
-  const lastServerTs = server.length ? server[server.length - 1].ts : 0;
+  // the transcript's last row: a row still in Hermes' queue (`waiting`) is not part of it and says nothing about
+  // which local rows the transcript already holds
+  const transcript = server.filter((m) => !(m.kind === "user" && m.waiting));
+  const lastServerTs = transcript.length ? transcript[transcript.length - 1].ts : 0;
   const keep = chat.items.filter((i) => {
     if (i.kind !== "user" && i.kind !== "assistant") return true;
     if (i.kind === "user" && i.held) return true; // never sent: no server row can be its twin
     if (ids.has(i.id)) {
       const twin = server.find((s) => s.id === i.id);
-      if (twin && i.kind === "user" && i.readAt !== undefined && twin.readAt === undefined) twin.readAt = i.readAt;
+      if (twin && i.kind === "user" && i.readAt !== undefined && twin.readAt === undefined && !twin.waiting) twin.readAt = i.readAt;
       return false;
     }
     // the words before a question, kept live above its card: the history now carries that row too (bridge
@@ -877,7 +880,7 @@ function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string, 
       const sent = i.sent ?? i.text;
       const twin = server.find((s) => s.kind === "user" && s.text === sent && s.ts >= i.ts - 120);
       // what this app already saw (the send went through) stays read until the history says when
-      if (twin && i.readAt !== undefined && twin.readAt === undefined) twin.readAt = i.readAt;
+      if (twin && i.readAt !== undefined && twin.readAt === undefined && !twin.waiting) twin.readAt = i.readAt;
       // keep the local pictures, and the text as typed with its skill tokens (they go out hoisted)
       if (twin && (i.files || i.sent || i.skills))
         Object.assign(twin, { text: i.text, sent, ...(i.files ? { files: i.files } : {}), ...(i.skills ? { skills: i.skills } : {}) });
@@ -939,6 +942,8 @@ export type Action =
   | { type: "send.failed"; bot: string; id: string; error: string }
   /** chat.send went through: the bot has the message (its "Read" mark). */
   | { type: "send.ok"; bot: string; id: string; now: number; paused?: boolean }
+  /** A chat's lost turns are now these (a folder chat after its Discard, which is not read again). */
+  | { type: "chat.lost"; bot: string; lost: LostTurn[] }
   | { type: "event"; ev: BridgeEvent; now: number }
   | { type: "approval.resolved"; bot: string; request_id: string; choice: ApprovalChoice }
   | { type: "clarify.resolved"; bot: string; request_id: string; answer: string; answers?: ClarifyAnswers }
@@ -1057,6 +1062,8 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
     // A turn starts only on turn.start (or a chat found running on open). Every other live event belongs to the
     // running turn and is dropped without one: an agent's own status after its turn ended (OmO's setStatus after
     // agent_end) must not start a turn that nothing ends.
+    case "chat.lost":
+      return state.chats[bot] ? touchChat(state, bot, (c) => ({ ...c, lost: ev.lost })) : state;
     case "turn.start":
       return touchChat(state, bot, (c) => {
         const early = c.early && now - c.early.at <= EARLY_STATUS_MS ? c.early.text : "";
@@ -1436,6 +1443,8 @@ export function reduce(state: AppState, a: Action): AppState {
       });
     case "reply.set":
       return { ...state, replyTo: { ...state.replyTo, [a.bot]: a.chip } };
+    case "chat.lost":
+      return state.chats[a.bot] ? touchChat(state, a.bot, (c) => ({ ...c, lost: a.lost })) : state;
     case "send.ok":
       // behind a turn Hermes lost: it waits in Hermes' queue (not read) until that turn is discarded
       if (a.paused && state.chats[a.bot])
@@ -1908,10 +1917,11 @@ export interface Actions {
   /** Attach each file in order (`chat.attach`), then send. Rejects, sending nothing, if any attach fails. */
   sendWithFiles(text: string, files: OutFile[]): Promise<void>;
   interrupt(): Promise<void>;
-  /** Discard the turns Hermes lost in a restart in `bot`'s main chat, or in its `thread` (`chat.discard`): Hermes
-   *  never runs them again and the messages waiting behind them run. The chat is read again after it. Rejects with
-   *  Hermes' refusal, leaving the chat paused. */
-  discardLost(bot: string, thread?: string | null): Promise<void>;
+  /** Discard the turns Hermes lost in a restart in `bot`'s main chat, or with `session` in its thread or folder chat
+   *  (`chat.discard`): Hermes never runs them again and the messages waiting behind them run. The main chat or thread
+   *  is read again after it; a folder chat drops its note (its turn's events follow). Rejects with Hermes' refusal,
+   *  leaving the chat paused. */
+  discardLost(bot: string, session?: string | null): Promise<void>;
   /** Steer queue, on a held row of `bot`'s main chat (the selected bot's by default). Send now: stop the running
    *  turn (one `chat.interrupt`) and send this one first when it ends. */
   queueSendNow(id: string, bot?: string): Promise<void>;
@@ -1994,7 +2004,8 @@ export interface Actions {
   folderClose(bot: string, session: string): Promise<void>;
   /** Change the model of folder chat `session`. */
   folderSetModel(bot: string, session: string, change: { model: string; provider?: string }): Promise<ModelCurrent>;
-  folderSend(bot: string, session: string, text: string): Promise<void>;
+  /** `paused`: Hermes keeps it in its queue behind a turn it lost (see `chat.send`). */
+  folderSend(bot: string, session: string, text: string): Promise<{ paused?: boolean }>;
   folderInterrupt(bot: string, session: string): Promise<void>;
   folderApprove(bot: string, session: string, requestId: string, choice: ApprovalChoice): Promise<void>;
   folderClarify(bot: string, session: string, requestId: string, answer: string | ClarifyAnswers): Promise<void>;
@@ -2426,8 +2437,18 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     const names = new Set(state.bots.map((b) => b.name));
     const loaded = Object.entries(state.chats).filter(([n, c]) => c.loaded && names.has(n)).map(([n]) => n);
     const threaded = Object.keys(state.threads).filter((n) => names.has(n));
-    await Promise.allSettled([...loaded.map(loadChat), ...threaded.map(loadThreads), ...peekUnlisted(), loadElsewhere(), loadRoutines(), loadAutomations()]);
+    await Promise.allSettled([
+      ...loaded.map(loadChat),
+      ...threaded.map(loadThreads),
+      ...threaded.flatMap((b) => loadedThreads(b).map((t) => loadThread(b, t))),
+      ...peekUnlisted(),
+      loadElsewhere(),
+      loadRoutines(),
+      loadAutomations(),
+    ]);
   };
+  /** `bot`'s threads whose chat was read (opened in this run). */
+  const loadedThreads = (bot: string) => (state.threads[bot] ?? []).map((r) => r.thread).filter((t) => state.chats[threadKey(bot, t)]?.loaded);
 
   // ---- threads under a bot (bridge `thread.*`) ----
   const threadReq = <K extends keyof ThreadOps>(op: K, params: ThreadOps[K]["params"]): Promise<ThreadOps[K]["result"]> =>
@@ -2549,6 +2570,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         if (ev.event === "bot.restarted" && ev.ok) {
           if (state.chats[ev.bot]?.loaded) void loadChat(ev.bot).catch(() => {});
           else if (selectUnlisted(state).some((b) => b.name === ev.bot)) void peekAsks(ev.bot);
+          // its threads that were read are read again too (a turn lost in the restart shows there as well)
+          for (const t of loadedThreads(ev.bot)) void loadThread(ev.bot, t);
         }
       });
       await bridge.connect();
@@ -2901,7 +2924,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     },
     folderSetModel: (bot, session, change) => bridge.request("chat.set_model", { bot, session, ...change }),
     async folderSend(bot, session, text) {
-      await bridge.request("chat.send", { bot, session, text });
+      const r = await bridge.request("chat.send", { bot, session, text });
+      return { ...(r?.paused ? { paused: true } : {}) };
     },
     async folderInterrupt(bot, session) {
       await bridge.request("chat.interrupt", { bot, session });
@@ -3043,10 +3067,11 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         dispatch({ type: "send.failed", bot: key, id, error: errText(e) });
       }
     },
-    async discardLost(bot, thread) {
-      await bridge.request("chat.discard", thread ? { bot, session: thread } : { bot });
-      if (thread) await loadThread(bot, thread);
-      else await loadChat(bot).catch(() => {});
+    async discardLost(bot, session) {
+      await bridge.request("chat.discard", session ? { bot, session } : { bot });
+      if (!session) await loadChat(bot).catch(() => {});
+      else if ((state.threads[bot] ?? []).some((r) => r.thread === session)) await loadThread(bot, session);
+      else dispatch({ type: "chat.lost", bot: folderKey(bot, session), lost: [] });
     },
     async threadInterrupt(bot, thread) {
       try {

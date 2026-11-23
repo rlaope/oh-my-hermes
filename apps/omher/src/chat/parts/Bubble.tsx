@@ -34,6 +34,7 @@ export const Bubble = memo(function Bubble({
   queueBusy,
   queueOff,
   last,
+  paused,
   quote,
   onQuote,
 }: {
@@ -59,6 +60,8 @@ export const Bubble = memo(function Bubble({
   queueBusy?: boolean;
   /** The person's last message in the chat: it carries the "Read" mark. */
   last?: boolean;
+  /** The chat is paused on a turn Hermes lost: a row waiting in Hermes' queue says it runs after that is discarded. */
+  paused?: boolean;
   /** Menu items that are off, with their reasons (a SESSIONS chat's agent). */
   queueOff?: QueueOffReasons;
   /** A bot answer: the message of the person's it replies to, when that is not plain from where it sits; a click
@@ -146,7 +149,7 @@ export const Bubble = memo(function Bubble({
         )}
         {item.waiting && (
           <div className="msg-wait" data-testid="bubble-waiting">
-            {t("bub.waiting")}
+            {paused ? t("bub.waiting") : t("bub.queued")}
           </div>
         )}
         {item.wait === "dropped" && (

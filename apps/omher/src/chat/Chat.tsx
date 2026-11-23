@@ -44,7 +44,7 @@ export function Chat() {
             that loses its account still shows it without scrolling */}
         <ConnectBlock bot={bot} />
         {/* Hermes lost a turn of this chat when it stopped mid-turn: the chat is paused until the person discards it */}
-        <LostTurnBlock bot={bot} chat={chat} />
+        <LostTurnBlock bot={bot.name} name={bot.display_name} chat={chat} offline={bot.status === "offline"} />
         <OmhPromptLine bot={bot} />
         <Composer
           key={bot.name}

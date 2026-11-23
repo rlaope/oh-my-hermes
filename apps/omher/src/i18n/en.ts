@@ -1375,6 +1375,7 @@ export const en = {
   "lost.discarding": "Discarding…",
   "lost.failed": "Could not discard: {error}",
   "bub.waiting": "Waiting · runs after the lost turn is discarded",
+  "bub.queued": "Waiting · runs after the current turn",
   "sq.unknown": "Might already be in the answer",
   "sq.unused": "Not used · the answer stopped first",
   "sq.send": "Send",

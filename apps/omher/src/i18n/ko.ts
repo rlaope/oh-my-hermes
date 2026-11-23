@@ -1373,6 +1373,7 @@ export const ko: Record<Key, string> = {
   "lost.discarding": "버리는 중…",
   "lost.failed": "버리지 못했습니다: {error}",
   "bub.waiting": "대기 중 · 잃어버린 턴을 버리면 실행됩니다",
+  "bub.queued": "대기 중 · 지금 턴이 끝나면 실행됩니다",
   "sq.unknown": "이미 답에 들어갔을 수 있어요",
   "sq.unused": "쓰이지 않음 · 답이 먼저 멈췄어요",
   "sq.send": "보내기",

@@ -4,7 +4,8 @@
 // 1. the chat says it is paused, quotes the lost turn, and offers Discard; the composer stays usable;
 // 2. a message sent meanwhile reads "Waiting", never "Read", and is still there (waiting) after a reload;
 // 3. Discard lets it run: the block goes and the bot answers it;
-// 4. ko: no raw keys.
+// 4. a thread whose turn Hermes lost: the same note in that thread only, and Discard runs what waited there;
+// 5. ko: no raw keys.
 // Shots: OMHER_SHOTS=<dir> (lost-turn-<what>-<theme>.png).
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
@@ -93,4 +94,25 @@ test("Korean shows no raw keys", async ({ page }) => {
   await expect(page.getByTestId("lost-turn")).toBeVisible();
   await expect(page.getByTestId("lost-turn")).not.toContainText("lost.");
   await expect(page.getByTestId("lost-turn-discard")).toHaveText("버리고 계속하기");
+});
+
+test("a thread whose turn Hermes lost is paused there only, and Discard runs the message that waited", async ({ page }) => {
+  await mock("mock.reset"); // no lost main-chat turn this time
+  const { threads } = await mock("mock.threads", { bot: "kami", threads: [{ title: "Build", cwd: "/work/build", ago: 1 }] });
+  const id = threads[0] as string;
+  await mock("mock.lostTurn", { bot: "kami", session: id, text: "build it" });
+  await setup(page);
+  await expect(page.getByTestId("lost-turn")).toHaveCount(0); // the main chat is not paused
+  await page.getByTestId(`thread-row-${id}`).getByTestId("thread-open").click();
+  await expect(page.getByTestId("thread-chat")).toBeVisible();
+  await expect(page.getByTestId("lost-turn-quote")).toHaveText("Lost turn: “build it”");
+  const box = page.getByTestId("composer");
+  await box.fill("still there?");
+  await box.press("Enter");
+  const sent = page.getByTestId("bubble-user").filter({ hasText: "still there?" });
+  await expect(sent.getByTestId("bubble-waiting")).toHaveText("Waiting · runs after the lost turn is discarded");
+  await page.getByTestId("lost-turn-discard").click();
+  await expect(page.getByTestId("lost-turn")).toHaveCount(0);
+  await expect(page.getByTestId("bubble-bot").last()).toContainText("Working in /work/build: still there?", { timeout: 10_000 });
+  await expect(page.getByTestId("bubble-user").filter({ hasText: "still there?" })).toHaveCount(1);
 });

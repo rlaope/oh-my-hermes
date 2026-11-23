@@ -1373,6 +1373,7 @@ export const zh: Record<Key, string> = {
   "lost.discarding": "正在丢弃…",
   "lost.failed": "无法丢弃：{error}",
   "bub.waiting": "等待中 · 丢弃丢失的一轮后运行",
+  "bub.queued": "等待中 · 当前这一轮结束后运行",
   "sq.unknown": "可能已经在回答里了",
   "sq.unused": "未使用 · 回答先停止了",
   "sq.send": "发送",

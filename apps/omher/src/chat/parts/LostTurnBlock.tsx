@@ -3,30 +3,30 @@
 // One quiet block above the composer, like the connect block, says so and offers Discard (bridge `chat.discard`,
 // Hermes' own `prompt.resolve_unknown`). The composer stays usable: what is sent meanwhile waits in Hermes' queue.
 import { useEffect, useState } from "react";
-import type { Bot } from "../../lib/protocol";
 import { getStore, type Chat } from "../../state/store";
 import { t } from "../../i18n";
 import "../connect/connect.css";
 
-export function LostTurnBlock({ bot, chat, thread }: { bot: Bot; chat: Chat | undefined; thread?: string }) {
+/** `bot`: the profile; `session`: its thread or folder chat (none: the main chat); `name`: what the note calls it. */
+export function LostTurnBlock({ bot, session, name, chat, offline }: { bot: string; session?: string; name: string; chat: Chat | undefined; offline: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const key = thread ?? bot.name;
+  const key = `${bot}\u0000${session ?? ""}`;
   useEffect(() => setError(null), [key]);
   const lost = chat?.lost ?? [];
-  if (!lost.length || bot.status === "offline") return null;
+  if (!lost.length || offline) return null;
   const discard = () => {
     setBusy(true);
     setError(null);
     getStore()
-      .actions.discardLost(bot.name, thread ?? null)
+      .actions.discardLost(bot, session ?? null)
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String((e as { message?: unknown })?.message ?? e)))
       .finally(() => setBusy(false));
   };
   return (
-    <div className="cn" role="alert" data-testid="lost-turn" data-bot={bot.name}>
+    <div className="cn" role="alert" data-testid="lost-turn" data-bot={bot}>
       <div className="cn-t" data-testid="lost-turn-text">
-        {t("lost.paused", { bot: bot.display_name })}
+        {t("lost.paused", { bot: name })}
       </div>
       {lost.map((l) =>
         l.text ? (

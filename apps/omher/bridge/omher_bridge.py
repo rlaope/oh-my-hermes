@@ -5040,6 +5040,24 @@ def _steer_ack(rows, at: int) -> dict:
     return {}
 
 
+def user_row_shown(text: str, display_kind=None, watch_names: set[str] | frozenset[str] = frozenset()
+                   ) -> tuple[str, dict | None, bool, str | None]:
+    """A user row as the page shows it, for a transcript row (``chat_messages``) and a row still in Hermes' queue
+    (``pending_turns``) alike: ``(text, reply_to, steered, watch)``. ``watch`` names the channel watch (of
+    ``watch_names``) that delivered it, and such a row is not shown; ``text`` "" is nothing to show. What the bridge
+    added to the person's words (the threads note, the peer hint, terminal links, a Reply there block) comes off;
+    the reply target comes back as ``reply_to``."""
+    name = watch_of(text) if display_kind in (None, "internal_notification") else None
+    if name in watch_names:
+        return "", None, False, name
+    text, steered = unwrap_steer(text)
+    steered = steered or display_kind == "steer"
+    if not text:
+        return "", None, steered, None
+    text, reply = split_reply_block(split_term_links(split_peer_hint(split_thread_hint(text))))
+    return text, reply, steered, None
+
+
 def chat_messages(rows, watch_names: set[str] | frozenset[str] = frozenset(), running: bool = False,
                   main: bool = False) -> list[dict]:
     """`watch_names`: the channel watches delivering into this chat; their delivered row is hidden and the answer
@@ -5062,15 +5080,10 @@ def chat_messages(rows, watch_names: set[str] | frozenset[str] = frozenset(), ru
         reply = None
         steered = False
         if row["role"] == "user":
-            name = watch_of(text) if row.get("display_kind") in (None, "internal_notification") else None
-            watch = {"name": name, "ts": float(row.get("timestamp") or 0.0)} if name in watch_names else None
-            if watch:
+            text, reply, steered, name = user_row_shown(text, row.get("display_kind"), watch_names)
+            watch = {"name": name, "ts": float(row.get("timestamp") or 0.0)} if name else None
+            if watch or not text:
                 continue
-            text, steered = unwrap_steer(text)
-            steered = steered or row.get("display_kind") == "steer"
-            if not text:
-                continue
-            text, reply = split_reply_block(split_term_links(split_peer_hint(split_thread_hint(text))))
         elif main and "omher-thread" in text:
             text = split_blocks(text)[2]
             if not text:
@@ -5088,29 +5101,43 @@ def chat_messages(rows, watch_names: set[str] | frozenset[str] = frozenset(), ru
     return out[-MAX_OPEN_MESSAGES:]
 
 
-def pending_turns(snap: dict) -> tuple[dict[str, int], list[dict], list[dict]]:
-    """The chat's admissions Hermes has not finished, from a ``session.resume``/``session.create`` snapshot
+def pending_turns(snap: dict, watch_names: set[str] | frozenset[str] = frozenset(),
+                  seen: dict[str, float] | None = None) -> tuple[dict[str, int], list[dict], list[dict]]:
+    """The chat's admissions Hermes has not finished, from a ``session.resume`` snapshot or a ``session.info`` event
     (``pending``): ``lost`` (admission id -> execution generation) are turns Hermes lost across a restart of its
     gateway (status ``unknown``). Hermes holds every later message of that chat in its queue until one of them is
     acknowledged (``prompt.resolve_unknown``), and never runs the lost one again. ``shown_lost`` is them for the
-    page (id, text); ``waiting`` is the person's messages queued behind them, which are not in the transcript yet,
-    as user rows marked ``queued`` so a reopened chat still shows them."""
+    page (id, text); ``queued`` is the person's messages still in Hermes' queue (behind a lost turn, or behind the
+    turn that runs), which are not in the transcript yet, as user rows marked ``queued`` (id ``q-<admission>``) so a
+    reopened chat still shows them. Each row is shown as a transcript row is (``user_row_shown``): a channel
+    watch's delivery is left out. Hermes gives a queued admission no time: ``seen`` (admission id -> when this
+    bridge first saw it) keeps one per row, the same on every read; it is pruned to the rows still queued."""
     lost: dict[str, int] = {}
     shown_lost: list[dict] = []
-    waiting: list[dict] = []
+    queued: list[dict] = []
     rows = snap.get("pending") if isinstance(snap.get("pending"), list) else []
+    seen = {} if seen is None else seen
+    now = time.time()
+    keep: set[str] = set()
     for row in sorted((r for r in rows if isinstance(r, dict)), key=lambda r: r.get("sequence") or 0):
         aid, status = row.get("admission_id"), row.get("status")
         if not isinstance(aid, str) or not aid:
             continue
-        text = row.get("text") if isinstance(row.get("text"), str) else ""
-        text = split_reply_block(split_term_links(split_peer_hint(split_thread_hint(text))))[0].strip()
+        raw = row.get("text") if isinstance(row.get("text"), str) else ""
+        text, reply, _, name = user_row_shown(raw, None, watch_names)
+        text = text.strip()
         if status == "unknown" and type(row.get("execution_generation")) is int:
             lost[aid] = row["execution_generation"]
             shown_lost.append({"id": aid, "text": text})
-        elif status == "queued" and not row.get("steering") and text:
-            waiting.append({"id": f"q-{aid}", "role": "user", "text": text, "ts": time.time(), "queued": True})
-    return lost, shown_lost, waiting
+        elif status == "queued" and not row.get("steering") and text and not name:
+            keep.add(aid)
+            m = {"id": f"q-{aid}", "role": "user", "text": text, "ts": seen.setdefault(aid, now), "queued": True}
+            if reply:
+                m["reply_to"] = reply
+            queued.append(m)
+    for aid in [a for a in seen if a not in keep]:
+        del seen[aid]
+    return lost, shown_lost, queued
 
 
 # ---------------------------------------------------------------- SSH peers (BOUNDARY rule 31)
@@ -5740,6 +5767,7 @@ class FolderChat:
         self.asked: dict[str, tuple[float, float | None]] = {}  # open prompt_id -> (asked at, gateway timeout s)
         self.batches: dict[str, list[str]] = {}  # open batch clarify request id -> question ids, in order
         self.lost_turns: dict[str, int] = {}  # turns Hermes lost in a restart (pending_turns): admission id -> generation
+        self.queued_seen: dict[str, float] = {}  # queued admission id -> when this bridge first saw it (pending_turns)
         self.last = ""  # a thread's latest answer, its last line (the threads note on main-chat turns quotes it)
         self.last_at = 0.0
 
@@ -5780,6 +5808,7 @@ class Conn:
         self.threads_shown = False  # an app that shows threads read them: main-chat turns carry the threads note
         self.split_done: set[str] = set()  # answers whose thread blocks were acted on (never twice)
         self.lost_turns: dict[str, int] = {}  # main-chat turns Hermes lost in a restart (pending_turns): id -> generation
+        self.queued_seen: dict[str, float] = {}  # queued main-chat admission id -> when this bridge first saw it
         self.asked: dict[str, tuple[float, float | None]] = {}  # open prompt_id -> (asked at, gateway timeout s)
         self.batches: dict[str, list[str]] = {}  # open batch clarify request id -> question ids, in order
         self.clarify_batch: bool | None = None  # the gateway asks a multi-question clarify as one request
@@ -6237,6 +6266,13 @@ class Bridge:
             t.generation = params["execution_generation"]
         if typ == "message.start":
             await self._begin_turn(conn, chat)
+        elif typ == "session.info" and isinstance(p.get("pending"), list):
+            # Hermes says what of this chat is still pending on every change: a lost turn discarded elsewhere (its
+            # Desktop, `hermes sessions discard`, `/discard`) or a new one goes to the open page at once
+            lost, shown, _ = pending_turns({"pending": p["pending"]})
+            if lost != t.lost_turns:
+                t.lost_turns = lost
+                await out("chat.lost", lost=shown)
         elif typ == "status.update":
             text = p.get("text")
             if isinstance(text, str) and text.strip():
@@ -6486,7 +6522,7 @@ class Bridge:
                 log.debug("naming the Bot Chat after create failed: %s", e)
         conn.main_id = snap["session_id"]
         conn.main_stored = snap.get("stored_session_id") or conn.main_id
-        conn.lost_turns = pending_turns(snap)[0]
+        conn.lost_turns = pending_turns(snap, conn.watch_names, conn.queued_seen)[0]
         if snap.get("execution_generation") is not None:
             conn.generation = snap["execution_generation"]
         return snap
@@ -6506,7 +6542,7 @@ class Bridge:
         running = bool(snap.get("running") if snap.get("running") is not None else info.get("running"))
         conn.in_turn = running
         conn.watch_names = self._watch_names(conn.name)
-        conn.lost_turns, lost, waiting = pending_turns(snap)
+        conn.lost_turns, lost, waiting = pending_turns(snap, conn.watch_names, conn.queued_seen)
         result = {"session_id": conn.main_id, "messages": chat_messages(snap.get("messages"), conn.watch_names, running,
                                                                         main=True) + waiting,
                   "running": running, "lost": lost,
@@ -6871,11 +6907,13 @@ class Bridge:
         if type(snap.get("revision")) is int:
             chat.revision = snap["revision"]
         chat.in_turn = running
+        chat.lost_turns, lost, waiting = pending_turns(snap, seen=chat.queued_seen)
         result = {"session": chat.id, "stored": stored, "cwd": str(info.get("cwd") or cwd),
                   "model": str(info.get("model") or conn.bot["model"]),
                   "provider": str(info.get("provider") or conn.bot["provider"]),
                   "reasoning": str(info.get("reasoning_effort") or conn.bot["reasoning"]),
-                  "messages": chat_messages(snap.get("messages"), running=running), "running": running}
+                  "messages": chat_messages(snap.get("messages"), running=running) + waiting, "running": running,
+                  "lost": lost}
         prompts = [x for x in (snap.get("prompts") or []) if isinstance(x, dict) and x.get("prompt_id")]
         asks = [x for x in (snap.get("open_requests") or [])
                 if isinstance(x, dict) and x.get("method") == "clarify" and isinstance(x.get("id"), str)]
@@ -7097,7 +7135,7 @@ class Bridge:
         if type(snap.get("revision")) is int:
             chat.revision = snap["revision"]
         chat.in_turn = running
-        chat.lost_turns, lost, waiting = pending_turns(snap)
+        chat.lost_turns, lost, waiting = pending_turns(snap, seen=chat.queued_seen)
         result = {"thread": tid, "session_id": tid, "title": chat.title, "cwd": chat.cwd,
                   "messages": chat_messages(snap.get("messages"), running=running) + waiting, "running": running,
                   "lost": lost,
