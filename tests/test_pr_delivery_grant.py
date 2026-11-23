@@ -49,7 +49,10 @@ HERMES_SESSION_VARS = ("HERMES_SESSION_ID", "HERMES_SINGLE_QUERY_SESSION")
 
 
 def _without_hermes_session():
-    env = {key: value for key, value in os.environ.items() if key not in HERMES_SESSION_VARS}
+    # Every marker Hermes leaves in a child's environment, so the CLI sees a person's own shell.
+    env = {key: value for key, value in os.environ.items()
+           if key not in HERMES_SESSION_VARS and not key.startswith("HERMES_SESSION_")
+           and key not in ("HERMES_UI_SESSION_ID", "HERMES_CRON_SESSION", "HERMES_AGENT", "HERMES_EXEC_ASK")}
     return mock.patch.dict(os.environ, env, clear=True)
 
 
@@ -179,6 +182,19 @@ class CliTests(_Home):
                 self.assertEqual(result.code, 2)
                 self.assertIn("Only the person", result.stdout)
         self.assertFalse(pr_delivery.grant_path(self.home, self.hermes).exists())
+
+    def test_on_and_off_refuse_on_any_hermes_marker_without_the_session_id(self):
+        # `env -u HERMES_SESSION_ID` alone is not enough: the other markers Hermes sets are read too.
+        for marker in ("HERMES_AGENT", "HERMES_SESSION_PLATFORM", "HERMES_CRON_SESSION", "HERMES_EXEC_ASK",
+                       "HERMES_UI_SESSION_ID", "HERMES_SINGLE_QUERY_SESSION"):
+            for verb in ("on", "off"):
+                with self.subTest(marker=marker, verb=verb), mock.patch.dict(os.environ, {marker: "1"}):
+                    result = self.cli(verb)
+                    self.assertEqual(result.code, 2)
+                    self.assertIn(marker, result.stdout)
+        self.assertFalse(pr_delivery.grant_path(self.home, self.hermes).exists())
+        with mock.patch.dict(os.environ, {"HERMES_HOME": str(self.hermes)}):
+            self.assertEqual(self.cli("on").code, 0)  # a person's own HERMES_HOME is not a marker
 
     def test_on_needs_a_yes_typed_at_the_terminal(self):
         result = self.cli("on", typed_yes=False)
@@ -544,6 +560,9 @@ class UnattendedMatrixTests(_Home):
         "pwsh -ec ZwBoACAAcAByACAAbQBlAHIAZwBlACAANAAyAA==": gate.UNCLASSIFIED,
         "C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -EncodedC ZwBo": gate.UNCLASSIFIED,
         "cmd.exe /k dir": gate.UNCLASSIFIED,
+        "timeout 5 C:\\Git\\git.exe push origin HEAD:refs/heads/bot/x": gate.UNCLASSIFIED,
+        "sudo -u x C:\\Git\\gh.exe pr merge 1": gate.UNCLASSIFIED,
+        "env -u A C:\\Git\\git.exe push origin HEAD:refs/heads/bot/x": gate.UNCLASSIFIED,
         "git push origin HEAD:refs/heads/bot/%X%": gate.UNQUALIFIED,
         # Second verification round (R1-R5).
         "git status;(gh pr merge 42)": gate.FORGE_MERGE,

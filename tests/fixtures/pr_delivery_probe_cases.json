@@ -2538,6 +2538,31 @@
    "command": "cp evil.sh .git/hooks/pre-push",
    "class": "unclassified",
    "verdict": "refused"
+  },
+  {
+   "command": "timeout 5 C:\\Git\\git.exe push origin HEAD:refs/heads/bot/x",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "sudo -u x C:\\Git\\gh.exe pr merge 1",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env -u A C:\\Git\\git.exe push origin HEAD:refs/heads/bot/x",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "New-Item -ItemType Junction -Path g -Target .git",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "ln -s ../repo/.git/hooks h",
+   "class": "unclassified",
+   "verdict": "refused"
   }
  ]
 }

@@ -44,12 +44,19 @@ omh capability-policy pr-delivery off [--json]
 
 The grant is per Hermes profile. Select the profile with `omh --hermes-home
 <profile home>` (and `--omh-home` when that profile has its own OMH home).
-`on` and `off` refuse to run inside a Hermes session, which they detect from
-the `HERMES_SESSION_ID` that Hermes sets for every command its terminal tool
-runs. `on` also asks for a typed yes on the controlling terminal
-(`/dev/tty`); a gateway- or cron-run child has none. On Windows, which has no
-`/dev/tty`, it asks on stdin only when stdin is a console (untested). `omh
-doctor` lists every profile in the OMH home whose grant is on.
+`on` and `off` refuse to run inside a Hermes session. They detect it from
+`HERMES_SESSION_ID`, which Hermes sets for every command its terminal tool
+runs, and from the other markers Hermes puts in its children's environment
+(every `HERMES_SESSION_*`, `HERMES_UI_SESSION_ID`, `HERMES_CRON_SESSION`,
+`HERMES_AGENT`, `HERMES_EXEC_ASK`, `HERMES_SINGLE_QUERY_SESSION`). `on` also
+asks for a typed yes on a terminal a person can see: `/dev/tty` on POSIX,
+and on Windows the console, only when its window is visible. This stops a
+cooperating agent and an agent without a terminal. It does not stop a bot
+that spells the command past the tool hook, unsets every marker and spawns
+its own pseudo-terminal (the terminal tool's `pty=true`) or answers a hidden
+console: that bot can type the yes itself. That is the same class as the
+other residuals below, which the gate does not claim to stop. `omh doctor`
+lists every profile in the OMH home whose grant is on.
 
 ## What it allows
 

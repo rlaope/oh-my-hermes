@@ -413,19 +413,32 @@ def _command_word_is_a_windows_path(command: str) -> bool:
         raw = list(lexer)
     except ValueError:
         return True
-    starts_segment = True
+    segments: list[list[str]] = [[]]
     for token in raw:
         if token in _SEPARATORS or (_OPERATOR_RUN.match(token) and not _REDIRECT.match(token)):
-            starts_segment = True
+            segments.append([])
+        else:
+            segments[-1].append(token)
+    return any(_WINDOWS_PATH_BACKSLASH.search(word) for word in map(_raw_command_word, segments) if word)
+
+
+def _raw_command_word(segment: list[str]) -> str:
+    """The token that names what runs, found past assignments and wrappers with `_unwrap`'s option table."""
+    index = 0
+    while index < len(segment):
+        token = segment[index]
+        if _ASSIGNMENT.match(token):
+            index += 1
             continue
-        if not starts_segment:
-            continue
-        if _ASSIGNMENT.match(token) or _basename(token.strip("'\"")).lower() in _WRAPPERS:
-            continue  # the command word comes after an assignment or a wrapper
-        if _WINDOWS_PATH_BACKSLASH.search(token):
-            return True
-        starts_segment = False
-    return False
+        name = _basename(token.strip("'\"")).lower()
+        if name not in _WRAPPERS:
+            return token
+        index += 1
+        while index < len(segment) and segment[index].startswith("-") and segment[index] != "-":
+            option = segment[index].split("=", 1)[0]
+            index += 2 if option in _WRAPPERS[name] and "=" not in segment[index] else 1
+        index += _WRAPPER_POSITIONALS.get(name, 0)
+    return ""
 
 
 def _runs_only_a_script(name: str, args: list[str]) -> bool:
