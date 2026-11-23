@@ -1016,7 +1016,14 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # check of the current directory or branch stay off a graph and off live information (+13).
             # skill-eval: a chess, tennis, job-interview and Korean sales skill stay off the host-fit check (+4).
             # Its review round: a person's skill at using Codex stays off it too (+1).
-            expected=1545,
+            # PR watch: a PR queue, a video (English and Korean), a how-to question, a CI concept question and a
+            # watch-out warning stay off github-event-ops (+6).
+            # Its verification round: a PR metric, a deploy watched before a PR is opened, and a staging deploy
+            # watched beside a merged PR stay off it (+3).
+            # Its final round: a PR merge rate until a sprint ends, a weekly merge count, and review speed until a
+            # sprint ends are measures, not waits on one PR (+3).
+            # Its hold round: four declined watches (three English, one Korean) and CI on main stay off it (+5).
+            expected=1562,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
@@ -1632,7 +1639,13 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # skill-health, skill-scout and agent-evaluation (+12).
             # Its review round: an agent skill loading in Codex and SKILL.md compatibility reach it, and a
             # Korean staff assessment keeps deep-interview (+3).
-            expected=1352,
+            # PR watch: five waits on one PR (three English, two Korean) reach github-event-ops, and a PR review
+            # and CI on main keep code-review and verification-gate (+7).
+            # Its verification round: a deploy monitored after a PR merges keeps deploy-and-monitor (+1).
+            # Its final round: five PR waits that name logs, production, a server or a deploy elsewhere still
+            # reach github-event-ops (+5).
+            # Its hold round: a declined review followed by a PR watch, in English and Korean, still reaches it (+2).
+            expected=1367,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

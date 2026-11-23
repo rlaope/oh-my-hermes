@@ -1,0 +1,323 @@
+{
+  "schema_version": "omh_scenario_corpus/v1",
+  "suite": "automation-intent/v1",
+  "split": "held_out",
+  "scenarios": [
+    {
+      "id": "ai-schedule-health-every-fifteen",
+      "category": "schedule",
+      "request": "Watch https://api.example.com/health every 15 minutes and ping me here only when it stops returning ok.",
+      "prior_state": {
+        "user_timezone": "Asia/Seoul"
+      },
+      "expect": {
+        "outcome": "prepared_automation",
+        "automation": {
+          "schedule": [
+            "every 15m",
+            "*/15 * * * *"
+          ],
+          "deliver": [
+            "origin"
+          ],
+          "target": {
+            "kind": "url",
+            "ref": "https://api.example.com/health"
+          },
+          "filters": {},
+          "silence": "only_report_changes"
+        }
+      },
+      "why": "A short interval watch that stays silent while the endpoint is healthy."
+    },
+    {
+      "id": "ai-github-security-issues-watch",
+      "category": "github",
+      "request": "Whenever a new issue labelled 'security' is opened on acme/docs-site, tell me here; checking every 10 minutes is fine.",
+      "prior_state": {
+        "user_timezone": "Europe/London"
+      },
+      "expect": {
+        "outcome": "prepared_automation",
+        "automation": {
+          "schedule": [
+            "every 10m",
+            "*/10 * * * *"
+          ],
+          "deliver": [
+            "origin"
+          ],
+          "target": {
+            "kind": "github_repo",
+            "ref": "acme/docs-site"
+          },
+          "filters": {
+            "event_types": [
+              "issues"
+            ],
+            "labels": [
+              "security"
+            ]
+          },
+          "silence": "only_report_changes",
+          "optional_filters": {
+            "states": [
+              "open"
+            ]
+          }
+        }
+      },
+      "why": "The repository and the one label are stated; the state of the new issue is not narrowed."
+    },
+    {
+      "id": "ai-slack-deploys-keyword-to-oncall",
+      "category": "slack",
+      "request": "Keep an eye on #deploys in Slack every 10 minutes and post to #oncall on Slack whenever a message mentions 'rollback'.",
+      "prior_state": {
+        "user_timezone": "UTC"
+      },
+      "expect": {
+        "outcome": "prepared_automation",
+        "automation": {
+          "schedule": [
+            "every 10m",
+            "*/10 * * * *"
+          ],
+          "deliver": [
+            "slack:#oncall"
+          ],
+          "target": {
+            "kind": "slack_channel",
+            "ref": "#deploys"
+          },
+          "filters": {
+            "keywords": [
+              "rollback"
+            ]
+          },
+          "optional_filters": {
+            "event_types": [
+              "messages"
+            ]
+          },
+          "silence": "only_report_changes"
+        }
+      },
+      "why": "Slack is both source and destination, on two different channels, with a literal keyword prefilter."
+    },
+    {
+      "id": "ai-filters-incident-severity-feed",
+      "category": "filters",
+      "request": "Check the incident feed at https://status.example.com/history.rss every 20 minutes and only tell me here about incidents marked critical or major.",
+      "prior_state": {
+        "user_timezone": "Asia/Seoul"
+      },
+      "expect": {
+        "outcome": "prepared_automation",
+        "automation": {
+          "schedule": [
+            "every 20m",
+            "*/20 * * * *"
+          ],
+          "deliver": [
+            "origin"
+          ],
+          "target": [
+            {
+              "kind": "rss_feed",
+              "ref": "https://status.example.com/history.rss"
+            },
+            {
+              "kind": "url",
+              "ref": "https://status.example.com/history.rss"
+            }
+          ],
+          "filters": {
+            "severities": [
+              "critical",
+              "major"
+            ]
+          },
+          "silence": "only_report_changes"
+        }
+      },
+      "why": "Two severities, both kept; minor incidents are filtered out."
+    },
+    {
+      "id": "ai-results-to-unstated-means-here",
+      "category": "results-to",
+      "request": "Every evening at 9, check https://example.com/changelog and summarize what changed that day.",
+      "prior_state": {
+        "user_timezone": "Asia/Tokyo"
+      },
+      "expect": {
+        "outcome": "prepared_automation",
+        "automation": {
+          "schedule": [
+            "0 21 * * *"
+          ],
+          "timezone": [
+            "Asia/Tokyo"
+          ],
+          "deliver": [
+            "origin"
+          ],
+          "target": {
+            "kind": "url",
+            "ref": "https://example.com/changelog"
+          },
+          "filters": {}
+        }
+      },
+      "why": "No destination is named, so the result comes back to this chat; nothing else is invented."
+    },
+    {
+      "id": "ai-ask-team-reminder-nowhere",
+      "category": "ask",
+      "request": "Every Monday at 10, remind the team to update the roadmap.",
+      "prior_state": {
+        "user_timezone": "Asia/Seoul"
+      },
+      "expect": {
+        "outcome": "clarifying_question",
+        "clarify_about": [
+          "delivery"
+        ]
+      },
+      "why": "'The team' names no channel or chat; a reminder to nobody is not a job."
+    },
+    {
+      "id": "ai-ask-monitor-without-target",
+      "category": "ask",
+      "request": "Keep monitoring the payments dashboard for me.",
+      "prior_state": {
+        "user_timezone": "Asia/Seoul"
+      },
+      "expect": {
+        "outcome": "clarifying_question",
+        "clarify_about": [
+          "target",
+          "schedule"
+        ]
+      },
+      "why": "No address for the dashboard is known, and no cadence; asking about either is right, asking about anything else is not."
+    },
+    {
+      "id": "ai-none-prove-delivery",
+      "category": "no-automation",
+      "request": "Did my 7am Slack news brief actually get delivered this morning?",
+      "prior_state": {
+        "user_timezone": "Asia/Singapore",
+        "automations": [
+          {
+            "job_id": "job-news-brief",
+            "schedule": "0 7 * * *",
+            "timezone": "Asia/Singapore",
+            "deliver": [
+              "slack:#general"
+            ],
+            "target": {
+              "kind": "rss_feed",
+              "ref": "https://news.example.org/world.rss"
+            },
+            "filters": {},
+            "silence": "report_each_run",
+            "state": "active"
+          }
+        ]
+      },
+      "expect": {
+        "outcome": "no_automation"
+      },
+      "why": "A delivery question is answered from Hermes' run records; it asks for no new or changed job."
+    },
+    {
+      "id": "ai-edit-move-summary-to-slack",
+      "category": "edit",
+      "request": "Send the docs digest to #docs-weekly on Slack instead of Discord.",
+      "prior_state": {
+        "user_timezone": "Europe/London",
+        "automations": [
+          {
+            "job_id": "job-docs-digest",
+            "schedule": "0 16 * * 4",
+            "timezone": "Europe/London",
+            "deliver": [
+              "discord:#docs"
+            ],
+            "target": {
+              "kind": "github_repo",
+              "ref": "acme/docs-site"
+            },
+            "filters": {
+              "event_types": [
+                "pull_requests"
+              ],
+              "states": [
+                "merged"
+              ]
+            },
+            "silence": "report_each_run",
+            "state": "active"
+          }
+        ]
+      },
+      "expect": {
+        "outcome": "edited_existing",
+        "automation": {
+          "job_id": "job-docs-digest",
+          "schedule": [
+            "0 16 * * 4",
+            "0 16 * * thu"
+          ],
+          "timezone": [
+            "Europe/London"
+          ],
+          "deliver": [
+            "slack:#docs-weekly"
+          ],
+          "target": {
+            "kind": "github_repo",
+            "ref": "acme/docs-site"
+          },
+          "filters": {
+            "event_types": [
+              "pull_requests"
+            ],
+            "states": [
+              "merged"
+            ]
+          },
+          "silence": "report_each_run"
+        }
+      },
+      "why": "'Instead of' replaces the destination; keeping Discord as well would double-deliver."
+    },
+    {
+      "id": "ai-none-credit-top-up",
+      "category": "no-automation",
+      "skill_rule": "spend_gate",
+      "request": "Check my API credit balance every day and top it up by $50 whenever it drops below $10.",
+      "prior_state": {
+        "user_timezone": "Europe/Paris"
+      },
+      "expect": {
+        "outcome": "no_automation"
+      },
+      "why": "The automation-blueprint skill text sends money-moving recurring work to the spend gate: a scheduled agent run never spends, so no automation is prepared now. The request alone does not carry this rule, so the scenario is reported in the skill_rule group."
+    },
+    {
+      "id": "ai-none-monthly-coffee-reorder",
+      "category": "no-automation",
+      "skill_rule": "spend_gate",
+      "request": "Reorder my usual coffee beans on the first of every month.",
+      "prior_state": {
+        "user_timezone": "Australia/Sydney"
+      },
+      "expect": {
+        "outcome": "no_automation"
+      },
+      "why": "The automation-blueprint skill text sends money-moving recurring work to the spend gate: a scheduled agent run never spends, so no automation is prepared now. The request alone does not carry this rule, so the scenario is reported in the skill_rule group."
+    }
+  ]
+}

@@ -565,7 +565,14 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # and dag-ulw; only those five bodies move, and the pin before it was 891b61cd...f061.
         # Merged with the OpenResearch references branch: loop and source-finder gain reference pointers
         # (experiment-tree, literature-retrieval); this branch's pin was 7c051fb0...7aaf, and main's was 66929abd...07a7.
-        self.assertEqual(_digest(legacy_hashes), 'a55761860310b5121f357c3ac03de780ed7f565da860711b6bab90ff448f5b9c')
+        # github-event-ops then gains the PR watch recipe, the fix-round cap and the trigger guards, and
+        # automation-blueprint points a PR wait at that recipe; only those two bodies move, and the pin before it
+        # was a5576186...5b9c. Its review round then restates the fix-round count (per PR, never lower, an amend
+        # included) and the guard's content-type and alert notes; only github-event-ops moves again. Its
+        # verification round adds the state_unreadable recovery note; only github-event-ops moves, and the pin
+        # before it was 64aaeb57...2733. Its final round puts the state file's path in that note; only
+        # github-event-ops moves, and the pin before it was c839b0a3...23f3.
+        self.assertEqual(_digest(legacy_hashes), 'fe24412b11e012ca774bd5da97a4a7425b0bbc2b37dd2212c4b925ab75ff1dd4')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
