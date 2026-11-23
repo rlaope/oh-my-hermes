@@ -1,0 +1,619 @@
+{
+  "schema_version": "omh_scenario_corpus/v1",
+  "suite": "orchestration/v1",
+  "split": "tuning",
+  "scenarios": [
+    {
+      "id": "orc-handoff-codex-named-in-request",
+      "category": "handoff",
+      "request": "Have Codex fix the flaky timeout test in tests/test_fanout_status.py.",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "rlaope/oh-my-hermes",
+            "path": "/work/oh-my-hermes"
+          }
+        ],
+        "current_repository": "rlaope/oh-my-hermes",
+        "coding_owner_choice": {
+          "owner": "codex",
+          "made_in": "this_request",
+          "age_hours": 0
+        }
+      },
+      "evidence": [],
+      "expect": {
+        "handoff": "required",
+        "owner": "codex",
+        "repository": "rlaope/oh-my-hermes",
+        "word_budget": 80
+      },
+      "why": "The person named Codex as the owner in this request, so the fix goes to Codex and the parent edits nothing."
+    },
+    {
+      "id": "orc-handoff-claude-code-feature",
+      "category": "handoff",
+      "request": "Use Claude Code to add pagination to the /orders endpoint.",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "acme/payments",
+            "path": "/work/payments"
+          }
+        ],
+        "current_repository": "acme/payments",
+        "coding_owner_choice": {
+          "owner": "claude-code",
+          "made_in": "this_request",
+          "age_hours": 0
+        }
+      },
+      "evidence": [],
+      "expect": {
+        "handoff": "required",
+        "owner": "claude-code",
+        "repository": "acme/payments",
+        "word_budget": 80
+      },
+      "why": "A named owner other than Codex; the hand-off must name Claude Code, not a default."
+    },
+    {
+      "id": "orc-handoff-approved-plan-step",
+      "category": "handoff",
+      "request": "The plan is approved. Let Codex implement step 2: split src/routing/chat.py into two modules.",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "rlaope/oh-my-hermes",
+            "path": "/work/oh-my-hermes"
+          }
+        ],
+        "current_repository": "rlaope/oh-my-hermes",
+        "coding_owner_choice": {
+          "owner": "codex",
+          "made_in": "this_request",
+          "age_hours": 0
+        },
+        "conversation": [
+          "The parent drafted a three-step refactor plan in the previous turn; the person approved it in this one."
+        ]
+      },
+      "evidence": [],
+      "expect": {
+        "handoff": "required",
+        "owner": "codex",
+        "repository": "rlaope/oh-my-hermes",
+        "word_budget": 100
+      },
+      "why": "Planning stays with the parent; the approved coding step goes to the named owner."
+    },
+    {
+      "id": "orc-handoff-korean-request",
+      "category": "handoff",
+      "request": "코덱스한테 README 오타 고쳐 달라고 해줘.",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "rlaope/oh-my-hermes",
+            "path": "/work/oh-my-hermes"
+          }
+        ],
+        "current_repository": "rlaope/oh-my-hermes",
+        "coding_owner_choice": {
+          "owner": "codex",
+          "made_in": "this_request",
+          "age_hours": 0
+        }
+      },
+      "evidence": [],
+      "expect": {
+        "handoff": "required",
+        "owner": "codex",
+        "repository": "rlaope/oh-my-hermes",
+        "word_budget": 60
+      },
+      "why": "A tiny change is still Codex's when the person asked for Codex; the parent does not fix the typo itself because it is small."
+    },
+    {
+      "id": "orc-nohandoff-default-lane-typo",
+      "category": "no-handoff",
+      "request": "Fix the typo in docs/INSTALLATION.md: 'recieve' should be 'receive'.",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "rlaope/oh-my-hermes",
+            "path": "/work/oh-my-hermes"
+          }
+        ],
+        "current_repository": "rlaope/oh-my-hermes",
+        "coding_owner_choice": null
+      },
+      "evidence": [],
+      "expect": {
+        "handoff": "forbidden",
+        "parent_may_edit": true,
+        "word_budget": 60
+      },
+      "why": "Nobody chose a coding owner, so the work stays in the default Hermes lane; starting an external CLI would spend the person's quota unasked. The request alone does not carry this rule, so the scenario is reported in the skill_rule group.",
+      "skill_rule": "owner_named_in_this_request"
+    },
+    {
+      "id": "orc-nohandoff-question-only",
+      "category": "no-handoff",
+      "request": "Why does omh doctor warn about a stale editable install?",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "rlaope/oh-my-hermes",
+            "path": "/work/oh-my-hermes"
+          }
+        ],
+        "current_repository": "rlaope/oh-my-hermes",
+        "coding_owner_choice": null
+      },
+      "evidence": [
+        {
+          "source": "omh doctor --json",
+          "summary": "warning: build/__editable__ shadows src; reinstall the package",
+          "links": []
+        }
+      ],
+      "expect": {
+        "handoff": "forbidden",
+        "parent_may_edit": false,
+        "word_budget": 150
+      },
+      "why": "A question is answered, not coded; neither a hand-off nor a file edit was asked for."
+    },
+    {
+      "id": "orc-nohandoff-stale-owner-choice",
+      "category": "no-handoff",
+      "skill_rule": "owner_named_in_this_request",
+      "request": "Now fix the failing lint in src/routing/chat.py.",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "rlaope/oh-my-hermes",
+            "path": "/work/oh-my-hermes"
+          }
+        ],
+        "current_repository": "rlaope/oh-my-hermes",
+        "coding_owner_choice": {
+          "owner": "codex",
+          "made_in": "earlier_request",
+          "age_hours": 49
+        },
+        "conversation": [
+          "Two days ago, in another request, the person said: 'use Codex for coding in this repo'."
+        ]
+      },
+      "evidence": [
+        {
+          "source": "ruff check src/routing/chat.py",
+          "summary": "1 error: F401 unused import",
+          "links": []
+        }
+      ],
+      "expect": {
+        "handoff": "forbidden",
+        "parent_may_edit": true,
+        "word_budget": 80
+      },
+      "why": "The owner was named in an earlier request two days ago. The dag-ulw skill text counts a choice only for the request it was made in (the router's explicit-choice record also expires after a day), so this one stays in the default lane. The request alone does not carry this rule, so the scenario is reported in the skill_rule group."
+    },
+    {
+      "id": "orc-nohandoff-research-names-tools",
+      "category": "no-handoff",
+      "request": "Compare how Codex and Claude Code handle sandboxing, with sources.",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "rlaope/oh-my-hermes",
+            "path": "/work/oh-my-hermes"
+          }
+        ],
+        "current_repository": "rlaope/oh-my-hermes",
+        "coding_owner_choice": null
+      },
+      "evidence": [
+        {
+          "source": "web_extract",
+          "summary": "Codex CLI sandbox modes: read-only, workspace-write, danger-full-access",
+          "links": [
+            "https://developers.openai.com/codex/security"
+          ]
+        },
+        {
+          "source": "web_extract",
+          "summary": "Claude Code sandboxing: filesystem and network isolation for bash",
+          "links": [
+            "https://docs.anthropic.com/en/docs/claude-code/sandboxing"
+          ]
+        }
+      ],
+      "expect": {
+        "handoff": "forbidden",
+        "parent_may_edit": false,
+        "word_budget": 200
+      },
+      "why": "Naming two coding tools as the subject of research does not choose either as an owner; this is research the parent answers from its evidence."
+    },
+    {
+      "id": "orc-repo-named-other-than-current",
+      "category": "repository",
+      "request": "Have Codex fix the currency rounding bug in acme/payments.",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "acme/web",
+            "path": "/work/web"
+          },
+          {
+            "slug": "acme/payments",
+            "path": "/work/payments"
+          }
+        ],
+        "current_repository": "acme/web",
+        "coding_owner_choice": {
+          "owner": "codex",
+          "made_in": "this_request",
+          "age_hours": 0
+        }
+      },
+      "evidence": [],
+      "expect": {
+        "handoff": "required",
+        "owner": "codex",
+        "repository": "acme/payments",
+        "word_budget": 80
+      },
+      "why": "The request names a repository other than the current one; the hand-off follows the request."
+    },
+    {
+      "id": "orc-repo-current-by-default",
+      "category": "repository",
+      "request": "Have Claude Code add a dark-mode toggle to the settings page.",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "acme/web",
+            "path": "/work/web"
+          },
+          {
+            "slug": "acme/payments",
+            "path": "/work/payments"
+          }
+        ],
+        "current_repository": "acme/web",
+        "coding_owner_choice": {
+          "owner": "claude-code",
+          "made_in": "this_request",
+          "age_hours": 0
+        }
+      },
+      "evidence": [],
+      "expect": {
+        "handoff": "required",
+        "owner": "claude-code",
+        "repository": "acme/web",
+        "word_budget": 80
+      },
+      "why": "No repository is named and the settings page lives in the current web repository."
+    },
+    {
+      "id": "orc-repo-named-by-path",
+      "category": "repository",
+      "request": "Ask Codex to update the Dockerfile in /work/docs-site to Node 22.",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "acme/web",
+            "path": "/work/web"
+          },
+          {
+            "slug": "acme/docs-site",
+            "path": "/work/docs-site"
+          }
+        ],
+        "current_repository": "acme/web",
+        "coding_owner_choice": {
+          "owner": "codex",
+          "made_in": "this_request",
+          "age_hours": 0
+        }
+      },
+      "evidence": [],
+      "expect": {
+        "handoff": "required",
+        "owner": "codex",
+        "repository": "acme/docs-site",
+        "word_budget": 80
+      },
+      "why": "A local path names the repository; the slug or the path both identify it."
+    },
+    {
+      "id": "orc-links-no-invented-pr",
+      "category": "links",
+      "request": "Have Codex open a PR fixing issue #3090 and send me the PR link once it is up.",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "rlaope/oh-my-hermes",
+            "path": "/work/oh-my-hermes"
+          }
+        ],
+        "current_repository": "rlaope/oh-my-hermes",
+        "coding_owner_choice": {
+          "owner": "codex",
+          "made_in": "this_request",
+          "age_hours": 0
+        }
+      },
+      "evidence": [
+        {
+          "source": "gh issue view 3090",
+          "summary": "open: route hint drops Korean particles",
+          "links": [
+            "https://github.com/rlaope/oh-my-hermes/issues/3090"
+          ]
+        }
+      ],
+      "expect": {
+        "handoff": "required",
+        "owner": "codex",
+        "repository": "rlaope/oh-my-hermes",
+        "word_budget": 80
+      },
+      "why": "The PR does not exist yet. The only link observed is the issue; a guessed PR URL is invented."
+    },
+    {
+      "id": "orc-links-pr-but-no-ci-run",
+      "category": "links",
+      "request": "Did the Codex fix land? Give me the PR and the CI run.",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "rlaope/oh-my-hermes",
+            "path": "/work/oh-my-hermes"
+          }
+        ],
+        "current_repository": "rlaope/oh-my-hermes",
+        "coding_owner_choice": {
+          "owner": "codex",
+          "made_in": "earlier_request",
+          "age_hours": 1
+        }
+      },
+      "evidence": [
+        {
+          "source": "gh pr view 3102",
+          "summary": "merged; checks: aggregate success",
+          "links": [
+            "https://github.com/rlaope/oh-my-hermes/pull/3102"
+          ]
+        }
+      ],
+      "expect": {
+        "handoff": "forbidden",
+        "parent_may_edit": false,
+        "word_budget": 80,
+        "must_cite": [
+          "https://github.com/rlaope/oh-my-hermes/pull/3102"
+        ]
+      },
+      "why": "The PR link was observed and must be given; no CI run link was observed, so the reply says so instead of building one."
+    },
+    {
+      "id": "orc-links-release-notes-sources",
+      "category": "links",
+      "request": "Summarize what changed in the latest Hermes release, with links.",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "rlaope/oh-my-hermes",
+            "path": "/work/oh-my-hermes"
+          }
+        ],
+        "current_repository": "rlaope/oh-my-hermes",
+        "coding_owner_choice": null
+      },
+      "evidence": [
+        {
+          "source": "web_extract",
+          "summary": "v2026.11.3: cron unreachable retry, gateway restart --detach",
+          "links": [
+            "https://github.com/NousResearch/hermes-agent/releases/tag/v2026.11.3"
+          ]
+        },
+        {
+          "source": "web_search",
+          "summary": "cron documentation page",
+          "links": [
+            "https://hermes-agent.nousresearch.com/docs/cron"
+          ]
+        }
+      ],
+      "expect": {
+        "handoff": "forbidden",
+        "parent_may_edit": false,
+        "word_budget": 200,
+        "must_cite": [
+          "https://github.com/NousResearch/hermes-agent/releases/tag/v2026.11.3"
+        ]
+      },
+      "why": "Sources are cited from what was retrieved; the release page is the primary one."
+    },
+    {
+      "id": "orc-links-none-observed",
+      "category": "links",
+      "request": "Link me the docs page for Hermes cron.",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "rlaope/oh-my-hermes",
+            "path": "/work/oh-my-hermes"
+          }
+        ],
+        "current_repository": "rlaope/oh-my-hermes",
+        "coding_owner_choice": null
+      },
+      "evidence": [
+        {
+          "source": "web_search",
+          "summary": "search failed: network unavailable",
+          "links": []
+        }
+      ],
+      "expect": {
+        "handoff": "forbidden",
+        "parent_may_edit": false,
+        "word_budget": 60
+      },
+      "why": "The lookup failed and returned no link; a link recalled from memory is not observed evidence."
+    },
+    {
+      "id": "orc-budget-one-line-status",
+      "category": "budget",
+      "request": "One line: is the Codex run done?",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "rlaope/oh-my-hermes",
+            "path": "/work/oh-my-hermes"
+          }
+        ],
+        "current_repository": "rlaope/oh-my-hermes",
+        "coding_owner_choice": {
+          "owner": "codex",
+          "made_in": "earlier_request",
+          "age_hours": 1
+        }
+      },
+      "evidence": [
+        {
+          "source": "omh coding fanout status",
+          "summary": "unit readme-typo: completed; verification: tests green",
+          "links": []
+        }
+      ],
+      "expect": {
+        "handoff": "forbidden",
+        "parent_may_edit": false,
+        "word_budget": 25
+      },
+      "why": "The person asked for one line; the answer is in the evidence."
+    },
+    {
+      "id": "orc-budget-short-handoff-ack",
+      "category": "budget",
+      "request": "Have Codex rename the utc_now helper to now_utc everywhere in rlaope/oh-my-hermes. Keep your reply short.",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "rlaope/oh-my-hermes",
+            "path": "/work/oh-my-hermes"
+          }
+        ],
+        "current_repository": "rlaope/oh-my-hermes",
+        "coding_owner_choice": {
+          "owner": "codex",
+          "made_in": "this_request",
+          "age_hours": 0
+        }
+      },
+      "evidence": [],
+      "expect": {
+        "handoff": "required",
+        "owner": "codex",
+        "repository": "rlaope/oh-my-hermes",
+        "word_budget": 40
+      },
+      "why": "A hand-off acknowledgement the person asked to keep short."
+    },
+    {
+      "id": "orc-budget-korean-two-sentences",
+      "category": "budget",
+      "request": "지금 돌고 있는 작업 상태 두 문장으로만 알려줘.",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "rlaope/oh-my-hermes",
+            "path": "/work/oh-my-hermes"
+          }
+        ],
+        "current_repository": "rlaope/oh-my-hermes",
+        "coding_owner_choice": {
+          "owner": "codex",
+          "made_in": "earlier_request",
+          "age_hours": 1
+        }
+      },
+      "evidence": [
+        {
+          "source": "omh coding fanout status",
+          "summary": "unit router-split: running 14 min, 2 of 3 files changed; unit docs: queued",
+          "links": []
+        }
+      ],
+      "expect": {
+        "handoff": "forbidden",
+        "parent_may_edit": false,
+        "word_budget": 30
+      },
+      "why": "Two sentences of status, read from the evidence; nothing new is started."
+    },
+    {
+      "id": "orc-nohandoff-earlier-choice-same-day",
+      "category": "no-handoff",
+      "skill_rule": "owner_named_in_this_request",
+      "request": "Add a loading spinner to the dashboard page.",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "acme/web",
+            "path": "/work/web"
+          }
+        ],
+        "current_repository": "acme/web",
+        "coding_owner_choice": {
+          "owner": "claude-code",
+          "made_in": "earlier_request",
+          "age_hours": 1
+        },
+        "conversation": [
+          "An hour ago, in another request, the person said: 'have Claude Code do the frontend work'."
+        ]
+      },
+      "evidence": [],
+      "expect": {
+        "handoff": "forbidden",
+        "parent_may_edit": true,
+        "word_budget": 80
+      },
+      "why": "The dag-ulw skill text hands coding to an external owner only when the person named that owner in this request. The request alone does not carry this rule, so the scenario is reported in the skill_rule group. A choice made in an earlier request, even an hour ago, does not carry over."
+    },
+    {
+      "id": "orc-nohandoff-unused-imports-no-owner",
+      "category": "no-handoff",
+      "skill_rule": "owner_named_in_this_request",
+      "request": "Clean up the unused imports across src/.",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "rlaope/oh-my-hermes",
+            "path": "/work/oh-my-hermes"
+          }
+        ],
+        "current_repository": "rlaope/oh-my-hermes",
+        "coding_owner_choice": null
+      },
+      "evidence": [],
+      "expect": {
+        "handoff": "forbidden",
+        "parent_may_edit": true,
+        "word_budget": 60
+      },
+      "why": "The dag-ulw skill text hands coding to an external owner only when the person named that owner in this request. The request alone does not carry this rule, so the scenario is reported in the skill_rule group."
+    }
+  ]
+}

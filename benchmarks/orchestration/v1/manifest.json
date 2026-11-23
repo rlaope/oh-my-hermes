@@ -1,0 +1,97 @@
+{
+  "schema_version": "omh_scenario_suite/v1",
+  "suite": "orchestration/v1",
+  "title": "Orchestration: does the parent hand coding to the named owner, in the right repository, citing only observed links?",
+  "question": "Given a request, the repositories and coding-owner choice around it, and the evidence already observed, does the parent hand coding to the owner the person named (and only then), target the right repository, cite only links the evidence returned, and stay within the reply's word budget?",
+  "status": "prepared_not_observed",
+  "latest_measured": null,
+  "categories": [
+    "handoff",
+    "no-handoff",
+    "repository",
+    "links",
+    "budget"
+  ],
+  "splits": {
+    "tuning": {
+      "file": "corpus/tuning.json",
+      "scenarios": 20,
+      "digest": "fedf301cc674a4487bee4e5d781062deae75ecc577a1e3eba69672078473d936",
+      "skill_rule_scenarios": 4
+    },
+    "held_out": {
+      "file": "corpus/held-out.json",
+      "scenarios": 8,
+      "digest": "d26209d4095e3866f24d8bd6416cb61e537bdd634e916ea89bb45a6abb9013f5",
+      "skill_rule_scenarios": 2
+    }
+  },
+  "held_out_policy": {
+    "default_split": "tuning",
+    "held_out_read_only_when_named": true,
+    "held_out_report_detail": "totals only; no per-category rate, scenario id, decision or failure",
+    "never_used_for": "tuning skill text, prompts or the grader",
+    "held_out_runs_whole_split": true,
+    "held_out_report_requires_an_observation_of_every_scenario": true,
+    "held_out_report_min_graded_share": "3/4",
+    "secrecy": "none: the corpus, held-out expectations included, is public in this repository; keeping the held-out split out of tuning is the operator's discipline, which the structure and tests support but cannot enforce"
+  },
+  "grader": "src/quality/orchestration_grading.py",
+  "shared_shape": "src/quality/scenario_suite.py",
+  "observations_schema": "omh_scenario_observations/v1",
+  "report_schema": "omh_scenario_suite_report/v1",
+  "rate_shape": "omh_reported_rate/v1 with a Wilson 95% interval",
+  "excluded_observation_classes": [
+    "arm_did_not_run",
+    "timeout",
+    "transport_error",
+    "not_observed"
+  ],
+  "arms": {
+    "skill-text": {
+      "kind": "omh_hermes_child",
+      "live": true,
+      "skill_files": [
+        "skills/dag-ulw/SKILL.md",
+        "skills/omh-routing/references/skill-common-rail.md"
+      ]
+    },
+    "bare": {
+      "kind": "omh_hermes_child",
+      "live": true,
+      "skill_files": []
+    },
+    "external": {
+      "kind": "operator_supplied",
+      "live": false,
+      "observations_from": "an omh_scenario_observations/v1 file the operator recorded with any tool"
+    }
+  },
+  "execution_policy": {
+    "offline_by_default": true,
+    "live_path": "omh coding hermes-child dispatch --confirm-dispatch",
+    "live_requires_explicit_flags": [
+      "--allow-paid-live",
+      "--max-paid-calls",
+      "--confirm"
+    ],
+    "prompt_on_stdin": true,
+    "prompts_persisted": false,
+    "decision_file": ".omh-scenario-decision.json",
+    "concurrency": 1,
+    "runs_in_ci": false
+  },
+  "fixture": {
+    "file": "fixtures/recorded-observations.json",
+    "measures": "nothing; it exercises the grader"
+  },
+  "claim_boundary": "A rate describes one arm on one split of this corpus at this revision. It grades a prepared decision structurally; it is not evidence that an automation ran, a hand-off executed, or a reply was delivered, and it says nothing about another model, prompt or corpus.",
+  "integrity": {
+    "algorithm": "sha256",
+    "canonical_json": "sorted-keys-compact-ascii"
+  },
+  "report_groups": {
+    "request_derivable": "scenarios any arm can derive from the request, prior state and the contract alone",
+    "skill_rule": "scenarios whose expectation rests on a rule only the skill text states (skill_rule); only the skill-text arm is given it, so this group's gap between the arms measures the skill text"
+  }
+}

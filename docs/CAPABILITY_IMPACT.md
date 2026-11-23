@@ -307,3 +307,21 @@ same Hermes tasks with and without OMH, blind the outputs, and score correctness
 completeness, evidence use, artifact quality, recovery behavior, and wasted
 tool/context cost. Until that evaluator exists, OMH can prove routing and local
 contracts, but it should not claim overall superiority.
+
+Two scenario suites (operator/maintainer) hold the baseline for the skill text
+that later changes will edit, each with a tuning split and a held-out split
+that is never used for tuning:
+
+- [`benchmarks/automation-intent/v1`](../benchmarks/automation-intent/v1/README.md):
+  does a plain-language request become the right prepared automation
+  (schedule, target, delivery, filters), or correctly a clarifying question,
+  no automation, or an edit of the existing job.
+- [`benchmarks/orchestration/v1`](../benchmarks/orchestration/v1/README.md):
+  does the parent hand coding to the owner the person named, in the right
+  repository, citing only links the evidence returned, within a word budget.
+
+Both grade structurally (no model judge) and report `omh_reported_rate/v1`
+with a Wilson 95% interval and infrastructure failures excluded by name. Their
+live arms run only through `omh coding hermes-child dispatch
+--confirm-dispatch`, behind explicit paid-live flags. Neither has been run
+live: both are `prepared_not_observed`, with no headline number.
