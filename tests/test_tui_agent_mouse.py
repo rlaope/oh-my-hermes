@@ -30,7 +30,7 @@ from pathlib import Path
 import unittest
 
 from _tui_gateway_replay import Scenario
-from test_tui_agent_list import INTERRUPTED_PROMPT, delegating_scenario, focused, info_left, more_agents, under_the_frame
+from test_tui_agent_list import INTERRUPTED_PROMPT, REFUSED_VIEW, delegating_scenario, focused, info_left, more_agents, under_the_frame
 from test_tui_agent_view import STARTS, agent_app, relay
 from test_tui_app import LIVE_ID, NO_TERMIOS, AppTestCase, FakePoller, ScriptedTerminal, Step, info_index
 from test_tui_modes import SID, RecordingClient, composer_index, drawn, make_app, type_text
@@ -145,6 +145,7 @@ class MouseStateTests(unittest.TestCase):
     def test_reports_are_on_only_while_the_agent_list_or_a_pager_is_open(self) -> None:
         now = [100.0]
         app, client = make_app(clock=lambda: now[0])
+        app._open_agent = app._open_agent_log  # type: ignore[method-assign]  # Enter opens the log, the session view's fallback
         settled(app)
         steps: list[tuple[str, bool]] = []
 
@@ -355,6 +356,7 @@ class FailingShutdownTests(unittest.TestCase):
         terminal = HungUpTerminal()
         client = RecordingClient()
         app = App(terminal, client, NATIVE_MOUSE, poller=FakePoller(), clock=lambda: 0.0)  # type: ignore[arg-type]
+        app._open_agent = app._open_agent_log  # type: ignore[method-assign]  # Enter opens the log, the session view's fallback
         app.sid = SID
         app.turn_pending = True
         relay(app, STARTS)
@@ -1230,7 +1232,8 @@ class DocumentedMouseTests(unittest.TestCase):
 @unittest.skipIf(NO_TERMIOS, "the OMH TUI needs termios")
 class MouseReplayTests(AppTestCase):
     def scenario(self) -> Scenario:
-        return delegating_scenario(("subagent.tail", {"result": {"subagent_id": SECOND, "available": False}}))
+        return delegating_scenario(("subagent.tail", {"result": {"subagent_id": SECOND, "available": False}}),
+                                   REFUSED_VIEW)
 
     def test_in_the_real_loop_reports_wait_for_the_list_and_a_click_on_its_row_opens_that_agent(self) -> None:
         run = self.prepare(self.scenario())

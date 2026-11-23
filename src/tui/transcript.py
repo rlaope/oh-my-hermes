@@ -1724,6 +1724,9 @@ class Transcript:
         # render them again: (version, width, theme, rows per block), good only while nothing has changed since.
         self._measured: tuple[int, int, Theme, list[list[Line]]] | None = None
         self.dropped = 0  # blocks BLOCK_CAP dropped from the front
+        # Not on screen (main's while a subagent's session is shown): BLOCK_CAP also drops blocks never taken, which
+        # nothing will take now; the full redraw on the way back draws from what remains.
+        self.offscreen = False
         # Where the last take's lines hold the first row of the newest prompt in them (not the blank row above it);
         # None when that take held no prompt.
         # Blocks about a live one (a steer, an answer to Hermes, a command's echo), waiting for a block boundary
@@ -1776,6 +1779,15 @@ class Transcript:
         self._append(block)
         self._keep_previews()
         return block
+
+    def replace_user_text(self, block: UserBlock, text: str) -> None:
+        """`block`, a prompt drawn in place of one not read yet (a subagent view's goal for its brief), takes the
+        real `text`; the next full redraw prints it where it stood."""
+        if block.text != text:
+            block.text = text
+            self._measured = None
+            self._live_held = None
+            self._version += 1
 
     def set_user_previews(self, lookup: Callable[[str], Preview | None]) -> None:
         """Every prompt not yet taken takes the preview `lookup` gives for each of its images (by what `images`
@@ -2143,8 +2155,11 @@ class Transcript:
         Runs after an append, a take and a retake, so a resumed session's
         history longer than the cap goes as soon as it is printed.
         """
-        drop = min(len(self.blocks) - BLOCK_CAP, self._cursor)
+        settled = len(self.blocks) - (1 if self.blocks and not self.blocks[-1].done else 0)
+        drop = min(len(self.blocks) - BLOCK_CAP, settled if self.offscreen else self._cursor)
         if drop > 0:
+            if drop > self._cursor:  # offscreen: blocks never taken go too, and the take starts over after them
+                self._cursor, self._cursor_lines, self._cursor_state = drop, 0, MarkdownState()
             del self.blocks[:drop]
             self._cursor -= drop
             self._turn_start = max(self._turn_start - drop, 0)

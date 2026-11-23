@@ -57,7 +57,7 @@ ACTIVITY = {
 }
 SUMMARY = {"inventory": ("completed", "26 open PRs listed into inventory.json"),
            "group-3": ("failed", "blocked: rebase conflict in tools/registry.py\nsee the handoff")}
-TREE_HINT = "↑↓ select · ←/→ or space fold · ⏎ log · x interrupt · s steer · esc back"
+TREE_HINT = "↑↓ select · ←/→ or space fold · ⏎ view · x interrupt · s steer · esc back"
 
 
 def setUpModule() -> None:
@@ -557,7 +557,7 @@ class RepairCycleTests(unittest.TestCase):
 
 
 class TreeActionTests(unittest.TestCase):
-    """On a node a child ran for, Enter opens the child's log, and x and s interrupt and steer it as the list does."""
+    """On a node a child ran for, Enter shows the child's session (its log where the read is refused), and x and s interrupt and steer it as the list does."""
 
     def focused(self, steps: int = 1):
         app, client = tree_app()
@@ -566,9 +566,19 @@ class TreeActionTests(unittest.TestCase):
             app._on_input(Key(DOWN))
         return app, client
 
-    def test_enter_opens_the_highlighted_nodes_child_log_and_leaving_comes_back_to_the_tree(self) -> None:
-        app, _client = self.focused()
+    def test_enter_shows_the_highlighted_nodes_child_session_with_a_lazy_read(self) -> None:
+        app, client = self.focused()
         app._on_input(Key(ENTER))
+        self.assertEqual(client.calls[-1], ("session.resume", {"session_id": "20261022_134612_a9f3e210", "lazy": True,
+                                                               "cols": 120}))
+        answer(app, client, {"session_id": "watch-1", "messages": [], "running": True})
+        assert app.viewing is not None
+        self.assertEqual((app.viewing.subagent_id, app.tree_selected, app.pager), (subagent_id("group-1"), None, None))
+
+    def test_enter_opens_the_highlighted_nodes_child_log_where_the_read_is_refused_and_leaving_comes_back(self) -> None:
+        app, client = self.focused()
+        app._on_input(Key(ENTER))
+        answer(app, client, error={"code": 4001, "message": "no such session"})  # the fallback: the log, as before
         self.assertEqual(app.log_agent, subagent_id("group-1"))
         self.assertTrue(app.pager.title.startswith("PR group 1"), app.pager.title)
         app._on_input(Key(CHAR, "q"))
@@ -636,8 +646,8 @@ class OtherAgentsTests(unittest.TestCase):
     """An agent no node is bound to (a helper the parent delegated beside the run) closes the tree in its own group,
     where the keys reach it as the agent list did."""
 
-    def test_a_helper_beside_the_run_is_a_row_of_its_own_group_and_enter_opens_its_log(self) -> None:
-        app, _client = tree_app(rows=90)  # a cap of 30: the whole tree and the group under it
+    def test_a_helper_beside_the_run_is_a_row_of_its_own_group_and_enter_shows_its_session(self) -> None:
+        app, client = tree_app(rows=90)  # a cap of 30: the whole tree and the group under it
         agent_event(app, "start", "sa-helper", goal="Look up the release notes", model="glm-5.3",
                     child_session_id="helper-session")
         agent_event(app, "tool", "sa-helper", goal="Look up the release notes", model="glm-5.3",
@@ -649,7 +659,10 @@ class OtherAgentsTests(unittest.TestCase):
         app._on_input(Key(DOWN))
         down_to(app, "agent:sa-helper")
         app._on_input(Key(ENTER))
-        self.assertEqual(app.log_agent, "sa-helper")
+        self.assertEqual(client.calls[-1][1].get("session_id"), "helper-session")  # its session, read lazily
+        answer(app, client, {"session_id": "watch-helper", "messages": [], "running": True})
+        assert app.viewing is not None
+        self.assertEqual(app.viewing.subagent_id, "sa-helper")
 
 
     def test_a_lane_of_this_run_the_graph_no_longer_draws_is_not_another_agent(self) -> None:
@@ -934,17 +947,19 @@ class TreeMouseTests(unittest.TestCase):
     """While the tree has the keys a click on its row selects it, as a click on a list row did; reports are on only
     then (round 2: the wheel scrolls and a drag selects the rest of the time)."""
 
-    def test_a_click_on_a_node_row_highlights_it_and_opens_its_childs_log(self) -> None:
+    def test_a_click_on_a_node_row_highlights_it_and_shows_its_childs_session(self) -> None:
         from test_tui_agent_mouse import click, reporting, row_of, settled
 
-        app, _client = tree_app()
+        app, client = tree_app()
         settled(app)
         self.assertFalse(reporting(app), "no reports while the composer has the keys")
         app._on_input(Key(DOWN))
         self.assertTrue(reporting(app))
         click(app, 10, row_of(app, "PR group 2: #128662"))
-        self.assertEqual(app.tree_selected, node_id("group-2"))
-        self.assertEqual(app.log_agent, subagent_id("group-2"))
+        self.assertEqual(client.calls[-1][0], "session.resume")
+        answer(app, client, {"session_id": "watch-2", "messages": [], "running": True})
+        assert app.viewing is not None
+        self.assertEqual(app.viewing.subagent_id, subagent_id("group-2"))
 
     def test_a_click_on_a_layer_row_only_highlights_it(self) -> None:
         from test_tui_agent_mouse import click, row_of, settled

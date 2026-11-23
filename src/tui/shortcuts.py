@@ -68,7 +68,7 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
     ("Ctrl+U / Ctrl+K", "Delete to the start or the end of the line; with a list or menu focused, Ctrl+K moves up instead"),
     ("Ctrl+_ / Ctrl+Y", "Undo or redo an edit in the composer (Ctrl+_ is what Ctrl+- and Ctrl+/ send on most terminals); "
                         "a run of typed characters is one edit"),
-    ("Esc", "Closes the / or @ menu; else interrupts a running turn, with a draft typed too, which stays in the "
+    ("Esc", "Closes the / or @ menu; in a subagent's session, goes back to main (in Vim INSERT the first Esc leaves INSERT); else interrupts a running turn, with a draft typed too, which stays in the "
             "composer (the activity row shows how long it has run, then interrupting…, and what you queued comes back "
             "to an empty composer unsent, or waits); cancels a rewind you picked; "
             "cancels an agent steer you picked and keeps what you typed; after an approval's tell row, "
@@ -141,12 +141,17 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
                        "(the list's last row on a short terminal) its title (Enter renames it, Esc cancels, an empty title is refused); Ctrl+D asks on the "
                        "row and a second Ctrl+D deletes it, any other key keeps it; the session you are in is not "
                        "deleted, and what Hermes refuses is said on the row"),
-    ("↑ / ↓, Enter, Esc, ←, q, Ctrl+C", "In the agent list, move, open the highlighted agent's log (on main, "
-                                        "only leave), or go back; any other key does nothing there"),
+    ("↑ / ↓, Enter, Esc, ←, q, Ctrl+C", "In the agent list, move, show the highlighted agent's session on the "
+                                        "main screen (its log where Hermes cannot show it; on main, back to main's "
+                                        "session), or go back; any other key does nothing there"),
     ("x, s", "In the agent list, on an agent: x twice interrupts it; s steers it with the next line you send "
              "(Esc cancels)"),
     ("↑ / ↓ or a click, Enter, Esc", "In the /theme picker, preview a launch look (spectrum, violet, gold, graphite, sakura, moonlit, aurora, ember, kanagawa-wave) on the logo, the card and the chrome, keep it, or put the one in use back; /theme <look> keeps one at once"),
-    ("Click", "On a row of the agent list, opens that agent's log (on main, only leaves the list)"),
+    ("Click", "On a row of the agent list, shows that agent's session as Enter does (on main, leaves the list "
+              "and goes back to main's session)"),
+    ("Enter, Esc", "In a subagent's session on the main screen, Enter sends what you typed to that agent (a steer "
+                   "while it runs; after it ended, a turn that continues it where Hermes can); Esc goes back to "
+                   "main; slash commands, ! lines and images stay in the composer"),
     ("← / →, q or Esc", "In an agent's log, show the agent before or after, or go back; the pager's keys scroll it"),
     ("Tab / n, Shift+Tab / p, Space / Enter, d", "In /dag, highlight the next or the previous box, fold or unfold "
                                                  "the highlighted one, or show or hide Node details; ↑ / ↓, "
