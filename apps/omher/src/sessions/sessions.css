@@ -790,6 +790,34 @@ body.side-resizing * {
   border: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
   transition: left 0.08s ease, top 0.08s ease, width 0.08s ease, height 0.08s ease;
 }
+/* a header merge (splitDrag.ts): the other half, named for the session that fills it; the same box, quieter */
+.split-drop-fill {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  border: 2px dashed color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  transition: left 0.08s ease, top 0.08s ease, width 0.08s ease, height 0.08s ease;
+}
+.split-drop-fill > span {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* a TERMINALS header that drags (SessionView): a grab cursor only where a drag can do something (its buttons keep
+   theirs) */
+.head.ss-head-drag {
+  cursor: grab;
+  touch-action: none;
+}
 /* where a TERMINALS row dragged in the sidebar would go: a line between rows */
 .row-drop {
   position: fixed;

@@ -1436,6 +1436,7 @@ export const en = {
   "termpanel.rang": "Rang its bell",
   "termpanel.splitRight": "Split right ({keys})",
   "split.closeSide": "Close {name} on this side",
+  "split.closePane": "Close {name}'s pane (the session stays in Terminals)",
   "split.grip": "Move {name}: drag onto a pane's side, or click for its menu",
   "split.zoomed": "Zoomed: one of {n} panes",
   "split.inSplit": "In the open split: {name}",

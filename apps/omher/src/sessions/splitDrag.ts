@@ -8,11 +8,16 @@
 //
 // A TERMINALS row dragged over another row of its own folder in the sidebar moves there instead: a line shows where it
 // goes (above the row under the pointer, or below it past its middle), and letting go puts it there (moveRow).
+//
+// The main column's header of a TERMINALS session drags too (Otty's): in a split it is the focused pane's grip; a
+// session on its own drags onto its own terminal to merge with its folder's next row (`mergePartner`), the preview
+// naming that session in the half it will fill. Taken back onto the header, or Escape, nothing changes.
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { MAX_PANES, panesOf } from "../terminal/layout";
-import { isTerminalRec } from "./agents";
+import { isTerminalRec, type AgentInfo, type SessionRec } from "./agents";
+import { pathKey } from "./folders";
 import { getSessions } from "./sessions";
-import { getSplit, groupOf, paneOf, type SplitDirName } from "./splitState";
+import { getSplit, groupOf, paneOf, type SplitDirName, type SplitGroup } from "./splitState";
 
 /** How far the pointer goes before a press is a drag (a smaller wobble stays a click). */
 const SLOP = 5;
@@ -22,6 +27,8 @@ export interface DropTarget {
   at: string;
   side: SplitDirName;
   box: DOMRect;
+  /** the name of the session that fills the other half (a header merge: `at`, which is not under the pointer) */
+  fill?: string;
 }
 
 /** The side of `box` nearest to the point. */
@@ -51,6 +58,32 @@ export function dropTargetAt(x: number, y: number, drag: string): DropTarget | n
   if (g && panesOf(g.layout).length >= MAX_PANES && !panesOf(g.layout).includes(n)) return null;
   const box = host.getBoundingClientRect();
   return { at, side: sideAt(box, x, y), box };
+}
+
+/** The session a TERMINALS session `id` on its own merges with when its header is dragged onto its terminal: the row
+ *  under it in its folder's TERMINALS rows (the sidebar's order), or above it when it is the last. A row that is in a
+ *  split already is passed over (merging never takes a pane from another split), and so is anything that is not a
+ *  TERMINALS session (a bot chat has no row there). Null when `id` is in a split, is not a TERMINALS session, or its
+ *  folder has no other row that can go: a partner is never taken from another folder. */
+export function mergePartner(list: readonly SessionRec[], agents: AgentInfo[] | null | undefined, groups: SplitGroup[], id: string): string | null {
+  const me = list.find((r) => r.id === id);
+  if (!me || paneOf(id) === null || !isTerminalRec(agents, me) || groupOf(groups, id)) return null;
+  const rows = list.filter((r) => isTerminalRec(agents, r) && pathKey(r.cwd) === pathKey(me.cwd));
+  const i = rows.findIndex((r) => r.id === id);
+  const free = (r: SessionRec) => paneOf(r.id) !== null && !groupOf(groups, r.id);
+  return rows.slice(i + 1).find(free)?.id ?? rows.slice(0, i).reverse().find(free)?.id ?? null;
+}
+
+/** Where the header of session `drag` (on its own) would merge it with `partner` (named `name`), the pointer at
+ *  (x, y): over `drag`'s own terminal (or its paused or ended view) in the main column, on the side nearest the
+ *  pointer. Anywhere else, the header band included, is no target. */
+export function mergeTargetAt(x: number, y: number, drag: string, partner: string, name: string): DropTarget | null {
+  const host = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-testid="terminal"], [data-testid="session-idle"]');
+  if (!host || host.closest('[data-testid="session-split"], [data-testid="termpanel"]')) return null;
+  const at = host.getAttribute("data-session");
+  if (at && at !== drag) return null;
+  const box = host.getBoundingClientRect();
+  return { at: partner, side: sideAt(box, x, y), box, fill: name };
 }
 
 export interface RowTarget {
@@ -83,21 +116,33 @@ function shadeRect({ box, side }: DropTarget): { left: number; top: number; widt
   return { left, top: top + height / 2, width, height: height / 2 };
 }
 
+const OTHER: Record<SplitDirName, SplitDirName> = { left: "right", right: "left", up: "down", down: "up" };
+
+export interface PressOptions {
+  /** where the drag would drop instead of a pane under the pointer (a header merge: `mergeTargetAt`) */
+  aim?: (x: number, y: number) => DropTarget | null;
+  /** the element that had the keyboard keeps it once the press is a drag (a press on the header, which takes no
+   *  focus, would leave the terminal without it); a plain click is left as it is */
+  keepFocus?: boolean;
+}
+
 /** A press on a TERMINALS row or a pane's grip, followed: past SLOP it is a drag of session `drag`, and letting go on a
  *  pane that can take it calls `onDrop`. The click a drag ends with is swallowed (it opens or toggles nothing); a
  *  press that never moved stays an ordinary click. */
-export function pressToSplit(e: ReactPointerEvent<HTMLElement>, drag: string, onDrop: (t: DropTarget) => void, onRow?: (t: RowTarget) => void): void {
+export function pressToSplit(e: ReactPointerEvent<HTMLElement>, drag: string, onDrop: (t: DropTarget) => void, onRow?: (t: RowTarget) => void, o: PressOptions = {}): void {
   const canSplit = paneOf(drag) !== null;
   if (e.button !== 0 || (!canSplit && !onRow)) return;
   const sx = e.clientX;
   const sy = e.clientY;
+  const had = o.keepFocus ? (document.activeElement as HTMLElement | null) : null;
   let moving = false;
   let target: DropTarget | null = null;
   let row: RowTarget | null = null;
   let shade: HTMLDivElement | null = null;
+  let fill: HTMLDivElement | null = null;
   let line: HTMLDivElement | null = null;
   const aim = (x: number, y: number) => {
-    target = canSplit ? dropTargetAt(x, y, drag) : null;
+    target = canSplit ? (o.aim ?? ((px, py) => dropTargetAt(px, py, drag)))(x, y) : null;
     row = !target && onRow ? rowTargetAt(x, y, drag) : null;
   };
   const showLine = () => {
@@ -118,8 +163,30 @@ export function pressToSplit(e: ReactPointerEvent<HTMLElement>, drag: string, on
     line.setAttribute("data-session", row.at);
     line.setAttribute("data-after", String(row.after));
   };
+  // a header merge: the other half, named for the session that fills it
+  const showFill = () => {
+    if (!target?.fill) {
+      fill?.remove();
+      fill = null;
+      return;
+    }
+    if (!fill) {
+      fill = document.createElement("div");
+      fill.className = "split-drop-fill";
+      fill.setAttribute("data-testid", "split-drop-fill");
+      fill.setAttribute("aria-hidden", "true");
+      fill.appendChild(document.createElement("span"));
+      document.body.appendChild(fill);
+    }
+    const r = shadeRect({ ...target, side: OTHER[target.side] });
+    Object.assign(fill.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+    fill.setAttribute("data-session", target.at);
+    fill.setAttribute("data-side", OTHER[target.side]);
+    fill.firstElementChild!.textContent = target.fill;
+  };
   const show = () => {
     showLine();
+    showFill();
     if (!target) {
       shade?.remove();
       shade = null;
@@ -143,6 +210,7 @@ export function pressToSplit(e: ReactPointerEvent<HTMLElement>, drag: string, on
       moving = true;
       document.body.classList.add("split-dragging");
       getSelection()?.removeAllRanges();
+      if (had && had !== document.activeElement && had.isConnected) had.focus({ preventScroll: true });
     }
     aim(ev.clientX, ev.clientY);
     show();

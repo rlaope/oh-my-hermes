@@ -6,7 +6,9 @@
 // read-only too. A chat agent's composer takes files as the bot chat's does (paste, the + menu, a drop on the chat),
 // in a draft too; a file dropped or pasted on a terminal is saved and its path typed at the prompt. A TERMINALS session
 // can split with up to three others on any side (SplitView: ⌘D / ⌘⇧D in its terminal, or a TERMINALS row dragged onto it).
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+// Its header drags (splitDrag.ts): onto its own terminal it merges with the next row of its folder, in a split it moves
+// the focused pane as its grip does; the header's x closes the focused pane, or the session on its own as ⌘W does.
+import { useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { getStore, selectAsks, useStore, type OutFile } from "../state/store";
 import { useResolvedTheme } from "../app/theme";
 import { Timeline } from "../chat/parts/Timeline";
@@ -15,7 +17,7 @@ import { Composer } from "../chat/parts/Composer";
 import { CheckIcon } from "../chat/model/CheckIcon";
 import { Seg } from "../chat/model/Seg";
 import "../chat/model/model.css";
-import { ArrowUp, ChatIcon, ChevronDown, ModelIcon, Popover, SearchIcon, TerminalIcon } from "../ui";
+import { ArrowUp, ChatIcon, ChevronDown, CloseIcon, ModelIcon, Popover, SearchIcon, TerminalIcon } from "../ui";
 import { composing } from "../lib/ime";
 import { levelLabel, levelOptions, modeHint, modeLabel, modesOf, queueOff, usageText } from "./controls";
 import type { SessionQueue } from "../chat/parts/Timeline";
@@ -40,8 +42,9 @@ import { useAccounts } from "../settings/accounts/useAccounts";
 import { t } from "../i18n";
 import { wireFileDrop, isWindows } from "../terminal/terms";
 import { isMac } from "../app/shortcuts";
-import { SplitView, useSplit, useSplitKeys } from "./SplitView";
+import { closeLone, leaveSplit, SplitView, splitWith, useSplit, useSplitKeys } from "./SplitView";
 import { groupOf } from "./splitState";
+import { mergePartner, mergeTargetAt, pressToSplit } from "./splitDrag";
 import { isCopyLinkKey, LINK_COPIED_EVENT } from "./termLink";
 import { TermShareCards } from "./TermShareCard";
 
@@ -930,9 +933,27 @@ export function SessionView() {
           : STATUS[rec.status]
             ? tr(STATUS[rec.status])
             : rec.status;
+  // A TERMINALS session's header (Otty's) drags: in a split it moves the focused pane as its grip does; on its own
+  // it merges with the next row of its folder (mergePartner), onto its own terminal. A grab cursor only when a drag
+  // can do something. Its x closes the focused pane (the session stays in TERMINALS), or the session on its own as
+  // ⌘W does (closeLone: a running one only when the close can be undone).
+  const termHead = mode === "terminal" && !showChat;
+  const inSplit = termHead && !!groupOf(sp.groups, rec.id);
+  const partner = termHead && !inSplit ? mergePartner(ss.list, ss.agents, sp.groups, rec.id) : null;
+  const drags = inSplit ? "move" : partner ? "merge" : undefined;
+  const grab = (e: PointerEvent<HTMLElement>) => {
+    if (!drags || (e.target as Element).closest("button, a, input, [role=menu]")) return;
+    const p = partner ? ss.list.find((r) => r.id === partner) : undefined;
+    const pname = p ? pickTitle(p, termFallbackName(p, ss.agents)).title : "";
+    pressToSplit(e, rec.id, (d) => splitWith(d.at, rec.id, d.side), undefined, {
+      keepFocus: true,
+      aim: partner ? (x, y) => mergeTargetAt(x, y, rec.id, partner, pname) : undefined,
+    });
+  };
+  const closeTip = inSplit ? tr("split.closePane", { name }) : tr("ss.close");
   return (
     <>
-      <header className="head" data-testid="header">
+      <header className={`head${drags ? " ss-head-drag" : ""}`} data-testid="header" data-drag={drags} onPointerDown={termHead ? grab : undefined}>
         <span className="ss-head-mark">
           {mode === "terminal" ? <TermRowMark agent={termMarkAgent(rec)} size={18} /> : <AgentMark agent={rec.agent} size={18} />}
         </span>
@@ -1000,6 +1021,20 @@ export function SessionView() {
             )}
             {showChat && <SessionModel rec={rec} options={ss.models[rec.id]} note={ss.notes[rec.id]} />}
             {showChat && <PanelToggle working={workingSubagents(c)} />}
+          </div>
+        )}
+        {termHead && (
+          <div className="head-right ss-head-right">
+            <button
+              type="button"
+              className="ss-toggle"
+              aria-label={closeTip}
+              title={closeTip}
+              onClick={() => (inSplit ? leaveSplit(rec.id) : void closeLone(rec.id))}
+              data-testid="session-head-close"
+            >
+              <CloseIcon />
+            </button>
           </div>
         )}
       </header>

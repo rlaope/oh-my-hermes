@@ -1434,6 +1434,7 @@ export const zh: Record<Key, string> = {
   "termpanel.rang": "响铃了",
   "termpanel.splitRight": "向右拆分（{keys}）",
   "split.closeSide": "关闭这一侧的 {name}",
+  "split.closePane": "关闭 {name} 的分屏(会话仍保留在终端列表中)",
   "split.grip": "移动 {name}：拖到某个分屏的一侧，或点击打开菜单",
   "split.zoomed": "已放大: {n} 个分屏之一",
   "split.inSplit": "在打开的分屏中：{name}",

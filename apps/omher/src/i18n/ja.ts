@@ -1434,6 +1434,7 @@ export const ja: Record<Key, string> = {
   "termpanel.rang": "ベルが鳴りました",
   "termpanel.splitRight": "右に分割（{keys}）",
   "split.closeSide": "この側の {name} を閉じる",
+  "split.closePane": "{name} のペインを閉じる(セッションはターミナルに残る)",
   "split.grip": "{name} を移動: ペインの端へドラッグ、クリックでメニュー",
   "split.zoomed": "拡大中: {n} 個のペインのうち 1 つ",
   "split.inSplit": "開いている分割に含まれる: {name}",

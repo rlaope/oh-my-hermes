@@ -4,7 +4,12 @@
 // last reported, OSC 7), as iTerm2 and Ghostty do; a full split does nothing. A TERMINALS row dragged from the sidebar
 // onto the open terminal puts that session in a pane on the side it is dropped (splitDrag.ts); a pane's grip (top
 // centre) drags the pane itself to another pane's side, and a click on it opens the pane's menu (zoom, even out,
-// close). The pane with the keyboard is the session open in the main column; the others are dimmed (Settings ›
+// close). The main column's header (SessionView) drags too, Otty's way: in a split it is the focused pane's grip; a
+// session on its own dragged by it onto its own terminal merges with the next TERMINALS row of its folder (the one
+// above when it is the last; splitDrag.ts mergePartner), the dragged session on the side the preview shows and the
+// other, named in the preview, in the other half; back onto the header, or Escape, changes nothing, and a folder with
+// no other row offers nothing. The header's x closes the focused pane as ⌘W does, or the session on its own as
+// closeLone does. The pane with the keyboard is the session open in the main column; the others are dimmed (Settings ›
 // Terminal › Dim unfocused panes) and the focused one shows by its cursor. Panes have no title bar (Ghostty / iTerm
 // splits): a 1px divider between them, the grip, and a zoom and an x in the top right corner, which show while the
 // pointer is over the pane. ⌘W closes the pane (the session stays in TERMINALS), ⌘⌥arrows move between panes, ⌘] / ⌘[
