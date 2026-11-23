@@ -120,7 +120,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # Its review round adds eight: words matched inside longer words, a common noun, an alert read, a reply,
         # a secrets vault, a bolt, and two questions about meeting notes.
         # Merged: 1584 (monitor recipes) + 17 cross-platform cases = 1601.
-        self.assertEqual(payload["summary"]["case_count"], 1601)
+        # Its anchor round adds one: viewing a Figma frame is a question.
+        self.assertEqual(payload["summary"]["case_count"], 1602)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -202,7 +203,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # 372 -> 374: the monitor-trigger lane's calendar question and linear regression are answered directly.
         # 374 -> 377: its review round's last-mail question, Gmail outage and `in linear regression`.
         # 377 -> 379: the cross-platform calendar question and Sentry concept question are answered directly.
-        self.assertEqual(payload["summary"]["direct_answer_count"], 379)
+        # 379 -> 380: viewing a Figma frame in presentation mode is answered directly.
+        self.assertEqual(payload["summary"]["direct_answer_count"], 380)
         # show-reel's README-link control is answered as a file lookup (+1).
         # "Use OMH to fix the failing test in billing.py" names a file: a file lookup (+1).
         # Copying the skills OMH selected and summarizing the files it picked

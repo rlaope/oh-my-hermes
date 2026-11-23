@@ -207,6 +207,10 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
     RoutingPrecisionCase("vault-knowledge-open-my-vault-is-not-recall", "Opening a vault is not vault as knowledge", "open my vault", "answer_clarification", ""),
     RoutingPrecisionCase("design-to-code-figma-export-is-not-a-build", "Exporting a Figma frame as PNG is not design to code", "export this Figma frame as PNG", "answer_clarification", "", "frontend"),
     RoutingPrecisionCase("design-to-code-korean-figma-export", "A Korean Figma export is not design to code", "피그마 프레임 PNG로 내보내줘", "answer_clarification", "", "frontend"),
+    # `view` is a read verb, the very sense frontend's Figma row withdraws, so it is
+    # not an anchor; nor are `interface` and `screens`, which kept frontend on
+    # "take screenshots of these screens from the Figma frame".
+    RoutingPrecisionCase("design-to-code-viewing-a-figma-frame-is-a-question", "Viewing a Figma frame in presentation mode is a question, not design to code", "how do I view the Figma frame in presentation mode", "answer_directly", "direct_answer", "frontend"),
     # Review round: the guards matched inside longer words ("create a pr" in
     # "create a private", 지라 in 지라도), an app name used as a common noun,
     # a one-off alert read, a reply, a secrets vault, and questions about meeting

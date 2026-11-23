@@ -2092,8 +2092,8 @@ EVERYDAY_SENSE_PHRASES: dict[str, tuple[tuple[str, ...], frozenset[str]]] = {
         frozenset(
             {
                 "app", "build", "code", "component", "components", "css", "design", "frontend", "handoff",
-                "html", "implement", "interface", "layout", "page", "react", "responsive", "screen", "screens",
-                "site", "svelte", "tailwind", "tokens", "view", "vue", "website",
+                "html", "implement", "layout", "page", "react", "responsive", "screen", "site", "svelte",
+                "tailwind", "tokens", "vue", "website",
             }
         ),
     ),

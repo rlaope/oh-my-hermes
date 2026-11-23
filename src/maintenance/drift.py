@@ -1034,7 +1034,8 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # Its review round: Linear as a common noun, 지라 inside 지라도, a Sentry alert read, a reply about work in
             # Korean, a secrets vault, a bolt (볼트), and two questions about meeting notes stay off them (+8).
             # Merged with monitor recipes: 1584 (#3153) + 17 cross-platform cases = 1601, re-derived from the producer.
-            expected=1601,
+            # Its anchor round: viewing a Figma frame in presentation mode is a question, not design to code (+1).
+            expected=1602,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
