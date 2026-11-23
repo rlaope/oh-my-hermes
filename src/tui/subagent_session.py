@@ -61,6 +61,7 @@ VIEW_TEXT_DROPPED = "{name} is no longer listed; what was sent to it did not go:
 REFUSED_FOR_STEER = "Slash commands, ! lines and images cannot be a steer for {name}. Your text is kept."
 READ_GAVE_UP = "Could not read the rest of {name}'s transcript."
 VIEW_TEXT_KEPT = "{name}'s session was left before this could go; it is kept in {name}'s composer."
+TELL_CHILD_LEFT = "That subagent's session is no longer on screen; what you would tell it is back in the composer."
 
 POLL_SECONDS = 1.0  # the most often a running child's transcript is read while it is on screen
 POLL_ANSWER_SECONDS = 10.0  # a poll with no answer this long is forgotten and no longer holds the next one back

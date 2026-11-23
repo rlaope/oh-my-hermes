@@ -11,13 +11,13 @@ import unittest
 from unittest import mock
 
 from test_tui_agent_session_view import (
-    BRIEF, FIRST, REPLY, SECOND, entered, lazy_answer, rows_answer, texts, viewing,
+    BRIEF, FIRST, REPLY, SECOND, WATCH, entered, lazy_answer, rows_answer, texts, viewing,
 )
 from test_tui_agent_view import agent_event
-from test_tui_modes import SID, answer, call_id, type_text
+from test_tui_modes import SID, answer, call_id, drawn, type_text
 from omh.tui import app as app_module
 from omh.tui import subagent_session as view_state
-from omh.tui.gateway import Event, Response
+from omh.tui.gateway import Event, Response, ServerRequest
 from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, Key, Paste
 
 
@@ -258,6 +258,95 @@ class PostEndBudgetTests(unittest.TestCase):
         section = doc[doc.index("## Agent views"):]
         section = " ".join(section[:section.index("\n## ", 3)].split())
         self.assertIn("at most 50 reads after it ends", section)
+
+
+class QuestionDuringOpenTests(unittest.TestCase):
+    """F1 (review2 N3): a main question that opens while an open is pending cancels that open."""
+
+    def test_a_main_clarify_during_a_pending_open_keeps_main_on_screen(self) -> None:
+        app, client, _ = entered(rows=24, cols=100)
+        opening = call_id(client, "session.resume")
+        request = ServerRequest("main-clarify", "clarify",
+                                {"session_id": SID, "questions": [{"qid": "q", "question": "MAIN QUESTION MARKER"}]})
+        app._on_server_request(request)
+        app._on_response(Response(opening, lazy_answer([BRIEF]), None))
+        self.assertIsNone(app.viewing)
+        self.assertEqual(client.named("session.close"), [{"session_id": WATCH}])
+        self.assertIn("MAIN QUESTION MARKER", "\n".join(drawn(app)))
+
+
+class LogFallbackTests(unittest.TestCase):
+    """F2 (review2 N4): opening the log pager for any agent supersedes every pending open."""
+
+    def test_a_fallback_log_pick_drops_an_older_pending_open(self) -> None:
+        app, client, _ = entered()
+        opening = call_id(client, "session.resume")
+        app.roster.agents[SECOND].child_session_id = ""
+        press(app, DOWN, ENTER)
+        self.assertEqual(app.log_agent, SECOND)
+        app._on_response(Response(opening, lazy_answer([BRIEF]), None))
+        self.assertIsNone(app.viewing)
+        press(app, ESCAPE)
+        self.assertIsNone(app.viewing)
+        self.assertNotIn("From main", "\n".join(drawn(app)))
+
+
+class ChildTellTests(unittest.TestCase):
+    """F3 (review2 N6): a child approval's tell follow-up goes to the session that asked."""
+
+    def test_a_continued_childs_tell_goes_to_its_watch_sid_not_main(self) -> None:
+        app, client, now = viewing(result=lazy_answer([BRIEF], running=False))
+        submit(app, "continue child")
+        answer(app, client, {"status": "streaming"})
+        app._on_event(Event("message.start", WATCH, {}))
+        app._on_server_request(ServerRequest("child-approval", "approval",
+                                             {"session_id": WATCH, "command": "printf ok",
+                                              "choices": ["once", "session", "deny"]}))
+        now[0] += 1
+        press(app, DOWN, DOWN, DOWN, ENTER)
+        self.assertIsNotNone(app.tell_draft)
+        submit(app, "alternate instructions for child")
+        self.assertEqual(sends(client)[-1], ("session.redirect", {"session_id": WATCH,
+                                                                  "text": "alternate instructions for child"}))
+        self.assertFalse(any(body.get("session_id") == SID and "alternate" in body.get("text", "")
+                             for _method, body in sends(client)))
+
+
+    def test_the_boundary_doc_names_the_childs_tell_send(self) -> None:
+        from pathlib import Path
+
+        doc = (Path(__file__).resolve().parents[1] / "docs" / "OMH-TUI-BOUNDARY.md").read_text(encoding="utf-8")
+        section = doc[doc.index("## Agent views"):]
+        section = " ".join(section[:section.index("\n## ", 3)].split())
+        self.assertIn("`session.redirect` on the watch session", section)
+
+
+class StaleWatchTests(unittest.TestCase):
+    """F4 (review2 N8): a stale open's watch sid that the newest open may own is not closed before that answer."""
+
+    def test_a_stale_answer_first_with_the_shared_watch_sid_closes_nothing_the_newest_view_owns(self) -> None:
+        app, client, _ = entered()
+        old = call_id(client, "session.resume")
+        press(app, ESCAPE, ESCAPE)
+        app._open_agent(FIRST)
+        new = call_id(client, "session.resume")
+        app._on_response(Response(old, lazy_answer([BRIEF], running=False), None))
+        self.assertEqual(client.named("session.close"), [], "decided at the newest answer, not before")
+        app._on_response(Response(new, lazy_answer([BRIEF], running=False), None))
+        assert app.viewing is not None
+        self.assertEqual(app.viewing.watch_sid, WATCH)
+        self.assertEqual(client.named("session.close"), [], "the shown view owns it")
+
+    def test_a_stale_watch_the_newest_open_does_not_own_is_closed_at_its_answer(self) -> None:
+        app, client, _ = entered()
+        old = call_id(client, "session.resume")
+        press(app, ESCAPE, ESCAPE)
+        app._open_agent(FIRST)
+        new = call_id(client, "session.resume")
+        stale = {**lazy_answer([BRIEF], running=False), "session_id": "old-watch"}
+        app._on_response(Response(old, stale, None))
+        app._on_response(Response(new, lazy_answer([BRIEF], running=False), None))
+        self.assertEqual(client.named("session.close"), [{"session_id": "old-watch"}])
 
 
 class RegressionPinTests(unittest.TestCase):

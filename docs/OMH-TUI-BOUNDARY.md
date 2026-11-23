@@ -315,7 +315,9 @@ out. What it sends, only when the person presses Enter in the view:
 continue a child, and the view says so and sends nothing); and during that
 continued turn, `session.steer` on the watch session. An approval's deny
 interrupts the session that asked (`session.interrupt` on the watch session
-for a continued child, main's turn for main). Leaving the view (Esc, `main`, a
+for a continued child, main's turn for main), and what the person tells
+Hermes instead goes to that session too (`session.redirect` on the watch
+session while the continued turn runs, else `prompt.submit` there). Leaving the view (Esc, `main`, a
 session switch, `/new`, a restart) sends `session.close` for the watch
 session, never one a view on screen still owns. A refused read falls back on
 the agent's log above. Main's transcript keeps folding every main event while

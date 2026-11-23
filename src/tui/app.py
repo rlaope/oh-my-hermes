@@ -2392,6 +2392,9 @@ class App(ModesMixin, AgentViewMixin):
         # A subagent view's draft left unsent, by agent: it comes back when that agent's view opens again; an agent
         # the roster drops takes its draft with it (`_prune_child_drafts`).
         self.child_drafts: dict[str, Composer] = {}
+        # Watch sids stale open answers carried while a newer open of the same agent is out: closed once that open
+        # is decided, unless the view it shows owns one (`_close_stale_watches`).
+        self.view_stale_watches: set[str] = set()
         over_ssh = any(environ.get(name) for name in SSH_VARIABLES)
         remote = over_ssh or any(environ.get(name) for name in WSL_VARIABLES)
         self.remote = remote  # input crosses a link that can split a mouse report (`_report_may_follow`)
@@ -2456,6 +2459,7 @@ class App(ModesMixin, AgentViewMixin):
         # The person's draft, set aside while the composer takes what to tell Hermes after an approval's tell row.
         self.tell_draft: Composer | None = None
         self.tell_turn_runs = False  # the turn whose approval the open tell field denied has not ended (`_tell`)
+        self.tell_owner = ""  # the session whose approval opened the tell field: a continued child's watch sid, or main's
         self.waiting_requests: deque[ServerRequest] = deque()
         self.queued: deque[QueuedLine] = deque()
         # Prompts sent while a session switch waits (`_switching`): sent in the session it opens, or given back.
@@ -4815,8 +4819,8 @@ class App(ModesMixin, AgentViewMixin):
         if self.slot is not None:
             self.waiting_requests.append(request)
             return
-        if self.viewing is not None and self._request_owner(request.params) == self.sid:
-            self._leave_view()  # main's question is answered on main's screen, the drafts as they were (D4)
+        if (self.viewing is not None or self.view_opening is not None) and self._request_owner(request.params) == self.sid:
+            self._leave_view()  # main's question is answered on main's screen, the drafts as they were, an open dropped
         if self.pager is not None:
             self._leave_pager()
         if self.chains_open:
@@ -4852,7 +4856,7 @@ class App(ModesMixin, AgentViewMixin):
         self._note_approval(answer)
         self._note_question(answer)
         if answer.tell:
-            self._open_tell()  # before the slot closes: a question waiting behind it then sets this composer aside
+            self._open_tell(owner)  # before the slot closes: a question waiting behind it then sets this composer aside
         self._close_slot()
 
     def _note_question(self, answer: Answer) -> None:
@@ -4893,7 +4897,7 @@ class App(ModesMixin, AgentViewMixin):
             self.waiting_since = None
             self.transcript.set_waiting(False)
 
-    def _open_tell(self) -> None:
+    def _open_tell(self, owner: str = "") -> None:
         """After an approval's tell row sent the deny: the draft is set aside and the composer, labelled on the mode
         row, takes what the person tells Hermes instead (`_tell`). It shares the draft's history.
 
@@ -4903,7 +4907,8 @@ class App(ModesMixin, AgentViewMixin):
         """
         if self.tell_draft is not None:
             return
-        self.tell_turn_runs = self._busy()
+        self.tell_owner = owner if owner != self.sid else ""  # a continued child's: its own turn, not main's
+        self.tell_turn_runs = self._busy() if not self.tell_owner else False
         draft = self.composer
         draft._drop_pending()
         self.tell_draft = draft
@@ -4928,6 +4933,10 @@ class App(ModesMixin, AgentViewMixin):
         if not text.strip():
             return
         self._leave_tell()
+        owner, self.tell_owner = self.tell_owner, ""
+        if owner:  # a continued child asked: what to do instead goes to that child's session, never main's turn
+            self._tell_child(owner, text, shown, images)
+            return
         if self.tell_turn_runs:
             self._steer_or_submit(text, shown, chips, images)
         else:

@@ -63,7 +63,7 @@ from .style import Line, Span, Style
 from . import subagent_session as view_state
 from .subagent_session import (
     CONTINUE_REFUSED, DEST_MAIN, DEST_STEER, DEST_VIEW, FROM_MAIN, READ_GAVE_UP, REFUSED_FOR_STEER, REFUSED_WHILE_VIEWING,
-    VIEW_TEXT_KEPT, VIEW_REFUSED_ARMED, VIEW_TEXT_DROPPED, SEND_CONTINUE, SEND_STEER, SEND_UNSUPPORTED, STILL_RUNNING,
+    TELL_CHILD_LEFT, VIEW_TEXT_KEPT, VIEW_REFUSED_ARMED, VIEW_TEXT_DROPPED, SEND_CONTINUE, SEND_STEER, SEND_UNSUPPORTED, STILL_RUNNING,
     UNSUPPORTED_LINE, WIRE_POLL, WIRE_WATCH, SubagentView, mark_rows,
 )
 from .subagents import (
@@ -747,7 +747,17 @@ class AgentViewMixin:
         if self._open_wanted(sid, seq):
             self.view_opening = None
             self._open_agent_log(subagent_id)
+        self._close_stale_watches(subagent_id)
         return True
+
+    def _close_stale_watches(self, subagent_id: str) -> None:
+        """Close the watch sids stale open answers left undecided, once no newer open of `subagent_id` is out; never
+        one the shown view owns (`_close_watch`)."""
+        if self.view_opening == subagent_id:
+            return
+        watches, self.view_stale_watches = self.view_stale_watches, set()
+        for watch in sorted(watches):
+            self._close_watch(watch)
 
     def _view_opened(self, sid: str, seq: int, subagent_id: str, wire: str, result: Mapping[str, Any]) -> None:
         """An open's answer: the view, filled from the history or rows it read, on the main screen. One that reads no
@@ -756,12 +766,17 @@ class AgentViewMixin:
         it."""
         watch = as_text(result.get("session_id")) if wire == WIRE_WATCH else ""
         if not self._open_wanted(sid, seq):
-            self._close_watch(watch)
+            if watch and sid == self.sid and self.view_opening == subagent_id:
+                self.view_stale_watches.add(watch)  # the newer open may get this very sid: decide at its answer
+            else:
+                self._close_watch(watch)
+                self._close_stale_watches(subagent_id)
             return
         self.view_opening = None
         agent = self.roster.agents.get(subagent_id)
         if view_state.read_refused(wire, result) or agent is None:
             self._close_watch(watch)
+            self._close_stale_watches(subagent_id)
             self._open_agent_log(subagent_id)
             return
         if self.viewing is not None:
@@ -784,6 +799,7 @@ class AgentViewMixin:
         self.viewing = view
         self.transcript.offscreen = True  # main keeps folding, bounded by BLOCK_CAP, until it is shown again
         self.list_selected = self.tree_selected = None  # the composer has the keys: what is typed goes to the agent
+        self._close_stale_watches(subagent_id)
         self._full_redraw()
 
     def _fill_view(self, view: SubagentView, rows: object, goal: str) -> None:
@@ -1097,6 +1113,31 @@ class AgentViewMixin:
                 self.transcript.add_notice(VIEW_TEXT_KEPT.format(name=name), NOTICE_WARN)
             self._give_back_to_owner(owner, text, (), name)
 
+    def _tell_child(self, watch: str, text: str, shown: str, images: Sequence[Any]) -> None:
+        """What to tell a continued child instead of the approval it was denied: to that child's own session, the
+        watch sid that asked, as main's tell goes into main's turn (`session.redirect` while its turn runs, a turn
+        continued with `prompt.submit` once it ended); main's busy state plays no part. Refused or not taken, it
+        goes back to that view's composer."""
+        view = self.viewing if self.viewing is not None and self.viewing.watch_sid == watch else None
+        if view is None:
+            self.transcript.add_notice(TELL_CHILD_LEFT, NOTICE_WARN)
+            self._give_back(text, images)
+            return
+        if self._child_refuses((DEST_VIEW, view.subagent_id), view.subagent_id, text, shown, images):
+            return
+        if not view.turn_running:
+            self._send_to_view(text, shown, ())  # its turn ended: a continue on the watch sid
+            return
+        block = view.transcript.add_steer(text, agent=view.name)
+        self._request(
+            "session.redirect", {"session_id": watch, "text": text},
+            lambda result: self._view_steered(view, block, {"status": contract.STEER_QUEUED} if as_text(
+                result.get("status")) in (contract.STEER_REDIRECTED, contract.STEER_QUEUED) else result),
+            lambda error: self._view_steered(view, block, {}, as_text(error.get("message")).strip().rstrip(".")),
+            lambda seconds: self._view_steered(view, block, {}, f"no answer in {seconds:g} s"),
+            steer=block, watch=True,
+        )
+
     def _view_steered(self, view: SubagentView, block: SteerBlock, result: Mapping[str, Any], reason: str = "") -> bool:
         """Hermes' answer to a steer sent from the view: taken, or refused and its text back in the composer."""
         if as_text(result.get("status")) == contract.STEER_QUEUED:
@@ -1127,6 +1168,7 @@ class AgentViewMixin:
         """One agent's log on the alternate screen, opened at its newest rows; nothing for an agent no longer held."""
         if subagent_id not in self.roster.agents:
             return
+        self._cancel_view_open()  # the latest pick is this log: no open still out may show a view behind it
         self._open_pager("", [])
         self.log_agent = subagent_id
         self._refresh_agent_log(to_end=True)
