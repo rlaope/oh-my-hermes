@@ -237,6 +237,7 @@ class Platform:
     error: str = ""
     needs_attention: bool = False
     current: bool = False  # stamped by the gateway process that runs now
+    code: str = ""  # Hermes' `error_code` for the state, e.g. `discord_intents_required`
 
 
 @dataclass(frozen=True)
@@ -552,7 +553,7 @@ def read_gateway(home: Path, now: float | None = None) -> Gateway:
         stamped = entry.get("writer_pid") == pid and entry.get("writer_start_time") == record.get("start_time")
         platforms.append(Platform(
             _text(name), _text(entry.get("state")) or "unknown", _text(entry.get("error_message")),
-            entry.get("needs_attention") is True, live and stamped,
+            entry.get("needs_attention") is True, live and stamped, _text(entry.get("error_code")),
         ))
     agents = record.get("active_agents")
     served = record.get("served_profiles")

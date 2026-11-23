@@ -4,10 +4,13 @@ The log fixture (`fixtures/gateway_health/host_gateway.log`) is a multiplexed
 host's `logs/gateway.log` in the exact line shapes Hermes 0.23.3 writes
 (`gateway/run_adapters.py`, `run_adapters_recovery.py`, `run_startup.py`, the
 Discord adapter's connect failure), with invented profile and bot names: a
-transient fatal error and its reconnect, a Discord bot refused for privileged
-intents twice (each with a traceback after the adapter's reason), a second
-profile's Slack connecting and then failing with no reason logged, the bot's
-recovery, a primary profile's line and a truncated last line.
+transient fatal error and its reconnect; the measured incident's sequence, where
+a served profile's reconnect (`Secondary discord reconnect retry … (profile: …)`)
+ends in the adapter's privileged-intents reason with a traceback and NO `✗`
+line; the manual restart that failed the same way, this time with Hermes' `✗`
+line; a second profile's Slack connecting, failing with no reason logged and
+being stopped; the bot's recovery; the in-process `local` adapter; a primary
+profile's line and a truncated last line.
 
 Everything is read from files; nothing runs a process (the listing and the
 gateway records are injected).
@@ -41,6 +44,7 @@ from omh.maintenance.gateway_health import (
     RESTART_NOTE,
     gateway_health,
 )
+from omh.maintenance.gateway_health import STATE_STALE, STATE_UNSERVED
 from omh.maintenance.hermes_gateway_formats import (
     LOG_LINE_CHARS,
     REASON_CHARS,
@@ -51,7 +55,9 @@ from omh.maintenance.hermes_gateway_formats import (
     REASON_UNRECOGNIZED,
     STATE_CONNECTED,
     STATE_DEGRADED,
+    STATE_DISCONNECTED,
     STATE_FAILED,
+    STATE_RETRYING,
     STATE_FATAL,
     STATUS_MISSING,
     STATUS_READ,
@@ -67,7 +73,7 @@ from omh.maintenance.hermes_gateway_formats import (
 )
 from omh.system import process_listing
 from omh.system.process_listing import gateway_runs, procargs2_argv
-from omh.tui.bot_board import Gateway
+from omh.tui.bot_board import Gateway, Platform
 
 FIXTURE = Path(__file__).parent / "fixtures" / "gateway_health" / "host_gateway.log"
 COMMIT = "c0ffee5389ae585ef77387a962aee05b1bcf1702"
@@ -112,6 +118,11 @@ class AdapterLineShapes(unittest.TestCase):
             "2026-11-23 17:30:12,500 INFO gateway.run: ✓ telegram connected (degraded)": ("", "telegram", STATE_DEGRADED, "", ""),
             "2026-11-23 17:30:12,500 INFO gateway.run: ⚠ telegram reconnected in degraded mode (receive path not yet "
             "confirmed)": ("", "telegram", STATE_DEGRADED, "", ""),
+            "2026-11-23 15:58:43,980 INFO gateway.run: Secondary discord reconnect retry in 30s (profile: harbor)":
+                ("harbor", "discord", STATE_RETRYING, "", ""),
+            "2026-11-11 11:45:21,000 INFO gateway.run: ✓ slack disconnected (0.42s) (profile: quay)":
+                ("quay", "slack", STATE_DISCONNECTED, "", ""),
+            "2026-11-11 11:45:21,000 INFO gateway.run: ✓ slack disconnected (1.07s)": ("", "slack", STATE_DISCONNECTED, "", ""),
         }
         for line, (profile, platform, state, reason, code) in cases.items():
             with self.subTest(line=line):
@@ -131,6 +142,7 @@ class AdapterLineShapes(unittest.TestCase):
             "2026-11-23 17:05:01,462 WARNING gateway.run: ✗ discord failed to connect (profile: harbor) and more",
             "2026-11-23 17:31:0",
             "✓ discord connected (profile: harbor)",
+            "2026-11-23 17:04:59,105 INFO gateway.run: ✓ local disconnected (0.00s) (profile: harbor)",  # no bot
             "",
         ):
             with self.subTest(line=line):
@@ -154,13 +166,28 @@ class AdapterHistory(unittest.TestCase):
         self.assertIn("requesting privileged intents", harbor.reason)  # attributed across the traceback lines
         self.assertEqual(classify_reason(harbor), REASON_PRIVILEGED_INTENTS)
 
+    def test_the_incidents_served_profile_reconnect_fails_with_no_x_line(self) -> None:
+        # Hermes' secondary reconnect writes only the adapter's reason; it supersedes the transient fatal before it.
+        lines = fixture_lines()
+        cut = next(index for index, line in enumerate(lines) if line.startswith("2026-11-23 16:30"))
+        harbor = latest(adapter_events(lines[:cut]))[("harbor", "discord")]
+        self.assertEqual((harbor.state, harbor.logged), (STATE_FAILED, "2026-11-23 16:08:17"))
+        self.assertEqual(classify_reason(harbor), REASON_PRIVILEGED_INTENTS)
+        retry = adapter_events(lines[:7])[-1]
+        self.assertEqual((retry.profile, retry.state), ("harbor", STATE_RETRYING))
+
+    def test_connected_then_stopped_reads_disconnected(self) -> None:
+        self.assertEqual(latest(adapter_events(fixture_lines()))[("quay", "slack")].state, STATE_DISCONNECTED)
+
     def test_interleaved_profiles_keep_their_own_states_and_reasons(self) -> None:
-        states = latest(adapter_events(fixture_lines()))
+        lines = fixture_lines()
+        cut = next(index for index, line in enumerate(lines) if line.startswith("2026-11-23 17:25"))
+        states = latest(adapter_events(lines[:cut]))
         quay = states[("quay", "slack")]
         self.assertEqual(quay.state, STATE_FAILED)  # connected at 16:30, failed at 17:10
         self.assertEqual(quay.reason, "")  # a Discord reason never goes to a Slack failure
         self.assertEqual(classify_reason(quay), REASON_NONE)
-        self.assertEqual(states[("", "telegram")].state, STATE_CONNECTED)
+        self.assertEqual(latest(adapter_events(lines))[("", "telegram")].state, STATE_CONNECTED)
 
     def test_a_reason_goes_to_one_failure_only_and_only_close_after_it(self) -> None:
         reason = ("2026-11-23 10:00:00,000 ERROR hermes_plugins.platforms__discord.adapter: [Discord] Failed to connect "
@@ -169,8 +196,18 @@ class AdapterHistory(unittest.TestCase):
         second = "2026-11-23 10:00:02,000 WARNING gateway.run: ✗ discord failed to connect (profile: two)"
         late = "2026-11-23 10:10:00,000 WARNING gateway.run: ✗ discord failed to connect (profile: one)"
         events = adapter_events([reason, first, second])
-        self.assertEqual([event.reason for event in events], ["boom", ""])
-        self.assertEqual(adapter_events([reason, late])[0].reason, "")
+        # The reason is its own failure until `first` takes it; given to no profile, it is then withdrawn.
+        self.assertEqual([(event.profile, event.reason) for event in events], [("one", "boom"), ("two", "")])
+        self.assertEqual([event.reason for event in adapter_events([reason, late])], ["boom", ""])
+
+    def test_a_reason_given_to_the_wrong_profile_is_withdrawn_when_the_x_line_names_another(self) -> None:
+        retry = "2026-11-23 10:00:00,000 INFO gateway.run: Secondary discord reconnect retry in 30s (profile: one)"
+        reason = ("2026-11-23 10:00:05,000 ERROR hermes_plugins.platforms__discord.adapter: [Discord] Failed to connect "
+                  "to Discord: boom")
+        failed = "2026-11-23 10:00:05,100 WARNING gateway.run: ✗ discord failed to connect (profile: two)"
+        events = adapter_events([retry, reason, failed])
+        self.assertEqual([(event.profile, event.state, event.reason) for event in events],
+                         [("one", STATE_RETRYING, ""), ("two", STATE_FAILED, "boom")])
 
     def test_the_transient_fatal_code_is_known(self) -> None:
         event = adapter_events(fixture_lines())[0]
@@ -415,24 +452,82 @@ class Fleet(unittest.TestCase):
             record_error = ("Discord rejected the connection because privileged Gateway Intents are not enabled. "
                             "Hermes is requesting: - Message Content Intent - Server Members Intent (required for "
                             "username allowlists and/or DISCORD_ALLOWED_ROLES)")
-            from omh.tui.bot_board import Platform
-
-            records = {".hermes": Gateway("running", True, 4100, served=("default", "harbor"), code_sha=COMMIT,
-                                          platforms=(Platform("harbor:discord", "fatal", record_error),))}
+            records = {".hermes": Gateway("running", True, 4100, served=("default", "harbor", "quay"), code_sha=COMMIT,
+                                          platforms=(Platform("harbor:discord", "fatal", record_error, True, True,
+                                                              "discord_intents_required"),))}
             report = self.run_health(root, records)
             by_key = {(state.profile, state.platform): state for state in report.adapters}
             harbor = by_key[("harbor", "discord")]
-            self.assertEqual((harbor.state, harbor.reason_kind), (STATE_FAILED, REASON_PRIVILEGED_INTENTS))
+            self.assertEqual((harbor.state, harbor.reason_kind, harbor.source), ("fatal", REASON_PRIVILEGED_INTENTS, "record"))
+            self.assertIn("requesting privileged intents", harbor.reason)  # the log's own words, this run
             self.assertIn("Hermes requests Message Content and Server Members", harbor.fix)
             self.assertIn("Bot page, Privileged Gateway Intents", harbor.fix)
             self.assertIn("`hermes gateway restart`", harbor.fix)
             self.assertEqual(by_key[("quay", "slack")].state, STATE_CONNECTED)  # its own log's newer line wins
             self.assertIn(FINDING_ADAPTER_DOWN, report.findings)
-            self.assertIn("harbor discord: failed to connect at 2026-11-23 17:05:01", "\n".join(report.lines))
+            self.assertIn("harbor discord: `fatal` by the serving gateway's own record (latest line 2026-11-23 17:05:01); "
+                          "Hermes flags it as needing attention.", "\n".join(report.lines))
             # Without Hermes' own guidance in the record, the rule is stated rather than guessed.
-            unguided = self.run_health(root, {".hermes": Gateway("running", True, 4100, served=("default", "harbor"))})
+            unguided = self.run_health(root, {".hermes": Gateway("running", True, 4100, served=("default", "harbor", "quay"))})
+            self.assertIn("harbor discord: failed to connect at 2026-11-23 17:05:01", "\n".join(unguided.lines))
             fix = {(s.profile, s.platform): s for s in unguided.adapters}[("harbor", "discord")].fix
             self.assertIn("and Server Members too when the profile has a role allowlist", fix)
+
+    def test_the_record_decides_now_and_the_log_only_explains(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = self.home(tmp)
+            (root / "logs").mkdir()
+            log = root / "logs" / "gateway.log"
+            log.write_text("2026-11-23 18:00:00,000 WARNING gateway.run: ✗ slack failed to connect (profile: quay)\n"
+                           "2026-11-23 18:00:00,000 INFO gateway.run: ✓ discord connected (profile: harbor)\n",
+                           encoding="utf-8")
+            platforms = (Platform("quay:slack", "connected", "", False, True),
+                         Platform("harbor:discord", "fatal", "Discord bot token rejected: x", False, True, "discord_auth_error"),
+                         Platform("harbor:telegram", "connected", "", False, False))  # stamped by another process
+            report = self.run_health(root, {".hermes": Gateway("running", True, 4100, served=("default", "harbor", "quay"),
+                                                                 platforms=platforms)})
+            by_key = {(state.profile, state.platform): state for state in report.adapters}
+            self.assertEqual(by_key[("quay", "slack")].state, STATE_CONNECTED)  # record: connected, log: a failure
+            self.assertEqual(by_key[("quay", "slack")].reason_kind, "")
+            self.assertEqual((by_key[("harbor", "discord")].state, by_key[("harbor", "discord")].reason_kind),
+                             ("fatal", REASON_TOKEN_REJECTED))  # record: fatal, log: connected
+            self.assertNotIn(("harbor", "telegram"), by_key)  # not this process's entry, and no log line
+
+    def test_a_line_from_an_earlier_run_or_for_an_unserved_profile_never_reads_as_now(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = self.home(tmp)
+            (root / "logs").mkdir()
+            (root / "logs" / "gateway.log").write_text(
+                "2026-11-08 17:07:26,000 INFO gateway.run: ✓ slack connected (profile: harbor)\n"
+                "2026-11-08 17:07:27,000 INFO gateway.run: ✓ discord connected (profile: quay)\n", encoding="utf-8")
+            started = datetime(2026, 11, 21, 11, 4, 27).timestamp()
+            report = self.run_health(root, {".hermes": Gateway("running", True, 4100, served=("default", "harbor"),
+                                                                 started=started, code_sha=COMMIT)})
+            by_key = {(state.profile, state.platform): state for state in report.adapters}
+            stale = by_key[("harbor", "slack")]
+            self.assertEqual((stale.state, stale.last_state, stale.reason_kind), (STATE_STALE, STATE_CONNECTED, ""))
+            self.assertEqual(by_key[("quay", "discord")].state, STATE_UNSERVED)
+            text = "\n".join(report.lines)
+            self.assertIn("harbor slack: no adapter line since the gateway serving it started", text)
+            self.assertIn("quay discord: no running gateway serves quay", text)
+            self.assertNotIn("slack: connected", text)
+            self.assertEqual(report.findings, ())
+
+    def test_a_retry_hermes_flags_as_needing_attention_is_a_finding(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = self.home(tmp)
+            platforms = (Platform("harbor:discord", "retrying", "", True, True, "discord_websocket_health_stale"),)
+            report = self.run_health(root, {".hermes": Gateway("running", True, 4100, served=("default", "harbor"),
+                                                                 platforms=platforms)})
+            state = report.adapters[0]
+            self.assertTrue(state.needs_attention)
+            self.assertIn(FINDING_ADAPTER_DOWN, report.findings)
+            self.assertIn("long enough to flag it as needing attention", state.fix)
+            calm = self.run_health(root, {".hermes": Gateway("running", True, 4100, served=("default", "harbor"),
+                                                               platforms=(Platform("harbor:discord", "retrying", "", False,
+                                                                                   True, "discord_websocket_health_stale"),))})
+            self.assertEqual(calm.findings, ())
+            self.assertIn("harbor discord: reconnecting; Hermes retries it on its own", "\n".join(calm.lines))
 
     def test_a_standalone_profiles_adapter_fix_names_its_own_restart(self) -> None:
         with TemporaryDirectory() as tmp:

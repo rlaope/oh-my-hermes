@@ -4282,11 +4282,20 @@ answers three questions for the root Hermes home and every profile under it
 - **Fleet shape.** A gateway process no record under this Hermes root names
   (another Hermes home's, such as a scratch or test home, or one left
   running), and a profile two recorded gateways both serve, by PID.
-- **Messaging adapters.** Per profile and platform, the newest state the
-  tails of the gateway logs record (`<home>/logs/gateway.log`, where a
-  multiplexed profile's lines land in the host's log, read with its rotated
-  `.1` when short): a later "connected" line supersedes an earlier failure,
-  and the reverse. A Discord bot refused for privileged intents gets which
+- **Messaging adapters.** Per profile and platform, the state now: the
+  serving gateway's own entry in its `gateway_state.json` when that process
+  stamped it (its state, error code and Hermes' "needs attention" flag),
+  else the newest line of this gateway run in the gateway log tails
+  (`<home>/logs/gateway.log` of the host and of the profile, read with the
+  rotated `.1` when short), where a later "connected" supersedes an earlier
+  failure and a later failure or stop supersedes a "connected". The log also
+  supplies the reason: a served profile's reconnect writes only the
+  adapter's own failure line, with no `✗` line, and that line counts. A line
+  from before the serving gateway started, or for a profile no running
+  gateway serves, is shown as that and never as the state now. Hermes'
+  in-process `local` adapter is not a bot and is left out. A reconnect Hermes
+  is still retrying is not a finding until Hermes flags it as needing
+  attention. A Discord bot refused for privileged intents gets which
   intents Hermes requests (Message Content always; Server Members when the
   profile has a role allowlist or a username rather than a numeric id in its
   user allowlist, as Hermes' own record says when it holds the guidance) and

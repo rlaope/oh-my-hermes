@@ -59,6 +59,11 @@ STATE_CONNECTED = "connected"
 STATE_DEGRADED = "degraded"
 STATE_FAILED = "failed"
 STATE_FATAL = "fatal"
+STATE_RETRYING = "retrying"  # Hermes waits to reconnect a served profile's adapter (`Secondary … reconnect retry`)
+STATE_DISCONNECTED = "disconnected"  # the adapter was stopped (`✓ … disconnected (…s)`)
+# Adapters that carry no messaging platform: Hermes' in-process `local` adapter connects and disconnects with every
+# local session, and is no bot.
+NON_MESSAGING_PLATFORMS = frozenset({"local"})
 
 REASON_PRIVILEGED_INTENTS = "discord_privileged_intents"
 REASON_TOKEN_REJECTED = "discord_token_rejected"
@@ -131,7 +136,11 @@ _FATAL_PROFILE = re.compile(
     _RUN + "Fatal " + _PLATFORM + r" adapter error for multiplexed profile (?P<profile>[^()\s]+) \((?P<code>[^()]*)\)$"
 )
 _FATAL_PRIMARY = re.compile(_RUN + "Fatal " + _PLATFORM + r" adapter error \((?P<code>[^()]*)\): (?P<reason>.+)$")
-# The adapter's own reason, logged just before the gateway's `✗ … failed to connect` (`plugins/platforms/discord`).
+_DISCONNECTED = re.compile(_RUN + "✓ " + _PLATFORM + r" disconnected \([0-9.]+s\)(?: " + _PROFILE + ")?$")
+# `gateway/run_adapters_recovery.py`: a served profile's adapter waits to reconnect, with no `✗` line.
+_SECONDARY_RETRY = re.compile(_RUN + "Secondary " + _PLATFORM + r" reconnect retry in \d+s " + _PROFILE + "$")
+# The adapter's own reason (`plugins/platforms/discord`): before the gateway's `✗ … failed to connect` at startup,
+# and on its own after a served profile's `Secondary … reconnect retry`, which writes no `✗` line.
 _ADAPTER_REASON = re.compile(
     _STAMP + r"hermes_plugins\.platforms__" + _PLATFORM + r"\.adapter: \[[^\]]+\] Failed to connect to [^:]+: (?P<reason>.+)$"
 )
@@ -236,29 +245,41 @@ def read_gateway_log(log_path: Path, *, tail_bytes: int = GATEWAY_LOG_TAIL_BYTES
 
 
 def adapter_events(lines: list[str]) -> list[AdapterEvent]:
-    """Every adapter state line in `lines`, oldest first, each failure with the adapter's reason when one precedes it.
+    """Every adapter state line in `lines`, oldest first.
 
     The Discord adapter logs why it failed (`[Discord] Failed to connect to
-    Discord: …`) without naming the profile, and the gateway's
-    `✗ discord failed to connect (profile: …)` follows it: each such reason
-    goes to the first failure of the same platform within
-    `REASON_WINDOW_SECONDS` after it, and to no other.
+    Discord: …`) without naming the profile. That line is a failure in its own
+    right: a served profile's reconnect (`Secondary discord reconnect retry …
+    (profile: P)`) writes no `✗` line after it. It goes to the profile the
+    newest earlier line for the same platform named ("" for none: the log's
+    own profile). When the gateway's `✗ discord failed to connect (profile: Q)`
+    follows within `REASON_WINDOW_SECONDS`, that line takes the reason, and a
+    reason event given to another profile than Q is withdrawn.
     """
-    events: list[AdapterEvent] = []
-    pending: dict[str, tuple[str, float | None]] = {}  # platform -> (reason, epoch) not yet attributed
+    events: list[AdapterEvent | None] = []
+    context: dict[str, str] = {}  # platform -> the profile its newest line named
+    pending: dict[str, tuple[str, float | None, int]] = {}  # platform -> (reason, epoch, its event's index)
     for line in lines:
         if (match := _ADAPTER_REASON.match(line)) is not None:
-            pending[match["platform"]] = (bounded_reason(match["reason"]), _log_epoch(match["stamp"]))
+            platform = match["platform"]
+            reason, at = bounded_reason(match["reason"]), _log_epoch(match["stamp"])
+            pending[platform] = (reason, at, len(events))
+            events.append(AdapterEvent(context.get(platform, ""), platform, STATE_FAILED, match["stamp"], at, reason))
             continue
         event = parse_adapter_line(line)
         if event is None:
             continue
+        if event.profile:
+            context[event.platform] = event.profile
         if event.state == STATE_FAILED and not event.reason and event.platform in pending:
-            reason, at = pending.pop(event.platform)
+            reason, at, index = pending.pop(event.platform)
             if at is not None and event.epoch is not None and 0 <= event.epoch - at <= REASON_WINDOW_SECONDS:
                 event = AdapterEvent(event.profile, event.platform, event.state, event.logged, event.epoch, reason)
+                held = events[index]
+                if held is not None and held.profile != event.profile:
+                    events[index] = None
         events.append(event)
-    return events
+    return [event for event in events if event is not None]
 
 
 def parse_adapter_line(line: str) -> AdapterEvent | None:
@@ -272,10 +293,14 @@ def parse_adapter_line(line: str) -> AdapterEvent | None:
         (_ERROR_PRIMARY, STATE_FAILED),
         (_FATAL_PROFILE, STATE_FATAL),
         (_FATAL_PRIMARY, STATE_FATAL),
+        (_SECONDARY_RETRY, STATE_RETRYING),
+        (_DISCONNECTED, STATE_DISCONNECTED),
     ):
         match = pattern.match(line)
         if match is None:
             continue
+        if match["platform"] in NON_MESSAGING_PLATFORMS:
+            return None
         groups = match.groupdict()
         return AdapterEvent(
             groups.get("profile") or "", match["platform"], state, match["stamp"], _log_epoch(match["stamp"]),

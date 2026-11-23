@@ -38,8 +38,9 @@ All notable changes will be documented here.
   its start time, and flags one started before the installed build stamp unless its own record stamps the installed
   commit. It reports Hermes' own pending-fleet-restart record and its last update receipt's restart outcome, any
   `hermes gateway run` process no record names, and a profile two gateways serve, by PID. For each profile and
-  platform it gives the newest connect state in the gateway logs, so a later "connected" line supersedes an
-  earlier failure. A privileged-intents refusal names the intents and the Developer Portal page that enables them;
+  platform it gives the state now: the serving gateway's own record entry first, else the newest gateway log line
+  of this gateway run (a served profile's reconnect that ends in the adapter's own failure line counts); a line
+  from an earlier run is said as such, never as connected. A privileged-intents refusal names the intents and the Developer Portal page that enables them;
   a rejected token is named, and any other reason is shown, bounded, as unrecognized. Missing evidence is said as
   missing, never as healthy. The fix is always Hermes' own command; OMH stops and restarts nothing.
   (`src/maintenance/gateway_health.py`, `src/maintenance/hermes_gateway_formats.py`,
