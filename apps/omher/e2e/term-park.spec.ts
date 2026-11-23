@@ -197,13 +197,13 @@ test("a parked terminal's bell and OSC 9 ring its row", async ({ page }) => {
   await fast(page);
   await expect.poll(() => parkedCount(page)).toBe(1);
   await out(page, pa, "waiting for you\x07");
-  await expect(row).toHaveAttribute("data-term-status", "bell");
+  await expect(row).toHaveAttribute("data-term-status", "news");
   await show(page, a);
-  await expect(row).not.toHaveAttribute("data-term-status", "bell");
+  await expect(row).not.toHaveAttribute("data-term-status", "news");
   await show(page, b);
   await expect.poll(() => parkedCount(page)).toBe(1);
   await out(page, pa, "\x1b]9;Claude needs your permission\x07");
-  await expect(row).toHaveAttribute("data-term-status", "bell");
+  await expect(row).toHaveAttribute("data-term-status", "news");
 });
 
 // integrate (run omher-mt): the remade xterm writes its row's activity through termActivity like the first one did,

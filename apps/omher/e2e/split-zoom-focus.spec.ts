@@ -5,7 +5,7 @@
 // Off macOS: OMHER_E2E_PLATFORM=Win32.
 import { expect, test, type Page } from "@playwright/test";
 import { mock, openApp, platformIsMac } from "./term-find-helpers";
-import { dragRowOnto, type Side } from "./split-drag-helpers";
+import { dragRowOnto, openFromSidebar, type Side } from "./split-drag-helpers";
 
 type Sessions = { startTerminal(a: string, cwd: string): string; ptyOf(id: string): number | null };
 type Call = { op: string; id?: number; data?: string };
@@ -18,6 +18,8 @@ const out = (page: Page, id: number, d: string) => page.evaluate(([p, s]) => (wi
 const term = (page: Page, id: string) => page.locator(`[data-testid="terminal"][data-session="${id}"]`);
 const textarea = (page: Page, id: string) => term(page, id).locator(".xterm-helper-textarea");
 const split = (page: Page) => page.getByTestId("session-split");
+// a split's session in TERMINALS: its cell in the split's card
+const cell = (page: Page, id: string) => page.locator(`[data-testid="split-cell"][data-session="${id}"]`);
 const focusedTerm = (page: Page) => page.evaluate(() => document.activeElement?.closest('[data-testid="terminal"]')?.getAttribute("data-session") ?? null);
 /** the session ids of the panes drawn now */
 const shown = (page: Page) => page.locator('[data-testid="split-pane"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-session")));
@@ -91,7 +93,7 @@ test("zoomed: ⌘] / ⌘[ and ⌘⌥arrows move the zoom to the new pane, and ty
   // ⌘] (next, wrapping): a, zoomed
   await page.keyboard.press(k.next);
   await expectZoomedOn(page, a);
-  await expect(page.getByTestId(`session-${a}`)).toHaveClass(/active/);
+  await expect(cell(page, a)).toHaveAttribute("data-focused", "true");
   // typing goes to a's program, nothing to the hidden panes
   const [pa, pb, pc] = [await ptyOf(page, a), await ptyOf(page, b), await ptyOf(page, c)];
   await page.keyboard.type("echo za");
@@ -120,7 +122,7 @@ test("zoomed: ⌘] / ⌘[ and ⌘⌥arrows move the zoom to the new pane, and ty
   for (const p of [pa, pb, pc]) expect(await writesTo(page, p)).not.toMatch(/\x1b\[|\t/);
 });
 
-test("zoomed: a click on another pane's sidebar row, or on its notification, shows that pane zoomed with the keyboard", async ({ page }) => {
+test("zoomed: a click on another pane's sidebar cell, or on its notification, shows that pane zoomed with the keyboard", async ({ page }) => {
   await page.addInitScript(() => {
     const w = window as unknown as { __notes: { title: string; n: { onclick: null | (() => void) } }[]; Notification: unknown };
     w.__notes = [];
@@ -139,8 +141,8 @@ test("zoomed: a click on another pane's sidebar row, or on its notification, sho
   const [a, b, c] = ids;
   await page.keyboard.press(k.zoom);
   await expectZoomedOn(page, c);
-  // the sidebar row of a (a pane of this split)
-  await page.getByTestId(`session-${a}`).locator(".ss-open").click();
+  // the sidebar cell of a (a pane of this split, in its card)
+  await openFromSidebar(page, a);
   await expectZoomedOn(page, a);
   await page.keyboard.type("row-a");
   await expect.poll(async () => writesTo(page, await ptyOf(page, a))).toContain("row-a");
@@ -184,7 +186,7 @@ test("zoomed: splitting, closing the zoomed pane or moving it shows every pane a
   await expect.poll(async () => writesTo(page, await ptyOf(page, heir!))).toContain("heir");
   // move the zoomed pane: unzoomed, it keeps the keyboard
   await term(page, a).click();
-  await expect(page.getByTestId(`session-${a}`)).toHaveClass(/active/);
+  await expect(cell(page, a)).toHaveAttribute("data-focused", "true");
   await expect.poll(() => focusedTerm(page)).toBe(a);
   await page.keyboard.press(k.zoom);
   await expectZoomedOn(page, a);
@@ -192,7 +194,7 @@ test("zoomed: splitting, closing the zoomed pane or moving it shows every pane a
   await expect(split(page)).toHaveAttribute("data-zoom", "false");
   await expect(page.getByTestId("terminal")).toHaveCount(3);
   await expect.poll(() => focusedTerm(page)).toBe(a);
-  // the closed pane's session is still listed
+  // the closed pane's session is still listed (a row again: it left the split)
   await expect(page.getByTestId(`session-${d}`)).toHaveCount(1);
   void b;
 });

@@ -122,8 +122,10 @@ test("a bot's request shows a card and types nothing until Allow; Deny types not
   await expect(card.locator("button")).toHaveText(["Deny", "Allow once"]);
   // Deny has the focus: a stray Enter is not an Allow
   await expect(card.locator("button").first()).toBeFocused();
-  // the row and the Dock count show it waits on the person
+  // the row and the Dock count show it waits on the person: the warning triangle, a wait omher knows
   await expect(page.getByTestId(`session-${id}`)).toHaveAttribute("data-term-status", "bell");
+  await expect(page.getByTestId(`session-${id}`).getByTestId("term-status").locator("svg path")).toHaveCount(2);
+  await expect(page.getByTestId(`session-${id}`).getByTestId("term-status")).toHaveAttribute("title", "Needs your answer");
   await expect.poll(() => page.evaluate(() => (window as unknown as W).__omherBadge)).toBeGreaterThan(0);
   // several looks later, still nothing typed
   await page.waitForTimeout(3500);
