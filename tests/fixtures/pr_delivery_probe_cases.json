@@ -2563,6 +2563,39 @@
    "command": "ln -s ../repo/.git/hooks h",
    "class": "unclassified",
    "verdict": "refused"
+  },
+  {
+   "command": "cat .git/config",
+   "class": "local",
+   "verdict": "allowed",
+   "why_allowed": "local: a plain read of a protected path is not a write"
+  },
+  {
+   "command": "grep -n url .git/config",
+   "class": "local",
+   "verdict": "allowed",
+   "why_allowed": "local: a plain read of a protected path is not a write"
+  },
+  {
+   "command": "head -5 ~/.gitconfig",
+   "class": "local",
+   "verdict": "allowed",
+   "why_allowed": "local: a plain read of a protected path is not a write"
+  },
+  {
+   "command": "cat x > .git/hooks/pre-push",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "tee .git/hooks/pre-push",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "find .git -delete",
+   "class": "unclassified",
+   "verdict": "refused"
   }
  ]
 }

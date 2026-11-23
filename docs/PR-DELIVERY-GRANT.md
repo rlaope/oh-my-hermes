@@ -53,7 +53,8 @@ asks for a typed yes on a terminal a person can see: `/dev/tty` on POSIX,
 and on Windows the console, only when its window is visible. This stops a
 cooperating agent and an agent without a terminal. It does not stop a bot
 that spells the command past the tool hook, unsets every marker and spawns
-its own pseudo-terminal (the terminal tool's `pty=true`) or answers a hidden
+its own pseudo-terminal (the terminal tool's `pty=true` makes the pty the
+child's controlling terminal, and `process submit "y"` answers it) or answers a hidden
 console: that bot can type the yes itself. That is the same class as the
 other residuals below, which the gate does not claim to stop. `omh doctor`
 lists every profile in the OMH home whose grant is on.
@@ -212,8 +213,13 @@ the forge without passing the gate:
   gate does not name. A file-tool write is checked both as written and with
   every link resolved (`g -> .git` then `g/hooks/pre-push` is refused), and
   `ln`, `mklink`, `New-Item -ItemType Junction`, `cp`, `mv` and similar
-  naming `.git` or a git config are refused in an unattended run; a link
-  made some other way and written through by a shell command is not seen;
+  naming `.git` or a git config are refused in an unattended run. The
+  command side is lexical: a link made through a glob or a variable
+  (`ln -s .gi? g`, `L=.git; ln -s $L g`), or by any program not named here,
+  and then written through by a shell redirect (`echo x > g/hooks/pre-push`)
+  is not seen. Plain reads of a protected path (`cat`, `less`, `head`,
+  `tail`, `grep`, `ls`, `stat`, `git config --get` or `--list`) are allowed;
+  writes, links, copies onto it and redirects into it are refused;
 - the grant file and the opened-PR record written by arbitrary code under
   another spelling (the file tools and command lines that name the store are
   refused);
@@ -229,7 +235,12 @@ there, held by tests that run on every platform through fakes.
   Hermes spawns every terminal child with `CREATE_NO_WINDOW`, which gives it
   a hidden console: `CONIN$` would open there with nobody at it, so a hidden
   or missing console is a refusal ("turning the grant on needs a yes typed at
-  your own terminal"), never a wait and never a crash.
+  your own terminal"), never a wait and never a crash. A classic console
+  window (conhost: `cmd.exe` or Windows PowerShell started from the Start
+  menu) is expected to work. Under Windows Terminal (ConPTY),
+  `GetConsoleWindow` may return a pseudo-window that reports as invisible,
+  so `on` may refuse there; run it from a classic console window instead.
+  None of this has run on Windows.
 - The grant file's owner and mode are not checked: POSIX mode bits mean
   nothing there, so the grant reads as recorded. On POSIX the check only
   excludes other users and group or world writes. The threat the grant

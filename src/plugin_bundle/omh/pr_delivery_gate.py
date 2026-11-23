@@ -568,7 +568,9 @@ def _classify_segment(segment: list[str], context: _Context, depth: int) -> str:
         return LOCAL if _runs_only_a_script(name, words[1:]) and not forge_text else UNCLASSIFIED
     if name in _LINKERS and any(_names_forge_config(word) for word in words[1:]):
         return UNCLASSIFIED  # a link to `.git` or a git config lets a later plain write land there
-    if name not in _READERS and any(_names_forge_config(word) for word in words[1:]) and not _FORGE_CLI.match(name):
+    reader = name in _READERS and not (name == "find" and any(
+        word.lower().startswith(("-exec", "-ok", "-delete", "-fprint", "-fls")) for word in words[1:]))
+    if not reader and any(_names_forge_config(word) for word in words[1:]) and not _FORGE_CLI.match(name):
         return UNCLASSIFIED  # a shell write into `.git/` or a git or gh config file
     if name in _SHELLS:
         payload = _shell_payload(words)
@@ -580,6 +582,8 @@ def _classify_segment(segment: list[str], context: _Context, depth: int) -> str:
         return UNCLASSIFIED if any("$" in word for word in words[1:]) else _nested(words[1:], context, depth)
     if name in _HTTP_CLIENTS and _FORGE_API_HOST.search(text) and _WRITE_METHOD.search(text):
         return OTHER_PR_OR_REPO  # a forge API write that skips gh
+    if reader:
+        return LOCAL  # a read of a protected path is not a write; redirections were judged above
     if forge_text and _FORGE_VERB.search(text):
         return UNCLASSIFIED
     return LOCAL

@@ -138,8 +138,10 @@ def confirm_on_terminal(prompt: str) -> bool:
     why this is stated as a residual, not a proof.
 
     POSIX reads `/dev/tty`. Windows has none; its equivalent is the console
-    itself, `CONIN$` and `CONOUT$`, which a process without a console cannot
-    open. Either way a missing terminal is a no, never a crash.
+    itself, `CONIN$` and `CONOUT$`. A Hermes child owns a hidden console
+    (`CREATE_NO_WINDOW`) where those open with nobody at it, so on Windows
+    the console window must also be visible. A missing or hidden terminal is
+    a no, never a wait and never a crash.
     """
     if os.name == "nt" and not console_is_visible():
         return False  # a hidden console (Hermes spawns its children with CREATE_NO_WINDOW) has nobody at it

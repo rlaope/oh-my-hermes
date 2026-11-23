@@ -588,6 +588,10 @@ class UnattendedMatrixTests(_Home):
         "gh auth status", "gh repo set-default --view", "git push origin HEAD:refs/heads/bot/x --dry-run",
         "git log --format='%h\\t%s'", "grep -E '\\bfoo\\b' notes.txt",
         "powershell -NoProfile -File build.ps1", "pwsh build.ps1", "cmd /c build.bat", "ls .git",
+        # Plain reads of a protected path are not writes.
+        "cat .git/config", "less .git/hooks/pre-push", "head -5 ~/.gitconfig", "tail .gitmodules",
+        "grep -n url .git/config", "stat .git/hooks/pre-push", "git config --list",
+        "git config --get remote.origin.url",
     )
 
     def setUp(self) -> None:
@@ -715,7 +719,9 @@ class UnattendedMatrixTests(_Home):
     def test_making_a_link_to_git_config_is_held(self):
         for command in ("ln -s .git g", "ln -s ../.git/hooks h", "mklink /J g .git", "cmd /c mklink /J g .git",
                         "New-Item -ItemType Junction -Path g -Target .git", "cp evil.sh .git/hooks/pre-push",
-                        "echo x > .git/hooks/pre-push", "ln -s ~/.gitconfig c"):
+                        "echo x > .git/hooks/pre-push", "ln -s ~/.gitconfig c", "cat x > .git/hooks/pre-push",
+                        "tee .git/hooks/pre-push", "cp x .git/config", "find .git -delete",
+                        "find .git/hooks -exec rm {} +", "echo x >> ~/.ssh/config"):
             with self.subTest(command=command):
                 self.assertEqual(self.terminal(command)["action"], "block")
         self.assertIsNone(self.terminal("ln -s build/out latest"))
