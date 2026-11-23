@@ -4787,11 +4787,55 @@ def read_session_cwds(profile_dir: Path, ids: list[str]) -> dict[str, str]:
 
 
 THREAD_ROWS_MAX = 2000  # a thread's newest user and assistant rows read for its PR links
+LINEAGE_STEPS = 32      # compression steps followed from a thread's id, each way
+LINEAGE_MAX = 64        # sessions of one thread's compression lineage read at most
+
+
+def _continues(model_config, source) -> bool:
+    """A child session that continues its parent's conversation after Hermes compressed it, as Hermes' own lineage
+    walk decides: not a branch, a reset, a delegated subagent or a tool session."""
+    if source == "tool":
+        return False
+    try:
+        mc = json.loads(model_config) if isinstance(model_config, str) and model_config else {}
+    except ValueError:
+        mc = {}
+    return not (isinstance(mc, dict) and any(mc.get(k) is not None for k in ("_branched_from", "_delegate_from", "_reset_from")))
+
+
+def thread_lineage(con, session_id: str) -> list[str]:
+    """`session_id` and the sessions Hermes' compression of it made one conversation with (`sessions`: a parent that
+    ended with `end_reason = 'compression'` and its continuing child, followed both ways, LINEAGE_STEPS at most, as
+    Hermes' own history read does), through an open read-only connection. Only `session_id` when the table has no
+    such columns."""
+    import sqlite3
+    seen, frontier = [session_id], [session_id]
+    try:
+        for _ in range(LINEAGE_STEPS):
+            found = []
+            for sid in frontier:
+                end = con.execute("SELECT end_reason FROM sessions WHERE id = ?", (sid,)).fetchone()
+                if end and end[0] == "compression":
+                    found += [cid for cid, mc, src in con.execute(
+                        "SELECT id, model_config, source FROM sessions WHERE parent_session_id = ?", (sid,)).fetchall()
+                        if _continues(mc, src)]
+                up = con.execute("SELECT c.parent_session_id, c.model_config, c.source, p.end_reason FROM sessions c"
+                                 " JOIN sessions p ON p.id = c.parent_session_id WHERE c.id = ?", (sid,)).fetchone()
+                if up and up[3] == "compression" and _continues(up[1], up[2]):
+                    found.append(up[0])
+            frontier = [x for x in dict.fromkeys(found) if isinstance(x, str) and x not in seen]
+            seen += frontier[:LINEAGE_MAX - len(seen)]
+            if not frontier or len(seen) >= LINEAGE_MAX:
+                break
+    except sqlite3.Error:
+        return [session_id]
+    return seen
 
 
 def thread_last_row(profile_dir: Path, session_id: str) -> int | None:
-    """The id of a thread's newest saved row (`messages`), from the profile's state.db opened read-only: when it has
-    not moved, the thread's PR links have not either. None when it has none (or no state.db). Nothing is written."""
+    """The id of the newest saved row (`messages`) of a thread across Hermes' compression of it (thread_lineage), from
+    the profile's state.db opened read-only: when it has not moved, the thread's PR links have not either. None when
+    it has none (or no state.db). Nothing is written."""
     import sqlite3
     db = profile_dir / "state.db"
     if not session_id or not db.is_file():
@@ -4799,7 +4843,9 @@ def thread_last_row(profile_dir: Path, session_id: str) -> int | None:
     try:
         con = sqlite3.connect(ro_uri(db), uri=True, timeout=1.0)
         try:
-            row = con.execute("SELECT MAX(id) FROM messages WHERE session_id = ?", (session_id,)).fetchone()
+            ids = thread_lineage(con, session_id)
+            row = con.execute(f"SELECT MAX(id) FROM messages WHERE session_id IN ({','.join('?' * len(ids))})",
+                              ids).fetchone()
         finally:
             con.close()
     except sqlite3.Error:
@@ -4809,8 +4855,9 @@ def thread_last_row(profile_dir: Path, session_id: str) -> int | None:
 
 def read_thread_rows(profile_dir: Path, session_id: str) -> list[dict]:
     """One thread's saved user and assistant rows (`messages`: id, role, content, timestamp, and display_kind where the
-    column exists), oldest first, the newest THREAD_ROWS_MAX, from the profile's state.db opened read-only; [] when it
-    has none (or no state.db). Never a tool row, reasoning or any other column. Nothing is written."""
+    column exists) across Hermes' compression of it (thread_lineage), oldest first, the newest THREAD_ROWS_MAX, from
+    the profile's state.db opened read-only; [] when it has none (or no state.db). Never a tool row, reasoning or any
+    other column. Nothing is written."""
     import sqlite3
     db = profile_dir / "state.db"
     if not session_id or not db.is_file():
@@ -4819,11 +4866,12 @@ def read_thread_rows(profile_dir: Path, session_id: str) -> list[dict]:
     try:
         con = sqlite3.connect(ro_uri(db), uri=True, timeout=1.0)
         try:
+            ids = thread_lineage(con, session_id)
             for use in (cols, cols[:4]):  # an older state.db has no display_kind
                 try:
-                    got = con.execute(f"SELECT {', '.join(use)} FROM messages WHERE session_id = ? AND role IN"
-                                      " ('user', 'assistant') ORDER BY id DESC LIMIT ?",
-                                      (session_id, THREAD_ROWS_MAX)).fetchall()
+                    got = con.execute(f"SELECT {', '.join(use)} FROM messages WHERE session_id IN"
+                                      f" ({','.join('?' * len(ids))}) AND role IN ('user', 'assistant')"
+                                      " ORDER BY id DESC LIMIT ?", (*ids, THREAD_ROWS_MAX)).fetchall()
                     break
                 except sqlite3.OperationalError:
                     if use is not cols:

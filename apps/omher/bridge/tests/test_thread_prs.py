@@ -287,6 +287,60 @@ class ReadThreadRows(unittest.TestCase):
             self.assertEqual(ob.read_thread_rows(Path(d), "th-1"), [])
 
 
+class CompressionLineage(unittest.TestCase):
+    """Hermes moves a long conversation to a continuation session when it compresses it; the thread's links are read
+    across that chain both ways, never into a branch, a reset, a subagent or a tool session."""
+
+    def lineage_db(self, prof: Path) -> None:
+        import sqlite3
+        con = sqlite3.connect(prof / "state.db")
+        con.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, parent_session_id TEXT, end_reason TEXT,"
+                    " model_config TEXT, source TEXT)")
+        con.executemany("INSERT INTO sessions VALUES (?, ?, ?, ?, ?)", [
+            ("root", None, "compression", None, "tui"),
+            ("cont", "root", "compression", "{}", "tui"),
+            ("cont2", "cont", None, None, "tui"),
+            ("branch", "root", None, '{"_branched_from": "root"}', "tui"),
+            ("deleg", "cont", None, '{"_delegate_from": "cont"}', "tui"),
+            ("tool", "cont", None, None, "tool"),
+            ("other", None, None, None, "tui"),
+        ])
+        con.commit()
+        con.close()
+        save_rows(prof, "root", [("user", "fix it"), ("assistant", "Opened https://github.com/o/r/pull/1")])
+        save_rows(prof, "branch", [("assistant", "https://github.com/o/r/pull/90")])
+        save_rows(prof, "cont", [("user", "more"), ("assistant", "Opened https://github.com/o/r/pull/2")])
+        save_rows(prof, "deleg", [("assistant", "https://github.com/o/r/pull/91")])
+        save_rows(prof, "tool", [("assistant", "https://github.com/o/r/pull/92")])
+        save_rows(prof, "cont2", [("user", "and?"), ("assistant", "Opened https://github.com/o/r/pull/3")])
+        save_rows(prof, "other", [("assistant", "https://github.com/o/r/pull/93")])
+
+    def test_links_after_and_before_a_compression_are_both_read(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            prof = Path(d)
+            self.lineage_db(prof)
+            for start in ("root", "cont", "cont2"):
+                rows = ob.read_thread_rows(prof, start)
+                self.assertEqual([r["number"] for r in ob.thread_pr_refs(ob.chat_messages(rows))], [3, 2, 1], start)
+                self.assertEqual(ob.thread_last_row(prof, start), max(r["row_id"] for r in rows))
+            self.assertEqual([r["number"] for r in ob.thread_pr_refs(ob.chat_messages(ob.read_thread_rows(prof, "branch")))], [90])
+
+    def test_the_walk_is_bounded(self):
+        import sqlite3
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            con = sqlite3.connect(Path(d) / "state.db")
+            con.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, parent_session_id TEXT, end_reason TEXT,"
+                        " model_config TEXT, source TEXT)")
+            con.executemany("INSERT INTO sessions VALUES (?, ?, 'compression', NULL, 'tui')",
+                            [(f"s{i}", f"s{i - 1}" if i else None) for i in range(200)])
+            con.commit()
+            self.assertLessEqual(len(ob.thread_lineage(con, "s100")), ob.LINEAGE_MAX)
+            self.assertEqual(ob.thread_lineage(con, "s100")[0], "s100")
+            con.close()
+
+
 class ThreadPrsOp(BridgeCase):
     async def open(self, env):
         s = await super().open(env)

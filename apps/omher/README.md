@@ -173,8 +173,8 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   an open PR or a draft, its checks (passing, failing, running); the transcript shows a card under the answer that
   named each (the newest three) with the repository, which opens the PR in the browser on a click, and Refresh. An
   open PR with failing checks lists its thread in Needs you and rings at most once per failing head commit, never
-  twice for one PR within 6 hours. The bridge reads the thread's own saved rows from the bot's `state.db` (read only,
-  no gateway call, again only when the thread has a new row) and asks your own `gh` with the same one fixed
+  twice for one PR within 6 hours. The bridge reads the thread's own saved rows from the bot's `state.db`, across Hermes'
+  compression of it (read only, no gateway call, again only when the thread has a new row) and asks your own `gh` with the same one fixed
   `gh pr view` the Plans graph uses, sharing its 5 minute cache, at most 4 calls at once and 30 a minute (threads at
   most 20). A row in view or a thread in Needs you is read again every 5 minutes at the soonest while its PR may
   still change (twice as long after each failed read, up to an hour; a minute after the cap held it back), also while

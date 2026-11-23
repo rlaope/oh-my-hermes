@@ -151,7 +151,7 @@ export function mayRing(t: Told, p: ThreadPr, now: number): { ring: boolean; tol
   if (head && t.heads.includes(head)) return { ring: false, told: t };
   const heads = head ? [...t.heads, head].slice(-TOLD_MAX) : t.heads;
   const last = t.prs[prKey(p)];
-  if (last !== undefined && now - last < PR_RING_GAP_MS) return { ring: false, told: { heads, prs: t.prs } };
+  if (last !== undefined && now - last < PR_RING_GAP_MS) return { ring: false, told: heads === t.heads ? t : { heads, prs: t.prs } };
   const prs = Object.fromEntries(
     Object.entries({ ...t.prs, [prKey(p)]: now })
       .sort((a, b) => a[1] - b[1])

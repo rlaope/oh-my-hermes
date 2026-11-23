@@ -133,7 +133,7 @@ All notable changes will be documented here.
   running), and the transcript shows a card under the answer that named each one (the newest three), with the
   repository; a click opens the PR on GitHub, Refresh asks again. Any full PR link in the bot's own answers counts,
   whoever's PR it is; the person's words and a tool's output never do. They are read from the thread's saved rows in
-  the bot's `state.db`, with no gateway call, so a thread is never resumed for it. An open PR with failing checks
+  the bot's `state.db` (across Hermes' compression of a long thread), with no gateway call, so a thread is never resumed for it. An open PR with failing checks
   puts its thread in Needs you ("checks failing on #n") until the checks pass or it is merged or closed, and rings
   at most once per failing head commit and never twice for the same PR within 6 hours. The state comes from the same
   one `gh pr view` the Plans graph uses, now with `statusCheckRollup` and `headRefOid`, reduced to one word from the

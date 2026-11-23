@@ -1272,6 +1272,8 @@ class ThreadPullRequests(unittest.TestCase):
         " pull request it is, never one in the person's message or a tool's output.",
         "read only and only for a thread it created or listed, and makes no gateway call for it, so a thread that is not"
         " open in omher is never resumed or attached to be read.",
+        "To find them the bridge reads that thread's saved user and assistant rows across Hermes' compression of it",
+        "only to follow the sessions a compression made one conversation, both ways, 32 steps and 64 sessions at most)",
         "a number of one to seven digits with no leading zero, the newest three of a thread, and keeps only those links,"
         " until the thread has a new row.",
         "The tick runs while omher's window is hidden too (rule 36), so a pull request that starts failing can still notify.",
@@ -1307,12 +1309,16 @@ class ThreadPullRequests(unittest.TestCase):
         self.assertIn("await asyncio.to_thread(read_thread_rows, conn.bot['path'], sid)", op)
         self.assertIn("thread_pr_refs(chat_messages(rows", op)
         self.assertNotIn("self._call(", op)  # no gateway call: never a history read of a stored id, never a resume
-        for name in ("read_thread_rows", "thread_last_row"):
+        for name in ("read_thread_rows", "thread_last_row", "thread_lineage"):
             rows = ast.unparse(ast.Module(body=fns[name].body[1:], type_ignores=[]))  # without its docstring
-            self.assertIn("ro_uri(db)", rows)  # read-only
-            self.assertIn("WHERE session_id = ?", rows)
-            for word in ("INSERT", "UPDATE", "DELETE", "reasoning", "tool_calls", "api_content"):
+            if name != "thread_lineage":  # it reads through the caller's read-only connection
+                self.assertIn("ro_uri(db)", rows)  # read-only
+                self.assertIn("ids = thread_lineage(con, session_id)", rows)  # across Hermes' compression of it
+                self.assertIn("WHERE session_id IN (", rows)
+            for word in ("INSERT", "UPDATE", "DELETE", "reasoning", "tool_calls", "api_content", "commit"):
                 self.assertNotIn(word, rows)
+        self.assertIn("LINEAGE_STEPS = 32", self.source)
+        self.assertIn("LINEAGE_MAX = 64", self.source)
         self.assertIn("role IN ('user', 'assistant')", ast.unparse(fns["read_thread_rows"]))
         refs = ast.unparse(fns["thread_pr_refs"])
         self.assertIn("m.get('role') != 'assistant'", refs)

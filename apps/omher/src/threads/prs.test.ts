@@ -302,7 +302,9 @@ describe("review fixes: rings, failures, the cap, and Needs out of view", () => 
     expect(step(pr(1, "open", "failing", a), PR_RING_GAP_MS * 3)).toBe(false); // the same head, ever
     expect(step(pr(2, "open", "failing", a, "x/y"), 10)).toBe(true); // another PR: its own count
     expect(step(pr(3, "open", "failing"), 0)).toBe(true);
+    const before = t;
     expect(step(pr(3, "open", "failing"), PR_RING_GAP_MS - 1)).toBe(false);
+    expect(t).toBe(before); // nothing changed: the same record, so nothing is written
     expect(step(pr(3, "open", "failing"), PR_RING_GAP_MS)).toBe(true);
     expect(step(pr(1, "open", "failing", b), PR_RING_GAP_MS * 3 + 1)).toBe(true);
   });
