@@ -178,6 +178,23 @@ lock returns `lock_unavailable` and never reports `routed`. A platform with
 neither lock backend is different and is reported through `lock_enforced`,
 because refusing there would disable routing entirely.
 
+## The in-child fallback chain rides along
+
+When `omh_delegate_route` writes `delegation.fallback_providers` (opt-in,
+`delegation_fallback_chain`), the chain is a fourth key of the mappings OMH
+stores -- the last write, each conversation's route and its stamp, and
+provenance (`fallback_providers` on the record) -- and only then: a chain the
+person owns is never part of a stored route. Every comparison of the live
+file with a stored mapping goes through `route_like`, which looks at the
+chain only when the stored side has one. So a restore takes OMH's chain out
+and an absent key stays absent, the lost-update guard sees a change to OMH's
+chain as a route change, a dispatch is put back on its own conversation's
+chain, and a person editing or removing their own chain changes none of
+those answers. The baseline never holds a chain, since OMH never writes over
+one that is not its own. A chain in OMH's shape is replaced only when the
+record or provenance says OMH wrote it (`omh_written_chains`); any other
+value stays as it is.
+
 ## What a restore does NOT promise
 
 It restores the three keys to their previous VALUES, not to their previous
@@ -200,13 +217,17 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Collection, Mapping
 
+from . import delegation_fallback_chain as _fallback_chain
 from . import runtime_paths
 from .awareness_delivery import LOCK_MECHANISM_NONE, _awareness_delivery_lock
 from .delegation_routing import (
-    ROUTABLE_KEYS,
+    FALLBACK_CHAIN_KEY,
+    ROUTE_KEYS,
     _VALUE_RE,
+    decode_fallback_chain,
     delegation_config_path,
     read_delegation_route,
+    route_like,
     write_delegation_route,
 )
 from .hermes_delegation import append_delegation_route_provenance, load_delegation_route_provenance
@@ -331,7 +352,7 @@ def route_write_lock(omh_home: str | Path | None = None, *, timeout_seconds: flo
 
 
 def _valid_route_mapping(value: object) -> dict[str, str] | None:
-    """A three-key subset whose values the route writer would accept.
+    """A subset of the route keys whose values the route writer would accept.
 
     An absent key is the recorded spelling of "the file did not carry this
     key", so an empty mapping is valid and means "all three absent". A value
@@ -343,9 +364,12 @@ def _valid_route_mapping(value: object) -> dict[str, str] | None:
         return None
     cleaned: dict[str, str] = {}
     for key, item in value.items():
-        if key not in ROUTABLE_KEYS or not isinstance(item, str):
+        if key not in ROUTE_KEYS or not isinstance(item, str):
             return None
-        if not _VALUE_RE.match(item):
+        if key == FALLBACK_CHAIN_KEY:
+            if decode_fallback_chain(item) is None:
+                return None
+        elif not _VALUE_RE.match(item):
             return None
         cleaned[key] = item
     return cleaned
@@ -774,7 +798,7 @@ def _stamp_conversation_write(
 
 
 def _routable_subset(applied: Mapping[str, Any]) -> dict[str, str]:
-    """The three routable keys of a writer result, as a later read returns them.
+    """The route keys of a writer result, as a later read returns them.
 
     `omh_delegate_route` decorates the writer's `applied` mapping with an
     `alias` afterwards, so the subset is taken by key rather than by copying
@@ -782,7 +806,7 @@ def _routable_subset(applied: Mapping[str, Any]) -> dict[str, str]:
     """
     return {
         key: str(applied[key])
-        for key in ROUTABLE_KEYS
+        for key in ROUTE_KEYS
         if isinstance(applied.get(key), str) and applied.get(key)
     }
 
@@ -816,11 +840,12 @@ def newest_written_provenance(
 
 
 def provenance_route_keys(record: Mapping[str, Any]) -> dict[str, str]:
-    """The three routable keys a provenance record says OMH wrote."""
+    """The route keys a provenance record says OMH wrote, its chain included."""
     pairs = (
         ("model", str(record.get("wire_model", "") or record.get("alias", ""))),
         ("reasoning_effort", str(record.get("reasoning_effort", ""))),
         ("provider", str(record.get("provider", ""))),
+        (FALLBACK_CHAIN_KEY, str(record.get(FALLBACK_CHAIN_KEY, ""))),
     )
     return {key: value for key, value in pairs if value}
 
@@ -854,11 +879,17 @@ def leftover_verdict(previous: Mapping[str, str], omh_home: str | Path | None) -
     record = newest_written_provenance(omh_home)
     if not record:
         return LEFTOVER_UNANSWERED
+    # The three scalars decide; whose chain the file holds is
+    # `omh_written_chains`'s question, never this one's.
     return (
         LEFTOVER_MATCH
-        if dict(previous) == provenance_route_keys(record)
+        if _scalars(previous) == _scalars(provenance_route_keys(record))
         else LEFTOVER_MISMATCH
     )
+
+
+def _scalars(route: Mapping[str, str]) -> dict[str, str]:
+    return {key: value for key, value in route.items() if key != FALLBACK_CHAIN_KEY}
 
 
 def omh_wrote_current_keys(
@@ -884,7 +915,7 @@ def omh_wrote_current_keys(
         return False
     if record is None:
         record = load_route_restore_record(omh_home)
-    if record and dict(current) == record["written"]:
+    if record and _scalars(current) == _scalars(record["written"]):
         return True
     return leftover_verdict(current, omh_home) == LEFTOVER_MATCH
 
@@ -898,10 +929,18 @@ def write_route_with_baseline(
     model: str = "",
     reasoning_effort: str = "",
     provider: str = "",
+    fallback_providers: str = "",
     expected_previous: Mapping[str, str] | None = None,
     now: float | None = None,
 ) -> dict[str, Any]:
     """Write a route and keep the baseline bookkeeping in step, under one lock.
+
+    `fallback_providers` is `write_delegation_route`'s, never None here: a
+    route either names its chain or has none, so `""` takes OMH's own chain
+    out and a chain text writes it. (None would leave OMH's chain in the file
+    while the result named none, and the baseline check would then miss it.) Only a
+    chain OMH wrote is replaced (`omh_written_chains`); the person's is
+    kept and reported.
 
     Returns the writer's own result mapping with a `route_restore` field
     naming what the bookkeeping did (`baseline_captured`,
@@ -933,6 +972,7 @@ def write_route_with_baseline(
                 model=model,
                 reasoning_effort=reasoning_effort,
                 provider=provider,
+                fallback_providers=fallback_providers,
                 expected_previous=expected_previous,
             )
             if result.get("status") == "routed":
@@ -988,6 +1028,7 @@ def _write_route_locked(
     reasoning_effort: str,
     provider: str,
     expected_previous: Mapping[str, str] | None,
+    fallback_providers: str = "",
 ) -> dict[str, Any]:
     """The route write and its baseline bookkeeping; the caller holds the lock."""
     record_path = delegation_route_restore_path(omh_home)
@@ -1004,6 +1045,8 @@ def _write_route_locked(
         provider=provider,
         expected_previous=expected_previous,
         guard_route_endpoint=True,
+        fallback_providers=fallback_providers,
+        replaceable_fallback=omh_written_chains(record, omh_home),
     )
     result["lock_enforced"] = enforced
     if result.get("status") != "routed":
@@ -1032,7 +1075,8 @@ def _write_route_locked(
             baseline, origin = {}, BASELINE_ORIGIN_OMH_LEFTOVER
             note = f"{stem}_over_omh_leftover"
         else:
-            baseline, origin = previous, BASELINE_ORIGIN_PERSON
+            # Never a chain: OMH writes over no chain but its own.
+            baseline, origin = _scalars(previous), BASELINE_ORIGIN_PERSON
             note = (
                 f"{stem}_provenance_unavailable"
                 if verdict == LEFTOVER_UNANSWERED
@@ -1061,6 +1105,21 @@ def _write_route_locked(
             "distinguishes the two and their pin will not come back."
         )
     return result
+
+
+def omh_written_chains(record: Mapping[str, Any], omh_home: str | Path | None) -> set[str]:
+    """The chains a route write may replace: the ones OMH can show it wrote.
+
+    The record's last write first, then the newest provenance record that
+    left a route, the same two authorities `omh_wrote_current_keys` asks. A
+    chain in neither is the person's, however it is spelled. The usual
+    caveat applies: a person who types exactly the chain OMH last wrote is
+    indistinguishable from it.
+    """
+    chains = {provenance_route_keys(newest_written_provenance(omh_home)).get(FALLBACK_CHAIN_KEY, "")}
+    if record:
+        chains.add(str(record["written"].get(FALLBACK_CHAIN_KEY, "")))
+    return chains - {""}
 
 
 def _store_record(path: Path, *, note: str, **fields: Any) -> str:
@@ -1289,8 +1348,14 @@ def _restore_locked(
                 "lock_enforced": enforced,
             }
         if unrecorded_clear:
+            # The chain comes off only when provenance says it is OMH's;
+            # with no record, anything else in the key is the person's.
             removed = write_delegation_route(
-                hermes_home, clear=True, expected_previous=expected_previous
+                hermes_home,
+                clear=True,
+                expected_previous=expected_previous,
+                fallback_providers="",
+                replaceable_fallback=omh_written_chains({}, omh_home),
             )
             removed["route_restore"] = "no_baseline_recorded"
             removed["trigger"] = trigger
@@ -1340,8 +1405,12 @@ def _restore_locked(
                 "lock_enforced": enforced,
                 **lineage_report,
             }
-    current = read_delegation_route(hermes_home)
-    if current != record["written"]:
+    current = route_like(read_delegation_route(hermes_home, with_chain=True), record["written"])
+    # The person edited or removed only the chain OMH wrote: the chain is
+    # theirs now and stays as they left it, but the three scalars are still
+    # OMH's route and come back out.
+    chain_edited = current != record["written"] and _scalars(current) == _scalars(record["written"])
+    if current != record["written"] and not chain_edited:
         # Someone else owns the value now. Drop the record: keeping it
         # would let a later restore act on a baseline that no longer
         # describes anything in the file.
@@ -1355,7 +1424,9 @@ def _restore_locked(
             "lock_enforced": enforced,
         }
     baseline = record["baseline"]
-    result = _put_baseline_back(hermes_home, baseline, current)
+    result = _put_baseline_back(
+        hermes_home, baseline, current, _scalars(record["written"]) if chain_edited else record["written"]
+    )
     if result.get("status") not in ("routed", "cleared"):
         return {
             "status": "error",
@@ -1372,7 +1443,7 @@ def _restore_locked(
         # separate names: `restored` put values back, `cleared` is the
         # baseline that had no keys to put back, which is the same
         # end state the tool reported before baselines existed.
-        "status": "restored" if baseline else "cleared",
+        "status": "chain_foreign_edit" if chain_edited else "restored" if baseline else "cleared",
         "trigger": trigger,
         "restored": baseline,
         "baseline_origin": record["baseline_origin"],
@@ -1450,13 +1521,20 @@ def _release_writer(omh_home: str | Path | None, record: Mapping[str, Any], unre
 
 
 def _put_baseline_back(
-    hermes_home: str | Path | None, baseline: Mapping[str, str], current: Mapping[str, str]
+    hermes_home: str | Path | None,
+    baseline: Mapping[str, str],
+    current: Mapping[str, str],
+    written: Mapping[str, str],
 ) -> dict[str, Any]:
+    # A chain comes out only when the record says OMH wrote it, and `current`
+    # has just been matched against that record, so the chain in the file is
+    # that one. Otherwise the chain key is not this restore's to touch.
     return write_delegation_route(
         hermes_home,
         model=baseline.get("model", ""),
         reasoning_effort=baseline.get("reasoning_effort", ""),
         provider=baseline.get("provider", ""),
+        fallback_providers="" if FALLBACK_CHAIN_KEY in written else None,
         expected_previous=current,
     )
 
@@ -1554,8 +1632,14 @@ def _dispatch_plan(
     now: float,
     conversation: Callable[[], set[str]],
     ancestors: Callable[[], list[set[str]] | None],
+    chain_allowed: bool = True,
 ) -> dict[str, Any]:
     """What the keys must hold for this dispatch, read from the three stores.
+
+    `chain_allowed` false (the in-child chain switched off, or a host that
+    no longer honours it) drops the chain from every route this dispatch
+    would put back, so the reapply takes OMH's chain out instead of
+    writing back one the person turned off.
 
     `action` is `none`, `reapply` (a route this dispatch should run on is
     not in the keys) or `restore_baseline` (the caller has no route and the
@@ -1586,8 +1670,12 @@ def _dispatch_plan(
         and now - entry["written_at"] <= LIVE_TUI_SESSION_FRESH_SECONDS
     ]
     entries = _in_force(entries, record, omh_home)
-    current = read_delegation_route(hermes_home)
-    record_live = bool(record) and current == record["written"]
+    if not chain_allowed:
+        entries = [{**entry, "route": _scalars(entry["route"])} for entry in entries]
+    # With the chain; each comparison below sees it only when the stored
+    # mapping names one (`route_like`).
+    current = read_delegation_route(hermes_home, with_chain=True)
+    record_live = bool(record) and route_like(current, record["written"]) == record["written"]
     plan: dict[str, Any] = {
         "record": record,
         "current": current,
@@ -1601,7 +1689,7 @@ def _dispatch_plan(
     if own:
         route = max(own, key=lambda entry: entry["written_at"])
         plan.update(entry=route, owner=(session_id, task_id), owners=conversation() | {route["session_id"]})
-        if current == route["route"]:
+        if route_like(current, route["route"]) == route["route"]:
             return {**plan, "action": "none", "status": "route_in_place"}
         return {**plan, "action": "reapply", "status": "route_reapplied"}
     record_is_callers = bool(record) and _owned_by_caller(
@@ -1620,6 +1708,8 @@ def _dispatch_plan(
         ancestry = [group - own for group in ancestry or []]
     if lineage:
         route = _newest_inherited(entries, ancestry or [], record, omh_home, config_path=config_path, now=now)
+        if route and not chain_allowed:
+            route = {**route, "route": _scalars(route["route"])}
         if route:
             # Written back on behalf of the parent, so the record names the
             # parent's task and the parent's own turn end takes it out.
@@ -1628,7 +1718,7 @@ def _dispatch_plan(
                 owner=(route["session_id"], route["task_id"]),
                 owners=lineage | {route["session_id"]},
             )
-            if current == route["route"]:
+            if route_like(current, route["route"]) == route["route"]:
                 return {**plan, "action": "none", "status": "parent_route_in_place"}
             return {**plan, "action": "reapply", "status": "parent_route_reapplied"}
         if record_live and record["writer_session_id"] in lineage:
@@ -1838,6 +1928,9 @@ def prepare_dispatch_route(
     home = hermes_home or runtime_paths.default_hermes_home()
     tick = float(now if now is not None else time.time())
     cache: dict[str, Any] = {}
+    # Asked once per dispatch: whether a route's in-child chain may still be
+    # put back (#3124 review).
+    chain_allowed = _fallback_chain.chain_allowed(omh_home)
 
     def conversation() -> set[str]:
         if "conversation" not in cache:
@@ -1861,6 +1954,7 @@ def prepare_dispatch_route(
             now=tick,
             conversation=conversation,
             ancestors=ancestors,
+            chain_allowed=chain_allowed,
         )
 
     peek = plan()
@@ -1883,7 +1977,9 @@ def prepare_dispatch_route(
                     tick=tick,
                     session_id=session_id,
                 )
-            written = _put_baseline_back(hermes_home, decided["record"]["baseline"], decided["current"])
+            written = _put_baseline_back(
+                hermes_home, decided["record"]["baseline"], decided["current"], decided["record"]["written"]
+            )
             if written.get("status") not in ("routed", "cleared"):
                 return _dispatch_refusal(
                     decided, session_id, f"write refused: {written.get('error', 'unknown')}"
@@ -1937,6 +2033,7 @@ def _reapply_route(
         model=route.get("model", ""),
         reasoning_effort=route.get("reasoning_effort", ""),
         provider=route.get("provider", ""),
+        fallback_providers=route.get(FALLBACK_CHAIN_KEY, ""),
         expected_previous=decided["current"],
     )
     if result.get("status") != "routed":
@@ -2044,7 +2141,7 @@ def conversation_route_for(
         "session_id": entry["session_id"],
         "task_id": entry["task_id"],
         "written_at": entry["written_at"],
-        "in_keys": read_delegation_route(hermes_home) == entry["route"],
+        "in_keys": route_like(read_delegation_route(hermes_home, with_chain=True), entry["route"]) == entry["route"],
     }
 
 
