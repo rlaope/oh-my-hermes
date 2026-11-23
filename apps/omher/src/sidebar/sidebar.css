@@ -1512,3 +1512,8 @@ body.row-dragging .bot-w .bot-new {
     display: none;
   }
 }
+/* a thread whose pull request is open with failing checks (rule 21): its own tag, in the failing colour */
+.needs-tag-pr {
+  color: var(--danger);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 45%, transparent);
+}
