@@ -1096,3 +1096,56 @@
     grid-row: 3;
   }
 }
+
+/* ---- Apps (src/apps): one section per tier, a state chip on each card, Hermes' own words as it wrote them ---- */
+.ap-sec {
+  margin-top: 16px;
+}
+.ap-h {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.pl-adds span.ap-state.installed {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 13%, transparent);
+}
+.ap-said {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  white-space: pre-wrap;
+}
+.ap-term {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  white-space: normal;
+}
+.ap-cmd {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: var(--r);
+  background: var(--raise);
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink);
+}
+.ap-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--body);
+}
+.ap-card-term {
+  margin-top: 8px;
+  font-size: 12px;
+}

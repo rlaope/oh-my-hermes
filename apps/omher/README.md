@@ -153,7 +153,14 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   an agent starts it at once. Rows are grouped by folder under its git branch; each card shows its status (a spinner
   while output flows, a check or an x when the program ends), the mark of the CLI in the foreground (a Shell running
   `codex` shows Codex's), its name and age, and on its second line the CLI and the last line it printed. ⌘⇧] and ⌘⇧[
-  step through the terminals, and BOTS and TERMINALS scroll on their own. A session ends with its program and comes
+  step through the terminals, and BOTS and TERMINALS scroll on their own. Up to four sessions share the view as a
+  split: ⌘D / ⌘⇧D (Ctrl+Shift+D / Alt+Shift+D off macOS) splits with a new Shell, a row dragged onto the terminal
+  goes on the side it is dropped, and a pane's grip moves it. The header drags too: a session on its own, dragged by
+  its header onto its terminal, merges with the next session of its folder in the sidebar's order (the one before it
+  when it is the last; a row a search or a collapsed folder hides counts too), the preview naming that session; back
+  onto the header, or Escape, changes nothing. In a split the header moves the focused pane (not while zoomed). The
+  header's x closes the focused pane (the session stays listed), or a lone session as its row's x does: undoable
+  while it runs, else after the row's Stop? question. A session ends with its program and comes
   back after a restart waiting for Resume. DSH has no terminal view and is not offered there. The program runs in a
   pseudo-terminal (`portable-pty`: a Unix PTY on macOS, ConPTY on
   Windows) drawn with xterm.js. Settings › Terminal picks how every session terminal looks: a theme for the dark app
@@ -168,12 +175,26 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   conversation, else the CLI's name. Above the bots, the Tasks row opens the Tasks page: open issues and pull or merge
   requests of the repository, read-only through your own `gh` or `glab` (`BOUNDARY.md` rule 33), with a drawer for
   one item and Start in thread, which opens a thread under the bot you pick with the issue as its first message.
-  Linear shows a connect screen naming the `hermes -p <bot> mcp install linear` command; omher keeps no Linear key.
+  Linear shows a connect screen that opens the Apps page for the bot; omher keeps no Linear key.
   The page's "나" (Me) scope (`src/tasks/MeView.tsx`, `src-tauri/src/gh_me.rs`) lists, across every repository, the
   open pull requests asking for your review, your open pull requests, the open issues assigned to you and the last
   week's mentions, for the GitHub accounts you add in Settings › Accounts › GitHub (the ones your `gh` is signed in
   to), with what needs action first; the sidebar's Tasks row counts the review requests. A non-active `gh` account is
   read with its token passed only to that one `gh` call (`BOUNDARY.md` rules 18 and 33).
+- **A thread's pull requests** (`src/threads/prs.ts`, `src/threads/ThreadPrs.tsx`, the bridge's `thread.prs`): when a
+  bot's answer in a thread links a pull request by its full `https://github.com/<owner>/<repo>/pull/<n>` address
+  (whoever's PR it is), the thread's row shows the newest one's number, state (open, draft, merged, closed) and, for
+  an open PR or a draft, its checks (passing, failing, running); the transcript shows a card under the answer that
+  named each (the newest three) with the repository, which opens the PR in the browser on a click, and Refresh. An
+  open PR with failing checks lists its thread in Needs you and rings at most once per failing head commit, never
+  twice for one PR within 6 hours. The bridge reads the thread's own saved rows from the bot's `state.db`, across Hermes'
+  compression of it (read only, no gateway call, again only when the thread has a new row) and asks your own `gh` with the same one fixed
+  `gh pr view` the Plans graph uses, sharing its 5 minute cache, at most 4 calls at once and 30 a minute (threads at
+  most 20). A row in view or a thread in Needs you is read again every 5 minutes at the soonest while its PR may
+  still change (twice as long after each failed read, up to an hour; a minute after the cap held it back), also while
+  the window is hidden; a thread is also read when opened, after its turn ends and on Refresh, two at most at a time.
+  Without `gh`, a login or the network the mark shows the number only (`BOUNDARY.md` rules 21 and 40,
+  `e2e/thread-prs.spec.ts`).
 - **Split card** (`src/sessions/SplitLayoutCard.tsx`, `splitCard.ts`): while the search box is empty, each TERMINALS split
   (2 to 4 panes) is one card at the top of the list, drawn like the split itself: one cell per pane in its real place and
   proportions, each with the CLI's mark, the session's name and its last line. Its members are not listed again as rows.
@@ -244,6 +265,13 @@ Rules the code keeps:
   `cron/jobs.json` and changes a job only with that bot's `cron.manage` (add, pause, resume, remove); Run now and
   Edit are chat messages. The Plugins page reads the catalog cache and the profile's plugin folder names and changes
   a plugin only with the bot's `plugins.manage`; installs are catalog-only, inspected first and confirmed.
+- **Apps through the bot's own Hermes.** The Apps page (`src/apps/`, the plug in the sidebar's foot) lists Hermes' MCP
+  catalog and its integration skills (Google Workspace, Obsidian, Apple Notes and the rest) for one bot, grouped work
+  apps, ops and data, then the rest, each with its state: not connected, connected, turned off, needs sign-in, or state
+  unknown when the bot's config cannot be read. Connect, Sign in and Remove run that bot's own
+  `hermes -p <bot> mcp install|login|remove <name>` (`BOUNDARY.md` rule 41); the sign-in is Hermes' own browser page,
+  a value an install asks for is typed in a terminal, and omher never sees a key or a token. Skills only show their
+  state.
 - **A Slack briefing with nothing to set up.** For a bot whose Hermes profile has Slack connected, omher sets up one
   automation, `omher-brief`, by itself: every 15 minutes the channel-watch collector checks the Slack channels the bot
   shares with you and wakes the bot only when something needs you (someone asked you and got no answer, a thread it
