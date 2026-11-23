@@ -20,7 +20,7 @@ import { busyFor, shortTime } from "../app/time";
 import { t } from "../i18n";
 import { composing } from "../lib/ime";
 import { AgentMark } from "./AgentMark";
-import { agentDef, agentLabel, draftFolder, folderChoices, folderName, hermesOnly, installLine, isTerminalRec, menuFocus, menuOrder, missingNote, parentPath, SHELL, splitPaneName, termActivity, termFallbackName, terminalAgents, termMarkAgent, termStatus, tildePath, type AgentId, type AgentInfo, type RowMark, type SessionRec, type TermStatus, type Unseen } from "./agents";
+import { agentDef, agentLabel, draftFolder, folderChoices, folderName, hermesOnly, installLine, isNews, isTerminalRec, menuFocus, menuOrder, missingNote, parentPath, SHELL, splitPaneName, termActivity, termFallbackName, terminalAgents, termMarkAgent, termStatus, tildePath, type AgentId, type AgentInfo, type RowMark, type SessionRec, type TermStatus, type Unseen } from "./agents";
 import { TermRowMark } from "./TermRowMark";
 import { SplitGlyph, splitWith, useSplit, useSplitPrune } from "./SplitView";
 import { SplitCard, type RowMenuKit } from "./SplitLayoutCard";
@@ -856,7 +856,7 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
             all={all.map((x) => x.cwd)}
             added={added.includes(g.cwd)}
             summary={{ ...folderSummary(g.rows.map((r) => (asks.has(r.id) ? "bell" : termStatus(r, ss.unseen[r.id], 0)))), running: g.rows.filter((r) => (r.status === "running" || r.status === "starting") && termMarkAgent(r) !== null).length }}
-            flowIds={shut ? g.rows.filter((r) => (r.status === "running" || r.status === "starting") && ss.unseen[r.id] !== "bell").map((r) => r.id) : NO_IDS}
+            flowIds={shut ? g.rows.filter((r) => (r.status === "running" || r.status === "starting") && !isNews(ss.unseen[r.id])).map((r) => r.id) : NO_IDS}
           />
           {!shut && g.rows.map((rec) =>
             confirm === rec.id ? (
