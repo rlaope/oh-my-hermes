@@ -294,6 +294,24 @@ test("a long name in a tall cell keeps its start and ends in an ellipsis inside 
   expect(fit.overflow).toBe("ellipsis");
 });
 
+test("in a right-to-left document the card mirrors as the main split does: the tall cell is on its pane's side", async ({ page }) => {
+  await openApp(page);
+  const [a, b, c, d] = await sessions(page, ["/w/a", "/w/b", "/w/c", "/w/d"]);
+  await oneThree(page, [a, b, c, d]);
+  // the side of its box each one is on: the tall cell against the short ones, the tall pane against the short ones
+  const sides = async () => {
+    const [ca, cb, pa, pb] = await Promise.all([cell(page, a).boundingBox(), cell(page, b).boundingBox(), pane(page, a).boundingBox(), pane(page, b).boundingBox()]);
+    return { card: ca!.x < cb!.x ? "start-left" : "start-right", main: pa!.x < pb!.x ? "start-left" : "start-right" };
+  };
+  expect(await sides()).toEqual({ card: "start-left", main: "start-left" });
+  await page.evaluate(() => (document.documentElement.dir = "rtl"));
+  await expect.poll(sides).toEqual({ card: "start-right", main: "start-right" });
+  // the cells stay inside the card
+  const [box, cellA] = [(await page.locator(".sc-map").boundingBox())!, (await cell(page, a).boundingBox())!];
+  expect(cellA.x).toBeGreaterThanOrEqual(box.x - 0.5);
+  expect(cellA.x + cellA.width).toBeLessThanOrEqual(box.x + box.width + 0.5);
+});
+
 test("a 1+3 split gives its tall cell stacked text and its short cells text beside the mark", async ({ page }) => {
   await openApp(page);
   const [a, b, c, d] = await sessions(page, ["/w/a", "/w/b", "/w/c", "/w/d"]);

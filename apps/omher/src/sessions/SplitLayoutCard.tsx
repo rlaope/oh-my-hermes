@@ -43,7 +43,8 @@ const ORBIT: readonly [number, number, number][] = [
 /** A rounded rect `inset` px inside a w×h cell, as SVG attributes. */
 const inRect = (w: number, h: number, inset: number, r = 6) => ({ x: inset, y: inset, width: Math.max(0, w - 2 * inset), height: Math.max(0, h - 2 * inset), rx: Math.max(0, r - inset) });
 
-/** One pane's cell. Memoised on primitives: a card re-render (a drag of the grip, another cell's state) passes the same
+/** One pane's cell, `x` from the inline start (the right in a right-to-left document, as the main split's row mirrors
+ *  there). Memoised on primitives: a card re-render (a drag of the grip, another cell's state) passes the same
  *  values and skips it. */
 const SplitCell = memo(function SplitCell({ rec, x, y, w, h, focused, agents, unseen, ticking, onClose, kit }: { rec: SessionRec; x: number; y: number; w: number; h: number; focused: boolean; agents: AgentInfo[] | null; unseen?: Unseen; ticking: boolean; lang: string; onClose: (rec: SessionRec) => void; kit: RowMenuKit }) {
   countRender(`cell:${rec.id}`);
@@ -88,7 +89,7 @@ const SplitCell = memo(function SplitCell({ rec, x, y, w, h, focused, agents, un
     <div
       ref={wrap}
       className="sc-cell"
-      style={{ left: x, top: y, width: w, height: h }}
+      style={{ insetInlineStart: x, top: y, width: w, height: h }}
       data-testid="split-cell"
       data-session={rec.id}
       data-state={state}
