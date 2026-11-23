@@ -460,6 +460,12 @@ RULES = (
     " judged by Hermes' own `_update_fenced`, which reads the markers and, only when a stale one is left, briefly tries a"
     " shared lock; it writes nothing) the bridge does not look, as Hermes' own"
     " `ensure_gateway_runtime` does not.",
+    "\"Hand to <bot>\" (a TERMINALS row's menu, a Worktrees row's menu) adds no read: its git facts are that Worktrees"
+    " list and one `panel.diff` of a worktree in it,",
+    "and a folder inside none of those worktrees goes with no git facts.",
+    "The folder is the one the TERMINALS session started in, never a folder its shell reported (OSC 7, rule 11).",
+    "Open thread starts the thread as \"Start in thread\" does (rule 33: `thread.create`, then `chat.send` of that"
+    " text), and nothing is moved, closed or typed into the terminal.",
 )
 TAURI_CONF = ROOT / "apps" / "omher" / "src-tauri" / "tauri.conf.json"
 CAPABILITIES = ROOT / "apps" / "omher" / "src-tauri" / "capabilities" / "default.json"
@@ -2721,6 +2727,33 @@ class TasksReadOnly(unittest.TestCase):
         self.assertIn("await actions.threadSend(bot, row.thread, text);", start)
         host = (UI_SRC / "tasks" / "host.ts").read_text(encoding="utf-8")
         self.assertEqual(sorted(set(re.findall(r'invoke<[^>]+>\("([a-z_]+)"', host))), ["gh_accounts", "tasks_list", "tasks_me", "tasks_remote", "tasks_status", "tasks_view"])
+
+
+class HandToBotAddsNoRead(unittest.TestCase):
+    """Rule 10 (and 33's thread start): "Hand to <bot>" reads only the bot's Worktrees list and one `panel.diff` of a
+    worktree in it, starts its thread through the store's one `startTaskThread`, and writes nothing to a terminal."""
+
+    def setUp(self) -> None:
+        self.card = (UI_SRC / "handover" / "HandoverCard.tsx").read_text(encoding="utf-8")
+        self.msg = (UI_SRC / "handover" / "message.ts").read_text(encoding="utf-8")
+
+    def test_reads_only_the_worktree_list_and_one_diff(self) -> None:
+        for src in (self.card, self.msg):
+            for bad in ("invoke(", "bridge.request", "@tauri-apps"):
+                self.assertNotIn(bad, src, bad)
+        self.assertEqual(re.findall(r"actions\.(\w+)\(", self.card), ["panelDiff"])
+        self.assertIn("loadTrees(reader)", self.card)
+        trees = (UI_SRC / "elsewhere" / "trees.ts").read_text(encoding="utf-8")
+        self.assertEqual(re.findall(r"actions\.(\w+)\(", trees), ["panelWorktrees"])
+
+    def test_starts_the_thread_like_start_in_thread_and_types_nothing(self) -> None:
+        self.assertEqual(re.findall(r"\bs\.(\w+)\(", self.card), ["startTaskThread"])
+        for bad in ("getSessions", "typeAllowed", "sendText", "shell_start", ".write("):
+            self.assertNotIn(bad, self.card, bad)
+        # the session's own folder, never the one its shell reports through OSC 7 (act.cwd stays in the page)
+        rows = (UI_SRC / "sessions" / "SessionsSection.tsx").read_text(encoding="utf-8")
+        self.assertIn('from={{ kind: "terminal", folder: rec.cwd }}', rows)
+        self.assertNotIn("folder: act.cwd", rows)
 
 
 class GithubMeReadOnly(unittest.TestCase):
