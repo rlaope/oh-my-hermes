@@ -22,12 +22,17 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest import mock
 
 from omh.maintenance.gateway_health import BOT_PLATFORMS_SCHEMA, bot_platforms, bot_platforms_payload
+from omh.maintenance import hermes_gateway_formats as formats
+from omh.maintenance.gateway_health import _adapter_line, gateway_health
 from omh.maintenance.hermes_gateway_formats import (
     REASON_PRIVILEGED_INTENTS,
     REASON_TOKEN_REJECTED,
     REASON_TRANSIENT,
+    LogCache,
+    bounded_reason,
     iso_utc,
 )
 from omh.tui.bot_board import BotPlatforms, Gateway, Platform, PlatformStatus
@@ -38,12 +43,18 @@ NO_RECORD = Gateway("", False, problem="no gateway record")
 TOKEN = ".".join(("x" * 24, "y" * 6, "z" * 27))
 WEBHOOK = "https://discord.com/api/webhooks/" + "1" * 18 + "/" + "w" * 40 + "?wait=" + "q" * 12
 SLACK_HOOK = "https://hooks.slack.com/services/" + "/".join(("T" + "0" * 8, "B" + "0" * 8, "s" * 24))
-API_KEY = "k" * 48
+API_KEY = "k7" * 24
 INTENTS_REASON = ("Shard ID None is requesting privileged intents that have not been explicitly enabled in the "
                   "developer portal.")
 RECORD_GUIDANCE = ("Discord rejected the connection because privileged Gateway Intents are not enabled. Hermes is "
                    "requesting: - Message Content Intent - Server Members Intent (required for username allowlists "
                    "and/or DISCORD_ALLOWED_ROLES). Enable them in the Developer Portal (Bot > Privileged Gateway Intents).")
+
+
+def formats_listing():
+    from omh.system.process_listing import GatewayListing
+
+    return GatewayListing(True, ())
 
 
 def stamp(day: int, hour: int, minute: int = 0) -> str:
@@ -56,6 +67,16 @@ def epoch(day: int, hour: int, minute: int = 0) -> float:
 
 def connected(day: int, hour: int, minute: int = 0) -> str:
     return f"{stamp(day, hour, minute)} INFO gateway.run: ✓ discord connected (profile: {BOT})"
+
+
+def fatal(day: int, hour: int, minute: int = 0, code: str = "discord_intents_required") -> str:
+    return (f"{stamp(day, hour, minute)} ERROR gateway.run: Fatal discord adapter error for multiplexed profile {BOT} "
+            f"({code})")
+
+
+def rescanned(day: int, hour: int, minute: int = 0, connected_count: int = 0) -> str:
+    return (f"{stamp(day, hour, minute)} INFO gateway.run_profile_reconcile: [MULTIPLEX] Re-scanned profile '{BOT}' "
+            f"after config/.env change ({connected_count} adapter(s) connected)")
 
 
 def refused(day: int, hour: int, minute: int = 0) -> str:
@@ -158,6 +179,38 @@ class PerBot(unittest.TestCase):
                                                                                    current=True))))
             self.assertEqual((state.status, state.attention, state.since), ("connected", False, ""))
 
+    def test_a_failure_before_hermes_served_the_bot_again_says_nothing_about_now(self) -> None:
+        # Hermes drops a profile's verdicts when its config or .env changes (Discord removed, a token replaced) and
+        # serves it again: the old failure is from before that, so with no record entry it is not known now.
+        with TemporaryDirectory() as tmp:
+            root = self.home(tmp)
+            records = self.serving(epoch(23, 7))
+            for before in (fatal(23, 8), refused(23, 8)):
+                with self.subTest(before=before[:60]):
+                    self.host(root, before, rescanned(23, 9))
+                    state = self.only(self.read(root, records))
+                    self.assertEqual((state.status, state.unknown_why, state.attention, state.since),
+                                     ("unknown", "earlier_run", False, ""))
+            self.host(root, fatal(23, 8), rescanned(23, 9), connected(23, 9, 1))
+            self.assertEqual(self.only(self.read(root, records)).status, "connected")
+            self.host(root, fatal(23, 8), rescanned(23, 9), refused(23, 9, 30))
+            state = self.only(self.read(root, records))
+            self.assertEqual((state.status, state.since), ("failed", iso_utc(epoch(23, 9, 30))),
+                             "since restarts at the new failure")
+
+    def test_a_failure_of_the_re_serve_itself_still_counts(self) -> None:
+        # Hermes logs "Now serving" / "Re-scanned" after the adapters it restarted failed: those lines are that attempt's.
+        with TemporaryDirectory() as tmp:
+            root = self.home(tmp)
+            self.host(root, refused(23, 9),
+                      f"{stamp(23, 9)} INFO gateway.run_profile_reconcile: [MULTIPLEX] Now serving profile '{BOT}' "
+                      "(0 adapter(s) connected; control-socket)")
+            state = self.only(self.read(root, self.serving(epoch(23, 7))))
+            self.assertEqual((state.status, state.reason_kind), ("failed", REASON_PRIVILEGED_INTENTS))
+            self.host(root, connected(23, 8), rescanned(23, 9))
+            self.assertEqual(self.only(self.read(root, self.serving(epoch(23, 7)))).status, "unknown",
+                             "an old connect is no more believed than an old failure")
+
     # ── unknown is never connected and never disconnected ──────────────────
 
     def test_lines_that_say_nothing_about_now_read_unknown(self) -> None:
@@ -209,6 +262,15 @@ class PerBot(unittest.TestCase):
             self.host(root, f"{stamp(23, 9)} INFO gateway.run: ✓ local disconnected (0.00s) (profile: {BOT})")
             self.assertEqual(self.read(root, self.serving(epoch(23, 8)))[BOT].platforms, (),
                              "Hermes' in-process local adapter is no messaging platform")
+
+    def test_an_unreadable_host_log_means_an_empty_list_cannot_be_believed(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = self.home(tmp)
+            log = self.host(root, "not a line Hermes writes")
+            bots = self.read(root, self.serving(epoch(23, 8)))
+            self.assertEqual((bots["default"].log, bots[BOT].log), ("unrecognized", "unrecognized"))
+            log.write_text(connected(23, 9) + "\n", encoding="utf-8")
+            self.assertEqual(self.read(root, self.serving(epoch(23, 8)))[BOT].log, "missing")
 
     def test_a_record_entry_alone_is_enough_and_a_state_it_does_not_know_is_unknown(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -291,6 +353,66 @@ class PerBot(unittest.TestCase):
             state = found[[bot.profile for bot in found].index(BOT)].platforms[0]
             self.assertEqual(state.reason_kind, REASON_TOKEN_REJECTED)
             self.assertIn("<redacted>", state.reason + state.guidance)
+
+    def test_every_common_credential_shape_is_taken_out_and_plain_words_stay(self) -> None:
+        secrets = {
+            "Authorization: Bearer " + "ab12" * 8: "Authorization: Bearer <redacted>",
+            "Bearer " + "Zx9" * 13: "Bearer <redacted>",
+            "Basic " + "dXNlcjpwYXNzd29yZDEyMzQ1Ng==": "Basic <redacted>",
+            "token=" + "a1" * 10 + ":" + "b2" * 10: "token=<redacted>",
+            "key=" + "0123456789abcdef" * 2: "key=<redacted>",
+            "code=" + "c3" * 15: "code=<redacted>",
+            "api_key: " + "q8" * 10: "api_key: <redacted>",
+            "password=hunter22": "password=<redacted>",
+            "secret " + "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY": "secret <redacted>",
+            "blob " + "2Xz++nd6e08VJBq/" + "Aa1" * 8 + "==": "blob <redacted>",
+            "twilio " + "f" * 16 + "0" * 16: "twilio <redacted>",
+        }
+        for raw, want in secrets.items():
+            with self.subTest(raw=raw[:24]):
+                self.assertEqual(bounded_reason(raw, 600), want)
+        for words in ("discord_websocket_health_stale_reconnect_timeout_exceeded",
+                      "Hermes is requesting: - Message Content Intent - Server Members Intent (required for username "
+                      "allowlists and/or DISCORD_ALLOWED_ROLES)",
+                      "Enable it on the Bot page, Privileged Gateway Intents", "error code: 4014"):
+            with self.subTest(words=words[:24]):
+                self.assertEqual(bounded_reason(words, 600), words)
+
+    def test_escapes_control_and_bidi_characters_never_leave_the_producer(self) -> None:
+        raw = "\x1b[31mred\x1b[0m \x1b]8;;http://evil.invalid\x07click\x1b]8;;\x07 \u202eevil\u202c \x9b2J nul\x00bel\x07 end"
+        self.assertEqual(bounded_reason(raw), "red click evil nulbel end")
+        with TemporaryDirectory() as tmp:
+            root = self.home(tmp)
+            self.host(root, f"{stamp(23, 9)} ERROR gateway.run: ✗ discord error (profile: {BOT}): {raw}")
+            state = self.only(self.read(root, self.serving(epoch(23, 8))))
+            report = gateway_health(root, environ={}, gateway_reader=lambda home: self.serving(epoch(23, 8)).get(
+                home.name, NO_RECORD), list_processes=lambda: formats_listing(), process_start=lambda pid: None)
+        for text in (state.reason, state.fix, *(_adapter_line(adapter) for adapter in report.adapters)):
+            self.assertFalse([ch for ch in text if ch in "\x1b\x9b\x00\x07\u202e\u202c"], text)
+
+    def test_a_board_that_reads_again_does_not_parse_an_unchanged_log_again(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = self.home(tmp)
+            log = self.host(root, refused(23, 9))
+            cache = LogCache()
+            calls = []
+            real = formats._tail
+
+            def counted(path, limit):
+                calls.append(path)
+                return real(path, limit)
+
+            records = self.serving(epoch(23, 8))
+            with mock.patch.object(formats, "_tail", counted):
+                first = self.read(root, records, log_reader=cache.read)
+                reads = len(calls)
+                second = self.read(root, records, log_reader=cache.read)
+                self.assertEqual(len(calls), reads, "an unchanged log costs a stat")
+                self.assertEqual(first, second)
+                with log.open("a", encoding="utf-8") as handle:
+                    handle.write(connected(23, 9, 30) + "\n")
+                self.assertEqual(self.only(self.read(root, records, log_reader=cache.read)).status, "connected")
+                self.assertGreater(len(calls), reads)
 
     def test_the_command_prints_the_schema_and_every_bot(self) -> None:
         from omh.commands.main import main

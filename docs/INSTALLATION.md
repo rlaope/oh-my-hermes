@@ -4344,8 +4344,13 @@ answers three questions for the root Hermes home and every profile under it
   page, Privileged Gateway Intents. Hermes does not retry that failure on its
   own, so the gateway needs a restart afterwards. A rejected token is named
   too; any other reason is shown, bounded, as unrecognized. Hermes' reason
-  text never keeps a bot token, a webhook's credential path, a long key, an
-  id, an email address or a URL's query.
+  text never keeps an escape sequence or control character, a bot token, a
+  bearer or labelled secret (`token=`, `password=` and the like), a webhook's
+  credential path, a long opaque run of letters and digits, an id, an email
+  address or a URL's query. When Hermes serves a profile again after a
+  config or `.env` change (`Re-scanned profile`, `Now serving profile`), it
+  drops that profile's old verdicts, and so does this check: an adapter line
+  logged more than two minutes before that says nothing about now.
 
 The same adapter states, per bot, are what `omh hermes platforms` prints
 (read-only JSON, `omh_bot_platforms/v1`): each platform's status (connected,

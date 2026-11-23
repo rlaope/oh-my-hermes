@@ -43,7 +43,8 @@ class Answer(unittest.TestCase):
         bots = ob.platform_rows(answer(row()))
         self.assertEqual(set(bots), {"demo-bot", "default"})
         self.assertEqual(bots["demo-bot"]["log"], "read")
-        self.assertEqual(bots["demo-bot"]["platforms"], [row()])
+        kept = {k: v for k, v in row().items() if k != "fix"}  # OMH's fix sentence is not kept: it can name a log path
+        self.assertEqual(bots["demo-bot"]["platforms"], [kept])
         self.assertEqual(bots["default"], {"log": "missing", "platforms": []})
 
     def test_a_value_of_an_unknown_shape_is_dropped(self):
@@ -64,9 +65,14 @@ class Answer(unittest.TestCase):
         self.assertEqual(ob.platform_rows(answer(row(reason="two\nlines\r\nhere")))["demo-bot"]["platforms"][0]["reason"],
                          "two lines here")
 
+    def test_escapes_control_and_bidi_characters_are_dropped(self):
+        raw = "\x1b[31mred\x1b[0m \x1b]8;;http://evil.invalid\x07click\x1b]8;;\x07 \u202eevil\u202c \x9b2J nul\x00 end"
+        got = ob.platform_rows(answer(row(reason=raw, guidance=raw)))["demo-bot"]["platforms"][0]
+        self.assertEqual((got["reason"], got["guidance"]), ("red click evil nul end",) * 2)
+
     def test_anything_that_is_not_the_answer_is_none(self):
         for out in (None, "", "not json", "[]", json.dumps({"bots": []}), answer(row(), schema="omh_bot_platforms/v2"),
-                    " " * (ob.PLATFORMS_OUT_MAX + 1)):
+                    " " * (ob.OMH_READ_OUTPUT_MAX + 1)):
             with self.subTest(out=(out or "")[:20]):
                 self.assertIsNone(ob.platform_rows(out))
         self.assertEqual(ob.platform_rows(answer(row(), bot="../etc")), {"default": {"log": "missing", "platforms": []}})
@@ -101,12 +107,19 @@ class FindAndRun(unittest.TestCase):
                 self.assertEqual(ob.omh_path(which=lambda name: None, environ={"XDG_DATA_HOME": str(data)}), str(other))
 
     @POSIX
+    def test_a_relative_or_current_folder_omh_from_path_is_passed_over(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(Path, "home", return_value=Path(tmp)):
+                self.assertIsNone(ob.omh_path(which=lambda name: "bin/omh", environ={}))
+                self.assertIsNone(ob.omh_path(which=lambda name: os.path.join(os.getcwd(), "omh"), environ={}))
+
+    @POSIX
     def test_on_windows_a_cmd_shim_is_passed_over_for_the_venvs_exe(self):
         with tempfile.TemporaryDirectory() as tmp:
             exe = Path(tmp) / "omh" / "venv" / "Scripts" / "omh.exe"
             find = lambda found: ob.omh_path(which=lambda name: found, environ={"LOCALAPPDATA": tmp}, windows=True)
             with mock.patch.object(Path, "home", return_value=Path(tmp)):
-                self.assertEqual(find(r"C:\bin\omh.EXE"), r"C:\bin\omh.EXE")
+                self.assertEqual(find("/opt/omh/omh.EXE"), "/opt/omh/omh.EXE")
                 self.assertIsNone(find(r"C:\bin\omh.cmd"))
                 exe.parent.mkdir(parents=True)
                 exe.write_text("")
@@ -118,9 +131,10 @@ class FindAndRun(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             script = Path(tmp) / "omh"
             script.write_text('#!/bin/sh\nread line && printf "stdin:%s|" "$line"\n'
-                              'printf "%s|%s|%s|%s" "${PYTHONPATH-unset}" "$NO_COLOR" "$PWD" "$*"\n')
+                              'printf "%s|%s|%s|%s" "${PYTHONPATH-unset}${PYTHONWARNINGS-}" "$NO_COLOR" "$PWD" "$*"\n')
             script.chmod(0o755)
-            with mock.patch.dict(os.environ, {"PYTHONPATH": "/hermes/checkout", "HERMES_GATEWAY": "1"}):
+            with mock.patch.dict(os.environ, {"PYTHONPATH": "/hermes/checkout", "PYTHONWARNINGS": "error",
+                                              "HERMES_GATEWAY": "1"}):
                 out = ob.run_omh_read(str(script), Path(tmp) / ".hermes", "platforms")
             self.assertEqual(out, f"unset|1|{Path.home()}|--hermes-home {Path(tmp) / '.hermes'} hermes platforms")
             script.write_text("#!/bin/sh\necho partial; exit 3\n")

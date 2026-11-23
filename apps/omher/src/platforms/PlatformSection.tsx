@@ -39,7 +39,10 @@ export function PlatformsSection({ bot }: { bot: Bot }) {
 
 /** The section for what was read: null while the first read is under way. */
 export function PlatformsBody({ bot, read }: { bot: Bot; read: PlatformsRead | null }) {
-  const rows = read?.bots[bot.name]?.platforms ?? [];
+  const mine = read?.bots[bot.name];
+  const rows = mine?.platforms ?? [];
+  // "no platform" only when OMH reported this bot and the logs its lines can be in were read (or are not there)
+  const blind = read?.available && (!mine || (rows.length === 0 && mine.log !== "read" && mine.log !== "missing"));
   return (
     <>
       <div className="st-gh">{t("pf.title")}</div>
@@ -53,6 +56,10 @@ export function PlatformsBody({ bot, read }: { bot: Bot; read: PlatformsRead | n
         ) : !read.available ? (
           <p className="bp-empty" data-testid="pf-unavailable">
             {t("pf.unavailable")}
+          </p>
+        ) : blind ? (
+          <p className="bp-empty" data-testid="pf-cannot-tell">
+            {mine ? t("pf.logUnread") : t("pf.notReported")}
           </p>
         ) : rows.length === 0 ? (
           <p className="bp-empty" data-testid="pf-none">

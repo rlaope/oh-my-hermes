@@ -18,7 +18,6 @@ const state = (over: Partial<PlatformState> = {}): PlatformState => ({
   unknown_why: "",
   reason: "Shard ID None is requesting privileged intents that have not been explicitly enabled in the developer portal.",
   guidance: "Hermes is requesting: - Message Content Intent - Server Members Intent (required for DISCORD_ALLOWED_ROLES)",
-  fix: "Discord refused the bot's privileged gateway intents.",
   restart: "hermes -p default gateway restart",
   intents: ["Message Content", "Server Members"],
   ...over,
@@ -133,6 +132,17 @@ describe("the bot page's section", () => {
   it("says when OMH could not be asked, when nothing is configured, and that a remote bot is not read", () => {
     expect(renderToStaticMarkup(<PlatformsBody bot={BOT} read={{ available: false, bots: {} }} />)).toContain("pf-unavailable");
     expect(renderToStaticMarkup(<PlatformsBody bot={BOT} read={read()} />)).toContain("pf-none");
+    // not "no platform" when it cannot know: the bot is not in the answer, or its logs could not be read
+    const missing = renderToStaticMarkup(<PlatformsBody bot={BOT} read={{ available: true, bots: {} }} />);
+    expect(text(missing)).toContain(t("pf.notReported"));
+    expect(missing).not.toContain("pf-none");
+    for (const log of ["unreadable", "unrecognized", "unknown"] as const) {
+      const html = renderToStaticMarkup(<PlatformsBody bot={BOT} read={{ available: true, bots: { "demo-bot": { log, platforms: [] } } }} />);
+      expect(text(html)).toContain(t("pf.logUnread"));
+      expect(html).not.toContain("pf-none");
+    }
+    const missingLog = renderToStaticMarkup(<PlatformsBody bot={BOT} read={{ available: true, bots: { "demo-bot": { log: "missing", platforms: [] } } }} />);
+    expect(missingLog).toContain("pf-none");
     const remote = renderToStaticMarkup(<PlatformsBody bot={REMOTE} read={read(state())} />);
     expect(text(remote)).toContain(t("pf.remote"));
     expect(remote).not.toContain("pf-discord");

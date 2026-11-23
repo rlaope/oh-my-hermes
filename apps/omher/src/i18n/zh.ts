@@ -683,6 +683,8 @@ export const zh: Record<Key, string> = {
   "pf.remote": "只在这台电脑上读取，所以另一台电脑上的机器人在这里不显示。",
   "pf.unavailable": "这台电脑上没有 oh-my-hermes，或无法读取它的答复，所以 omher 无法判断这个机器人的平台是否已连接。",
   "pf.none": "Hermes 的网关记录和日志中没有这个机器人的消息平台。",
+  "pf.notReported": "oh-my-hermes 没有报告这个机器人，所以 omher 无法判断它的平台是否已连接。",
+  "pf.logUnread": "无法读取这个机器人的 Hermes 网关日志，所以 omher 无法判断它的平台是否已连接。",
   "pf.source": "由 oh-my-hermes 从 Hermes 的网关记录和日志读取。omher 不在这里更改或运行任何东西。",
   "pf.st.connected": "已连接",
   "pf.st.degraded": "已连接（功能受限）",

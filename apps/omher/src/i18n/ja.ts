@@ -683,6 +683,8 @@ export const ja: Record<Key, string> = {
   "pf.remote": "このコンピューターでのみ読みます。別のコンピューターのボットはここに表示されません。",
   "pf.unavailable": "このコンピューターに oh-my-hermes がないか、その応答を読めなかったため、このボットのプラットフォームが接続中かどうか分かりません。",
   "pf.none": "Hermes のゲートウェイ記録とログに、このボットのメッセージングプラットフォームはありません。",
+  "pf.notReported": "oh-my-hermes がこのボットを報告しなかったため、プラットフォームが接続中かどうか分かりません。",
+  "pf.logUnread": "このボットの Hermes ゲートウェイのログを読めなかったため、プラットフォームが接続中かどうか分かりません。",
   "pf.source": "oh-my-hermes が Hermes のゲートウェイ記録とログから読んだ内容です。omher はここで何も変更せず、何も実行しません。",
   "pf.st.connected": "接続中",
   "pf.st.degraded": "接続中（機能制限あり）",

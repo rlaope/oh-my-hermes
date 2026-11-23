@@ -686,6 +686,8 @@ export const en = {
   "pf.remote": "Read on this computer only, so a bot on another computer shows none here.",
   "pf.unavailable": "oh-my-hermes is not on this computer, or its answer could not be read, so omher cannot tell whether this bot's platforms are connected.",
   "pf.none": "Hermes' gateway records and logs name no messaging platform for this bot.",
+  "pf.notReported": "oh-my-hermes did not report this bot, so omher cannot tell whether its platforms are connected.",
+  "pf.logUnread": "Hermes' gateway log for this bot could not be read, so omher cannot tell whether its platforms are connected.",
   "pf.source": "Read by oh-my-hermes from Hermes' gateway records and logs. omher changes nothing here and runs nothing.",
   "pf.st.connected": "Connected",
   "pf.st.degraded": "Connected, degraded",

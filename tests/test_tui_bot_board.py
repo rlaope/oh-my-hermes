@@ -1294,6 +1294,13 @@ class MessagingTests(unittest.TestCase):
                 self.assertEqual(row, f"discord unknown: {words}")
                 self.assertNotIn("fix", [squeeze(cell).split(" ")[0] for line in box for cell in line.split("│")])
 
+    def test_escapes_and_bidi_characters_in_hermes_words_never_reach_the_screen(self) -> None:
+        raw = "\x1b[31mred\x1b[0m \x1b]8;;http://evil.invalid\x07click\x1b]8;;\x07 \u202eevil"
+        box = self.box(self.demo(demo_down(reason=raw, fix=raw)), 150)
+        drawn = "".join(box)
+        self.assertFalse([ch for ch in drawn if ch in "\x1b\x07\u202e"])
+        self.assertIn("red", field(box, "why"))
+
     def test_a_long_fix_is_wrapped_to_its_rows_and_cut_only_past_them(self) -> None:
         box = self.box(self.demo(demo_down(fix="word " * 400)), 60)
         fix = field_row(box, "fix")

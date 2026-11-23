@@ -683,6 +683,8 @@ export const ko: Record<Key, string> = {
   "pf.remote": "이 컴퓨터에서만 읽어요. 다른 컴퓨터의 봇은 여기에 나오지 않아요.",
   "pf.unavailable": "이 컴퓨터에 oh-my-hermes가 없거나 답을 읽지 못해서, 이 봇의 플랫폼이 연결되어 있는지 알 수 없어요.",
   "pf.none": "Hermes 게이트웨이 기록과 로그에 이 봇의 메신저 플랫폼이 없어요.",
+  "pf.notReported": "oh-my-hermes가 이 봇을 알려 주지 않아서, 플랫폼이 연결되어 있는지 알 수 없어요.",
+  "pf.logUnread": "이 봇의 Hermes 게이트웨이 로그를 읽지 못해서, 플랫폼이 연결되어 있는지 알 수 없어요.",
   "pf.source": "oh-my-hermes가 Hermes 게이트웨이 기록과 로그에서 읽은 내용이에요. omher는 여기서 아무것도 바꾸거나 실행하지 않아요.",
   "pf.st.connected": "연결됨",
   "pf.st.degraded": "연결됨, 일부 기능 제한",

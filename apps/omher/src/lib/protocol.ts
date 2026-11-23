@@ -111,8 +111,9 @@ export type PlatformStatus =
   | "unknown";
 
 /** One platform of one bot. Times are UTC ISO strings ("" when not known); `reason` and `guidance` are Hermes' own
- *  words, bounded, with tokens, ids, emails and a URL's query taken out; `fix` is OMH doctor's sentence; `restart`
- *  is Hermes' `hermes -p <profile> gateway restart` for the gateway that serves the bot, to copy (omher never runs it). */
+ *  words, bounded, with credentials, ids, emails, a URL's query and control characters taken out; `restart` is
+ *  Hermes' `hermes -p <profile> gateway restart` for the gateway that serves the bot, to copy (omher never runs it).
+ *  The fix is worded by the page from `reason_kind`. */
 export interface PlatformState {
   platform: string;
   status: PlatformStatus;
@@ -125,13 +126,14 @@ export interface PlatformState {
   unknown_why: string;
   reason: string;
   guidance: string;
-  fix: string;
   restart: string;
   /** A privileged-intents refusal: the intents Hermes' own record says it requests ([] when it does not say). */
   intents: string[];
 }
 
 export interface BotPlatforms {
+  /** The gateway logs its lines can be in (its own and the root's): an empty list is believable only when `read` or
+   *  `missing`. */
   log: "read" | "missing" | "unreadable" | "unrecognized" | "unknown";
   platforms: PlatformState[];
 }

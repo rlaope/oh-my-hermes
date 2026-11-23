@@ -119,6 +119,7 @@ import threading
 import time
 from typing import Any, ClassVar
 
+from ..maintenance.hermes_gateway_formats import LogCache
 from ..plugin_bundle.omh import runtime_paths
 from ..skin_pack import TUI_PROFILE, hex_to_rgb
 from ..plugin_bundle.omh.hud_text import compact_count
@@ -961,14 +962,18 @@ def read_messages(home: Path, session_id: str) -> tuple[tuple[MessageRow, ...], 
     return tuple(messages), _session_row(found) if found is not None else None, ""
 
 
+_LOG_CACHE = LogCache()  # the board's reader thread is its only user
+
+
 def read_messaging(root: Path) -> dict[str, tuple[PlatformStatus, ...]]:
     """Each profile's messaging platforms, from the one producer `omh doctor` and omher read too
-    (`maintenance.gateway_health.bot_platforms`: the gateway records and the bounded tails of the gateway logs).
-    A read that fails leaves every card without them, never the board without its cards."""
+    (`maintenance.gateway_health.bot_platforms`: the gateway records and the bounded tails of the gateway logs). A
+    log unchanged since the last read is not read again (`LogCache`). A read that fails leaves every card without
+    them, never the board without its cards."""
     from ..maintenance.gateway_health import bot_platforms  # it reads gateway records with this module's reader
 
     try:
-        return {bot.profile: bot.platforms for bot in bot_platforms(root)}
+        return {bot.profile: bot.platforms for bot in bot_platforms(root, log_reader=_LOG_CACHE.read)}
     except (OSError, ValueError):
         return {}
 

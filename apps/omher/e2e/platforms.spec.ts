@@ -40,7 +40,6 @@ const REFUSED = {
   unknown_why: "",
   reason: "Shard ID None is requesting privileged intents that have not been explicitly enabled in the developer portal.",
   guidance: "Hermes is requesting: - Message Content Intent - Server Members Intent (required for DISCORD_ALLOWED_ROLES)",
-  fix: "Discord refused the bot's privileged gateway intents.",
   restart: "hermes -p default gateway restart",
   intents: ["Message Content", "Server Members"],
 };
@@ -58,10 +57,10 @@ test.beforeEach(async () => {
 
 test("connected: the row says nothing and the page lists the platform as connected", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("bot-kami")).toBeVisible();
+  await expect(page.getByTestId("bot-default")).toBeVisible();
   await expect.poll(async () => (await platformReads()).length).toBeGreaterThan(0);
-  await expect(page.getByTestId("platform-down-kami")).toHaveCount(0);
-  await botPage(page, "kami");
+  await expect(page.getByTestId("platform-down-default")).toHaveCount(0);
+  await botPage(page, "default");
   const section = page.getByTestId("bp-platforms");
   await expect(section.getByTestId("pf-state-discord")).toHaveText("Connected");
   await expect(section.getByTestId("pf-fix-discord")).toHaveCount(0);
@@ -69,14 +68,14 @@ test("connected: the row says nothing and the page lists the platform as connect
 
 test("a refused Discord: the row names it, the page gives the reason, the portal and the restart to copy", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-  await mock("mock.platforms", one("kami", REFUSED));
+  await mock("mock.platforms", one("default", REFUSED));
   await page.goto("/");
-  const chip = page.getByTestId("platform-down-kami");
+  const chip = page.getByTestId("platform-down-default");
   await expect(chip).toHaveText("!Discord disconnected");
   await expect(chip).toHaveAttribute("role", "status");
   await expect(page.getByTestId("platform-down-friren")).toHaveCount(0);
 
-  await botPage(page, "kami");
+  await botPage(page, "default");
   const item = page.getByTestId("pf-discord");
   await expect(item.getByTestId("pf-state-discord")).toHaveText("!Disconnected");
   await expect(item).toContainText("since");
@@ -97,7 +96,7 @@ test("a refused Discord: the row names it, the page gives the reason, the portal
   expect(before).toBe(0);
 
   // Read again asks OMH again (fresh), and a later connect clears the row
-  await mock("mock.platforms", one("kami", { ...REFUSED, status: "connected", attention: false, reason_kind: "", since: "" }));
+  await mock("mock.platforms", one("default", { ...REFUSED, status: "connected", attention: false, reason_kind: "", since: "" }));
   await page.getByTestId("bp-refresh").click();
   await expect(item.getByTestId("pf-state-discord")).toHaveText("Connected");
   await expect(chip).toHaveCount(0);
@@ -105,12 +104,12 @@ test("a refused Discord: the row names it, the page gives the reason, the portal
 });
 
 test("unknown and an OMH that could not say: nothing on the row, and the page says which", async ({ page }) => {
-  await mock("mock.platforms", one("kami", { ...REFUSED, status: "unknown", attention: false, unknown_why: "earlier_run", since: "" }));
+  await mock("mock.platforms", one("default", { ...REFUSED, status: "unknown", attention: false, unknown_why: "earlier_run", since: "" }));
   await page.goto("/");
-  await expect(page.getByTestId("bot-kami")).toBeVisible();
+  await expect(page.getByTestId("bot-default")).toBeVisible();
   await expect.poll(async () => (await platformReads()).length).toBeGreaterThan(0);
-  await expect(page.getByTestId("platform-down-kami")).toHaveCount(0);
-  await botPage(page, "kami");
+  await expect(page.getByTestId("platform-down-default")).toHaveCount(0);
+  await botPage(page, "default");
   const item = page.getByTestId("pf-discord");
   await expect(item.getByTestId("pf-state-discord")).toHaveText("Not known");
   await expect(item).toContainText("from before the gateway serving it started");
@@ -123,11 +122,11 @@ test("unknown and an OMH that could not say: nothing on the row, and the page sa
 });
 
 test("a bot with no messaging platform shows none, and Korean says it in Korean", async ({ page }) => {
-  await mock("mock.platforms", one("kami", REFUSED));
+  await mock("mock.platforms", one("default", REFUSED));
   await page.goto("/");
   await page.evaluate(() => localStorage.setItem("omher.lang", "ko"));
   await page.reload();
-  await expect(page.getByTestId("platform-down-kami")).toHaveText("!Discord 연결 끊김");
+  await expect(page.getByTestId("platform-down-default")).toHaveText("!Discord 연결 끊김");
   await page.getByTestId("bot-friren").click({ button: "right" });
   await page.getByTestId("row-menu").getByRole("menuitem", { name: "봇 편집" }).click();
   await expect(page.getByTestId("pf-none")).toContainText("메신저 플랫폼이 없어요");

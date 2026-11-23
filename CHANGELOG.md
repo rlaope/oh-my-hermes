@@ -436,9 +436,11 @@ All notable changes will be documented here.
   platforms`, JSON `omh_bot_platforms/v1`, which omher's bridge runs): the serving gateway's own record entry first,
   else the newest line of that gateway's run in the bounded log tails, so a refusal followed by a later connect reads
   connected, a connect followed by a fatal error reads disconnected, and a line from an earlier run or for a bot no
-  gateway serves reads as not known, never as connected. A bot with no messaging platform shows nothing. The reader
-  now also takes a Discord or Slack webhook's credential path and any 40-character key out of Hermes' reason text,
-  and names the gateway's profile in every restart command (`hermes -p default gateway restart`; a bare `hermes
+  gateway serves reads as not known, never as connected, as does a line from before Hermes served the bot again
+  after a config or `.env` change. A bot with no messaging platform shows nothing. The reader now also takes escape
+  and control characters, bearer and labelled secrets, a Discord or Slack webhook's credential path and long opaque
+  keys out of Hermes' reason text, reads only lines that can be an adapter's (the board keeps unchanged logs from its
+  last read), and names the gateway's profile in every restart command (`hermes -p default gateway restart`; a bare `hermes
   gateway restart` follows Hermes' sticky active profile). (`src/maintenance/gateway_health.py` `bot_platforms`,
   `src/tui/bot_board.py`, `apps/omher/src/platforms/`; `docs/OMHER-BOUNDARY.md` rule 43)
 - The OMH TUI no longer asks for kitty image previews in an omher terminal that cannot paint them. omher 1.1.3

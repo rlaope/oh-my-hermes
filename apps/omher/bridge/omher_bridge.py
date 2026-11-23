@@ -997,7 +997,6 @@ def read_bot_page(profile_dir: Path) -> dict:
 # ask for PLATFORMS_TTL; a failed one is asked again only after PLATFORMS_TTL_MISS.
 PLATFORMS_TTL = 30.0
 PLATFORMS_TTL_MISS = 120.0
-PLATFORMS_OUT_MAX = 1 << 20  # its answer, at most; a longer one is not read
 # The read-only `omh` JSON commands the bridge may run, each a fixed argv after `omh --hermes-home <Hermes root>`.
 # This table is the whole list: an entry needs a boundary rule of its own (`platforms`: rule 43).
 OMH_READS = {"platforms": ("hermes", "platforms")}
@@ -1011,7 +1010,12 @@ PLATFORM_TOKEN = re.compile(r"[a-z][a-z0-9_]{0,63}")  # a reason kind or why a s
 PLATFORM_TIME = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")
 PLATFORM_RESTART = re.compile(r"hermes -p [a-z0-9][a-z0-9_-]{0,63} gateway restart")
 PLATFORM_INTENTS = frozenset({"Message Content", "Server Members", "Presence"})
-PLATFORM_TEXT_MAX = {"reason": 300, "guidance": 800, "fix": 1200}
+# Hermes' own words, kept on one line and clipped. OMH's `fix` sentence is not kept: the page words its own fix from
+# the reason kind, and that sentence can name a log file's full path.
+PLATFORM_TEXT_MAX = {"reason": 300, "guidance": 800}
+# Escape sequences (ANSI colour, an OSC 8 link), dropped before the control and format characters (Cc, Cf: a bidi
+# override included) go one by one.
+PLATFORM_ESCAPES = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x9b[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-_]")
 PLATFORM_LOGS = frozenset({"read", "missing", "unreadable", "unrecognized"})
 
 
@@ -1023,7 +1027,10 @@ def omh_path(which=None, environ=None, windows: bool | None = None) -> str | Non
     environ = os.environ if environ is None else environ
     windows = os.name == "nt" if windows is None else windows
     found = which("omh")
-    if found and (not windows or found.lower().endswith(".exe")):
+    # only an absolute path outside the bridge's own folder: a relative PATH entry, or Windows looking in the current
+    # folder first, must not pick an `omh` that happens to sit there
+    if found and os.path.isabs(found) and os.path.dirname(os.path.abspath(found)) != os.getcwd() \
+            and (not windows or found.lower().endswith(".exe")):
         return found
     home = Path.home()
     data = Path(environ["XDG_DATA_HOME"]) if os.path.isabs(environ.get("XDG_DATA_HOME") or "") else home / ".local" / "share"
@@ -1048,11 +1055,11 @@ def run_omh_read(omh: str, home: Path, read: str, timeout: float = OMH_READ_TIME
     """Run one OMH_READS argv and return what it printed, or None when it could not say (it could not start, it ended
     with an error, it printed more than OMH_READ_OUTPUT_MAX, or it was still running at *timeout* and was stopped with
     `_stop_run`, in a session or group of its own so the stop reaches nothing else). No shell, nothing on stdin, its
-    stderr dropped, started in the home folder without the Hermes interpreter's Python variables or the gateway's own
-    markers. The output goes to a temporary file, not a pipe, so nothing it leaves running can hold the read open."""
+    stderr dropped, started in the home folder without any `PYTHON*` variable of the Hermes interpreter (only
+    PYTHONIOENCODING, set to UTF-8) or the gateway's own markers. The output goes to a temporary file, not a pipe, so nothing it leaves running can hold the read open."""
     import tempfile
     argv = omh_read_argv(omh, home, read)
-    env = {k: v for k, v in os.environ.items() if k not in ("PYTHONPATH", "PYTHONHOME", *_GATEWAY_MARKERS)}
+    env = {k: v for k, v in os.environ.items() if not k.startswith("PYTHON") and k not in _GATEWAY_MARKERS}
     env.update(NO_COLOR="1", PYTHONIOENCODING="utf-8")
     if os.name == "nt":
         kw = {"creationflags": 0x08000000 | 0x00000200}  # CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP
@@ -1076,7 +1083,9 @@ def run_omh_read(omh: str, home: Path, read: str, timeout: float = OMH_READ_TIME
 
 
 def _platform_text(value, n: int) -> str:
-    text = " ".join(str(value).split()) if isinstance(value, str) else ""
+    import unicodedata
+    text = " ".join(PLATFORM_ESCAPES.sub("", value).split()) if isinstance(value, str) else ""
+    text = "".join(ch for ch in text if unicodedata.category(ch) not in ("Cc", "Cf"))
     return text if len(text) <= n else text[: n - 1].rstrip() + "…"
 
 
@@ -1084,7 +1093,7 @@ def platform_rows(out: str | None) -> dict[str, dict] | None:
     """`omh hermes platforms`' answer, kept field by field: {bot: {log, platforms: [...]}}, or None when it is not
     that answer. A value of an unknown shape is dropped (a row whose status is not one this page knows, a restart
     that is not Hermes' own `hermes -p <profile> gateway restart`); text is kept on one line and clipped."""
-    if not out or len(out) > PLATFORMS_OUT_MAX:
+    if not out or len(out) > OMH_READ_OUTPUT_MAX:
         return None
     try:
         data = json.loads(out)

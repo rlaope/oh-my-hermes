@@ -655,13 +655,16 @@ let noSkills;
 let botPageFail;
 // Each bot's messaging platforms as the bridge's PlatformStates answers (mock.platforms {available?, bots?}).
 let platformsRead;
+// As OMH reports them: every profile of the Hermes home, most with no messaging platform.
+const PLATFORMS_NONE = () => Object.fromEntries(BOT_SEED.map((b) => [b.name, { log: "read", platforms: [] }]));
 const PLATFORMS_SEED = () => ({
   available: true,
   bots: {
-    kami: {
+    ...PLATFORMS_NONE(),
+    default: {
       log: "read",
       platforms: [
-        { platform: "discord", status: "connected", attention: false, since: "", logged: "2026-11-23T09:00:00Z", reason_kind: "", unknown_why: "", reason: "", guidance: "", fix: "", restart: "hermes -p default gateway restart", intents: [] },
+        { platform: "discord", status: "connected", attention: false, since: "", logged: "2026-11-23T09:00:00Z", reason_kind: "", unknown_why: "", reason: "", guidance: "", restart: "hermes -p default gateway restart", intents: [] },
       ],
     },
   },
@@ -2231,7 +2234,7 @@ const OPS = {
     return {};
   },
   "mock.platforms": (p) => {
-    platformsRead = { available: p.available !== false, bots: p.bots ?? {} };
+    platformsRead = { available: p.available !== false, bots: { ...PLATFORMS_NONE(), ...(p.bots ?? {}) } };
     return {};
   },
   "mock.botPageFail": (p) => {

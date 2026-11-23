@@ -3398,15 +3398,17 @@ class MessagingPlatformsThroughOmh(unittest.TestCase):
         "The bridge runs `omh` only through `run_omh_read`, with an argv from one fixed table (`OMH_READS`), and this"
         " rule allows that table exactly this one entry.",
         "the argv is fixed and takes nothing from the page, with no shell, nothing on stdin, its stderr dropped, started"
-        " in the home folder without the Hermes interpreter's Python variables, and at most 1 MB of what it prints read"
-        " (a longer answer is refused).",
-        "A read still running after 20 seconds is stopped, with what it started (it runs in a session or process group of"
-        " its own), by `_stop_run`, the same stop rule 41 uses; nothing else is signalled.",
+        " in the home folder without any `PYTHON*` variable of the Hermes interpreter, and at most 1 MB of what it prints"
+        " read (a longer answer is refused).",
+        "A read still running after 20 seconds is stopped by `_stop_run`, the same stop rule 41 uses: on macOS and Linux"
+        " with everything in the session it was started in, on Windows the `omh.exe` process itself; nothing else is"
+        " signalled.",
         "That command reads, never writes, the gateway record (`gateway_state.json`) of the Hermes root and of each"
         " profile and the tail of each one's `logs/gateway.log` (at most 1 MB, with the rotated `gateway.log.1` before it"
         " when the log is shorter); it runs no Hermes command, signals no process and sends nothing anywhere, and omher"
         " itself opens no Hermes log.",
-        "the fix in OMH's words, and Hermes' restart command for the gateway that serves the bot; never a log line.",
+        "the fix in OMH's words, and Hermes' restart command for the gateway that serves the bot; never a log line. The"
+        " bridge keeps only those fields but the fix (it can name a log file's path; the page words its own),",
         "is shown as not known, never as connected or as not connected, and with no answer from `omh` nothing is shown"
         " as connected.",
         "shown to copy and never run by omher (rule 29's Restart stays the one way omher restarts a gateway). A bot on"
@@ -3448,7 +3450,7 @@ class MessagingPlatformsThroughOmh(unittest.TestCase):
         self.assertIn("_stop_run(proc)", run)
         self.assertIn("kw = {'start_new_session': True}", run)
         self.assertIn("kw = {'creationflags': 134217728 | 512}", run)
-        self.assertIn("('PYTHONPATH', 'PYTHONHOME', *_GATEWAY_MARKERS)", run)
+        self.assertIn("if not k.startswith('PYTHON') and k not in _GATEWAY_MARKERS", run)
         self.assertIn("out.seek(0, os.SEEK_END) > OMH_READ_OUTPUT_MAX", run)
         self.assertNotIn("shell=", run)
         self.assertNotIn("PIPE", run)
@@ -3506,7 +3508,7 @@ class MessagingPlatformsThroughOmh(unittest.TestCase):
             self.assertNotIn(secret, kept, secret)
         self.assertEqual(set(bots["demo-bot"]["platforms"][0]),
                          {"platform", "status", "attention", "since", "logged", "reason_kind", "unknown_why", "reason",
-                          "guidance", "fix", "restart", "intents"})
+                          "guidance", "restart", "intents"})  # no `fix`: it can name a log file's path
 
     def test_the_page_runs_nothing_and_shows_the_restart_to_copy(self) -> None:
         store = (UI_SRC / "state" / "store.ts").read_text(encoding="utf-8")

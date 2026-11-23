@@ -67,12 +67,14 @@ from .hermes_gateway_formats import (
     STATE_DISCONNECTED,
     STATE_FAILED,
     STATE_FATAL,
+    STATE_RESERVED,
     STATE_RETRYING,
     STATUS_MISSING,
     STATUS_READ,
     STATUS_UNREADABLE,
     STATUS_UNRECOGNIZED,
     AMBIGUOUS_PROFILE,
+    ATTEMPT_WINDOW_SECONDS,
     AdapterEvent,
     BuildStamp,
     FleetRestartState,
@@ -253,6 +255,7 @@ def bot_platforms(
     *,
     gateway_reader: Callable[[Path], Gateway] = read_gateway,
     log_tail_bytes: int = GATEWAY_LOG_TAIL_BYTES,
+    log_reader: Callable[[Path, int], LogRead] | None = None,
 ) -> tuple[BotPlatforms, ...]:
     """Question 3 alone, per bot: each profile's messaging platforms as `gateway_health` judges them, for the TUI bot
     board and `omh hermes platforms`. It reads the gateway records and the gateway log tails only (no process listing,
@@ -260,12 +263,15 @@ def bot_platforms(
 
     A platform the log cannot give to one of several profiles is `unknown` for each of them that has no state of its
     own; one whose every candidate's record says it is up is history and not listed. A profile with no platform in its
-    serving gateway's record and no adapter line has an empty list: nothing to show, which is not "connected".
+    serving gateway's record and no adapter line has an empty list: nothing to show, which is not "connected". Its
+    `log` says whether that empty list can be believed: the worse of its own log and the root's, where a served bot's
+    lines also land (`unreadable` or `unrecognized` over `read` or `missing`). `log_reader` (path, tail bytes) lets a
+    caller that reads often keep a `LogCache`.
     """
     root = hermes_root(hermes_home)
     homes = gateway_homes(root)
     _recorded, _unverified, serving = _recorded_gateways(homes, gateway_reader, BuildStamp(STATUS_MISSING, ""))
-    logs, adapters = _adapter_states(homes, serving, log_tail_bytes)
+    logs, adapters = _adapter_states(homes, serving, log_tail_bytes, log_reader)
     by_profile: dict[str, dict[str, PlatformStatus]] = {label: {} for label, _home in homes}
     unowned: list[AdapterState] = []
     for state in adapters:
@@ -278,7 +284,10 @@ def bot_platforms(
             continue  # every candidate's own record says it is up now
         for name in state.profile.split("/"):
             by_profile.setdefault(name, {}).setdefault(state.platform, _platform_status(state))
-    log_status = {label: log.status for (label, _home), log in zip(homes, logs, strict=True)}
+    own = {label: log.status for (label, _home), log in zip(homes, logs, strict=True)}
+    unread = (STATUS_UNREADABLE, STATUS_UNRECOGNIZED)
+    root_bad = own.get(DEFAULT_PROFILE) if own.get(DEFAULT_PROFILE) in unread else None
+    log_status = {label: status if status in unread else root_bad or status for label, status in own.items()}
     return tuple(
         BotPlatforms(name, log_status.get(name, STATUS_MISSING), tuple(platforms[key] for key in sorted(platforms)))
         for name, platforms in by_profile.items()
@@ -373,21 +382,29 @@ def _shared_profiles(recorded: list[GatewayProcess]) -> dict[str, list[int]]:
 
 
 def _adapter_states(
-    homes: list[tuple[str, Path]], serving: dict[str, _Serving], tail_bytes: int
+    homes: list[tuple[str, Path]], serving: dict[str, _Serving], tail_bytes: int,
+    log_reader: Callable[[Path, int], LogRead] | None = None,
 ) -> tuple[list[LogRead], list[AdapterState]]:
     """Per profile and platform: the serving gateway's own current record entry first, else the newest log line of
-    this gateway run. A line from before the serving gateway started, or for a profile no running gateway serves, is
-    said as such and never as the state now."""
-    logs: list[LogRead] = []
+    this gateway run. A line from before the serving gateway started, from before the profile was last served again,
+    or for a profile no running gateway serves, is said as such and never as the state now."""
+    log_reader = log_reader or (lambda path, tail: read_gateway_log(path, tail_bytes=tail))
+    logs = [log_reader(home / GATEWAY_LOG_RELATIVE, tail_bytes) for _label, home in homes]
+    # A profile served again starts a run of its own: its adapter lines from before that attempt say nothing about now.
+    reserved: dict[str, float] = {}
+    for log in logs:
+        for event in log.events:
+            if event.state == STATE_RESERVED and event.epoch is not None:
+                reserved[event.profile] = max(event.epoch, reserved.get(event.profile, event.epoch))
     latest: dict[tuple[str, str], tuple[AdapterEvent, str, AdapterEvent | None]] = {}
     ambiguous: list[AdapterState] = []
-    for label, home in homes:
-        log = read_gateway_log(home / GATEWAY_LOG_RELATIVE, tail_bytes=tail_bytes)
-        logs.append(log)
+    for (label, _home), log in zip(homes, logs, strict=True):
         newest_here: dict[tuple[str, str], AdapterEvent] = {}
         outage_here: dict[tuple[str, str], AdapterEvent] = {}  # the first line of this run not followed by a connect
         unowned: dict[str, AdapterEvent] = {}
         for event in log.events:  # within one log, the line written last wins, whatever its stamp says
+            if event.state == STATE_RESERVED:
+                continue
             if event.profile == AMBIGUOUS_PROFILE:
                 unowned[event.platform] = event
                 continue
@@ -395,7 +412,7 @@ def _adapter_states(
             newest_here[key] = event
             if event.state in {STATE_CONNECTED, STATE_DEGRADED}:
                 outage_here.pop(key, None)
-            elif _in_run(event, serving.get(key[0])):
+            elif _in_run(event, serving.get(key[0]), reserved.get(key[0])):
                 outage_here.setdefault(key, event)
         ambiguous.extend(_ambiguous_state(event, log.path, serving) for event in unowned.values())
         for key, event in newest_here.items():  # across logs, the stamps decide
@@ -415,7 +432,7 @@ def _adapter_states(
                                            last_state=event.state, logged_as_written=event.logged))
             continue
         record = info.platforms.get(f"{profile}:{platform}")
-        this_run = event is not None and _in_run(event, info)
+        this_run = event is not None and _in_run(event, info, reserved.get(profile))
         restart = _restart_command(info.gateway_profile)
         started = iso_utc(info.started)
         if record is None and not this_run:
@@ -432,9 +449,17 @@ def _adapter_states(
     return logs, states + [state for state in ambiguous if state.reason_kind or state.source == SOURCE_RECORD]
 
 
-def _in_run(event: AdapterEvent, info: _Serving | None) -> bool:
-    """Whether a line falls in the run of the gateway serving its profile (a line with no readable stamp does)."""
-    return info is not None and (info.started is None or event.epoch is None or event.epoch >= info.started - 1)
+def _in_run(event: AdapterEvent, info: _Serving | None, reserved: float | None = None) -> bool:
+    """Whether a line falls in the run of the gateway serving its profile (a line with no readable stamp does) and,
+    when the profile was served again since (`reserved`), in that attempt: logged at most ATTEMPT_WINDOW_SECONDS
+    before Hermes said so, or after."""
+    if info is None:
+        return False
+    if event.epoch is None:
+        return True
+    if info.started is not None and event.epoch < info.started - 1:
+        return False
+    return reserved is None or event.epoch >= reserved - ATTEMPT_WINDOW_SECONDS
 
 
 def _ambiguous_state(event: AdapterEvent, log_path: str, serving: dict[str, _Serving]) -> AdapterState:
@@ -531,7 +556,7 @@ def _adapter_fix(
     where = f"around {event.logged} in {log_path}" if event.logged and log_path else "in the gateway log"
     if kind == REASON_NONE:
         return f"no reason this check recognizes was recorded with it; read the lines {where}."
-    return f"unrecognized reason (Hermes recorded: {event.reason or event.code}); read the lines {where}."
+    return f"unrecognized reason (Hermes recorded: {event.reason or bounded_reason(event.code)}); read the lines {where}."
 
 
 def _findings(
