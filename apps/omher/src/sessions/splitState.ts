@@ -85,7 +85,9 @@ export function splitIn(groups: SplitGroup[], at: string, dir: SplitDirName, add
   const g = groupOf(rest, at);
   const layout = splitLayout(g?.layout ?? { pane: a }, a, dir === "right" || dir === "left" ? "row" : "col", b, dir === "left" || dir === "up");
   if (!layout) return groups;
-  return g ? rest.map((x) => (x === g ? { layout, ...keepH(x) } : x)) : [...rest, { layout }].slice(-MAX_GROUPS);
+  // no split of `at`'s left after `add` went: a new one, unless `add` only moved within `at`'s two-pane split (which
+  // ended for that moment), which keeps its card height
+  return g ? rest.map((x) => (x === g ? { layout, ...keepH(x) } : x)) : [...rest, { layout, ...(current ? keepH(current) : {}) }].slice(-MAX_GROUPS);
 }
 
 /** The split holding `id`, changed by `fn` (the same list when there is none). */

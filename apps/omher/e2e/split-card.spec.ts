@@ -5,7 +5,7 @@
 // double-click goes back), a search draws rows instead, and a 1+3 split's tall cell stacks its text.
 import { expect, test, type Page } from "@playwright/test";
 import { mock, openApp } from "./term-find-helpers";
-import { dragRowOnto, type Side } from "./split-drag-helpers";
+import { closeFromSidebar, dragRowOnto, type Side } from "./split-drag-helpers";
 
 type Sessions = { startTerminal(a: string, cwd: string): string; ptyOf(id: string): number | null };
 const start = (page: Page, cwd: string, agent = "shell") => page.evaluate(([c, a]) => (window as unknown as { __omherSessions: Sessions }).__omherSessions.startTerminal(a, c), [cwd, agent] as const);
@@ -232,6 +232,41 @@ test("a split that ends while its grip is held saves nothing, and a later window
   await page.waitForTimeout(100);
   await expect(grip).toHaveAttribute("aria-valuenow", "62");
   expect(await page.evaluate(() => localStorage.getItem("omher.splits"))).not.toContain("mapH");
+});
+
+test("a card keeps its height when a pane moves within its split and when a closed cell comes back with Undo", async ({ page }) => {
+  await openApp(page);
+  await page.evaluate(() => ((window as unknown as { __omherCloseGraceMs: number }).__omherCloseGraceMs = 10_000));
+  const [a, b, c] = await sessions(page, ["/w/a", "/w/b", "/w/c"]);
+  await splitWith(page, a, b);
+  const grip = page.getByTestId("split-card-grip");
+  await grip.focus();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await expect(grip).toHaveAttribute("aria-valuenow", "94");
+  // b moved below a: still one split of a and b, still 94
+  await dragRowOnto(page, b, a, "down");
+  await expect(pane(page, b)).toHaveAttribute("data-focused", "true");
+  await expect(card(page)).toHaveAttribute("data-panes", "2");
+  await expect(grip).toHaveAttribute("aria-valuenow", "94");
+  // close b (the split ends while the close can be undone), then Undo: the card is back at its height
+  await grip.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(grip).toHaveAttribute("aria-valuenow", "110");
+  await closeFromSidebar(page, b);
+  await expect(card(page)).toHaveCount(0);
+  await page.getByTestId(`close-toast-${b}`).getByTestId("close-toast-undo").click();
+  await expect(page.getByTestId("split-cell")).toHaveCount(2);
+  await expect(grip).toHaveAttribute("aria-valuenow", "110");
+  // a three-pane split: a cell closes and comes back, the height stays its own throughout
+  await splitWith(page, a, c);
+  await expect(card(page)).toHaveAttribute("data-panes", "3");
+  await expect(grip).toHaveAttribute("aria-valuenow", "110");
+  await closeFromSidebar(page, b);
+  await expect(page.getByTestId("split-cell")).toHaveCount(2);
+  await page.getByTestId(`close-toast-${b}`).getByTestId("close-toast-undo").click();
+  await expect(page.getByTestId("split-cell")).toHaveCount(3);
+  await expect(grip).toHaveAttribute("aria-valuenow", "110");
 });
 
 test("a long name in a tall cell keeps its start and ends in an ellipsis inside the cell", async ({ page }) => {

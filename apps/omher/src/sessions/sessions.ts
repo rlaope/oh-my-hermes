@@ -2259,7 +2259,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const ms = graceNow();
     const g = groupOf(getSplit().groups, id);
     const index = state.list.findIndex((s) => s.id === id);
-    const split: SplitWas | null = g ? { layout: g.layout, ...(g.zoom ? { zoom: true as const } : {}) } : null;
+    const split: SplitWas | null = g ? { layout: g.layout, ...(g.zoom ? { zoom: true as const } : {}), ...(g.mapH === undefined ? {} : { mapH: g.mapH }) } : null;
     if (!grace.begin(id, r.title || nameOf(r), ms, { rec: r, index, split })) return false;
     heldRecs.set(id, r);
     t.held = true;

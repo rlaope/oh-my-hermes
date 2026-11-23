@@ -147,6 +147,19 @@ describe("TERMINALS splits", () => {
     expect(mapHeightIn(g, "s9", 80)).toBe(g);
   });
 
+  it("a pane moved within its own two-pane split keeps the card's height; a new split starts without one", () => {
+    const two: SplitGroup[] = [{ layout: row(P(1), P(2)), mapH: 94 }];
+    // s2 dropped below s1: the split ends for a moment (s2 leaves it) and is made again, top and bottom
+    const moved = splitIn(two, "s1", "down", "s2");
+    expect(moved).toHaveLength(1);
+    expect(moved[0].layout).toMatchObject({ dir: "col", a: { pane: 1 }, b: { pane: 2 } });
+    expect(moved[0].mapH).toBe(94);
+    // a session out of every split joining a lone one makes a new split, at the default height
+    expect("mapH" in splitIn([], "s1", "right", "s3")[0]).toBe(false);
+    // s3 taken out of another split onto a lone s1 does not carry that split's height
+    expect("mapH" in splitIn([{ layout: row(P(3), P(4)), mapH: 94 }], "s1", "right", "s3")[0]).toBe(false);
+  });
+
   it("saves a set card height with the split", () => {
     setSplit({ groups: [{ layout: row(P(1), P(2)) }] });
     setMapHeight("s2", 100);
