@@ -266,6 +266,8 @@ def terminal_name(environ: Mapping[str, str]) -> str:
 
 INLINE_KITTY = "kitty"
 INLINE_UNICODE = "unicode"
+# The first omher release that paints kitty Unicode placeholders and says its version in `TERM_PROGRAM_VERSION`.
+OMHER_PLACEHOLDER_VERSION = (1, 1, 4)
 
 
 def inline_graphics(environ: Mapping[str, str]) -> str:
@@ -275,7 +277,7 @@ def inline_graphics(environ: Mapping[str, str]) -> str:
     kitty virtual placements (docs.otty.sh, Images: "Unicode placeholders (U+10EEEE virtual placement)") but sets
     `TERM=xterm-256color` and no kitty variable, so it would otherwise get half-blocks, and omher's terminals
     (`TERM_PROGRAM=omher`, which the omher desktop app sets in its terminal sessions), which paint kitty Unicode placeholders
-    too and carry the same xterm TERM. The tmux/screen, VS Code and WezTerm guards stay ahead of both."""
+    too and carry the same xterm TERM, from omher 1.1.4 on (`TERM_PROGRAM_VERSION`; an older omher paints none). The tmux/screen, VS Code and WezTerm guards stay ahead of both."""
     term = environ.get("TERM", "").lower()
     program = environ.get("TERM_PROGRAM", "").lower()
     if program == "vscode" or environ.get("HERMES_PTY_HOST", "") == "dashboard":
@@ -289,10 +291,23 @@ def inline_graphics(environ: Mapping[str, str]) -> str:
         or environ.get("GHOSTTY_RESOURCES_DIR")
         or "kitty" in term
         or "ghostty" in term
-        or program in ("ghostty", "otty", "omher")
+        or program in ("ghostty", "otty")
+        or (program == "omher" and _omher_paints_placeholders(environ.get("TERM_PROGRAM_VERSION", "")))
     ):
         return INLINE_KITTY
     return INLINE_UNICODE
+
+
+def _omher_paints_placeholders(version: str) -> bool:
+    """Whether the omher that set `TERM_PROGRAM_VERSION` to `version` paints kitty Unicode placeholders.
+
+    omher 1.1.3 and earlier set `TERM_PROGRAM=omher` and no version, and paint none: the placeholder cells show as
+    tofu boxes and the transmitted picture lands where the cursor was. Only a version at or past
+    `OMHER_PLACEHOLDER_VERSION` gets kitty; no version, or one that does not read as numbers, gets half-blocks."""
+    parts = version.strip().split("-", 1)[0].split(".")
+    if not parts or not all(part.isdigit() for part in parts):
+        return False
+    return tuple(int(part) for part in parts) >= OMHER_PLACEHOLDER_VERSION
 
 
 def keyboard_protocol_request(environ: Mapping[str, str]) -> str:
