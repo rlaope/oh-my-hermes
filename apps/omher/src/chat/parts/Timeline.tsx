@@ -47,6 +47,7 @@ export function Timeline({
   connectionNotice = true,
   queue,
   emptyHint,
+  afterAnswer,
 }: {
   bot: Bot;
   face?: ReactNode;
@@ -55,6 +56,8 @@ export function Timeline({
   queue?: SessionQueue;
   /** what an empty chat says instead of "Say hi to <bot>" (a new thread asks what it is about): one line, not two */
   emptyHint?: ReactNode;
+  /** what goes under a bot answer (a thread's pull request cards) */
+  afterAnswer?: (it: MessageItem) => ReactNode;
 }) {
   const s = useStore();
   const items = selectTimeline(s, bot.name);
@@ -145,9 +148,15 @@ export function Timeline({
             <>
               <WatchLine name={it.watch.name} ts={it.watch.ts} text={it.text} />
               <Bubble item={it} bot={bot.name} face faceEl={face} />
+              {afterAnswer?.(it)}
             </>
           );
-        return <Bubble item={it} bot={bot.name} face={!botSpoke(prev)} faceEl={face} quote={quoteFor(items, at)} onQuote={showMessage} />;
+        return (
+          <>
+            <Bubble item={it} bot={bot.name} face={!botSpoke(prev)} faceEl={face} quote={quoteFor(items, at)} onQuote={showMessage} />
+            {afterAnswer?.(it)}
+          </>
+        );
       case "activity": {
         const C = slots.activity ?? ActivityFallback;
         return <C bot={bot.name} item={it} live={chat?.turn?.id === it.turn.id} />;

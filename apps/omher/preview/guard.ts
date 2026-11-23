@@ -6,8 +6,8 @@
 //   in the file manager or the system terminal; from 0.2.12 an archived thread, Start in thread and the other
 //   real-work buttons of Tasks, a new terminal, and typing into a terminal) show one small note instead: "Download
 //   omher to …". Nothing is
-//   started anywhere. The Automations and Plugins pages themselves open on staged data (host.ts), so a visitor can
-//   look around them.
+//   started anywhere. The Automations, Plugins and Apps pages themselves open on staged data (host.ts), so a visitor
+//   can look around them; Connect, Sign in, Remove and the Apps page's terminal buttons are held back.
 const W = window as unknown as { __omherPreviewToasts?: string[] };
 
 let focused = false;
@@ -105,6 +105,15 @@ const INERT: [string, Note, boolean?][] = [
     },
   ],
   [
+    '[data-testid^="app-install-"], [data-testid^="app-login-"], [data-testid="app-confirm-remove"], [data-testid="app-confirm-login"], [data-testid="apps-terminal"], [data-testid^="app-open-terminal-"]',
+    {
+      en: "This is a preview. Download omher to connect your own bots to Notion, Linear and the other apps.",
+      ko: "미리보기 화면이에요. omher를 내려받으면 내 봇을 Notion, Linear 같은 앱에 연결할 수 있어요.",
+      ja: "これはプレビューです。omher をダウンロードすると、自分のボットを Notion や Linear などのアプリにつなげます。",
+      zh: "这是预览。下载 omher 即可把你自己的机器人连接到 Notion、Linear 等应用。",
+    },
+  ],
+  [
     '[data-testid="row-restart"], [data-testid="chat-start"], [data-testid$="load-restart"], [data-testid="restart-press"], [data-testid="restart-anyway"], [data-testid="restart-again"]',
     {
       en: "This is a preview. Download omher to restart your own bots.",
@@ -153,7 +162,7 @@ const INERT: [string, Note, boolean?][] = [
     true,
   ],
   [
-    '[data-testid="tasks-start"], [data-testid="tasks-terminal"], [data-testid="tasks-browser"], [data-testid="tasks-repo-go"], [data-testid="tasks-signin-terminal"], [data-testid="tasks-linear-terminal"]',
+    '[data-testid="tasks-start"], [data-testid="tasks-terminal"], [data-testid="tasks-browser"], [data-testid="tasks-repo-go"], [data-testid="tasks-signin-terminal"]',
     {
       en: "This is a preview. Download omher to work on your own GitHub and GitLab issues and pull requests.",
       ko: "미리보기 화면이에요. omher를 내려받으면 내 GitHub·GitLab 이슈와 PR로 작업할 수 있어요.",
