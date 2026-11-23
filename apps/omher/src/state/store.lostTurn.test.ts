@@ -14,6 +14,7 @@ function fixture() {
   let lost: LostTurn[] = [{ id: "a1", text: "hello" }];
   let waiting: { id: string; role: "user"; text: string; ts: number; queued: true }[] = [];
   let refuse = false;
+  let threads: unknown[] = [];
   const ran: { id: string; role: "user"; text: string; ts: number }[] = [];
   const calls: { op: string; params: any }[] = [];
   const bridge: BridgeLike = {
@@ -54,7 +55,7 @@ function fixture() {
       if (op === "elsewhere.list") return { sessions: [] };
       if (op === "routines.list") return { routines: [] };
       if (op === "automations.list") return { automations: [] };
-      if (op === "thread.list") return { threads: [] };
+      if (op === "thread.list") return { threads };
       if (op === "models.options") return { providers: [], current: { model: "m", provider: "p", reasoning: "high" }, reasoning_levels: [] };
       return {};
     }) as BridgeLike["request"],
@@ -63,6 +64,9 @@ function fixture() {
   return {
     store,
     calls,
+    listThreads: (t: unknown[]) => {
+      threads = t;
+    },
     event: (e: BridgeEvent) => event(e),
     refuse: (r: boolean) => {
       refuse = r;
@@ -232,7 +236,9 @@ it("a bot that comes back re-reads its threads that were open, not only its main
   const f = fixture();
   await f.store.actions.init();
   await settle();
-  f.store.dispatch({ type: "threads", bot: "kami", threads: [{ thread: "th1", title: "t", cwd: "/w", started_at: 1, running: false, needs: false, message_count: 0 }] });
+  const row = { thread: "th1", title: "t", cwd: "/w", started_at: 1, running: false, needs: false, message_count: 0 };
+  f.listThreads([row]); // the bridge lists it again first (store.resyncThreads.test.ts)
+  f.store.dispatch({ type: "threads", bot: "kami", threads: [row] });
   f.store.dispatch({ type: "chat.opened", bot: "fold:kami:th1", res: { session_id: "th1", messages: [], running: false, model: "m", provider: "p", reasoning: "" }, now: 1 });
   f.event({ event: "bot.restarted", bot: "kami", ok: true } as BridgeEvent);
   await settle();

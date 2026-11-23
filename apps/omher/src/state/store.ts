@@ -2439,8 +2439,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     const threaded = Object.keys(state.threads).filter((n) => names.has(n));
     await Promise.allSettled([
       ...loaded.map(loadChat),
-      ...threaded.map(loadThreads),
-      ...threaded.flatMap((b) => loadedThreads(b).map((t) => loadThread(b, t))),
+      ...threaded.map(rereadThreads),
       ...peekUnlisted(),
       loadElsewhere(),
       loadRoutines(),
@@ -2449,6 +2448,12 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
   };
   /** `bot`'s threads whose chat was read (opened in this run). */
   const loadedThreads = (bot: string) => (state.threads[bot] ?? []).map((r) => r.thread).filter((t) => state.chats[threadKey(bot, t)]?.loaded);
+  /** List `bot`'s threads again, then read again the ones that were open. In that order: a bridge that was started
+   *  again knows no thread until `thread.list` has listed it, and refuses `thread.open` of one before then. */
+  const rereadThreads = async (bot: string) => {
+    await loadThreads(bot);
+    await Promise.allSettled(loadedThreads(bot).map((t) => loadThread(bot, t)));
+  };
 
   // ---- threads under a bot (bridge `thread.*`) ----
   const threadReq = <K extends keyof ThreadOps>(op: K, params: ThreadOps[K]["params"]): Promise<ThreadOps[K]["result"]> =>
@@ -2571,7 +2576,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
           if (state.chats[ev.bot]?.loaded) void loadChat(ev.bot).catch(() => {});
           else if (selectUnlisted(state).some((b) => b.name === ev.bot)) void peekAsks(ev.bot);
           // its threads that were read are read again too (a turn lost in the restart shows there as well)
-          for (const t of loadedThreads(ev.bot)) void loadThread(ev.bot, t);
+          if (state.threads[ev.bot]) void rereadThreads(ev.bot);
         }
       });
       await bridge.connect();
