@@ -302,7 +302,10 @@ second while the child runs and the view is open; a completion schedules the
 next read on that same pace; a read unanswered for 10 s is forgotten before
 the next goes. Once the child ended (or when a finished child is opened) its
 pages are read one after another until a page with no rows, the host's
-caught-up mark, at most 50 pages. A plain resume of a child is never sent (on
+caught-up mark (its wire `rows` empty, from a read sent after the end was
+seen), at most 50 reads after it ends, each read sent counting whether
+answered, refused or unanswered; then the view says in one dim line that the
+rest could not be read. A plain resume of a child is never sent (on
 the shared gateway it would mount the child and move the attach adapter's
 current session). Each open is one intent: only the latest open's answer
 shows a view, and `main`, Esc, a switch, `/new` or a restart cancels one still

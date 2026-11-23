@@ -10,9 +10,13 @@ from __future__ import annotations
 import unittest
 from unittest import mock
 
-from test_tui_agent_session_view import BRIEF, FIRST, SECOND, entered, lazy_answer, texts, viewing
+from test_tui_agent_session_view import (
+    BRIEF, FIRST, REPLY, SECOND, entered, lazy_answer, rows_answer, texts, viewing,
+)
+from test_tui_agent_view import agent_event
 from test_tui_modes import SID, answer, call_id, type_text
 from omh.tui import app as app_module
+from omh.tui import subagent_session as view_state
 from omh.tui.gateway import Event, Response
 from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, Key, Paste
 
@@ -190,6 +194,70 @@ class DestinationTests(unittest.TestCase):
         self.assertEqual(sends(client), [])
         self.assertEqual(app.queued, type(app.queued)())
         self.assertIn("for the child /tmp/held-view.txt", app.child_drafts[FIRST].text)
+
+
+class CatchUpBoundaryTests(unittest.TestCase):
+    """E4 (review2 B4): catch-up is judged after the end, on the wire's own rows."""
+
+    def test_an_empty_read_sent_before_the_end_never_counts_as_caught_up(self) -> None:
+        app, client, now = viewing(shared=True)
+        now[0] = 1.0
+        app._poll_view_when_due()
+        read = call_id(client, "session.transcript")
+        now[0] = 1.1
+        agent_event(app, "complete", FIRST, status="completed", summary="done")
+        app._on_response(Response(read, rows_answer([], running=True, reset=False, cursor="c1"), None))
+        for t in (2.0, 12.0, 100.0):
+            now[0] = t
+            app._poll_view_when_due()
+            if app.viewing.poll_open:
+                final = call_id(client, "session.transcript")
+                app._on_response(Response(final, rows_answer([REPLY], running=False, reset=False, cursor="final"),
+                                          None))
+        assert app.viewing is not None
+        self.assertFalse(app.viewing.running)
+        self.assertIn("reply:" + REPLY["text"], texts(app.viewing.transcript))
+        self.assertGreaterEqual(len(client.named("session.transcript")), 3)
+
+    def test_a_page_of_only_a_handoff_row_is_not_empty_and_its_cursor_is_followed(self) -> None:
+        app, client, now = viewing(shared=True, result=rows_answer([BRIEF], running=False, cursor="handoff-next"))
+        app._poll_view_when_due()
+        result = rows_answer([], running=False, reset=False, cursor="reply-next")
+        result["rows"] = [{"row_kind": "compaction", "role": "user", "text": "bounded handoff", "compacted_messages": 10}]
+        answer(app, client, result)
+        for t in (0, 2.0, 20.0):
+            now[0] = t
+            app._poll_view_when_due()
+        cursors = [read.get("cursor") for read in client.named("session.transcript")]
+        self.assertEqual(cursors[:3], [None, "handoff-next", "reply-next"])
+
+    def test_caught_up_reads_the_wire_rows_not_the_drawn_ones(self) -> None:
+        self.assertTrue(view_state.caught_up({"rows": []}))
+        self.assertFalse(view_state.caught_up({"rows": [{"row_kind": "compaction"}]}))
+
+
+class PostEndBudgetTests(unittest.TestCase):
+    """E5 (review2 B5): each post-end read sent spends one of the 50, answered or not; then one dim line."""
+
+    def test_unanswered_post_end_reads_stop_at_the_budget_with_one_line(self) -> None:
+        app, client, now = viewing(shared=True, result=rows_answer([BRIEF], running=False, cursor="resume-here"))
+        for step in range(80):
+            now[0] = 1 + 10 * step
+            app._poll_view_when_due()
+        assert app.viewing is not None
+        # The open's own read was one of the 50.
+        self.assertEqual(len(client.named("session.transcript")), view_state.CATCH_UP_PAGES)
+        line = "notice:" + view_state.READ_GAVE_UP.format(name=app.viewing.name)
+        self.assertEqual(texts(app.viewing.transcript).count(line), 1)
+        self.assertEqual(sum(call.method == "session.transcript" for call in app.pending.values()), 0)
+
+    def test_the_boundary_doc_says_at_most_50_reads_after_it_ends(self) -> None:
+        from pathlib import Path
+
+        doc = (Path(__file__).resolve().parents[1] / "docs" / "OMH-TUI-BOUNDARY.md").read_text(encoding="utf-8")
+        section = doc[doc.index("## Agent views"):]
+        section = " ".join(section[:section.index("\n## ", 3)].split())
+        self.assertIn("at most 50 reads after it ends", section)
 
 
 class RegressionPinTests(unittest.TestCase):

@@ -62,7 +62,7 @@ from .composer import Composer
 from .style import Line, Span, Style
 from . import subagent_session as view_state
 from .subagent_session import (
-    CONTINUE_REFUSED, DEST_MAIN, DEST_STEER, DEST_VIEW, FROM_MAIN, REFUSED_FOR_STEER, REFUSED_WHILE_VIEWING,
+    CONTINUE_REFUSED, DEST_MAIN, DEST_STEER, DEST_VIEW, FROM_MAIN, READ_GAVE_UP, REFUSED_FOR_STEER, REFUSED_WHILE_VIEWING,
     VIEW_TEXT_KEPT, VIEW_REFUSED_ARMED, VIEW_TEXT_DROPPED, SEND_CONTINUE, SEND_STEER, SEND_UNSUPPORTED, STILL_RUNNING,
     UNSUPPORTED_LINE, WIRE_POLL, WIRE_WATCH, SubagentView, mark_rows,
 )
@@ -773,8 +773,9 @@ class AgentViewMixin:
         rows = result.get("messages") if wire == WIRE_WATCH else result.get(contract.TRANSCRIPT_ROWS)
         self._fill_view(view, rows, agent.goal)
         if wire == WIRE_POLL and not view.running:  # a finished child: its pages are read until an empty one
-            view.pages_left = view_state.CATCH_UP_PAGES
-            view_state.page_read(view, empty=not view_state.message_rows(rows))
+            view.pages_left = view_state.CATCH_UP_PAGES - 1  # the open's own read was one, sent after the end
+            if not view_state.page_read(view, counts=True, empty=view_state.caught_up(result)):
+                self._read_spent(view)
         main = self._screen_draft()  # whatever the composer holds now is main's: set aside whole, the view's comes in
         main._drop_pending()
         child = self.child_drafts.pop(subagent_id, None) or Composer(history=main.history, on_record=main.on_record)
@@ -914,7 +915,8 @@ class AgentViewMixin:
         if view is None or not isinstance(payload, Mapping) or as_text(payload.get("subagent_id")) != view.subagent_id:
             return
         if event_type == contract.SUBAGENT_COMPLETE:
-            view_state.child_ended(view)  # on the shared gateway the next paced read reads its last rows
+            # On the shared gateway the next paced read reads its last rows; a read out now was sent before the end.
+            view_state.child_ended(view, after=view.read_seq)
 
     def _poll_view_when_due(self) -> None:
         """`session.transcript` for the subagent on screen on the shared gateway, when `poll_due_at` says: while it
@@ -927,6 +929,10 @@ class AgentViewMixin:
         if view.poll_open and view.read_id is not None:
             self.pending.pop(view.read_id, None)
             self.client.forget(view.read_id)
+            view.poll_open, view.read_id = False, None
+        if not view.running and view.pages_left <= 0:
+            self._read_spent(view)  # the post-end reads are all sent: none more goes
+            return
         self._poll_view(view)
 
     def _poll_view(self, view: SubagentView) -> None:
@@ -935,6 +941,8 @@ class AgentViewMixin:
         view.read_seq += 1
         seq, cursor = view.read_seq, view.cursor
         view.polled_at, view.poll_open, view.read_now = self.clock(), True, False
+        if not view.running:
+            view.pages_left -= 1  # a post-end read spends its one of `CATCH_UP_PAGES` as it goes, answered or not
         view.read_id = self._request(
             "session.transcript", view_state.read_params(view.parent_sid, view.subagent_id, cursor),
             lambda result: self._on_view_rows(view, seq, cursor, result),
@@ -952,8 +960,8 @@ class AgentViewMixin:
         if self.viewing is not view or cursor != view.cursor:
             return True
         if result.get(contract.TRANSCRIPT_AVAILABLE) is not True:
-            if not view.running:
-                view.pages_left = max(view.pages_left - 1, 0)  # a refused catch-up page still counts
+            if not view.running and view.pages_left <= 0:
+                self._read_spent(view)  # a refused post-end read was spent as it went
             return True
         rows = view_state.message_rows(result.get(contract.TRANSCRIPT_ROWS))
         if result.get(contract.TRANSCRIPT_RESET) is True:
@@ -968,10 +976,21 @@ class AgentViewMixin:
             self._draw_history(kept, into=view.transcript)
         view.cursor = as_text(result.get(contract.TRANSCRIPT_NEXT_CURSOR)) or view.cursor
         if result.get(contract.TRANSCRIPT_RUNNING) is not True:
-            view_state.child_ended(view)
-        view_state.page_read(view, empty=not rows)
+            view_state.child_ended(view, after=seq - 1)  # the host samples `running` before it reads: this read counts
+        # Caught up only on the wire's own empty `rows`, and only from a read sent after the end was seen.
+        if not view_state.page_read(view, counts=seq > view.ended_seq, empty=view_state.caught_up(result)):
+            self._read_spent(view)
         self.dirty = True
         return True
+
+    def _read_spent(self, view: SubagentView) -> None:
+        """Once the child ended and its `CATCH_UP_PAGES` post-end reads are all sent before an empty page: no read
+        more goes, and one dim line in the view says the rest could not be read."""
+        if view.running or view.pages_left > 0 or view.gave_up:
+            return
+        view.gave_up = True
+        view.transcript.add_aside(NoticeBlock(READ_GAVE_UP.format(name=view.name), one_line=True))
+        self.dirty = True
 
     def _send_to_view(self, text: str, shown: str, images: Sequence[Any]) -> None:
         """A line sent while a subagent's session is on screen goes to that subagent: a steer while it runs (or while a

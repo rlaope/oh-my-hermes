@@ -59,12 +59,13 @@ CONTINUE_REFUSED = "Hermes did not continue {name}: {reason}. Your text is back 
 VIEW_REFUSED_ARMED = "A rewind or a tell is armed: send or cancel it (Esc) before opening a subagent's session."
 VIEW_TEXT_DROPPED = "{name} is no longer listed; what was sent to it did not go: {text}"
 REFUSED_FOR_STEER = "Slash commands, ! lines and images cannot be a steer for {name}. Your text is kept."
+READ_GAVE_UP = "Could not read the rest of {name}'s transcript."
 VIEW_TEXT_KEPT = "{name}'s session was left before this could go; it is kept in {name}'s composer."
 
 POLL_SECONDS = 1.0  # the most often a running child's transcript is read while it is on screen
 POLL_ANSWER_SECONDS = 10.0  # a poll with no answer this long is forgotten and no longer holds the next one back
 READ_LIMIT = 200  # rows a transcript read asks for at once
-CATCH_UP_PAGES = 50  # pages read one after another once the child ended, until an empty one (caught up)
+CATCH_UP_PAGES = 50  # reads sent once the child ended (answered, refused or unanswered), until an empty page
 SENT_STEERS_CAP = 64  # steers sent from an attached view awaiting their stored rows; the oldest goes first
 
 # What Enter does with a line typed in the view (`send_kind`).
@@ -118,6 +119,10 @@ class SubagentView:
     pages_left: int = 0
     read_now: bool = False
     brief_block: Any = None
+    # `ended_seq`: the latest read sent when the end was seen; a read up to it never counts as caught up.
+    # `gave_up`: the post-end budget ran out before an empty page (one dim line said so).
+    ended_seq: int = 0
+    gave_up: bool = False
 
 
 def wire_for(shared_gateway: bool) -> str:
@@ -191,11 +196,11 @@ def send_kind(view: SubagentView) -> str:
 
 
 def poll_due_at(view: SubagentView | None, now: float) -> float | None:
-    """When the next transcript read may go, on the app's clock; None while none goes (no view, the watch wire, or a
-    child that no longer runs and is caught up). One read at a time: while one is out, the next waits for its
-    answer or `POLL_ANSWER_SECONDS`; else at most one every `POLL_SECONDS`, but a catch-up page right after a page
-    that brought rows (`read_now`)."""
-    if view is None or view.wire != WIRE_POLL or not (view.running or view.pages_left > 0):
+    """When the next transcript read may go (or the one out is forgotten), on the app's clock; None while none goes
+    (no view, the watch wire, or a child that no longer runs whose post-end reads are over and none is out). One
+    read at a time: while one is out, the next waits for its answer or `POLL_ANSWER_SECONDS`; else at most one
+    every `POLL_SECONDS`, but a catch-up page right after a page that brought rows (`read_now`)."""
+    if view is None or view.wire != WIRE_POLL or not (view.running or view.pages_left > 0 or view.poll_open):
         return None
     if view.poll_open and view.polled_at is not None:
         return view.polled_at + POLL_ANSWER_SECONDS
@@ -204,22 +209,35 @@ def poll_due_at(view: SubagentView | None, now: float) -> float | None:
     return view.polled_at + POLL_SECONDS
 
 
-def page_read(view: SubagentView, empty: bool) -> None:
-    """After a page was applied: once the child ended, the next page goes at once while pages bring rows, until an
-    empty page (caught up) or `CATCH_UP_PAGES` pages since it ended."""
+def caught_up(result: Mapping[str, Any]) -> bool:
+    """Whether a transcript answer is the host's caught-up mark: its wire `rows` list is empty, judged before any
+    filtering for display (a page of only a handoff or other non-message row is not empty)."""
+    rows = result.get(contract.TRANSCRIPT_ROWS)
+    return isinstance(rows, list) and not rows
+
+
+def page_read(view: SubagentView, counts: bool, empty: bool) -> bool:
+    """After a page was applied: once the child ended, the next page goes at once until a page that `counts` (a read
+    sent after the end was seen) is `empty` (caught up), while post-end reads are left (`pages_left`, spent as each
+    one is sent). A read sent before the end never counts as caught up: a read after it always goes. True once
+    caught up, and while the child runs (nothing to catch up yet)."""
     if view.running:
         view.read_now = False
-        return
-    view.pages_left = 0 if empty else view.pages_left - 1
+        return True
+    if counts and empty:
+        view.pages_left, view.read_now = 0, False
+        return True
     view.read_now = view.pages_left > 0
+    return False
 
 
-def child_ended(view: SubagentView) -> None:
+def child_ended(view: SubagentView, after: int) -> None:
     """The child's run ended (a `subagent.complete`, a read saying it no longer runs): `running` only ever goes
-    from true to false, and the catch-up pages start counting."""
+    from true to false, and the post-end reads start counting; only reads numbered past `after` may say caught up."""
     if view.running:
         view.running = False
         view.pages_left = CATCH_UP_PAGES
+        view.ended_seq = after
 
 
 def rule_label(name: str) -> str:
