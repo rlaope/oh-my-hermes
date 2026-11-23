@@ -11,6 +11,9 @@ All notable changes will be documented here.
   started, as macOS and Linux do by reading the foreground process group's leader. A terminal running `hermes` on its
   own still reads Hermes. A process older than the one that now holds its parent's pid (Windows reuses pids) is no
   longer taken for part of the terminal, so a row cannot show another session's agent. Thanks @hajeu. (#3130)
+- **GLM 5.4 is mapped to Z.ai.** `glm-5.4` (opened to every GLM Coding Plan user on 2026-11-23) now resolves to the
+  `zai` provider family, so a chain or override that names it routes to Z.ai. It joins no shipped chain, and it has
+  no contract or price row until Z.ai publishes a model page and list price.
 - **A large workspace no longer logs a warning after every shell command.** When the shell round end re-indexes a
   workspace past its entry or time budget, that designed skip is now logged at debug (`shell_changed skipped=`)
   instead of warning on nearly every `terminal` / `execute_code` call (~700 lines a day in one workspace). A real
