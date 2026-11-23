@@ -16,6 +16,13 @@ them, with the job to create and the prompt for each, are in
 
 All three are stdlib only (Python >= 3.10), so they run on Hermes' own
 interpreter, and they write nothing: their only output is stdout and stderr.
+The google-workspace CLI that `google_watch.py` runs rewrites
+`<profile>/google_token.json` when it refreshes the sign-in, as it does when
+the agent uses it. Do not set `--interpreter` on a `google_watch` job: that CLI
+would run on the other Python, which may lack the Google libraries.
+
+`omh update` refreshes this folder, never the copies in `<profile>/scripts/`:
+after an update, copy each installed script again.
 
 ## Install (one watch)
 
@@ -46,9 +53,9 @@ per kind is in `examples/`.
 | `calendar` | `calendar` (default `primary`), `lead_minutes` (1-240, default 15) |
 | `notion` | `pages` (at most 10 page ids), `databases` (at most 5 database ids), `rows` (1-100 newest-edited rows per database, default 20); at least one id |
 | `linear` | `limit` (1-100, default 50) |
-| `jira` | `site` (the `<site>` of `<site>.atlassian.net`), `jql` (default `assignee = currentUser() AND statusCategory != Done ORDER BY created DESC`), `limit` (1-100, default 50) |
+| `jira` | `site` (the `<site>` of `<site>.atlassian.net`), `jql` (default `assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC`), `limit` (1-100, default 50) |
 | `sentry` | `org` (slug), `region` (`us` for sentry.io, `de` for de.sentry.io), `project_ids` (numeric, optional), `query` (default `is:unresolved`), `limit` (1-100, default 10) |
-| `obsidian` | `vault` (optional; else `OBSIDIAN_VAULT_PATH`, else `~/Documents/Obsidian Vault`), `folder` (relative to the vault, default the whole vault), `extensions` (default `[".md"]`), `recent` (0-50 newest names shown, default 10) |
+| `obsidian` | `vault` (optional; else `OBSIDIAN_VAULT_PATH`, else `~/Documents/Obsidian Vault`), `folder` (relative to the vault, default the whole vault), `extensions` (default `[".md"]`), `recent` (0-50 newest names shown, default 10), `use_mtime` (default true; false hashes names and sizes only, for a vault a sync tool touches, and shows no `recent` lines) |
 
 `api_base` (`api_watch.py` only) is for tests: it replaces the API host and is
 refused unless it is `http://` on a loopback address.
@@ -70,7 +77,7 @@ the key in the profile's `.env`: these names are not Hermes-managed
 credentials, so Hermes keeps them in a cron script's environment. Each host is
 fixed in the script (Jira's is `<site>.atlassian.net` with the site validated),
 so a config cannot send the credential anywhere else. Redirects are refused,
-each request has a 15 s timeout, and replies are capped at 1 MiB.
+each read has a 15 s timeout and a whole reply 30 s, and replies are capped at 1 MiB.
 `google_watch.py` holds no credential: it checks that `google_token.json`
 exists and runs the skill's CLI, which reads it.
 
@@ -84,7 +91,7 @@ note content is printed; the woken agent reads those with its own tools.
 | kind | lines |
 | --- | --- |
 | `gmail` | `matched=<n>`, then `message <id>` for the newest matching messages |
-| `calendar` | `event <id> start=<start>` for the event(s) with the latest start at or before now + `lead_minutes` (24 h back), or `event none` |
+| `calendar` | `event <id> start=<start>` for every timed event starting after now and within `lead_minutes`, plus the latest one already started (24 h back), or `event none` |
 | `notion` | `page <id> edited=<last_edited_time>` (or `archived`), `database <id> row <id> edited=<last_edited_time>` (or `database <id> rows=0`) |
 | `linear`, `jira` | `issue <key>` per open assigned issue (or `issues=0`), `limit_reached=yes` when the list was cut |
 | `sentry` | `issue <id> short=<short id> first_seen=<time>` for the newest issues the query selects (or `issues=0`) |
@@ -96,7 +103,7 @@ note content is printed; the woken agent reads those with its own tools.
 | --- | --- | --- | --- |
 | 0 | the digest | | hash compared: unchanged suppresses the agent, changed wakes it |
 | 0 | `error reason=<reason>` (plus `key=<NAME>` for a credential) | a config error's detail | the line changes once, the agent wakes once to report it, and the next ticks are unchanged until it is fixed |
-| 1 | nothing | `monitor: <kind> watch=<name> unreachable reason=<reason>` | a failed monitor source: no change, no agent run, the stored hash kept, an alert to the job's failure target |
+| 1 | nothing | `monitor: <kind> watch=<name> unreachable reason=<reason>` | a failed monitor source: no change, no agent run, the stored hash kept; an alert on the first failed tick, repeats of the same failure held back for `cron.failure_repeat_alert_hours` (6 by default) |
 
 Exit 0 error reasons: `config`, `no_token`, `bad_token`, `token_rejected`
 (HTTP 401), `forbidden` (403), `not_found` (404), `request_rejected` (another
@@ -104,6 +111,10 @@ Exit 0 error reasons: `config`, `no_token`, `bad_token`, `token_rejected`
 profile), `not_signed_in` (no `google_token.json`), `sign_in_expired`,
 `vault_missing`, `folder_missing`, `folder_unreadable`.
 
-Exit 1 reasons: `network`, `timeout`, `rate_limited` (429), `server_error`
-(5xx), `redirect_refused`, `reply_too_large`, `bad_response`, `cli_failed`
-(the google-workspace CLI failed for another reason).
+Exit 1 reasons: `network` (a refused or dropped connection, or a timeout),
+`platform_busy` (HTTP 429, or a Linear rate limit), `server_error` (5xx),
+`redirect_refused`, `reply_too_large`, `bad_response` (a reply it cannot read,
+or a non-empty list in which no item has a readable id), `cli_failed` (the
+google-workspace CLI failed or hung for another reason). None of them uses the
+words Hermes reads as a model provider's failure (rate limit, timed out,
+quota), so Hermes' alert names the script, not the model.

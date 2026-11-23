@@ -14,9 +14,12 @@ the most recently modified notes; never a note's content:
     recent 2026-11-24T08:12:40Z Inbox/ideas.md
 
 A note added, removed, renamed, saved with new bytes, or touched (its
-modification time moved) changes the digest. Names starting with a dot are
+modification time moved) changes the digest. With `"use_mtime": false` only
+names and sizes count, for a vault a sync tool touches on every sync (no
+`recent` lines then, and an edit that keeps the size is not seen). Names starting with a dot are
 skipped, files and folders alike (`.obsidian/`, `.trash/`, `.git/`, editor swap
-files), and symbolic links are not followed.
+files), and symbolic links (and, on Python 3.12+, Windows junctions) are
+neither followed during the walk nor accepted in the folder path.
 
 The vault is the config's `vault`, else `OBSIDIAN_VAULT_PATH` from the
 environment, else `~/Documents/Obsidian Vault`, the same order as Hermes'
@@ -100,8 +103,11 @@ def load_config(path: Path) -> dict:
     recent = raw.get("recent", 10)
     if isinstance(recent, bool) or not isinstance(recent, int) or not 0 <= recent <= 50:
         raise ConfigError("recent must be a whole number from 0 to 50")
-    return {"name": name, "vault": vault, "folder": "/".join(parts), "recent": recent,
-            "extensions": sorted({e.lower() for e in extensions})}
+    use_mtime = raw.get("use_mtime", True)
+    if not isinstance(use_mtime, bool):
+        raise ConfigError("use_mtime must be true or false")
+    return {"name": name, "vault": vault, "folder": "/".join(parts), "recent": recent if use_mtime else 0,
+            "extensions": sorted({e.lower() for e in extensions}), "use_mtime": use_mtime}
 
 
 def resolve_config(arg: str | None) -> tuple[Path, str | None]:
@@ -126,13 +132,26 @@ def vault_root(cfg: dict) -> Path:
 # ---------------------------------------------------------------- scan
 
 
+def _is_link(path: Path) -> bool:
+    isjunction = getattr(os.path, "isjunction", None)  # Python 3.12+; older Windows Pythons see a plain folder
+    return path.is_symlink() or bool(isjunction and isjunction(path))
+
+
 def scan(vault: Path, folder: str, extensions: list[str]) -> tuple[list[tuple[str, int, int]], int, bool]:
     """(sorted (vault-relative path, mtime_ns, size), unreadable folders, entry cap reached)."""
     if not vault.is_dir():
         raise Persistent("vault_missing")
-    top = vault.joinpath(*folder.split("/")) if folder else vault
-    if top.is_symlink() or not top.is_dir():
+    top = vault
+    for part in folder.split("/") if folder else ():
+        top = top / part
+        if _is_link(top):  # no component below the vault may be a link (or, on Windows, a junction)
+            raise Persistent("folder_missing")
+    if not top.is_dir():
         raise Persistent("folder_missing")
+    try:
+        top.resolve().relative_to(vault.resolve())
+    except (OSError, ValueError):
+        raise Persistent("folder_missing") from None
     files: list[tuple[str, int, int]] = []
     unreadable, seen, capped = 0, 0, False
     stack = [(top, PurePosixPath(folder) if folder else PurePosixPath())]
@@ -155,6 +174,8 @@ def scan(vault: Path, folder: str, extensions: list[str]) -> tuple[list[tuple[st
                 continue
             try:
                 if entry.is_dir(follow_symlinks=False):
+                    if _is_link(Path(entry.path)):
+                        continue
                     stack.append((Path(entry.path), relative / entry.name))
                     continue
                 if not entry.is_file(follow_symlinks=False):
@@ -179,7 +200,8 @@ def _shown(path: str) -> str:
 def digest_lines(cfg: dict, files: list[tuple[str, int, int]], unreadable: int, capped: bool) -> list[str]:
     digest = hashlib.sha256()
     for path, mtime_ns, size in files:
-        digest.update(f"{path}\t{mtime_ns}\t{size}\n".encode("utf-8", errors="surrogateescape"))
+        stamp = mtime_ns if cfg["use_mtime"] else ""
+        digest.update(f"{path}\t{stamp}\t{size}\n".encode("utf-8", errors="surrogateescape"))
     summary = f"folder={cfg['folder'] or '.'} files={len(files)} digest={digest.hexdigest()[:16]}"
     if unreadable:
         summary += f" unreadable={unreadable}"

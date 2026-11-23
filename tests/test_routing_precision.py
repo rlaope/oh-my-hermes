@@ -114,7 +114,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # Its final round adds three PR measures watched until a date.
         # Its hold round adds five: four declined watches and CI on main.
         # Monitor recipes add ten platform mentions that ask for no trigger.
-        self.assertEqual(payload["summary"]["case_count"], 1572)
+        # Their review round adds twelve: time questions, outages, APIs, `in linear`, 이전에, a plugin update.
+        self.assertEqual(payload["summary"]["case_count"], 1584)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -194,7 +195,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # 370 -> 371: the PR watch lane's CI concept question is answered directly.
         # 371 -> 372: its staging deploy beside a merged PR falls back to a direct answer.
         # 372 -> 374: the monitor-trigger lane's calendar question and linear regression are answered directly.
-        self.assertEqual(payload["summary"]["direct_answer_count"], 374)
+        # 374 -> 377: its review round's last-mail question, Gmail outage and `in linear regression`.
+        self.assertEqual(payload["summary"]["direct_answer_count"], 377)
         # show-reel's README-link control is answered as a file lookup (+1).
         # "Use OMH to fix the failing test in billing.py" names a file: a file lookup (+1).
         # Copying the skills OMH selected and summarizing the files it picked
@@ -297,7 +299,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # Its final round adds five PR waits that name logs, production, a server or a deploy elsewhere.
         # Its hold round adds two: a declined review, then a PR watch, in English and Korean.
         # Monitor recipes add seventeen: twelve platform triggers that dispatch and five neighbours that keep their owner.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1384)
+        # Their review round adds six neighbours that keep connector-operator or gateway-intent-card.
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1390)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

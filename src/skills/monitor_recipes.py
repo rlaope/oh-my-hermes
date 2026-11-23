@@ -43,6 +43,8 @@ class MonitorRecipe:
     # The first tick is a baseline, not a change: its items are already there. A calendar
     # watch still reminds on it, because an event inside the lead window is the trigger itself.
     baseline_silent: bool = True
+    # What the recipe cannot see or what it costs beyond one call per change; rendered, never in the prompt.
+    limits: str = ""
 
 
 MONITOR_RECIPES: tuple[MonitorRecipe, ...] = (
@@ -53,6 +55,7 @@ MONITOR_RECIPES: tuple[MonitorRecipe, ...] = (
         kind="gmail",
         script="google_watch.py",
         example="gmail-new-mail.json",
+        limits='a message that stops matching wakes the agent once ([SILENT]); keep `is:unread` out of the search if reading mail should not wake it',
         read_path="Hermes' google-workspace skill CLI, `google_api.py gmail search`, run by the script with one fixed argv",
         env_names=(),
         credential="none in the script: the profile's Google sign-in (`google_token.json`), read by that CLI",
@@ -74,22 +77,26 @@ MONITOR_RECIPES: tuple[MonitorRecipe, ...] = (
         kind="calendar",
         script="google_watch.py",
         example="calendar-starting-soon.json",
+        limits='more than 100 events in 24 hours cuts the list; each event that starts costs one more [SILENT] call',
         read_path="Hermes' google-workspace skill CLI, `google_api.py calendar list`, run by the script with one fixed argv",
         env_names=(),
         credential="none in the script: the profile's Google sign-in (`google_token.json`), read by that CLI",
         host="Google, through the skill's CLI; the script itself opens no connection",
         digest=(
-            "the id and start of the timed event(s) with the latest start at or before now plus `lead_minutes`, "
-            "looking back 24 hours, or `event none`"
+            "the id and start of every timed event starting within `lead_minutes`, plus the latest one already "
+            "started (24 hours back), or `event none`"
         ),
-        other_changes="an event deleted after it entered the window, or `event none` after 24 hours with no event",
+        other_changes=(
+            "an event starting (it replaces the earlier started one), an event deleted, or `event none` after 24 "
+            "hours with no event"
+        ),
         agent_skills=("google-workspace",),
         agent_reads="the google-workspace skill (`calendar list`)",
         schedule="every 5m",
         act=(
-            "If the event line names an event that starts after now, read it with the google-workspace skill "
-            "(`calendar list`) and remind the person of its title, start time and place in one line. If it has "
-            "already started, or the line says `event none`, reply with exactly [SILENT]."
+            "For each event line whose start is after now and that your previous output did not remind about, read "
+            "it with the google-workspace skill (`calendar list`) and remind the person of its title, start time "
+            "and place in one line. If no such line remains, reply with exactly [SILENT]."
         ),
         baseline_silent=False,
     ),
@@ -100,6 +107,7 @@ MONITOR_RECIPES: tuple[MonitorRecipe, ...] = (
         kind="notion",
         script="api_watch.py",
         example="notion-changed.json",
+        limits='Notion rounds `last_edited_time` to the minute, so a second edit in the same minute as the tick that saw the first is not seen; a database with several data sources is not read',
         read_path="`GET /v1/pages/<id>` per page and `POST /v1/databases/<id>/query` (a read) per database",
         env_names=("NOTION_API_KEY",),
         credential="`NOTION_API_KEY`, an internal integration token; share each page or database with the integration",
@@ -120,11 +128,15 @@ MONITOR_RECIPES: tuple[MonitorRecipe, ...] = (
         kind="linear",
         script="api_watch.py",
         example="linear-assigned.json",
+        limits='past `limit` open issues the list is cut (`limit_reached=yes`), and an update to an issue outside it can move the cut',
         read_path="one GraphQL query (`viewer.assignedIssues`, open states only) sent as `POST /graphql`, a read",
         env_names=("LINEAR_API_KEY",),
         credential="`LINEAR_API_KEY`, a personal API key",
         host="`api.linear.app`",
-        digest="the keys of the open issues assigned to the key's user",
+        digest=(
+            "the keys of the open issues assigned to the key's user, most recently updated first up to `limit` "
+            "(`limit_reached=yes` when cut)"
+        ),
         other_changes="an assigned issue completed, canceled, or unassigned",
         agent_skills=(),
         agent_reads="the Linear MCP server (`hermes mcp install linear`)",
@@ -141,11 +153,15 @@ MONITOR_RECIPES: tuple[MonitorRecipe, ...] = (
         kind="jira",
         script="api_watch.py",
         example="jira-assigned.json",
+        limits='past `limit` issues the list is cut (`limit_reached=yes`), and an update to an issue outside it can move the cut',
         read_path="`GET /rest/api/3/search/jql` with the config's JQL (default: open issues assigned to the token's user)",
         env_names=("JIRA_EMAIL", "JIRA_API_TOKEN"),
         credential="`JIRA_EMAIL` and `JIRA_API_TOKEN`, an Atlassian API token",
         host="`<site>.atlassian.net`, the site validated",
-        digest="the keys of the issues the JQL selects",
+        digest=(
+            "the keys of the issues the JQL selects (default: most recently updated first up to `limit`, "
+            "`limit_reached=yes` when cut)"
+        ),
         other_changes="an assigned issue done or unassigned",
         agent_skills=(),
         agent_reads="the Atlassian MCP server (`hermes mcp install atlassian`)",
@@ -162,6 +178,7 @@ MONITOR_RECIPES: tuple[MonitorRecipe, ...] = (
         kind="obsidian",
         script="vault_watch.py",
         example="obsidian-folder-changed.json",
+        limits='a sync tool that touches modification times on every sync wakes the agent every tick (up to 144 calls a day at every 10 minutes); set `use_mtime` to false for such a vault, which then sees only names and sizes',
         read_path="a local listing of the folder: names, sizes and modification times, no file opened",
         env_names=(),
         credential="none",
@@ -183,6 +200,7 @@ MONITOR_RECIPES: tuple[MonitorRecipe, ...] = (
         kind="sentry",
         script="api_watch.py",
         example="sentry-new-issue.json",
+        limits='an issue resolved (with `is:unresolved`) or quiet for 14 days wakes the agent once ([SILENT])',
         read_path="`GET /api/0/organizations/<org>/issues/` sorted by first seen, the config's query",
         env_names=("SENTRY_AUTH_TOKEN",),
         credential="`SENTRY_AUTH_TOKEN`, a token with `event:read`",
@@ -245,6 +263,7 @@ def _recipe_section(recipe: MonitorRecipe) -> str:
 | the woken agent reads details with | {recipe.agent_reads} |
 | `--skill` | {skills} |
 | default interval | `{recipe.schedule}` |
+| limits | {recipe.limits} |
 
 Config (`<profile>/monitors/<watch>.json`, from `toolkit/monitors/examples/{recipe.example}`):
 
@@ -331,12 +350,19 @@ install -m 600 "<skill_dir>/toolkit/monitors/scripts/<script>.py" "<profile>/scr
 
 Write `<profile>/monitors/<watch>.json` with mode 600 from the recipe's
 example. A recipe with a credential reads it only from the environment, by the
-one name the recipe gives: check that the NAME exists in `<profile>/.env`
-(`grep -c '^NOTION_API_KEY=' <profile>/.env`) and never print, copy, or ask for
-its value. Hermes keeps these names in a cron script's environment because
-they are not Hermes-managed credentials; Hermes loads `.env` into its own
-environment when the gateway starts, so a key added later may need a gateway
-restart before the script sees it. Config keys, output lines and exit codes are
+one name the recipe gives; never print, copy, or ask for its value. The key
+may live in `<profile>/.env`, a Hermes secret source, or the service's own
+environment, so a look at `.env` proves nothing: the authoritative check is the
+job's own baseline tick, which prints `error reason=no_token key=<NAME>` when
+the script cannot see it. Hermes keeps these names in a cron script's
+environment because they are not Hermes-managed credentials; Hermes loads
+`.env` into its own environment when the gateway starts, so a key added later
+may need a gateway restart before the script sees it. Do not set
+`--interpreter` on a `google_watch` job: the skill's CLI then runs on that
+Python, which may lack the Google libraries, and every tick fails. `omh update`
+refreshes the skill's `toolkit/`, never the copies in `<profile>/scripts/`:
+after an update, copy each installed script again (same `install -m 600`
+line) so a watch runs the fixed version. Config keys, output lines and exit codes are
 in `toolkit/monitors/README.md`
 (`skill_view(name='omh-automation-blueprint', file_path='toolkit/monitors/README.md')`).
 
@@ -356,12 +382,16 @@ Failure is never a change, and never silent.
 | what happened | the script | Hermes |
 | --- | --- | --- |
 | a missing, malformed or rejected credential; a page, project or folder not found or not shared; a refused request; no google-workspace skill or sign-in; a config error | prints `error reason=<reason>` and exits 0 | the line changes once: the agent wakes once and reports it with the fix; later ticks are unchanged until it is fixed, and the next change after the fix wakes it again |
-| a network error, a timeout, HTTP 429 or 5xx, a redirect, an unreadable reply | prints nothing on stdout, one `unreachable reason=<reason>` line on stderr, exits 1 | a failed monitor source: no change, no agent run, the stored hash kept, and an alert delivered to the job's failure target on each failed tick |
+| a network error or timeout (`network`), HTTP 429 or a Linear rate limit (`platform_busy`), 5xx (`server_error`), a redirect, an unreadable reply, the google-workspace CLI failing or hanging (`cli_failed`) | prints nothing on stdout, one `unreachable reason=<reason>` line on stderr, exits 1 | a failed monitor source: no change, no agent run, the stored hash kept; Hermes opens an incident for that failure and alerts the job's failure target on the first failed tick |
 
-A long outage therefore sends one alert per tick to the delivery target; set
-`--failure-deliver <target>` to send those elsewhere, or `--failure-deliver
-local` to keep them only in `hermes cron list` and `hermes cron runs`. The fix
-for each reason:
+Hermes groups failures by job and error text: the first failed tick alerts,
+repeats of the same failure are held back for `cron.failure_repeat_alert_hours`
+(6 by default), and a tick that succeeds closes the incident, so a source that
+keeps dropping and coming back alerts again at each drop. A laptop offline
+overnight gets about one alert per 6 hours. Set `--failure-deliver <target>` to
+send those alerts elsewhere, or `--failure-deliver local` to keep them only in
+`hermes cron list`, `hermes cron runs` and `hermes cron incidents`. The fix for
+each reason:
 
 | reason | fix to tell the person |
 | --- | --- |

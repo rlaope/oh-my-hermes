@@ -188,6 +188,7 @@ class ApiWatchTest(unittest.TestCase):
         self.assertEqual(request["headers"]["Authorization"], TOKEN)
         self.assertEqual(request["body"]["variables"], {"first": 50})
         self.assertIn("assignedIssues", request["body"]["query"])
+        self.assertIn("orderBy: updatedAt", request["body"]["query"])
 
     def test_linear_marks_a_cut_list_and_reports_an_auth_error_in_a_200(self):
         nodes = [{"identifier": "ENG-1"}, {"identifier": "ENG-2"}]
@@ -211,7 +212,7 @@ class ApiWatchTest(unittest.TestCase):
         self.assertTrue(request["headers"]["Authorization"].startswith("Basic "))
         self.assertEqual(self.watch(kind="jira", site="example").stdout.count("issue "), 2)
         self.assertEqual(self.api.requests[-1]["query"]["jql"],
-                         ["assignee = currentUser() AND statusCategory != Done ORDER BY created DESC"])
+                         ["assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC"])
 
     def test_jira_needs_both_names_and_reports_invalid_jql_as_refused(self):
         done = self.watch(env=_env(JIRA_API_TOKEN=TOKEN), kind="jira", site="example")
@@ -263,7 +264,7 @@ class ApiWatchTest(unittest.TestCase):
             self.assertEqual(second.stdout, first.stdout)
 
     def test_transient_failures_print_nothing_on_stdout_and_exit_1(self):
-        for status, reason in ((429, "rate_limited"), (500, "server_error"), (503, "server_error"),
+        for status, reason in ((429, "platform_busy"), (500, "server_error"), (503, "server_error"),
                                (302, "redirect_refused")):
             self.api.route = lambda m, p, q, b, status=status: (status, {})
             done = self.watch(kind="linear")
@@ -276,6 +277,96 @@ class ApiWatchTest(unittest.TestCase):
                          (1, "", "monitor: linear watch=watch-1 unreachable reason=bad_response"))
         self.api.route = lambda m, p, q, b: (200, {"data": {"viewer": None}})
         self.assertEqual(self.watch(kind="linear").returncode, 1)
+
+    def test_a_linear_rate_limit_is_transient_on_200_and_400(self):
+        limited = {"errors": [{"message": "x", "extensions": {"code": "RATELIMITED"}}]}
+        for status in (200, 400):
+            self.api.route = lambda m, p, q, b, status=status: (status, limited)
+            done = self.watch(kind="linear")
+            self.assertEqual((done.returncode, done.stdout, done.stderr.strip()),
+                             (1, "", "monitor: linear watch=watch-1 unreachable reason=platform_busy"), status)
+
+    def test_a_list_with_items_but_no_readable_id_is_a_failure_not_an_empty_list(self):
+        cases = (
+            ({"kind": "linear"}, {"data": {"viewer": {"assignedIssues": {"nodes": [{"id": "uuid-only"}]}}}}),
+            ({"kind": "jira", "site": "example"}, {"issues": [{"id": "10001"}], "isLast": True}),
+            ({"kind": "sentry", "org": "example-org"}, [{"id": "12", "title": "no short id"}]),
+            ({"kind": "notion", "databases": ["b" * 32]}, {"results": [{"id": "x"}]}),
+        )
+        for cfg, reply in cases:
+            self.api.route = lambda m, p, q, b, reply=reply: (200, reply)
+            done = self.watch(**cfg)
+            self.assertEqual((done.returncode, done.stdout), (1, ""), cfg)
+            self.assertIn("reason=bad_response", done.stderr, cfg)
+        self.api.route = lambda m, p, q, b: (200, {"issues": [], "isLast": True})
+        self.assertEqual(self.watch(kind="jira", site="example").stdout.splitlines()[-1], "issues=0")
+
+    def test_the_transient_reasons_never_read_as_a_model_provider_failure(self):
+        """Hermes classifies a monitor job's failure text with its provider classifier; keep these words out."""
+        import ast
+        words = set()
+        for script in (API, GOOGLE):
+            for node in ast.walk(ast.parse(script.read_text(encoding="utf-8"))):
+                if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "Transient"
+                        and node.args and isinstance(node.args[0], ast.Constant)):
+                    words.add(node.args[0].value)
+        self.assertEqual(words, {"network", "platform_busy", "server_error", "redirect_refused", "reply_too_large",
+                                 "bad_response", "cli_failed"})
+        for word in words:
+            for banned in ("rate", "limit", "too_many", "throttl", "timed", "timeout", "quota", "overload"):
+                self.assertNotIn(banned, word)
+
+    def test_a_malformed_status_line_is_bad_response_without_a_traceback(self):
+        server = socket.socket()
+        server.bind(("127.0.0.1", 0))
+        server.listen(1)
+        port = server.getsockname()[1]
+
+        def answer():
+            conn, _ = server.accept()
+            with conn:
+                conn.recv(65536)
+                conn.sendall(b"GARBAGE\r\n\r\n")
+        thread = threading.Thread(target=answer, daemon=True)
+        thread.start()
+        try:
+            done = self.watch(kind="linear", api_base=f"http://127.0.0.1:{port}")
+        finally:
+            thread.join(5)
+            server.close()
+        self.assertEqual((done.returncode, done.stdout, done.stderr.strip()),
+                         (1, "", "monitor: linear watch=watch-1 unreachable reason=bad_response"))
+
+    def test_a_reply_that_drips_is_cut_at_the_deadline(self):
+        module = _load(API, "api_watch_deadline_check")
+        module.DEADLINE_S, module.TIMEOUT_S = 1, 5
+        server = socket.socket()
+        server.bind(("127.0.0.1", 0))
+        server.listen(1)
+        port = server.getsockname()[1]
+        stop = threading.Event()
+
+        def drip():
+            conn, _ = server.accept()
+            with conn:
+                conn.recv(65536)
+                conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n")
+                while not stop.wait(0.3):
+                    try:
+                        conn.sendall(b" ")
+                    except OSError:
+                        return
+        thread = threading.Thread(target=drip, daemon=True)
+        thread.start()
+        try:
+            client = module.Client({"base": f"http://127.0.0.1:{port}", "loopback": True}, "Bearer x")
+            with self.assertRaises(module.Transient) as caught:
+                client.call("GET", "/slow")
+        finally:
+            stop.set()
+            thread.join(5)
+            server.close()
+        self.assertEqual(caught.exception.reason, "network")
 
     def test_a_closed_port_is_a_network_failure_not_a_change(self):
         with socket.socket() as probe:
@@ -382,28 +473,53 @@ class GoogleWatchTest(unittest.TestCase):
         again = self.watch(list(reversed(messages)), cfg={"kind": "gmail", "query": "-in:chats from:boss@example.com", "limit": 7})
         self.assertEqual(again.stdout, done.stdout)
 
-    def test_calendar_wakes_once_per_event_entering_the_lead_window(self):
+    def test_calendar_wakes_for_each_event_entering_the_lead_window(self):
         cfg = {"kind": "calendar", "lead_minutes": 15}
         events = [
             {"id": "evta", "summary": "Private standup", "start": "2026-11-24T18:10:00+09:00", "status": "confirmed"},
             {"id": "evtb", "summary": "Later", "start": "2026-11-24T10:00:00Z"},
             {"id": "allday", "summary": "Holiday", "start": "2026-11-24"},
             {"id": "gone", "summary": "Cancelled", "start": "2026-11-24T09:12:00Z", "status": "cancelled"},
-            {"id": "old", "start": "2026-11-23T09:00:00Z"},
+            {"id": "old", "start": "2026-11-23T12:00:00Z"},
             {"id": "older", "start": "2026-11-23T08:00:00Z"},
         ]
         before = self.watch(events, now="2026-11-24T08:50:00+00:00", cfg=cfg)
-        self.assertEqual(before.stdout, "monitor: calendar watch=w\nevent old start=2026-11-23T09:00:00Z\n")
+        self.assertEqual(before.stdout, "monitor: calendar watch=w\nevent old start=2026-11-23T12:00:00Z\n")
         self.assertEqual(self.argv(), ["calendar", "list", "--start", "2026-11-23T08:50:00Z", "--end",
                                        "2026-11-24T09:05:00Z", "--max", "100", "--calendar", "primary"])
         entered = self.watch(events, now="2026-11-24T09:00:00+00:00", cfg=cfg)
-        self.assertEqual(entered.stdout, "monitor: calendar watch=w\nevent evta start=2026-11-24T18:10:00+09:00\n")
-        started = self.watch(events, now="2026-11-24T09:20:00+00:00", cfg=cfg)
-        self.assertEqual(started.stdout, entered.stdout)
+        self.assertEqual(entered.stdout, "monitor: calendar watch=w\nevent old start=2026-11-23T12:00:00Z\n"
+                                         "event evta start=2026-11-24T18:10:00+09:00\n")
         self.assertNotIn("Private", entered.stdout)
+        # Still inside the window a tick later: the same bytes, no wake.
+        self.assertEqual(self.watch(events, now="2026-11-24T09:05:00+00:00", cfg=cfg).stdout, entered.stdout)
+        # It starts: it replaces the earlier started event, one change the prompt answers [SILENT].
+        started = self.watch(events, now="2026-11-24T09:20:00+00:00", cfg=cfg)
+        self.assertEqual(started.stdout, "monitor: calendar watch=w\nevent evta start=2026-11-24T18:10:00+09:00\n")
+        self.assertEqual(self.watch(events, now="2026-11-24T09:40:00+00:00", cfg=cfg).stdout, started.stdout)
         nxt = self.watch(events, now="2026-11-24T09:46:00+00:00", cfg=cfg)
-        self.assertEqual(nxt.stdout, "monitor: calendar watch=w\nevent evtb start=2026-11-24T10:00:00Z\n")
+        self.assertEqual(nxt.stdout, "monitor: calendar watch=w\nevent evta start=2026-11-24T18:10:00+09:00\n"
+                                     "event evtb start=2026-11-24T10:00:00Z\n")
         self.assertEqual(self.watch([], cfg=cfg).stdout, "monitor: calendar watch=w\nevent none\n")
+
+    def test_two_events_entering_in_one_tick_and_one_added_ahead_each_get_a_line(self):
+        cfg = {"kind": "calendar", "lead_minutes": 15}
+        both = [{"id": "aaa", "start": "2026-11-24T10:00:00Z"}, {"id": "bbb", "start": "2026-11-24T10:02:00Z"}]
+        done = self.watch(both, now="2026-11-24T09:47:00+00:00", cfg=cfg)
+        self.assertEqual(done.stdout.splitlines()[1:], ["event aaa start=2026-11-24T10:00:00Z",
+                                                        "event bbb start=2026-11-24T10:02:00Z"])
+        shown = self.watch([{"id": "late", "start": "2026-11-24T10:00:00Z"}], now="2026-11-24T09:50:00+00:00", cfg=cfg)
+        added = self.watch([{"id": "late", "start": "2026-11-24T10:00:00Z"},
+                            {"id": "early", "start": "2026-11-24T09:55:00Z"}], now="2026-11-24T09:50:00+00:00", cfg=cfg)
+        self.assertNotEqual(added.stdout, shown.stdout)
+        self.assertIn("event early start=2026-11-24T09:55:00Z", added.stdout)
+
+    def test_a_reply_with_items_but_no_readable_id_is_a_failure_not_nothing(self):
+        done = self.watch([{"identifier": "x"}], cfg={"kind": "gmail", "query": "is:starred"})
+        self.assertEqual((done.returncode, done.stdout), (1, ""))
+        self.assertIn("reason=bad_response", done.stderr)
+        done = self.watch([{"eventId": "x", "start": "2026-11-24T09:05:00Z"}], cfg={"kind": "calendar"})
+        self.assertEqual((done.returncode, done.stdout), (1, ""))
 
     def test_events_with_the_same_start_print_together_in_id_order(self):
         events = [{"id": "zz", "start": "2026-11-24T09:05:00Z"}, {"id": "aa", "start": "2026-11-24T09:05:00Z"}]
@@ -432,7 +548,7 @@ class GoogleWatchTest(unittest.TestCase):
         self.assertEqual((done.returncode, done.stdout), (1, ""))
         self.assertIn("reason=bad_response", done.stderr)
 
-    def test_a_cli_that_hangs_is_a_timeout_not_a_change(self):
+    def test_a_cli_that_hangs_is_a_failed_tick_not_a_change(self):
         module = _load(GOOGLE, "google_watch_under_test")
         module.TIMEOUT_S = 1
         old = {k: os.environ.get(k) for k in ("FAKE_GOOGLE_ARGV", "FAKE_GOOGLE_SLEEP")}
@@ -447,7 +563,7 @@ class GoogleWatchTest(unittest.TestCase):
                     os.environ.pop(key, None)
                 else:
                     os.environ[key] = value
-        self.assertEqual(caught.exception.reason, "timeout")
+        self.assertEqual(caught.exception.reason, "cli_failed")
 
     def test_config_errors(self):
         for cfg in ({"kind": "gmail"}, {"kind": "gmail", "query": "a\nb"}, {"kind": "gmail", "query": "x", "limit": 51},
@@ -510,6 +626,27 @@ class VaultWatchTest(unittest.TestCase):
         self.note("Inbox/c.md", "new", 1_700_000_060)
         self.assertNotEqual(self.watch().stdout, touched)
 
+    def test_without_mtimes_a_touch_wakes_nobody_but_a_size_change_does(self):
+        first = self.watch(use_mtime=False)
+        self.assertEqual(len(first.stdout.splitlines()), 2)  # no `recent` lines without modification times
+        os.utime(self.vault / "Inbox/a.md", (1_700_000_777, 1_700_000_777))
+        self.assertEqual(self.watch(use_mtime=False).stdout, first.stdout)
+        self.note("Inbox/a.md", "secret content alpha, longer", 1_700_000_000)
+        self.assertNotEqual(self.watch(use_mtime=False).stdout, first.stdout)
+
+    def test_a_link_anywhere_in_the_folder_path_is_refused(self):
+        outside = Path(self.tmp.name) / "outside"
+        (outside / "b").mkdir(parents=True)
+        (outside / "b/private diagnosis.md").write_text("x", encoding="utf-8")
+        try:
+            os.symlink(outside, self.vault / "a", target_is_directory=True)
+        except OSError:
+            self.assertEqual(self.watch(folder="a/b").stdout.splitlines()[-1], "error reason=folder_missing")
+            return  # Windows without the symlink privilege: no link exists, and the missing folder is refused
+        done = self.watch(folder="a/b")
+        self.assertEqual(done.stdout, "monitor: obsidian watch=w\nerror reason=folder_missing\n")
+        self.assertNotIn("private", done.stdout)
+
     def test_the_vault_comes_from_the_environment_when_the_config_names_none(self):
         done = self.watch(env=_env(OBSIDIAN_VAULT_PATH=str(self.vault)), vault=None)
         self.assertRegex(done.stdout.splitlines()[1], r"^folder=Inbox files=2 ")
@@ -537,7 +674,7 @@ class VaultWatchTest(unittest.TestCase):
         done = self.watch(vault=str(Path(self.tmp.name) / "missing"))
         self.assertEqual(done.stdout, "monitor: obsidian watch=w\nerror reason=vault_missing\n")
         for cfg in ({"folder": "../outside"}, {"folder": "/etc"}, {"folder": ".obsidian"}, {"extensions": ["md"]},
-                    {"recent": 51}, {"kind": "notion"}):
+                    {"recent": 51}, {"kind": "notion"}, {"use_mtime": "no"}):
             done = self.watch(**cfg)
             self.assertEqual((done.returncode, done.stdout.splitlines()[-1]), (0, "error reason=config"), cfg)
 

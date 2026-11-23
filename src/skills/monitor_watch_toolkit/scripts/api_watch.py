@@ -28,8 +28,8 @@ The credential comes only from the environment, by one fixed name per
 platform (NOTION_API_KEY, LINEAR_API_KEY, JIRA_EMAIL with JIRA_API_TOKEN,
 SENTRY_AUTH_TOKEN). It is sent only to that platform's own API host, fixed
 here (api.notion.com, api.linear.app, <site>.atlassian.net, sentry.io or
-de.sentry.io), over HTTPS, with redirects refused, a 15 s timeout and a capped
-reply. It is never printed, logged or written. Every request is a read: GETs,
+de.sentry.io), over HTTPS, with redirects refused, a 15 s socket timeout, 30 s
+at most for a whole reply, and a capped reply. It is never printed, logged or written. Every request is a read: GETs,
 plus Notion's database query and Linear's GraphQL query, which are reads sent
 as POST. Nothing is written anywhere; the only output is stdout and stderr.
 
@@ -38,11 +38,16 @@ Failure is never a change, and never silent:
   found or not shared, a refused request, or a config error prints one fixed
   line, `error reason=<reason>`, and exits 0. Hermes sees that line change
   once, wakes the agent once to report it, and stays quiet while it holds.
-- A network error, a timeout, HTTP 429 or 5xx, a redirect, or a reply it
-  cannot read prints nothing on stdout and one `unreachable reason=<reason>`
-  line on stderr, and exits 1. Hermes treats that as a failed monitor source:
-  no change, no agent run, the stored hash kept, and an alert to the job's
-  failure target.
+- A network error or timeout (`network`), HTTP 429 or a Linear rate limit
+  (`platform_busy`), 5xx (`server_error`), a redirect, or a reply it cannot
+  read prints nothing on stdout and one `unreachable reason=<reason>` line on
+  stderr, and exits 1. Hermes treats that as a failed monitor source: no
+  change, no agent run, the stored hash kept. It alerts the job's failure
+  target on the first failed tick and holds back repeats of the same failure
+  for `cron.failure_repeat_alert_hours` (6 by default); a tick that succeeds
+  closes the incident. The reason words avoid the ones Hermes reads as a model
+  provider's failure (rate limit, timed out, quota), so the alert does not
+  blame the model.
 
 `api_base` in the config (tests only) replaces the host and is refused unless
 it is plain HTTP on a loopback address; requests to it skip any proxy.
@@ -58,6 +63,7 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urlsplit
@@ -84,9 +90,10 @@ SENTRY_SHORT_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
 
 TIMEOUT_S = 15
+DEADLINE_S = 30
 MAX_BODY = 1024 * 1024
 NOTION_VERSION = "2022-06-28"
-DEFAULT_JQL = "assignee = currentUser() AND statusCategory != Done ORDER BY created DESC"
+DEFAULT_JQL = "assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC"
 DEFAULT_SENTRY_QUERY = "is:unresolved"
 HOSTS = {
     "notion": "https://api.notion.com",
@@ -101,7 +108,7 @@ TOKEN_KEYS = {
     "sentry": ("SENTRY_AUTH_TOKEN",),
 }
 LINEAR_QUERY = (
-    "query($first: Int!) { viewer { assignedIssues(first: $first, orderBy: createdAt, "
+    "query($first: Int!) { viewer { assignedIssues(first: $first, orderBy: updatedAt, "
     "filter: { state: { type: { nin: [\"completed\", \"canceled\"] } } }) { nodes { identifier } } } }"
 )
 
@@ -279,18 +286,25 @@ class Client:
             sent["Content-Type"] = "application/json"
         req = Request(url, data=data, method=method, headers=sent)
         self.requests += 1
+        deadline = time.monotonic() + DEADLINE_S
         try:
-            with self._opener.open(req, timeout=TIMEOUT_S) as resp:
-                status, raw = resp.status, resp.read(MAX_BODY + 1)
-        except HTTPError as exc:
-            status, raw = exc.code, exc.read(MAX_BODY + 1)
-        except TimeoutError:
-            raise Transient("timeout") from None
-        except (URLError, OSError) as exc:
-            reason = getattr(exc, "reason", None)
-            raise Transient("timeout" if isinstance(reason, TimeoutError) else "network") from None
+            try:
+                resp = self._opener.open(req, timeout=TIMEOUT_S)
+            except HTTPError as exc:
+                resp = exc  # a 4xx or 5xx: its status and body are read like any reply
+            with resp:
+                status, raw = resp.status, _read_bounded(resp, deadline)
+        except (URLError, OSError):
+            # A timeout and a refused or dropped connection are one outage: one reason, so Hermes
+            # opens one incident for it, not one per symptom.
+            raise Transient("network") from None
+        except Exception:  # noqa: BLE001 - http.client's malformed-reply errors (BadStatusLine, ...)
+            # urllib re-raises http.client.HTTPException subclasses as they are, and importing
+            # http.client here to name them would widen this client's surface; the class is not
+            # printed, so the reply reads as unreadable and nothing from it reaches stderr.
+            raise Transient("bad_response") from None
         if status == 429:
-            raise Transient("rate_limited")
+            raise Transient("platform_busy")
         if status >= 500:
             raise Transient("server_error")
         if 300 <= status < 400:
@@ -308,7 +322,9 @@ class Client:
         if status == 404:
             raise Persistent("not_found")
         if status >= 400:
-            if _linear_auth_error(parsed):
+            if _linear_error_code(parsed, "RATELIMITED"):
+                raise Transient("platform_busy")
+            if _linear_error_code(parsed, "AUTHENTICATION_ERROR"):
                 raise Persistent("token_rejected")
             raise Persistent("request_rejected")
         if parsed is None:
@@ -316,15 +332,30 @@ class Client:
         return parsed
 
 
-def _linear_auth_error(parsed: object) -> bool:
+def _linear_error_code(parsed: object, code: str) -> bool:
+    """Whether a GraphQL error in the reply carries `extensions.code == code` (Linear's error shape)."""
     errors = parsed.get("errors") if isinstance(parsed, dict) else None
     if not isinstance(errors, list):
         return False
     for error in errors:
         extensions = error.get("extensions") if isinstance(error, dict) else None
-        if isinstance(extensions, dict) and extensions.get("code") == "AUTHENTICATION_ERROR":
+        if isinstance(extensions, dict) and extensions.get("code") == code:
             return True
     return False
+
+
+def _read_bounded(stream, deadline: float) -> bytes:
+    """At most MAX_BODY + 1 bytes, read in pieces until DEADLINE_S has passed since the request."""
+    chunks, size = [], 0
+    while size <= MAX_BODY:
+        if time.monotonic() > deadline:
+            raise TimeoutError("reply took too long")
+        piece = stream.read1(65_536) if hasattr(stream, "read1") else stream.read(65_536)
+        if not piece:
+            break
+        chunks.append(piece)
+        size += len(piece)
+    return b"".join(chunks)
 
 
 def _authorization(kind: str, credentials: list[str]) -> str:
@@ -366,13 +397,17 @@ def read_notion(client: Client, cfg: dict) -> list[str]:
             edited = _stamp(row.get("last_edited_time")) if isinstance(row, dict) else None
             if isinstance(row_id, str) and NOTION_OUT_ID_RE.fullmatch(row_id) and edited:
                 rows.append(f"database {database} row {row_id} edited={edited}")
+        if results and not rows:
+            raise Transient("bad_response")
         lines.extend(rows or [f"database {database} rows=0"])
     return sorted(lines)
 
 
 def read_linear(client: Client, cfg: dict) -> list[str]:
     data = client.call("POST", "/graphql", body={"query": LINEAR_QUERY, "variables": {"first": cfg["limit"]}})
-    if _linear_auth_error(data):
+    if _linear_error_code(data, "RATELIMITED"):
+        raise Transient("platform_busy")
+    if _linear_error_code(data, "AUTHENTICATION_ERROR"):
         raise Persistent("token_rejected")
     if isinstance(data, dict) and data.get("errors"):
         raise Persistent("request_rejected")
@@ -385,6 +420,8 @@ def read_linear(client: Client, cfg: dict) -> list[str]:
     keys = sorted({n["identifier"] for n in nodes
                    if isinstance(n, dict) and isinstance(n.get("identifier"), str)
                    and LINEAR_KEY_RE.fullmatch(n["identifier"])})
+    if nodes and not keys:
+        raise Transient("bad_response")
     lines = [f"issue {key}" for key in keys] or ["issues=0"]
     if len(nodes) >= cfg["limit"]:
         lines.append("limit_reached=yes")
@@ -400,6 +437,8 @@ def read_jira(client: Client, cfg: dict) -> list[str]:
         raise Transient("bad_response")
     keys = sorted({i["key"] for i in issues
                    if isinstance(i, dict) and isinstance(i.get("key"), str) and JIRA_KEY_RE.fullmatch(i["key"])})
+    if issues and not keys:
+        raise Transient("bad_response")
     lines = [f"issue {key}" for key in keys] or ["issues=0"]
     if len(issues) >= cfg["limit"] or data.get("isLast") is False:
         lines.append("limit_reached=yes")
@@ -421,6 +460,8 @@ def read_sentry(client: Client, cfg: dict) -> list[str]:
         if (isinstance(issue_id, str) and SENTRY_ID_RE.fullmatch(issue_id) and isinstance(short, str)
                 and SENTRY_SHORT_RE.fullmatch(short) and first):
             rows.append((int(issue_id), f"issue {issue_id} short={short} first_seen={first}"))
+    if data and not rows:
+        raise Transient("bad_response")
     return [line for _key, line in sorted(set(rows))] or ["issues=0"]
 
 

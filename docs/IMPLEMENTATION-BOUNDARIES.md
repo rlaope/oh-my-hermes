@@ -144,9 +144,11 @@ stays in `AGENTS.md`, where `tests/test_paired_run_arm_home.py` reads it.
   in `src/` imports them. The person (or their bot, on their request) copies
   one into `<profile>/scripts/` as `<script>_<watch>.py`, and Hermes runs it as
   a cron job's `--monitor-script`, on Hermes' interpreter, created paused. All
-  three are stdlib only and write nothing: their only output is stdout and
-  stderr, ids and platform timestamps (and note names for Obsidian), never a
-  message, title or note body.
+  three are stdlib only and write nothing themselves: their only output is
+  stdout and stderr, ids and platform timestamps (and note names for Obsidian),
+  never a message, title or note body. The google-workspace CLI that
+  `google_watch.py` runs rewrites the profile's `google_token.json` when it
+  refreshes the sign-in, as it does when the agent uses it.
   `api_watch.py` (Notion, Linear, Jira, Sentry) is a read-only network client:
   `GET /v1/pages/<id>` and the database query on api.notion.com, one GraphQL
   query on api.linear.app, `GET /rest/api/3/search/jql` on
@@ -154,9 +156,9 @@ stays in `AGENTS.md`, where `tests/test_paired_run_arm_home.py` reads it.
   or de.sentry.io, each host fixed in the script. Its credential comes only
   from its environment name (`NOTION_API_KEY`, `LINEAR_API_KEY`, `JIRA_EMAIL`
   with `JIRA_API_TOKEN`, `SENTRY_AUTH_TOKEN`), goes only to that host, and is
-  never printed or written; redirects are refused, a request times out after
-  15 s, and a reply is capped. It is in INVARIANT 2's `NETWORK_CLIENT_BRIDGES`
-  with no importer. `google_watch.py` (Gmail, Calendar) opens no connection and
+  never printed or written; redirects are refused, a read times out after
+  15 s and a whole reply after 30 s, and a reply is capped. It is in
+  INVARIANT 2's `NETWORK_CLIENT_BRIDGES` with no importer. `google_watch.py` (Gmail, Calendar) opens no connection and
   holds no credential: it runs Hermes' own google-workspace skill CLI, one
   fixed read argv per tick (`google_api.py gmail search` or `calendar list`),
   no shell, stdin closed, a 90 s timeout, and that CLI uses the profile's
@@ -293,7 +295,8 @@ The one-line form of the same exceptions, formerly under What This Repo Is in
   credential from one environment name), `google_watch.py` (Hermes'
   google-workspace skill CLI, one read argv per tick) and `vault_watch.py` (an
   Obsidian folder's file metadata): Hermes cron monitor scripts the person's
-  Hermes runs, writing nothing. OMH never imports or runs them. `api_watch.py`
+  Hermes runs, writing nothing themselves (the google-workspace CLI refreshes its
+  own `google_token.json`). OMH never imports or runs them. `api_watch.py`
   is in INVARIANT 2's `NETWORK_CLIENT_BRIDGES` and `google_watch.py` in
   INVARIANT 1's `PROCESS_SPAWN_ALLOWLIST`.
 - The OMH TUI's gateway child, `src/tui/attach/gateway_attach.py`: not core.

@@ -86,6 +86,34 @@ class MonitorTriggerRoutingTests(unittest.TestCase):
             with self.subTest(message=message):
                 self.assertFalse(_applies(message))
 
+    # Review round: a bare `when` or `before` is no event, `in linear` is not the Linear app, and a time
+    # question, an outage, an API, a write after the trigger, a how-to, a setting or 이전에 is no trigger.
+    REVIEW_NEGATIVES = (
+        'can you tell me when my next calendar meeting is?',
+        'tell me when I got the last mail from Bob',
+        'tell me when the mail server is back up',
+        'tell me when Gmail is down',
+        'let me know before you send the mail',
+        'remind me to send the mail before Friday',
+        "tell me what's in my inbox before 9am",
+        'notify me when the Notion API supports webhooks',
+        'tell me when the calendar API docs change',
+        'tell me when the loss in linear regression drops',
+        'let me know when the error on linear models goes down',
+        'tell me when the Notion page changes and then update the Jira ticket',
+        '메일 보내기 전에 알려줘',
+        '이전에 받은 메일 알려줘',
+        '회의 전에 캘린더 알림 설정해줘',
+        '캘린더 알림 끄는 방법 알려줘 회의 전에 자꾸 떠',
+        '어제 메일 오면 알림 왜 안 와?',
+        '옵시디언 플러그인 업데이트 뜨면 알려줘',
+    )
+
+    def test_review_round_phrasings_do_not_fire_the_guard(self) -> None:
+        for message in self.REVIEW_NEGATIVES:
+            with self.subTest(message=message):
+                self.assertFalse(_applies(message))
+
     def test_neighbours_keep_their_base_routes(self) -> None:
         for message, verdict in (
             ("create a Linear issue for this bug", ("dispatch", "connector-operator")),

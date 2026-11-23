@@ -136,7 +136,7 @@ and evidence obvious to a reviewer reading the PR without the chat history.
   - **Show-reel provider scripts**, the **Channel watch collector**, the
     **PR watch monitor and event guard**, and the **monitor-recipe scripts**
     (`api_watch.py`, `google_watch.py`, `vault_watch.py`): inert package data
-    only the user's Hermes runs.
+    only the user's Hermes runs; they write nothing themselves.
   - **The OMH TUI** (bare `omh`) and its gateway child: a foreground frontend over
     Hermes' own gateway; read
     [`docs/OMH-TUI-BOUNDARY.md`](docs/OMH-TUI-BOUNDARY.md) before touching

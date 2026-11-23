@@ -1050,7 +1050,7 @@ NETWORK_CLIENT_BRIDGES: dict[str, str] = {
         "only: `GET /v1/pages/<id>` and the database query on api.notion.com, one GraphQL query on api.linear.app, "
         "`GET /rest/api/3/search/jql` on <site>.atlassian.net, `GET /api/0/organizations/<org>/issues/` on sentry.io "
         "or de.sentry.io, each host fixed in the script; the credential comes only from its environment name and is "
-        "never printed or written; redirects refused, a 15 s timeout, a bounded reply; `api_base` only to a loopback "
+        "never printed or written; redirects refused, a 15 s read timeout and a 30 s reply deadline, a bounded reply; `api_base` only to a loopback "
         "host (tests), sent direct and never through a proxy; it writes nothing. Nothing in src/ imports it "
         "(test_core_never_imports_the_monitor_watch_toolkit); the same class of scoped integration the owner approved "
         "for the PR watch scripts on 2026-11-23, documented in AGENTS.md."

@@ -20,11 +20,13 @@ Gmail prints the ids of the newest messages that match the search, so a new
 matching message changes it, and so does a message leaving the match (read,
 when the search says `is:unread`; archived, when it says `in:inbox`).
 
-Calendar prints the timed events with the latest start at or before now plus
-`lead_minutes`, looking back 24 hours (`event none` when there is none). An
-event entering the lead window changes it once; the event starting, or ending,
-does not, because it stays the latest started one until the next event comes
-into the window. All-day and cancelled events are left out.
+Calendar prints every timed event that starts after now and within
+`lead_minutes`, plus the event(s) with the latest start already passed, looking
+back 24 hours (`event none` when there is none). An event entering the lead
+window adds its line, so two events entering in one tick, or one added ahead
+of an event already shown, each wake the agent; when an event starts it
+replaces the earlier started one, one more change the prompt answers with
+[SILENT]. All-day and cancelled events are left out.
 
 It holds no credential and reads none. It runs Hermes' own google-workspace
 skill CLI, which signs in with the profile's Google sign-in
@@ -33,8 +35,11 @@ one fixed argv per tick, `<python> <profile>/skills/productivity/
 google-workspace/scripts/google_api.py gmail search --max <n> -- <query>` or
 `... calendar list --start <t> --end <t> --max 100 --calendar <id>`, on this
 interpreter, no shell, stdin closed, a 90 s timeout, output capped. Both are
-reads. This script only checks that the token file exists; it never opens it.
-Nothing is written anywhere; the only output is stdout and stderr.
+reads. This script only checks that the token file exists; it never opens it,
+and writes nothing itself (its only output is stdout and stderr); the skill's
+CLI rewrites `google_token.json` when it refreshes the sign-in, as it does for
+the agent. A job that sets `--interpreter` runs that CLI on the other Python,
+which may lack the Google libraries; leave it unset.
 
 Failure is never a change, and never silent:
 - No google-workspace skill, no Google sign-in, a sign-in Google no longer
@@ -44,8 +49,10 @@ Failure is never a change, and never silent:
 - The CLI failing any other way, timing out, or printing something that is not
   the JSON it documents prints nothing on stdout and one `unreachable
   reason=<reason>` line on stderr, and exits 1. Hermes treats that as a failed
-  monitor source: no change, no agent run, the stored hash kept, and an alert
-  to the job's failure target.
+  monitor source: no change, no agent run, the stored hash kept. It alerts the
+  job's failure target on the first failed tick and holds back repeats of the
+  same failure for `cron.failure_repeat_alert_hours` (6 by default); a tick
+  that succeeds closes the incident.
 
 Installed as `<profile>/scripts/google_watch_<watch>.py`; the file name names
 the watch, whose config is `<profile>/monitors/<watch>.json`. `--config PATH`
@@ -188,7 +195,7 @@ def run_skill(home: Path, cfg: dict, now: dt.datetime) -> list:
         done = subprocess.run(skill_argv(cli, cfg, now), stdin=subprocess.DEVNULL, capture_output=True,
                               timeout=TIMEOUT_S, check=False, cwd=str(home))
     except subprocess.TimeoutExpired:
-        raise Transient("timeout") from None
+        raise Transient("cli_failed") from None  # one reason for a hang and a failure: one Hermes incident
     except OSError:
         raise Transient("cli_failed") from None
     if done.returncode != 0:
@@ -213,6 +220,8 @@ def run_skill(home: Path, cfg: dict, now: dt.datetime) -> list:
 def gmail_lines(messages: list) -> list[str]:
     ids = sorted({m["id"] for m in messages
                   if isinstance(m, dict) and isinstance(m.get("id"), str) and GMAIL_ID_RE.fullmatch(m["id"])})
+    if messages and not ids:
+        raise Transient("bad_response")  # a reply whose shape changed must not read as "no mail"
     return [f"matched={len(ids)}", *(f"message {message_id}" for message_id in ids)]
 
 
@@ -229,20 +238,35 @@ def _start(value: object) -> dt.datetime | None:
 
 
 def calendar_lines(events: list, now: dt.datetime, lead_minutes: int) -> list[str]:
+    """Every timed event starting in (now, now + lead], plus the latest one already started.
+
+    An event entering the lead window adds its line; when it starts it becomes the latest
+    started event and the one before it leaves, which is one more change the prompt answers
+    with [SILENT]. Two events entering in one tick, or one added ahead of an event already
+    shown, each get their own line.
+    """
     horizon = now + dt.timedelta(minutes=lead_minutes)
-    timed = []
+    upcoming, started = [], []
     for event in events:
         if not isinstance(event, dict) or event.get("status") == "cancelled":
             continue
         event_id, raw_start = event.get("id"), event.get("start")
         start = _start(raw_start)
-        if isinstance(event_id, str) and EVENT_ID_RE.fullmatch(event_id) and start is not None:
-            if now - LOOKBACK <= start <= horizon:
-                timed.append((start, event_id, raw_start))
-    if not timed:
+        if not (isinstance(event_id, str) and EVENT_ID_RE.fullmatch(event_id) and start is not None):
+            continue
+        if now < start <= horizon:
+            upcoming.append((start, event_id, raw_start))
+        elif now - LOOKBACK <= start <= now:
+            started.append((start, event_id, raw_start))
+    if started:
+        latest = max(start for start, _id, _raw in started)
+        upcoming.extend(item for item in started if item[0] == latest)
+    if events and not upcoming and not any(isinstance(e, dict) and isinstance(e.get("id"), str)
+                                           and EVENT_ID_RE.fullmatch(e["id"]) for e in events):
+        raise Transient("bad_response")  # a reply whose shape changed must not read as "no event"
+    if not upcoming:
         return ["event none"]
-    latest = max(start for start, _id, _raw in timed)
-    return sorted(f"event {event_id} start={raw}" for start, event_id, raw in timed if start == latest)
+    return [f"event {event_id} start={raw}" for _start_at, event_id, raw in sorted(upcoming)]
 
 
 # ---------------------------------------------------------------- main
@@ -278,13 +302,13 @@ def run(argv: list[str]) -> int:
     header = f"monitor: {kind} watch={name}"
     try:
         data = run_skill(hermes_home(Path(sys.argv[0])), cfg, now)
+        lines = gmail_lines(data) if kind == "gmail" else calendar_lines(data, now, cfg["lead_minutes"])
     except Persistent as exc:
         _emit([header, f"error reason={exc.reason}"])
         return EXIT_OK
     except Transient as exc:
         print(f"{header} unreachable reason={exc.reason}", file=sys.stderr)
         return EXIT_UNREACHABLE
-    lines = gmail_lines(data) if kind == "gmail" else calendar_lines(data, now, cfg["lead_minutes"])
     _emit([header, *lines])
     return EXIT_OK
 

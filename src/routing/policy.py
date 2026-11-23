@@ -5399,18 +5399,19 @@ _CHANNEL_WATCH_BLOCKERS = (
 # morning-brief, connector-operator, wiki or operating-rhythm, fell back, or
 # dispatched connector-operator, wiki or github-event-ops; none listed
 # automation-blueprint. It needs all three: the platform named, a tell-me cue,
-# and an event cue (when it arrives, changes, is assigned, opens; 오면,
-# 바뀌면, 배정되면, 생기면; or a time before it starts). A how-to question, a
-# platform that is only the delivery target ("email me when"), or a "when you"
-# about the bot's own work stands it down.
+# and an event cue that is about the platform's own items (arrives, changes,
+# is assigned, opens; 오면, 바뀌면, 배정되면, 생기면) or a time before a start
+# ("10 minutes before", "시작 15분 전에"). A bare `when` or `before` is not an
+# event: "tell me when my next meeting is" is a question. A question about
+# time, a how-to, a service outage or API, the platform as the delivery target,
+# the bot's own work, or a write that follows the trigger stands it down.
 _MONITOR_TRIGGER_SPOKEN_PLATFORMS = (
     "gmail", "inbox", "mail", "mails", "calendar", "notion", "jira", "obsidian", "sentry",
 )
 _MONITOR_TRIGGER_PLATFORMS = (
     "linear issue",
     "linear ticket",
-    "in linear",
-    "on linear",
+    "linear app",
     "지메일",
     "메일",
     "받은편지함",
@@ -5434,7 +5435,31 @@ _MONITOR_TRIGGER_NOTIFY_CUES = (
     "알려주",
     "알림",
 )
-_MONITOR_TRIGGER_SPOKEN_EVENTS = ("when", "whenever", "as soon as", "before")
+_MONITOR_TRIGGER_SPOKEN_EVENTS = (
+    "arrives",
+    "arrive",
+    "comes in",
+    "come in",
+    "changes",
+    "changed",
+    "is updated",
+    "gets updated",
+    "is edited",
+    "is assigned",
+    "gets assigned",
+    "assigned to me",
+    "is opened",
+    "opens",
+    "is created",
+    "minutes before",
+    "minute before",
+    "mins before",
+    "hour before",
+    "hours before",
+    "before it starts",
+    "before each",
+    "starts soon",
+)
 _MONITOR_TRIGGER_KO_EVENTS = (
     "오면",
     "들어오면",
@@ -5446,16 +5471,46 @@ _MONITOR_TRIGGER_KO_EVENTS = (
     "할당되면",
     "올라오면",
     "열리면",
-    "뜨면",
-    "전에",
+    "분 전에",
+    "분 전",
+    "시간 전에",
+    "시작 전",
+    "시작하기 전",
+)
+_MONITOR_TRIGGER_SPOKEN_BLOCKERS = (
+    "when is",
+    "when my next",
+    "when did",
+    "when i",
+    "when you",
+    "before you",
+    "is down",
+    "back up",
+    "back online",
+    "api",
+    "docs",
+    "and then",
+    "and update",
+    "then update",
+    "and create",
+    "and reply",
+    "and send",
+    "and post",
+    "email me",
+    "mail me",
+    "video",
 )
 _MONITOR_TRIGGER_BLOCKERS = (
     *_GREENFIELD_QUESTION_OPENERS,
-    "email me",
-    "mail me",
-    "when you",
-    "video",
+    "what's",
+    "whats",
     "영상",
+    "방법",
+    "왜",
+    "설정",
+    "끄는",
+    "이전에",
+    "보내",
 )
 # "Watch PR 42 until its checks finish" is a wait on one pull request: a Hermes
 # cron monitor job from github-event-ops' PR watch recipe, not a model polling
@@ -10963,7 +11018,7 @@ def channel_watch_guard_applies(normalized_query: str) -> bool:
 
 
 def monitor_trigger_guard_applies(normalized_query: str) -> bool:
-    """A platform with no webhook, a tell-me cue, and an event cue together; none alone."""
+    """A platform with no webhook, a tell-me cue, and an event cue on its items together; none alone."""
     if not (
         any(phrase_is_spoken(normalized_query, word) for word in _MONITOR_TRIGGER_SPOKEN_PLATFORMS)
         or _contains_phrase(normalized_query, _MONITOR_TRIGGER_PLATFORMS)
@@ -10972,9 +11027,11 @@ def monitor_trigger_guard_applies(normalized_query: str) -> bool:
     if not _contains_phrase(normalized_query, _MONITOR_TRIGGER_NOTIFY_CUES):
         return False
     if not (
-        any(phrase_is_spoken(normalized_query, word) for word in _MONITOR_TRIGGER_SPOKEN_EVENTS)
+        any(phrase_is_spoken(normalized_query, phrase) for phrase in _MONITOR_TRIGGER_SPOKEN_EVENTS)
         or _contains_phrase(normalized_query, _MONITOR_TRIGGER_KO_EVENTS)
     ):
+        return False
+    if any(phrase_is_spoken(normalized_query, phrase) for phrase in _MONITOR_TRIGGER_SPOKEN_BLOCKERS):
         return False
     return not _contains_phrase(normalized_query, _MONITOR_TRIGGER_BLOCKERS)
 
