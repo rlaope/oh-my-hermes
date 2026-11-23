@@ -12,7 +12,8 @@ import { memo, useEffect, useLayoutEffect, useReducer, useRef, useState, type Co
 import { t } from "../i18n";
 import { termActivity, termFallbackName, termMarkAgent, termStatus, splitPaneName, type AgentInfo, type SessionRec, type Unseen } from "./agents";
 import { TermRowMark } from "./TermRowMark";
-import { focusSplitPane } from "./SplitView";
+import { focusSplitPane, splitWith } from "./SplitView";
+import { pressToSplit } from "./splitDrag";
 import { groupSessions, setMapHeight, type SplitGroup } from "./splitState";
 import { cellBoxes, cellState, cellText, clampCardHeight, defaultCardHeight, elapsedLabel, GRIP_STEP, type CellState } from "./splitCard";
 import { usePendingRequests } from "./termShare";
@@ -92,6 +93,11 @@ const SplitCell = memo(function SplitCell({ rec, x, y, w, h, focused, agents, un
       data-state={state}
       data-focused={focused ? "true" : "false"}
       data-text={text}
+      onPointerDown={(e) => {
+        // a cell dragged onto the open terminal moves that pane there, as its row did (a press that stays put clicks)
+        if (editing || (e.target as Element).closest("[role=menu], [role=separator]")) return;
+        pressToSplit(e, rec.id, (d) => splitWith(d.at, rec.id, d.side));
+      }}
       onContextMenu={(e) => {
         if (editing) return;
         e.preventDefault();

@@ -10,8 +10,9 @@
 // `ref` (the list can mount after its section, as TERMINALS does with its first session).
 import { useCallback, useRef } from "react";
 
-/** The rows that are shown whole or not at all: a bot's own row, a thread row, a folder header, a terminal row. */
-export const CUT_ROWS = ".bot-w > .bot, .th-row, .tg-h, .ss-row, .bot-list > :not(.bot-w):not(.tg)";
+/** The rows that are shown whole or not at all: a bot's own row, a thread row, a folder header, a terminal row, a
+ *  TERMINALS split card (its cells and grip are one unit, never cut mid-way). */
+export const CUT_ROWS = ".bot-w > .bot, .th-row, .tg-h, .ss-row, .split-card, .bot-list > :not(.bot-w):not(.tg)";
 /** The band kept free at a cut bottom edge for the chevron (sessions.css draws it there). */
 export const CUE_PX = 14;
 
