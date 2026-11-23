@@ -992,13 +992,17 @@ def read_bot_page(profile_dir: Path) -> dict:
 
 # Whether each bot's Discord, Slack or other messaging platform is connected, as OMH's own reader judges it from
 # Hermes' gateway records and log tails (`omh hermes platforms`: the producer `omh doctor` prints and the OMH TUI's
-# bot board draws). The bridge opens no Hermes log itself and parses none: it runs that one fixed argv, keeps only the
-# fields below, each checked and clipped, and never logs them. One answer serves every ask for PLATFORMS_TTL; a failed
-# one is asked again only after PLATFORMS_TTL_MISS.
+# bot board draws). The bridge opens no Hermes log itself and parses none: it runs that one fixed argv through
+# `run_omh_read`, keeps only the fields below, each checked and clipped, and never logs them. One answer serves every
+# ask for PLATFORMS_TTL; a failed one is asked again only after PLATFORMS_TTL_MISS.
 PLATFORMS_TTL = 30.0
 PLATFORMS_TTL_MISS = 120.0
-PLATFORMS_TIMEOUT = 20.0
 PLATFORMS_OUT_MAX = 1 << 20  # its answer, at most; a longer one is not read
+# The read-only `omh` JSON commands the bridge may run, each a fixed argv after `omh --hermes-home <Hermes root>`.
+# This table is the whole list: an entry needs a boundary rule of its own (`platforms`: rule 43).
+OMH_READS = {"platforms": ("hermes", "platforms")}
+OMH_READ_TIMEOUT = 20.0  # a read still running then is stopped (`_stop_run`)
+OMH_READ_OUTPUT_MAX = 1 << 20  # what it prints, at most; a longer answer is refused, not cut
 PLATFORMS_SCHEMA = "omh_bot_platforms/v1"
 PLATFORM_STATUSES = frozenset({"connected", "degraded", "connecting", "disabled", "failed", "disconnected",
                                "reconnecting", "unknown"})
@@ -1035,26 +1039,40 @@ def omh_path(which=None, environ=None, windows: bool | None = None) -> str | Non
     return None
 
 
-def platforms_argv(omh: str, home: Path) -> list[str]:
-    """The one argv: OMH's read-only `hermes platforms` for this Hermes root, nothing from the page in it."""
-    return [omh, "--hermes-home", str(home), "hermes", "platforms"]
+def omh_read_argv(omh: str, home: Path, read: str) -> list[str]:
+    """One entry of OMH_READS as argv: `omh --hermes-home <root>` and that entry's fixed words, nothing from the page."""
+    return [omh, "--hermes-home", str(home), *OMH_READS[read]]
 
 
-def run_omh_platforms(omh: str, home: Path, timeout: float = PLATFORMS_TIMEOUT) -> str | None:
-    """Run `platforms_argv` and return what it printed, or None when it could not say. No shell, nothing on stdin,
-    started in the home folder, without the Python variables of the Hermes interpreter running this bridge or the
-    gateway's own markers; stopped after `timeout`."""
+def run_omh_read(omh: str, home: Path, read: str, timeout: float = OMH_READ_TIMEOUT) -> str | None:
+    """Run one OMH_READS argv and return what it printed, or None when it could not say (it could not start, it ended
+    with an error, it printed more than OMH_READ_OUTPUT_MAX, or it was still running at *timeout* and was stopped with
+    `_stop_run`, in a session or group of its own so the stop reaches nothing else). No shell, nothing on stdin, its
+    stderr dropped, started in the home folder without the Hermes interpreter's Python variables or the gateway's own
+    markers. The output goes to a temporary file, not a pipe, so nothing it leaves running can hold the read open."""
+    import tempfile
+    argv = omh_read_argv(omh, home, read)
     env = {k: v for k, v in os.environ.items() if k not in ("PYTHONPATH", "PYTHONHOME", *_GATEWAY_MARKERS)}
-    env["NO_COLOR"] = "1"
-    kw = {}
+    env.update(NO_COLOR="1", PYTHONIOENCODING="utf-8")
     if os.name == "nt":
-        kw["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
-    try:
-        r = subprocess.run(platforms_argv(omh, home), stdin=subprocess.DEVNULL, capture_output=True, text=True,
-                           encoding="utf-8", errors="replace", timeout=timeout, env=env, cwd=str(Path.home()), **kw)
-    except (OSError, subprocess.SubprocessError):
-        return None
-    return r.stdout if r.returncode == 0 else None
+        kw = {"creationflags": 0x08000000 | 0x00000200}  # CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP
+    else:
+        kw = {"start_new_session": True}
+    with tempfile.TemporaryFile() as out:
+        try:
+            proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.DEVNULL, env=env,
+                                    cwd=str(Path.home()), **kw)
+        except OSError:
+            return None
+        try:
+            code = proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _stop_run(proc)
+            return None
+        if code != 0 or out.seek(0, os.SEEK_END) > OMH_READ_OUTPUT_MAX:
+            return None
+        out.seek(0)
+        return out.read(OMH_READ_OUTPUT_MAX).decode("utf-8", errors="replace")
 
 
 def _platform_text(value, n: int) -> str:
@@ -1109,7 +1127,7 @@ class PlatformStates:
     for PLATFORMS_TTL_MISS); asks that overlap share one run. `available` is False when omh is not on this computer or
     its answer could not be read, so the page says so and never shows a state for it."""
 
-    def __init__(self, home: Path, *, find=omh_path, run=run_omh_platforms, clock=time.monotonic):
+    def __init__(self, home: Path, *, find=omh_path, run=run_omh_read, clock=time.monotonic):
         self.home, self._find, self._run, self._clock = home, find, run, clock
         self._lock = threading.Lock()
         self._at: float | None = None
@@ -1122,7 +1140,7 @@ class PlatformStates:
             if self._at is not None and now - self._at < ttl and not (fresh and now - self._at >= 2.0):
                 return self._answer
             omh = self._find()
-            bots = platform_rows(self._run(omh, self.home)) if omh else None
+            bots = platform_rows(self._run(omh, self.home, "platforms")) if omh else None
             self._answer = {"available": bots is not None, "bots": bots or {}}
             self._at = now
             return self._answer
@@ -2993,9 +3011,9 @@ MCP_STOP_WAIT = 5.0             # seconds to wait for a stopped run to end
 
 
 def _stop_run(proc) -> None:
-    """End a `hermes mcp` run past its time: on POSIX its whole process group (it was started in a session of its
-    own, so this reaches nothing else), on Windows the process itself (started in a group of its own). The wait after
-    is bounded, so the run's bot is never left busy."""
+    """End a run the bridge started past its time (rule 41's `hermes mcp`, rule 43's `omh` read): on POSIX its whole
+    process group (it was started in a session of its own, so this reaches nothing else), on Windows the process
+    itself (started in a group of its own). The wait after is bounded, so the run's bot is never left busy."""
     if os.name == "nt":
         with contextlib.suppress(OSError):
             proc.kill()

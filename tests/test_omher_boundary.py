@@ -352,8 +352,8 @@ RULES = (
     "never runs this in its own pseudo-terminal, so no keystroke passes through omher.",
     "There are three exceptions. The first two are a bot's automations and plugins, which omher changes only by asking"
     " that bot's own gateway (rules 24 and 25); omher writes no file of either itself, with one exception of its own:",
-    "never signals a process (the one exception is rule 41's stop of its own `hermes mcp` run past its time), never"
-    " calls a service manager",
+    "never signals a process (the exceptions are rule 41's stop of its own `hermes mcp` run past its time and rule 43's"
+    " stop of its own `omh` read past its time, both through `_stop_run`), never calls a service manager",
     "The third is a bot's MCP apps (rule 41): on the person's press, Hermes' own `hermes -p <bot> mcp"
     " install|login|remove <name>` writes that profile's `config.yaml` `mcp_servers`, its `.env` and its `mcp-tokens/`;"
     " omher itself writes none of them.",
@@ -1226,9 +1226,8 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         calls = [(fn.name, c) for fn in fns.values() for c in ast.walk(fn)
                  if isinstance(c, ast.Call) and ast.unparse(c.func) == "subprocess.run"]
         # _hermes_run: rule 24's one `hermes -p <bot> cron create` for the briefing (rule 41's run_hermes_mcp is a
-        # Popen, pinned in AppsThroughTheBotsOwnHermes); run_omh_platforms: rule 43's one `omh hermes platforms`
-        self.assertEqual(sorted(name for name, _ in calls),
-                         ["_git", "_hermes_run", "gh_pr_view", "run_hermes_restart", "run_omh_platforms"])
+        # Popen, pinned in AppsThroughTheBotsOwnHermes, as is rule 43's run_omh_read in MessagingPlatformsThroughOmh)
+        self.assertEqual(sorted(name for name, _ in calls), ["_git", "_hermes_run", "gh_pr_view", "run_hermes_restart"])
         fn = fns["gh_pr_view"]
         body = ast.unparse(ast.Module(body=fn.body[1:], type_ignores=[]))  # the code, without its docstring
         self.assertIn("timeout=timeout", body)
@@ -1298,10 +1297,10 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         self.assertEqual(sorted(ast.unparse(c.args[0]) for c in runs),
                          ["['git', *pre, *args]",
                           "[gh, 'pr', 'view', str(number), '-R', repo, '--json', 'state,isDraft,mergedAt,url,statusCheckRollup,headRefOid']",
-                          "argv", "argv", "argv", "platforms_argv(omh, home)"])  # argv: rule 29's restart_argv
-        # (RestartOneBotOnAPress), rule 24's brief_create_argv (`hermes -p <bot> cron create`, pinned in
-        # bridge/tests/test_brief_setup.py) and rule 41's mcp_argv (AppsThroughTheBotsOwnHermes); platforms_argv: rule
-        # 43's `omh hermes platforms` (MessagingPlatformsThroughOmh)
+                          "argv", "argv", "argv", "argv"])  # argv: rule 29's restart_argv (RestartOneBotOnAPress),
+        # rule 24's brief_create_argv (`hermes -p <bot> cron create`, pinned in bridge/tests/test_brief_setup.py), rule
+        # 41's mcp_argv (AppsThroughTheBotsOwnHermes) and rule 43's omh_read_argv over OMH_READS
+        # (MessagingPlatformsThroughOmh)
         for host in ("slack.com/api", "discord.com/api", "api.telegram.org", "hooks.slack.com"):
             self.assertNotIn(host, self.source)
         hermes_send = [fn.name for fn in ast.walk(self.tree) if isinstance(fn, ast.FunctionDef)
@@ -2448,15 +2447,17 @@ class RestartOneBotOnAPress(unittest.TestCase):
         self.assertIn("argv = restart_argv(hermes, bot, interrupt)", body)
         self.assertIn("subprocess.run(argv, stdin=subprocess.DEVNULL", body)
         self.assertNotIn("shell=True", self.src)
-        # the bridge's own SIGTERM handler (it stops itself) is not a signal sent to anything; the one signal is rule
-        # 41's stop of its own `hermes mcp` run past its time (`_stop_run`), started by `run_hermes_mcp` alone
+        # the bridge's own SIGTERM handler (it stops itself) is not a signal sent to anything; the one signal is
+        # `_stop_run`: rule 41's stop of its own `hermes mcp` run past its time (`run_hermes_mcp`) and rule 43's of its
+        # own `omh` read (`run_omh_read`)
         rest = self.src
-        for own in ("run_hermes_mcp", "_stop_run"):
+        for own in ("run_hermes_mcp", "run_omh_read", "_stop_run"):
             rest = rest.replace(ast.get_source_segment(self.src, self.fns[own]), "")
         for word in ("Popen", "os.kill", "send_signal", "killpg", "launchctl", "systemctl", "schtasks", "os.system"):
             self.assertNotIn(word, rest, word)
         self.assertNotIn("Popen", ast.get_source_segment(self.src, self.fns["_stop_run"]))
-        self.assertNotIn("kill", ast.get_source_segment(self.src, self.fns["run_hermes_mcp"]).replace("_stop_run", ""))
+        for own in ("run_hermes_mcp", "run_omh_read"):
+            self.assertNotIn("kill", ast.get_source_segment(self.src, self.fns[own]).replace("_stop_run", ""), own)
         callers = [n for n, f in self.fns.items() if n != "run_hermes_restart"
                    and any(isinstance(c, ast.Name) and c.id == "run_hermes_restart" for c in ast.walk(f))]
         self.assertEqual(callers, ["op_bots_restart"])
@@ -3205,7 +3206,7 @@ class AppsThroughTheBotsOwnHermes(unittest.TestCase):
         stop = self._body("_stop_run")
         self.assertIn("os.killpg(proc.pid, signal.SIGKILL)", stop)
         self.assertIn("proc.wait(timeout=MCP_STOP_WAIT)", stop)
-        self.assertEqual(self._callers("_stop_run"), ["run_hermes_mcp"])
+        self.assertEqual(sorted(self._callers("_stop_run")), ["run_hermes_mcp", "run_omh_read"])  # rules 41 and 43
         self.assertEqual(ast.literal_eval(self._const("MCP_TIMEOUT")), {"install": 300.0, "login": 330.0, "remove": 60.0})
         self.assertEqual(self._callers("run_hermes_mcp"), ["_apps_run"])
 
@@ -3394,8 +3395,13 @@ class MessagingPlatformsThroughOmh(unittest.TestCase):
         "43. To show whether each bot's messaging platform (Discord, Slack and the others) is connected, the bridge"
         " runs one more program, OMH's own read-only reader: `omh --hermes-home <Hermes root> hermes platforms`"
         " (`bots.platforms`). This is the one exception to rule 10 for it.",
-        "the argv is fixed and takes nothing from the page, with no shell, nothing on stdin, started in the home folder"
-        " without the Hermes interpreter's Python variables, and stopped after 20 seconds.",
+        "The bridge runs `omh` only through `run_omh_read`, with an argv from one fixed table (`OMH_READS`), and this"
+        " rule allows that table exactly this one entry.",
+        "the argv is fixed and takes nothing from the page, with no shell, nothing on stdin, its stderr dropped, started"
+        " in the home folder without the Hermes interpreter's Python variables, and at most 1 MB of what it prints read"
+        " (a longer answer is refused).",
+        "A read still running after 20 seconds is stopped, with what it started (it runs in a session or process group of"
+        " its own), by `_stop_run`, the same stop rule 41 uses; nothing else is signalled.",
         "That command reads, never writes, the gateway record (`gateway_state.json`) of the Hermes root and of each"
         " profile and the tail of each one's `logs/gateway.log` (at most 1 MB, with the rotated `gateway.log.1` before it"
         " when the log is shorter); it runs no Hermes command, signals no process and sends nothing anywhere, and omher"
@@ -3427,22 +3433,38 @@ class MessagingPlatformsThroughOmh(unittest.TestCase):
         for sentence in self.RULE_43:
             self.assertIn(_flat(sentence), text)
 
-    def test_one_fixed_argv_no_shell_no_stdin_bounded(self) -> None:
-        argv = ast.unparse(self.fns["platforms_argv"].body[-1])
-        self.assertEqual(argv, "return [omh, '--hermes-home', str(home), 'hermes', 'platforms']")
-        run = ast.unparse(self.fns["run_omh_platforms"])
-        self.assertIn("subprocess.run(platforms_argv(omh, home), stdin=subprocess.DEVNULL", run)
-        self.assertIn("timeout=timeout", run)
-        self.assertIn("cwd=str(Path.home())", run)
+    def test_one_table_of_fixed_reads_no_shell_no_stdin_bounded(self) -> None:
+        table = next(n.value for n in self.tree.body if isinstance(n, ast.Assign)
+                     and any(isinstance(t, ast.Name) and t.id == "OMH_READS" for t in n.targets))
+        # the whole list of `omh` argvs the bridge may run; a new entry needs a rule of its own
+        self.assertEqual(ast.literal_eval(table), {"platforms": ("hermes", "platforms")})
+        argv = ast.unparse(self.fns["omh_read_argv"].body[-1])
+        self.assertEqual(argv, "return [omh, '--hermes-home', str(home), *OMH_READS[read]]")
+        run = ast.unparse(self.fns["run_omh_read"])
+        self.assertIn("argv = omh_read_argv(omh, home, read)", run)
+        self.assertIn("proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.DEVNULL,"
+                      " env=env, cwd=str(Path.home()), **kw)", run)
+        self.assertIn("code = proc.wait(timeout=timeout)", run)
+        self.assertIn("_stop_run(proc)", run)
+        self.assertIn("kw = {'start_new_session': True}", run)
+        self.assertIn("kw = {'creationflags': 134217728 | 512}", run)
         self.assertIn("('PYTHONPATH', 'PYTHONHOME', *_GATEWAY_MARKERS)", run)
-        self.assertNotIn("shell=True", run)
-        self.assertIn("PLATFORMS_TIMEOUT = 20.0", self.source)
+        self.assertIn("out.seek(0, os.SEEK_END) > OMH_READ_OUTPUT_MAX", run)
+        self.assertNotIn("shell=", run)
+        self.assertNotIn("PIPE", run)
+        self.assertIn("OMH_READ_TIMEOUT = 20.0", self.source)
+        self.assertIn("OMH_READ_OUTPUT_MAX = 1 << 20", self.source)
         self.assertIn("PLATFORMS_TTL = 30.0", self.source)
         self.assertIn("PLATFORMS_TTL_MISS = 120.0", self.source)
+        # only run_omh_read builds an `omh` argv, and only PlatformStates runs it (its default runner), for `platforms`
+        builders = [n for n, f in self.fns.items() if n != "omh_read_argv"
+                    and any(isinstance(c, ast.Name) and c.id == "omh_read_argv" for c in ast.walk(f))]
+        self.assertEqual(builders, ["run_omh_read"])
         states = next(c for c in ast.walk(self.tree) if isinstance(c, ast.ClassDef) and c.name == "PlatformStates")
-        refs = [c for c in ast.walk(self.tree) if isinstance(c, ast.Name) and c.id == "run_omh_platforms"]
-        self.assertEqual(len(refs), 1)  # PlatformStates' default runner, and nothing else
+        refs = [c for c in ast.walk(self.tree) if isinstance(c, ast.Name) and c.id == "run_omh_read"]
+        self.assertEqual(len(refs), 1)
         self.assertIn(refs[0], list(ast.walk(states)))
+        self.assertIn("self._run(omh, self.home, 'platforms')", ast.unparse(states))
         op = ast.unparse(self.fns["op_bots_platforms"])
         self.assertIn("asyncio.to_thread(self.platforms.read, p.get('fresh') is True)", op)
         self.assertNotIn("conn", op)  # no gateway call

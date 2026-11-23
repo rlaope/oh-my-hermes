@@ -75,7 +75,11 @@ class Answer(unittest.TestCase):
 class FindAndRun(unittest.TestCase):
     def test_the_one_argv(self):
         home = Path("/h") / ".hermes"
-        self.assertEqual(ob.platforms_argv("/x/omh", home), ["/x/omh", "--hermes-home", str(home), "hermes", "platforms"])
+        self.assertEqual(ob.OMH_READS, {"platforms": ("hermes", "platforms")})
+        self.assertEqual(ob.omh_read_argv("/x/omh", home, "platforms"),
+                         ["/x/omh", "--hermes-home", str(home), "hermes", "platforms"])
+        with self.assertRaises(KeyError):
+            ob.omh_read_argv("/x/omh", home, "doctor")  # only a read the table lists
 
     @POSIX
     def test_omh_is_found_on_path_else_where_its_installer_puts_it(self):
@@ -117,21 +121,43 @@ class FindAndRun(unittest.TestCase):
                               'printf "%s|%s|%s|%s" "${PYTHONPATH-unset}" "$NO_COLOR" "$PWD" "$*"\n')
             script.chmod(0o755)
             with mock.patch.dict(os.environ, {"PYTHONPATH": "/hermes/checkout", "HERMES_GATEWAY": "1"}):
-                out = ob.run_omh_platforms(str(script), Path(tmp) / ".hermes")
+                out = ob.run_omh_read(str(script), Path(tmp) / ".hermes", "platforms")
             self.assertEqual(out, f"unset|1|{Path.home()}|--hermes-home {Path(tmp) / '.hermes'} hermes platforms")
             script.write_text("#!/bin/sh\necho partial; exit 3\n")
-            self.assertIsNone(ob.run_omh_platforms(str(script), Path(tmp)))
-            script.write_text("#!/bin/sh\nsleep 5\n")
-            self.assertIsNone(ob.run_omh_platforms(str(script), Path(tmp), timeout=0.2))
-            self.assertIsNone(ob.run_omh_platforms(str(Path(tmp) / "absent"), Path(tmp)))
+            self.assertIsNone(ob.run_omh_read(str(script), Path(tmp), "platforms"))
+            script.write_text("#!/bin/sh\necho oops >&2; printf '{}'\n")
+            self.assertEqual(ob.run_omh_read(str(script), Path(tmp), "platforms"), "{}", "stderr is not the answer")
+            self.assertIsNone(ob.run_omh_read(str(Path(tmp) / "absent"), Path(tmp), "platforms"))
+            with mock.patch.object(ob, "OMH_READ_OUTPUT_MAX", 8):
+                script.write_text("#!/bin/sh\nprintf '0123456789'\n")
+                self.assertIsNone(ob.run_omh_read(str(script), Path(tmp), "platforms"), "too long: refused, not cut")
+
+    @POSIX
+    def test_a_read_past_its_time_is_stopped_with_what_it_started(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            script, pid_file = Path(tmp) / "omh", Path(tmp) / "child.pid"
+            script.write_text(f'#!/bin/sh\nsleep 30 &\necho $! > "{pid_file}"\nwait\n')
+            script.chmod(0o755)
+            self.assertIsNone(ob.run_omh_read(str(script), Path(tmp), "platforms", timeout=0.5))
+            child = int(pid_file.read_text())
+            for _ in range(50):
+                try:
+                    os.kill(child, 0)
+                except ProcessLookupError:
+                    break
+                import time
+                time.sleep(0.05)
+            else:
+                self.fail("the read's own child outlived the stop")
 
 
 class Cache(unittest.TestCase):
     def states(self, out: str | None, omh: str | None = "/x/omh"):
         self.now, self.runs = 0.0, []
 
-        def run(path, home):
+        def run(path, home, read):
             self.runs.append((path, home))
+            self.assertEqual(read, "platforms")
             return out
 
         return ob.PlatformStates(Path("/h"), find=lambda: omh, run=run, clock=lambda: self.now)
@@ -176,8 +202,8 @@ class PlatformsOp(BridgeCase):
         async with Env(("demo-bot",)) as env:
             calls = []
 
-            def run(path, home):
-                calls.append((path, home))
+            def run(path, home, read):
+                calls.append((path, home, read))
                 return answer(row(), bot="demo-bot")
 
             env.bridge.platforms = ob.PlatformStates(env.home, find=lambda: "/x/omh", run=run)
@@ -186,7 +212,7 @@ class PlatformsOp(BridgeCase):
             self.assertTrue(r["ok"], r)
             self.assertTrue(r["result"]["available"])
             self.assertEqual(r["result"]["bots"]["demo-bot"]["platforms"][0]["platform"], "discord")
-            self.assertEqual(calls, [("/x/omh", env.home)])
+            self.assertEqual(calls, [("/x/omh", env.home, "platforms")])
             r = await s.req("bots.platforms", fresh=True)
             self.assertTrue(r["ok"], r)
             self.assertEqual(env.connects, [])  # nothing attached for it
