@@ -167,6 +167,18 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   week's mentions, for the GitHub accounts you add in Settings › Accounts › GitHub (the ones your `gh` is signed in
   to), with what needs action first; the sidebar's Tasks row counts the review requests. A non-active `gh` account is
   read with its token passed only to that one `gh` call (`BOUNDARY.md` rules 18 and 33).
+- **A thread's pull request** (`src/threads/prs.ts`, `src/threads/ThreadPrs.tsx`, the bridge's `thread.prs`): when a
+  bot's answer in a thread names a pull request by its full `https://github.com/<owner>/<repo>/pull/<n>` link, the
+  thread's row shows the newest one's number, state (open, draft, merged, closed) and, for an open PR or a draft, its
+  checks (passing, failing, running); the transcript shows a card under the answer that named each (the newest three)
+  with the repository, which opens the PR in the browser on a click, and Refresh. An open PR with failing checks lists
+  its thread in Needs you and rings once per failing head commit. The bridge reads the thread's own saved messages
+  (`session.history`) and asks your own `gh` with the same one fixed `gh pr view` the Plans graph uses, sharing its
+  5 minute cache, at most 4 calls at once and 30 a minute. A row in view is read when it comes into view, then every
+  5 minutes at the soonest while its PR may still change (twice as long after each failed read, up to an hour); a
+  thread is also read when opened, after its turn ends and on Refresh, two at most at a time. Without `gh`, a login
+  or the network, and for a bot on another computer, the mark shows the number only (`BOUNDARY.md` rule 21,
+  `e2e/thread-prs.spec.ts`).
 - **ACP agents** (`src-tauri/src/acp_chat.rs`): one adapter for agents that speak the Agent Client Protocol
   (JSON-RPC on stdio), one table row per agent. OpenCode (`opencode acp`) is the first. omher turns off the
   protocol's file and terminal capabilities, so the agent uses its own tools; its permission requests become

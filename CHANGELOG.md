@@ -4,6 +4,20 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: a thread shows the pull request its bot opened, and whether its checks pass.** A bot's thread often ends
+  with "opened https://github.com/<owner>/<repo>/pull/<n>", and omher showed only a link: the thread list could not
+  say whether that PR was open, merged or failing. Now a thread's row carries a small mark for the newest PR its bot
+  named (number, state, and the checks for an open PR or a draft: passing, failing or running), and the transcript
+  shows a card under the answer that named each one (the newest three), with the repository; a click opens the PR on
+  GitHub, Refresh asks again. An open PR with failing checks puts its thread in Needs you ("checks failing on #n")
+  until the checks pass or it is merged or closed, and raises one system notification per failing head commit. Only
+  full PR links in the bot's own answers count, never the person's words or a tool's output. The state comes from
+  the same one `gh pr view` the Plans graph uses, now with `statusCheckRollup` and `headRefOid`, reduced to one word
+  from the checks' status fields (a check's name is never read); answers are kept 5 minutes, at most 4 calls run at
+  once and 30 a minute for plans and threads together, and a row in view is read again every 5 minutes at the
+  soonest, only while its PR may still change, with a doubling wait after a failed read. Without `gh`, a login or
+  the network, and for a bot on another computer, the mark shows the number with no state. This is a display: it
+  never changes a thread's state and starts, steers or stops nothing. (`docs/OMHER-BOUNDARY.md` rule 21)
 - **`omh_delegate_route` can hand a child the rest of its chain, each step at its own effort (opt-in).** With
   `{"schema_version": "delegate_route_options/v1", "write_fallback_providers": true}` in
   `~/.omh/routing/delegate-route.json`, `set` also writes the positions after the head into
