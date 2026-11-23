@@ -309,7 +309,7 @@ All notable changes will be documented here.
   report no background work never show the dashed edge. A terminal's bell, OSC 9 message or progress done is now quiet
   news everywhere (an accent dot on the row and the folder summary, a slowly breathing accent edge on the cell, "rang"
   in the notification), and the amber warning is kept for waits omher knows: a bot's request to type, a chat's approval
-  or question. (`apps/omher/src/sessions/SplitLayoutCard.tsx`) (#TBD)
+  or question. (`apps/omher/src/sessions/SplitLayoutCard.tsx`) (#3138)
 
 ## 5.0.0 - 2026-11-21
 
