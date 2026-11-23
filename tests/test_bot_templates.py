@@ -292,8 +292,10 @@ class BotTemplateRoutingTests(unittest.TestCase):
         ):
             with self.subTest(message=message):
                 self.assertTrue(everyday_sense_phrase_unanchored(SKILL, normalized_phrase(message)))
-        # A template id beside a messenger is still the template.
+        # A template id beside a messenger is still the template; beside a language or code word it is not.
         self.assertFalse(bot_template_code_sense(normalized_phrase("apply the channel-watch bot template for slack")))
+        for message in ("write a pr-review bot template in python", "pr-review 봇 템플릿 파이썬 코드 짜줘"):
+            self.assertTrue(bot_template_code_sense(normalized_phrase(message)), message)
 
     def test_anchored_english_and_job_phrases_keep_it(self) -> None:
         for message in ("apply the pr-review bot template", "list the bot templates", "bot template"):

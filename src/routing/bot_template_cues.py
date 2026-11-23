@@ -126,11 +126,15 @@ def bot_template_other_action(normalized_query: str) -> bool:
 
 
 def bot_template_code_sense(normalized_query: str) -> bool:
-    """Not an apply: a starter project (code, a language, a repository or a messenger with no template id), a file
-    being edited, or a template removed or exported, whatever it names."""
+    """Not an apply: code or a language (whatever it names), a messenger with no template id, a file being edited, or
+    a template removed or exported."""
     if bot_template_file_sense(normalized_query) or bot_template_other_action(normalized_query):
         return True
     tokens = routing_tokens(normalized_query)
+    # a language or code word is a starter project even beside a template id ("write a pr-review bot template in
+    # python"); only a messenger word is excused by an id ("the channel-watch bot template for slack")
+    if tokens & _LANGUAGE_TOKENS:
+        return True
     return bool(tokens & _CODE_TOKENS) and not tokens & _ID_TOKENS
 
 

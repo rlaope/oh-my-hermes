@@ -125,7 +125,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # and a Jinja and two prompt templates.
         # Its review round adds four repository template files named like a template id.
         # Its verification round adds four: a template deleted, removed, exported, or built in Python.
-        self.assertEqual(payload["summary"]["case_count"], 1618)
+        # Its last round adds two bot templates written in Python beside a template id.
+        self.assertEqual(payload["summary"]["case_count"], 1620)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -322,7 +323,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # that dispatch, and a PR, a release notes and an issue template that keep their owners.
         # Its review round adds a Korean template file edit that keeps content-operator and a Korean recommend ask.
         # Its verification round adds a Korean delete that keeps code-review.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1444)
+        # Its last round adds Korean Python code for a pr-review bot template, which keeps code-review.
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1445)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

@@ -10819,6 +10819,14 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "build a bot from the release-notes template in python", "answer_clarification", "", "bot-template",
     ),
     RoutingPrecisionCase(
+        "pr-review-bot-template-in-python-is-not-bot-template", "Writing a pr-review bot template in Python is code",
+        "write a pr-review bot template in python", "answer_clarification", "", "bot-template",
+    ),
+    RoutingPrecisionCase(
+        "meeting-to-issues-bot-template-in-python-is-not-bot-template", "Writing a meeting-to-issues bot template in Python is code",
+        "write a meeting-to-issues bot template in python", "answer_clarification", "", "bot-template",
+    ),
+    RoutingPrecisionCase(
         "export-bot-template-json-is-not-bot-template", "Exporting a bot template as JSON reads catalog data",
         "export the research-vault bot template as json", "answer_clarification", "", "bot-template",
     ),
@@ -22067,6 +22075,7 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     RoutingInterventionCase("release-notes-template-keeps-content-operator", "A release notes template stays with the content operator", "release notes template for the changelog", "dispatch", "content-operator", "prepare_content_operator_card", "content_operator"),
     RoutingInterventionCase("ko-release-notes-template-file-keeps-content-operator", "A Korean edit of a release-notes template file keeps the content operator", "릴리즈 release-notes 템플릿 파일 수정해줘", "dispatch", "content-operator", "prepare_content_operator_card", "content_operator"),
     RoutingInterventionCase("ko-bot-template-delete-keeps-code-review", "A Korean ask to delete a bot template keeps its earlier route, not the apply skill", "pr-review 봇 템플릿 삭제해줘", "dispatch", "code-review", "prepare_review_or_followup_handoff", "review_check"),
+    RoutingInterventionCase("ko-bot-template-python-code-keeps-code-review", "Korean Python code for a pr-review bot template keeps its earlier route", "pr-review 봇 템플릿 파이썬 코드 짜줘", "dispatch", "code-review", "prepare_review_or_followup_handoff", "review_check"),
     RoutingInterventionCase("ko-bot-template-recommend", "A Korean ask to recommend a bot template reaches it", "봇 템플릿 추천해줘", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
     RoutingInterventionCase("github-issue-template-keeps-github-event-ops", "A GitHub issue template stays with GitHub event ops", "github issue template for feature requests", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
 )
