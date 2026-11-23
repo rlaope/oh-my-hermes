@@ -256,8 +256,9 @@ _SCRIPT_SUFFIX: Final = re.compile(r"\.(?:ps1|bat|cmd)$", re.IGNORECASE)
 # Programs that make links (`ln -s .git g`, `mklink /J g .git`, PowerShell `New-Item -ItemType Junction`).
 _LINKERS: Final = frozenset({"ln", "mklink", "new-item", "ni", "cp", "mv", "install", "rsync", "tar", "unzip"})
 # Programs that only read the files they name.
-_READERS: Final = frozenset({"cat", "less", "more", "head", "tail", "ls", "stat", "file", "wc", "grep", "rg",
-                             "find", "diff", "cmp", "sha256sum", "shasum", "md5sum", "du", "tree", "realpath",
+# `tree` (`-o` writes) and `rg` (`--pre` runs a program) are not on it.
+_READERS: Final = frozenset({"cat", "less", "more", "head", "tail", "ls", "stat", "file", "wc", "grep",
+                             "find", "diff", "cmp", "sha256sum", "shasum", "md5sum", "du", "realpath",
                              "readlink", "basename", "dirname", "test", "["})
 _FORGE_API_HOST: Final = re.compile(r"api\.github\.com|/api/v3/|/api/graphql", re.IGNORECASE)
 _WRITE_METHOD: Final = re.compile(r"\b(?:PUT|POST|PATCH|DELETE)\b|--data|(?:^|\s)-d\b|--json|--form", re.IGNORECASE)
@@ -459,6 +460,18 @@ def _runs_only_a_script(name: str, args: list[str]) -> bool:
     return False
 
 
+def _plain_read(name: str, assignments: list[str], args: list[str]) -> bool:
+    """A reader that reads and runs nothing: no assignment before it (`LESSOPEN='|cmd' less`), no
+    option that runs or writes (`find -exec`, `less +!cmd`)."""
+    if name not in _READERS or assignments:
+        return False
+    if name == "find":
+        return not any(word.lower().startswith(("-exec", "-ok", "-delete", "-fprint", "-fls")) for word in args)
+    if name in ("less", "more"):
+        return not any(word.startswith("+") or word.lower().startswith(("-k", "--lesskey")) for word in args)
+    return True
+
+
 def _names_forge_config(word: str) -> bool:
     """A command argument naming `.git` itself, a path under it, or a git or gh config file."""
     value = word.split("=", 1)[-1] if word.startswith("-") else word
@@ -568,8 +581,7 @@ def _classify_segment(segment: list[str], context: _Context, depth: int) -> str:
         return LOCAL if _runs_only_a_script(name, words[1:]) and not forge_text else UNCLASSIFIED
     if name in _LINKERS and any(_names_forge_config(word) for word in words[1:]):
         return UNCLASSIFIED  # a link to `.git` or a git config lets a later plain write land there
-    reader = name in _READERS and not (name == "find" and any(
-        word.lower().startswith(("-exec", "-ok", "-delete", "-fprint", "-fls")) for word in words[1:]))
+    reader = _plain_read(name, names, words[1:])
     if not reader and any(_names_forge_config(word) for word in words[1:]) and not _FORGE_CLI.match(name):
         return UNCLASSIFIED  # a shell write into `.git/` or a git or gh config file
     if name in _SHELLS:

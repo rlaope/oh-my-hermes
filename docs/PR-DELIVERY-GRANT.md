@@ -218,8 +218,12 @@ the forge without passing the gate:
   (`ln -s .gi? g`, `L=.git; ln -s $L g`), or by any program not named here,
   and then written through by a shell redirect (`echo x > g/hooks/pre-push`)
   is not seen. Plain reads of a protected path (`cat`, `less`, `head`,
-  `tail`, `grep`, `ls`, `stat`, `git config --get` or `--list`) are allowed;
-  writes, links, copies onto it and redirects into it are refused;
+  `tail`, `grep`, `ls`, `stat`, `git config --get` or `--list`) are allowed,
+  but only with no variable assigned before the reader (`LESSOPEN='|…' less`
+  runs a command) and no option that runs or writes (`less +!…`, `find
+  -exec`); `tree` and `rg` are not readers here (`tree -o` writes, `rg
+  --pre` runs a program). Writes, links, copies onto it and redirects into
+  it are refused;
 - the grant file and the opened-PR record written by arbitrary code under
   another spelling (the file tools and command lines that name the store are
   refused);

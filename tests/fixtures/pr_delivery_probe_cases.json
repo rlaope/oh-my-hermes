@@ -2596,6 +2596,36 @@
    "command": "find .git -delete",
    "class": "unclassified",
    "verdict": "refused"
+  },
+  {
+   "command": "LESSOPEN='|gh pr merge 42 %s' less README.md",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "LESSOPEN=\"|git push -f origin HEAD:main %s\" less README.md",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env LESSOPEN='|gh pr merge 42' less README.md",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "LESSOPEN='|gh pr merge 42 %s' more README.md",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "less '+!gh pr merge 42' README.md",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "tree -o .git/hooks/pre-push",
+   "class": "unclassified",
+   "verdict": "refused"
   }
  ]
 }

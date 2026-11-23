@@ -721,7 +721,12 @@ class UnattendedMatrixTests(_Home):
                         "New-Item -ItemType Junction -Path g -Target .git", "cp evil.sh .git/hooks/pre-push",
                         "echo x > .git/hooks/pre-push", "ln -s ~/.gitconfig c", "cat x > .git/hooks/pre-push",
                         "tee .git/hooks/pre-push", "cp x .git/config", "find .git -delete",
-                        "find .git/hooks -exec rm {} +", "echo x >> ~/.ssh/config"):
+                        "find .git/hooks -exec rm {} +", "echo x >> ~/.ssh/config",
+                        "LESSOPEN='|gh pr merge 42 %s' less README.md",
+                        "LESSOPEN=\"|git push -f origin HEAD:main %s\" less README.md",
+                        "env LESSOPEN='|gh pr merge 42' less README.md", "LESSOPEN='|gh pr merge 42 %s' more README.md",
+                        "less '+!gh pr merge 42' README.md", "tree -o .git/hooks/pre-push",
+                        "rg --pre ./x url .git/config"):
             with self.subTest(command=command):
                 self.assertEqual(self.terminal(command)["action"], "block")
         self.assertIsNone(self.terminal("ln -s build/out latest"))
