@@ -10,7 +10,8 @@ interface MdNode {
   data?: { hName?: string; hProperties?: Record<string, string> };
 }
 
-const SKIP = new Set(["link", "linkReference", "definition", "inlineCode", "code", "html"]);
+// obsidianLink: remarkObsidianLinks' chip, which opens nothing, so nothing inside it may open a chat either
+const SKIP = new Set(["link", "linkReference", "definition", "inlineCode", "code", "html", "obsidianLink"]);
 
 export function remarkMentions(options: { resolve: (name: string) => string | null }) {
   const { resolve } = options;

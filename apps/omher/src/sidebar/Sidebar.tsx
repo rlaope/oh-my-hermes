@@ -4,7 +4,7 @@ import "./sidebar.css";
 import logo from "../assets/omher-mark.png";
 import { selectAsks, selectSidebarBots, useStore } from "../state/store";
 import { slots } from "../features";
-import { CalendarIcon, GearIcon, GridIcon, IconButton, PlusIcon, SearchIcon } from "../ui";
+import { CalendarIcon, GearIcon, GridIcon, IconButton, PlugIcon, PlusIcon, SearchIcon } from "../ui";
 import { BotRow, threadsLatest } from "./BotRow";
 import { threadKey } from "../threads/types";
 import { useRowDrag } from "./useRowDrag";
@@ -188,7 +188,7 @@ export function Sidebar() {
       <div className="side-foot">
         {/* little disk space left on the home folder's volume (src/lib/disk.ts); nothing while it is fine */}
         <DiskChip />
-        {/* one compact row: Automations, Plugins and Settings as icon buttons (their names in the tooltip and to a
+        {/* one compact row: Automations, Plugins, Apps and Settings as icon buttons (their names in the tooltip and to a
             screen reader), the usage marks after them */}
         <div className="foot-row" data-testid="foot-row">
           <button
@@ -213,6 +213,17 @@ export function Sidebar() {
           >
             <GridIcon />
             <span className="vh">{t("nav.plugins")}</span>
+          </button>
+          <button
+            type="button"
+            className={`nav nav-i${s.ui.view === "apps" ? " on" : ""}`}
+            aria-current={s.ui.view === "apps" ? "page" : undefined}
+            title={t("nav.apps")}
+            onClick={() => s.openApps()}
+            data-testid="nav-apps"
+          >
+            <PlugIcon />
+            <span className="vh">{t("nav.apps")}</span>
           </button>
           <button
             type="button"

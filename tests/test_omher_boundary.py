@@ -280,8 +280,8 @@ RULES = (
     "For Linear omher holds no key. The bot's `config.yaml` is the file the bridge already parses whole (and keeps"
     " parsed) to find the bots, for every op; for `tasks.linear` it runs that file through a YAML event reader of its"
     " own, and the only values that leave"
-    " that parser are the server names under `mcp_servers` and each one's plain `enabled`: a header, env or args value"
-    " (or a url or auth) is never copied out of it.",
+    " that parser are the server names under `mcp_servers` and each one's `enabled`, read as Hermes reads it (on, off,"
+    " or a value Hermes would not take): a header, env or args value (or a url or auth) is never copied out of it.",
     "The Tasks/Linear path adds nothing to that and returns, caches and shows only that: the first server whose name"
     " has `linear` in it and"
     " whether it is turned on, so a server is Linear by its name alone; it never sends, logs, stores or displays any"
@@ -334,8 +334,13 @@ RULES = (
     "The provider id is checked against `^[a-z0-9][a-z0-9_-]{0,40}$` and passed as one argument;",
     "Hermes asks for the key in that terminal and stores it itself: omher never sees the key.",
     "never runs this in its own pseudo-terminal, so no keystroke passes through omher.",
-    "The two exceptions are a bot's automations and plugins, which omher changes only by asking that bot's own gateway"
-    " (rules 24 and 25); omher writes no file of either itself, with one exception of its own:",
+    "There are three exceptions. The first two are a bot's automations and plugins, which omher changes only by asking"
+    " that bot's own gateway (rules 24 and 25); omher writes no file of either itself, with one exception of its own:",
+    "never signals a process (the one exception is rule 41's stop of its own `hermes mcp` run past its time), never"
+    " calls a service manager",
+    "The third is a bot's MCP apps (rule 41): on the person's press, Hermes' own `hermes -p <bot> mcp"
+    " install|login|remove <name>` writes that profile's `config.yaml` `mcp_servers`, its `.env` and its `mcp-tokens/`;"
+    " omher itself writes none of them.",
     "omher changes a bot's automations only through Hermes' own `cron.manage` on that bot's gateway (`add`, `pause`,"
     " `resume`, `remove`), only when the person presses a button.",
     "It reads `cron/jobs.json` and never writes it;",
@@ -465,6 +470,29 @@ RULES = (
     " judged by Hermes' own `_update_fenced`, which reads the markers and, only when a stale one is left, briefly tries a"
     " shared lock; it writes nothing) the bridge does not look, as Hermes' own"
     " `ensure_gateway_runtime` does not.",
+    # rule 41: the Apps page, through the bot's own `hermes mcp`
+    "41. omher connects a bot to an app of Hermes' MCP catalog only through that bot's own Hermes command, only when the"
+    " person presses a button on the Apps page:",
+    "This follows the owner's answer that omher may run a fixed Hermes command on a button press.",
+    "each is a fixed argv with no shell and nothing on stdin, the Hermes root as `HERMES_HOME`, stopped after 300, 330"
+    " and 60 seconds, one run at a time per bot.",
+    "a run past its time is stopped with that group (on Windows the process itself), then waited for at most 5 seconds:"
+    " that stop is the one signal omher sends, only to its own run.",
+    "and Connect needs it not to be there: Hermes' install replaces a server's whole block and turns it on, so a server"
+    " that is already there (on, off or set up by hand), or a config omher cannot read, is never installed over.",
+    "Sign in again first asks the person, since Hermes drops the current sign-in before the new one;",
+    "when the bot's own config sets a server's sign-in to a device code (`oauth.flow: device`), which Hermes shows only"
+    " in a terminal, the page offers no Sign in for it and shows `hermes -p <bot> mcp login <name>` to run there, and"
+    " the bridge refuses that sign-in.",
+    "the name is checked against `^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$` (so it never reads as an option) and must be an"
+    " entry of the catalog the bridge has just read;",
+    "whether Hermes keeps a sign-in for a server it learns from a stat of `<profile>/mcp-tokens/<name>.json`, a file it"
+    " never opens.",
+    "A state omher cannot read is shown as unknown, never as connected.",
+    "omher never runs another `hermes mcp` verb (`add`, `configure`, `test`, `reauth`, `catalog`), never passes Hermes a"
+    " value an install asks for, never reads, writes or shows a key or a token, never edits `config.yaml`, `.env` or"
+    " `mcp-tokens/` itself, and never reloads or restarts anything after a change:",
+    "to connect Linear the page opens the Apps page for that bot (rule 41); it lists nothing from Linear itself.",
 )
 TAURI_CONF = ROOT / "apps" / "omher" / "src-tauri" / "tauri.conf.json"
 CAPABILITIES = ROOT / "apps" / "omher" / "src-tauri" / "capabilities" / "default.json"
@@ -590,10 +618,11 @@ class DocPins(unittest.TestCase):
         # omher restarting it is looked for through Hermes' own discovery, which starts nothing, and attached again
         # once ready); 40: rule 40 (a thread's PRs: links in the bot's own answers read from its state.db, their
         # state and checks through rule 21's one `gh pr view`, now with statusCheckRollup and headRefOid, on open,
-        # turn end, Refresh and a visible row's bounded tick; Needs you and one notification per failing head).
-        # The rules stay numbered 1..n with no gap or repeat.
+        # turn end, Refresh and a visible row's bounded tick; Needs you and one notification per failing head);
+        # 41: rule 41 (the Apps page: three fixed `hermes -p <bot> mcp install|login|remove <name>` argvs on a press,
+        # the catalog and the bot's MCP state read from files). The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 40, len(rules))
+        self.assertTrue(6 <= len(rules) <= 41, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -1175,7 +1204,8 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         fns = {f.name: f for f in ast.walk(self.tree) if isinstance(f, ast.FunctionDef)}
         calls = [(fn.name, c) for fn in fns.values() for c in ast.walk(fn)
                  if isinstance(c, ast.Call) and ast.unparse(c.func) == "subprocess.run"]
-        # _hermes_run: rule 24's one `hermes -p <bot> cron create` for the briefing
+        # _hermes_run: rule 24's one `hermes -p <bot> cron create` for the briefing (rule 41's run_hermes_mcp is a
+        # Popen, pinned in AppsThroughTheBotsOwnHermes)
         self.assertEqual(sorted(name for name, _ in calls), ["_git", "_hermes_run", "gh_pr_view", "run_hermes_restart"])
         fn = fns["gh_pr_view"]
         body = ast.unparse(ast.Module(body=fn.body[1:], type_ignores=[]))  # the code, without its docstring
@@ -1246,8 +1276,9 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         self.assertEqual(sorted(ast.unparse(c.args[0]) for c in runs),
                          ["['git', *pre, *args]",
                           "[gh, 'pr', 'view', str(number), '-R', repo, '--json', 'state,isDraft,mergedAt,url,statusCheckRollup,headRefOid']",
-                          "argv", "argv"])  # argv: rule 29's restart_argv (RestartOneBotOnAPress) and rule 24's
-        # brief_create_argv (`hermes -p <bot> cron create`, pinned in bridge/tests/test_brief_setup.py)
+                          "argv", "argv", "argv"])  # argv: rule 29's restart_argv (RestartOneBotOnAPress), rule 24's
+        # brief_create_argv (`hermes -p <bot> cron create`, pinned in bridge/tests/test_brief_setup.py) and rule 41's
+        # mcp_argv (AppsThroughTheBotsOwnHermes)
         for host in ("slack.com/api", "discord.com/api", "api.telegram.org", "hooks.slack.com"):
             self.assertNotIn(host, self.source)
         hermes_send = [fn.name for fn in ast.walk(self.tree) if isinstance(fn, ast.FunctionDef)
@@ -2394,9 +2425,15 @@ class RestartOneBotOnAPress(unittest.TestCase):
         self.assertIn("argv = restart_argv(hermes, bot, interrupt)", body)
         self.assertIn("subprocess.run(argv, stdin=subprocess.DEVNULL", body)
         self.assertNotIn("shell=True", self.src)
-        # the bridge's own SIGTERM handler (it stops itself) is not a signal sent to anything
+        # the bridge's own SIGTERM handler (it stops itself) is not a signal sent to anything; the one signal is rule
+        # 41's stop of its own `hermes mcp` run past its time (`_stop_run`), started by `run_hermes_mcp` alone
+        rest = self.src
+        for own in ("run_hermes_mcp", "_stop_run"):
+            rest = rest.replace(ast.get_source_segment(self.src, self.fns[own]), "")
         for word in ("Popen", "os.kill", "send_signal", "killpg", "launchctl", "systemctl", "schtasks", "os.system"):
-            self.assertNotIn(word, self.src, word)
+            self.assertNotIn(word, rest, word)
+        self.assertNotIn("Popen", ast.get_source_segment(self.src, self.fns["_stop_run"]))
+        self.assertNotIn("kill", ast.get_source_segment(self.src, self.fns["run_hermes_mcp"]).replace("_stop_run", ""))
         callers = [n for n, f in self.fns.items() if n != "run_hermes_restart"
                    and any(isinstance(c, ast.Name) and c.id == "run_hermes_restart" for c in ast.walk(f))]
         self.assertEqual(callers, ["op_bots_restart"])
@@ -2802,7 +2839,21 @@ class TasksReadOnly(unittest.TestCase):
             self.assertNotIn(word, events, word)
         self.assertIn("yaml.parse(stream, Loader=loader)", events)
         self.assertIn('YAML(typ="safe", pure=True).parse(stream)', events)
-        self.assertEqual(sorted(set(re.findall(r'== "([a-z_]+)"', names))), ["enabled", "mcp_servers"])
+        # the keys it keeps: `mcp_servers`, then of each server only the *keys* asked for (`enabled`; the Apps page of
+        # rule 41 also the legacy `disabled`), each turned into True, False or "?" by mcp_switch as Hermes reads it
+        # (`oauth` and its `flow` only when the caller asks for `oauth.flow`: the Apps page, never the Linear source)
+        self.assertEqual(sorted(set(re.findall(r'== "([a-z_]+)"', names))), ["flow", "mcp_servers", "oauth"])
+        self.assertIn('got = mcp_switch(ev.value, ev.implicit[0], ruamel) if isinstance(ev, yaml.ScalarEvent) else "?"', names)
+        switch = src.split("def mcp_switch(", 1)[1].split("\ndef ", 1)[0]
+        for word in ("open(", "read", "log.", "_YAML_CACHE", "write"):
+            self.assertNotIn(word, switch.split('"""', 2)[2], word)
+        self.assertIn('keys: tuple[str, ...] = ("enabled",)', names)
+        self.assertIn('top[1] = ev.value if ev.value in keys or (ev.value == "oauth" and "oauth.flow" in keys) else None', names)
+        # under `oauth` only its `flow` is kept, and only as one of Hermes' two words or "?"
+        self.assertIn('top[1] = "oauth.flow" if ev.value == "flow" else None', names)
+        self.assertIn('out[stack[1][1]]["oauth.flow"] = flow if flow in ("browser", "device") else "?"', names)
+        self.assertIn('MCP_KEYS = ("enabled", "disabled", "oauth.flow")', src)
+        self.assertIn('mcp_server_names(profile_dir / "config.yaml", MCP_KEYS)', src)
         body = src.split("def linear_server(", 1)[1].split("\ndef ", 1)[0].split('"""', 2)[2]
         # the keys, then of the Linear-named server only its `enabled`: no url, no values(), no items()
         self.assertIn("for name in servers.keys():", body)
@@ -3073,3 +3124,133 @@ class DiskTrayAndKeepAwake(unittest.TestCase):
         lib = (SHELL / "lib.rs").read_text(encoding="utf-8")
         exit_arm = lib.split("RunEvent::Exit = event {", 1)[1].split("shell.sessions.close_all();", 1)[0]
         self.assertIn("power.quit();", exit_arm)
+
+
+class AppsThroughTheBotsOwnHermes(unittest.TestCase):
+    """Rule 41: the Apps page changes a bot's MCP apps only through three fixed `hermes -p <bot> mcp` argvs on a press,
+    with a checked profile and a catalog name; reads are files only (the catalog's manifests, the bot's `mcp_servers`
+    names and switches, a token file's stat); nothing is reloaded, restarted or written by omher itself."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.src = BRIDGE.read_text(encoding="utf-8")
+        cls.tree = ast.parse(cls.src)
+        cls.fns = {f.name: f for f in ast.walk(cls.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+    def _body(self, name: str) -> str:
+        fn = self.fns[name]
+        return ast.unparse(ast.Module(body=fn.body[1:] if ast.get_docstring(fn) else fn.body, type_ignores=[]))
+
+    def _const(self, name: str):
+        return next(n.value for n in self.tree.body if isinstance(n, ast.Assign)
+                    and any(getattr(t, "id", "") == name for t in n.targets))
+
+    def _callers(self, name: str) -> list[str]:
+        return sorted(n for n, f in self.fns.items() if n != name
+                      and any(isinstance(c, ast.Name) and c.id == name for c in ast.walk(f)))
+
+    def test_three_fixed_argvs_with_a_checked_profile_and_name(self) -> None:
+        self.assertEqual(ast.literal_eval(self._const("MCP_VERBS")), ("install", "login", "remove"))
+        body = self._body("mcp_argv")
+        self.assertIn("if verb not in MCP_VERBS:", body)
+        self.assertIn("PROFILE_ID.fullmatch(bot)", body)
+        self.assertIn("MCP_NAME.fullmatch(name)", body)
+        self.assertIn("return [hermes, '-p', bot, 'mcp', verb, name]", body)
+        pattern = ast.literal_eval(self._const("MCP_NAME").args[0])
+        self.assertEqual(pattern, "[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
+        for bad in ("-h", "--help", "x;rm", "a b", "$(id)", "`id`", "x|y", "x/y", "official/notion", "../x", "x\ny", ""):
+            self.assertIsNone(re.fullmatch(pattern, bad), bad)
+        # the only list naming `mcp` is mcp_argv's, and only run_hermes_mcp builds it
+        lists = {n for n, f in self.fns.items() for lst in ast.walk(f) if isinstance(lst, ast.List)
+                 and any(isinstance(c, ast.Constant) and c.value == "mcp" for c in lst.elts)}
+        self.assertEqual(lists, {"mcp_argv"})
+        self.assertEqual(self._callers("mcp_argv"), ["run_hermes_mcp"])
+        for verb in ("add", "configure", "config", "test", "reauth", "catalog", "picker", "--all", "--flow"):
+            self.assertNotIn(f"'{verb}'", ast.unparse(self.fns["mcp_argv"]), verb)
+
+    def test_one_run_with_no_shell_nothing_on_stdin_and_a_timeout(self) -> None:
+        body = self._body("run_hermes_mcp")
+        self.assertIn("argv = mcp_argv(hermes, bot, verb, name)", body)
+        self.assertIn("proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, env=env, **kw)", body)
+        self.assertIn("code = proc.wait(timeout=timeout)", body)
+        self.assertIn("_stop_run(proc)", body)
+        self.assertIn("kw = {'start_new_session': True}", body)
+        self.assertIn("kw = {'creationflags': 134217728 | 512}", body)
+        self.assertIn("HERMES_HOME=str(home)", body)
+        self.assertNotIn("shell=", body)
+        self.assertNotIn("PIPE", body.replace("stderr=subprocess.STDOUT", ""))
+        stop = self._body("_stop_run")
+        self.assertIn("os.killpg(proc.pid, signal.SIGKILL)", stop)
+        self.assertIn("proc.wait(timeout=MCP_STOP_WAIT)", stop)
+        self.assertEqual(self._callers("_stop_run"), ["run_hermes_mcp"])
+        self.assertEqual(ast.literal_eval(self._const("MCP_TIMEOUT")), {"install": 300.0, "login": 330.0, "remove": 60.0})
+        self.assertEqual(self._callers("run_hermes_mcp"), ["_apps_run"])
+
+    def test_a_press_checks_the_bot_the_name_and_the_catalog_first(self) -> None:
+        body = self._body("_apps_run")
+        order = ["bot = self._bot(p.get('bot'))", "if not PROFILE_ID.fullmatch(name):", "MCP_NAME.fullmatch(app)",
+                 "entry = next((e for e in catalog or [] if e['name'] == app), None)",
+                 "if verb != 'install' and (servers is None or app not in servers):",
+                 "if verb == 'login' and entry['auth'] != 'oauth':", "if name in self._apps_busy:",
+                 "run_hermes_mcp, hermes, name, verb, app, self.home, MCP_TIMEOUT[verb]"]
+        at = [body.index(part) for part in order]
+        self.assertEqual(at, sorted(at))
+        # the outcome is read back from the files, never from Hermes' exit code alone
+        self.assertIn("'login': after is not None and after != before", body)
+        self.assertIn("'remove': servers is not None and app not in servers", body)
+        # Connect never goes over a server that is there, nor over a config omher cannot read
+        self.assertIn("if verb == 'install' and servers is None:", body)
+        self.assertIn("if verb == 'install' and app in servers:", body)
+        self.assertIn("if verb == 'login' and _device_signin(servers, app):", body)
+        # each op is one press from the UI: the op table, one verb each
+        for verb in ("install", "login", "remove"):
+            self.assertEqual(self._body(f"op_apps_{verb}"), f"return await self._apps_run(p, '{verb}')")
+            self.assertIn(f'"apps.{verb}": self.op_apps_{verb}', self.src)
+
+    def test_reads_are_files_only_and_nothing_is_written_reloaded_or_restarted(self) -> None:
+        for name in ("read_mcp_catalog", "mcp_token_file", "_token_stamp", "app_state", "read_app_skills",
+                     "_shipped_skill", "read_apps", "_install_asks", "_hermes_dir", "hermes_said"):
+            body = self._body(name)
+            for word in ("write_text", "write_bytes", "unlink", "rename", "replace(", "mkdir", "os.remove", "dump(",
+                         "subprocess", "_call(", "'w'", "'a'"):
+                self.assertNotIn(word, body, f"{name}: {word}")
+        # the token file: a stat, never opened or read
+        self.assertIn("mcp_token_file(profile_dir, name).stat()", self._body("_token_stamp"))
+        for name in ("mcp_token_file", "_token_stamp"):
+            for word in ("open(", "read_text", "read_bytes", "json.", "loads("):
+                self.assertNotIn(word, self._body(name), f"{name}: {word}")
+        # the catalog: only four keys leave a manifest
+        catalog = self._body("read_mcp_catalog")
+        self.assertIn("out.append({'name': name, 'description': _clip(desc, 200), 'auth': kind, 'asks': asks, 'terminal': terminal})",
+                      catalog)
+        self.assertIn("if child.is_symlink() or manifest.is_symlink()", catalog)
+        # Hermes' gateway MCP calls are never used: no reload, no server writes, no OAuth session from omher
+        for rpc in ('"reload.mcp"', "'reload.mcp'", "mcp.servers", '"mcp.catalog"', "reload_mcp("):
+            self.assertNotIn(rpc, self.src, rpc)
+        run = self._body("_apps_run")
+        for word in ("restart", "reload", "_call(", "_conn("):
+            self.assertNotIn(word, run, word)
+
+    def test_the_ui_sends_the_three_ops_from_one_place_and_only_on_a_press(self) -> None:
+        files = {p.relative_to(UI_SRC).as_posix(): p.read_text(encoding="utf-8") for p in UI_SRC.rglob("*.ts*") if ".test." not in p.name}
+        for verb in ("install", "login", "remove"):
+            senders = sorted(f for f, src in files.items() if f'request("apps.{verb}"' in src)
+            self.assertEqual(senders, ["state/store.ts"], verb)
+        callers = sorted(f for f, src in files.items() if re.search(r"\.appsRun\(", src))
+        self.assertEqual(callers, ["apps/AppsPage.tsx"])
+        page = files["apps/AppsPage.tsx"]
+        self.assertEqual(len(re.findall(r"s\.appsRun\(", page)), 1)
+        # Remove only from the confirm button; the other two from their own button's click
+        # Remove and Sign in again only from their confirm button; Connect and a first Sign in from their own click
+        self.assertIn("const asks = (verb: Verb) => verb === \"remove\" || (verb === \"login\" && state !== \"needs_signin\");", page)
+        self.assertIn("onClick={() => (asks(verb) ? setConfirm(verb) : onRun(verb, card.app))}", page)
+        self.assertIn("onRun(verb, card.app);", page)
+        # the page never takes a value an install asks for: its one input is the search (the "say it" box is AskBox's)
+        self.assertEqual(page.count("<input"), 1)
+
+    def test_apps_stay_on_this_computer(self) -> None:
+        # a peer's bot gets no apps op: the sign-in browser and the files are on the other computer
+        forward = ast.literal_eval(self._const("PEER_FORWARD").args[0])
+        self.assertEqual(sorted(op for op in forward if op.startswith("apps.")), [])
+        for verb in ("list", "install", "login", "remove"):
+            self.assertNotIn(f"apps.{verb}", forward)

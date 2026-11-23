@@ -14,6 +14,8 @@
 // mock.offline {bot, on} (a bot's gateway down for the Automations / Plugins writes),
 // mock.restart {bot, outcome: "ok"|"refused"|"failed"|"slow", work?, line?} (what Hermes' restart answers next),
 // mock.pluginLoad {load: "live"|"reload"|"restart"|"failed"} (what the next plugin install / reload says),
+// mock.apps {bot, name, state} (one Apps entry's state for a bot), mock.appsNext {verb, line} (the next apps.<verb> run
+// fails with Hermes' text), mock.appsDelay {verb, ms} (how long an apps.<verb> run takes),
 // mock.botStatus {bot, status} (a bot goes offline or online),
 // mock.manual {bot, on} (a message to that bot, or to its folder chats, starts a turn that runs no script: the test
 // drives it with mock.emit),
@@ -648,6 +650,30 @@ let lostQueue = new Map();
 let noSkills;
 // Tasks › Linear: the bots whose config names a Linear MCP server (mock.linear {bot, server|null})
 let linearMcp;
+// Apps (apps.*, BOUNDARY rule 41): Hermes' MCP catalog (APP_CATALOG) and each bot's state per entry (`<bot>:<name>` ->
+// installed | needs_signin | disabled | unknown; absent = available); appsNext {verb: {line}} makes that verb's next run
+// fail with Hermes' text (mock.appsNext {verb, line}); mock.apps {bot, name, state} sets one state. Each run answers
+// after APPS_RUN_MS (mock.appsDelay {verb, ms} for one verb), so a test sees the page while it runs. mock.appsHold {bot}
+// holds that bot's next apps.list answer until mock.appsRelease {bot}, so a test decides when a reload lands.
+let appState, appsNext, appsDelay, appsHold;
+const APPS_RUN_MS = 300;
+const APP_CATALOG = [
+  { name: "asana", description: "Asana tasks, projects and goals.", auth: "oauth", asks: ["ASANA_CLIENT_ID", "ASANA_CLIENT_SECRET"], terminal: true, device: false },
+  { name: "atlassian", description: "Jira issues and Confluence pages.", auth: "oauth", asks: [], terminal: false, device: false },
+  { name: "datadog", description: "Datadog monitors, logs and incidents.", auth: "oauth", asks: [], terminal: false, device: false },
+  { name: "deepwiki", description: "Ask questions about public GitHub repositories.", auth: "none", asks: [], terminal: false, device: false },
+  { name: "figma", description: "Figma files, frames and comments.", auth: "oauth", asks: [], terminal: false, device: false },
+  { name: "linear", description: "Find, create, and update Linear issues, projects, and comments.", auth: "oauth", asks: [], terminal: false, device: false },
+  { name: "notion", description: "Search, read and write Notion pages and databases.", auth: "oauth", asks: [], terminal: false, device: false },
+  { name: "wolfram", description: "Wolfram Alpha answers and computations.", auth: "none", asks: [], terminal: false, device: false },
+];
+const APP_SKILL_SEED = {
+  kami: [
+    { name: "google-workspace", description: "Gmail, Calendar, Drive, Docs, Sheets via gws CLI or Python.", state: "installed" },
+    { name: "obsidian", description: "Read, search, create, and edit notes in the Obsidian vault.", state: "disabled" },
+    { name: "himalaya", description: "Himalaya CLI: IMAP/SMTP email from terminal.", state: "available" },
+  ],
+};
 let notReady = new Map();
 
 // What each bot has done (bots.info): sessions per place, skills, routines.
@@ -836,6 +862,10 @@ function reset() {
   lostQueue = new Map();
   noSkills = new Set();
   linearMcp = new Map();
+  appState = new Map([["kami:linear", "installed"], ["kami:figma", "needs_signin"], ["kami:datadog", "disabled"]]);
+  appsNext = {};
+  appsDelay = {};
+  appsHold = new Map(); // bot -> { arrived, release }: its next apps.list waits for mock.appsRelease
   notReady = new Map(); // bot -> the sign-in provider that now passes its strict check ("" = none)
   idSeq = 0;
   calls = [];
@@ -1046,6 +1076,33 @@ function needStr(p, k) {
 }
 
 // A write needs the bot's gateway: a bot marked with mock.offline answers the way the bridge does.
+// One `hermes -p <bot> mcp install|login|remove <name>` as the bridge runs it: the name from the catalog, refusals
+// before anything runs, Hermes' own text when it did not work, and the state read back after.
+const APP_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+function appRun(p, verb) {
+  const b = needBotAny(p);
+  if (typeof p.name !== "string" || !APP_NAME.test(p.name)) throw new OpError("bad_request", "need an app from Hermes' MCP catalog");
+  const entry = APP_CATALOG.find((e) => e.name === p.name);
+  if (!entry) throw new OpError("not_found", `${p.name} is not in Hermes' MCP catalog`);
+  const key = `${b.name}:${p.name}`;
+  const was = appState.get(key);
+  if (verb !== "install" && !was) throw new OpError("not_found", `${b.display_name} has no ${p.name}`);
+  if (verb === "login" && entry.auth !== "oauth") throw new OpError("bad_request", `${p.name} has no sign-in`);
+  // as the bridge: Connect only what is not there yet (Hermes' install would replace the whole server block)
+  if (verb === "install" && was) throw new OpError("exists", `${b.display_name} already has ${p.name}`);
+  // refusals above throw before anything runs (their code reaches the page); the run itself answers later
+  return new Promise((r) => setTimeout(r, appsDelay[verb] ?? APPS_RUN_MS)).then(() => {
+    const fail = appsNext[verb];
+    delete appsNext[verb];
+    if (fail) return { outcome: "failed", line: fail.line, state: was ?? "available" };
+    if (verb === "install" && entry.asks.length)
+      return { outcome: "failed", line: `✗ install failed: ${entry.asks[0]} is required but no value was provided`, state: "available" };
+    if (verb === "remove") appState.delete(key);
+    else appState.set(key, verb === "install" && entry.auth === "oauth" ? "needs_signin" : "installed");
+    return { outcome: "ok", state: appState.get(key) ?? "available" };
+  });
+}
+
 function needWritable(p) {
   const b = needBot(p);
   if (offlineWrites.has(b.name)) throw new OpError("bot_offline", `${b.name} is offline: gateway not running`);
@@ -1509,6 +1566,22 @@ const OPS = {
     needBot(p);
     return { commands: COMMAND_SEED.map((x) => ({ ...x, kind: "command", prefix: "/" })) };
   },
+  "apps.list": (p) => {
+    const b = needBotAny(p);
+    const hold = appsHold.get(b.name);
+    if (hold && !hold.arrived) {
+      hold.arrived = true;
+      return hold.gate.then(() => OPS["apps.list"]({ bot: b.name }));
+    }
+    return {
+      catalog: true,
+      apps: APP_CATALOG.map((e) => ({ ...e, asks: [...e.asks], state: appState.get(`${b.name}:${e.name}`) ?? "available" })),
+      skills: structuredClone(APP_SKILL_SEED[b.name] ?? []),
+    };
+  },
+  "apps.install": (p) => appRun(p, "install"),
+  "apps.login": (p) => appRun(p, "login"),
+  "apps.remove": (p) => appRun(p, "remove"),
   "tasks.linear": (p) => {
     const server = linearMcp.get(needBot(p).name);
     return server ? { configured: true, server } : { configured: false, server: "" };
@@ -2049,6 +2122,34 @@ const OPS = {
   "mock.answer": (p) => {
     const b = needBot(p);
     (answers[b.name] ??= []).push(needStr(p, "text"));
+    return {};
+  },
+  "mock.apps": (p) => {
+    const b = needBotAny(p);
+    if (p.state) appState.set(`${b.name}:${p.name}`, String(p.state));
+    else appState.delete(`${b.name}:${p.name}`);
+    return {};
+  },
+  "mock.appsHold": (p) => {
+    const b = needBotAny(p);
+    let release;
+    const gate = new Promise((r) => (release = r));
+    appsHold.set(b.name, { arrived: false, gate, release });
+    return {};
+  },
+  "mock.appsRelease": (p) => {
+    const b = needBotAny(p);
+    const hold = appsHold.get(b.name);
+    appsHold.delete(b.name);
+    hold?.release();
+    return { arrived: !!hold?.arrived };
+  },
+  "mock.appsDelay": (p) => {
+    appsDelay[String(p.verb)] = Number(p.ms);
+    return {};
+  },
+  "mock.appsNext": (p) => {
+    appsNext[String(p.verb)] = { line: String(p.line) };
     return {};
   },
   "mock.linear": (p) => {
