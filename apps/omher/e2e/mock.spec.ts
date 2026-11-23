@@ -115,7 +115,7 @@ test("hello, bots and seeded data", async () => {
   expect(routines.map((r: any) => [r.name, r.schedule])).toEqual([["Repo watch", "Daily 09:00"], ["OG digest", "Weekly (Mon 09:00)"]]);
 
   const opts = await c.ok("models.options", { bot: "kami" });
-  expect(opts.reasoning_levels).toEqual(["none", "low", "medium", "high", "xhigh"]);
+  expect(opts.reasoning_levels).toEqual(["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]);
   const set = await c.ok("chat.set_model", { bot: "kami", reasoning: "low" });
   expect(set).toMatchObject({ model: "Opus 5.5", reasoning: "low" });
 });

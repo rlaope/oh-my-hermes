@@ -66,7 +66,9 @@ MAX_THREADS = 48
 THREAD_TITLE = 40  # chars of the first message a new thread takes as its title
 _THREAD_PLACEHOLDER = re.compile(r"new thread [0-9a-f]{6}")
 LOCAL_SOURCES = frozenset({"tui", "cli", "local", "desktop", "acp", "api_server", "omher"})
-REASONING_LEVELS = ["none", "low", "medium", "high", "xhigh"]
+# Hermes' reasoning ladder in its own order: "none" (thinking off), then `hermes_constants.VALID_REASONING_EFFORTS`.
+# reasoning_levels() reads the installed Hermes' tuple; this copy answers only when that Hermes names none.
+REASONING_LEVELS = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]
 # `bots.ready {provider}`: a Hermes provider id, the shell's `valid_provider` pattern (the three sign-in ids the desktop
 # shell allows pass it; the strict check is a read either way).
 PROVIDER_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,40}$")
@@ -108,6 +110,19 @@ RESTART_LINES = 12
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 # Variables that make a child think it is the gateway itself (Hermes' update_restart_recovery drops the same three).
 _GATEWAY_MARKERS = ("_HERMES_GATEWAY", "HERMES_GATEWAY", "HERMES_GATEWAY_MODE")
+def reasoning_levels() -> list[str]:
+    """The levels the installed Hermes accepts, in its order: "none", then its `VALID_REASONING_EFFORTS`. The tuple is
+    read from the checkout `ensure_hermes_on_path` put on sys.path, so a Hermes from before max and ultra offers neither.
+    A Hermes that names no tuple gets REASONING_LEVELS; its gateway refuses a level it does not know, and the
+    picker shows that refusal."""
+    try:
+        from hermes_constants import VALID_REASONING_EFFORTS
+        named = [e for e in VALID_REASONING_EFFORTS if isinstance(e, str) and e and e != "none"]
+    except Exception:
+        named = []
+    return ["none", *named] if named else list(REASONING_LEVELS)
+
+
 def default_hermes_home(environ=None, platform: str | None = None) -> Path:
     """Hermes' own default home: `HERMES_HOME`, else `~/.hermes`, or `%LOCALAPPDATA%\\hermes` on Windows
     (the same rule as Hermes' `hermes_constants`, kept here so the bridge needs no Hermes import to start)."""
@@ -7255,7 +7270,7 @@ class Bridge:
                 "current": {"model": sess_model or str(res.get("model") or conn.bot["model"]),
                             "provider": sess_provider or str(res.get("provider") or conn.bot["provider"]),
                             "reasoning": reasoning},
-                "reasoning_levels": list(REASONING_LEVELS)}
+                "reasoning_levels": reasoning_levels()}
 
     async def op_set_model(self, p) -> dict:
         model, provider, reasoning = p.get("model"), p.get("provider"), p.get("reasoning")
@@ -7266,7 +7281,7 @@ class Bridge:
             raise BridgeError("bad_request", "need model or reasoning")
         if provider is not None and model is None:
             raise BridgeError("bad_request", "provider needs a model")
-        if reasoning is not None and reasoning not in REASONING_LEVELS:
+        if reasoning is not None and reasoning not in reasoning_levels():
             raise BridgeError("bad_request", f"unknown reasoning level {reasoning}")
         conn = await self._conn(p.get("bot"))
         main, _chat = await self._target(conn, p)

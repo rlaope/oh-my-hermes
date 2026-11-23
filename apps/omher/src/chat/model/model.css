@@ -208,6 +208,11 @@
 .mp-pop .mseg {
   margin: 4px 6px 2px;
 }
+/* Hermes' full ladder is eight levels, too many for one row of the popover: past six they sit in rows of four */
+.mp-pop .mseg:has(> button:nth-child(7)) {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
 .mp-note {
   font-size: 11.5px;
   color: var(--muted);

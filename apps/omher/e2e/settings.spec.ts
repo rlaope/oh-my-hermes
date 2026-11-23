@@ -64,7 +64,13 @@ test("model pill: the model control plus the panel button, popover lists provide
   // selection is gray, never the brand gradient
   expect(await on.evaluate((el) => getComputedStyle(el).backgroundImage)).toBe("none");
   await expect(pop.getByRole("radio", { name: "high", exact: true })).toHaveAttribute("aria-checked", "true");
-  for (const label of ["none", "low", "medium", "high", "xhigh"]) await expect(pop.getByRole("radio", { name: label, exact: true })).toBeVisible();
+  // Hermes' whole ladder in its order; eight do not fit one row, so they sit in two rows of four, no label clipped
+  const levels = pop.getByTestId("reasoning-seg").getByRole("radio");
+  await expect(levels).toHaveText(["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]);
+  const boxes = await levels.evaluateAll((bs) => bs.map((b) => ({ top: Math.round(b.getBoundingClientRect().top), fits: b.scrollWidth <= b.clientWidth })));
+  expect(new Set(boxes.map((b) => b.top)).size).toBe(2);
+  expect(boxes.slice(0, 4).every((b) => b.top === boxes[0].top) && boxes.slice(4).every((b) => b.top === boxes[4].top)).toBe(true);
+  expect(boxes.every((b) => b.fits)).toBe(true);
 
   // Escape closes
   await page.keyboard.press("Escape");
@@ -82,11 +88,19 @@ test("changing reasoning and model calls chat.set_model and updates the pill", a
     { bot: "kami", reasoning: "xhigh" },
   ]);
 
+  // the top of the ladder, which the picker used to hide
+  await pop.getByRole("radio", { name: "ultra", exact: true }).click();
+  await expect(page.getByTestId("reasoning-label")).toHaveText("ultra");
+  await expect.poll(async () => (await callsOf("chat.set_model")).map((c) => c.params)).toEqual([
+    { bot: "kami", reasoning: "xhigh" },
+    { bot: "kami", reasoning: "ultra" },
+  ]);
+
   await pop.getByTestId("model-opt").filter({ hasText: "gpt-6.1-terra" }).click();
   await expect(page.getByTestId("model-label")).toHaveText("gpt-6.1-terra");
   await expect(pop.locator(".mp-opt.on")).toContainText("gpt-6.1-terra");
   const calls = await callsOf("chat.set_model");
-  expect(calls[1].params).toEqual({ bot: "kami", model: "gpt-6.1-terra", provider: "openai" });
+  expect(calls[2].params).toEqual({ bot: "kami", model: "gpt-6.1-terra", provider: "openai" });
   await expect(page.getByTestId("model-note")).toHaveCount(0);
 });
 

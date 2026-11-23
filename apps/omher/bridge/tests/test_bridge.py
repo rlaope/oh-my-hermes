@@ -537,7 +537,46 @@ class BotsAndChat(BridgeCase):
             r = (await s.req("models.options", bot="kami"))["result"]
             self.assertEqual(r["providers"], [{"slug": "claude-proxy", "name": "Claude", "models": ["claude-opus-5-5", "x"]}])
             self.assertEqual(r["current"]["model"], "claude-opus-5-5")
-            self.assertEqual(r["reasoning_levels"], ["none", "low", "medium", "high", "xhigh"])
+            self.assertEqual(r["reasoning_levels"], ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"])
+
+    async def test_reasoning_levels_are_the_installed_hermes_ones(self):
+        """The picker offers "none" plus the installed Hermes' VALID_REASONING_EFFORTS, in its order; a level that
+        Hermes does not name is refused before any mutation."""
+        older = types.SimpleNamespace(VALID_REASONING_EFFORTS=("minimal", "low", "medium", "high", "xhigh"))
+        with mock.patch.dict(sys.modules, {"hermes_constants": older}):
+            async with Env() as env:
+                s = await self.open(env)
+                r = (await s.req("models.options", bot="kami"))["result"]
+                self.assertEqual(r["reasoning_levels"], ["none", "minimal", "low", "medium", "high", "xhigh"])
+                for level in ("max", "ultra"):
+                    bad = await s.req("chat.set_model", bot="kami", reasoning=level)
+                    self.assertEqual(bad["error"]["code"], "bad_request", level)
+                self.assertEqual(env.clients["kami"].find("session.mutate"), [])
+                self.assertTrue((await s.req("chat.set_model", bot="kami", reasoning="minimal"))["ok"])
+        # A Hermes that names no tuple: Hermes' full ladder (its gateway is the judge of what it accepts).
+        with mock.patch.dict(sys.modules, {"hermes_constants": types.SimpleNamespace()}):
+            self.assertEqual(ob.reasoning_levels(), ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"])
+        with mock.patch.dict(sys.modules, {"hermes_constants": None}):  # not importable at all
+            self.assertEqual(ob.reasoning_levels(), list(ob.REASONING_LEVELS))
+
+    async def test_a_gateway_that_refuses_the_level_answers_its_error(self):
+        """An older gateway refusing `ultra` is an error the picker shows, never a silent success."""
+        async with Env() as env:
+            s = await self.open(env)
+            self.assertTrue((await s.req("chat.open", bot="kami"))["ok"])
+            c = env.clients["kami"]
+            real = c.rpc
+
+            async def rpc(method, **params):
+                if method == "session.mutate" and params.get("operation") == "reasoning":
+                    c.calls.append((method, params))
+                    raise GatewayRPCError("invalid_params", {"reason": "invalid_params"})
+                return await real(method, **params)
+            c.rpc = rpc
+            r = await s.req("chat.set_model", bot="kami", reasoning="ultra")
+            self.assertFalse(r["ok"], r)
+            self.assertEqual(r["error"]["code"], "invalid_params")
+            self.assertEqual([m["payload"] for m in c.find("session.mutate")], [{"effort": "ultra"}])
 
 
 class BotsReady(BridgeCase):

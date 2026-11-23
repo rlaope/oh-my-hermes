@@ -599,7 +599,7 @@ const SIGN_IN_MODELS = {
 // Hermes with no account lists.
 const PROVIDERS_LONG = JSON.parse(readFileSync(new URL("./fixtures/providers-long.json", import.meta.url), "utf-8"));
 let providerFixture = "default";
-const REASONING_LEVELS = ["none", "low", "medium", "high", "xhigh"];
+const REASONING_LEVELS = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"];
 
 // ---- mutable state ---------------------------------------------------------------------------
 
