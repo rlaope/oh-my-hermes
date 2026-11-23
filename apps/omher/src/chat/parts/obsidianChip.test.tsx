@@ -41,6 +41,27 @@ describe("obsidian:// links", () => {
     expect(html(`[x](${NOTE}) **bold obsidian://vault/Work/Ideas**`)).not.toContain("<a");
   });
 
+  it("keeps one whole address where GFM split its query into links, strikethrough or emphasis", () => {
+    const cases: [string, string][] = [
+      ["obsidian://open?vault=x&file=https://evil.example/a", "Obsidian · a"],
+      ["obsidian://open?vault=me@example.com", "Obsidian vault · me@example.com"],
+      ["obsidian://open?vault=x&file=www.example.com", "Obsidian · www.example.com"],
+      ["obsidian://open?vault=a~b~c&file=*x*y", "Obsidian · *x*y"],
+    ];
+    for (const [url, label] of cases) {
+      const out = html(`see ${url}, then more`);
+      expect(out, url).toContain(label);
+      expect(out, url).toContain(`title="${url.replace(/&/g, "&amp;")}"`);
+      expect(out, url).not.toMatch(/<a |<del>|<em>|href=/);
+      expect(out, url).toMatch(/<\/span>, then more<\/p>$/);
+      expect(out.match(/data-testid="link-chip"/g), url).toHaveLength(1);
+    }
+    // a web link after a space is its own chip again
+    const two = html("obsidian://open?vault=x&file=a https://example.com/b");
+    expect(two).toContain('href="https://example.com/b"');
+    expect(two).toContain('title="obsidian://open?vault=x&amp;file=a"');
+  });
+
   it("leaves the text of a web link alone", () => {
     const out = html("[see obsidian://vault/Work/Ideas](https://example.com/a)");
     expect(out).toContain('href="https://example.com/a"');

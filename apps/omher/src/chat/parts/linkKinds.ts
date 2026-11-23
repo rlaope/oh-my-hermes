@@ -66,7 +66,7 @@ function on(host: string, domain: string): boolean {
 
 // C0 and C1 controls and the bidi marks, embeddings, overrides and isolates: a label never reorders or hides the
 // text around it.
-const UNSAFE = /[\p{Cc}؜‎‏‪-‮⁦-⁩]/gu;
+const UNSAFE = /[\p{Cc}\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu;
 const LABEL_MAX = 80;
 /** A name taken from the URL (a page title, a note, a space key) inside a label. */
 const NAME_MAX = 48;
@@ -77,17 +77,16 @@ function clean(s: string, max = LABEL_MAX): string {
   return cps.length > max ? cps.slice(0, max - 1).join("").trimEnd() + "…" : cps.join("");
 }
 
-const seg = (path: string) =>
-  path
-    .split("/")
-    .filter(Boolean)
-    .map((s) => {
-      try {
-        return decodeURIComponent(s);
-      } catch {
-        return s;
-      }
-    });
+/** A percent-encoded piece of a URL, decoded; a malformed escape leaves it as it is. */
+const decode = (s: string) => {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+};
+
+const seg = (path: string) => path.split("/").filter(Boolean).map(decode);
 
 /** "83", "83s", "1m23s", "1h2m3s" -> seconds; null when it is not a time. */
 export function parseT(t: string | null): number | null {
@@ -501,10 +500,12 @@ function jira(u: URL, p: string[], site: string): LinkInfo {
   return { service: "jira", kind: "page", label: "Jira", meta };
 }
 
-function confluence(p: string[], site: string): LinkInfo {
+function confluence(u: URL, p: string[], site: string): LinkInfo {
   const meta: Record<string, string> = { site };
-  const page = (title?: string): LinkInfo => {
-    const name = title ? clean(title.replace(/\+/g, " "), NAME_MAX) : "";
+  // a title's `+` is a space and `%2B` a plus: read it from the raw path, before decoding (same indexes as `p`)
+  const raw = u.pathname.split("/").filter(Boolean);
+  const page = (at?: number): LinkInfo => {
+    const name = at !== undefined && raw[at] ? clean(decode(raw[at].replace(/\+/g, " ")), NAME_MAX) : "";
     return { service: "confluence", kind: "page", label: name ? `Confluence · ${name}` : k("Confluence", "lk.k.page"), meta };
   };
   // p[0] is "wiki". /wiki/spaces/ENG/pages/123456/Title, /pages/edit-v2/123456, /wiki/spaces/ENG[/overview]
@@ -514,7 +515,7 @@ function confluence(p: string[], site: string): LinkInfo {
       const at = p.findIndex((s, i) => i > 3 && /^\d+$/.test(s));
       if (at > 0) {
         meta.page = p[at];
-        return page(at === 4 ? p[5] : undefined);
+        return page(at === 4 ? 5 : undefined);
       }
     } else if (!p[3] || p[3] === "overview") {
       return { service: "confluence", kind: "space", label: `${k("Confluence", "lk.k.space")} · ${clean(p[2], NAME_MAX)}`, meta };
@@ -524,7 +525,7 @@ function confluence(p: string[], site: string): LinkInfo {
   // /wiki/display/ENG/Page+Title (the older form), /wiki/x/AbCd (a short link)
   if (p[1] === "display" && p[2] && p[3]) {
     meta.space = p[2];
-    return page(p[3]);
+    return page(3);
   }
   if (p[1] === "x" && p[2]) {
     meta.short = p[2];
@@ -622,7 +623,7 @@ function clickup(p: string[]): LinkInfo {
     return { service: "clickup", kind: "task", label: custom || k("ClickUp", "lk.k.task"), meta };
   }
   // app.clickup.com/<workspace>/v/li/<list>, /v/s/<space>, /v/f/<folder>
-  const view = /^\d+$/.test(p[0] ?? "") && p[1] === "v" && p[3] ? CLICKUP_VIEW[p[2]] : undefined;
+  const view = /^\d+$/.test(p[0] ?? "") && p[1] === "v" && p[3] && Object.hasOwn(CLICKUP_VIEW, p[2]) ? CLICKUP_VIEW[p[2]] : undefined;
   if (view) {
     meta.workspace = p[0];
     meta[view[0]] = p[3];
@@ -755,7 +756,7 @@ function classify(url: string): LinkInfo | null {
   // Jira and Confluence Cloud: <site>.atlassian.net, Confluence under /wiki
   if (on(host, "atlassian.net") && host !== "atlassian.net") {
     const site = host.slice(0, -".atlassian.net".length);
-    return p[0] === "wiki" ? confluence(p, site) : jira(u, p, site);
+    return p[0] === "wiki" ? confluence(u, p, site) : jira(u, p, site);
   }
   if (on(host, "sentry.io")) return sentry(p, host);
   if (on(host, "asana.com")) return asana(p);

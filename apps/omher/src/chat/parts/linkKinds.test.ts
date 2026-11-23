@@ -131,6 +131,9 @@ const CASES: Case[] = [
   // ---- Confluence (<site>.atlassian.net/wiki)
   ["https://acme.atlassian.net/wiki/spaces/ENG/pages/123456/Release+Checklist", "confluence", "page", "Confluence · Release Checklist", { site: "acme", space: "ENG", page: "123456" }],
   ["https://acme.atlassian.net/wiki/spaces/ENG/pages/123456/Q4%20Plan%20%E2%80%94%20Draft", "confluence", "page", "Confluence · Q4 Plan — Draft"],
+  ["https://acme.atlassian.net/wiki/spaces/ENG/pages/123/C%2B%2B+Basics", "confluence", "page", "Confluence · C++ Basics"],
+  ["https://acme.atlassian.net/wiki/display/ENG/Q%26A+%2B+Notes", "confluence", "page", "Confluence · Q&A + Notes"],
+  ["https://acme.atlassian.net/wiki/spaces/ENG/pages/123/Rate%2541", "confluence", "page", "Confluence · Rate%41"],
   ["https://acme.atlassian.net/wiki/spaces/ENG/pages/edit-v2/123456", "confluence", "page", "Confluence page", { page: "123456" }],
   ["https://acme.atlassian.net/wiki/spaces/ENG/pages/123456", "confluence", "page", "Confluence page"],
   ["https://acme.atlassian.net/wiki/spaces/ENG/overview", "confluence", "space", "Confluence space · ENG", { space: "ENG" }],
@@ -177,6 +180,9 @@ const CASES: Case[] = [
   ["https://app.clickup.com/9012345678/v/f/90123457", "clickup", "folder", "ClickUp folder", { folder: "90123457" }],
   ["https://app.clickup.com/9012345678/v/l/6-901234567890-1", "clickup", "page", "ClickUp"],
   ["https://app.clickup.com/9012345678/home", "clickup", "page", "ClickUp"],
+  ["https://app.clickup.com/123/v/constructor/1", "clickup", "page", "ClickUp"],
+  ["https://app.clickup.com/123/v/__proto__/1", "clickup", "page", "ClickUp"],
+  ["https://app.clickup.com/123/v/toString/1", "clickup", "page", "ClickUp"],
   // ---- GitLab (gitlab.com only)
   ["https://gitlab.com/acme/widgets/-/merge_requests/42", "gitlab", "mr", "acme/widgets!42", { project: "acme/widgets", number: "42" }],
   ["https://gitlab.com/acme/widgets/-/merge_requests/42/diffs?commit_id=0a1b2c3", "gitlab", "mr", "acme/widgets!42"],
@@ -254,7 +260,7 @@ describe("classifyLink", () => {
 });
 
 describe("labels taken from the URL", () => {
-  const BIDI_OR_CONTROL = /[\p{Cc}؜‎‏‪-‮⁦-⁩]/u;
+  const BIDI_OR_CONTROL = /[\p{Cc}\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/u;
   it("carry no control or bidi characters", () => {
     const urls = [
       "https://acme.atlassian.net/wiki/spaces/ENG/pages/1/Invoice%E2%80%AEfdp.exe",
