@@ -43,6 +43,16 @@ All notable changes will be documented here.
   open thread at the same time as it listed the bot's threads again. The new bridge knew no thread yet and refused
   it, so the thread showed a false "not reachable" line and a turn Hermes lost there stayed unseen. Threads are now
   listed first and the open ones read after that, on reconnect and when a bot comes back. (Follow-up to #3127)
+- **omher: two terminals of one folder merge by dragging the header.** Drag a TERMINALS session's header down onto
+  its terminal and it joins the next session of its folder in a split, in the sidebar's order (the one before it when
+  it is the last; a row hidden by a search or a collapsed folder counts too): a translucent half shows where the
+  dragged session goes and the other half names the session that fills it. Taken back onto the header, or Escape,
+  nothing changes, and a button let go outside the window or the window losing focus ends the drag the same way; a
+  folder with no other session offers nothing, and a grab cursor shows only when a drag can do something. In a split
+  the header drags the focused pane as its grip does (not while the split is zoomed). The header also has an x: in a
+  split it closes the focused pane (the session stays in TERMINALS), on its own it closes the session as its row's x
+  does, undoable while it runs, and with the undo window Off it asks the row's Stop? first. Nothing new is started,
+  read, written or sent.
 - **omher: a bot's chat that stopped answering after a crash says why and gets going again.** When Hermes' gateway
   stops in the middle of a turn (a crash, a kill, Windows ending the process), Hermes brings that turn back as lost
   and keeps every later message of the chat in its own queue until someone acknowledges it, because the lost turn may
@@ -271,6 +281,18 @@ All notable changes will be documented here.
   turn and sends the prompt without an `Interrupted.` notice, like Claude Code's send-now; Hermes' "Operation
   interrupted: waiting for model response (…)" line never shows as the reply, while it streams, at the end, or in a
   resumed conversation. Esc and `/stop` still say `Interrupted.`.
+- **omher: link chips for Jira, Confluence, Sentry, Asana, Todoist, ClickUp, GitLab and Obsidian.** Links to these
+  showed as plain web links. They now show the service's mark and what the link is, read from the address alone:
+  a Jira issue as `ACME-123`, a board or project; a Confluence page by its title, or a space; a Sentry issue, project
+  or release; an Asana or Todoist task or project (Todoist with the task's name); a ClickUp task, list, space or
+  folder; a GitLab merge request as `group/project!42`, an issue, pipeline or commit, nested groups shortened to
+  `group/…/project`. Only the cloud hosts count (`*.atlassian.net`, `gitlab.com`): a self-hosted Jira or GitLab, or
+  a lookalike host, stays a plain link; another page on an Atlassian site (Compass, the site's home) is a generic
+  Atlassian chip. Google Calendar booking pages and Figma Make and Sites files get chips too.
+  An `obsidian://` link (open, search, new, vault; bare, written as a link or as a reference) shows the note's name
+  as text that opens nothing, because omher opens only web links and messenger threads; a screen reader reads its
+  address. Every label is bounded and has no control or bidi characters, and a title's escaped `+` (`%2B`) stays a
+  plus in Confluence, Notion, Figma and Google Maps chips.
 
 - **omher: the Slack briefing opens with a greeting and what it is about.** A brief could open with what the bot did
   or could not do ("could not open the log...") with nothing saying which alert or thread it meant, so the person had

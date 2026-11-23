@@ -365,7 +365,9 @@ test("start a mock terminal session, type, see the echo, then switch to a bot ch
   await expect(page.getByTestId("session-title")).toHaveText("oh-my-hermes");
   await expect(page.getByTestId("session-agent")).toHaveText("Grok");
   await expect(page.getByTestId("session-cwd")).toHaveText("~/code/oh-my-hermes");
-  await expect(header.locator("button")).toHaveCount(0); // no extra header icons
+  // no extra header icons: the x that closes the session is the only one
+  await expect(header.locator("button")).toHaveCount(1);
+  await expect(header.getByTestId("session-head-close")).toBeVisible();
   const row = page.locator("[data-testid=session-list] .ss-row").first();
   await expect(row).toContainText("oh-my-hermes");
   await expect(row.locator(".bot-p")).toHaveText("Grok");
