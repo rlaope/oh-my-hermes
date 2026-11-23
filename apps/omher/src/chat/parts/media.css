@@ -114,6 +114,7 @@
   font: inherit;
   font-size: 12px;
   cursor: pointer;
+  white-space: nowrap;
 }
 .media-acts button:hover {
   background: var(--raise);

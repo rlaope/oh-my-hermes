@@ -53,6 +53,7 @@
   border: 1px solid var(--line);
   font-size: 12px;
   color: var(--ink);
+  white-space: nowrap;
 }
 .tpaste-b:hover {
   background: var(--raise2);

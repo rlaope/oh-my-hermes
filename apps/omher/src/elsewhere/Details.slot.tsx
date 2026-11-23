@@ -184,6 +184,12 @@ function DetailsTab({ bot, open, head }: { bot: Bot; open: boolean; head: JSXChi
                   {a.running && <i className="ew-live" aria-hidden />}
                   {awayTime(a, now)}
                 </span>
+                {/* the Reply there button's room in the row's own layout (elsewhere.css), so it never covers text */}
+                {reply && (
+                  <span className="ew-reply-room" aria-hidden>
+                    {tr("aw.reply")}
+                  </span>
+                )}
                 <span className="t2">
                   <span className="ew-src">
                     <SourceIcon source={a.source} size={12} />
