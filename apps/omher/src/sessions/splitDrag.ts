@@ -10,8 +10,9 @@
 // goes (above the row under the pointer, or below it past its middle), and letting go puts it there (moveRow).
 //
 // The main column's header of a TERMINALS session drags too (Otty's): in a split it is the focused pane's grip; a
-// session on its own drags onto its own terminal to merge with its folder's next row (`mergePartner`), the preview
-// naming that session in the half it will fill. Taken back onto the header, or Escape, nothing changes.
+// session on its own drags onto its own terminal to merge with its folder's next session (`mergePartner`), the preview
+// naming that session in the half it will fill. Taken back onto the header, or Escape, nothing changes. Any drag ends
+// with nothing done when the window loses focus or a move comes with the button up (let go outside the window).
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { MAX_PANES, panesOf } from "../terminal/layout";
 import { isTerminalRec, type AgentInfo, type SessionRec } from "./agents";
@@ -60,11 +61,12 @@ export function dropTargetAt(x: number, y: number, drag: string): DropTarget | n
   return { at, side: sideAt(box, x, y), box };
 }
 
-/** The session a TERMINALS session `id` on its own merges with when its header is dragged onto its terminal: the row
- *  under it in its folder's TERMINALS rows (the sidebar's order), or above it when it is the last. A row that is in a
+/** The session a TERMINALS session `id` on its own merges with when its header is dragged onto its terminal: the next
+ *  TERMINALS session of its folder in the session list's order (the order the sidebar lists a folder's rows in, a row
+ *  a sidebar search or a collapsed folder hides included), or the one before it when it is the last. A session in a
  *  split already is passed over (merging never takes a pane from another split), and so is anything that is not a
  *  TERMINALS session (a bot chat has no row there). Null when `id` is in a split, is not a TERMINALS session, or its
- *  folder has no other row that can go: a partner is never taken from another folder. */
+ *  folder has no other session that can go: a partner is never taken from another folder. The preview names it. */
 export function mergePartner(list: readonly SessionRec[], agents: AgentInfo[] | null | undefined, groups: SplitGroup[], id: string): string | null {
   const me = list.find((r) => r.id === id);
   if (!me || paneOf(id) === null || !isTerminalRec(agents, me) || groupOf(groups, id)) return null;
@@ -76,12 +78,12 @@ export function mergePartner(list: readonly SessionRec[], agents: AgentInfo[] | 
 
 /** Where the header of session `drag` (on its own) would merge it with `partner` (named `name`), the pointer at
  *  (x, y): over `drag`'s own terminal (or its paused or ended view) in the main column, on the side nearest the
- *  pointer. Anywhere else, the header band included, is no target. */
+ *  pointer. Anywhere else, the header band and a view the main column switched to during the drag included, is no
+ *  target. */
 export function mergeTargetAt(x: number, y: number, drag: string, partner: string, name: string): DropTarget | null {
   const host = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-testid="terminal"], [data-testid="session-idle"]');
   if (!host || host.closest('[data-testid="session-split"], [data-testid="termpanel"]')) return null;
-  const at = host.getAttribute("data-session");
-  if (at && at !== drag) return null;
+  if (host.getAttribute("data-session") !== drag) return null;
   const box = host.getBoundingClientRect();
   return { at: partner, side: sideAt(box, x, y), box, fill: name };
 }
@@ -205,6 +207,8 @@ export function pressToSplit(e: ReactPointerEvent<HTMLElement>, drag: string, on
     shade.setAttribute("data-session", target.at);
   };
   const move = (ev: PointerEvent) => {
+    // the button was let go where this page did not hear it (another app, outside the window): the drag is over
+    if ((ev.buttons & 1) === 0) return end(null);
     if (!moving) {
       if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < SLOP) return;
       moving = true;
@@ -220,6 +224,7 @@ export function pressToSplit(e: ReactPointerEvent<HTMLElement>, drag: string, on
     removeEventListener("pointerup", up);
     removeEventListener("pointercancel", cancel);
     removeEventListener("keydown", key, true);
+    removeEventListener("blur", cancel);
     if (ev && moving) aim(ev.clientX, ev.clientY);
     else {
       target = null;
@@ -256,4 +261,6 @@ export function pressToSplit(e: ReactPointerEvent<HTMLElement>, drag: string, on
   addEventListener("pointerup", up);
   addEventListener("pointercancel", cancel);
   addEventListener("keydown", key, true);
+  // the window losing focus (another app came forward) ends the drag with nothing done
+  addEventListener("blur", cancel);
 }

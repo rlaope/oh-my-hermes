@@ -4,7 +4,7 @@
 // Escape, nothing changes. A folder with no other row offers nothing. In a split the header is the focused pane's
 // grip. The header's x closes the focused pane (the session stays listed), or the lone session as ⌘W does.
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { mock, openApp } from "./term-find-helpers";
+import { mock, openApp, platformIsMac } from "./term-find-helpers";
 import type { Side } from "./split-drag-helpers";
 
 type Sessions = { startTerminal(a: string, cwd: string): string };
@@ -251,14 +251,118 @@ test("the header's x on a lone terminal closes it as ⌘W does: undoable while i
   await expect(page.getByTestId(`session-${a}`)).toBeVisible();
 });
 
-test("with the undo window Off the header's x leaves a running terminal alone and never closes the window", async ({ page }) => {
+test("with the undo window Off the header's x on a running terminal asks the row's Stop? and never closes the window", async ({ page }) => {
   await openApp(page, { term: { undoClose: 0 } });
-  await graceMs(page, 10_000);
-  const [a] = await sessions(page, ["/w/a"]);
+  const [a, b] = await sessions(page, ["/w/a", "/w/a"]);
+  // a sidebar search that hides b's row: the question shows on it all the same
+  await page.getByTestId("bot-search").fill("zzz-no-match");
   await headX(page).click();
-  await page.waitForTimeout(200);
-  await expect(page.getByTestId(`session-${a}`)).toHaveAttribute("data-status", "running");
-  await expect(term(page, a)).toBeVisible();
-  expect(await windowCloses(page)).toBe(0);
+  const ask = page.getByTestId(`session-confirm-${b}`);
+  await expect(ask).toBeVisible();
+  // the row's own question: Cancel leaves it running
+  await ask.getByRole("button", { name: "Cancel" }).click();
+  await expect(ask).toHaveCount(0);
+  await page.getByTestId("bot-search").fill("");
+  await expect(page.getByTestId(`session-${b}`)).toHaveAttribute("data-status", "running");
   expect(await calls(page)).toEqual([]);
+  // asked again, Stop closes it at once (the program is stopped: no undo window)
+  await headX(page).click();
+  await page.getByTestId("session-stop").click();
+  await expect(page.getByTestId(`session-${b}`)).toHaveCount(0);
+  await expect.poll(async () => (await calls(page)).filter((c) => c.op === "close").length).toBe(1);
+  await expect(page.getByTestId(`session-${a}`)).toBeVisible();
+  expect(await windowCloses(page)).toBe(0);
+});
+
+test("the main column switched under a drag (⌘⇧] / Ctrl+Shift+]): no preview, letting go merges nothing", async ({ page }) => {
+  await openApp(page);
+  const mod = (await platformIsMac(page)) ? "Meta" : "Control";
+  const [a, b, c] = await sessions(page, ["/w/a", "/w/a", "/w/c"]);
+  await openRow(page, b);
+  await expect(header(page)).toHaveAttribute("data-drag", "merge");
+  await pressHeaderOnto(page, term(page, b), "right");
+  await expect(shade(page)).toHaveAttribute("data-session", a);
+  // the next terminal opens while the button is held: the view under the pointer is no longer the dragged session's
+  await page.keyboard.press(`${mod}+Shift+BracketRight`);
+  await expect(page.getByTestId(`session-${b}`)).not.toHaveClass(/active/);
+  const shownId = await page.locator('[data-testid="terminal"]').first().getAttribute("data-session");
+  expect(shownId).not.toBe(b);
+  const to = await sidePoint(page, page.locator('[data-testid="terminal"]').first(), "left");
+  await page.mouse.move(to.x, to.y, { steps: 6 });
+  await expect(shade(page)).toHaveCount(0);
+  await expect(fill(page)).toHaveCount(0);
+  await page.mouse.up();
+  await expect(split(page)).toHaveCount(0);
+  expect([a, c]).toContain(shownId);
+  expect(await calls(page)).toEqual([]);
+});
+
+test("a paused session's idle view takes the merge too", async ({ page }) => {
+  await openApp(page);
+  const [a, b] = await sessions(page, ["/w/a", "/w/a"]);
+  // after a restart both shells come back paused: their idle views, no terminal
+  await expect.poll(async () => (await page.evaluate(() => JSON.parse(localStorage.getItem("omher.resume") || "null")))?.sessions?.length).toBe(2);
+  await page.evaluate(() => sessionStorage.setItem("__kept", "1"));
+  await page.reload();
+  await openRow(page, b);
+  const idle = page.locator(`[data-testid="session-idle"][data-session="${b}"]`);
+  await expect(idle).toBeVisible();
+  await expect(page.getByTestId("terminal")).toHaveCount(0);
+  await expect(header(page)).toHaveAttribute("data-drag", "merge");
+  await pressHeaderOnto(page, idle, "down");
+  await expect(shade(page)).toHaveAttribute("data-session", a);
+  await expect(shade(page)).toHaveAttribute("data-side", "down");
+  await page.mouse.up();
+  await expect(split(page)).toHaveAttribute("data-panes", "2");
+  const [bb, ba] = [(await pane(page, b).boundingBox())!, (await pane(page, a).boundingBox())!];
+  expect(bb.y).toBeGreaterThan(ba.y + ba.height - 2);
+  // both still wait for Resume: the merge started nothing
+  await expect(page.getByTestId("session-resume")).toHaveCount(2);
+  expect((await calls(page)).length).toBe(0);
+  expect(await page.evaluate(() => ((window as unknown as { __omherSessionCalls?: Call[] }).__omherSessionCalls ?? []).filter((c) => c.op === "start").length)).toBe(0);
+});
+
+test("a zoomed split's header shows no grab and drags nothing", async ({ page }) => {
+  await openApp(page);
+  const [a, b] = await sessions(page, ["/w/a", "/w/a"]);
+  await pressHeaderOnto(page, term(page, b), "right");
+  await page.mouse.up();
+  await expect(split(page)).toHaveAttribute("data-panes", "2");
+  await pane(page, b).hover();
+  await pane(page, b).getByTestId("split-zoom").click();
+  await expect(split(page)).toHaveAttribute("data-zoom", "true");
+  await expect(header(page)).not.toHaveAttribute("data-drag", /./);
+  expect(await header(page).evaluate((el) => getComputedStyle(el).cursor)).not.toBe("grab");
+  await pressHeaderOnto(page, pane(page, b), "left");
+  await page.waitForTimeout(100);
+  await expect(shade(page)).toHaveCount(0);
+  await page.mouse.up();
+  // still zoomed on b (only its pane drawn), both still in the split, laid out as before
+  await expect(split(page)).toHaveAttribute("data-zoom", "true");
+  await expect(split(page)).toHaveAttribute("data-panes", "2");
+  expect(await order(page)).toEqual([b]);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("omher.splits") || "null")?.groups?.[0]?.layout)).toEqual({ dir: "row", ratio: 0.5, a: { pane: Number(a.slice(1)) }, b: { pane: Number(b.slice(1)) } });
+});
+
+test("a release the page never hears (another app, outside the window) ends the drag: the next click merges nothing", async ({ page }) => {
+  await openApp(page);
+  const [, b] = await sessions(page, ["/w/a", "/w/a"]);
+  await pressHeaderOnto(page, term(page, b), "right");
+  await expect(shade(page)).toBeVisible();
+  // a move with no button held (the button went up where the page could not hear it)
+  await page.evaluate(() => window.dispatchEvent(new PointerEvent("pointermove", { clientX: 600, clientY: 400, buttons: 0, bubbles: true })));
+  await expect(shade(page)).toHaveCount(0);
+  await expect(fill(page)).toHaveCount(0);
+  await page.mouse.up();
+  await expect(split(page)).toHaveCount(0);
+  // the window losing focus mid-drag ends it the same way
+  await pressHeaderOnto(page, term(page, b), "down");
+  await expect(shade(page)).toBeVisible();
+  await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+  await expect(shade(page)).toHaveCount(0);
+  await page.mouse.up();
+  const to = await sidePoint(page, term(page, b), "right");
+  await page.mouse.click(to.x, to.y);
+  await expect(split(page)).toHaveCount(0);
+  await expect(page.locator("body")).not.toHaveClass(/split-dragging/);
 });

@@ -693,6 +693,16 @@ export function sessionMatches(rec: SessionRec, needle: string): boolean {
   return [name, rec.cwd].some((v) => v.toLowerCase().includes(needle));
 }
 
+/** Who shows a row's "Stop?" (the mounted SessionList). */
+const closeAskers = new Set<(id: string) => void>();
+
+/** Ask the row's own "Stop?" for session `id`, as its x does when the close cannot be undone and its program runs:
+ *  the main column header's x on a lone terminal, when closeLone left it alone (SessionView). One question, one
+ *  policy: the row's. */
+export function askCloseRow(id: string): void {
+  for (const fn of closeAskers) fn(id);
+}
+
 export function SessionList({ needle = "", query = "" }: { needle?: string; query?: string }) {
   const s = useStore();
   const ss = useSessions();
@@ -700,6 +710,17 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
   useSplitPrune();
   const [confirm, setConfirm] = useState<string | null>(null);
   const [refocus, setRefocus] = useState<string | null>(null);
+  // the header's x asks here (askCloseRow): its row's folder opens so the question shows
+  useEffect(() => {
+    const ask = (id: string) => {
+      const rec = getSessions().getState().list.find((r) => r.id === id);
+      if (!rec) return;
+      openFolder(rec.cwd);
+      setConfirm(id);
+    };
+    closeAskers.add(ask);
+    return () => void closeAskers.delete(ask);
+  }, []);
   const current = s.ui.view === "session" ? s.ui.session : null;
   // the split the open session is in: its rows carry the split's shape
   const openSplit = current ? groupOf(sp.groups, current) : null;
@@ -779,7 +800,8 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
   const ticking = terms.some((r) => r.status === "running" || r.status === "starting");
   const added = addedFolders(folders);
   if (terms.length === 0 && added.length === 0) return <SessionStart />;
-  const shown = terms.filter((r) => sessionMatches(r, needle));
+  // a row asking "Stop?" shows whatever the search
+  const shown = terms.filter((r) => r.id === confirm || sessionMatches(r, needle));
   // an added folder with no session is a group too; a search keeps it only when its path matches
   const groups = orderFolders(withAdded(folderGroups(shown), needle ? added.filter((c) => c.toLowerCase().includes(needle)) : added), folders.order);
   return (
