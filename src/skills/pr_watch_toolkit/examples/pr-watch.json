@@ -1,0 +1,7 @@
+{
+  "name": "widgets-pr-42",
+  "repo": "acme/widgets",
+  "pr": 42,
+  "deadline": "2026-11-23T14:00:00Z",
+  "fix_round_cap": 2
+}

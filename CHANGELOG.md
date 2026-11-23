@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher on Windows: a terminal running oh-my-hermes reads oh-my-hermes, not Hermes.** Windows has no terminal
+  foreground process group, so omher looks through the processes under the terminal for a known agent CLI. It took
+  the newest one, and `omh.exe` starts `hermes.exe` beneath itself, so the row read "Hermes" with the Hermes mark and
+  `hermes ·` before its last line. A CLI now owns everything it starts: the row names the CLI that no other CLI
+  started, as macOS and Linux do by reading the foreground process group's leader. A terminal running `hermes` on its
+  own still reads Hermes. A process older than the one that now holds its parent's pid (Windows reuses pids) is no
+  longer taken for part of the terminal, so a row cannot show another session's agent. Thanks @hajeu. (#3130)
 - **GLM 5.4 is mapped to Z.ai.** `glm-5.4` (opened to every GLM Coding Plan user on 2026-11-23) now resolves to the
   `zai` provider family, so a chain or override that names it routes to Z.ai. It joins no shipped chain, and it has
   no contract or price row until Z.ai publishes a model page and list price.
@@ -195,6 +202,20 @@ All notable changes will be documented here.
   from history recall, a paste or a loaded draft opens no mid-line menu until the next typed key. A line that does
   not start with `/` still goes as a prompt with the `/skill` text in it. (`src/tui/slash.py` `slash_token_at`,
   `skill_completions`, `src/tui/app.py`)
+- **Two scenario suites measure automation intent and coding hand-off, before their skill text changes.**
+  `benchmarks/automation-intent/v1` grades whether a plain-language request becomes the right prepared automation
+  (schedule, target, delivery, filters, silence) or correctly a clarifying question, no automation, or an edit of
+  the existing job. `benchmarks/orchestration/v1` grades whether the parent hands coding to the owner the person
+  named in that request (and only then), targets the right repository, cites only links the observed evidence
+  returned, and stays within a word budget. Grading is a deterministic structural function; reports use
+  `omh_reported_rate/v1` with a Wilson 95% interval, infrastructure failures (`arm_did_not_run`, `timeout`,
+  `transport_error`) and unobserved scenarios excluded by name, and `percent: null` over an empty denominator. Each
+  suite has a held-out split read only when named, reported as counts only, and kept out of skill and routing
+  sources by test. The live arm is opt-in and runs only through `omh coding hermes-child dispatch
+  --confirm-dispatch`; neither suite has been run live, so both are `prepared_not_observed`.
+  (`src/quality/scenario_suite.py`, `src/quality/automation_intent_grading.py`,
+  `src/quality/orchestration_grading.py`, `benchmarks/scenario_suite_bench.py`; `benchmarks/automation-intent/v1/README.md`,
+  `benchmarks/orchestration/v1/README.md`, `docs/CAPABILITY_IMPACT.md` "Growth Gate")
 - **omher: the bridge comes back after it dies.** If the Python bridge stopped after it was ready, nothing started it
   again: Hermes bots and folder chats stayed on "Connecting to Hermes…" until omher was restarted, because the shell
   kept handing the page the dead bridge's port. The shell now notices the exit (the bridge's output closes, or a check
@@ -219,6 +240,16 @@ All notable changes will be documented here.
     TUI use for pasted pictures), so a pasted screenshot shows as the picture itself instead of a coarse block
     mosaic. The layer stays above the GPU renderer, keeps one canvas per terminal, and shares the 32 MB per-terminal
     picture budget with the other image kinds; Settings › Terminal › Show images turns it off.
+- **github-event-ops: watch one PR without a polling loop, and bound a bot that works on PRs.** Asking Hermes to
+  wait on a pull request ("watch PR 42 until its checks finish", "PR 42 체크 끝날 때까지 지켜봐줘") now reaches
+  `github-event-ops`, whose PR watch recipe (`references/pr-watch.md`) sets up one Hermes cron monitor job for that
+  PR: `toolkit/scripts/pr_watch.py` prints only the PR's settled state from one read-only `gh pr view`, so the agent
+  wakes only when checks finish, a conflict or review appears, or the PR merges or closes, every 5 minutes for two
+  hours at most. A bot takes at most two fix rounds per PR, counted from the PR's own commits and heads and kept per
+  PR across watches; after that the fix is a person's. `toolkit/scripts/pr_event_guard.py`, as a webhook route's
+  `--script`, drops events the bot's own runs caused and more than 5 events per 15 minutes. Both scripts are inert
+  package data the person's Hermes runs (owner-approved scoped integration, 2026-11-23); OMH never runs them.
+  (`src/skills/pr_watch_toolkit/`, `src/skills/catalog_feature_surfaces.py`, `src/routing/policy.py`)
 - **OMH TUI: kitty previews inside omher, and a quiet Ctrl+Enter.** Under `TERM_PROGRAM=omher` the OMH TUI asks for
   kitty previews (tmux and screen keep half-blocks). Ctrl+Enter on a prompt with images during a turn now stops the
   turn and sends the prompt without an `Interrupted.` notice, like Claude Code's send-now; Hermes' "Operation

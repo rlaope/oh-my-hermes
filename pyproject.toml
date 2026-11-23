@@ -143,6 +143,9 @@ packages = [
   "show_reel_craft/*.md",
   "channel_watch_toolkit/README.md", "channel_watch_toolkit/scripts/channel_watch.py",
   "channel_watch_toolkit/examples/watch.json",
+  "pr_watch_toolkit/README.md", "pr_watch_toolkit/scripts/pr_watch.py",
+  "pr_watch_toolkit/scripts/pr_event_guard.py", "pr_watch_toolkit/examples/pr-watch.json",
+  "pr_watch_toolkit/examples/pr-event-guard.json",
 ]
 "omh.skins" = ["*.yaml"]
 "omh.tui" = ["frontend/dist/*.js"]
