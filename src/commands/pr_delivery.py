@@ -90,6 +90,23 @@ def terminal_devices() -> tuple[str, str]:
     return ("CONIN$", "CONOUT$") if os.name == "nt" else ("/dev/tty", "/dev/tty")
 
 
+def console_is_visible() -> bool:
+    """Whether this process's console has a window a person can see. Windows only.
+
+    Hermes spawns every terminal child with `CREATE_NO_WINDOW`
+    (`tools/environments/local.py`, `windows_hide_flags`): such a child has a
+    console, so `CONIN$` opens, but no visible window, so nobody can type the
+    yes. Any failure to ask answers no.
+    """
+    try:
+        import ctypes
+
+        window = ctypes.windll.kernel32.GetConsoleWindow()  # type: ignore[attr-defined]
+        return bool(window) and bool(ctypes.windll.user32.IsWindowVisible(window))  # type: ignore[attr-defined]
+    except (AttributeError, OSError, ImportError):
+        return False
+
+
 def confirm_on_terminal(prompt: str) -> bool:
     """A yes typed at the controlling terminal. A gateway- or cron-run child has none, so it is a no.
 
@@ -97,6 +114,8 @@ def confirm_on_terminal(prompt: str) -> bool:
     itself, `CONIN$` and `CONOUT$`, which a process without a console cannot
     open. Either way a missing terminal is a no, never a crash.
     """
+    if os.name == "nt" and not console_is_visible():
+        return False  # a hidden console (Hermes spawns its children with CREATE_NO_WINDOW) has nobody at it
     reader, writer = terminal_devices()
     try:
         with open(writer, "w", encoding="utf-8") as out:

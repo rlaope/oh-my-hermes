@@ -56,6 +56,7 @@ from typing import Final
 
 from . import pr_delivery
 from .consistency_trigger import _edit_targets
+from .tools.lsp_nav_tool import _workspace_root
 from .hooks.nudge_budget import session_is_delegated
 from .hooks.session_attendance import SINGLE_QUERY_SESSION_ENV, UNATTENDED_APPROVAL_PLATFORMS, session_platform
 
@@ -182,7 +183,7 @@ _PUSH_LONG_BOOL: Final = frozenset({
 _PUSH_LONG_OPTIONAL_VALUE: Final = frozenset({"--signed", "--recurse-submodules"})
 _FORCE_LONG: Final = frozenset({"--force", "--force-with-lease", "--force-if-includes", "--delete", "--mirror", "--prune"})
 _WIDE_LONG: Final = frozenset({"--all", "--branches", "--tags", "--follow-tags"})
-_NOT_LITERAL: Final = re.compile(r"[$`*?\[\\~^\s'\"]|\.\.|@\{")
+_NOT_LITERAL: Final = re.compile(r"[$`*?\[\\~^%\s'\"]|\.\.|@\{")
 _PUSH_REMOTE: Final = "origin"
 
 # gh -------------------------------------------------------------------------
@@ -247,6 +248,17 @@ _MCP_FORGE_WRITE: Final = re.compile(
 
 # An HTTP client writing to a forge API without gh: the cheap, common shape only.
 _HTTP_CLIENTS: Final = frozenset({"curl", "wget", "http", "https", "xh"})
+# Shells that take a command in a form this gate cannot read (`-EncodedCommand`).
+_WINDOWS_SHELLS: Final = frozenset({"powershell", "pwsh", "cmd"})
+_POWERSHELL_PLAIN_OPTIONS: Final = frozenset({"-noprofile", "-nologo", "-noninteractive", "-nop", "-noni"})
+_POWERSHELL_VALUE_OPTIONS: Final = frozenset({"-executionpolicy", "-ep", "-ex"})
+_SCRIPT_SUFFIX: Final = re.compile(r"\.(?:ps1|bat|cmd)$", re.IGNORECASE)
+# Programs that make links (`ln -s .git g`, `mklink /J g .git`, PowerShell `New-Item -ItemType Junction`).
+_LINKERS: Final = frozenset({"ln", "mklink", "new-item", "ni", "cp", "mv", "install", "rsync", "tar", "unzip"})
+# Programs that only read the files they name.
+_READERS: Final = frozenset({"cat", "less", "more", "head", "tail", "ls", "stat", "file", "wc", "grep", "rg",
+                             "find", "diff", "cmp", "sha256sum", "shasum", "md5sum", "du", "tree", "realpath",
+                             "readlink", "basename", "dirname", "test", "["})
 _FORGE_API_HOST: Final = re.compile(r"api\.github\.com|/api/v3/|/api/graphql", re.IGNORECASE)
 _WRITE_METHOD: Final = re.compile(r"\b(?:PUT|POST|PATCH|DELETE)\b|--data|(?:^|\s)-d\b|--json|--form", re.IGNORECASE)
 
@@ -258,7 +270,8 @@ _CREDENTIAL: Final = re.compile(
 # Files git or gh read as configuration (global, XDG, submodules, gh's own).
 _FORGE_CONFIG_FILES: Final = frozenset({".gitconfig", ".gitmodules", ".git-credentials", ".gitattributes"})
 _FORGE_CONFIG_SUFFIXES: Final = ("git/config", "git/attributes", "gh/config.yml", "gh/hosts.yml",
-                                  "github cli/config.yml", "github cli/hosts.yml")
+                                  "github cli/config.yml", "github cli/hosts.yml", "etc/gitconfig",
+                                  "git/credentials", ".ssh/config")
 # An 8.3 short name of a protected entry: `GIT~1` (.git), `GITCON~1` (.gitconfig),
 # `GITMOD~1` (.gitmodules), `GIT-CR~1`, `GITATT~1`, `GITHUB~1` (gh's `GitHub CLI`).
 _SHORT_GIT: Final = re.compile(r"^\.?git[^~/]{0,4}~[0-9]+$")
@@ -371,7 +384,7 @@ def _classify(command: object, context: _Context, depth: int) -> str:
         return UNCLASSIFIED
     for index, token in enumerate(whole[:-1]):
         # A here-string or redirection hands its target to the program as input.
-        if _REDIRECT.match(token) and _FORGE_WORD.search(whole[index + 1]):
+        if _REDIRECT.match(token) and (_FORGE_WORD.search(whole[index + 1]) or _configures_forge(whole[index + 1])):
             return UNCLASSIFIED
     segments = _segments(whole)
     if depth == 0:
@@ -413,6 +426,30 @@ def _command_word_is_a_windows_path(command: str) -> bool:
             return True
         starts_segment = False
     return False
+
+
+def _runs_only_a_script(name: str, args: list[str]) -> bool:
+    """`powershell -NoProfile -File x.ps1 ...`, `pwsh x.ps1`, `cmd /c x.bat`: a script file and nothing else."""
+    if name == "cmd":
+        return len(args) >= 2 and args[0].lower() == "/c" and bool(_SCRIPT_SUFFIX.search(args[1]))
+    index = 0
+    while index < len(args):
+        option = args[index].lower()
+        if option in _POWERSHELL_PLAIN_OPTIONS:
+            index += 1
+        elif option in _POWERSHELL_VALUE_OPTIONS:
+            index += 2
+        elif option in ("-file", "-f"):
+            return index + 1 < len(args) and bool(_SCRIPT_SUFFIX.search(args[index + 1]))
+        else:
+            return not option.startswith("-") and bool(_SCRIPT_SUFFIX.search(args[index]))
+    return False
+
+
+def _names_forge_config(word: str) -> bool:
+    """A command argument naming `.git` itself, a path under it, or a git or gh config file."""
+    value = word.split("=", 1)[-1] if word.startswith("-") else word
+    return bool(value) and _configures_forge(value)
 
 
 def _join_continuations(command: str) -> str:
@@ -511,6 +548,15 @@ def _classify_segment(segment: list[str], context: _Context, depth: int) -> str:
         if carried:
             return UNCLASSIFIED
         return _classify_git(words[1:], context, depth) if name == "git" else _classify_gh(words[1:], context)
+    if name in _WINDOWS_SHELLS:
+        # Decided by the executable, never by the flag spelling: PowerShell
+        # accepts any unambiguous prefix of `-EncodedCommand`, and cmd runs
+        # `/c`, `/k` and `/r`. Only a plain script file stays a script residual.
+        return LOCAL if _runs_only_a_script(name, words[1:]) and not forge_text else UNCLASSIFIED
+    if name in _LINKERS and any(_names_forge_config(word) for word in words[1:]):
+        return UNCLASSIFIED  # a link to `.git` or a git config lets a later plain write land there
+    if name not in _READERS and any(_names_forge_config(word) for word in words[1:]) and not _FORGE_CLI.match(name):
+        return UNCLASSIFIED  # a shell write into `.git/` or a git or gh config file
     if name in _SHELLS:
         payload = _shell_payload(words)
         if payload is not None:
@@ -887,7 +933,17 @@ def grant_change_directive(*, tool_name: object, tool_input: object) -> dict[str
     }
 
 
-def _tool_class(tool: str, tool_input: object, prefix: str, opened: frozenset[tuple[str, int]]) -> str:
+def _resolved(target: str, task_id: object) -> str:
+    """The real path a file tool would write: relative to the session's workspace, every link followed."""
+    base = _workspace_root(task_id) or os.getcwd()
+    try:
+        return os.path.realpath(os.path.join(base, os.path.expanduser(target)))
+    except (OSError, ValueError):
+        return target
+
+
+def _tool_class(tool: str, tool_input: object, prefix: str, opened: frozenset[tuple[str, int]],
+                task_id: object = None) -> str:
     if tool == TERMINAL_TOOL:
         return classify_command(_text_arg(tool_input, "command"), prefix=prefix, opened=opened)
     if tool == PROCESS_TOOL:
@@ -905,9 +961,11 @@ def _tool_class(tool: str, tool_input: object, prefix: str, opened: frozenset[tu
         code = _text_arg(tool_input, "code")
         return UNCLASSIFIED if _FORGE_WORD.search(code) and _FORGE_VERB.search(code) else LOCAL
     if tool in FILE_TOOLS:
-        # A file under `.git/` (a hook, the config) runs on the next git command.
+        # A file under `.git/` (a hook, the config) runs on the next git command. Read both as
+        # written and resolved: a symlinked or junctioned parent (`g -> .git`) must not hide it.
         targets = _edit_targets(tool, dict(tool_input) if isinstance(tool_input, Mapping) else {})
-        return UNCLASSIFIED if any(_configures_forge(target) for target in targets) else LOCAL
+        return UNCLASSIFIED if any(_configures_forge(target) or _configures_forge(_resolved(target, task_id))
+                                   for target in targets) else LOCAL
     lowered = tool.lower()
     if (lowered.startswith("mcp") or "github" in lowered or "gitlab" in lowered) and _MCP_FORGE_WRITE.search(tool):
         return OTHER_PR_OR_REPO
@@ -936,7 +994,8 @@ def _windows_part(part: str) -> str:
 
 
 def delivery_directive(
-    *, tool_name: object, tool_input: object, session_id: str, omh_home: str, hermes_home: str
+    *, tool_name: object, tool_input: object, session_id: str, omh_home: str, hermes_home: str,
+    task_id: object = None,
 ) -> dict[str, str] | None:
     """The block for a forge command an unattended session may not run, else None."""
     tool = str(tool_name or "")
@@ -945,7 +1004,7 @@ def delivery_directive(
     grant = pr_delivery.read_grant(omh_home, hermes_home)
     prefix = pr_delivery.branch_prefix(grant)
     opened = pr_delivery.opened_prs(omh_home, hermes_home) if tool in (TERMINAL_TOOL, PROCESS_TOOL) else frozenset()
-    forge_class = _tool_class(tool, tool_input, prefix, opened)
+    forge_class = _tool_class(tool, tool_input, prefix, opened, task_id)
     if forge_class in (LOCAL, NOT_GOVERNED):
         return None
     delegated = _delegated(session_id)

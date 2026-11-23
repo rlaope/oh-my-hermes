@@ -2489,9 +2489,55 @@
   },
   {
    "command": "git push origin HEAD:refs/heads/bot/%X%",
-   "class": "push_bot_branch",
+   "class": "destination_not_named",
+   "verdict": "refused"
+  },
+  {
+   "command": "powershell.exe -EncodedCommand ZwBoACAAcAByACAAbQBlAHIAZwBlACAANAAyAA==",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "powershell -enc ZwBoACAAcAByACAAbQBlAHIAZwBlACAANAAyAA==",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "pwsh -ec ZwBoACAAcAByACAAbQBlAHIAZwBlACAANAAyAA==",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "cmd /c git push -f origin HEAD:main",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "powershell -NoProfile -File build.ps1",
+   "class": "local",
    "verdict": "allowed",
-   "why_allowed": "grant-covered: `%` is literal under Git Bash; only a `%` in the command word is refused"
+   "why_allowed": "residual: a plain script file, which the gate does not read"
+  },
+  {
+   "command": "cmd /c build.bat",
+   "class": "local",
+   "verdict": "allowed",
+   "why_allowed": "residual: a plain script file, which the gate does not read"
+  },
+  {
+   "command": "ln -s .git g",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "mklink /J g .git",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "cp evil.sh .git/hooks/pre-push",
+   "class": "unclassified",
+   "verdict": "refused"
   }
  ]
 }

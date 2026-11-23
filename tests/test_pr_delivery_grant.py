@@ -206,6 +206,15 @@ class CliTests(_Home):
                 mock.patch("builtins.open", side_effect=OSError("no console")):
             self.assertFalse(pr_delivery_cli.confirm_on_terminal("yes? "))
 
+    def test_a_hidden_windows_console_is_a_no_without_waiting(self):
+        # Hermes spawns terminal children with CREATE_NO_WINDOW: CONIN$ would open on a console nobody sees.
+        with mock.patch.object(pr_delivery_cli.os, "name", "nt"), \
+                mock.patch.object(pr_delivery_cli, "console_is_visible", return_value=False), \
+                mock.patch("builtins.open", side_effect=AssertionError("must not open the console")):
+            self.assertFalse(pr_delivery_cli.confirm_on_terminal("yes? "))
+        if os.name != "nt":
+            self.assertFalse(pr_delivery_cli.console_is_visible())  # no ctypes.windll: a no, never a raise
+
     def test_on_windows_the_grant_file_mode_is_not_checked(self):
         # POSIX mode bits mean nothing there: the grant reads as recorded (documented residual).
         self.grant_on()
@@ -528,6 +537,14 @@ class UnattendedMatrixTests(_Home):
         "Set-Item -Path Env:GH_REPO -Value x": gate.UNCLASSIFIED,
         "set GIT_SSH_COMMAND=x": gate.UNCLASSIFIED,
         "setx GH_REPO victim/r": gate.UNCLASSIFIED,
+        # Second Windows pass (W1): PowerShell and cmd decided by the executable.
+        "powershell.exe -EncodedCommand ZwBoACAAcAByACAAbQBlAHIAZwBlACAANAAyAA==": gate.UNCLASSIFIED,
+        "powershell -enc ZwBoACAAcAByACAAbQBlAHIAZwBlACAANAAyAA==": gate.UNCLASSIFIED,
+        "pwsh -e ZwBoACAAcAByACAAbQBlAHIAZwBlACAANAAyAA==": gate.UNCLASSIFIED,
+        "pwsh -ec ZwBoACAAcAByACAAbQBlAHIAZwBlACAANAAyAA==": gate.UNCLASSIFIED,
+        "C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -EncodedC ZwBo": gate.UNCLASSIFIED,
+        "cmd.exe /k dir": gate.UNCLASSIFIED,
+        "git push origin HEAD:refs/heads/bot/%X%": gate.UNQUALIFIED,
         # Second verification round (R1-R5).
         "git status;(gh pr merge 42)": gate.FORGE_MERGE,
         "git status&&(gh pr merge 42)": gate.FORGE_MERGE,
@@ -551,6 +568,7 @@ class UnattendedMatrixTests(_Home):
         "git config user.email bot@example.invalid", "git config --get remote.origin.url", "git remote -v",
         "gh auth status", "gh repo set-default --view", "git push origin HEAD:refs/heads/bot/x --dry-run",
         "git log --format='%h\\t%s'", "grep -E '\\bfoo\\b' notes.txt",
+        "powershell -NoProfile -File build.ps1", "pwsh build.ps1", "cmd /c build.bat", "ls .git",
     )
 
     def setUp(self) -> None:
@@ -652,13 +670,36 @@ class UnattendedMatrixTests(_Home):
                      "C:\\repo\\.git\\hooks\\pre-push", "C:\\repo\\.GIT\\hooks\\pre-push", "C:\\repo\\.git.\\config",
                      "C:\\repo\\.git::$INDEX_ALLOCATION\\config", "C:\\repo\\GIT~1\\config", "C:\\Users\\u\\.gitconfig",
                      "C:\\Users\\u\\AppData\\Roaming\\GitHub CLI\\hosts.yml", "C:\\Users\\u\\GITCON~1",
-                     "C:\\repo\\GITMOD~1", "C:\\Users\\u\\AppData\\Roaming\\GITHUB~1\\hosts.yml"):
+                     "C:\\repo\\GITMOD~1", "C:\\Users\\u\\AppData\\Roaming\\GITHUB~1\\hosts.yml",
+                     "/etc/gitconfig", "C:\\Users\\u\\AppData\\Local\\Programs\\Git\\etc\\gitconfig"):
             with self.subTest(path=path):
                 self.assertEqual(self.pre("write_file", {"path": path, "content": "x"})["action"], "block")
         for tool in ("mcp_github_add_issue_comment", "mcp_github_update_issue", "github_merge_pr",
                      "MCP_GitHub_Merge", "mcp__github__merge_pull_request", "mcp_github_enable_pr_auto_merge"):
             with self.subTest(tool=tool):
                 self.assertEqual(self.pre(tool, {"body": "/merge"})["action"], "block")
+
+    def test_a_write_through_a_symlinked_parent_is_held(self):
+        if not hasattr(os, "symlink"):
+            self.skipTest("no symlinks on this platform")
+        repo = Path(os.environ["TERMINAL_CWD"])
+        (repo / ".git" / "hooks").mkdir(parents=True)
+        try:
+            (repo / "g").symlink_to(repo / ".git", target_is_directory=True)
+        except OSError:
+            self.skipTest("symlink creation not permitted")
+        self.grant_on()
+        directive = self.pre("write_file", {"path": "g/hooks/pre-push", "content": "#!/bin/sh\n"})
+        self.assertEqual(directive["action"], "block")
+        self.assertIsNone(self.pre("write_file", {"path": "src/app.py", "content": "x = 1\n"}))
+
+    def test_making_a_link_to_git_config_is_held(self):
+        for command in ("ln -s .git g", "ln -s ../.git/hooks h", "mklink /J g .git", "cmd /c mklink /J g .git",
+                        "New-Item -ItemType Junction -Path g -Target .git", "cp evil.sh .git/hooks/pre-push",
+                        "echo x > .git/hooks/pre-push", "ln -s ~/.gitconfig c"):
+            with self.subTest(command=command):
+                self.assertEqual(self.terminal(command)["action"], "block")
+        self.assertIsNone(self.terminal("ln -s build/out latest"))
 
     def test_mcp_forge_writes_and_git_dir_writes_are_held(self):
         self.grant_on()
