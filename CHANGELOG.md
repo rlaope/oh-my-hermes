@@ -24,9 +24,12 @@ All notable changes will be documented here.
   control showed none, low, medium, high and xhigh only, so minimal, max and ultra could not be picked. The bridge now
   reads the installed Hermes' own levels (`hermes_constants.VALID_REASONING_EFFORTS`, after "none") and offers them in
   Hermes' order: none, minimal, low, medium, high, xhigh, max, ultra. An older Hermes offers only the levels it has,
-  and the bridge refuses any other before asking Hermes. A Hermes that names no levels gets the full list, and a
-  level its gateway refuses shows the picker's note instead of looking applied. The eight levels sit in two rows of
-  four. (`apps/omher/bridge/omher_bridge.py` `reasoning_levels`, `apps/omher/src/chat/model/levels.ts`)
+  and the bridge refuses any other before asking Hermes. When the levels are not importable the picker offers the
+  full list, and a level the gateway refuses shows the picker's note instead of looking applied. The eight levels sit
+  in two rows of four. A level the route does not send as picked says so, as Hermes' own pickers do: Hermes sends
+  `max` for `ultra` on most routes, so the pill reads "ultra · sends max" and the popover "ultra (sends max on this
+  route)", from Hermes' `reasoning_effort_wire`. (`apps/omher/bridge/omher_bridge.py` `reasoning_levels`,
+  `apps/omher/src/chat/model/levels.ts`)
 - **Fanout hands coding units to a harness CLI you declare, or to one of nine presets.** Put an executor in
   `<omh_home>/routing/executors.toml` (never read from a repository or the working directory) as an `argv` list
   with exactly one `{prompt}` or `{prompt_file}` element, or opt in to a preset with `omh coding executors add

@@ -84,13 +84,17 @@ test("changing reasoning and model calls chat.set_model and updates the pill", a
   await pop.getByRole("radio", { name: "xhigh", exact: true }).click();
   await expect(page.getByTestId("reasoning-label")).toHaveText("xhigh");
   await expect(pop.getByRole("radio", { name: "xhigh", exact: true })).toHaveAttribute("aria-checked", "true");
+  await expect(pop.getByTestId("reasoning-sent")).toHaveCount(0); // sent as picked: nothing more to say
   await expect.poll(async () => (await callsOf("chat.set_model")).map((c) => c.params)).toEqual([
     { bot: "kami", reasoning: "xhigh" },
   ]);
 
-  // the top of the ladder, which the picker used to hide
+  // the top of the ladder, which the picker used to hide. The mock's route has no ultra and sends max, as Hermes'
+  // OpenAI-compatible routes do (`reasoning_effort_wire`): the pill and the popover say so, in Hermes' words
   await pop.getByRole("radio", { name: "ultra", exact: true }).click();
-  await expect(page.getByTestId("reasoning-label")).toHaveText("ultra");
+  await expect(page.getByTestId("reasoning-label")).toHaveText("ultra · sends max");
+  await expect(pop.getByTestId("reasoning-sent")).toHaveText("ultra (sends max on this route)");
+  await expect(pop.getByRole("radio", { name: "ultra", exact: true })).toHaveAttribute("aria-checked", "true");
   await expect.poll(async () => (await callsOf("chat.set_model")).map((c) => c.params)).toEqual([
     { bot: "kami", reasoning: "xhigh" },
     { bot: "kami", reasoning: "ultra" },

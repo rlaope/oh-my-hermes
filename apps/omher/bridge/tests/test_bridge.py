@@ -526,18 +526,38 @@ class BotsAndChat(BridgeCase):
             c = env.clients["kami"]
             c.model_info = {"model": "claude-sonnet-5-5", "provider": "other-proxy", "reasoning_effort": "low"}
             current = (await s.req("models.options", bot="kami"))["result"]["current"]
-            self.assertEqual(current, {"model": "claude-sonnet-5-5", "provider": "other-proxy", "reasoning": "low"})
+            self.assertEqual(current, {"model": "claude-sonnet-5-5", "provider": "other-proxy", "reasoning": "low",
+                                       "reasoning_wire": ""})
             c.model_info = {"reasoning_effort": "low"}  # an info without the route falls back to the profile default
             current = (await s.req("models.options", bot="kami"))["result"]["current"]
-            self.assertEqual(current, {"model": "claude-opus-5-5", "provider": "claude-proxy", "reasoning": "low"})
+            self.assertEqual(current, {"model": "claude-opus-5-5", "provider": "claude-proxy", "reasoning": "low",
+                                       "reasoning_wire": ""})
 
     async def test_models_options_shape(self):
+        # pinned: the levels are the installed Hermes' tuple, whatever this machine has installed
+        ladder = ("minimal", "low", "medium", "high", "xhigh", "max", "ultra")
+        with mock.patch.dict(sys.modules, {"hermes_constants": types.SimpleNamespace(VALID_REASONING_EFFORTS=ladder)}):
+            async with Env() as env:
+                s = await self.open(env)
+                r = (await s.req("models.options", bot="kami"))["result"]
+                self.assertEqual(r["providers"], [{"slug": "claude-proxy", "name": "Claude", "models": ["claude-opus-5-5", "x"]}])
+                self.assertEqual(r["current"]["model"], "claude-opus-5-5")
+                self.assertEqual(r["reasoning_levels"], ["none", *ladder])
+
+    async def test_the_level_the_route_sends_rides_with_the_pick(self):
+        """Hermes clamps `ultra` to `max` on most routes (`reasoning_effort_wire`): chat.open, models.options and
+        chat.set_model carry it as `reasoning_wire` so the picker never shows ultra as a level the route has."""
         async with Env() as env:
             s = await self.open(env)
-            r = (await s.req("models.options", bot="kami"))["result"]
-            self.assertEqual(r["providers"], [{"slug": "claude-proxy", "name": "Claude", "models": ["claude-opus-5-5", "x"]}])
-            self.assertEqual(r["current"]["model"], "claude-opus-5-5")
-            self.assertEqual(r["reasoning_levels"], ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"])
+            opened = (await s.req("chat.open", bot="kami"))["result"]
+            self.assertEqual(opened["reasoning_wire"], "")  # an info without the field: Hermes did not say
+            c = env.clients["kami"]
+            c.model_info = {**c.model_info, "reasoning_effort": "ultra", "reasoning_effort_wire": "max"}
+            current = (await s.req("models.options", bot="kami"))["result"]["current"]
+            self.assertEqual((current["reasoning"], current["reasoning_wire"]), ("ultra", "max"))
+            r = (await s.req("chat.set_model", bot="kami", reasoning="ultra"))["result"]
+            self.assertEqual((r["reasoning"], r["reasoning_wire"]), ("ultra", "max"))
+            self.assertEqual((await s.req("chat.open", bot="kami"))["result"]["reasoning_wire"], "max")
 
     async def test_reasoning_levels_are_the_installed_hermes_ones(self):
         """The picker offers "none" plus the installed Hermes' VALID_REASONING_EFFORTS, in its order; a level that

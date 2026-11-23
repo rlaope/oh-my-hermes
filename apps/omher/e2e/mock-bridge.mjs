@@ -600,6 +600,10 @@ const SIGN_IN_MODELS = {
 const PROVIDERS_LONG = JSON.parse(readFileSync(new URL("./fixtures/providers-long.json", import.meta.url), "utf-8"));
 let providerFixture = "default";
 const REASONING_LEVELS = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"];
+// What the route sends for a level (Hermes' `reasoning_effort_wire`): an OpenAI-compatible route has no `ultra` and
+// clamps it to `max`; every other level goes as picked. "" for thinking off, as Hermes stamps none.
+const wireOf = (level) => (level === "ultra" ? "max" : level === "none" ? "" : level);
+const current = (m) => ({ ...m, reasoning_wire: wireOf(m.reasoning) });
 
 // ---- mutable state ---------------------------------------------------------------------------
 
@@ -1217,6 +1221,7 @@ const OPS = {
       model: m.model,
       provider: m.provider,
       reasoning: m.reasoning,
+      reasoning_wire: wireOf(m.reasoning),
     };
   },
   "folder.open": (p) => {
@@ -1679,14 +1684,14 @@ const OPS = {
     const b = needBot(p);
     const signed = notReady.get(b.name);
     if (signed && SIGN_IN_MODELS[signed]) {
-      return { providers: [...PROVIDERS, SIGN_IN_MODELS[signed]], current: { ...models[b.name] }, reasoning_levels: REASONING_LEVELS };
+      return { providers: [...PROVIDERS, SIGN_IN_MODELS[signed]], current: current(models[b.name]), reasoning_levels: REASONING_LEVELS };
     }
     // a Hermes installed a minute ago with no account lists no provider at all (measured on Hermes 0.23.2)
-    if (providerFixture === "empty") return { providers: [], current: { ...models[b.name] }, reasoning_levels: REASONING_LEVELS };
+    if (providerFixture === "empty") return { providers: [], current: current(models[b.name]), reasoning_levels: REASONING_LEVELS };
     if (providerFixture === "long") {
-      return { providers: PROVIDERS_LONG.providers, current: { ...models[b.name], ...PROVIDERS_LONG.current }, reasoning_levels: REASONING_LEVELS };
+      return { providers: PROVIDERS_LONG.providers, current: { ...current(models[b.name]), ...PROVIDERS_LONG.current }, reasoning_levels: REASONING_LEVELS };
     }
-    return { providers: PROVIDERS, current: { ...models[b.name] }, reasoning_levels: REASONING_LEVELS };
+    return { providers: PROVIDERS, current: current(models[b.name]), reasoning_levels: REASONING_LEVELS };
   },
   "chat.set_model": (p) => {
     const b = needBot(p);
@@ -1704,7 +1709,7 @@ const OPS = {
       provider: p.provider ?? cur.provider,
       reasoning: p.reasoning ?? cur.reasoning,
     };
-    return { ...models[b.name] };
+    return current(models[b.name]);
   },
   "usage.read": () => ({ providers: USAGE[usageFixture]() }),
   "accounts.list": () => accountsList(),

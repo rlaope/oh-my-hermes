@@ -67,7 +67,7 @@ THREAD_TITLE = 40  # chars of the first message a new thread takes as its title
 _THREAD_PLACEHOLDER = re.compile(r"new thread [0-9a-f]{6}")
 LOCAL_SOURCES = frozenset({"tui", "cli", "local", "desktop", "acp", "api_server", "omher"})
 # Hermes' reasoning ladder in its own order: "none" (thinking off), then `hermes_constants.VALID_REASONING_EFFORTS`.
-# reasoning_levels() reads the installed Hermes' tuple; this copy answers only when that Hermes names none.
+# reasoning_levels() reads the installed Hermes' tuple; this copy answers only when that tuple is not importable.
 REASONING_LEVELS = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]
 # `bots.ready {provider}`: a Hermes provider id, the shell's `valid_provider` pattern (the three sign-in ids the desktop
 # shell allows pass it; the strict check is a read either way).
@@ -110,11 +110,14 @@ RESTART_LINES = 12
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 # Variables that make a child think it is the gateway itself (Hermes' update_restart_recovery drops the same three).
 _GATEWAY_MARKERS = ("_HERMES_GATEWAY", "HERMES_GATEWAY", "HERMES_GATEWAY_MODE")
+
+
 def reasoning_levels() -> list[str]:
     """The levels the installed Hermes accepts, in its order: "none", then its `VALID_REASONING_EFFORTS`. The tuple is
     read from the checkout `ensure_hermes_on_path` put on sys.path, so a Hermes from before max and ultra offers neither.
-    A Hermes that names no tuple gets REASONING_LEVELS; its gateway refuses a level it does not know, and the
-    picker shows that refusal."""
+    The import is cached for the bridge's lifetime: a Hermes updated underneath a running bridge is read again when the
+    bridge restarts. When the tuple is not importable the answer is REASONING_LEVELS (a Hermes that old cannot serve
+    `session.mutate` anyway); a level the gateway refuses comes back as its error, which the picker shows."""
     try:
         from hermes_constants import VALID_REASONING_EFFORTS
         named = [e for e in VALID_REASONING_EFFORTS if isinstance(e, str) and e and e != "none"]
@@ -6562,7 +6565,8 @@ class Bridge:
                                                                         main=True) + waiting,
                   "running": running, "lost": lost,
                   "model": str(info.get("model") or bot["model"]), "provider": str(info.get("provider") or bot["provider"]),
-                  "reasoning": str(info.get("reasoning_effort") or bot["reasoning"])}
+                  "reasoning": str(info.get("reasoning_effort") or bot["reasoning"]),
+                  "reasoning_wire": str(info.get("reasoning_effort_wire") or "")}
         prompts = [x for x in (snap.get("prompts") or []) if isinstance(x, dict) and x.get("prompt_id")]
 
         asks = [x for x in (snap.get("open_requests") or [])
@@ -7256,12 +7260,15 @@ class Bridge:
             providers.append({"slug": str(pr.get("slug") or ""), "name": str(pr.get("name") or pr.get("slug") or ""),
                               "models": [m for m in models if m]})
         reasoning = conn.bot["reasoning"]
-        sess_model = sess_provider = ""
+        sess_model = sess_provider = wire = ""
         if conn.main_id:
             with contextlib.suppress(Exception):
                 snap = await self._call(conn, "session.resume", session_id=conn.main_id)
                 info = snap.get("info") or {}
                 reasoning = str(info.get("reasoning_effort") or reasoning)
+                # The level the route actually sends (Hermes clamps `ultra` to `max` on most routes): the pick itself
+                # when sent verbatim, "" when Hermes does not say (thinking off, no level, an older Hermes).
+                wire = str(info.get("reasoning_effort_wire") or "")
                 # The picker's "current" must be the session's live model: ``model.options`` reports the
                 # profile default, which a session-level switch does not change.
                 sess_model = str(info.get("model") or "")
@@ -7269,7 +7276,7 @@ class Bridge:
         return {"providers": providers,
                 "current": {"model": sess_model or str(res.get("model") or conn.bot["model"]),
                             "provider": sess_provider or str(res.get("provider") or conn.bot["provider"]),
-                            "reasoning": reasoning},
+                            "reasoning": reasoning, "reasoning_wire": wire},
                 "reasoning_levels": reasoning_levels()}
 
     async def op_set_model(self, p) -> dict:
@@ -7320,7 +7327,8 @@ class Bridge:
         snap = await self._call(conn, "session.resume", session_id=main)
         info = snap.get("info") or {}
         return {"model": str(info.get("model") or ""), "provider": str(info.get("provider") or conn.bot["provider"]),
-                "reasoning": str(info.get("reasoning_effort") or "")}
+                "reasoning": str(info.get("reasoning_effort") or ""),
+                "reasoning_wire": str(info.get("reasoning_effort_wire") or "")}
 
     # ------------------------------------------------------------ bots / hello / routines
 

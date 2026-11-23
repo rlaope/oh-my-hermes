@@ -208,7 +208,8 @@
 .mp-pop .mseg {
   margin: 4px 6px 2px;
 }
-/* Hermes' full ladder is eight levels, too many for one row of the popover: past six they sit in rows of four */
+/* More than six levels do not fit one row of a model popover: they sit in rows of four. Intentionally general: it
+   holds for Hermes' eight-level ladder in the chat picker and for any SESSIONS agent that offers as many. */
 .mp-pop .mseg:has(> button:nth-child(7)) {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

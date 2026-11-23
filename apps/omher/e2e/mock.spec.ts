@@ -116,8 +116,12 @@ test("hello, bots and seeded data", async () => {
 
   const opts = await c.ok("models.options", { bot: "kami" });
   expect(opts.reasoning_levels).toEqual(["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]);
+  expect(opts.current).toMatchObject({ reasoning: "high", reasoning_wire: "high" });
   const set = await c.ok("chat.set_model", { bot: "kami", reasoning: "low" });
-  expect(set).toMatchObject({ model: "Opus 5.5", reasoning: "low" });
+  expect(set).toMatchObject({ model: "Opus 5.5", reasoning: "low", reasoning_wire: "low" });
+  // the route has no ultra: Hermes sends max and says so
+  expect(await c.ok("chat.set_model", { bot: "kami", reasoning: "ultra" })).toMatchObject({ reasoning: "ultra", reasoning_wire: "max" });
+  expect((await c.ok("models.options", { bot: "kami" })).current).toMatchObject({ reasoning: "ultra", reasoning_wire: "max" });
 });
 
 test("errors are replies, not crashes", async () => {
