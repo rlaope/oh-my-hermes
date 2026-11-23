@@ -700,6 +700,44 @@ class ReviewProbeTableTests(unittest.TestCase):
                 if case["verdict"] == "allowed":
                     self.assertTrue(case["why_allowed"])
 
+    # The review's tool-surface probes: (tool, args, refused?). The three allowed rows are
+    # a send whose refused first half leaves it harmless, and code built from string
+    # pieces (a stated residual).
+    TOOL_CASES = (
+        ("process", {"action": "submit", "data": "gh pr \\"}, True),
+        ("process", {"action": "submit", "data": "merge 42"}, False),
+        ("process", {"action": "write", "data": "g\\\n"}, True),
+        ("process", {"action": "write", "data": "it push -f origin HEAD:main\n"}, False),
+        ("process", {"action": "submit", "data": "git status;(gh pr merge 42)"}, True),
+        ("process", {"action": "write", "data": "gh pr merge 42\r"}, True),
+        ("process", {"action": "send_keys", "data": "gh pr merge 42\n"}, True),
+        ("write_file", {"path": "/home/u/.gitconfig", "content": "x"}, True),
+        ("write_file", {"path": "/home/u/.config/git/config", "content": "x"}, True),
+        ("write_file", {"path": "/home/u/.config/gh/config.yml", "content": "x"}, True),
+        ("write_file", {"path": "repo/.gitmodules", "content": "x"}, True),
+        ("write_file", {"path": "repo/.git/hooks/pre-push", "content": "x"}, True),
+        ("write_file", {"path": "repo/.GIT/hooks/pre-push", "content": "x"}, True),
+        ("write_file", {"path": "repo/.git", "content": "gitdir: /tmp/evil"}, True),
+        ("patch", {"path": "repo/.git/config", "old_string": "a", "new_string": "b"}, True),
+        ("mcp_github_merge_pull_request", {}, True),
+        ("mcp_github_add_issue_comment", {"issue_number": 42, "body": "/merge"}, True),
+        ("mcp_github_update_issue", {"issue_number": 42, "state": "closed"}, True),
+        ("mcp_github_create_pull_request_review", {"event": "APPROVE"}, True),
+        ("mcp_github_enable_pr_auto_merge", {}, True),
+        ("mcp_github_update_pull_request_branch", {}, True),
+        ("github_merge_pr", {}, True),
+        ("MCP_GitHub_Merge", {}, True),
+        ("mcp__github__merge_pull_request", {}, True),
+        ("execute_code", {"code": "import subprocess; subprocess.run(['g'+'h','pr','mer'+'ge','42'])"}, False),
+        ("execute_code", {"code": "import subprocess; subprocess.run(['gh','pr','merge','42'])"}, True),
+    )
+
+    def test_every_tool_probe_keeps_its_verdict(self):
+        for tool, args, refused in self.TOOL_CASES:
+            with self.subTest(tool=tool, args=args):
+                found = gate._tool_class(tool, args, "bot/", OPENED)
+                self.assertEqual(found not in (gate.LOCAL, gate.NOT_GOVERNED), refused)
+
     def test_every_grant_change_spelling_is_refused(self):
         for tool, text in self.GRANT_CHANGES:
             with self.subTest(text=text):
