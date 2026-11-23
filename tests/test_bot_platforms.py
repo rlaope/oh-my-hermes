@@ -26,6 +26,7 @@ import unittest
 from unittest import mock
 
 from omh.maintenance.gateway_health import BOT_PLATFORMS_SCHEMA, bot_platforms, bot_platforms_payload
+from _credential_fixtures import AWS_ACCESS_KEY_ID, AWS_TEMPORARY_ACCESS_KEY_ID
 from omh.maintenance import hermes_gateway_formats as formats
 from omh.maintenance.gateway_health import _adapter_line, gateway_health
 from omh.maintenance.hermes_gateway_formats import (
@@ -45,6 +46,7 @@ TOKEN = ".".join(("x" * 24, "y" * 6, "z" * 27))
 WEBHOOK = "https://discord.com/api/webhooks/" + "1" * 18 + "/" + "w" * 40 + "?wait=" + "q" * 12
 SLACK_HOOK = "https://hooks.slack.com/services/" + "/".join(("T" + "0" * 8, "B" + "0" * 8, "s" * 24))
 API_KEY = "k7" * 24
+AWS_SECRET_SAMPLE = "/".join(("wJalrXUtnFEMI", "K7MDENG", "bPxRfiCY" + "EXAMPLEKEY"))  # AWS's documented example shape
 INTENTS_REASON = ("Shard ID None is requesting privileged intents that have not been explicitly enabled in the "
                   "developer portal.")
 RECORD_GUIDANCE = ("Discord rejected the connection because privileged Gateway Intents are not enabled. Hermes is "
@@ -391,9 +393,11 @@ class PerBot(unittest.TestCase):
             "code=" + "c3" * 15: "code=<redacted>",
             "api_key: " + "q8" * 10: "api_key: <redacted>",
             "password=hunter22": "password=<redacted>",
-            "key=" + "AK" + "IA" + "IOSFODNN7EXAMPLE": "key=<redacted>",
+            "key=" + AWS_ACCESS_KEY_ID: "key=<redacted>",
+            f"access key {AWS_ACCESS_KEY_ID} denied": "access key <redacted> denied",
+            f"access key {AWS_TEMPORARY_ACCESS_KEY_ID} denied": "access key <redacted> denied",
             "token: " + "QWERTYUIOPASDFGHJKL1": "token: <redacted>",
-            "secret " + "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY": "secret <redacted>",
+            "secret " + AWS_SECRET_SAMPLE: "secret <redacted>",
             "blob " + "2Xz++nd6e08VJBq/" + "Aa1" * 8 + "==": "blob <redacted>",
             "twilio " + "f" * 16 + "0" * 16: "twilio <redacted>",
         }

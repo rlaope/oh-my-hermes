@@ -1252,6 +1252,21 @@ class MessagingTests(unittest.TestCase):
         box = self.box(self.demo(demo_down("reconnecting", attention=False, since="2027-01-15T07:59:00Z")), 150)
         self.assertTrue(field(box, "discord").startswith("discord ✗ reconnecting"), "the box says it at once")
 
+    def test_the_board_judges_the_threshold_by_its_clock_on_an_unchanged_snapshot(self) -> None:
+        # the log cache leaves the answer as it was; the board draws with its own clock each frame, so a reconnect
+        # crosses EDGE_RECONNECT_SECONDS onto the card's edge with no new answer
+        since = datetime(2027, 1, 15, 8, 0, tzinfo=timezone.utc).timestamp()
+        profile = self.demo(demo_down("reconnecting", attention=False, since="2027-01-15T08:00:00Z"))
+        snapshot_ = BoardSnapshot(BoardView(), (profile,), read_at=since)
+        clock = [since + bot_board.EDGE_RECONNECT_SECONDS - 60]
+        board = BotBoard("bots", clock=lambda: clock[0])
+        board.take(snapshot_)
+        board.frame(150, 20, DEFAULT_THEME)
+        self.assertNotIn("reconnecting", " ".join(lines_text(board.lines)))
+        clock[0] = since + bot_board.EDGE_RECONNECT_SECONDS
+        board.frame(150, 20, DEFAULT_THEME)
+        self.assertIn("discord ✗ reconnecting", squeeze(" ".join(lines_text(board.lines))))
+
     def test_connected_and_unknown_draw_no_state_chip(self) -> None:
         plain = squeeze(lines_text(self.card(bots()[2], 150))[-2])
         for status in ("connected", "degraded", "connecting", "disabled", "unknown"):
