@@ -274,6 +274,13 @@ All notable changes will be documented here.
   last, and loading the skill stays an optional last clause. The hint grows by 225 characters, only on review
   requests.
 - omher connects over SSH to a Windows computer whose Hermes has only the `hermes.cmd` shim and no venv: the remote discovery now reads the shim's interpreter too (a UTF-8 BOM included), in the same order the local app reads launchers (the agent's bin before the user bin, `.exe` before `.cmd` in each), so a stale launcher from an older install is never picked over the current one. Reported and first fixed by @jundev0001 in #3077.
+- **A diff review reads the files it was given before listing anything as not checked.** In live runs the
+  reviewer sometimes wrote "Not checked: the Policy constructor" while the file that defines it was in the review's
+  context, unread, and then flagged a bug that file rules out. The code-review rules OMH adds to a review request now
+  say: open every provided file that defines, constructs or calls what the diff touches before deciding; a file you
+  could read never goes under Not checked. The code-review skill's finding-validation method says the same. The hint
+  grows by 150 characters, only on review requests. (`src/plugin_bundle/omh/awareness.py`,
+  `src/skills/review_methods.py`)
 
 ## 5.0.0 - 2026-11-21
 

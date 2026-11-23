@@ -137,6 +137,8 @@ class CodeReviewRouteHintTests(unittest.TestCase):
             "theoretical only",
             "End the review body with a `Not checked:` line",
             "required last line, still comes last",
+            "Open every provided file that defines, constructs or calls what the diff touches before deciding",
+            "a file you could read never goes under Not checked",
         ):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, first)
@@ -161,12 +163,21 @@ class CodeReviewRouteHintTests(unittest.TestCase):
             "intended",
             "documented",
             "theoretical only",
+            "open every provided file that defines, constructs or calls what the diff touches before deciding",
+            "a file you could read never goes under not checked",
         ):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, hint)
                 self.assertIn(phrase, method)
         self.assertIn("Not checked", awareness._CODE_REVIEW_REQUEST_RESPONSE)
         self.assertIn("`Not checked`", catalog_definitions._NOT_CHECKED_BAR)
+
+    def test_provided_context_is_read_before_it_is_listed_as_not_checked(self) -> None:
+        # Measured live: a reply listed the retry policy constructor under Not checked while
+        # context/internal/retry/policy.go, which bounds it, sat unread. The open-it rule comes before
+        # the Not checked line it limits.
+        hint = awareness._CODE_REVIEW_REQUEST_RESPONSE
+        self.assertLess(hint.index("Open every provided file"), hint.index("End the review body"))
 
     def test_a_review_beside_a_code_edit_keeps_its_hints(self) -> None:
         for message in REVIEW_AND_FIX:
