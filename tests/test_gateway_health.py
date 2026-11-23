@@ -216,6 +216,16 @@ class AdapterHistory(unittest.TestCase):
         self.assertEqual([(event.profile, event.state, event.reason) for event in events],
                          [("one", STATE_RETRYING, ""), ("one", STATE_FAILED, "boom"), ("two", STATE_FAILED, "")])
 
+    def test_a_connected_line_hours_earlier_never_claims_a_lone_reason(self) -> None:
+        lines = [
+            "2026-10-14 09:00:00,000 INFO gateway.run: ✓ discord connected (profile: alpha)",
+            "2026-10-14 10:00:00,000 ERROR hermes_plugins.platforms__discord.adapter: [Discord] Failed to connect to "
+            "Discord: Shard ID None is requesting privileged intents that have not been explicitly enabled",
+        ]
+        states = latest(adapter_events(lines))
+        self.assertEqual(states[("alpha", "discord")].state, STATE_CONNECTED)
+        self.assertEqual(states[("", "discord")].state, STATE_FAILED)  # the log's own (primary) bot
+
     def test_two_open_reconnects_leave_a_reason_unattributed(self) -> None:
         lines = [
             "2026-10-14 08:00:00,000 INFO gateway.run: Secondary discord reconnect retry in 30s (profile: one)",
@@ -570,6 +580,25 @@ class Fleet(unittest.TestCase):
             self.assertIn("quay discord: no running gateway serves quay", text)
             self.assertNotIn("slack: connected", text)
             self.assertEqual(report.findings, ())
+
+    def test_record_states_that_are_not_failures_raise_no_finding(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = self.home(tmp)
+            for state, code, message, words in (
+                ("disabled", "multiplex_shared_ingress", "another profile owns this ingress",
+                 "harbor discord: disabled by Hermes: another profile owns this ingress"),
+                ("connecting", "", "", "harbor discord: connecting now"),
+                ("warming_up", "", "", "harbor discord: state `warming_up`, which this check does not know"),
+            ):
+                with self.subTest(state=state):
+                    platforms = (Platform("harbor:discord", state, message, False, True, code),)
+                    report = self.run_health(root, {".hermes": Gateway("running", True, 4100, code_sha=COMMIT,
+                                                                         served=("default", "harbor"),
+                                                                         platforms=platforms)})
+                    self.assertEqual(report.findings, ())
+                    self.assertEqual(report.adapters[0].reason_kind, "")
+                    self.assertIn(words, "\n".join(report.lines))
+                    self.assertEqual(report.next_actions, ())
 
     def test_a_retry_hermes_flags_as_needing_attention_is_a_finding(self) -> None:
         with TemporaryDirectory() as tmp:

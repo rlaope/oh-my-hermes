@@ -84,6 +84,13 @@ SOURCE_RECORD = "record"  # the serving gateway's own `gateway_state.json` entry
 SOURCE_LOG = "log"
 # States that are not a failure to report: Hermes connected it, or is reconnecting it on its own.
 _NOT_DOWN = frozenset({STATE_CONNECTED, STATE_DEGRADED, STATE_RETRYING, STATE_DISCONNECTED, STATE_STALE, STATE_UNSERVED})
+# The `platform_state` values Hermes writes into a record entry (`gateway/run_adapters.py`, `run_adapters_recovery.py`,
+# `run_startup.py`), each mapped explicitly; a value outside these is said as unknown, never judged up or down.
+RECORD_CONNECTING = frozenset({"connecting", "starting"})
+RECORD_DISABLED = "disabled"  # a deliberate stand-down (config, `whatsapp_unpaired`, `multiplex_shared_ingress`)
+RECORD_DOWN = frozenset({"fatal"})
+RECORD_KNOWN = frozenset({STATE_CONNECTED, STATE_DEGRADED, STATE_RETRYING, RECORD_DISABLED, *RECORD_CONNECTING,
+                          *RECORD_DOWN})
 RESTART_NOTE = (
     "while turns are live Hermes asks before interrupting them, refuses when there is no terminal to ask on, "
     "and interrupts them only with `--yes`; OMH restarts nothing"
@@ -316,7 +323,10 @@ def _adapter_state(
     else:
         state, reason, code = STATE_STALE, "", ""  # unreachable: the caller passes a record or a line of this run
     logged = event.logged if event is not None else ""
-    down = state not in _NOT_DOWN or (record is not None and record.needs_attention)
+    if record is not None:
+        down = state in RECORD_DOWN or (state == STATE_RETRYING and record.needs_attention)
+    else:
+        down = state not in _NOT_DOWN
     probe = AdapterEvent(profile, platform, state, logged, None, reason, code)
     kind = classify_reason(probe) if down else ""
     fix = _adapter_fix(kind, probe, log_path, restart, record.error if record else "",
@@ -559,6 +569,13 @@ def _adapter_line(state: AdapterState) -> str:
         return (f"{where}: no adapter line since the gateway serving it started ({state.gateway_started}); the "
                 f"last one, `{state.last_state}` at {state.logged}, is from an earlier run.")
     by = "by the serving gateway's own record, " if state.source == SOURCE_RECORD else ""
+    if state.source == SOURCE_RECORD and state.state in RECORD_CONNECTING:
+        return f"{where}: connecting now ({by}{latest})."
+    if state.source == SOURCE_RECORD and state.state == RECORD_DISABLED:
+        why = f": {state.reason or state.code}" if state.reason or state.code else ""
+        return f"{where}: disabled by Hermes{why} ({by}{latest})."
+    if state.source == SOURCE_RECORD and state.state not in RECORD_KNOWN:
+        return f"{where}: state `{state.state}`, which this check does not know ({by}{latest}); not judged."
     if state.state == STATE_CONNECTED:
         return f"{where}: connected ({by}{latest})."
     if state.state == STATE_DEGRADED:
