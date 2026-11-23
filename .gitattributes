@@ -73,3 +73,4 @@ src/skills/channel_watch_toolkit/** text eol=lf
 skills/omh-automation-blueprint/toolkit/** text eol=lf
 src/skills/pr_watch_toolkit/** text eol=lf
 skills/omh-github-event-ops/toolkit/** text eol=lf
+src/skills/monitor_watch_toolkit/** text eol=lf

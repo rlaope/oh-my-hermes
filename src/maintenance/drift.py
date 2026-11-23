@@ -1023,7 +1023,10 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # Its final round: a PR merge rate until a sprint ends, a weekly merge count, and review speed until a
             # sprint ends are measures, not waits on one PR (+3).
             # Its hold round: four declined watches (three English, one Korean) and CI on main stay off it (+5).
-            expected=1562,
+            # Monitor recipes: an inbox summary, a Gmail tidy-up, today's calendar, a Sentry root cause, Obsidian
+            # plugins, a one-time reminder, email as the delivery target, a video, a linear regression and adding a
+            # meeting stay off automation-blueprint (+10).
+            expected=1572,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
@@ -1645,7 +1648,10 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # Its final round: five PR waits that name logs, production, a server or a deploy elsewhere still
             # reach github-event-ops (+5).
             # Its hold round: a declined review followed by a PR watch, in English and Korean, still reaches it (+2).
-            expected=1367,
+            # Monitor recipes: twelve platform triggers (six English, six Korean) reach automation-blueprint, and an
+            # issue creation in Linear and Jira, a notification how-to, a wait on the bot's own reading and a GitHub
+            # issue opening keep connector-operator and github-issue-intake (+17).
+            expected=1384,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

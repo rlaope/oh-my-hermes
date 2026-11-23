@@ -5391,6 +5391,72 @@ _CHANNEL_WATCH_BLOCKERS = (
     "슬랙으로",
     "디스코드로",
 )
+# "Tell me when a mail from my boss arrives", "노션 페이지 바뀌면 알려줘": a
+# trigger on a platform that sends Hermes no webhook (Gmail, Google Calendar,
+# Notion, Linear, Jira, Obsidian, Sentry) is one of automation-blueprint's
+# monitor recipes, a Hermes cron monitor job. Measured before the
+# `monitor_trigger_before_connector_or_wiki` guard, these clarified toward
+# morning-brief, connector-operator, wiki or operating-rhythm, fell back, or
+# dispatched connector-operator, wiki or github-event-ops; none listed
+# automation-blueprint. It needs all three: the platform named, a tell-me cue,
+# and an event cue (when it arrives, changes, is assigned, opens; 오면,
+# 바뀌면, 배정되면, 생기면; or a time before it starts). A how-to question, a
+# platform that is only the delivery target ("email me when"), or a "when you"
+# about the bot's own work stands it down.
+_MONITOR_TRIGGER_SPOKEN_PLATFORMS = (
+    "gmail", "inbox", "mail", "mails", "calendar", "notion", "jira", "obsidian", "sentry",
+)
+_MONITOR_TRIGGER_PLATFORMS = (
+    "linear issue",
+    "linear ticket",
+    "in linear",
+    "on linear",
+    "지메일",
+    "메일",
+    "받은편지함",
+    "캘린더",
+    "노션",
+    "리니어",
+    "지라",
+    "옵시디언",
+    "센트리",
+)
+_MONITOR_TRIGGER_NOTIFY_CUES = (
+    "tell me",
+    "ping me",
+    "notify me",
+    "alert me",
+    "let me know",
+    "remind me",
+    "message me",
+    "알려줘",
+    "알려 줘",
+    "알려주",
+    "알림",
+)
+_MONITOR_TRIGGER_SPOKEN_EVENTS = ("when", "whenever", "as soon as", "before")
+_MONITOR_TRIGGER_KO_EVENTS = (
+    "오면",
+    "들어오면",
+    "생기면",
+    "바뀌면",
+    "변경되면",
+    "수정되면",
+    "배정되면",
+    "할당되면",
+    "올라오면",
+    "열리면",
+    "뜨면",
+    "전에",
+)
+_MONITOR_TRIGGER_BLOCKERS = (
+    *_GREENFIELD_QUESTION_OPENERS,
+    "email me",
+    "mail me",
+    "when you",
+    "video",
+    "영상",
+)
 # "Watch PR 42 until its checks finish" is a wait on one pull request: a Hermes
 # cron monitor job from github-event-ops' PR watch recipe, not a model polling
 # loop. Measured before the `pr_watch_before_loop_or_ultrawork` guard, the
@@ -6179,6 +6245,15 @@ CHANNEL_WATCH_GUARD = RoutingGuardRule(
     why="Matched a messenger platform, a watch verb, and a tell-me cue; a channel watch is a recurring collector job with a [SILENT] judging prompt, not a one-off delivery card.",
     activation_status="active",
 )
+MONITOR_TRIGGER_GUARD = RoutingGuardRule(
+    id="monitor_trigger_before_connector_or_wiki",
+    rule="Being told when something happens on Gmail, Google Calendar, Notion, Linear, Jira, Obsidian, or Sentry should route to automation-blueprint's monitor recipes before the connector, wiki, or briefing lanes.",
+    matched_label="guard:monitor_trigger",
+    preferred_skills=("automation-blueprint",),
+    score_boost=36,
+    why="Matched a platform with no webhook, a tell-me cue, and an event cue; the trigger is a paused Hermes cron monitor job whose script wakes the agent only on a change, not a one-off read.",
+    activation_status="active",
+)
 PR_WATCH_GUARD = RoutingGuardRule(
     id="pr_watch_before_loop_or_ultrawork",
     rule="Waiting on one pull request until its checks finish, it merges, or it settles should route to github-event-ops' PR watch recipe before the loop or ultrawork lanes.",
@@ -6253,6 +6328,7 @@ ROUTING_GUARD_RULES = (
     RESEARCH_DEPARTMENT_GUARD,
     SCHEDULED_OPS_BLUEPRINT_GUARD,
     CHANNEL_WATCH_GUARD,
+    MONITOR_TRIGGER_GUARD,
     PR_WATCH_GUARD,
     SOURCE_FINDER_GUARD,
     WEB_RESEARCH_BEFORE_PROCESS_GUARD,
@@ -6378,6 +6454,7 @@ GUARD_DISPATCH_TRUST: dict[str, tuple[str, str]] = {
     "risky_refactor_before_cleanup": (GUARD_TRUSTED, "risky refactor named as the change; no measured record as a winner, keeps its shape label"),
     "safe_feature_change_before_generic_plan": (GUARD_TRUSTED, "a safe feature change named as the change; no measured record as a winner, keeps its shape label"),
     "channel_watch_before_gateway_or_connector": (GUARD_TRUSTED, "a watch verb on a Slack or Discord channel plus a tell-me cue; no measured record as a winner, keeps its shape label"),
+    "monitor_trigger_before_connector_or_wiki": (GUARD_TRUSTED, "a platform with no webhook, a tell-me cue and an event cue; no measured record as a winner, keeps its shape label"),
     "pr_watch_before_loop_or_ultrawork": (GUARD_TRUSTED, "a watch or wait verb on one pull request plus a settle cue; no measured record as a winner, keeps its shape label"),
     "scheduled_ops_blueprint_before_reliability_or_research": (GUARD_CONTEXT_ONLY, "a cadence plus a scheduled action; measured 0 right / 1 wrong"),
     "source_finder_before_generic_web_research": (GUARD_CONTEXT_ONLY, "fires on source and paper nouns; no measured record as a winner, keeps its shape label"),
@@ -6913,8 +6990,17 @@ def _active_routing_guard_rules_cached(
         and (explicit_scheduled_ops_blueprint or not research_department_applies)
     ):
         rules.append(SCHEDULED_OPS_BLUEPRINT_GUARD)
-    if not direct_coding_task_applies and channel_watch_guard_applies(normalized_query):
+    channel_watch_applies = not direct_coding_task_applies and channel_watch_guard_applies(normalized_query)
+    if channel_watch_applies:
         rules.append(CHANNEL_WATCH_GUARD)
+    # A monitor trigger names the platform as what is watched, so the connector
+    # and GitHub event lanes, which fire on the same platform and issue words,
+    # stand down for it.
+    monitor_trigger_applies = (
+        not direct_coding_task_applies and not channel_watch_applies and monitor_trigger_guard_applies(normalized_query)
+    )
+    if monitor_trigger_applies:
+        rules.append(MONITOR_TRIGGER_GUARD)
     if not direct_coding_task_applies and pr_watch_guard_applies(normalized_query):
         rules.append(PR_WATCH_GUARD)
     source_finder_applies = (
@@ -6955,7 +7041,7 @@ def _active_routing_guard_rules_cached(
         rules.append(MISSED_WORKFLOW_WEB_RESEARCH_GUARD)
     if _github_issue_intake_guard_applies(normalized_query, query_tokens):
         rules.append(GITHUB_ISSUE_INTAKE_GUARD)
-    if _github_event_ops_guard_applies(normalized_query, query_tokens):
+    if not monitor_trigger_applies and _github_event_ops_guard_applies(normalized_query, query_tokens):
         rules.append(GITHUB_EVENT_OPS_GUARD)
     if contract_redline_guard_applies(normalized_query):
         rules.append(CONTRACT_REDLINE_GUARD)
@@ -7032,6 +7118,7 @@ def _active_routing_guard_rules_cached(
     if (
         not direct_coding_task_applies
         and not feedback_before_coding_applies
+        and not monitor_trigger_applies
         and _connector_operator_guard_applies(normalized_query, query_tokens)
     ):
         rules.append(CONNECTOR_OPERATOR_GUARD)
@@ -10873,6 +10960,23 @@ def channel_watch_guard_applies(normalized_query: str) -> bool:
     if not _contains_phrase(normalized_query, _CHANNEL_WATCH_NOTIFY_CUES):
         return False
     return not _contains_phrase(normalized_query, _CHANNEL_WATCH_BLOCKERS)
+
+
+def monitor_trigger_guard_applies(normalized_query: str) -> bool:
+    """A platform with no webhook, a tell-me cue, and an event cue together; none alone."""
+    if not (
+        any(phrase_is_spoken(normalized_query, word) for word in _MONITOR_TRIGGER_SPOKEN_PLATFORMS)
+        or _contains_phrase(normalized_query, _MONITOR_TRIGGER_PLATFORMS)
+    ):
+        return False
+    if not _contains_phrase(normalized_query, _MONITOR_TRIGGER_NOTIFY_CUES):
+        return False
+    if not (
+        any(phrase_is_spoken(normalized_query, word) for word in _MONITOR_TRIGGER_SPOKEN_EVENTS)
+        or _contains_phrase(normalized_query, _MONITOR_TRIGGER_KO_EVENTS)
+    ):
+        return False
+    return not _contains_phrase(normalized_query, _MONITOR_TRIGGER_BLOCKERS)
 
 
 def pr_watch_guard_applies(normalized_query: str) -> bool:
