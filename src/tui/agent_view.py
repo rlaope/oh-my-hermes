@@ -776,6 +776,7 @@ class AgentViewMixin:
         child.set_vim(main.vim)
         view.main_draft = self._swap_draft(child)
         self.viewing = view
+        self.transcript.offscreen = True  # main keeps folding, bounded by BLOCK_CAP, until it is shown again
         self.list_selected = self.tree_selected = None  # the composer has the keys: what is typed goes to the agent
         self._full_redraw()
 
@@ -804,6 +805,7 @@ class AgentViewMixin:
         view, self.viewing = self.viewing, None
         if view is None:
             return
+        self.transcript.offscreen = False
         if view.main_draft is not None:
             child = self._swap_draft(view.main_draft)
             child._drop_pending()
@@ -958,11 +960,15 @@ class AgentViewMixin:
             view.turn_running = True
             self._request(
                 "prompt.submit", {"session_id": view.watch_sid, "text": text}, lambda _result: None,
-                lambda error: self._continue_refused(view, text, error), watch=True,
+                lambda error: self._continue_refused(view, text, error),
+                lambda seconds: self._continue_refused(view, text, {"message": f"no answer in {seconds:g} s"}),
+                watch=True,
             )
             return
         block = view.transcript.add_steer(text, agent=view.name)
-        view.sent_steers.append(text)
+        if view.wire == WIRE_POLL:  # only a transcript read brings a steer's stored row back; stdio has none to match
+            view.sent_steers.append(text)
+            del view.sent_steers[:-view_state.SENT_STEERS_CAP]
         if kind == SEND_STEER:
             method, params = "subagent.steer", {"session_id": view.parent_sid, "subagent_id": view.subagent_id,
                                                 "text": text}
@@ -989,7 +995,9 @@ class AgentViewMixin:
         return True
 
     def _continue_refused(self, view: SubagentView, text: str, error: Mapping[str, Any]) -> bool:
-        """A continue Hermes refused: 4009 while the child still runs; either way the text is back in the composer."""
+        """A continue Hermes refused (4009 while the child still runs) or never answered: the turn is not running,
+        one notice says so, and the text goes back where it was typed (`_give_back_to_view`); the next Enter decides
+        steer or continue from the real state."""
         view.turn_running = False
         if error.get("code") == SESSION_BUSY:
             notice = STILL_RUNNING.format(name=view.name)

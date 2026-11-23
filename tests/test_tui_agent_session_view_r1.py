@@ -17,6 +17,7 @@ from omh.tui import app as app_module
 from omh.tui import subagent_session as view_state
 from omh.tui.gateway import Event, Response, ServerRequest
 from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, UP, Key
+from omh.tui.transcript import BLOCK_CAP
 
 
 def submit(app, text: str) -> None:
@@ -334,6 +335,73 @@ class SameTextTests(unittest.TestCase):
         assert app.viewing is not None
         self.assertEqual(texts(app.viewing.transcript),
                          ["notice:› From main", f"user:{GOAL}", f"user:{STEER_ROW['text']}", f"reply:{REPLY['text']}"])
+
+
+class LoopTests(unittest.TestCase):
+    """D9: the loop sleeps and the spinner turns while main is idle and the child works."""
+
+    def test_an_idle_main_with_a_working_child_repaints_at_the_spinner_pace_and_waits_between(self) -> None:
+        app, _client, now = viewing()
+        app._on_event(Event("message.start", SID, {}))
+        app._on_event(Event("message.complete", SID, {"text": "main done", "status": "complete"}))
+        app._render_when_due()
+        assert app.viewing is not None
+        self.assertTrue(app.viewing.running and not app._busy())
+        was = app.last_render
+        now[0] += 3
+        app._render_when_due()
+        self.assertEqual(app.last_render, now[0], "the spinner's deadline repaints")
+        self.assertGreater(app._read_timeout(), 0.0, "and the loop waits until the next tick")
+        self.assertNotEqual(app.last_render, was)
+
+
+class BoundTests(unittest.TestCase):
+    """D10: bounded while hidden."""
+
+    def test_mains_hidden_transcript_keeps_to_the_block_cap_and_is_drawn_again_on_return(self) -> None:
+        app, _client, _now = viewing()
+        for index in range(2 * BLOCK_CAP + 100):
+            app.transcript.add_notice(f"Main event {index}")
+        drawn(app)
+        self.assertLessEqual(len(app.transcript.blocks), BLOCK_CAP)
+        self.assertGreater(app.transcript.dropped, 0)
+        app._on_input(Key(ESCAPE))
+        self.assertIn(f"Main event {2 * BLOCK_CAP + 99}", "\n".join(drawn(app)))
+
+    def test_stdio_steers_never_wait_in_sent_steers_and_attached_ones_are_capped(self) -> None:
+        app, client, _now = viewing()
+        for index in range(100):
+            app._send_to_view(f"steer {index}", "", ())
+            answer(app, client, {"status": "queued"})
+        assert app.viewing is not None
+        self.assertEqual(app.viewing.sent_steers, [])
+        app, client, _now = viewing(shared=True)
+        for index in range(100):
+            app._send_to_view(f"steer {index}", "", ())
+            answer(app, client, {"status": "queued"})
+        assert app.viewing is not None
+        view = app.viewing
+        self.assertEqual(len(view.sent_steers), view_state.SENT_STEERS_CAP)
+        self.assertEqual(view.sent_steers[-1], "steer 99")
+        app._on_input(Key(ESCAPE))
+        self.assertEqual(view.sent_steers, [], "cleared when the view closes")
+
+
+class ContinueExpiryTests(unittest.TestCase):
+    """D11: a continuation with no answer leaves steer mode and gives its text back."""
+
+    def test_an_unanswered_continue_ends_the_turn_gives_the_text_back_and_the_next_enter_continues(self) -> None:
+        app, client, now = viewing(result=lazy_answer([BRIEF], running=False))
+        submit(app, "continue the child")
+        now[0] = app_module.CALL_ANSWER_SECONDS + 1
+        app._expire_calls()
+        assert app.viewing is not None
+        self.assertFalse(app.viewing.turn_running)
+        self.assertEqual(app.composer.text, "continue the child")
+        self.assertEqual(sum("no answer" in line for line in texts(app.viewing.transcript)), 1)
+        app._set_composer("")
+        submit(app, "next child prompt")
+        self.assertEqual(client.calls[-1], ("prompt.submit", {"session_id": WATCH, "text": "next child prompt"}))
 
 
 if __name__ == "__main__":

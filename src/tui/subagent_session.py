@@ -62,6 +62,7 @@ POLL_SECONDS = 1.0  # the most often a running child's transcript is read while 
 POLL_ANSWER_SECONDS = 10.0  # a poll with no answer this long is forgotten and no longer holds the next one back
 READ_LIMIT = 200  # rows a transcript read asks for at once
 CATCH_UP_PAGES = 50  # pages read one after another once the child ended, until an empty one (caught up)
+SENT_STEERS_CAP = 64  # steers sent from an attached view awaiting their stored rows; the oldest goes first
 
 # What Enter does with a line typed in the view (`send_kind`).
 SEND_STEER = "steer"  # the child runs: `subagent.steer` on the parent session

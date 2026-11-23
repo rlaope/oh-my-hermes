@@ -10038,7 +10038,8 @@ class App(ModesMixin, AgentViewMixin):
             return  # the screen is mid-reflow; the settled redraw paints it
         now = self.clock()
         due = (self._busy() or self._compressing_since() is not None or self._panel_live() or self._aura_live()
-               or self._tree_spins() or bool(self.held_submits)) and now - self.last_render >= self._tick_seconds()
+               or self._tree_spins() or bool(self.held_submits) or self._view_working()
+               ) and now - self.last_render >= self._tick_seconds()  # the same set `_read_timeout` waits on
         if not (self.dirty or due or self._background_due() or self._tree_second_due()):
             if self._wallpaper_moves() and now - self.ambient_at >= WALLPAPER_TICK_SECONDS:
                 self.ambient_at = now  # only the wallpaper's cells that moved: no frame is built
