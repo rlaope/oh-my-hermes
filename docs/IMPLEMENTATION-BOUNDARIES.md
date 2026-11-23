@@ -155,10 +155,14 @@ stays in `AGENTS.md`, where `tests/test_paired_run_arm_home.py` reads it.
   nobody can answer (a programmatic platform, a cron turn, a single-query
   process, a delegated child) refuses the never-allowed classes whatever the
   grant says, the allowed ones while it is off, a push or PR that does not
-  name its destination, and a command it cannot classify. It holds a
-  cooperating model against mistakes and naive injected instructions; it is
-  not a boundary against a model that sets out to evade it (a script file, a
-  persistent-shell function, an HTTP client with a token).
+  name its destination, and a command it cannot classify. It is a guardrail
+  that stops a cooperating agent's mistakes and the common spellings of a
+  forbidden action, failing closed on what it cannot parse; it is not a
+  sandbox against an agent that deliberately evades it from a shell (by
+  unsetting `HERMES_SESSION_ID` to flip the grant, or by writing its own
+  client). Hermes' approval policy and the forge's branch protection are the
+  controls for that, and the operator page recommends branch protection on
+  the default branch.
   "A PR this bot opened" is OMH's record of the URL a grant-allowed `gh pr
   create` printed, never the model's word. The matrix and its residuals are in
   [`docs/PR-DELIVERY-GRANT.md`](PR-DELIVERY-GRANT.md);

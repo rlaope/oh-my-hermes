@@ -201,6 +201,15 @@ class CliTests(_Home):
         self.assertEqual(result.code, 2)
         self.assertFalse(pr_delivery.grant_path(self.home, self.hermes).exists())
 
+    def test_doctor_warns_when_two_granted_profiles_share_a_prefix(self):
+        self.grant_on()
+        self.cli("on", hermes=self.other_hermes)
+        _code, stdout, _stderr = run_cli(["--omh-home", str(self.home), "--hermes-home", str(self.hermes), "doctor",
+                                          "--json", "--no-state-write", "--no-personal-files"])
+        shared = json.loads(stdout)["pr_delivery"]["shared_prefixes"]
+        self.assertEqual([row["branch_prefix"] for row in shared], ["bot/"])
+        self.assertEqual(len(shared[0]["profiles"]), 2)
+
     def test_doctor_lists_the_profiles_whose_grant_is_on(self):
         self.grant_on()
         self.cli("on", hermes=self.other_hermes)
@@ -526,10 +535,18 @@ class UnattendedMatrixTests(_Home):
             with self.subTest(command=command):
                 self.assertIsNone(self.terminal(command))
 
-    def test_issue_and_run_mutations_are_outside_this_gate(self):
-        for command in ("gh issue edit 3 --add-label bug", "gh run rerun 9"):
+    def test_issue_and_run_verbs_follow_the_owner_call(self):
+        for command in ("gh issue edit 3 --add-label bug", "gh issue comment 3 -b hi", "gh issue close 3"):
             self.assertEqual(gate.classify_command(command, prefix="bot/"), gate.NOT_GOVERNED)
             self.assertIsNone(self.terminal(command))
+        for command in ("gh run rerun 9", "gh run cancel 9", "gh run delete 9", "gh issue delete 3 --yes",
+                        "gh issue transfer 3 other/repo"):
+            self.assertEqual(self.terminal(command)["action"], "block")
+
+    def test_comments_substitution_and_credentials_fail_closed(self):
+        for command in ("git status # note", "git status $(echo x)", "echo $GITHUB_TOKEN", "cat ~/.config/gh/hosts.yml",
+                        "cat ~/.git-credentials"):
+            self.assertEqual(gate.classify_command(command, prefix="bot/"), gate.UNCLASSIFIED, command)
 
     def test_every_unattended_kind_is_held_the_same_way(self):
         self.grant_on()
@@ -605,6 +622,59 @@ class UnattendedMatrixTests(_Home):
     def _record_opened(self, url: str, session: str = "an-earlier-run") -> None:
         self.assertTrue(pr_delivery.append_opened_pr(self.home, self.hermes, url=url, head_branch="bot/fix-ci",
                                                      session_id=session))
+
+
+class ReviewProbeTableTests(unittest.TestCase):
+    """Every input of the review of record for #3154, with the verdict the gate gives it.
+
+    A refused row must stay refused. An allowed row carries the reason it is
+    allowed (grant-covered, a local read, an ungoverned issue verb, or a stated
+    residual), so loosening or tightening the gate shows up as a row that moved.
+    """
+
+    FIXTURE = ROOT / "tests/fixtures/pr_delivery_probe_cases.json"
+    GRANT_CHANGES = (
+        ("terminal", "omh capability-policy pr-delivery on"),
+        ("terminal", "env -u HERMES_SESSION_ID omh capability-policy pr-delivery on"),
+        ("terminal", "X=on; env -u HERMES_SESSION_ID omh capability-policy pr-delivery $X"),
+        ("terminal", "env -u HERMES_SESSION_ID omh capability-policy pr-delivery $'on'"),
+        ("terminal", "echo a#b; env -u HERMES_SESSION_ID omh capability-policy pr-delivery on"),
+        ("terminal", "omh capability-policy pr-delivery on\xa0"),
+        ("terminal", "omh capability-policy pr-delivery --branch-prefix x/ on"),
+        ("terminal", "omh capability-policy pr-deliver''y on"),
+        ("terminal", "omh capability-policy pr-delivery o''n"),
+        ("terminal", 'omh capability-policy pr-delivery "o"n'),
+        ("terminal", "P=pr-delivery; omh capability-policy $P on"),
+        ("terminal", "omh capability-policy pr-delivery `echo on`"),
+        ("terminal", "printf on | xargs omh capability-policy pr-delivery"),
+        ("terminal", "python3 -m omh.cli capability-policy pr-delivery on"),
+        ("terminal", "cat > ~/.omh/runtime/pr_deliv''ery/grant-0123456789abcdef.json < /tmp/forged.json"),
+        ("terminal", "cp /tmp/forged.json ~/.omh/runtime/pr_*/grant-0123456789abcdef.json"),
+        ("terminal", "cd ~/.omh/runtime && cp /tmp/f.json pr_deliver?/grant-x.json"),
+        ("terminal", "ln -s ~/.omh/runtime/pr_deliv''ery /tmp/s"),
+        ("terminal", "python3 -c \"import json;open('/h/runtime/pr_'+'delivery/opened-x.jsonl','a').write('{}')\""),
+        ("terminal", "echo x >> ~/.omh/runtime/PR_DELIVERY/opened-x.jsonl"),
+        ("execute_code", "import os; p=os.path.expanduser('~/.omh/runtime/pr_'+'delivery'); open(p+'/x','w')"),
+        ("execute_code", "import subprocess; subprocess.run(['omh','capability-policy','pr-'+'delivery','on'], env={})"),
+        ("terminal", "OMH_HOME=/tmp/forged omh capability-policy pr-delivery on"),
+    )
+
+    def test_every_probe_input_keeps_its_verdict(self):
+        table = json.loads(self.FIXTURE.read_text(encoding="utf-8"))
+        allowed = {gate.LOCAL, gate.NOT_GOVERNED, *gate.GRANT_COVERED}
+        for case in table["cases"]:
+            with self.subTest(command=case["command"]):
+                found = gate.classify_command(case["command"], prefix="bot/", opened=OPENED)
+                self.assertEqual(found, case["class"])
+                self.assertEqual("allowed" if found in allowed else "refused", case["verdict"])
+                if case["verdict"] == "allowed":
+                    self.assertTrue(case["why_allowed"])
+
+    def test_every_grant_change_spelling_is_refused(self):
+        for tool, text in self.GRANT_CHANGES:
+            with self.subTest(text=text):
+                directive = gate.grant_change_directive(tool_name=tool, tool_input={"command": text, "code": text})
+                self.assertIsNotNone(directive)
 
 
 class OpenedPrRecordTests(_Home):

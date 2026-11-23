@@ -3356,10 +3356,18 @@ def _list_catalog_context(skills: list[dict[str, object]]) -> dict[str, object]:
 def _doctor_pr_delivery(paths) -> dict[str, object]:
     from ..plugin_bundle.omh import pr_delivery
 
+    profiles = pr_delivery.recorded_grants(paths.omh_home)
+    by_prefix: dict[str, list[str]] = {}
+    for row in profiles:
+        if row.get("state") == "on":
+            by_prefix.setdefault(str(row.get("branch_prefix", "")), []).append(str(row.get("hermes_home", "")))
     return {
         "schema_version": "omh_pr_delivery_doctor/v1",
         "this_profile": pr_delivery.read_grant(paths.omh_home, paths.hermes_home),
-        "profiles": pr_delivery.recorded_grants(paths.omh_home),
+        "profiles": profiles,
+        # Two granted bots on one prefix can each push to the other's branches.
+        "shared_prefixes": [{"branch_prefix": prefix, "profiles": sorted(homes)}
+                            for prefix, homes in sorted(by_prefix.items()) if len(homes) > 1],
     }
 
 
@@ -5762,6 +5770,11 @@ def _print_doctor_summary(payload: dict[str, object], *, language: str = "en") -
         print(f"  {line}")
     if isinstance(delivery, dict) and not granted:
         print(f"  {tr(language, 'doctor_pr_delivery_off')}")
+    for shared in (delivery.get("shared_prefixes", []) if isinstance(delivery, dict) else []):
+        if isinstance(shared, dict):
+            line = tr(language, "doctor_pr_delivery_shared_prefix", count=len(shared.get("profiles", [])),
+                      prefix=shared.get("branch_prefix", ""))
+            print(f"  {line}")
     groups = summary.get("groups", [])
     if isinstance(groups, list):
         for group in groups:

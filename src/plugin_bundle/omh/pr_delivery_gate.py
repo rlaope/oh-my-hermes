@@ -184,6 +184,12 @@ _GH_PR_MUTATIONS: Final = frozenset({"edit", "close", "reopen", "ready", "review
 _GH_REPO_GROUPS: Final = frozenset({"repo", "secret", "variable", "label", "workflow", "release", "ruleset",
                                     "cache", "deploy-key"})
 _GH_NOT_GOVERNED_GROUPS: Final = frozenset({"issue", "run"})
+# Owner call (2026-11-24): these verbs of the otherwise ungoverned groups are
+# never run unattended. `issue develop` creates a branch on the forge.
+_GH_GOVERNED_VERBS: Final[Mapping[str, frozenset[str]]] = {
+    "run": frozenset({"rerun", "cancel", "delete"}),
+    "issue": frozenset({"delete", "transfer", "develop"}),
+}
 
 
 def _aliases(*pairs: tuple[str, str]) -> dict[str, str]:
@@ -231,6 +237,11 @@ _MCP_FORGE_WRITE: Final = re.compile(
 _HTTP_CLIENTS: Final = frozenset({"curl", "wget", "http", "https", "xh"})
 _FORGE_API_HOST: Final = re.compile(r"api\.github\.com|/api/v3/|/api/graphql", re.IGNORECASE)
 _WRITE_METHOD: Final = re.compile(r"\b(?:PUT|POST|PATCH|DELETE)\b|--data|(?:^|\s)-d\b|--json|--form", re.IGNORECASE)
+
+# A forge credential named or read: a token variable, gh's host file, git's credential store.
+_CREDENTIAL: Final = re.compile(
+    r"\b(?:GH_TOKEN|GITHUB_TOKEN|GH_ENTERPRISE_TOKEN|GITHUB_ENTERPRISE_TOKEN)\b|gh/hosts\.yml|\.git-credentials",
+    re.IGNORECASE)
 
 # The grant's command and store, as tokens.
 _GRANT_GROUP: Final = "capability-policy"
@@ -316,7 +327,9 @@ def _classify(command: object, context: _Context, depth: int) -> str:
     if depth > _MAX_DEPTH:
         return UNCLASSIFIED
     mentions_forge = _FORGE_WORD.search(command) is not None
-    if "`" in command and mentions_forge:
+    if _CREDENTIAL.search(command):
+        return UNCLASSIFIED  # printing a forge credential takes the next step outside this gate
+    if mentions_forge and ("`" in command or "$(" in command or "<(" in command or ">(" in command):
         return UNCLASSIFIED
     lines = command.splitlines()
     if len(lines) > 1 and "<<" in command and mentions_forge:
@@ -325,6 +338,8 @@ def _classify(command: object, context: _Context, depth: int) -> str:
     whole = _tokens(command)
     if not whole:
         return UNCLASSIFIED if mentions_forge else LOCAL
+    if mentions_forge and any(token.startswith("#") for token in whole):
+        return UNCLASSIFIED  # a comment: what bash drops and what this reads must not differ
     if _defines_forge_function(whole):
         return UNCLASSIFIED
     for index, token in enumerate(whole[:-1]):
@@ -648,7 +663,9 @@ def _classify_gh(args: list[str], context: _Context) -> str:
     if group in _GH_REPO_GROUPS:
         return LOCAL if not verb or verb in _GH_READ_VERBS else OTHER_PR_OR_REPO
     if group in _GH_NOT_GOVERNED_GROUPS:
-        return LOCAL if not verb or verb in _GH_READ_VERBS else NOT_GOVERNED
+        if not verb or verb in _GH_READ_VERBS:
+            return LOCAL
+        return OTHER_PR_OR_REPO if verb in _GH_GOVERNED_VERBS.get(group, ()) else NOT_GOVERNED
     if group == "config" and verb in ("get", "list"):
         return LOCAL
     return UNCLASSIFIED
@@ -735,9 +752,7 @@ def _process_data(tool_input: object) -> str | None:
 
 def _names_store(token: str) -> bool:
     lowered = token.lower()
-    if "pr_delivery/" in lowered or lowered.endswith("/pr_delivery"):
-        return True
-    if "runtime/" in lowered and any(mark in lowered for mark in _STORE_GLOB):
+    if "pr_delivery/" in lowered or lowered.endswith("/pr_delivery") or "runtime/pr_" in lowered:
         return True
     # A glob that the shell would expand to the store's directory (`pr_deliver?/`, `pr_*`).
     return any(any(mark in part for mark in _STORE_GLOB) and fnmatch.fnmatchcase(_STORE_DIR, part)

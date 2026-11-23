@@ -11,6 +11,26 @@ delivery grant lets one profile's bot finish that delivery itself. This is
 owner-approved, 2026-11-23
 ([`IMPLEMENTATION-BOUNDARIES.md`](IMPLEMENTATION-BOUNDARIES.md)).
 
+**What the gate is.** It is a guardrail. It stops a cooperating agent's
+mistakes and the common spellings of a forbidden action, and it refuses what
+it cannot parse. It is **not** a sandbox against an agent that deliberately
+evades it from a shell, for example by unsetting `HERMES_SESSION_ID` and
+driving a terminal to flip the grant, or by writing its own forge client.
+Hermes' approval policy and the forge's own branch protection are the
+controls for that. Turn on branch protection for the default branch of every
+repository a granted bot can reach: require a pull request and a review, and
+refuse force pushes. The gate refuses the obvious self-grant spellings, but
+that list is not complete.
+
+**What changes when this ships.** In a cron job (a PR watch included), a
+webhook or `api_server` run, a `hermes chat -q` run or a delegated child:
+
+- A command that pushes a branch or opens a PR is refused with a hand-off
+  until the person runs `omh capability-policy pr-delivery on` for that
+  profile.
+- Merges, force pushes and pushes to the default branch are refused with or
+  without the grant.
+
 ## The commands
 
 ```sh
@@ -86,7 +106,7 @@ A session counts as unattended when it is one of these:
 | Command class | Attended chat | Unattended | Delegated child |
 | --- | --- | --- | --- |
 | push to `origin` `HEAD:refs/heads/<prefix>...` with a named destination | Hermes approvals | allowed with the grant on, refused with a hand-off while it is off | refused, because a child does not carry the grant |
-| `gh pr create --head <prefix>...` as the only command in the line, without `--repo` or `--label`, at most one per session | Hermes approvals | same as above | refused |
+| `gh pr create --head <prefix>...` as the only command in the line, without `--repo`, `--label` or `--body-file`, at most one per run (one Hermes session id: one webhook delivery, one cron run, one `chat -q` process, one chat session), counted from the opened-PR record | Hermes approvals | same as above | refused |
 | `gh pr comment <URL>` on a recorded own PR, body not a bot command | Hermes approvals | same as above | refused |
 | merge or merge trigger (`gh pr merge`, a `gh api` write to a merge endpoint, a comment line starting with `/`, `@name ...` or `bors`) | Hermes approvals | refused | refused |
 | force push or ref deletion (`-f`, `--force`, `--force-with-lease`, `+ref`, `--delete`, `:ref`, `--mirror`, `--prune`) | Hermes approvals | refused | refused |
@@ -106,7 +126,11 @@ Unclassifiable covers:
 - a write to any `git config` key but `user.name` and `user.email`, and any
   `git remote` change;
 - a git subcommand or alias the table does not know, and `difftool`;
-- `gh auth` other than a plain `status`, and an unknown `gh` group;
+- `gh auth` other than a plain `status` (`gh auth token` prints a
+  credential), a named forge token variable (`GH_TOKEN`, `GITHUB_TOKEN`),
+  gh's `hosts.yml` or git's `.git-credentials`, and an unknown `gh` group;
+- a comment (`#` word), and command or process substitution (`$(...)`,
+  backquotes, `<(...)`) in a command that names git or gh;
 - a function or alias named git or gh;
 - git or gh beside a forge verb under another program;
 - `execute_code` naming them, a `process` write that is not a whole line,
@@ -157,8 +181,14 @@ the forge without passing the gate:
 
 - Only `git` and `gh` are recognized as forge CLIs.
 - Two profiles that grant the same prefix can each push to the other's bot
-  branches. Give each bot its own prefix.
-- `gh issue` and `gh run` mutations are outside this gate.
+  branches. `omh doctor` warns when that is the case; give each bot its own
+  prefix.
+- `gh issue create|comment|close|edit|reopen` are outside this gate (owner
+  call, 2026-11-24). `gh run rerun|cancel|delete` and `gh issue
+  delete|transfer|develop` are refused in an unattended run.
+- The merge-trigger refusals (a comment line starting with `/`, `@name
+  <word>` or `bors`, and any `--label` on PR creation) are a best-effort
+  list. A merge bot that reads other words or labels is not covered.
 - A commit message or command argument that reads as a forge command, or
   holds a `$`, can be refused in an unattended session. This is the
   fail-closed direction.
