@@ -4,6 +4,18 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: a bot's chat that stopped answering after a crash says why and gets going again.** When Hermes' gateway
+  stops in the middle of a turn (a crash, a kill, Windows ending the process), Hermes brings that turn back as lost
+  and keeps every later message of the chat in its own queue until someone acknowledges it, because the lost turn may
+  have done part of its work. omher did not read that state: a new message showed "Read", nothing answered, and after
+  a restart the message was gone from the chat (it was in Hermes' queue, not its transcript), while a new thread worked.
+  Now the main chat, a thread and an oh-my-hermes folder chat show a note above the composer that the chat is paused,
+  with the lost turn's text and **Discard and continue**. Discard acknowledges only that turn through Hermes' own
+  `prompt.resolve_unknown`; Hermes does not run it again, and the messages waiting behind it then run in order. A
+  message sent meanwhile reads "Waiting" instead of "Read" and stays in the chat across a restart. A lost turn
+  discarded elsewhere (Hermes' own app, `/discard`) clears the note at once. A message waiting in Hermes' queue behind
+  a turn that is still running (nothing lost) also stays in the chat after a restart, as "Waiting · runs after the
+  current turn". (#3123; `docs/OMHER-BOUNDARY.md` rule 3)
 - **Fanout hands coding units to a harness CLI you declare, or to one of nine presets.** Put an executor in
   `<omh_home>/routing/executors.toml` (never read from a repository or the working directory) as an `argv` list
   with exactly one `{prompt}` or `{prompt_file}` element, or opt in to a preset with `omh coding executors add
