@@ -2,7 +2,7 @@
 // its state for that bot, read from files by the bridge. Connect, Sign in and Remove run the bot's own
 // `hermes -p <bot> mcp install|login|remove <name>`; the sign-in itself is Hermes' own browser flow, and omher never
 // sees a key or a token. Skills only show their state: the bot sets one up when asked in chat.
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AppRow, AppSkill, Bot } from "../lib/protocol";
 import { useStore } from "../state/store";
 import { t, type Key } from "../i18n";
@@ -15,8 +15,12 @@ import { actionsOf, markOf, sections, titleOf, type Card } from "./tiers";
 import "../pages/pages.css";
 
 type Verb = "install" | "login" | "remove";
-type Data = { catalog: boolean; apps: AppRow[]; skills: AppSkill[] };
-type Result = { bot: string; name: string; verb: Verb; ok: boolean; text: string; asks: string[] };
+type Data = { bot: string; catalog: boolean; apps: AppRow[]; skills: AppSkill[] };
+type Result = { name: string; verb: Verb; ok: boolean; text: string; asks: string[] };
+type Busy = { name: string; verb: Verb };
+
+/** The command Hermes asks its values in, for the person to run in a terminal. */
+export const installCmd = (bot: string, name: string) => `hermes -p ${bot} mcp install ${name}`;
 
 /** The line after a run that worked: what changed, and when the bot has the app's tools (Hermes' gateway connects a new
  *  server on its own about once a minute; a chat already open gets its tools after `/reload-mcp`). */
@@ -32,48 +36,56 @@ export function AppsPage() {
   const local = s.bots.filter((b) => !b.host);
   const scope = local.find((b) => b.name === s.ui.appsBot) ?? local.find((b) => b.name === s.selectedBot) ?? local[0];
   const scopeName = scope?.name;
+  // Everything a run leaves is kept per bot: a sign-in waits for the person up to 330 s, and the chip may point at
+  // another bot when it ends. Only the shown bot's list is ever put on the page (`shownRef`).
+  const shownRef = useRef(scopeName);
+  shownRef.current = scopeName;
   const [data, setData] = useState<Data | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<{ bot: string; text: string } | null>(null);
   const [query, setQuery] = useState("");
-  const [busy, setBusy] = useState<{ bot: string; name: string; verb: Verb } | null>(null);
-  const [result, setResult] = useState<Result | null>(null);
+  const [busy, setBusy] = useState<Record<string, Busy>>({});
+  const [results, setResults] = useState<Record<string, Result>>({});
   const [askBot, setAskBot] = useState<string | null>(null);
   const [text, setText] = useState("");
   const askTo = local.find((b) => b.name === askBot) ?? scope;
 
-  const reload = useCallback(async () => {
-    if (!scopeName) return;
+  const load = async (bot: string) => {
     try {
-      setData(await s.appsList(scopeName));
+      const got = await s.appsList(bot);
+      if (shownRef.current !== bot) return;
+      setData({ bot, ...got });
       setErr(null);
     } catch (e) {
-      setData({ catalog: true, apps: [], skills: [] });
-      setErr(errorLine(e, local.find((b) => b.name === scopeName)?.display_name ?? scopeName));
+      if (shownRef.current !== bot) return;
+      setData({ bot, catalog: true, apps: [], skills: [] });
+      setErr({ bot, text: errorLine(e, local.find((b) => b.name === bot)?.display_name ?? bot) });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scopeName]);
+  };
 
   useEffect(() => {
     setData(null);
-    void reload();
-  }, [reload]);
+    if (scopeName) void load(scopeName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scopeName]);
 
   const run = async (verb: Verb, app: AppRow) => {
     if (!scope) return;
-    setBusy({ bot: scope.name, name: app.name, verb });
-    setResult(null);
+    const bot = scope.name;
+    const shownName = scope.display_name;
+    setBusy((b) => ({ ...b, [bot]: { name: app.name, verb } }));
+    setResults(({ [bot]: _gone, ...rest }) => rest);
     let r: Result;
     try {
-      const out = await s.appsRun(verb, scope.name, app.name);
+      const out = await s.appsRun(verb, bot, app.name);
       const ok = out.outcome === "ok";
-      r = { bot: scope.name, name: app.name, verb, ok, asks: app.asks,
-            text: ok ? doneWords(verb, out.state, app.name, scope.display_name) : (out.line ?? t("apps.failed", { name: titleOf(app.name) })) };
+      r = { name: app.name, verb, ok, asks: app.asks,
+            text: ok ? doneWords(verb, out.state, app.name, shownName) : (out.line ?? t("apps.failed", { name: titleOf(app.name) })) };
     } catch (e) {
-      r = { bot: scope.name, name: app.name, verb, ok: false, asks: app.asks, text: errorLine(e, scope.display_name) };
+      r = { name: app.name, verb, ok: false, asks: app.asks, text: errorLine(e, shownName) };
     }
-    setBusy(null);
-    setResult(r);
-    await reload();
+    setBusy(({ [bot]: _done, ...rest }) => rest);
+    setResults((m) => ({ ...m, [bot]: r }));
+    await load(bot);
   };
 
   const send = () => {
@@ -83,10 +95,12 @@ export function AppsPage() {
     void s.sendTo(askTo.name, msg);
   };
 
-  const groups = data ? sections(data.apps, data.skills, query) : [];
-  const mine = busy && busy.bot === scopeName ? busy : null;
-  const shown = result && result.bot === scopeName ? result : null;
-  const cmd = shown && scope ? `hermes -p ${scope.name} mcp install ${shown.name}` : "";
+  const shownData = data && data.bot === scopeName ? data : null;
+  const groups = shownData ? sections(shownData.apps, shownData.skills, query) : [];
+  const mine = scopeName ? (busy[scopeName] ?? null) : null;
+  const shown = scopeName ? (results[scopeName] ?? null) : null;
+  const shownErr = err && err.bot === scopeName ? err.text : null;
+  const cmd = shown && scope ? installCmd(scope.name, shown.name) : "";
 
   return (
     <div className="pg" data-testid="apps">
@@ -113,9 +127,9 @@ export function AppsPage() {
               <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("apps.search")} aria-label={t("apps.search")} data-testid="apps-search" />
             </label>
           </div>
-          {err && (
+          {shownErr && (
             <p className="pg-err" role="alert" data-testid="page-error">
-              {err}
+              {shownErr}
             </p>
           )}
           {mine?.verb === "login" && (
@@ -144,11 +158,11 @@ export function AppsPage() {
             <div className="pg-empty" data-testid="apps-no-bot">
               <b>{t("apps.noBot")}</b>
             </div>
-          ) : !data ? (
+          ) : !shownData ? (
             <div className="pg-empty">{t("apps.loading")}</div>
           ) : (
             <>
-              {!data.catalog && (
+              {!shownData.catalog && (
                 <div className="pg-empty" data-testid="apps-no-catalog">
                   <b>{t("apps.noCatalog")}</b>
                   <span>{t("apps.noCatalogHint")}</span>
@@ -199,10 +213,11 @@ export function AppCard({
 }: {
   card: Card;
   bot: Bot;
-  busy: { name: string; verb: Verb } | null;
+  busy: Busy | null;
   onRun: (verb: Verb, app: AppRow) => void;
 }) {
-  const [confirm, setConfirm] = useState(false);
+  // Remove always asks first; Sign in again too, since Hermes drops the current sign-in before the new one
+  const [confirm, setConfirm] = useState<Verb | null>(null);
   const name = nameOf(card);
   const label = titleOf(name);
   const state = card.kind === "mcp" ? card.app.state : card.skill.state;
@@ -210,6 +225,14 @@ export function AppCard({
   const warn = state === "needs_signin" || state === "unknown";
   const desc = card.kind === "mcp" ? card.app.description : card.skill.description;
   const acts = card.kind === "mcp" ? actionsOf(card.app) : [];
+  // an install whose values Hermes can only ask in a terminal: the command, up front, instead of a Connect that fails
+  const terminal = card.kind === "mcp" && card.app.state === "available" && card.app.terminal;
+  const cmd = installCmd(bot.name, name);
+  const asks = (verb: Verb) => verb === "remove" || (verb === "login" && state !== "needs_signin");
+  const confirmText = (verb: Verb) =>
+    verb === "remove"
+      ? t("apps.confirmRemove", { name: label, bot: bot.display_name })
+      : t("apps.confirmSignin", { name: label, bot: bot.display_name });
   const running = (verb: Verb) => busy?.name === name && busy.verb === verb;
   const pressLabel = (verb: Verb) =>
     verb === "install"
@@ -236,24 +259,41 @@ export function AppCard({
             <span className="need">{t("apps.asks", { env: card.app.asks.join(", ") })}</span>
           )}
         </div>
+        {terminal && (
+          <div className="ap-term ap-card-term" data-testid={`app-terminal-${name}`}>
+            <span>{t("apps.terminalOnly", { env: card.kind === "mcp" ? card.app.asks.join(", ") : "" })}</span>
+            <code className="ap-cmd" data-testid={`app-cmd-${name}`}>
+              {cmd}
+              <CopyButton text={() => cmd} />
+            </code>
+          </div>
+        )}
       </div>
+      {card.kind === "mcp" && terminal && (
+        <div className="pl-ctl">
+          <button type="button" className="pg-btn" onClick={() => openShellAt(null)} data-testid={`app-open-terminal-${name}`}>
+            {t("tasks.openTerminal")}
+          </button>
+        </div>
+      )}
       {card.kind === "mcp" && acts.length > 0 && (
         <div className="pl-ctl">
           {confirm ? (
-            <div className="ap-confirm" role="alertdialog" aria-label={t("apps.confirmRemove", { name: label, bot: bot.display_name })}>
-              <span>{t("apps.confirmRemove", { name: label, bot: bot.display_name })}</span>
+            <div className="ap-confirm" role="alertdialog" aria-label={confirmText(confirm)}>
+              <span>{confirmText(confirm)}</span>
               <button
                 type="button"
-                className="pg-btn danger-fill"
+                className={`pg-btn${confirm === "remove" ? " danger-fill" : " pri"}`}
                 onClick={() => {
-                  setConfirm(false);
-                  onRun("remove", card.app);
+                  const verb = confirm;
+                  setConfirm(null);
+                  onRun(verb, card.app);
                 }}
-                data-testid="app-confirm-remove"
+                data-testid={`app-confirm-${confirm}`}
               >
-                {t("apps.remove")}
+                {confirm === "remove" ? t("apps.remove") : t("apps.signinAgain")}
               </button>
-              <button type="button" className="pg-btn" onClick={() => setConfirm(false)}>
+              <button type="button" className="pg-btn" onClick={() => setConfirm(null)}>
                 {t("page.cancel")}
               </button>
             </div>
@@ -265,7 +305,7 @@ export function AppCard({
                 className={`pg-btn${verb === "remove" ? " danger" : verb === "install" || state === "needs_signin" ? " pri" : ""}`}
                 disabled={!!busy}
                 aria-label={`${pressLabel(verb)} · ${label}`}
-                onClick={() => (verb === "remove" ? setConfirm(true) : onRun(verb, card.app))}
+                onClick={() => (asks(verb) ? setConfirm(verb) : onRun(verb, card.app))}
                 data-testid={`app-${verb}-${name}`}
               >
                 {pressLabel(verb)}

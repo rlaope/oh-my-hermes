@@ -1,7 +1,7 @@
 // Apps (src/apps, BOUNDARY rule 41), against the mock bridge: one bot's view of Hermes' MCP catalog and its
 // integration skills, grouped by tier, each with its state; Connect, Sign in and Remove send `apps.install`,
-// `apps.login` and `apps.remove` with the bot and the catalog name only; Hermes' own words when a run did not work, and
-// the terminal command for an app whose install asks for a value.
+// `apps.login` and `apps.remove` with the bot and the catalog name only; Hermes' own words when a run did not work; the
+// terminal command up front for an app whose install only a terminal can answer; a run's end never paints another bot.
 import { expect, test, type Page } from "@playwright/test";
 
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
@@ -109,11 +109,49 @@ test("Remove asks first; a run that did not work shows Hermes' own words; a valu
   await expect(page.getByTestId("apps-result")).toHaveAttribute("role", "alert");
   await expect(page.getByTestId("app-state-figma")).toHaveText("Needs sign-in");
 
-  await expect(page.getByTestId("app-card-asana")).toContainText("Asks for ASANA_CLIENT_SECRET");
-  await page.getByTestId("app-install-asana").click();
-  await expect(page.getByTestId("apps-result")).toContainText("✗ install failed: ASANA_CLIENT_SECRET is required but no value was provided");
-  await expect(page.getByTestId("apps-terminal-cmd")).toHaveText(/hermes -p kami mcp install asana/);
-  await expect(page.getByTestId("apps-terminal")).toBeVisible();
+  // Asana's install asks for a client id Hermes never reads from .env: no Connect, the command up front
+  const asana = page.getByTestId("app-card-asana");
+  await expect(asana).toContainText("Asks for ASANA_CLIENT_ID, ASANA_CLIENT_SECRET");
+  await expect(asana).toContainText("only in a terminal");
+  await expect(page.getByTestId("app-install-asana")).toHaveCount(0);
+  await expect(page.getByTestId("app-cmd-asana")).toHaveText(/hermes -p kami mcp install asana/);
+  await expect(page.getByTestId("app-open-terminal-asana")).toBeVisible();
+  expect((await calls("apps.install")).length).toBe(0);
+});
+
+test("Sign in again asks first and says the current sign-in is dropped", async ({ page }) => {
+  await openApps(page);
+  await page.getByTestId("app-login-linear").click();
+  await expect(page.getByRole("alertdialog")).toContainText("Hermes drops the current sign-in first");
+  expect((await calls("apps.login")).length).toBe(0);
+  await page.getByTestId("app-confirm-login").click();
+  await expect(page.getByTestId("apps-result")).toContainText("Kami is signed in to Linear");
+  expect((await calls("apps.login")).map((c) => c.params)).toEqual([{ bot: "kami", name: "linear" }]);
+});
+
+test("a run that ends while the page shows another bot leaves that bot's cards alone", async ({ page }) => {
+  await openApps(page);
+  await mock("mock.appsDelay", { verb: "login", ms: 1500 });
+  await page.getByTestId("app-login-figma").click();   // Kami's Figma needs a sign-in: no confirm
+  await expect(page.getByTestId("apps-signing")).toBeVisible();
+  await page.getByTestId("apps-scope").click();
+  await page.getByTestId("apps-scope-friren").click();
+  await expect(page.getByTestId("apps-scope")).toContainText("Friren's apps");
+  await expect(page.getByTestId("app-state-figma")).toHaveText("Not connected");
+  // Friren is not busy: its buttons work while Kami's sign-in runs, and no sign-in note is shown for it
+  await expect(page.getByTestId("app-install-linear")).toBeEnabled();
+  await expect(page.getByTestId("apps-signing")).toHaveCount(0);
+  // Kami's run ends: Friren's states and buttons stay Friren's, and Kami's line is not shown here
+  await expect.poll(async () => (await calls("apps.list")).filter((c) => c.params.bot === "kami").length, { timeout: 5000 }).toBe(2);
+  await expect(page.getByTestId("app-state-figma")).toHaveText("Not connected");
+  await expect(page.getByTestId("app-state-linear")).toHaveText("Not connected");
+  await expect(page.getByTestId("app-install-figma")).toBeEnabled();
+  await expect(page.getByTestId("apps-result")).toHaveCount(0);
+  // back on Kami: its own result and state
+  await page.getByTestId("apps-scope").click();
+  await page.getByTestId("apps-scope-kami").click();
+  await expect(page.getByTestId("app-state-figma")).toHaveText("Connected");
+  await expect(page.getByTestId("apps-result")).toContainText("Kami is signed in to Figma");
 });
 
 test("the scope chip switches bots; another bot starts with nothing connected", async ({ page }) => {

@@ -233,6 +233,9 @@ export interface AppRow {
   auth: "oauth" | "api_key" | "none";
   /** Values Hermes asks for when it installs this entry (env names); it asks in a terminal, never through omher. */
   asks: string[];
+  /** One of them can only be typed in a terminal (Hermes never takes a non-secret value from `.env`, and with no stdin
+   *  its prompt answers nothing): Connect from omher always fails, so the card shows the command instead. */
+  terminal: boolean;
   state: AppState;
 }
 /** One of Hermes' integration skills for one bot: the bot has it (installed or turned off) or Hermes ships it. */

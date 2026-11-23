@@ -74,11 +74,13 @@ const MARKS: Record<string, string> = {
 export const markOf = (name: string): string => MARKS[name] ?? name;
 
 /** What a catalog entry's card offers: Connect, Sign in (again) and Remove, each only where it means something. A state
- *  omher could not read offers nothing. */
-export function actionsOf(app: Pick<AppRow, "auth" | "state">): ("install" | "login" | "remove")[] {
+ *  omher could not read offers nothing, and neither does an install only a terminal can answer (the card shows its
+ *  command). */
+export function actionsOf(app: Pick<AppRow, "auth" | "state" | "terminal">): ("install" | "login" | "remove")[] {
   switch (app.state) {
     case "available":
-      return ["install"];
+      // a value Hermes can only ask in a terminal: Connect would always fail, so the card shows the command instead
+      return app.terminal ? [] : ["install"];
     case "needs_signin":
       return ["login", "remove"];
     case "installed":

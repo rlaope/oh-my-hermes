@@ -4878,13 +4878,22 @@ class TasksLinear(unittest.TestCase):
         self.assertEqual(ob.read_linear_mcp(d), {"configured": False, "server": ""})
 
     def test_enabled_reads_as_the_config_loader_reads_it(self):
-        # the event reader and the bridge's loader must agree on `enabled` for every plain word: under Hermes'
-        # own hermes_yaml (YAML 1.1 in ruamel) `n` and `N` are false too, under PyYAML they are strings (on)
-        for word in ("true", "false", "yes", "no", "on", "off", "y", "Y", "n", "N", "Off", "NO", "maybe", "0", "1"):
+        # the event reader agrees with Hermes on `enabled` for every word: the YAML loader's value, then Hermes'
+        # `_parse_boolish` (a bool or number as itself, true/1/yes/on and false/0/no/off in any case); any other value is
+        # "?" (Hermes takes its default, on). Under Hermes' own hermes_yaml (ruamel) `y`/`n` are bools, under PyYAML strings
+        def hermes(v):
+            if isinstance(v, (bool, int, float)):
+                return bool(v)
+            w = str(v).strip().lower()
+            return True if w in ("true", "1", "yes", "on") else False if w in ("false", "0", "no", "off") else "?"
+        for word in ("true", "false", "yes", "no", "on", "off", "y", "Y", "n", "N", "Off", "NO", "maybe", "0", "1",
+                     "'false'", "'1'", "FaLsE", "2", "0.0"):
             d = self._dir(f"mcp_servers:\n  linear:\n    enabled: {word}\n")
             loaded = ob._load_yaml(d / "config.yaml")["mcp_servers"]["linear"]["enabled"]
             ob._YAML_CACHE.clear()
-            self.assertEqual(ob.mcp_server_names(d / "config.yaml")["linear"].get("enabled"), loaded is not False, word)
+            self.assertEqual(ob.mcp_server_names(d / "config.yaml")["linear"].get("enabled"), hermes(loaded), word)
+            # the Linear source counts a server as on unless Hermes would read it as off
+            self.assertEqual(ob.read_linear_mcp(d)["configured"], hermes(loaded) is not False, word)
 
     def test_reads_only_the_names_and_enabled(self):
         # the verifier's probe (V3 on PR #2908): every value read is recorded; only the Linear server's `enabled` may be
@@ -4968,7 +4977,8 @@ class TasksLinear(unittest.TestCase):
     def test_names_and_enabled_only(self):
         d = self._dir("mcp_servers:\n  notion: {url: x}\n  lin:\n    nested: {enabled: false}\n    enabled: off\n"
                       "  q:\n    enabled: 'false'\nskills:\n  mcp_servers: {linear: {}}\n")
-        self.assertEqual(ob.mcp_server_names(d / "config.yaml"), {"notion": {}, "lin": {"enabled": False}, "q": {}})
+        # a quoted 'false' is off too: Hermes' `_parse_boolish` reads the string "false" as off
+        self.assertEqual(ob.mcp_server_names(d / "config.yaml"), {"notion": {}, "lin": {"enabled": False}, "q": {"enabled": False}})
         # a file that does not parse is None (the Apps page says "state unknown"); the Linear source reads it as off
         broken = self._dir("mcp_servers: {linear: {enabled: false}\n")
         self.assertIsNone(ob.mcp_server_names(broken / "config.yaml"))

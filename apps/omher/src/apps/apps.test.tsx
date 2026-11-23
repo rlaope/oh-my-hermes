@@ -4,11 +4,12 @@ import type { AppRow, AppSkill, AppState, Bot } from "../lib/protocol";
 import { AppCard, doneWords } from "./AppsPage";
 import { actionsOf, markOf, sections, tierOf, titleOf, type Card } from "./tiers";
 
-const app = (name: string, state: AppState, auth: AppRow["auth"] = "oauth", asks: string[] = []): AppRow => ({
+const app = (name: string, state: AppState, auth: AppRow["auth"] = "oauth", asks: string[] = [], terminal = false): AppRow => ({
   name,
   description: `${name} things.`,
   auth,
   asks,
+  terminal,
   state,
 });
 const skill = (name: string, state: AppSkill["state"]): AppSkill => ({ name, description: `${name} skill.`, state });
@@ -28,6 +29,21 @@ describe("what a card offers for each state", () => {
     expect(actionsOf(app("deepwiki", "installed", "api_key"))).toEqual(["remove"]);
     expect(actionsOf(app("notion", "disabled"))).toEqual(["remove"]);
     expect(actionsOf(app("notion", "unknown"))).toEqual([]);
+    // a value only a terminal can give: no Connect (it would always fail); once added, Sign in and Remove as usual
+    expect(actionsOf(app("asana", "available", "oauth", ["ASANA_CLIENT_ID"], true))).toEqual([]);
+    expect(actionsOf(app("asana", "needs_signin", "oauth", ["ASANA_CLIENT_ID"], true))).toEqual(["login", "remove"]);
+  });
+
+  it("shows the terminal command up front for an install only a terminal can answer", () => {
+    const html = card(mcp(app("asana", "available", "oauth", ["ASANA_CLIENT_ID", "ASANA_CLIENT_SECRET"], true)));
+    expect(buttons(html)).toEqual([]);
+    expect(html).toContain("hermes -p demo-bot mcp install asana");
+    expect(html).toContain("only in a terminal");
+    expect(html).toContain('data-testid="app-open-terminal-asana"');
+    // a secret alone may already be in Hermes' .env: Connect stays, no command up front
+    const key = card(mcp(app("keyed", "available", "api_key", ["MCP_KEYED_API_KEY"], false)));
+    expect(buttons(key)).toEqual(["install"]);
+    expect(key).not.toContain("mcp install keyed");
   });
 
   it("draws the state word and only those buttons", () => {

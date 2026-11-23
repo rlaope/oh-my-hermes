@@ -942,19 +942,16 @@ def mcp_server_names(path: Path, keys: tuple[str, ...] = ("enabled",)) -> dict |
     `mcp_servers` mapping of the YAML file at *path*; {} when there is no file or no such mapping, None when the file
     cannot be read or parsed. The file goes through the safe loader's event stream and nothing is built from it: a
     scalar is kept only when it is a top-level key equal to `mcp_servers`, a key directly under it (a server name), or
-    the plain value of one of *keys* in one (`enabled`, and for the Apps page also the legacy `disabled`, each read as
-    a bool the way Hermes' `mcp_server_enabled` words it); every other scalar (a url, headers, env, auth: a credential
+    the value of one of *keys* in one (`enabled`, and for the Apps page also the legacy `disabled`, each read by
+    `mcp_switch` as Hermes reads it: True, False, or "?" for a value Hermes would not take; an empty one is left out);
+    every other scalar (a url, headers, env, auth: a credential
     may sit there) is dropped as it passes, so no other value of the file is kept, returned or cached."""
     try:
         out: dict[str, dict] = {}
         stack: list[list] = []  # one per open collection: [is_map, kept key or None, awaiting a key, was a key]
         with path.open(encoding="utf-8") as f:
             events, yaml = _yaml_events(f)  # `yaml`: the module of the event classes
-            # the words for false: YAML 1.1 as Hermes' own `hermes_yaml` (ruamel) reads it also takes `n` and `N`
-            off = ("false", "False", "FALSE", "no", "No", "NO", "off", "Off", "OFF")
-            off += ("n", "N") if yaml.__name__.startswith("ruamel") else ()
-            on = ("true", "True", "TRUE", "yes", "Yes", "YES", "on", "On", "ON")
-            on += ("y", "Y") if yaml.__name__.startswith("ruamel") else ()
+            ruamel = yaml.__name__.startswith("ruamel")  # Hermes' own `hermes_yaml` reads y/n as bools too
             for ev in events:
                 if isinstance(ev, (yaml.MappingEndEvent, yaml.SequenceEndEvent)):
                     was_key = stack.pop()[3]
@@ -979,10 +976,11 @@ def mcp_server_names(path: Path, keys: tuple[str, ...] = ("enabled",)) -> dict |
                         top[1] = None
                 elif as_key:
                     top[1] = None
-                elif (depth == 3 and servers and isinstance(ev, yaml.ScalarEvent) and top[0] and top[1] in keys
-                      and stack[1][1] is not None and ev.implicit[0]):
-                    # `disabled` is on only when it says so; `enabled` is off only when it says so (Hermes' defaults)
-                    out[stack[1][1]][top[1]] = ev.value in on if top[1] == "disabled" else ev.value not in off
+                elif depth == 3 and servers and top[0] and top[1] in keys and stack[1][1] is not None:
+                    # a scalar as Hermes reads it; a list, a mapping or an alias is a value Hermes would not take
+                    got = mcp_switch(ev.value, ev.implicit[0], ruamel) if isinstance(ev, yaml.ScalarEvent) else "?"
+                    if got is not None:
+                        out[stack[1][1]][top[1]] = got
                 if isinstance(ev, (yaml.MappingStartEvent, yaml.SequenceStartEvent)):
                     stack.append([isinstance(ev, yaml.MappingStartEvent), None, True, as_key])
                 elif top and top[0]:
@@ -1006,6 +1004,36 @@ def linear_server(servers) -> dict:
             on = not (isinstance(cfg, dict) and cfg.get("enabled") is False)
             return {"configured": on, "server": name[:64]}
     return {"configured": False, "server": ""}
+
+
+# YAML 1.1's bool words as Hermes' own `hermes_yaml` (ruamel) reads a plain scalar; PyYAML (Hermes 0.21) lacks y/n
+_YAML_TRUE = frozenset({"y", "Y", "yes", "Yes", "YES", "true", "True", "TRUE", "on", "On", "ON"})
+_YAML_FALSE = frozenset({"n", "N", "no", "No", "NO", "false", "False", "FALSE", "off", "Off", "OFF"})
+_YAML_NULL = frozenset({"", "~", "null", "Null", "NULL"})
+_YAML_NUMBER = re.compile(r"[-+]?(?:[0-9][0-9_]*(?:\.[0-9_]*)?|\.[0-9_]+)(?:[eE][-+]?[0-9]+)?")
+
+
+def mcp_switch(text: str, plain: bool, ruamel: bool = True):
+    """One `enabled` / `disabled` value as Hermes reads it: its YAML 1.1 config loader, then `_parse_boolish`
+    (`tools/mcp_tool_common.py`: a bool or number as itself, a string by `true/1/yes/on` and `false/0/no/off` in any
+    case). True or False; None for an empty value (Hermes' default applies); "?" for any other value, which Hermes
+    takes as its default with a warning and omher shows as a state it cannot tell."""
+    if plain:
+        if text in _YAML_NULL:
+            return None
+        if text in _YAML_TRUE and (ruamel or text not in ("y", "Y")):
+            return True
+        if text in _YAML_FALSE and (ruamel or text not in ("n", "N")):
+            return False
+        if _YAML_NUMBER.fullmatch(text):
+            with contextlib.suppress(ValueError):
+                return float(text.replace("_", "")) != 0
+    word = text.strip().lower()
+    if word in ("true", "1", "yes", "on"):
+        return True
+    if word in ("false", "0", "no", "off"):
+        return False
+    return "?"
 
 
 def read_skills(profile_dir: Path) -> list[dict]:
@@ -2495,20 +2523,25 @@ def _hermes_dir(env_var: str, sub: str, root: Path | None = None, environ=None) 
     return Path(override) if override else (root or DEFAULT_HERMES_ROOT) / sub
 
 
-def _install_asks(auth: dict) -> list[str]:
-    """The `auth.env` values Hermes asks for at install: required (its default) and without a default value."""
+def _install_asks(auth: dict) -> tuple[list[str], bool]:
+    """The `auth.env` values Hermes asks for at install (`required`, its default), and whether one of them can only be
+    typed in a terminal. With nothing on stdin Hermes' prompt answers "" (`hermes_cli/cli_output.py` `prompt`), not a
+    manifest's `default`, so a required value is never filled in by itself; a secret one is taken from the profile's
+    `.env` when it is already there (`_prompt_env_vars`), a non-secret one never is."""
     env = auth.get("env")
     if not isinstance(env, list):
-        return []
-    return [str(e["name"]) for e in env if isinstance(e, dict) and isinstance(e.get("name"), str)
-            and _ENV_NAME.fullmatch(e["name"]) and e.get("required", True) and not e.get("default")][:8]
+        return [], False
+    asked = [e for e in env if isinstance(e, dict) and isinstance(e.get("name"), str) and _ENV_NAME.fullmatch(e["name"])
+             and e.get("required", True)]
+    return [str(e["name"]) for e in asked][:8], any(e.get("secret", True) is False for e in asked)
 
 
 def read_mcp_catalog(folder: Path) -> list[dict] | None:
     """The entries Hermes' `hermes mcp catalog` lists (`hermes_cli/mcp_catalog.py` `list_catalog`): each
     `<folder>/<entry>/manifest.yaml` of manifest version 1 with a name and a description, in folder order, the first of
-    a repeated name. Only the name, the description, the auth type and the names of the values Hermes asks for at
-    install are kept. None when the folder is not there; a linked or oversized manifest is skipped."""
+    a repeated name. Only the name, the description, the auth type, the names of the values Hermes asks for at install
+    and whether one of them needs a terminal (`terminal`) are kept. None when the folder is not there; a linked entry
+    folder, a linked manifest and an oversized one are skipped."""
     try:
         children = sorted(folder.iterdir())[:MCP_CATALOG_MAX]
     except OSError:
@@ -2517,7 +2550,7 @@ def read_mcp_catalog(folder: Path) -> list[dict] | None:
     for child in children:
         manifest = child / "manifest.yaml"
         try:
-            if manifest.is_symlink() or not manifest.is_file() or manifest.stat().st_size > MCP_MANIFEST_MAX:
+            if child.is_symlink() or manifest.is_symlink() or not manifest.is_file() or manifest.stat().st_size > MCP_MANIFEST_MAX:
                 continue
             data = _yaml_safe_load(manifest.read_text(encoding="utf-8-sig"))
         except Exception:
@@ -2530,7 +2563,8 @@ def read_mcp_catalog(folder: Path) -> list[dict] | None:
         if (not isinstance(name, str) or not MCP_NAME.fullmatch(name) or not desc
                 or kind not in ("api_key", "oauth", "none") or any(e["name"] == name for e in out)):
             continue
-        out.append({"name": name, "description": _clip(desc, 200), "auth": kind, "asks": _install_asks(auth)})
+        asks, terminal = _install_asks(auth)
+        out.append({"name": name, "description": _clip(desc, 200), "auth": kind, "asks": asks, "terminal": terminal})
     return out
 
 
@@ -2551,8 +2585,8 @@ def _token_stamp(profile_dir: Path, name: str) -> tuple[int, int] | None:
 
 def app_state(entry: dict, servers: dict | None, signed_in: bool) -> str:
     """One catalog entry for one bot: `unknown` when its config could not be read, `available` when its `mcp_servers`
-    has no server by that name, `disabled` when that server is switched off, `needs_signin` for an OAuth entry with no
-    token file, else `installed`."""
+    has no server by that name, `disabled` when that server is switched off, `unknown` when its switch holds a value
+    Hermes would not take, `needs_signin` for an OAuth entry with no token file, else `installed`."""
     if servers is None:
         return "unknown"
     server = servers.get(entry["name"])
@@ -2560,6 +2594,8 @@ def app_state(entry: dict, servers: dict | None, signed_in: bool) -> str:
         return "available"
     if server.get("enabled") is False or server.get("disabled") is True:
         return "disabled"
+    if "?" in (server.get("enabled"), server.get("disabled")):
+        return "unknown"
     if entry["auth"] == "oauth" and not signed_in:
         return "needs_signin"
     return "installed"
@@ -2632,31 +2668,65 @@ def mcp_argv(hermes: str, bot: str, verb: str, name: str) -> list[str]:
 
 
 def hermes_said(output: str) -> str:
-    """Hermes' own words when a run did not work: its error and warning lines (`✗`, `⚠`, `Error:`), else its last
-    lines, without colour codes, trimmed."""
+    """Hermes' own words when a run did not work, without colour codes, trimmed: its error lines (`✗`, `Error:`) when
+    it printed any; else its warning lines (`⚠`) and its last line, so an unmarked failure (a traceback's last line, a
+    sign-in address it printed) is never hidden. Hermes' start-up notes about its own update (a `⚠` line naming an
+    update) say nothing about this run and are left out."""
     lines = [ln.strip() for ln in _ANSI.sub("", output or "").splitlines() if ln.strip()]
-    marked = [ln for ln in lines if ln.startswith(("✗", "⚠", "Error:"))]
-    return _clip("\n".join((marked or lines)[-MCP_SAID_LINES:]), 800)
+    lines = [ln for ln in lines if not (ln.startswith("⚠") and re.search(r"\bupdate\b", ln, re.IGNORECASE))]
+    pick = [ln for ln in lines if ln.startswith(("✗", "Error:"))]
+    if not pick:
+        pick = [ln for ln in lines if ln.startswith("⚠")]
+        if lines and (not pick or pick[-1] != lines[-1]):
+            pick.append(lines[-1])
+    return _clip("\n".join(pick[-MCP_SAID_LINES:]), 800)
+
+
+MCP_OUTPUT_MAX = 256 * 1024     # bytes of a run's output read back
+MCP_STOP_WAIT = 5.0             # seconds to wait for a stopped run to end
+
+
+def _stop_run(proc) -> None:
+    """End a `hermes mcp` run past its time: on POSIX its whole process group (it was started in a session of its
+    own, so this reaches nothing else), on Windows the process itself (started in a group of its own). The wait after
+    is bounded, so the run's bot is never left busy."""
+    if os.name == "nt":
+        with contextlib.suppress(OSError):
+            proc.kill()
+    else:
+        with contextlib.suppress(OSError):
+            os.killpg(proc.pid, signal.SIGKILL)
+    with contextlib.suppress(subprocess.TimeoutExpired):
+        proc.wait(timeout=MCP_STOP_WAIT)
 
 
 def run_hermes_mcp(hermes: str, bot: str, verb: str, name: str, home: Path, timeout: float) -> tuple[int | None, str]:
-    """Run one `hermes mcp` argv and return (exit code, its output); None for a run stopped at *timeout*. No shell,
-    nothing on stdin (so Hermes asks nothing: a value it needs is refused in its own words), the Hermes root as
-    HERMES_HOME, none of the gateway's own markers, and UTF-8 output on every system."""
+    """Run one `hermes mcp` argv and return (exit code, its output); the code is None for a run stopped at *timeout*
+    (`_stop_run`), whose output so far is still returned. No shell, nothing on stdin (so Hermes asks nothing: a value it
+    needs is refused in its own words), the Hermes root as HERMES_HOME, none of the gateway's own markers, and UTF-8
+    output on every system. The output goes to a temporary file, not a pipe, so a helper Hermes left running (a
+    browser it opened) can never keep the run from ending."""
+    import tempfile
     argv = mcp_argv(hermes, bot, verb, name)
     env = {k: v for k, v in os.environ.items() if k not in _GATEWAY_MARKERS}
     env.update(HERMES_HOME=str(home), PYTHONIOENCODING="utf-8", NO_COLOR="1")
-    kw = {}
     if os.name == "nt":
-        kw["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
-    try:
-        r = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                           text=True, encoding="utf-8", errors="replace", timeout=timeout, env=env, **kw)
-    except subprocess.TimeoutExpired:
-        return None, ""
-    except OSError as e:
-        return -1, f"Hermes could not be started: {e}"
-    return r.returncode, r.stdout or ""
+        kw = {"creationflags": 0x08000000 | 0x00000200}  # CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP
+    else:
+        kw = {"start_new_session": True}
+    with tempfile.TemporaryFile() as out:
+        try:
+            proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, env=env, **kw)
+        except OSError as e:
+            return -1, f"Hermes could not be started: {e}"
+        try:
+            code = proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _stop_run(proc)
+            code = None
+        out.seek(0)
+        text = out.read(MCP_OUTPUT_MAX).decode("utf-8", errors="replace")
+    return code, text
 
 
 class PrStates:
@@ -8351,6 +8421,12 @@ class Bridge:
         servers = await asyncio.to_thread(mcp_server_names, config, ("enabled", "disabled"))
         if verb != "install" and (servers is None or app not in servers):
             raise BridgeError("not_found", f"{bot['display_name']} has no {app}")
+        # Connect only what the page offers it for: Hermes' install replaces a server's whole block and turns it on,
+        # so a server that is already there (on, off or set up by hand) or a config omher cannot read is refused
+        if verb == "install" and servers is None:
+            raise BridgeError("bad_request", f"omher cannot read {bot['display_name']}'s config, so it does not add {app}")
+        if verb == "install" and app in servers:
+            raise BridgeError("exists", f"{bot['display_name']} already has {app}")
         if verb == "login" and entry["auth"] != "oauth":
             raise BridgeError("bad_request", f"{app} has no sign-in")
         if name in self._apps_busy:
@@ -8373,10 +8449,11 @@ class Bridge:
                 "remove": servers is not None and app not in servers}[verb]
         if done:
             return {"outcome": "ok", "state": state}
+        said = hermes_said(output)
         if code is None:
-            line = f"Hermes did not finish in {int(MCP_TIMEOUT[verb])} seconds."
+            line = f"Hermes did not finish in {int(MCP_TIMEOUT[verb])} seconds." + (f"\n{said}" if said else "")
         else:
-            line = hermes_said(output) or f"Hermes exited with code {code}."
+            line = said or f"Hermes exited with code {code}."
         return {"outcome": "failed", "line": line, "state": state}
 
     def poll_routines(self) -> list[tuple[str, dict]]:

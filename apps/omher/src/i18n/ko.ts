@@ -842,6 +842,8 @@ export const ko: Record<Key, string> = {
   "apps.removed": "{bot}에서 {name}을(를) 제거했어요.",
   "apps.failed": "Hermes가 {name}을(를) 바꾸지 못했어요.",
   "apps.terminalHint": "Hermes는 이 앱을 설치할 때 터미널에서 {env} 값을 물어봐요. 터미널에서 이걸 실행해 주세요:",
+  "apps.confirmSignin": "{bot}의 {name}에 다시 로그인할까요? Hermes가 지금 로그인을 먼저 지워서, 새 로그인이 끝날 때까지 {bot}은(는) {name}을(를) 쓸 수 없어요.",
+  "apps.terminalOnly": "Hermes는 이 앱을 설치할 때 {env} 값을 터미널에서만 물어봐요. 터미널에서 이걸 실행해 주세요:",
   "apps.skillNote": "스킬은 채팅에서 써요. 설정하려면 위 입력란에서 {bot}에게 부탁해 주세요.",
   "tl.offline": "{bot}가 연결되어 있지 않아요.",
   "needs.one": "1개 확인 필요",

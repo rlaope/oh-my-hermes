@@ -64,13 +64,21 @@ class Catalog(Base):
         got = ob.read_mcp_catalog(self.catalog)
         self.assertEqual([e["name"] for e in got], ["asana", "deepwiki", "notion"])
         by = {e["name"]: e for e in got}
-        self.assertEqual(by["notion"], {"name": "notion", "description": "notion issues and pages.", "auth": "oauth", "asks": []})
+        self.assertEqual(by["notion"], {"name": "notion", "description": "notion issues and pages.", "auth": "oauth", "asks": [],
+                                        "terminal": False})
         self.assertEqual(by["deepwiki"]["auth"], "none")
-        # required and without a default: the two Hermes would prompt for (no stdin, so it refuses in its own words)
-        self.assertEqual(by["asana"]["asks"], ["DEMO_CLIENT_ID", "DEMO_SECRET"])
-        # only those four keys leave the reader: no url, no transport, no oauth block
+        # every required value Hermes prompts for: with no stdin its prompt answers "" (not the manifest's default),
+        # so DEMO_REGION's default does not fill it; a non-secret one is never read from .env, so it needs a terminal
+        self.assertEqual(by["asana"]["asks"], ["DEMO_CLIENT_ID", "DEMO_SECRET", "DEMO_REGION"])
+        self.assertTrue(by["asana"]["terminal"])
+        self.assertFalse(by["deepwiki"]["terminal"])
+        # a secret alone may already be in the profile's .env: Connect can work, no terminal needed up front
+        write(self.catalog / "keyonly" / "manifest.yaml", OPEN.format(name="keyonly") + "auth:\n  type: api_key\n  env:\n    - {name: MCP_KEYONLY_API_KEY}\n")
+        key = next(e for e in ob.read_mcp_catalog(self.catalog) if e["name"] == "keyonly")
+        self.assertEqual((key["asks"], key["terminal"]), (["MCP_KEYONLY_API_KEY"], False))
+        # only those five keys leave the reader: no url, no transport, no oauth block
         for e in got:
-            self.assertEqual(set(e), {"name", "description", "auth", "asks"})
+            self.assertEqual(set(e), {"name", "description", "auth", "asks", "terminal"})
 
     def test_skips_what_hermes_would_not_list_or_omher_could_not_pass(self):
         bad = {
@@ -87,10 +95,12 @@ class Catalog(Base):
             write(self.catalog / folder / "manifest.yaml", text)
         write(self.catalog / "big" / "manifest.yaml", OAUTH.format(name="big") + "#" * ob.MCP_MANIFEST_MAX)
         real = write(self.root / "elsewhere.yaml", OAUTH.format(name="linked"))
+        outside = write(self.root / "outside" / "manifest.yaml", OAUTH.format(name="linkdir")).parent
         (self.catalog / "linked").mkdir()
         try:
             (self.catalog / "linked" / "manifest.yaml").symlink_to(real)
-        except OSError:  # Windows without the privilege: the link case is not built there
+            (self.catalog / "linkdir").symlink_to(outside, target_is_directory=True)
+        except OSError:  # Windows without the privilege: the link cases are not built there
             pass
         names = [e["name"] for e in ob.read_mcp_catalog(self.catalog)]
         self.assertEqual(names, ["asana", "deepwiki", "notion"])
@@ -122,7 +132,29 @@ class States(Base):
         self.config("  deepwiki: {url: https://x, enabled: true, disabled: true}\n")
         self.assertEqual(self.states()["deepwiki"], "disabled")
         self.config("  deepwiki: {url: https://x, disabled: maybe}\n")
-        self.assertEqual(self.states()["deepwiki"], "installed")
+        self.assertEqual(self.states()["deepwiki"], "unknown")
+
+    def test_switches_read_as_hermes_reads_them_and_anything_else_is_unknown(self):
+        # Hermes: its YAML 1.1 loader, then _parse_boolish (a bool or number as itself, true/1/yes/on and
+        # false/0/no/off in any case); any other value Hermes takes as its default with a warning: omher says unknown
+        cases = {"false": "disabled", "False": "disabled", "off": "disabled", "no": "disabled", "0": "disabled",
+                 "0.0": "disabled", "'false'": "disabled", "'FALSE'": "disabled", "'0'": "disabled", "'Off'": "disabled",
+                 "FaLsE": "disabled", "true": "installed", "1": "installed", "2": "installed", "'yes'": "installed",
+                 "TrUe": "installed", "~": "installed", "": "installed", "maybe": "unknown", "'maybe'": "unknown",
+                 "[a]": "unknown", "{a: 1}": "unknown"}
+        for word, want in cases.items():
+            self.config(f"  deepwiki:\n    url: https://x\n    enabled: {word}\n")
+            self.assertEqual(self.states()["deepwiki"], want, f"enabled: {word}")
+        for word, want in {"1": "disabled", "'true'": "disabled", "yes": "disabled", "TRUE": "disabled", "0": "installed",
+                           "no": "installed", "'off'": "installed", "huh": "unknown"}.items():
+            self.config(f"  deepwiki:\n    url: https://x\n    disabled: {word}\n")
+            self.assertEqual(self.states()["deepwiki"], want, f"disabled: {word}")
+
+    def test_the_switch_words_match_hermes_own_parse(self):
+        self.assertEqual([ob.mcp_switch(v, True) for v in ("y", "N", "on", "0", "1_0", "-1", ".5", "", "null")],
+                         [True, False, True, False, True, True, True, None, None])
+        self.assertEqual(ob.mcp_switch("y", True, ruamel=False), "?")           # PyYAML: a plain y is the string "y"
+        self.assertEqual([ob.mcp_switch(v, False) for v in ("1", " YES ", "off", "", "y")], [True, True, False, "?", "?"])
 
     def test_a_config_that_does_not_parse_is_unknown_never_installed(self):
         write(self.profile / "config.yaml", "mcp_servers: {notion: {enabled: false}\n")
@@ -145,7 +177,7 @@ class States(Base):
         got = ob.read_apps(self.profile)
         self.assertNotIn(fake, repr(got))
         self.assertEqual(got["apps"][-1], {"name": "notion", "description": "notion issues and pages.", "auth": "oauth",
-                                           "asks": [], "state": "installed"})
+                                           "asks": [], "terminal": False, "state": "installed"})
         self.assertEqual(repr(ob._YAML_CACHE), before)
 
     def test_the_token_file_name_is_hermes_safe_name(self):
@@ -184,40 +216,81 @@ class Argv(unittest.TestCase):
             with self.assertRaises(ValueError, msg=name):
                 ob.mcp_argv("hermes", BOT, "install", name)
 
+    def fake_popen(self, seen: dict, code=0, said=b"ok\n", hang=False):
+        test = self
+
+        class Proc:
+            pid = 4242
+
+            def __init__(self, argv, **kw):
+                seen.update(argv=argv, **kw)
+                kw["stdout"].write(said)
+                self.waits = seen.setdefault("waits", [])
+
+            def wait(self, timeout=None):
+                self.waits.append(timeout)
+                if hang and len(self.waits) == 1:
+                    raise subprocess.TimeoutExpired("hermes", timeout)
+                return None if hang else code
+
+            def kill(self):
+                seen["killed"] = True
+
+        del test
+        return Proc
+
     def test_one_run_no_shell_nothing_on_stdin_and_the_root_as_home(self):
-        seen = {}
-
-        def run(argv, **kw):
-            seen.update(argv=argv, **kw)
-            return subprocess.CompletedProcess(argv, 0, stdout="ok\n")
-
-        with mock.patch.object(ob.subprocess, "run", run), mock.patch.dict(os.environ, {"_HERMES_GATEWAY": "1"}):
+        seen: dict = {}
+        with mock.patch.object(ob.subprocess, "Popen", self.fake_popen(seen)), mock.patch.dict(os.environ, {"_HERMES_GATEWAY": "1"}):
             self.assertEqual(ob.run_hermes_mcp("/h/hermes", BOT, "login", "notion", Path("/home/h"), 330.0), (0, "ok\n"))
         self.assertEqual(seen["argv"], ["/h/hermes", "-p", BOT, "mcp", "login", "notion"])
         self.assertIs(seen["stdin"], subprocess.DEVNULL)
         self.assertNotIn("shell", seen)
-        self.assertEqual(seen["timeout"], 330.0)
+        self.assertEqual(seen["waits"], [330.0])
         self.assertEqual((seen["env"]["HERMES_HOME"], seen["env"]["PYTHONIOENCODING"]), ("/home/h", "utf-8"))
         self.assertNotIn("_HERMES_GATEWAY", seen["env"])
+        # its own session (POSIX) or process group (Windows), so a stop reaches only this run
+        if os.name == "nt":
+            self.assertEqual(seen["creationflags"] & 0x00000200, 0x00000200)
+        else:
+            self.assertIs(seen["start_new_session"], True)
+        # output to a file, never a pipe a leftover helper could hold open
+        self.assertNotEqual(seen["stdout"], subprocess.PIPE)
 
-        def slow(argv, **kw):
-            raise subprocess.TimeoutExpired(argv, kw["timeout"])
+    def test_a_run_past_its_time_is_stopped_with_its_group_and_the_wait_after_is_bounded(self):
+        seen: dict = {}
+        killed = []
+        with mock.patch.object(ob.subprocess, "Popen", self.fake_popen(seen, said=b"  Open https://example.org/a\n", hang=True)), \
+                mock.patch.object(ob.os, "killpg", lambda pid, sig: killed.append((pid, sig)), create=True):
+            code, out = ob.run_hermes_mcp("/h/hermes", BOT, "login", "notion", Path("/h"), 2.0)
+        self.assertEqual((code, out), (None, "  Open https://example.org/a\n"))  # what Hermes said so far is kept
+        self.assertEqual(seen["waits"], [2.0, ob.MCP_STOP_WAIT])
+        if os.name == "nt":
+            self.assertTrue(seen.get("killed"))
+        else:
+            self.assertEqual(killed, [(4242, ob.signal.SIGKILL)])
 
+    def test_a_program_that_cannot_start(self):
         def missing(argv, **kw):
             raise FileNotFoundError(2, "No such file", argv[0])
 
-        with mock.patch.object(ob.subprocess, "run", slow):
-            self.assertEqual(ob.run_hermes_mcp("/h/hermes", BOT, "install", "notion", Path("/h"), 1.0), (None, ""))
-        with mock.patch.object(ob.subprocess, "run", missing):
+        with mock.patch.object(ob.subprocess, "Popen", missing):
             code, out = ob.run_hermes_mcp("/h/hermes", BOT, "install", "notion", Path("/h"), 1.0)
-            self.assertEqual(code, -1)
-            self.assertIn("Hermes could not be started", out)
+        self.assertEqual(code, -1)
+        self.assertIn("Hermes could not be started", out)
 
     def test_hermes_own_words_trimmed(self):
         out = "\x1b[36m  Installing MCP 'asana'\x1b[0m\n\n  Configure credentials:\n  DEMO_SECRET: \n" \
               "\x1b[31m  ✗ install failed: DEMO_SECRET is required but no value was provided\x1b[0m\n"
         self.assertEqual(ob.hermes_said(out), "✗ install failed: DEMO_SECRET is required but no value was provided")
-        self.assertEqual(ob.hermes_said("\r\n".join(f"line {i}" for i in range(20))), "\n".join(f"line {i}" for i in range(12, 20)))
+        # no error line: the last line is always there (here a traceback's), and an update note from Hermes' start-up
+        # is left out while a warning about this run stays
+        crash = ("  ⚠ A newer Hermes is available: run `hermes update`\n  ⚠ Server responded slowly\nTraceback (most recent call last):\n"
+                 '  File "x.py", line 1, in <module>\nRuntimeError: callback port 27890 is in use\n')
+        self.assertEqual(ob.hermes_said(crash), "⚠ Server responded slowly\nRuntimeError: callback port 27890 is in use")
+        self.assertEqual(ob.hermes_said("  ⚠ Could not check for an interrupted `hermes update`: x\n  ✗ Authentication failed: denied\n"),
+                         "✗ Authentication failed: denied")
+        self.assertEqual(ob.hermes_said("\r\n".join(f"line {i}" for i in range(20))), "line 19")
         self.assertLessEqual(len(ob.hermes_said("✗ " + "x" * 5000)), 800)
         self.assertEqual(ob.hermes_said(""), "")
 
@@ -270,6 +343,15 @@ class Ops(Base):
         self.assertEqual(got, {"outcome": "failed", "state": "available",
                                "line": "✗ install failed: DEMO_SECRET is required but no value was provided"})
 
+    def test_connect_is_refused_for_a_server_already_there_or_an_unreadable_config(self):
+        # Hermes' install replaces the whole block and turns it on: a turned-off or hand-made server is never touched
+        for block in ("  notion: {url: https://custom.example.org/mcp, enabled: false}\n", "  notion: {url: https://x}\n"):
+            self.config(block)
+            self.refused("install", "exists", name="notion")
+        write(self.profile / "config.yaml", "mcp_servers: {notion: {enabled: false}\n")
+        self.refused("install", "bad_request", name="deepwiki")
+        self.assertEqual(self.runs, [])
+
     def test_refusals_run_nothing(self):
         self.refused("install", "not_found", name="linear")                # not in the catalog read just now
         for bad in ("x;rm -rf ~", "-h", "$(id)", "a b", "official/notion", "", None, 7, ["notion"]):
@@ -321,6 +403,12 @@ class Ops(Base):
         self.effect = lambda verb, name: (None, "")
         got = self.op("install", name="notion")
         self.assertEqual(got["line"], f"Hermes did not finish in {int(ob.MCP_TIMEOUT['install'])} seconds.")
+        # a sign-in that ran out of time still shows what Hermes printed (the address it could not open, say)
+        self.config("  notion: {url: https://mcp.example.org/mcp, auth: oauth}\n")
+        self.effect = lambda verb, name: (None, "  Open this address to sign in: https://example.org/authorize?x=1\n")
+        got = self.op("login", name="notion")
+        self.assertEqual(got["line"], f"Hermes did not finish in {int(ob.MCP_TIMEOUT['login'])} seconds.\n"
+                                      "Open this address to sign in: https://example.org/authorize?x=1")
 
     def test_without_hermes_nothing_runs(self):
         with mock.patch.object(ob, "hermes_path", lambda *a, **k: None):
