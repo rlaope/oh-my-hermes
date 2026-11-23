@@ -8,7 +8,7 @@ import { t, tx, type Key } from "../i18n";
 import { SourceIcon, Spinner } from "../ui";
 import { cadence, isFailure, nextRun, sourceName, statusText } from "./format";
 import { loadTrees } from "./trees";
-import { HandoverCard, type HandoverFrom } from "../handover/HandoverCard";
+import { HandoverCard, handBots, type HandoverFrom } from "../handover/HandoverCard";
 import { SessionMenu, MENU_W_PX, menuHeight } from "../sessions/SessionsSection";
 import "./panel.css";
 
@@ -438,6 +438,9 @@ export function WorktreesTab({ bot, onOpenDiff }: { bot: Bot; onOpenDiff: (path:
   if (!data) return <Loading error={error} />;
   const list: Worktree[] = data.worktrees;
   const handCard = hand && <HandoverCard at={hand.at} from={hand.from} onClose={() => setHand(null)} />;
+  // Hand to <bot> only for a bot of this computer (a bot over SSH lists folders on another computer) and only while a
+  // bot of this computer is online to take it; read, not subscribed, when the row is right-clicked
+  const canHand = () => !bot.host && handBots(getStore().getSnapshot().bots).length > 0;
   return (
     <div className="pn-body" data-testid="panel-worktrees">
       <div className="pn-sec">
@@ -458,6 +461,7 @@ export function WorktreesTab({ bot, onOpenDiff }: { bot: Bot; onOpenDiff: (path:
           className="pn-row link"
           onClick={() => onOpenDiff(w.path)}
           onContextMenu={(e) => {
+            if (!canHand()) return;
             e.preventDefault();
             setMenu({ x: Math.max(6, Math.min(e.clientX, window.innerWidth - MENU_W_PX - 6)), y: Math.max(6, Math.min(e.clientY, window.innerHeight - menuHeight(1) - 6)), w });
           }}

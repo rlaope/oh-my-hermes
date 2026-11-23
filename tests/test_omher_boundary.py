@@ -466,6 +466,10 @@ RULES = (
     "The folder is the one the TERMINALS session started in, never a folder its shell reported (OSC 7, rule 11).",
     "Open thread starts the thread as \"Start in thread\" does (rule 33: `thread.create`, then `chat.send` of that"
     " text), and nothing is moved, closed or typed into the terminal.",
+    "It is offered only on a Worktrees row of a bot of this computer (never a bot over SSH, whose folders are on another"
+    " computer) and only while a bot of this computer is online to take it; with none, nothing is read.",
+    "so nothing read from a repository can add a line to the message; a worktree the bridge no longer finds is said to"
+    " be gone and nothing is sent.",
 )
 TAURI_CONF = ROOT / "apps" / "omher" / "src-tauri" / "tauri.conf.json"
 CAPABILITIES = ROOT / "apps" / "omher" / "src-tauri" / "capabilities" / "default.json"
@@ -2754,6 +2758,25 @@ class HandToBotAddsNoRead(unittest.TestCase):
         rows = (UI_SRC / "sessions" / "SessionsSection.tsx").read_text(encoding="utf-8")
         self.assertIn('from={{ kind: "terminal", folder: rec.cwd }}', rows)
         self.assertNotIn("folder: act.cwd", rows)
+
+    def test_offered_only_for_a_local_bot_with_one_online(self) -> None:
+        panel = (UI_SRC / "elsewhere" / "PanelTabs.tsx").read_text(encoding="utf-8")
+        self.assertIn("const canHand = () => !bot.host && handBots(getStore().getSnapshot().bots).length > 0;", panel)
+        self.assertIn("if (!canHand()) return;", panel)
+        self.assertIn('export const handBots = (bots: Bot[]) => bots.filter((b) => !b.host && b.status !== "offline");', self.card)
+        rows = (UI_SRC / "sessions" / "SessionsSection.tsx").read_text(encoding="utf-8")
+        self.assertIn("termMenuItems(rec, handBots(getStore().getSnapshot().bots).length > 0)", rows)
+        # no bot to send to: no read at all
+        self.assertIn("if (!reader) return;", self.card)
+
+    def test_every_name_is_printable_before_it_enters_the_message(self) -> None:
+        # one way in for a name: printable() then a code span; the goal is one printable line
+        self.assertIn("const name = (s: string) => codeSpan(printable(s));", self.msg)
+        self.assertEqual(self.msg.count("codeSpan("), 2)
+        self.assertIn("return printable(goal.replace(", self.msg)
+        unsafe = self.msg.split("const UNSAFE = /[", 1)[1].split("]/g;", 1)[0]
+        for part in ("\\u0000-\\u001f", "\\u007f-\\u009f", "\\u2028\\u2029", "\\u200e\\u200f", "\\u202a-\\u202e", "\\u2066-\\u2069"):
+            self.assertIn(part, unsafe, part)
 
 
 class GithubMeReadOnly(unittest.TestCase):

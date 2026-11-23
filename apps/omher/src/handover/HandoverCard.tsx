@@ -30,12 +30,14 @@ export function handLabel(): string {
 
 const W = 380;
 
-type Facts = { key: string; worktree: Worktree | null; diff: WorktreeDiff | null };
+/** `gone`: the bridge no longer finds that worktree (removed since the list was read): nothing can be sent. */
+type Facts = { key: string; worktree: Worktree | null; diff: WorktreeDiff | null; gone: boolean };
 
 export function HandoverCard({ at, from, onClose }: { at: { x: number; y: number }; from: HandoverFrom; onClose: () => void }) {
   const s = useStore();
   const local = handBots(s.bots);
-  const [pick, setPick] = useState<string | null>(null);
+  // a Worktrees row goes to its own bot unless another is picked (when that bot is of this computer and online)
+  const [pick, setPick] = useState<string | null>(from.kind === "worktree" ? from.bot : null);
   const to = local.find((b) => b.name === pick) ?? local.find((b) => b.name === s.selectedBot) ?? local[0];
   const [goal, setGoal] = useState("");
   const [busy, setBusy] = useState(false);
@@ -43,17 +45,27 @@ export function HandoverCard({ at, from, onClose }: { at: { x: number; y: number
   const ref = useRef<HTMLDivElement>(null);
   const [top, setTop] = useState(at.y);
   const folder = from.kind === "terminal" ? from.folder : from.worktree.path;
-  // a Worktrees row is read as the bot whose tab shows it; a terminal's folder as the bot it goes to
-  const reader = from.kind === "worktree" ? from.bot : to?.name ?? "";
+  // a Worktrees row is read as the bot whose tab shows it; a terminal's folder as the bot it goes to. With no bot to
+  // send to, nothing is read.
+  const reader = !to ? "" : from.kind === "worktree" ? from.bot : to.name;
   const key = `${reader}\n${folder}`;
   useEffect(() => {
+    if (!reader) return;
     let live = true;
     void (async () => {
       let worktree: Worktree | null = null;
       if (from.kind === "worktree") worktree = from.worktree;
-      else if (reader) worktree = worktreeOf(folder, (await loadTrees(reader).catch(() => ({ worktrees: [] }))).worktrees);
-      const diff = worktree ? await getStore().actions.panelDiff(reader, worktree.path).catch(() => null) : null;
-      if (live) setFacts({ key, worktree, diff });
+      else worktree = worktreeOf(folder, (await loadTrees(reader).catch(() => ({ worktrees: [] }))).worktrees);
+      let gone = false;
+      const diff = !worktree
+        ? null
+        : await getStore()
+            .actions.panelDiff(reader, worktree.path)
+            .catch((e: { code?: string }) => {
+              gone = e?.code === "not_found";
+              return null;
+            });
+      if (live) setFacts({ key, worktree, diff, gone });
     })();
     return () => {
       live = false;
@@ -83,7 +95,7 @@ export function HandoverCard({ at, from, onClose }: { at: { x: number; y: number
     setTop(Math.max(6, Math.min(at.y, window.innerHeight - h - 6)));
   }, [at.y, text]);
   const send = async () => {
-    if (!to || !ready || busy) return;
+    if (!to || !ready || ready.gone || busy) return;
     setBusy(true);
     const made = await s.startTaskThread(to.name, handoverTitle({ folder, worktree: ready.worktree }), text);
     setBusy(false);
@@ -140,7 +152,13 @@ export function HandoverCard({ at, from, onClose }: { at: { x: number; y: number
         />
       </label>
       <div className="ho-sub">{t("hand.preview")}</div>
-      {ready ? (
+      {!to ? (
+        <div className="ho-prev ho-wait">{t("hand.noBot")}</div>
+      ) : ready?.gone ? (
+        <div className="ho-prev ho-wait ho-gone" data-testid="handover-gone">
+          {t("hand.gone")}
+        </div>
+      ) : ready ? (
         <pre className="ho-prev" data-testid="handover-preview">
           {text}
         </pre>
@@ -154,7 +172,7 @@ export function HandoverCard({ at, from, onClose }: { at: { x: number; y: number
         <button type="button" onClick={onClose} data-testid="handover-cancel">
           {t("hand.cancel")}
         </button>
-        <button type="button" className="primary" disabled={!to || !ready || busy} onClick={() => void send()} data-testid="handover-send">
+        <button type="button" className="primary" disabled={!to || !ready || ready.gone || busy} onClick={() => void send()} data-testid="handover-send">
           {t("hand.send")}
         </button>
       </div>

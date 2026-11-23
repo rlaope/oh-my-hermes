@@ -318,7 +318,11 @@ const PANEL_TREES = {
   ],
   friren: [],
   default: [],
+  // a bot over SSH lists folders on its own computer
+  "mac-mini:mini": [{ path: "/home/sionic/build", branch: "main", head: "b1c2d3e4f", repo: "build", dirty: 1, ago: 60 }],
 };
+// worktrees removed on disk since the list was read: still listed, but panel.diff no longer finds them (mock.treeGone)
+const goneTrees = new Set();
 const PANEL_DIFF = {
   "/w/gateway-keepalive": {
     scope: "uncommitted",
@@ -772,6 +776,7 @@ function acctFind(p) {
 }
 
 function reset() {
+  goneTrees.clear();
   usageFixture = "default";
   skillsLater = { add: [], after: 0 };
   providerFixture = "default";
@@ -1496,7 +1501,7 @@ const OPS = {
   "panel.diff": (p) => {
     const b = needBot(p);
     const w = (PANEL_TREES[b.name] ?? []).find((t) => t.path === p.path);
-    if (!w) throw new OpError("not_found", "not a worktree this bot worked in");
+    if (!w || goneTrees.has(w.path)) throw new OpError("not_found", "not a worktree this bot worked in");
     return { path: w.path, branch: w.branch, repo: w.repo, truncated: false, ...PANEL_DIFF[w.path] };
   },
   "media.read": (p) => {
@@ -1890,6 +1895,10 @@ const OPS = {
   },
   "mock.pluginLoad": (p) => {
     pluginLoadNext = p.load ?? null;
+    return {};
+  },
+  "mock.treeGone": (p) => {
+    goneTrees.add(needStr(p, "path"));
     return {};
   },
   "mock.botStatus": (p) => {

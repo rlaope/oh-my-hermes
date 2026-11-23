@@ -1544,6 +1544,7 @@ export const ko: Record<Key, string> = {
   "hand.note": "디스크에서 옮겨지는 것은 없고 터미널도 열린 채로 있어요. 봇이 자기 도구와 승인으로 작업해요.",
   "hand.cancel": "취소",
   "hand.send": "스레드 열기",
+  "hand.gone": "이 폴더가 더 이상 없어요. 아무것도 보내지 않았어요.",
   "tshare.wants": "{bot}이(가) {title}에 입력하려고 해요",
   "tshare.resumeSend": "이어서 보내기",
   "tshare.notTyped": "입력하지 못했어요: 터미널이 입력을 받지 않아요. 이어하거나 거부하세요.",

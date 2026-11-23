@@ -68,6 +68,12 @@
   justify-content: center;
   min-height: 48px;
 }
+.ho-gone {
+  color: var(--danger);
+  font-family: inherit;
+  font-size: 12px;
+  text-align: center;
+}
 .ho-note {
   margin: 0;
   line-height: 1.4;

@@ -1544,6 +1544,7 @@ export const ja: Record<Key, string> = {
   "hand.note": "ディスク上では何も移動せず、ターミナルも開いたままです。ボットは自分のツールと承認で作業します。",
   "hand.cancel": "キャンセル",
   "hand.send": "スレッドを開く",
+  "hand.gone": "このフォルダーはもうありません。何も送っていません。",
   "tshare.wants": "{bot} が {title} に入力しようとしています",
   "tshare.resumeSend": "再開して送信",
   "tshare.notTyped": "入力できませんでした: ターミナルが入力を受け付けていません。再開するか、拒否してください。",

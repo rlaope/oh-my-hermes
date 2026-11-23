@@ -1547,6 +1547,7 @@ export const en = {
   "hand.note": "Nothing moves on disk and the terminal stays open. The bot works with its own tools and approvals.",
   "hand.cancel": "Cancel",
   "hand.send": "Open thread",
+  "hand.gone": "This worktree is no longer there. Nothing was sent.",
   "tshare.wants": "{bot} wants to type into {title}",
   "tshare.resumeSend": "Resume and send",
   "tshare.notTyped": "Not typed: the terminal is not taking input. Resume it, or Deny.",

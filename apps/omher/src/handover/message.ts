@@ -4,6 +4,10 @@
 // line saying nothing moved. The git facts come only from the bot's own Worktrees list and one `panel.diff` of a
 // worktree in it (BOUNDARY.md rule 10); a folder outside them is handed with no git facts and the bot reads them
 // with its own tools. Paths and branch names go in code spans, so spaces, backslashes and `_` show as written.
+// Every name in it (folder, worktree, branch, file) comes from disk or from a repository someone else may have
+// written, so each goes through printable() first: a control character, a line or paragraph separator or a bidi
+// control becomes a visible escape and cannot start a line of its own (a forged "Goal:"), and each name is cut to
+// NAME_CHARS. The goal is one line the same way. The whole message stays under MESSAGE_CHARS by construction.
 import { pathKey } from "../sessions/folders";
 import type { Worktree, WorktreeDiff } from "../lib/protocol";
 
@@ -11,6 +15,26 @@ import type { Worktree, WorktreeDiff } from "../lib/protocol";
 export const STAT_FILES = 20;
 /** The most characters of the goal line. */
 export const GOAL_CHARS = 500;
+/** The most characters of one name (a path, a branch, a file) after its escapes. */
+export const NAME_CHARS = 240;
+/** What the whole message stays under: the fixed lines, five names, STAT_FILES file lines and the goal at their caps. */
+export const MESSAGE_CHARS = 8192;
+
+/** C0 and C1 controls, DEL, the line and paragraph separators and the bidi controls (U+200E/F, U+202A-202E,
+ *  U+2066-2069): what could start a new line or reorder what a reader sees. */
+const UNSAFE = /[\u0000-\u001f\u007f-\u009f\u2028\u2029\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
+const NAMED: Record<string, string> = { "\n": "\\n", "\r": "\\r", "\t": "\\t" };
+
+/** `s` with every UNSAFE character as a visible escape (`\n`, `\r`, `\t`, else `\u202E` and the like), cut to
+ *  `max` characters with "…". */
+export function printable(s: string, max = NAME_CHARS): string {
+  const out = s.replace(UNSAFE, (c) => NAMED[c] ?? `\\u${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`);
+  const chars = [...out];
+  return chars.length <= max ? out : `${chars.slice(0, max - 1).join("")}…`;
+}
+
+/** A name as the message writes it: printable, in a code span. */
+const name = (s: string) => codeSpan(printable(s));
 
 export interface HandoverFacts {
   /** The folder handed over: a TERMINALS session's own folder, or the worktree's path. */
@@ -64,16 +88,15 @@ const leaf = (p: string) => pathKey(p).split(/[\\/]/).filter(Boolean).pop() ?? p
 
 /** One line: the folder's last part and, when known, its branch. */
 export function handoverTitle(f: Pick<HandoverFacts, "folder" | "worktree">): string {
-  const branch = f.worktree?.branch || (f.worktree?.head ? f.worktree.head.slice(0, 7) : "");
-  const name = leaf(f.folder).replace(/\s+/g, " ").trim() || f.folder;
-  return branch ? `${name} (${branch})` : name;
+  const branch = printable(f.worktree?.branch || (f.worktree?.head ? f.worktree.head.slice(0, 7) : ""), 80);
+  const base = printable(leaf(f.folder).replace(/\s+/g, " ").trim() || f.folder, 80);
+  return branch ? `${base} (${branch})` : base;
 }
 
-/** The goal as one line, at most GOAL_CHARS characters. */
+/** The goal as one line (every run of white space, line breaks included, is one space), printable, at most
+ *  GOAL_CHARS characters: it can never start a line of the message. */
 export function goalLine(goal: string): string {
-  const one = goal.replace(/\s+/g, " ").trim();
-  const chars = [...one];
-  return chars.length <= GOAL_CHARS ? one : `${chars.slice(0, GOAL_CHARS - 1).join("").trimEnd()}…`;
+  return printable(goal.replace(/[\s\u2028\u2029]+/g, " ").trim(), GOAL_CHARS);
 }
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -82,10 +105,10 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 function gitLines(f: HandoverFacts): string[] {
   const w = f.worktree;
   const out: string[] = [];
-  if (w && cmpKey(w.path) !== cmpKey(f.folder)) out.push(`- Worktree: ${codeSpan(w.path)}`);
+  if (w && cmpKey(w.path) !== cmpKey(f.folder)) out.push(`- Worktree: ${name(w.path)}`);
   if (w) {
-    const head = w.head ? ` at ${w.head.slice(0, 7)}` : "";
-    out.push(w.branch ? `- Branch: ${codeSpan(w.branch)}${head}` : `- Branch: detached${head}`);
+    const head = w.head ? ` at ${printable(w.head.slice(0, 7))}` : "";
+    out.push(w.branch ? `- Branch: ${name(w.branch)}${head}` : `- Branch: detached${head}`);
   }
   if (!w || !f.diff) {
     out.push("- Git: omher did not read this folder's status; check it with `git status` and `git diff --stat` there.");
@@ -103,7 +126,7 @@ function gitLines(f: HandoverFacts): string[] {
     out.push("- Status: clean, no uncommitted changes");
     if (tracked.length) out.push(`- Last commit: ${plural(tracked.length, "file", "files")}, +${add} -${del}${cut}`);
   }
-  const named = [...tracked.map((x) => `  - ${codeSpan(x.path)} +${x.add} -${x.del}`), ...untracked.map((x) => `  - ${codeSpan(x.path)} untracked`)];
+  const named = [...tracked.map((x) => `  - ${name(x.path)} +${x.add} -${x.del}`), ...untracked.map((x) => `  - ${name(x.path)} untracked`)];
   out.push(...named.slice(0, STAT_FILES));
   if (named.length > STAT_FILES) out.push(`  - and ${named.length - STAT_FILES} more`);
   return out;
@@ -113,7 +136,7 @@ function gitLines(f: HandoverFacts): string[] {
 export function handoverMessage(f: HandoverFacts): string {
   const parts = [
     "Handover from omher: pick up the work in this folder.",
-    [`- Folder: ${codeSpan(f.folder)}`, ...gitLines(f)].join("\n"),
+    [`- Folder: ${name(f.folder)}`, ...gitLines(f)].join("\n"),
   ];
   const goal = goalLine(f.goal);
   if (goal) parts.push(`Goal: ${goal}`);

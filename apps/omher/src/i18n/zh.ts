@@ -1544,6 +1544,7 @@ export const zh: Record<Key, string> = {
   "hand.note": "磁盘上的东西不会移动，终端也保持打开。机器人用自己的工具和审批来工作。",
   "hand.cancel": "取消",
   "hand.send": "打开会话",
+  "hand.gone": "这个文件夹已经不在了。没有发送任何内容。",
   "tshare.wants": "{bot} 想在 {title} 中输入",
   "tshare.resumeSend": "继续并发送",
   "tshare.notTyped": "未能输入：终端当前不接受输入。请继续该会话，或拒绝。",

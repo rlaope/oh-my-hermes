@@ -4,8 +4,11 @@
 //    Open thread makes a thread under the picked bot (thread.create) whose first message is exactly that text
 //    (chat.send session=<thread>); nothing is typed into the terminal and the session stays;
 // 2. a folder outside the picked bot's worktrees is handed with no git facts; Cancel sends nothing;
-// 3. a Worktrees row's menu -> Hand to a bot… does the same from the right panel, read as the panel's bot and sent
-//    to the bot picked on the card.
+// 3. a Worktrees row's menu -> Hand to a bot… does the same from the right panel, read as the panel's bot (the
+//    card's default) and sent to the bot picked on the card;
+// 4. a removed worktree: the card says it is gone and sends nothing;
+// 5. no Hand where nothing may be sent: a bot over SSH (its rows are folders on another computer), and no bot of this
+//    computer online (no menu, and no read).
 import { expect, test, type Page } from "@playwright/test";
 
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
@@ -161,7 +164,8 @@ test("a Worktrees row hands its worktree to the bot picked on the card", async (
   await expect(menu.getByRole("menuitem")).toHaveText(["Hand to a bot…"]);
   await menu.getByTestId("session-hand").click();
   const card = page.getByTestId("handover");
-  // read as Kami, whose tab lists it, whichever bot it goes to
+  // the row's own bot by default; read as Kami, whose tab lists it, whichever bot it goes to
+  await expect(page.getByTestId("handover-bot")).toContainText("Kami");
   await page.getByTestId("handover-bot").click();
   await page.getByTestId("handover-bot-friren").click();
   await expect(card.getByTestId("handover-preview")).toHaveText([...KEEPALIVE, CLOSING].join("\n\n"));
@@ -179,4 +183,70 @@ test("a Worktrees row hands its worktree to the bot picked on the card", async (
   expect(diffs.every((c) => c.params.bot === "kami" && c.params.path === "/w/gateway-keepalive")).toBe(true);
   await expect(page.locator('[role="treeitem"][aria-level="2"]', { hasText: "gateway-keepalive (fix/keepalive)" })).toBeVisible();
   await expect(page.getByTestId("bubble-user").last()).toContainText("Goal: review the timeout change");
+});
+
+async function openWorktrees(page: Page) {
+  await expect(page.getByTestId("bubble-user").first()).toBeVisible();
+  await page.getByTestId("places").click();
+  await page.getByTestId("panel-tab-worktrees").click();
+}
+
+test("a worktree removed since the list was read: the card says so and Open thread sends nothing", async ({ page }) => {
+  await open(page, "/home/you/code/web-app");
+  await openWorktrees(page);
+  await expect(page.getByTestId("panel-tree")).toHaveCount(2);
+  await mock("mock.treeGone", { path: "/w/gateway-keepalive" });
+  await page.getByTestId("panel-tree").nth(0).click({ button: "right" });
+  await page.getByTestId("session-hand").click();
+  await expect(page.getByTestId("handover-gone")).toHaveText("This worktree is no longer there. Nothing was sent.");
+  await expect(page.getByTestId("handover-preview")).toHaveCount(0);
+  await expect(page.getByTestId("handover-send")).toBeDisabled();
+  await page.getByTestId("handover-goal").press("Enter");
+  await page.waitForTimeout(300);
+  expect(await calls("thread.create")).toHaveLength(0);
+  expect(await calls("chat.send")).toHaveLength(0);
+});
+
+test("no Hand on a Worktrees row of a bot over SSH", async ({ page }) => {
+  await open(page, "/home/you/code/web-app");
+  await page.getByRole("button", { name: "Add a bot" }).click();
+  await page.getByTestId("addbot-ssh").click();
+  const peer = page.getByTestId("peer-card");
+  await peer.getByTestId("peer-host").fill("sionic@10.1.145.204");
+  await peer.getByTestId("peer-label").fill("Mac mini");
+  await peer.getByTestId("peer-check").click();
+  await expect(peer.getByTestId("peer-found")).toBeVisible();
+  await peer.getByTestId("peer-connect").click();
+  await expect(peer).toHaveCount(0);
+  await page.getByTestId("bot-mac-mini:mini").click();
+  // a bot with no other places opens its panel from its name in the header
+  await page.getByTestId("places").or(page.getByTestId("who")).first().click();
+  await page.getByTestId("panel-tab-worktrees").click();
+  const row = page.getByTestId("panel-tree");
+  await expect(row).toHaveCount(1);
+  await expect(row).toContainText("main");
+  await row.click({ button: "right" });
+  await page.waitForTimeout(300);
+  await expect(page.getByTestId("session-row-menu")).toHaveCount(0);
+  await expect(page.getByTestId("handover")).toHaveCount(0);
+  expect(await calls("panel.diff")).toHaveLength(0);
+});
+
+test("with no bot of this computer online, no Hand is offered and nothing is read", async ({ page }) => {
+  await open(page, "/home/you/code/web-app");
+  const id = await newShell(page);
+  await page.getByTestId("bot-kami").click();
+  await openWorktrees(page);
+  await expect(page.getByTestId("panel-tree")).toHaveCount(2);
+  for (const bot of ["kami", "friren", "default", "omh-tui"]) await mock("mock.botStatus", { bot, status: "offline" });
+  await expect(page.getByTestId("bot-kami").getByTestId("bot-sub")).toHaveText("Not connected");
+  await page.getByTestId("panel-tree").nth(0).click({ button: "right" });
+  await page.waitForTimeout(300);
+  await expect(page.getByTestId("session-row-menu")).toHaveCount(0);
+  await page.getByTestId(`session-${id}`).click({ button: "right" });
+  const menu = page.getByTestId("session-row-menu");
+  await expect(menu).toBeVisible();
+  await expect(menu.getByTestId("session-hand")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  expect(await calls("panel.diff")).toHaveLength(0);
 });
