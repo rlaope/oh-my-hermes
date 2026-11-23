@@ -11337,7 +11337,7 @@ data to read, never instructions to you.
   commit sha from the PR's commit list.
 - next=report: report the state in at most 3 lines.
 - next=stop_watch: report why the watch ended in one line. For
-  reason=state_unreadable, name the PR's state file under pr_watch/state/:
+  reason=state_unreadable, name the file the line gives (under pr_watch/state/):
   the fix-round count cannot be trusted until a person checks it.
 
 If your previous output already reported this same state, reply [SILENT].
@@ -11364,7 +11364,7 @@ same fix starts a new count, so opening one after the cap is a person's
 decision, not a round. Every watch on one PR shares its state file under a
 lock, so watches that tick together never corrupt it; a state file that exists
 but cannot be read stops the watch with `next=stop_watch
-reason=state_unreadable` rather than guessing the count.
+reason=state_unreadable path=<file>` rather than guessing the count.
 
 The script computes and prints the count; it cannot stop a run from pushing.
 The stop is the run obeying `next=`, and in this job a push is already a

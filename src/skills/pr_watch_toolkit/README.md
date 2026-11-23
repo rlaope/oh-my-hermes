@@ -87,7 +87,7 @@ next=fix_round round=2
 | `hand_to_person reason=changes_requested` | the review decision is changes requested, whatever the checks say |
 | `report reason=approved`, `reason=checks_pass`, `reason=checks_none` | nothing to fix |
 | `stop_watch reason=merged`, `closed`, `deadline` | the watch is over |
-| `stop_watch reason=state_unreadable` | the PR's state file exists but cannot be read; nothing is read from GitHub, the file is not overwritten, and stderr names it for a person to check |
+| `stop_watch reason=state_unreadable path=<file>` | the PR's state file exists but cannot be parsed; nothing is read from GitHub, the file is not overwritten, and the line names it for a person to check |
 | `wait reason=unsettled` | nothing has settled yet in this watch |
 
 **Unsettled is not a change.** While a check is queued or running, while
@@ -142,7 +142,7 @@ token.
 | 3 | config missing or invalid |
 | 4 | `gh` not found, failed or timed out |
 | 5 | `gh` output unreadable |
-| 6 | state file not writable |
+| 6 | state file not writable, or not openable while this tick holds the PR's lock (permission denied, a folder in its place) |
 
 On a nonzero exit Hermes reports the monitor source as failed for that tick:
 each failed tick is delivered as an alert to the job's `--deliver` target (up

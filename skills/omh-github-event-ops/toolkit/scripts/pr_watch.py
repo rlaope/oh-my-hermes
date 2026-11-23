@@ -47,8 +47,10 @@ file beside it: a tick reads, changes and writes it only while holding the lock
 cannot get the lock within 20 seconds repeats its watch's last block, reads
 nothing and writes nothing: no change and no alert. A state file that exists
 but cannot be read is never overwritten: the watch stops with
-`next=stop_watch reason=state_unreadable`, reads nothing from GitHub, and names
-the file on stderr, so a person checks it.
+`next=stop_watch reason=state_unreadable path=<file>`, the same bytes every
+tick, and reads nothing from GitHub, so a person checks it. A tick that holds
+the lock and still cannot open the file (permission denied, a folder in its
+place) exits 6, which Hermes delivers as an alert.
 
 Each watch ends at most 24 hours after its first tick, whatever its `deadline`
 says. The first tick is kept per watch name, so a later watch on the same PR
@@ -178,9 +180,13 @@ def resolve_config(arg: str | None) -> tuple[Path, str | None]:
 
 
 def _safe_part(part: str) -> str:
-    """A path component every platform accepts: a trailing dot or a Windows device name is hex-encoded."""
+    """A path component every platform accepts: a trailing dot or a Windows device name is hex-encoded.
+
+    The `~` prefix is a character `REPO_RE` refuses in an owner or a name, so an encoded part can never
+    be some other repository's real name.
+    """
     if part.endswith(".") or part.split(".", 1)[0] in RESERVED_NAMES:
-        return "_" + part.encode("utf-8").hex()
+        return "~" + part.encode("utf-8").hex()
     return part
 
 
@@ -488,16 +494,22 @@ def tick(cfg: dict, path: Path, now: dt.datetime, reader, locked: bool) -> tuple
     loaded, status = read_state(path)  # a lockless read is whole: every write is one atomic replace
     if status == "unreadable":
         # Fails loudly and stops: the count cannot be trusted, so nothing is read and nothing is overwritten.
+        # The path is on stdout, the same bytes every tick: Hermes shows a monitor's stdout, not its stderr.
         print(f"pr-watch: error reason=state_unreadable path={path}", file=sys.stderr)
-        return EXIT_OK, ["next=stop_watch reason=state_unreadable"]
+        return EXIT_OK, [f"next=stop_watch reason=state_unreadable path={path}"]
     state = json.loads(json.dumps(loaded))
     entry = watch_entry(state, cfg["watch_key"], now)
     deadline = min(cfg["deadline"], dt.datetime.fromtimestamp(entry["started"] + MAX_WATCH_SECONDS, dt.timezone.utc))
     if now >= deadline:
         lines = ["next=stop_watch reason=deadline"]
+    elif locked and status == "io_error":
+        # Holding the lock and still unable to read (permission denied, a folder at the path) is not
+        # contention: fail the tick, so Hermes delivers the error instead of a wait that never ends.
+        print(f"pr-watch: error reason=state_io_error path={path}", file=sys.stderr)
+        return EXIT_STATE, []
     elif not locked or status == "io_error":
-        # Another watch on this PR holds the lock (or the file is briefly unopenable): this tick repeats this
-        # watch's last block, which is no change and no alert, and the next tick reads the PR.
+        # Another watch on this PR holds the lock: this tick repeats this watch's last block, which is no
+        # change and no alert, and the next tick reads the PR.
         print(f"pr-watch: note reason=state_busy path={path}", file=sys.stderr)
         return EXIT_OK, entry["settled"] or [WAIT_LINE]
     else:

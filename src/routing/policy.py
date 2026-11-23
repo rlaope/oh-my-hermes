@@ -5431,11 +5431,15 @@ _PR_WATCH_SETTLE_CUES = (
     "머지",
     "때까지",
 )
-# The PR must be the thing watched: an English verb takes it as its object
-# within a few words after it, and a Korean verb within a few words after it
-# when a PR-state word (checks, CI, merge, review) or the verb itself follows
-# it closely. "배포 끝날 때까지 지켜보다가 PR 올려줘" names the PR as the result of
-# the wait, not its object.
+# The PR must be the thing watched, and the wait must end on the PR's own state.
+# English: the PR comes within a few words after the watch or wait verb, the
+# words up to the clause opener (`until`, `to`, `when`) name no other watched
+# thing and no measure of PRs, and the clause names a PR state (checks, CI,
+# merged, approved) and no calendar boundary. Korean: the PR comes before the
+# verb with a PR-state word or the verb right after it, and the span up to the
+# verb holds the settle ending and no other watched thing, measure or date.
+# "배포 끝날 때까지 지켜보다가 PR 올려줘" names the PR as the result of the wait,
+# and "monitor PR merge rate until the sprint ends" a measure until a date.
 _PR_WATCH_EN_VERB_WORDS = (
     ("watch",),
     ("watching",),
@@ -5449,43 +5453,59 @@ _PR_WATCH_EN_VERB_WORDS = (
     ("wait", "on"),
     ("wait", "until"),
 )
-_PR_WATCH_KO_VERB_STEMS = ("지켜보", "지켜봐", "기다려", "기다렸", "감시", "모니터링", "주시")
-_PR_WATCH_KO_STATE_WORDS = ("체크", "ci", "머지", "리뷰", "빌드", "테스트", "검사")
 _PR_WATCH_EN_OBJECT_WINDOW = 4
-_PR_WATCH_KO_OBJECT_WINDOW = 6
-# Something else is watched (a deploy, a release, an environment), or the PR is
-# a number to measure, not a thing to wait on.
-_PR_WATCH_BLOCKER_TOKENS = frozenset(
+_PR_WATCH_EN_CLAUSE_OPENERS = frozenset({"until", "till", "to", "when", "once"})
+_PR_WATCH_EN_STATE_WORDS = frozenset(
     {
-        "queue", "backlog", "video", "videos", "youtube",
-        "deploy", "deploys", "deployed", "deploying", "deployment", "deployments", "release", "releases",
-        "staging", "production", "prod", "rollout", "rollouts", "server", "servers", "logs",
-        "turnaround", "metric", "metrics", "times", "throughput", "statistics", "stats", "average", "count",
-        "latency", "velocity", "dashboard",
+        "check", "checks", "ci", "test", "tests", "build", "builds",
+        "pass", "passes", "passed", "passing", "green", "fail", "fails", "failed", "red",
+        "merge", "merges", "merged", "mergeable", "approve", "approves", "approved",
+        "review", "reviews", "reviewed", "close", "closes", "closed", "land", "lands", "landed",
+        "done", "finish", "finishes", "finished", "complete", "completes", "completed", "settle", "settles",
     }
+)
+_PR_WATCH_EN_CALENDAR = frozenset(
+    {
+        "sprint", "week", "weekend", "month", "quarter", "year", "today", "tonight", "tomorrow", "eod",
+        "deadline", "morning", "evening", "noon", "monday", "tuesday", "wednesday", "thursday", "friday",
+        "saturday", "sunday",
+    }
+)
+# Another thing watched in the PR's place, and a measure of PRs.
+_PR_WATCH_OTHER_OBJECTS = frozenset(
+    {
+        "queue", "backlog", "video", "videos", "deploy", "deploys", "deployment", "deployments",
+        "release", "releases", "staging", "production", "prod", "rollout", "server", "servers", "logs",
+        "dashboard", "pipeline", "pipelines",
+    }
+)
+_PR_WATCH_MEASURES = frozenset(
+    {
+        "rate", "rates", "count", "counts", "number", "numbers", "speed", "time", "times", "turnaround",
+        "throughput", "latency", "velocity", "metric", "metrics", "stats", "statistics", "average", "long",
+        "many", "volume", "trend", "trends",
+    }
+)
+_PR_WATCH_KO_VERB_STEMS = ("지켜보", "지켜봐", "기다려", "기다렸", "감시", "모니터링", "주시")
+_PR_WATCH_KO_STATE_WORDS = ("체크", "ci", "머지", "리뷰", "빌드", "테스트", "검사", "승인", "통과", "실패", "닫히")
+_PR_WATCH_KO_OBJECT_WINDOW = 6
+# Whole words, compared after the router's own fold (Hangul is decomposed there).
+_PR_WATCH_KO_MEASURE_WORDS = frozenset(
+    normalized_phrase(word) for word in ("수", "수를", "수가", "속도", "속도를", "건수", "개수", "비율", "시간")
+)
+_PR_WATCH_KO_BLOCKERS = (
+    "배포", "릴리즈", "릴리스", "스테이징", "서버", "로그", "영상", "대기열",
+    "통계", "지표", "평균", "얼마나", "속도", "건수", "개수", "비율",
+    "이번 주", "주말", "금요일", "월요일", "화요일", "수요일", "목요일", "토요일", "일요일",
+    "스프린트", "분기", "오늘", "내일", "월말",
 )
 _PR_WATCH_BLOCKERS = (
     *_GREENFIELD_QUESTION_OPENERS,
     "watch out",
     "how long",
     "how many",
-    "대기열",
-    "영상",
-    "유튜브",
-    "배포",
-    "릴리즈",
-    "릴리스",
-    "스테이징",
-    "운영 서버",
-    "서버",
-    "로그",
-    "지표",
-    "통계",
-    "평균",
-    "얼마나",
-    "몇 개",
-    "대시보드",
 )
+
 _ONE_OFF_TOKENS = _normalized_token_set(
     {
         "once",
@@ -10847,7 +10867,7 @@ def channel_watch_guard_applies(normalized_query: str) -> bool:
 
 
 def pr_watch_guard_applies(normalized_query: str) -> bool:
-    """One pull request as the object of a watch or wait verb, and a settle cue; none alone."""
+    """A wait on one pull request's own state: the PR is what is watched, and the wait ends on its state."""
     if not (
         any(phrase_is_spoken(normalized_query, noun) for noun in _PR_WATCH_SPOKEN_OBJECTS)
         or _contains_phrase(normalized_query, _PR_WATCH_OBJECTS)
@@ -10863,13 +10883,11 @@ def pr_watch_guard_applies(normalized_query: str) -> bool:
         or _PR_WATCH_SETTLE_TOKENS & routing_terms(normalized_query)
     ):
         return False
-    if _PR_WATCH_BLOCKER_TOKENS & routing_terms(normalized_query) or _contains_phrase(normalized_query, _PR_WATCH_BLOCKERS):
+    if _contains_phrase(normalized_query, _PR_WATCH_BLOCKERS):
         return False
-    return _pr_is_the_watched_object(_pr_watch_words(normalized_query))
-
-
-def _pr_watch_words(normalized_query: str) -> list[str]:
-    return [word.strip(".,!?;:()[]{}\"'`") for word in normalized_query.split()]
+    raw = normalized_query.split()
+    words = [word.strip(".,!?;:()[]{}\"'`#") for word in raw]
+    return _english_pr_watch(raw, words) or _korean_pr_watch(words)
 
 
 def _is_pr_word(words: list[str], index: int) -> bool:
@@ -10890,20 +10908,61 @@ def _english_verb_ends(words: list[str]) -> list[int]:
     return ends
 
 
-def _pr_is_the_watched_object(words: list[str]) -> bool:
+def _english_pr_watch(raw: list[str], words: list[str]) -> bool:
+    """An English verb takes the PR as its object, and its until-clause is about the PR's own state.
+
+    The object is the words from the verb to the clause opener (`until`, `to`, `when`, ...); it may not
+    name another watched thing or a measure of PRs. The clause runs to the next comma or `and`/`then`;
+    it must name a PR state (checks, CI, merged, approved, ...) and no calendar boundary.
+    """
     pr_at = [index for index in range(len(words)) if _is_pr_word(words, index)]
     for end in _english_verb_ends(words):
-        if any(end < index <= end + _PR_WATCH_EN_OBJECT_WINDOW for index in pr_at):
-            return True
-    korean_verbs = [index for index, word in enumerate(words) if _contains_phrase(word, _PR_WATCH_KO_VERB_STEMS)]
-    for verb in korean_verbs:
-        for index in pr_at:
-            if not index < verb <= index + _PR_WATCH_KO_OBJECT_WINDOW:
+        for pr in (index for index in pr_at if end < index <= end + _PR_WATCH_EN_OBJECT_WINDOW):
+            opener = next((k for k in range(pr + 1, len(words)) if words[k] in _PR_WATCH_EN_CLAUSE_OPENERS), None)
+            if opener is None:
                 continue
-            close = words[index + 1:min(index + 3, verb + 1)]
-            if verb <= index + 2 or any(_contains_phrase(word, _PR_WATCH_KO_STATE_WORDS) for word in close):
+            obj = words[end + 1:opener]
+            if any(word in _PR_WATCH_OTHER_OBJECTS or word in _PR_WATCH_MEASURES for word in obj):
+                continue
+            clause = []
+            for k in range(opener + 1, len(words)):
+                if words[k] in ("and", "then", "but", "so"):
+                    break
+                clause.append(words[k])
+                if raw[k][-1:] in ",;.":
+                    break
+            if any(word in _PR_WATCH_EN_STATE_WORDS for word in clause) and not any(
+                word in _PR_WATCH_EN_CALENDAR for word in clause
+            ):
                 return True
     return False
+
+
+def _korean_pr_watch(words: list[str]) -> bool:
+    """A Korean verb follows the PR, and the words between them are the PR's own state ending.
+
+    A PR-state word (체크, CI, 머지, 리뷰, ...) or the verb comes right after the PR, the span up to
+    the verb holds the settle ending (끝날 때까지, 머지될 때까지, 되면), and it names no other watched
+    thing, no measure of PRs, and no calendar boundary.
+    """
+    pr_at = [index for index in range(len(words)) if _is_pr_word(words, index)]
+    verbs = [index for index, word in enumerate(words) if _contains_phrase(word, _PR_WATCH_KO_VERB_STEMS)]
+    for verb in verbs:
+        for pr in pr_at:
+            if not pr < verb <= pr + _PR_WATCH_KO_OBJECT_WINDOW:
+                continue
+            span = words[pr + 1:verb]
+            close = words[pr + 1:min(pr + 3, verb + 1)]
+            if not (verb <= pr + 2 or any(_contains_phrase(word, _PR_WATCH_KO_STATE_WORDS) for word in close)):
+                continue
+            if any(word in _PR_WATCH_KO_MEASURE_WORDS or _contains_phrase(word, _PR_WATCH_KO_BLOCKERS) for word in span):
+                continue
+            if _contains_phrase(" ".join(span), _PR_WATCH_SETTLE_CUES) and any(
+                _contains_phrase(word, _PR_WATCH_KO_STATE_WORDS) for word in span
+            ):
+                return True
+    return False
+
 
 
 def credential_rotation_guard_applies(normalized_query: str) -> bool:

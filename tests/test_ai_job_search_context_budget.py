@@ -570,8 +570,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # was a5576186...5b9c. Its review round then restates the fix-round count (per PR, never lower, an amend
         # included) and the guard's content-type and alert notes; only github-event-ops moves again. Its
         # verification round adds the state_unreadable recovery note; only github-event-ops moves, and the pin
-        # before it was 64aaeb57...2733.
-        self.assertEqual(_digest(legacy_hashes), 'c839b0a3e67b613c998e015204793303c2835b2efd773b502342501a2fc923f3')
+        # before it was 64aaeb57...2733. Its final round puts the state file's path in that note; only
+        # github-event-ops moves, and the pin before it was c839b0a3...23f3.
+        self.assertEqual(_digest(legacy_hashes), 'fe24412b11e012ca774bd5da97a4a7425b0bbc2b37dd2212c4b925ab75ff1dd4')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

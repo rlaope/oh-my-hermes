@@ -43,7 +43,26 @@ class PrWatchRoutingTests(unittest.TestCase):
         "이 PR 머지될 때까지 지켜보다가 알려줘",
         "wait for the checks on PR 42 to finish",
         "PR #12 머지될 때까지 기다려줘",
+        # Logs, production, a server or a deploy named elsewhere, not watched.
+        "watch PR 42 until CI finishes and show me the failing logs",
+        "PR 42 체크 끝날 때까지 지켜보고 실패하면 로그 보여줘",
+        "watch PR 42 until it is merged to production",
+        "서버 쪽 PR 머지될 때까지 지켜봐줘",
+        "keep an eye on PR 3137 until the checks pass, it fixes the deploy script",
     )
+
+    # Real PR waits the guard leaves on clarify, by choice: the PR is beyond the verb's object window
+    # (the pipeline is what is watched) or is merged by someone else as the wait's end.
+    LEFT_ON_CLARIFY = (
+        "watch the CI pipeline for the PR until it's done",
+        "wait until my teammate merges the PR, then rebase",
+    )
+
+    def test_some_real_pr_waits_stay_on_clarify(self) -> None:
+        for message in self.LEFT_ON_CLARIFY:
+            with self.subTest(message=message):
+                self.assertFalse(_applies(message))
+                self.assertEqual(_route(message)["action"], "clarify")
 
     # The PR is mentioned, but something else is watched, or the PR is what the
     # wait produces rather than what it waits on.
@@ -69,6 +88,16 @@ class PrWatchRoutingTests(unittest.TestCase):
         "PR 올리고 나서 로그 끝날 때까지 지켜봐줘",
         "테스트 끝날 때까지 기다렸다가 PR 리뷰 요청해줘",
         "PR 올리기 전에 빌드 끝날 때까지 지켜봐줘",
+        # A measure of PRs, or a wait that ends on a date.
+        "monitor PR merge rate until the sprint ends",
+        "이번 주 PR 머지 수 지켜보다가 금요일에 보고해줘",
+        "PR 리뷰 속도 지켜보다가 스프린트 끝날 때 알려줘",
+        "watch PR velocity until the end of the quarter",
+        "monitor the PR merge time until Friday",
+        "watch PR 42 until Friday",
+        "keep an eye on PR 42 until next week",
+        "PR 42 이번 주 끝날 때까지 지켜봐줘",
+        "PR 건수 월말까지 지켜보다가 알려줘",
     )
 
     def test_the_pr_must_be_what_is_watched(self) -> None:

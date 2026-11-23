@@ -478,7 +478,9 @@ class WatchTest(unittest.TestCase):
                 # and the 24 h bound cannot be lost to it: the watch is already over.
                 for now in (self.now, self.now + dt.timedelta(days=365 * 72)):
                     code, out, err = self.tick(None, now=now)
-                    self.assertEqual((code, out), (0, f"{HEADER}\nnext=stop_watch reason=state_unreadable\n"))
+                    # The path is on the stable stdout line: Hermes drops stderr when the script exits 0.
+                    self.assertEqual(
+                        (code, out), (0, f"{HEADER}\nnext=stop_watch reason=state_unreadable path={self.state}\n"))
                     self.assertIn(f"reason=state_unreadable path={self.state}", err)
                 self.assertEqual(self.state.read_text(encoding="utf-8"), damaged)
 
@@ -497,6 +499,15 @@ class WatchTest(unittest.TestCase):
         self.assertEqual(self.next_line(gh_view(B, [A, B], FAIL)), "next=fix_round round=2")
         self.assertFalse(lock.exists())
 
+    def test_a_state_it_cannot_open_while_holding_the_lock_is_an_error_not_a_wait(self):
+        self.tick(gh_view(A, [A], FAIL))
+        self.state.unlink()
+        self.state.mkdir()  # a folder where the file should be: every read fails the same way
+        code, out, err = self.tick(None)
+        self.assertEqual((code, out), (6, ""))
+        self.assertIn(f"reason=state_io_error path={self.state}", err)
+        self.assertFalse(self.state.with_name("pr-42.json.lock").exists())
+
     def test_writes_leave_no_temporary_files(self):
         for view in (gh_view(A, [A], FAIL), gh_view(B, [A, B], RUNNING), gh_view(B, [A, B], FAIL)):
             self.tick(view)
@@ -512,8 +523,10 @@ class WatchTest(unittest.TestCase):
     def test_state_directories_are_safe_names_on_every_platform(self):
         for repo, parts in (
             ("acme/widgets", ("acme", "widgets")),
-            ("con/aux.lib", ("_636f6e", "_6175782e6c6962")),
-            ("acme/widgets.", ("acme", "_776964676574732e")),
+            ("con/aux.lib", ("~636f6e", "~6175782e6c6962")),
+            ("acme/widgets.", ("acme", "~776964676574732e")),
+            # A real repository spelled like an encoded part keeps its own name, which `~` can never start.
+            ("acme/_636f6e", ("acme", "_636f6e")),
             ("Acme/Widgets", ("acme", "widgets")),
         ):
             with self.subTest(repo=repo):
