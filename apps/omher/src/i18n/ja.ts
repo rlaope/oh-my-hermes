@@ -1450,6 +1450,8 @@ export const ja: Record<Key, string> = {
   "key.termClear": "ターミナルをクリア",
   "key.termScroll": "スクロールの先頭、末尾(ターミナル内)",
   "key.termCopyPaste": "コピー、貼り付け(ターミナル内)",
+  "key.termSelectAll": "ターミナルをすべて選択",
+  "key.termPrompt": "前、次のプロンプト(ターミナル内)",
   "tmenu.label": "ターミナル",
   "tmenu.copy": "コピー",
   "tmenu.paste": "貼り付け",

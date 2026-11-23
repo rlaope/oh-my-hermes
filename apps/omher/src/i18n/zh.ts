@@ -1450,6 +1450,8 @@ export const zh: Record<Key, string> = {
   "key.termClear": "清空终端",
   "key.termScroll": "回滚到顶部、底部(终端内)",
   "key.termCopyPaste": "复制、粘贴(终端内)",
+  "key.termSelectAll": "全选终端内容",
+  "key.termPrompt": "上一个、下一个提示符(终端内)",
   "tmenu.label": "终端",
   "tmenu.copy": "复制",
   "tmenu.paste": "粘贴",

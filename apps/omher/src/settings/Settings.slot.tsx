@@ -355,6 +355,7 @@ function BotCard({ bot }: { bot: Bot }) {
 }
 
 const MOD = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl+";
+const WIN = typeof navigator !== "undefined" && /^Win/.test(navigator.platform);
 const SHORTCUTS: [string, Key][] = [
   [`${MOD}1 … ${MOD}9`, "key.openBot"],
   [`${MOD}K`, "key.search"],
@@ -374,10 +375,14 @@ const SHORTCUTS: [string, Key][] = [
     ? ([
         ["⌘← · ⌘→ · ⌘⌫ · ⌘⌦", "key.termLine"],
         ["⌥← · ⌥→", "key.termWord"],
-        ["⌘K", "key.termClear"],
       ] as [string, Key][])
-    : ([["Ctrl+Shift+C · Ctrl+Shift+V · Ctrl+Insert · Shift+Insert", "key.termCopyPaste"]] as [string, Key][])),
+    : ([
+        [WIN ? "Ctrl+C · Ctrl+V · Ctrl+Shift+C · Ctrl+Shift+V · Ctrl+Insert · Shift+Insert" : "Ctrl+Shift+C · Ctrl+Shift+V · Ctrl+Insert · Shift+Insert", "key.termCopyPaste"],
+        ["Ctrl+Shift+A", "key.termSelectAll"],
+      ] as [string, Key][])),
+  [MOD === "⌘" ? "⌘K" : "Ctrl+Shift+K", "key.termClear"],
   [MOD === "⌘" ? "⌘Home · ⌘End" : "Ctrl+Home · Ctrl+End", "key.termScroll"],
+  [MOD === "⌘" ? "⌘↑ · ⌘↓" : "Ctrl+↑ · Ctrl+↓", "key.termPrompt"],
   [MOD === "⌘" ? "⌘⇧C" : "Alt+Shift+C", "key.copyLink"],
   ["1 · 2 · 3", "key.cardKeys"],
   ["Esc", "key.stop"],

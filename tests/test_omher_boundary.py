@@ -49,6 +49,8 @@ RULES = (
     " clicked in the window within the last 3 seconds;",
     "Off macOS, Ctrl+Shift+C and Ctrl+Insert copy the selection, and Ctrl+Shift+V and Shift+Insert are the page's own"
     " paste.",
+    "On Windows, as in Windows Terminal, Ctrl+V is the page's own paste too, and Ctrl+C copies the selection and clears"
+    " it; with nothing selected, Ctrl+C is the program's.",
     "Reset puts back the terminal's own state in the page and sends nothing to the program,",
     "On macOS, the person's Cmd+Left, Cmd+Right, Cmd+Backspace and Cmd+Delete reach the program as Ctrl+A, Ctrl+E,"
     " Ctrl+U and Ctrl+K, and Option+Left and Option+Right as ESC b and ESC f",

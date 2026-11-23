@@ -5,13 +5,14 @@
 // - OSC 133 (FinalTerm marks `A` prompt, `B` command, `C` output, `D[;exit]` finished): the buffer line each prompt
 //   starts on (an xterm marker, gone when that line leaves the scrollback) and whether its command ended non-zero. A
 //   thin mark is drawn beside each prompt (red after a failed command), and Cmd+Up / Cmd+Down (Cmd+PageUp /
-//   Cmd+PageDown) move the view to the previous / next prompt. A terminal that sent no marks keeps those keys as they
-//   were.
+//   Cmd+PageDown) move the view to the previous / next prompt; Ctrl+Up / Ctrl+Down on Windows and Linux (as VS Code).
+//   A terminal that sent no marks, or a full-screen program (the alternate screen), keeps those keys as they were.
 // - OSC 7 (`file://host/path`): the folder the shell is in now, only from a `file://` address on this computer (an
 //   empty host, `localhost` or this computer's name) with an absolute path. Only the path is read.
 // - OSC 9;4 (ConEmu progress `4;state;percent`): working (states 1, 2, 3) or done (0). No text is read.
 import type { IDecoration, IMarker, Terminal } from "@xterm/xterm";
 import "./marks.css";
+import { isMacPlatform } from "./engine-links";
 
 /** One OSC 133 mark: its letter, and for `D` the exit code when it carries one. */
 export interface Mark133 {
@@ -163,6 +164,15 @@ export function jumpToPrompt(term: Terminal, dir: -1 | 1): boolean {
 const PREV = new Set(["ArrowUp", "PageUp"]);
 const NEXT = new Set(["ArrowDown", "PageDown"]);
 
+/** The prompt a key asks for: -1 the previous, 1 the next, 0 none. macOS: Cmd with an arrow or page key; elsewhere
+ *  Ctrl with an arrow (Ctrl+PageUp / PageDown stay the program's: PowerShell scrolls a line with them). Nothing else
+ *  held, so AltGr (Ctrl+Alt on Windows) is never one. */
+export function promptKey(e: { key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }, mac: boolean): -1 | 0 | 1 {
+  if (e.altKey || e.shiftKey || (mac ? !e.metaKey || e.ctrlKey : !e.ctrlKey || e.metaKey)) return 0;
+  if (mac) return PREV.has(e.key) ? -1 : NEXT.has(e.key) ? 1 : 0;
+  return e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0;
+}
+
 /** Sent (bubbling) on a terminal's element when its shell reports a folder that counts (OSC 7): `detail` is the path. */
 export const CWD_EVENT = "omher-term-cwd";
 /** Sent (bubbling) on a terminal's element when its program reports progress (OSC 9;4): `detail` is busy or done. */
@@ -191,10 +201,11 @@ export function attachMarks(term: Terminal, el: HTMLElement): () => void {
       return false;
     }),
   ];
-  // ahead of xterm (capture on its parent): Cmd with an arrow or page key, and nothing else held
+  // ahead of xterm (capture on its parent): promptKey's keys
+  const mac = isMacPlatform();
   const key = (e: KeyboardEvent) => {
-    if (!e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || e.isComposing) return;
-    const dir = PREV.has(e.key) ? -1 : NEXT.has(e.key) ? 1 : 0;
+    if (e.isComposing) return;
+    const dir = promptKey(e, mac);
     if (!dir || !jumpToPrompt(term, dir)) return;
     e.preventDefault();
     e.stopPropagation();

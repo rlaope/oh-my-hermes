@@ -1450,6 +1450,8 @@ export const ko: Record<Key, string> = {
   "key.termClear": "터미널 화면 지우기",
   "key.termScroll": "스크롤 맨 위, 맨 아래 (터미널)",
   "key.termCopyPaste": "복사, 붙여넣기 (터미널)",
+  "key.termSelectAll": "터미널 전체 선택",
+  "key.termPrompt": "이전, 다음 프롬프트 (터미널)",
   "tmenu.label": "터미널",
   "tmenu.copy": "복사",
   "tmenu.paste": "붙여넣기",

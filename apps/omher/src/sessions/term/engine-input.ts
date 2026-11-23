@@ -16,14 +16,20 @@
 // Option+Left / Option+Right move a word (ESC b / ESC f; xterm's own ESC[1;3D is bound in no stock zsh or bash). A
 // program that turned the Kitty keyboard protocol on gets Option+arrows as xterm encodes them: it reads them itself.
 // Cmd+K clears the screen and the scrollback (as in Terminal.app and iTerm2); the prompt stays, the program sees no key.
+// Off macOS Ctrl+K is the program's (it kills to the line end), so Ctrl+Shift+K clears (as Konsole), and Ctrl+Shift+A
+// selects the whole buffer (Windows Terminal and GNOME Terminal) where Cmd+A does on macOS.
 //
 // Scrolling: Cmd+Home / Cmd+End (Fn+Cmd+Left / Right on a laptop) on macOS, Ctrl+Home / Ctrl+End elsewhere (as in VS
 // Code), go to the top / bottom of the scrollback; Shift+PageUp / Shift+PageDown page through it (xterm's own). A
 // full-screen program (the alternate screen) has no scrollback, so there the keys stay the program's.
 //
-// Copy and paste off macOS, as Windows Terminal and GNOME Terminal: Ctrl+Shift+C or Ctrl+Insert copies the selection
-// (never a Ctrl+C to the program, selection or not), Ctrl+Shift+V or Shift+Insert pastes through the page's own paste
-// (the multi-line confirm and a pasted picture's path included). macOS keeps Cmd+C / Cmd+V from the Edit menu.
+// Copy and paste off macOS: Ctrl+Shift+C or Ctrl+Insert copies the selection (never a Ctrl+C to the program, selection
+// or not), Ctrl+Shift+V or Shift+Insert pastes through the page's own paste (the multi-line confirm and a pasted
+// picture's path included). On Windows, as Windows Terminal does by default, Ctrl+V pastes the same way and Ctrl+C
+// copies while there is a selection (and clears it, so the next Ctrl+C reaches the program); with no selection Ctrl+C
+// is the program's ^C. Linux keeps the GNOME Terminal and Konsole convention: plain Ctrl+C and Ctrl+V are the
+// program's (^C, and ^V for a literal next key in a shell or block select in vim). macOS keeps Cmd+C / Cmd+V from the
+// Edit menu. None of these keys is taken with Alt or AltGr held (AltGr reads as Ctrl+Alt on Windows: ć, @ or €).
 //
 // On macOS every other Cmd key is the app's (Copy, Paste, Select All and the rest of the menu, the app's shortcuts),
 // as in Terminal.app and iTerm2, and never reaches the program. Without this, a program that turned the Kitty
@@ -38,7 +44,12 @@ import { historyChanged } from "./history";
 import { attachPasteGuard, guardedPaste, saidInto } from "./paste-guard";
 import type { FindOptions } from "./engine-find";
 
-type KeyLike = { key: string; code?: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean };
+type KeyLike = { key: string; code?: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; getModifierState?(key: "AltGraph"): boolean };
+
+/** Which keyboard convention a terminal follows: macOS, Windows (Windows Terminal's) or Linux (GNOME Terminal's). */
+export type KeyOs = "mac" | "win" | "linux";
+export const keyOs = (): KeyOs =>
+  isMacPlatform() ? "mac" : typeof navigator !== "undefined" && /^Win/.test(navigator.platform) ? "win" : "linux";
 
 /** The key that stands for `letter`: itself on a Latin layout; otherwise (a non-Latin layout, or Option on a Mac,
  *  which types ç or ®) the key in its place. */
@@ -100,9 +111,11 @@ export function lineEditBytes(e: KeyLike, mac: boolean, kitty: boolean): string 
   return null;
 }
 
-/** Cmd+K on macOS: clear the screen and the scrollback. Off macOS Ctrl+K is the program's (it kills to the line end). */
+/** Cmd+K on macOS, Ctrl+Shift+K elsewhere: clear the screen and the scrollback. Off macOS Ctrl+K is the program's (it
+ *  kills to the line end). */
 export function isClearKey(e: KeyLike, mac: boolean): boolean {
-  return mac && e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && isKey(e, "k");
+  if (e.altKey || !isKey(e, "k")) return false;
+  return mac ? e.metaKey && !e.ctrlKey && !e.shiftKey : e.ctrlKey && e.shiftKey && !e.metaKey;
 }
 
 /** Cmd+Home / Cmd+End (macOS), Ctrl+Home / Ctrl+End (elsewhere): the top or bottom of the scrollback, or null. */
@@ -113,11 +126,14 @@ export function scrollKey(e: KeyLike, mac: boolean): "top" | "bottom" | null {
   return null;
 }
 
-/** Copy or paste keys off macOS, or null. */
-export function clipboardKey(e: KeyLike, mac: boolean): "copy" | "paste" | null {
-  if (mac || e.metaKey || e.altKey) return null;
+/** Copy or paste keys off macOS, or null. `selection`: the terminal has a selection (Ctrl+C copies only then, on
+ *  Windows; otherwise it is the program's ^C). */
+export function clipboardKey(e: KeyLike, os: KeyOs, selection: boolean): "copy" | "paste" | null {
+  if (os === "mac" || e.metaKey || e.altKey || e.getModifierState?.("AltGraph")) return null;
   if (e.ctrlKey && e.shiftKey && isKey(e, "c")) return "copy";
   if (e.ctrlKey && e.shiftKey && isKey(e, "v")) return "paste";
+  if (os === "win" && e.ctrlKey && !e.shiftKey && isKey(e, "c")) return selection ? "copy" : null;
+  if (os === "win" && e.ctrlKey && !e.shiftKey && isKey(e, "v")) return "paste";
   if (e.key === "Insert" && e.ctrlKey && !e.shiftKey) return "copy";
   if (e.key === "Insert" && e.shiftKey && !e.ctrlKey) return "paste";
   return null;
@@ -128,10 +144,12 @@ export function isAppKey(e: KeyLike, mac: boolean): boolean {
   return mac && e.metaKey;
 }
 
-/** Cmd+A on macOS: select the terminal's whole buffer. xterm does this itself only for a key it is handed, and the
- *  Edit menu's Select All would select the hidden input field instead, so the page does it. */
+/** Cmd+A on macOS, Ctrl+Shift+A elsewhere (Ctrl+A is the program's: line start): select the terminal's whole buffer.
+ *  xterm does this itself only for a key it is handed, and the Edit menu's Select All would select the hidden input
+ *  field instead, so the page does it. */
 export function isSelectAllKey(e: KeyLike, mac: boolean): boolean {
-  return mac && e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && isKey(e, "a");
+  if (e.altKey || !isKey(e, "a")) return false;
+  return mac ? e.metaKey && !e.ctrlKey && !e.shiftKey : e.ctrlKey && e.shiftKey && !e.metaKey;
 }
 
 /** The character Option types on a Mac layout where it is how you reach a plain ASCII sign: @ [ ] { } | \\ ~ on a
@@ -146,10 +164,18 @@ const MODIFIERS = ["Shift", "Control", "Alt", "Meta", "CapsLock"];
 
 /** Keyboard and mouse handling for one terminal; `onFind` runs when the person asks for find. Returns what undoes it. */
 export function attachInput(term: Terminal, host: HTMLElement, onFind: () => void): () => void {
-  const mac = isMacPlatform();
+  const os = keyOs();
+  const mac = os === "mac";
   const linux = !mac && typeof navigator !== "undefined" && /Linux/.test(navigator.platform);
+  // a Ctrl+C that copied (Windows): its repeats and its key-up are not the program's either, though the selection is gone
+  let copyHeld = false;
   // find: xterm asks first; `false` keeps the key from the program
   term.attachCustomKeyEventHandler((e) => {
+    if (e.type === "keydown" && !e.repeat) copyHeld = false;
+    else if (copyHeld && isKey(e, "c")) {
+      if (e.type === "keyup") copyHeld = false;
+      return false;
+    }
     const font = fontKey(e, mac);
     if (font) {
       if (e.type === "keydown") {
@@ -176,17 +202,23 @@ export function attachInput(term: Terminal, host: HTMLElement, onFind: () => voi
       }
       return false;
     }
-    const clip = clipboardKey(e, mac);
+    const clip = clipboardKey(e, os, term.hasSelection());
     if (clip === "copy") {
       if (e.type === "keydown") {
         e.preventDefault();
         const text = term.hasSelection() ? term.getSelection() : "";
         if (text) void navigator.clipboard?.writeText(text).catch(() => undefined);
+        // plain Ctrl+C (Windows) clears what it copied, as Windows Terminal does
+        if (!e.shiftKey && e.key !== "Insert") {
+          term.clearSelection();
+          copyHeld = true;
+        }
       }
       return false;
     }
     if (clip === "paste") {
-      // Windows (WebView2) pastes on these keys by itself: its paste event reaches the paste guard and the file paste.
+      // Windows (WebView2) pastes on these keys by itself (Ctrl+V too): its one paste event reaches the paste guard and
+      // the file paste, so the page reads no clipboard here, and the paste happens once.
       // WebKitGTK has no Ctrl+Shift+V binding, so on Linux that one reads the clipboard's text and pastes it here
       if (linux && e.shiftKey && e.ctrlKey && e.type === "keydown") {
         e.preventDefault();

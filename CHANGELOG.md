@@ -4,6 +4,17 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: Ctrl+V pastes and Ctrl+C copies in a Windows terminal, as in Windows Terminal.** On Windows, Ctrl+V in a
+  terminal used to reach the program as ^V; only Ctrl+Shift+V and Shift+Insert pasted. Now Ctrl+V pastes through the
+  same path as those keys (the multi-line confirm, and a pasted picture's saved path), and the paste happens once.
+  Ctrl+C copies while text is selected and then clears the selection; with nothing selected it is the program's ^C.
+  Ctrl+Shift+C / Ctrl+Shift+V and Ctrl+Insert / Shift+Insert still work. Linux keeps the GNOME Terminal keys: plain
+  Ctrl+C and Ctrl+V stay the program's there. Three Mac terminal keys that had no Windows or Linux key now have one:
+  Ctrl+Shift+A selects the whole terminal (Cmd+A), Ctrl+Shift+K clears it (Cmd+K), and Ctrl+Up / Ctrl+Down go to the
+  previous or next prompt (Cmd+Up / Cmd+Down; Ctrl+Up and Ctrl+Down go to the program while a full-screen program is
+  open or the shell sent no prompt marks). The terminal's right-click menu and Settings › Keyboard show these keys on
+  Windows and Linux, with no ⌘. None of these keys acts while AltGr is held. (`docs/OMHER-BOUNDARY.md` rule 11)
+
 - **omher: a bot's chat that stopped answering after a crash says why and gets going again.** When Hermes' gateway
   stops in the middle of a turn (a crash, a kill, Windows ending the process), Hermes brings that turn back as lost
   and keeps every later message of the chat in its own queue until someone acknowledges it, because the lost turn may
