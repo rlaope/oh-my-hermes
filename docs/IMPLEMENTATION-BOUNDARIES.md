@@ -118,8 +118,9 @@ stays in `AGENTS.md`, where `tests/test_paired_run_arm_home.py` reads it.
   against a fake API on 127.0.0.1.
 - **PR watch monitor and event guard**: `src/skills/pr_watch_toolkit/scripts/pr_watch.py`
   and `pr_event_guard.py` ship as inert package data under `github-event-ops`'
-  `toolkit/` (scoped integration, owner approval pending). OMH core, install, update, routing
-  and doctor never import or execute them, and nothing in `src/` imports them.
+  `toolkit/` (owner-approved scoped integration, 2026-11-23). OMH core,
+  install, update, routing and doctor never import or execute them, and nothing
+  in `src/` imports them.
   The person (or their bot, on their request) copies them into
   `<profile>/scripts/`: Hermes runs `pr_watch_<watch>.py` as a cron job's
   `--monitor-script` and `pr_event_guard_<route>.py` as a webhook route's
