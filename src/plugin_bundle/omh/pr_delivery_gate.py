@@ -125,7 +125,16 @@ _ASSIGNMENT: Final = re.compile(r"^([A-Za-z_][A-Za-z_0-9]*)\+?=")
 # Variables that redirect or reprogram git or gh: their `-c`, `--repo` and
 # `--exec-path` in another spelling.
 _FORGE_ENV: Final = re.compile(r"^(?:GIT_|GH_|GITHUB_|PATH$|HOME$|XDG_CONFIG_HOME$)", re.IGNORECASE)
-_DECLARERS: Final = frozenset({"export", "declare", "typeset", "readonly", "local", "set"})
+_DECLARERS: Final = frozenset({"export", "declare", "typeset", "readonly", "local", "set", "setx"})
+# Marks in a command word that a shell resolves before it runs it: POSIX
+# expansion and quoting, cmd.exe's `^` escape and `%VAR%`, PowerShell's backtick.
+_HIDING_MARKS: Final = "$\\'\"^%`"
+# PowerShell's environment assignment (`$env:GH_REPO = ...`), the twin of `GH_REPO=...`.
+_POWERSHELL_ENV: Final = re.compile(r"^\$?env:(?:GIT_|GH_|GITHUB_|PATH\b|HOME\b|XDG_CONFIG_HOME\b)", re.IGNORECASE)
+_WINDOWS_EXECUTABLE: Final = re.compile(r"\.(?:exe|cmd|bat|com)$", re.IGNORECASE)
+# A backslash before a letter or digit: a Windows path, which the POSIX lexer
+# would read as escapes (`C:\Program Files\Git\cmd\git.exe` loses every one).
+_WINDOWS_PATH_BACKSLASH: Final = re.compile(r"\\[A-Za-z0-9]")
 _DEFINERS: Final = frozenset({"alias", "function", "unalias", "unset", "hash"})
 
 # A pattern rather than a ("git", ...) literal: INVARIANT 3 reads such a tuple as a git argv.
@@ -248,7 +257,9 @@ _CREDENTIAL: Final = re.compile(
 
 # Files git or gh read as configuration (global, XDG, submodules, gh's own).
 _FORGE_CONFIG_FILES: Final = frozenset({".gitconfig", ".gitmodules", ".git-credentials", ".gitattributes"})
-_FORGE_CONFIG_SUFFIXES: Final = ("git/config", "git/attributes", "gh/config.yml", "gh/hosts.yml")
+_FORGE_CONFIG_SUFFIXES: Final = ("git/config", "git/attributes", "gh/config.yml", "gh/hosts.yml",
+                                  "github cli/config.yml", "github cli/hosts.yml")
+_SHORT_GIT: Final = re.compile(r"^git~[0-9]+$")
 
 # The grant's command and store, as tokens.
 _GRANT_GROUP: Final = "capability-policy"
@@ -336,7 +347,9 @@ def _classify(command: object, context: _Context, depth: int) -> str:
     if depth > _MAX_DEPTH:
         return UNCLASSIFIED
     command = _join_continuations(command)
-    mentions_forge = _FORGE_WORD.search(command) is not None
+    mentions_forge = _FORGE_WORD.search(command.replace("\\", "/")) is not None
+    if mentions_forge and _WINDOWS_PATH_BACKSLASH.search(command):
+        return UNCLASSIFIED  # a Windows path or escape the POSIX lexer would misread
     if _CREDENTIAL.search(command):
         return UNCLASSIFIED  # printing a forge credential takes the next step outside this gate
     if mentions_forge and ("`" in command or "$(" in command or "<(" in command or ">(" in command):
@@ -383,7 +396,9 @@ def _defines_forge_function(tokens: list[str]) -> bool:
 
 
 def _basename(token: str) -> str:
-    return token.rsplit("/", 1)[-1]
+    """The program a command word names: its last path part, without a Windows `.exe`/`.cmd`/`.bat`/`.com`."""
+    name = token.replace("\\", "/").rsplit("/", 1)[-1]
+    return _WINDOWS_EXECUTABLE.sub("", name)
 
 
 def _split_assignments(words: list[str]) -> tuple[list[str], list[str]]:
@@ -441,19 +456,21 @@ def _classify_segment(segment: list[str], context: _Context, depth: int) -> str:
     if unwrapped is None:
         return UNCLASSIFIED if forge_text else LOCAL
     names, words = unwrapped
-    if any(_FORGE_ENV.match(name) for name in names):
+    if any(_FORGE_ENV.match(name) for name in names) or any(_POWERSHELL_ENV.match(word) for word in segment):
         return UNCLASSIFIED
     if not words:
         return LOCAL
     head = words[0]
     name = _basename(head).lower()
+    if name == "setx" and len(words) > 1 and _FORGE_ENV.match(words[1]):
+        return UNCLASSIFIED  # cmd.exe's `setx NAME value`, with no `=`
     if name in _DECLARERS:
         declared = [_ASSIGNMENT.match(word) for word in words[1:]]
         if any(match is not None and _FORGE_ENV.match(match.group(1)) for match in declared):
             return UNCLASSIFIED
     if name in _DEFINERS and forge_text:
         return UNCLASSIFIED
-    if any(mark in head for mark in "$\\'\"") and _FORGE_VERB.search(text):
+    if any(mark in head for mark in _HIDING_MARKS) and _FORGE_VERB.search(text):
         return UNCLASSIFIED
     if _FORGE_CLI.match(name):
         carried = (any("$" in word or _EXEC_URL.search(word) for word in words[1:])
@@ -793,6 +810,9 @@ def _names_store(token: str) -> bool:
 def _names_grant_change(command: str, depth: int = 0) -> bool:
     """Whether a command line would change the grant or touch its store."""
     command = _join_continuations(command)
+    folded = command.replace("\\", "/").lower()
+    if "pr_delivery/" in folded or "runtime/pr_" in folded:
+        return True  # a store path in any spelling, a Windows one included, which the lexer would unescape
     tokens = _tokens(command)
     if not tokens:
         lowered = command.lower()
@@ -862,12 +882,24 @@ def _tool_class(tool: str, tool_input: object, prefix: str, opened: frozenset[tu
 
 
 def _configures_forge(target: str) -> bool:
-    """A file that git or gh reads as configuration or runs as a hook. Case-folded: APFS and NTFS ignore case."""
+    """A file that git or gh reads as configuration or runs as a hook.
+
+    Case-folded (APFS and NTFS ignore case), with Windows spellings folded to
+    the name the file system opens: backslashes, a drive letter, trailing dots
+    and spaces (`.git.` is `.git`), an NTFS stream suffix (`.git::$DATA`), and
+    the 8.3 short name `GIT~1`.
+    """
     lowered = target.replace("\\", "/").casefold()
-    parts = lowered.split("/")
-    if ".git" in parts or parts[-1] in _FORGE_CONFIG_FILES:
+    parts = [_windows_part(part) for part in lowered.split("/")]
+    if any(part == ".git" or _SHORT_GIT.match(part) for part in parts) or parts[-1] in _FORGE_CONFIG_FILES:
         return True
-    return lowered.endswith(_FORGE_CONFIG_SUFFIXES)
+    return "/".join(parts).endswith(_FORGE_CONFIG_SUFFIXES)
+
+
+def _windows_part(part: str) -> str:
+    if len(part) == 2 and part.endswith(":"):
+        return part  # a drive letter
+    return part.split(":", 1)[0].rstrip(". ")
 
 
 def delivery_directive(

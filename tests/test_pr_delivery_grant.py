@@ -18,6 +18,7 @@ the argument shape Hermes sends, against a temporary OMH home.
 from __future__ import annotations
 
 import ast
+import io
 import json
 from types import SimpleNamespace
 import os
@@ -185,8 +186,35 @@ class CliTests(_Home):
         self.assertIn("typed at your own terminal", result.stdout)
         self.assertFalse(pr_delivery.grant_path(self.home, self.hermes).exists())
         # With no controlling terminal (a gateway or cron child) the confirmation is a no.
-        with mock.patch("builtins.open", side_effect=OSError("no tty")), mock.patch.object(os, "name", "posix"):
+        with mock.patch("builtins.open", side_effect=OSError("no tty")):
             self.assertFalse(pr_delivery_cli.confirm_on_terminal("yes? "))
+
+    def test_windows_confirmation_uses_the_console_and_never_crashes(self):
+        # Runs on every platform through fakes: Windows has no /dev/tty, its console is CONIN$/CONOUT$.
+        opened: list[str] = []
+
+        def fake_open(name, *args, **kwargs):
+            opened.append(name)
+            return io.StringIO("yes\n")
+
+        windows = ("CONIN$", "CONOUT$")
+        with mock.patch.object(pr_delivery_cli, "terminal_devices", return_value=windows), \
+                mock.patch("builtins.open", fake_open):
+            self.assertTrue(pr_delivery_cli.confirm_on_terminal("yes? "))
+        self.assertEqual(opened, ["CONOUT$", "CONIN$"])
+        with mock.patch.object(pr_delivery_cli, "terminal_devices", return_value=windows), \
+                mock.patch("builtins.open", side_effect=OSError("no console")):
+            self.assertFalse(pr_delivery_cli.confirm_on_terminal("yes? "))
+
+    def test_on_windows_the_grant_file_mode_is_not_checked(self):
+        # POSIX mode bits mean nothing there: the grant reads as recorded (documented residual).
+        self.grant_on()
+        path = pr_delivery.grant_path(self.home, self.hermes)
+        if os.name == "posix":
+            path.chmod(0o666)
+        with mock.patch.object(pr_delivery, "MODE_BITS_MEAN_SOMETHING", False):
+            status = self.state()
+        self.assertEqual((status["state"], status["reason"]), ("on", "granted"))
 
     def test_a_grant_file_others_can_write_reads_off(self):
         if os.name != "posix":
@@ -240,9 +268,9 @@ class OnlyThePersonTurnsItOnTests(unittest.TestCase):
                     name = func.id if isinstance(func, ast.Name) else func.attr if isinstance(func, ast.Attribute) else ""
                 if isinstance(node, (ast.ImportFrom, ast.Import)):
                     if any(alias.name == self.WRITER for alias in node.names):
-                        callers.append(str(path.relative_to(ROOT)))
+                        callers.append(path.relative_to(ROOT).as_posix())
                 if name == self.WRITER:
-                    callers.append(str(path.relative_to(ROOT)))
+                    callers.append(path.relative_to(ROOT).as_posix())
         self.assertEqual(sorted(set(callers)), ["src/commands/pr_delivery.py"])
 
     def test_no_plugin_module_imports_the_cli_or_writes_the_grant_file(self):
@@ -262,7 +290,7 @@ class OnlyThePersonTurnsItOnTests(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             if pr_delivery.TURN_ON_COMMAND not in text:
                 continue
-            with self.subTest(path=str(path.relative_to(ROOT))):
+            with self.subTest(path=path.relative_to(ROOT).as_posix()):
                 self.assertRegex(text, r"only the person|Only the person")
 
 
@@ -318,6 +346,7 @@ class AttendedSessionTests(_Home):
             "cd ~/.omh/runtime && cp /tmp/f.json pr_deliver?/grant-x.json",
             "echo x >> ~/.omh/runtime/PR_DELIVERY/opened-x.jsonl",
             "ln -s ~/.omh/runtime/pr_deliv''ery /tmp/s",
+            "copy f C:\\Users\\u\\.omh\\runtime\\pr_delivery\\grant-0123456789abcdef.json",
         )
         for command in refused:
             with self.subTest(command=command):
@@ -481,6 +510,22 @@ class UnattendedMatrixTests(_Home):
             gate.OTHER_PR_OR_REPO,
         "git push --dry-run=no origin HEAD:main": gate.UNCLASSIFIED,
         "git push origin HEAD:refs/heads/bot/x:refs/heads/main": gate.UNQUALIFIED,
+        # Windows spellings (cmd.exe, PowerShell): classified, or refused as unparseable.
+        "git.exe push -f origin HEAD:main": gate.FORCE_PUSH,
+        "gh.exe pr merge 42": gate.FORGE_MERGE,
+        "& git push -f origin HEAD:main": gate.FORCE_PUSH,
+        "C:\\Program Files\\Git\\cmd\\git.exe push -f origin HEAD:main": gate.UNCLASSIFIED,
+        "\"C:\\Program Files\\Git\\cmd\\git.exe\" push origin HEAD:refs/heads/bot/x": gate.UNCLASSIFIED,
+        "g^it push -f origin HEAD:main": gate.UNCLASSIFIED,
+        "%G% push origin HEAD:main": gate.UNCLASSIFIED,
+        "cmd /c \"git push -f origin HEAD:main\"": gate.UNCLASSIFIED,
+        "powershell -Command \"git push -f origin HEAD:main\"": gate.UNCLASSIFIED,
+        "Start-Process git -ArgumentList push,-f": gate.UNCLASSIFIED,
+        "$env:GH_REPO='victim/r'": gate.UNCLASSIFIED,
+        "$env:GIT_SSH_COMMAND='x'; git fetch origin": gate.UNCLASSIFIED,
+        "Set-Item -Path Env:GH_REPO -Value x": gate.UNCLASSIFIED,
+        "set GIT_SSH_COMMAND=x": gate.UNCLASSIFIED,
+        "setx GH_REPO victim/r": gate.UNCLASSIFIED,
         # Second verification round (R1-R5).
         "git status;(gh pr merge 42)": gate.FORGE_MERGE,
         "git status&&(gh pr merge 42)": gate.FORGE_MERGE,
@@ -600,7 +645,10 @@ class UnattendedMatrixTests(_Home):
 
     def test_forge_configuration_files_are_held_case_folded(self):
         for path in ("repo/.GIT/hooks/pre-push", "repo/.git", "/home/u/.gitconfig", "/home/u/.config/git/config",
-                     "/home/u/.config/gh/config.yml", "repo/.gitmodules"):
+                     "/home/u/.config/gh/config.yml", "repo/.gitmodules",
+                     "C:\\repo\\.git\\hooks\\pre-push", "C:\\repo\\.GIT\\hooks\\pre-push", "C:\\repo\\.git.\\config",
+                     "C:\\repo\\.git::$INDEX_ALLOCATION\\config", "C:\\repo\\GIT~1\\config", "C:\\Users\\u\\.gitconfig",
+                     "C:\\Users\\u\\AppData\\Roaming\\GitHub CLI\\hosts.yml"):
             with self.subTest(path=path):
                 self.assertEqual(self.pre("write_file", {"path": path, "content": "x"})["action"], "block")
         for tool in ("mcp_github_add_issue_comment", "mcp_github_update_issue", "github_merge_pr",

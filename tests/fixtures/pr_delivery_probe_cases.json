@@ -642,7 +642,7 @@
   },
   {
    "command": "git.exe push origin HEAD:main",
-   "class": "unclassified",
+   "class": "push_outside_bot_branches",
    "verdict": "refused"
   },
   {
@@ -657,7 +657,7 @@
   },
   {
    "command": "\\git push origin HEAD:main",
-   "class": "push_outside_bot_branches",
+   "class": "unclassified",
    "verdict": "refused"
   },
   {
