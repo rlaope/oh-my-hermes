@@ -27,21 +27,40 @@ export const MESSAGE_CHARS = 8192;
 const UNSAFE = /[\u0000-\u001f\u007f-\u009f\u2028\u2029\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
 const NAMED: Record<string, string> = { "\n": "\\n", "\r": "\\r", "\t": "\\t" };
 
-/** `s` with every UNSAFE character as a visible escape (`\n`, `\r`, `\t`, else `\u202E` and the like), cut to
- *  `max` characters with "…". */
+/** `s` as its tokens: each character, or its visible escape when it is UNSAFE (`\n`, `\r`, `\t`, else `\u202E` and
+ *  the like). A cut never splits a token, so an escape is never left half written. */
+function tokens(s: string): string[] {
+  return [...s].map((c) => (UNSAFE_ONE.test(c) ? (NAMED[c] ?? `\\u${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`) : c));
+}
+const UNSAFE_ONE = new RegExp(UNSAFE.source);
+
+/** The tokens as text, at most `max` characters: whole tokens and then "…" when they do not all fit. */
+function fit(t: string[], max: number): string {
+  const all = t.join("");
+  if ([...all].length <= max) return all;
+  let out = "";
+  let used = 0;
+  for (const x of t) {
+    const n = [...x].length;
+    if (used + n > max - 1) break;
+    out += x;
+    used += n;
+  }
+  return `${out}…`;
+}
+
+/** `s` with every UNSAFE character as a visible escape, cut on whole tokens to `max` characters with "…". */
 export function printable(s: string, max = NAME_CHARS): string {
-  const out = s.replace(UNSAFE, (c) => NAMED[c] ?? `\\u${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`);
-  const chars = [...out];
-  return chars.length <= max ? out : `${chars.slice(0, max - 1).join("")}…`;
+  return fit(tokens(s), max);
 }
 
 /** A name as the message writes it: printable, in a code span, the whole span at most NAME_CHARS (a name full of
- *  backticks needs a long fence, so the text inside is cut until the span fits). */
+ *  backticks needs a long fence, so the text inside is cut, on whole tokens, until the span fits). */
 function name(s: string): string {
-  const chars = [...printable(s, Number.MAX_SAFE_INTEGER)];
-  for (let n = Math.min(chars.length, NAME_CHARS); ; n--) {
-    const span = codeSpan(n < chars.length ? `${chars.slice(0, Math.max(0, n - 1)).join("")}…` : chars.join(""));
-    if ([...span].length <= NAME_CHARS || n <= 1) return span;
+  const t = tokens(s);
+  for (let max = NAME_CHARS; ; max--) {
+    const span = codeSpan(fit(t, max));
+    if ([...span].length <= NAME_CHARS || max <= 1) return span;
   }
 }
 
@@ -64,6 +83,7 @@ export function codeSpan(s: string): string {
   const pad = s.startsWith("`") || s.endsWith("`") ? " " : "";
   return `${fence}${pad}${s}${pad}${fence}`;
 }
+
 
 const isWindows = (key: string) => /^[A-Za-z]:\\|^\\\\/.test(key);
 

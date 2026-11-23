@@ -2772,7 +2772,7 @@ class HandToBotAddsNoRead(unittest.TestCase):
     def test_every_name_is_printable_before_it_enters_the_message(self) -> None:
         # one way in for a name: printable() then a code span; the goal is one printable line
         body = self.msg.split("function name(s: string): string {", 1)[1].split("\n}\n", 1)[0]
-        self.assertIn("printable(s, Number.MAX_SAFE_INTEGER)", body)
+        self.assertIn("const t = tokens(s);", body)  # the same escapes printable() makes, cut on whole tokens
         self.assertIn("[...span].length <= NAME_CHARS", body)  # the cap holds with the code span's fences
         self.assertEqual(self.msg.count("codeSpan("), 2)  # its definition and name(): no raw name reaches a span
         self.assertIn("return printable(goal.replace(", self.msg)

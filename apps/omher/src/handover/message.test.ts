@@ -214,6 +214,17 @@ describe("names from disk cannot add lines to the message", () => {
     expect(handoverMessage({ folder: "a``b", worktree: null, diff: null, goal: "" })).toContain("- Folder: ```a``b```");
   });
 
+  it("a cut never leaves an escape half written", () => {
+    // the escape (6 characters) would straddle the cap: it is left out whole
+    expect(printable("x".repeat(NAME_CHARS - 3) + "\u202Etail")).toBe("x".repeat(NAME_CHARS - 3) + "…");
+    expect(printable("x".repeat(NAME_CHARS - 7) + "\u202Etail")).toBe("x".repeat(NAME_CHARS - 7) + "\\u202E" + "…");
+    expect(goalLine("g".repeat(GOAL_CHARS - 2) + "\u2066rest")).toBe("g".repeat(GOAL_CHARS - 2) + "…");
+    const text = handoverMessage({ folder: "/" + "d".repeat(NAME_CHARS - 6) + "\u0000\u0000", worktree: null, diff: null, goal: "" });
+    const line = text.split("\n").find((l) => l.startsWith("- Folder:"))!;
+    expect(line).not.toMatch(/\\u0?0?0?…|\\u…|\\…/);
+    expect([...line.slice("- Folder: ".length)].length).toBeLessThanOrEqual(NAME_CHARS);
+  });
+
   it("the title is printable and short", () => {
     const title = handoverTitle({ folder: "/w/a\nb", worktree: { path: "/w", branch: "x\u202Ey".repeat(40), head: "" } });
     expect(title).not.toMatch(/[\n\u202E]/);
