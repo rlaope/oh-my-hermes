@@ -8,6 +8,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { mock, openApp, platformIsMac, type OpenOpts } from "./term-find-helpers";
+import { closeFromSidebar } from "./split-drag-helpers";
 
 const SHOTS = process.env.OMHER_SHOTS || "";
 
@@ -49,10 +50,8 @@ async function shell(page: Page, cwd: string): Promise<string> {
   return id;
 }
 
-async function closeRow(page: Page, id: string) {
-  await row(page, id).hover();
-  await row(page, id).getByTestId("session-close").click();
-}
+/** Close session `id` from TERMINALS: its row's x, or Close in its split cell's menu. */
+const closeRow = (page: Page, id: string) => closeFromSidebar(page, id);
 
 test.beforeEach(async () => {
   await mock("mock.reset");
@@ -124,7 +123,7 @@ test("at the end of the window the old close runs once: the pty is closed and th
   expect(await ids(page)).not.toContain(a);
 });
 
-test("a split pane's row closed and undone comes back into its split, in the same slot", async ({ page }) => {
+test("a split pane's cell closed and undone comes back into its split, in the same slot", async ({ page }) => {
   await app(page);
   const b = await shell(page, "/home/you/code/api-server");
   // ⌘D: a new Shell (a) in a new pane right of b

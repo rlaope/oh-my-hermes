@@ -452,6 +452,23 @@ calling another Hermes, network or subprocess helper; it is not a sandbox, and
 does not catch an allowed Hermes function called with other arguments, or check
 where the grant's url points.
 
+## Turn progress and the bell
+
+The TUI tells its terminal the state its title shows as OSC 9;4 progress:
+working (`ESC ] 9 ; 4 ; 3 ST`, indeterminate) as the state turns `running`, and
+done (`ESC ] 9 ; 4 ; 0 ST`) as it leaves it for `idle` or `waiting on you`, each
+time that state changes and never per frame, and done on the way out (and at a
+Ctrl+Z suspend) if working was the last word. It writes it only where the
+terminal reads it as progress: `TERM_PROGRAM` `omher`, `WezTerm`, `ghostty` or
+`iTerm.app`, Windows Terminal (`WT_SESSION` set) or ConEmu (`ConEmuPID` set);
+any other terminal might print it, so it gets none. It is state, not a ring:
+`OMH_TUI_BELL=0` leaves it on. A turn of 10 s or more ends with the terminal's
+attention signal (the bell, or OSC 9 / 777 where the terminal shows that as a
+notification), except inside omher (`TERM_PROGRAM=omher`). There the done is
+the signal and omher marks the session as news itself, because a bell is not
+a warning (the owner's decision of 2026-11-23). A question or an approval rings
+the bell on every terminal, omher included, unless `OMH_TUI_BELL=0`.
+
 ## herdr
 
 Inside a herdr pane, and only there (`HERDR_ENV=1` and a `HERDR_PANE_ID`, the

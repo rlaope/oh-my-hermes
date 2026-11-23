@@ -4,7 +4,7 @@
 // Dim unfocused panes changes how bright the panes without the keyboard are, in TERMINALS and the bottom panel alike.
 import { expect, test, type Page } from "@playwright/test";
 import { mock, usePlatform } from "./term-find-helpers";
-import { dragRowOnto, type Side } from "./split-drag-helpers";
+import { closeFromSidebar, dragRowOnto, openFromSidebar, type Side } from "./split-drag-helpers";
 
 type Sessions = { startTerminal(a: string, cwd: string): string };
 const start = (page: Page, cwd: string) => page.evaluate((c) => (window as unknown as { __omherSessions: Sessions }).__omherSessions.startTerminal("shell", c), cwd);
@@ -58,9 +58,11 @@ test("the split comes back after a restart, its layout and sizes kept; paused se
   await expect.poll(() => page.evaluate(() => localStorage.getItem("omher.splits"))).toContain('"ratio":0.4');
 
   await page.reload();
-  await expect(page.getByTestId(`session-${a}`)).toBeVisible();
+  // the split's card comes back on top of TERMINALS
+  await expect(page.locator(`[data-testid="split-cell"][data-session="${a}"]`)).toBeVisible();
+  await expect(page.getByTestId("split-card")).toHaveAttribute("data-panes", "3");
   // the shells come back paused; opening one shows the whole split again, each pane paused with Resume
-  await page.getByTestId(`session-${b}`).locator(".ss-open").click();
+  await openFromSidebar(page, b);
   await expect(page.getByTestId("session-split")).toHaveAttribute("data-panes", "3");
   for (const id of [a, b, c]) await expect(pane(page, id).getByTestId("session-paused")).toBeVisible();
   await expect(pane(page, b)).toHaveAttribute("data-focused", "true");
@@ -86,9 +88,8 @@ test("a closed session leaves its split, and a split left with one pane ends", a
   await expect(term(page, b).locator(".xterm-rows")).toContainText("(mock)");
   await split(page, b, "right", a);
   await expect(page.getByTestId("session-split")).toBeVisible();
-  // close b from its row (stop): a is alone, no split, nothing saved
-  await page.getByTestId(`session-${b}`).hover();
-  await page.getByTestId(`session-${b}`).getByTestId("session-close").click();
+  // close b from its cell's menu (stop): a is alone, no split, nothing saved
+  await closeFromSidebar(page, b);
   await page.getByTestId("session-stop").click();
   await expect(page.getByTestId("session-split")).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => localStorage.getItem("omher.splits"))).toBeNull();
@@ -124,6 +125,6 @@ test("Dim unfocused panes: the setting sets how bright panes without the keyboar
   await expect(page.getByTestId("term-dim").locator("input")).toHaveValue("0.68");
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("omher.term") || "{}").dimUnfocused)).toBe(0.68);
   await expect.poll(() => boxOpacity(0)).toBe("0.68");
-  await page.getByTestId(`session-${b}`).locator(".ss-open").click();
+  await openFromSidebar(page, b);
   await expect.poll(() => opacity(a)).toBe("0.68");
 });
