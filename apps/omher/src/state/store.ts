@@ -2388,7 +2388,9 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
   };
   const loadPlatforms = async (fresh?: boolean) => {
     try {
-      dispatch({ type: "platforms", platforms: await bridge.request("bots.platforms", fresh ? { fresh: true } : {}) });
+      const platforms = await bridge.request("bots.platforms", fresh ? { fresh: true } : {});
+      // the minute's poll and each page open usually read the same answer: no re-render of the app for it
+      if (JSON.stringify(platforms) !== JSON.stringify(state.platforms)) dispatch({ type: "platforms", platforms });
     } catch {
       /* an older bridge without the op, or a failed ask: what was last read stays */
     }

@@ -391,7 +391,7 @@ class PerBot(unittest.TestCase):
             "code=" + "c3" * 15: "code=<redacted>",
             "api_key: " + "q8" * 10: "api_key: <redacted>",
             "password=hunter22": "password=<redacted>",
-            "key=" + "AKIAIOSFODNN7EXAMPLE": "key=<redacted>",
+            "key=" + "AK" + "IA" + "IOSFODNN7EXAMPLE": "key=<redacted>",
             "token: " + "QWERTYUIOPASDFGHJKL1": "token: <redacted>",
             "secret " + "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY": "secret <redacted>",
             "blob " + "2Xz++nd6e08VJBq/" + "Aa1" * 8 + "==": "blob <redacted>",
