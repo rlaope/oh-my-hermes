@@ -1,6 +1,6 @@
 // The bot page's sections under its picture and name: Persona (`SOUL.md`), Memory (Hermes' built-in targets), its
 // Automations, where else it is talking, and its open threads. Persona and memory are files of the bot's own profile,
-// read through `bots.page` when the page opens and on Read again (BOUNDARY rule 40); a bot on another computer is read
+// read through `bots.page` when the page opens and on Read again (BOUNDARY rule 42); a bot on another computer is read
 // there by its own bridge. Nothing here writes: Edit opens the bot's main chat with a request in the composer, and
 // only the person sends it. File text is shown as plain text, never as HTML.
 import { useEffect, useState } from "react";

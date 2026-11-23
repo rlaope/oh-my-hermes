@@ -7,8 +7,8 @@ profile's own gateway through Hermes' ``connect_gateway``.
 
 Prints one line ``OMHER_BRIDGE_READY {"port": N}`` on stdout once listening; everything else goes
 to stderr. Binds 127.0.0.1 only and refuses (403) any connection whose ``token`` query parameter
-differs. Makes no model or network call of its own; the one outside read is a PR's state through the
-person's own `gh` (``runs.prs``).
+differs. Makes no model or network call of its own; the one outside read is a PR's state and check result through
+the person's own `gh` (``runs.prs`` for a plan, ``thread.prs`` for a thread).
 
 Boundary rules the code keeps:
 * One gateway connection per profile, opened lazily (``--eager`` opens them all at start).
@@ -1083,21 +1083,22 @@ def read_linear_mcp(profile_dir: Path) -> dict:
     return linear_server(mcp_server_names(profile_dir / "config.yaml"))
 
 
-def mcp_server_names(path: Path) -> dict:
+def mcp_server_names(path: Path, keys: tuple[str, ...] = ("enabled",)) -> dict | None:
     """`{name: {"enabled": bool}}` (or `{name: {}}` when it has no `enabled`) for each server under the top-level
-    `mcp_servers` mapping of the YAML file at *path*; {} when there is none or it does not parse. The file goes
-    through the safe loader's event stream and nothing is built from it: a scalar is kept only when it is a top-level
-    key equal to `mcp_servers`, a key directly under it (a server name), or the plain `enabled` value of one; every
-    other scalar (a url, headers, env, auth: a credential may sit there) is dropped as it passes, so no other value
-    of the file is kept, returned or cached."""
+    `mcp_servers` mapping of the YAML file at *path*; {} when there is no file or no such mapping, None when the file
+    cannot be read or parsed. The file goes through the safe loader's event stream and nothing is built from it: a
+    scalar is kept only when it is a top-level key equal to `mcp_servers`, a key directly under it (a server name), or
+    the value of one of *keys* in one (`enabled`, and for the Apps page also the legacy `disabled`, each read by
+    `mcp_switch` as Hermes reads it: True, False, or "?" for a value Hermes would not take; an empty one is left out),
+    and, when *keys* names `oauth.flow`, the `flow` under a server's `oauth` as `browser`, `device` or "?"; every other
+    scalar (a url, headers, env, auth: a credential
+    may sit there) is dropped as it passes, so no other value of the file is kept, returned or cached."""
     try:
         out: dict[str, dict] = {}
         stack: list[list] = []  # one per open collection: [is_map, kept key or None, awaiting a key, was a key]
         with path.open(encoding="utf-8") as f:
             events, yaml = _yaml_events(f)  # `yaml`: the module of the event classes
-            # the words for false: YAML 1.1 as Hermes' own `hermes_yaml` (ruamel) reads it also takes `n` and `N`
-            off = ("false", "False", "FALSE", "no", "No", "NO", "off", "Off", "OFF")
-            off += ("n", "N") if yaml.__name__.startswith("ruamel") else ()
+            ruamel = yaml.__name__.startswith("ruamel")  # Hermes' own `hermes_yaml` reads y/n as bools too
             for ev in events:
                 if isinstance(ev, (yaml.MappingEndEvent, yaml.SequenceEndEvent)):
                     was_key = stack.pop()[3]
@@ -1117,21 +1118,33 @@ def mcp_server_names(path: Path) -> dict:
                         top[1] = ev.value
                         out.setdefault(ev.value, {})
                     elif depth == 3 and servers and stack[1][1] is not None:
-                        top[1] = "enabled" if ev.value == "enabled" else None
+                        # `oauth` is followed only to reach its `flow` (rule 41); nothing else under it is kept
+                        top[1] = ev.value if ev.value in keys or (ev.value == "oauth" and "oauth.flow" in keys) else None
+                    elif depth == 4 and servers and stack[1][1] is not None and stack[2][1] == "oauth":
+                        top[1] = "oauth.flow" if ev.value == "flow" else None
                     else:
                         top[1] = None
                 elif as_key:
                     top[1] = None
-                elif (depth == 3 and servers and isinstance(ev, yaml.ScalarEvent) and top[0] and top[1] == "enabled"
-                      and stack[1][1] is not None and ev.implicit[0]):
-                    out[stack[1][1]]["enabled"] = ev.value not in off
+                elif depth == 3 and servers and top[0] and top[1] in keys and stack[1][1] is not None:
+                    # a scalar as Hermes reads it; a list, a mapping or an alias is a value Hermes would not take
+                    got = mcp_switch(ev.value, ev.implicit[0], ruamel) if isinstance(ev, yaml.ScalarEvent) else "?"
+                    if got is not None:
+                        out[stack[1][1]][top[1]] = got
+                elif (depth == 4 and servers and top[0] and top[1] == "oauth.flow" and stack[2][1] == "oauth"
+                      and stack[1][1] is not None):
+                    # Hermes' `hermes mcp login` takes the flow from here: `browser` or `device`, anything else it refuses
+                    flow = ev.value if isinstance(ev, yaml.ScalarEvent) else None
+                    out[stack[1][1]]["oauth.flow"] = flow if flow in ("browser", "device") else "?"
                 if isinstance(ev, (yaml.MappingStartEvent, yaml.SequenceStartEvent)):
                     stack.append([isinstance(ev, yaml.MappingStartEvent), None, True, as_key])
                 elif top and top[0]:
                     top[2] = not as_key
         return out
-    except Exception:
+    except FileNotFoundError:
         return {}
+    except Exception:
+        return None
 
 
 def linear_server(servers) -> dict:
@@ -1146,6 +1159,36 @@ def linear_server(servers) -> dict:
             on = not (isinstance(cfg, dict) and cfg.get("enabled") is False)
             return {"configured": on, "server": name[:64]}
     return {"configured": False, "server": ""}
+
+
+# YAML 1.1's bool words as Hermes' own `hermes_yaml` (ruamel) reads a plain scalar; PyYAML (Hermes 0.21) lacks y/n
+_YAML_TRUE = frozenset({"y", "Y", "yes", "Yes", "YES", "true", "True", "TRUE", "on", "On", "ON"})
+_YAML_FALSE = frozenset({"n", "N", "no", "No", "NO", "false", "False", "FALSE", "off", "Off", "OFF"})
+_YAML_NULL = frozenset({"", "~", "null", "Null", "NULL"})
+_YAML_NUMBER = re.compile(r"[-+]?(?:[0-9][0-9_]*(?:\.[0-9_]*)?|\.[0-9_]+)(?:[eE][-+]?[0-9]+)?")
+
+
+def mcp_switch(text: str, plain: bool, ruamel: bool = True):
+    """One `enabled` / `disabled` value as Hermes reads it: its YAML 1.1 config loader, then `_parse_boolish`
+    (`tools/mcp_tool_common.py`: a bool or number as itself, a string by `true/1/yes/on` and `false/0/no/off` in any
+    case). True or False; None for an empty value (Hermes' default applies); "?" for any other value, which Hermes
+    takes as its default with a warning and omher shows as a state it cannot tell."""
+    if plain:
+        if text in _YAML_NULL:
+            return None
+        if text in _YAML_TRUE and (ruamel or text not in ("y", "Y")):
+            return True
+        if text in _YAML_FALSE and (ruamel or text not in ("n", "N")):
+            return False
+        if _YAML_NUMBER.fullmatch(text):
+            with contextlib.suppress(ValueError):
+                return float(text.replace("_", "")) != 0
+    word = text.strip().lower()
+    if word in ("true", "1", "yes", "on"):
+        return True
+    if word in ("false", "0", "no", "off"):
+        return False
+    return "?"
 
 
 def read_skills(profile_dir: Path) -> list[dict]:
@@ -2223,8 +2266,19 @@ PR_REPO = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9_.-]{1,100}$
 PR_TTL = 300.0          # seconds a PR state is reused
 PR_TTL_MISS = 60.0      # and a failed look-up (no gh, no network): tried again sooner
 PR_TIMEOUT = 3.0        # seconds one `gh pr view` may take
-PR_POOL = 4             # look-ups at once
+PR_POOL = 4             # look-ups at once, across every plan and thread
+PR_CALLS_PER_MIN = 30   # `gh pr view` runs in any 60 seconds, across every plan and thread; past it, the kept answer
+PR_THREAD_CALLS_PER_MIN = 20  # of those, at most this many for threads: the rest stays for the plan the person opened
+PR_FRESH_MIN = 10.0     # an explicit refresh asks again only when the kept answer is older than this
 PR_STATES = ("open", "merged", "closed", "draft", "unknown")
+PR_CHECKS = ("passing", "failing", "running", "none")
+PR_HEAD = re.compile(r"^[0-9a-f]{40}$")
+PR_ROLLUP_MAX = 500     # rollup entries looked at
+# A thread's PR: a full link in one of the bot's own answers, stricter than PR_URL (BOUNDARY rule 40): https only, the
+# host exactly `github.com`, nothing glued before it, a number with no leading zero, and no further path segment.
+THREAD_PR_URL = re.compile(r"(?<![A-Za-z0-9.@/-])https://github\.com/([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))/"
+                           r"([A-Za-z0-9_.-]{1,100})/pull/([1-9][0-9]{0,6})(?![A-Za-z0-9_/])")
+PR_THREAD_MAX = 3       # a thread's newest PRs read and shown
 
 
 def _pr_refs(text: str) -> list[tuple[int, int, str | None]]:
@@ -2269,8 +2323,60 @@ def attach_prs(run: dict, texts: dict[str, str]) -> dict:
     return run
 
 
+def thread_pr_refs(messages, limit: int = PR_THREAD_MAX) -> list[dict]:
+    """The PRs a thread's bot named, newest first, each once, at most ``limit``: full THREAD_PR_URL links in the
+    bot's own answers only (``chat_messages`` rows of role ``assistant``: the person's words and tool output never
+    count). {number, repo, url} each."""
+    seen: dict[tuple[str, int], int] = {}
+    order = 0
+    for m in messages or []:
+        if not isinstance(m, dict) or m.get("role") != "assistant" or not isinstance(m.get("text"), str):
+            continue
+        for hit in THREAD_PR_URL.finditer(m["text"]):
+            if hit.group(2) in (".", ".."):
+                continue
+            key = (f"{hit.group(1)}/{hit.group(2)}", int(hit.group(3)))
+            seen[key] = order
+            order += 1
+    newest = sorted(seen, key=lambda k: -seen[k])[:limit]
+    return [{"number": n, "repo": r, "url": f"https://github.com/{r}/pull/{n}"} for r, n in newest]
+
+
+def pr_checks_of(rollup) -> str:
+    """The checks of `gh pr view --json statusCheckRollup` as one of PR_CHECKS, from GitHub's enum fields only (a
+    check run's `status` and `conclusion`, a status context's `state`); a check's name, URL or any other text is never
+    read, so no name can make a state. Any failed: failing; else any not finished (or not understood): running; else
+    any passed: passing; else (none, or only skipped and neutral ones): none. Past PR_ROLLUP_MAX entries the rest are
+    not looked at and a result that would be passing or none reads running."""
+    if not isinstance(rollup, list):
+        return "none"
+    failed = running = passed = False
+    if len(rollup) > PR_ROLLUP_MAX:
+        running = True  # an entry not looked at may have failed: never "passing" without seeing every one
+    for c in rollup[:PR_ROLLUP_MAX]:
+        if not isinstance(c, dict):
+            continue
+        status, conclusion, state = (str(c.get(k) or "").upper() for k in ("status", "conclusion", "state"))
+        if c.get("__typename") == "StatusContext" or (state and not status):
+            if state == "SUCCESS":
+                passed = True
+            elif state in ("FAILURE", "ERROR"):
+                failed = True
+            else:  # PENDING, EXPECTED, anything else
+                running = True
+        elif status != "COMPLETED":
+            running = True
+        elif conclusion == "SUCCESS":
+            passed = True
+        elif conclusion in ("FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "STARTUP_FAILURE"):
+            failed = True
+        elif conclusion not in ("NEUTRAL", "SKIPPED", "STALE"):
+            running = True
+    return "failing" if failed else "running" if running else "passing" if passed else "none"
+
+
 def pr_state_of(view: dict) -> str:
-    """GitHub's answer (`gh pr view --json state,isDraft,mergedAt,url`) as one of PR_STATES."""
+    """GitHub's answer (`gh pr view --json state,isDraft,mergedAt,...`) as one of PR_STATES."""
     state = str(view.get("state") or "").upper()
     if state == "MERGED" or (state == "CLOSED" and view.get("mergedAt")):
         return "merged"
@@ -2303,9 +2409,11 @@ def _gh_path(which=None) -> str | None:
 
 def gh_pr_view(repo: str, number: int, *, gh: str | None = None, timeout: float = PR_TIMEOUT) -> dict | None:
     """One fixed read through the person's own `gh`: `gh pr view <n> -R <owner>/<repo> --json
-    state,isDraft,mergedAt,url`. None when gh is missing, slow, signed out or offline. omher passes no token and
+    state,isDraft,mergedAt,url,statusCheckRollup,headRefOid` (no title, body, author; the rollup's check names are
+    never read, see pr_checks_of). None when gh is missing, slow, signed out or offline. omher passes no token and
     reads none; gh uses its own login."""
-    if not PR_REPO.match(repo) or not isinstance(number, int) or isinstance(number, bool) or not 0 < number < 10**7:
+    if (not PR_REPO.match(repo) or repo.split("/")[1] in (".", "..") or not isinstance(number, int)
+            or isinstance(number, bool) or not 0 < number < 10**7):
         raise ValueError(f"not a PR: {repo}#{number}")
     gh = gh or _gh_path()
     if not gh:
@@ -2314,7 +2422,8 @@ def gh_pr_view(repo: str, number: int, *, gh: str | None = None, timeout: float 
     if os.name == "nt":
         kw["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
     try:
-        r = subprocess.run([gh, "pr", "view", str(number), "-R", repo, "--json", "state,isDraft,mergedAt,url"],
+        r = subprocess.run([gh, "pr", "view", str(number), "-R", repo, "--json",
+                            "state,isDraft,mergedAt,url,statusCheckRollup,headRefOid"],
                            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout,
                            stdin=subprocess.DEVNULL, env={**os.environ, "GH_PROMPT_DISABLED": "1",
                                                           "GH_NO_UPDATE_NOTIFIER": "1", "NO_COLOR": "1"}, **kw)
@@ -2538,37 +2647,312 @@ def reload_plugins(home: Path, root: Path):
     return answer
 
 
+# ---------------------------------------------------------------- apps (Hermes' MCP catalog, BOUNDARY rule 41)
+# The Apps page reads Hermes' MCP catalog (the `optional-mcps/<name>/manifest.yaml` files Hermes ships), the names and
+# on/off switches of the bot's `mcp_servers`, whether Hermes keeps an OAuth token file for a server (a stat, the file is
+# never opened) and the bot's integration skills. A press runs one of three fixed argvs, `hermes -p <bot> mcp
+# install|login|remove <name>`, with a name from the catalog it just read.
+
+# A catalog entry's name: Hermes' manifest grammar (`hermes_cli/mcp_catalog.py` `^[A-Za-z0-9_-]+$`) without a leading
+# `-`, so a name can never read as an option of `hermes mcp`.
+MCP_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
+MCP_VERBS = ("install", "login", "remove")
+# seconds one run may take: an install probes the server; a sign-in waits for the person in the browser (Hermes'
+# `login_connect_timeout`: the 300 s OAuth callback window plus 15 s for the token exchange) and 15 s more
+MCP_TIMEOUT = {"install": 300.0, "login": 330.0, "remove": 60.0}
+MCP_CATALOG_MAX = 256           # catalog folders read
+MCP_MANIFEST_MAX = 64 * 1024    # bytes of one manifest.yaml
+MCP_SAID_LINES = 8              # lines of Hermes' own output shown when a run did not work
+_ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,63}")
+# Hermes' bundled and optional skills that connect a bot to an outside app (the plan's platform list); the page shows
+# each one's state and runs nothing for them.
+APP_SKILLS = ("google-workspace", "himalaya", "email-inbox-triage", "obsidian", "apple-notes", "apple-reminders",
+              "microsoft-office", "teams-meeting-pipeline", "meeting-action-items", "agentmail", "siyuan", "box")
+
+
+def _hermes_dir(env_var: str, sub: str, root: Path | None = None, environ=None) -> Path:
+    """A folder of the Hermes checkout as `hermes_constants._packaged_dir` finds it: the package manager's variable
+    (`HERMES_OPTIONAL_MCPS`, `HERMES_BUNDLED_SKILLS`, `HERMES_OPTIONAL_SKILLS`), else the checkout's own folder."""
+    environ = os.environ if environ is None else environ
+    override = (environ.get(env_var) or "").strip()
+    return Path(override) if override else (root or DEFAULT_HERMES_ROOT) / sub
+
+
+def _install_asks(auth: dict) -> tuple[list[str], bool]:
+    """The `auth.env` values Hermes asks for at install (`required`, its default), and whether one of them can only be
+    typed in a terminal. With nothing on stdin Hermes' prompt answers "" (`hermes_cli/cli_output.py` `prompt`), not a
+    manifest's `default`, so a required value is never filled in by itself; a secret one is taken from the profile's
+    `.env` when it is already there (`_prompt_env_vars`), a non-secret one never is."""
+    env = auth.get("env")
+    if not isinstance(env, list):
+        return [], False
+    asked = [e for e in env if isinstance(e, dict) and isinstance(e.get("name"), str) and _ENV_NAME.fullmatch(e["name"])
+             and e.get("required", True)]
+    return [str(e["name"]) for e in asked][:8], any(e.get("secret", True) is False for e in asked)
+
+
+def read_mcp_catalog(folder: Path) -> list[dict] | None:
+    """The entries Hermes' `hermes mcp catalog` lists (`hermes_cli/mcp_catalog.py` `list_catalog`): each
+    `<folder>/<entry>/manifest.yaml` of manifest version 1 with a name and a description, in folder order, the first of
+    a repeated name. Only the name, the description, the auth type, the names of the values Hermes asks for at install
+    and whether one of them needs a terminal (`terminal`) are kept. None when the folder is not there; a linked entry
+    folder, a linked manifest and an oversized one are skipped."""
+    try:
+        children = sorted(folder.iterdir())[:MCP_CATALOG_MAX]
+    except OSError:
+        return None
+    out: list[dict] = []
+    for child in children:
+        manifest = child / "manifest.yaml"
+        try:
+            if child.is_symlink() or manifest.is_symlink() or not manifest.is_file() or manifest.stat().st_size > MCP_MANIFEST_MAX:
+                continue
+            data = _yaml_safe_load(manifest.read_text(encoding="utf-8-sig"))
+        except Exception:
+            continue
+        if not isinstance(data, dict) or data.get("manifest_version") != 1:
+            continue
+        name, desc = data.get("name"), " ".join(str(data.get("description") or "").split())
+        auth = data.get("auth") or {"type": "none"}
+        kind = (auth.get("type") or "none") if isinstance(auth, dict) else None
+        if (not isinstance(name, str) or not MCP_NAME.fullmatch(name) or not desc
+                or kind not in ("api_key", "oauth", "none") or any(e["name"] == name for e in out)):
+            continue
+        asks, terminal = _install_asks(auth)
+        out.append({"name": name, "description": _clip(desc, 200), "auth": kind, "asks": asks, "terminal": terminal})
+    return out
+
+
+def mcp_token_file(profile_dir: Path, name: str) -> Path:
+    """Where Hermes keeps a server's OAuth tokens for this profile (`tools/mcp_oauth.py` `HermesTokenStorage`:
+    `<home>/mcp-tokens/<safe name>.json`). omher only asks whether it is there and when it changed."""
+    safe = re.sub(r"[^\w\-]", "_", name).strip("_")[:128] or "default"
+    return profile_dir / "mcp-tokens" / f"{safe}.json"
+
+
+def _token_stamp(profile_dir: Path, name: str) -> tuple[int, int] | None:
+    try:
+        st = mcp_token_file(profile_dir, name).stat()
+    except OSError:
+        return None
+    return st.st_mtime_ns, st.st_size
+
+
+# What the Apps page reads of each server: its switches, and the `oauth.flow` Hermes' sign-in follows
+MCP_KEYS = ("enabled", "disabled", "oauth.flow")
+
+
+def _device_signin(servers: dict | None, name: str) -> bool:
+    """Whether the bot's own config sets this server's sign-in to a device code (`oauth.flow: device`): Hermes then
+    prints a code for the person to type elsewhere, which only a terminal shows, so the page does not offer Sign in."""
+    return bool(servers) and (servers.get(name) or {}).get("oauth.flow") == "device"
+
+
+def app_state(entry: dict, servers: dict | None, signed_in: bool) -> str:
+    """One catalog entry for one bot: `unknown` when its config could not be read, `available` when its `mcp_servers`
+    has no server by that name, `disabled` when that server is switched off, `unknown` when its switch holds a value
+    Hermes would not take, `needs_signin` for an OAuth entry with no token file, else `installed`."""
+    if servers is None:
+        return "unknown"
+    server = servers.get(entry["name"])
+    if server is None:
+        return "available"
+    if server.get("enabled") is False or server.get("disabled") is True:
+        return "disabled"
+    if "?" in (server.get("enabled"), server.get("disabled")):
+        return "unknown"
+    if entry["auth"] == "oauth" and not signed_in:
+        return "needs_signin"
+    return "installed"
+
+
+def _skill_names(value) -> set[str]:
+    """`skills.disabled` as Hermes' `parse_config_string_list` reads it: a list, a quoted list, or one name."""
+    if isinstance(value, str) and value.strip().startswith("["):
+        import ast
+        with contextlib.suppress(ValueError, SyntaxError):
+            value = ast.literal_eval(value.strip())
+    if isinstance(value, str):
+        value = [value]
+    return {str(v).strip() for v in value if str(v).strip()} if isinstance(value, list) else set()
+
+
+def _shipped_skill(bases: list[Path], name: str) -> dict | None:
+    """The head of a skill Hermes ships under one of *bases* (`<base>/<category>/<name>/SKILL.md`), or None."""
+    for base in bases:
+        try:
+            cats = sorted(c for c in base.iterdir() if c.is_dir() and not c.name.startswith("."))
+        except OSError:
+            continue
+        for cat in cats:
+            skill = cat / name / "SKILL.md"
+            head = read_skill_head(skill) if skill.is_file() else None
+            if head is not None:
+                return head
+    return None
+
+
+def read_app_skills(profile_dir: Path, root: Path | None = None, environ=None) -> list[dict]:
+    """APP_SKILLS for one bot: `installed`, or `disabled` when its config's `skills.disabled` names it, for a skill the
+    bot has (rule 19's read); `available` for one Hermes ships (`skills/`, `optional-skills/`) that the bot does not
+    have; one Hermes does not ship is left out. Read-only, SKILL.md heads only."""
+    have = {s["name"]: s["description"] for s in read_skills(profile_dir)}
+    cfg = _load_yaml(profile_dir / "config.yaml")
+    off = _skill_names(cfg["skills"].get("disabled")) if isinstance(cfg.get("skills"), dict) else set()
+    bases = [_hermes_dir("HERMES_BUNDLED_SKILLS", "skills", root, environ),
+             _hermes_dir("HERMES_OPTIONAL_SKILLS", "optional-skills", root, environ)]
+    out = []
+    for name in APP_SKILLS:
+        if name in have:
+            out.append({"name": name, "description": have[name], "state": "disabled" if name in off else "installed"})
+        elif (head := _shipped_skill(bases, name)) is not None:
+            desc = " ".join(head["description"].split())
+            out.append({"name": name, "description": _clip(desc, SKILL_DESC_MAX), "state": "available"})
+    return out
+
+
+def read_apps(profile_dir: Path, root: Path | None = None, environ=None) -> dict:
+    """`apps.list`: Hermes' MCP catalog with each entry's state for this bot, and its integration skills. `catalog`
+    is False when this Hermes has no catalog folder."""
+    catalog = read_mcp_catalog(_hermes_dir("HERMES_OPTIONAL_MCPS", "optional-mcps", root, environ))
+    servers = mcp_server_names(profile_dir / "config.yaml", MCP_KEYS)
+    apps = [{**e, "state": app_state(e, servers, _token_stamp(profile_dir, e["name"]) is not None),
+             "device": _device_signin(servers, e["name"])} for e in catalog or []]
+    return {"catalog": catalog is not None, "apps": apps, "skills": read_app_skills(profile_dir, root, environ)}
+
+
+def mcp_argv(hermes: str, bot: str, verb: str, name: str) -> list[str]:
+    """`hermes -p <bot> mcp install|login|remove <name>`: the profile and the catalog name are checked here, each one
+    argv element; nothing else varies. `-p` always: without it Hermes follows its sticky `active_profile` file."""
+    if verb not in MCP_VERBS:
+        raise ValueError(f"not an mcp verb omher runs: {verb!r}")
+    if not isinstance(bot, str) or not PROFILE_ID.fullmatch(bot):
+        raise ValueError(f"not a profile id: {bot!r}")
+    if not isinstance(name, str) or not MCP_NAME.fullmatch(name):
+        raise ValueError(f"not a catalog name: {name!r}")
+    return [hermes, "-p", bot, "mcp", verb, name]
+
+
+def hermes_said(output: str) -> str:
+    """Hermes' own words when a run did not work, without colour codes, trimmed: its error lines (`✗`, `Error:`) when
+    it printed any; else its warning lines (`⚠`) and its last line, so an unmarked failure (a traceback's last line, a
+    sign-in address it printed) is never hidden. Hermes' start-up notes about its own update (a `⚠` line naming an
+    update) say nothing about this run and are left out."""
+    lines = [ln.strip() for ln in _ANSI.sub("", output or "").splitlines() if ln.strip()]
+    lines = [ln for ln in lines if not (ln.startswith("⚠") and re.search(r"\bupdate\b", ln, re.IGNORECASE))]
+    pick = [ln for ln in lines if ln.startswith(("✗", "Error:"))]
+    if not pick:
+        pick = [ln for ln in lines if ln.startswith("⚠")]
+        if lines and (not pick or pick[-1] != lines[-1]):
+            pick.append(lines[-1])
+    return _clip("\n".join(pick[-MCP_SAID_LINES:]), 800)
+
+
+MCP_OUTPUT_MAX = 256 * 1024     # bytes of a run's output read back
+MCP_STOP_WAIT = 5.0             # seconds to wait for a stopped run to end
+
+
+def _stop_run(proc) -> None:
+    """End a `hermes mcp` run past its time: on POSIX its whole process group (it was started in a session of its
+    own, so this reaches nothing else), on Windows the process itself (started in a group of its own). The wait after
+    is bounded, so the run's bot is never left busy."""
+    if os.name == "nt":
+        with contextlib.suppress(OSError):
+            proc.kill()
+    else:
+        with contextlib.suppress(OSError):
+            os.killpg(proc.pid, signal.SIGKILL)
+    with contextlib.suppress(subprocess.TimeoutExpired):
+        proc.wait(timeout=MCP_STOP_WAIT)
+
+
+def run_hermes_mcp(hermes: str, bot: str, verb: str, name: str, home: Path, timeout: float) -> tuple[int | None, str]:
+    """Run one `hermes mcp` argv and return (exit code, its output); the code is None for a run stopped at *timeout*
+    (`_stop_run`), whose output so far is still returned. No shell, nothing on stdin (so Hermes asks nothing: a value it
+    needs is refused in its own words), the Hermes root as HERMES_HOME, none of the gateway's own markers, and UTF-8
+    output on every system. The output goes to a temporary file, not a pipe, so a helper Hermes left running (a
+    browser it opened) can never keep the run from ending."""
+    import tempfile
+    argv = mcp_argv(hermes, bot, verb, name)
+    env = {k: v for k, v in os.environ.items() if k not in _GATEWAY_MARKERS}
+    env.update(HERMES_HOME=str(home), PYTHONIOENCODING="utf-8", NO_COLOR="1")
+    if os.name == "nt":
+        kw = {"creationflags": 0x08000000 | 0x00000200}  # CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP
+    else:
+        kw = {"start_new_session": True}
+    with tempfile.TemporaryFile() as out:
+        try:
+            proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, env=env, **kw)
+        except OSError as e:
+            return -1, f"Hermes could not be started: {e}"
+        try:
+            code = proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _stop_run(proc)
+            code = None
+        # the end of what Hermes printed: its error lines come last
+        size = out.seek(0, os.SEEK_END)
+        out.seek(max(0, size - MCP_OUTPUT_MAX))
+        text = out.read(MCP_OUTPUT_MAX).decode("utf-8", errors="replace")
+    return code, text
+
+
 class PrStates:
-    """PR states by (repo, number), each kept PR_TTL seconds (a failed look-up PR_TTL_MISS). `view` is the look-up
-    (gh_pr_view; tests pass a stub)."""
+    """PR states and check results by (repo, number), each kept PR_TTL seconds (a failed look-up PR_TTL_MISS). `view`
+    is the look-up (gh_pr_view; tests pass a stub). Every plan and thread shares one instance, so the limits hold for
+    all of them together: at most PR_POOL look-ups at once and PR_CALLS_PER_MIN in any 60 seconds, of which threads
+    take at most PR_THREAD_CALLS_PER_MIN, so a plan always has room. Past that a PR keeps its last answer, or reads
+    `unknown` with `limited: true` (not kept, and not a failed look-up: the page asks again a minute later)."""
 
     def __init__(self, view=None, clock=time.monotonic):
         self._view = view or gh_pr_view
         self._clock = clock
-        self._cache: dict[tuple[str, int], tuple[float, dict]] = {}
+        self._cache: dict[tuple[str, int], tuple[float, dict, float]] = {}
         self._lock = threading.Lock()
+        self._gate = threading.BoundedSemaphore(PR_POOL)
+        self._calls: list[tuple[float, bool]] = []  # (when, for a thread) of each look-up in the last 60 seconds
 
-    def _one(self, repo: str, number: int) -> dict:
+    def _may_call(self, now: float, thread: bool) -> bool:
+        with self._lock:
+            self._calls = [c for c in self._calls if now - c[0] < 60.0]
+            if len(self._calls) >= PR_CALLS_PER_MIN:
+                return False
+            if thread and sum(1 for _, th in self._calls if th) >= PR_THREAD_CALLS_PER_MIN:
+                return False
+            self._calls.append((now, thread))
+            return True
+
+    def _one(self, repo: str, number: int, fresh: bool = False, thread: bool = False) -> dict:
         key = (repo, number)
         now = self._clock()
         with self._lock:
             hit = self._cache.get(key)
-        if hit and now < hit[0]:
+        if hit and now < hit[0] and not (fresh and now - hit[2] >= PR_FRESH_MIN):
             return hit[1]
+        if not self._may_call(now, thread):
+            return hit[1] if hit else {"state": "unknown", "checks": "none", "limited": True}
         try:
-            view = self._view(repo, number)
+            with self._gate:
+                view = self._view(repo, number)
         except ValueError:
             view = None
         state = pr_state_of(view) if view else "unknown"
-        out = {"state": state}
+        out = {"state": state, "checks": pr_checks_of(view.get("statusCheckRollup")) if view else "none"}
         url = view.get("url") if view else None
         if isinstance(url, str) and url == f"https://github.com/{repo}/pull/{number}":
             out["url"] = url
+        head = view.get("headRefOid") if view else None
+        if isinstance(head, str) and PR_HEAD.match(head):
+            out["head"] = head
         with self._lock:
-            self._cache[key] = (now + (PR_TTL if state != "unknown" else PR_TTL_MISS), out)
+            self._cache[key] = (now + (PR_TTL if state != "unknown" else PR_TTL_MISS), out, now)
             if len(self._cache) > 2000:
                 self._cache.clear()
         return out
+
+    def thread(self, refs: list[dict], fresh: bool = False) -> list[dict]:
+        """Each of a thread's PRs (thread_pr_refs) with its state and checks, in the same order."""
+        return [{**r, **{k: v for k, v in self._one(r["repo"], r["number"], fresh, True).items() if k != "url"}} for r in refs]
 
     def states(self, run: dict) -> dict[str, dict]:
         """{node id: {number, repo?, url?, state}} for every node of `run` that names a PR; a PR with no repo is
@@ -2583,7 +2967,7 @@ class PrStates:
         out = {}
         for n in nodes:
             pr = dict(n["pr"])
-            pr.update(got.get((pr.get("repo"), pr["number"]), {"state": "unknown"}))
+            pr.update(got.get((pr.get("repo"), pr["number"]), {"state": "unknown", "checks": "none"}))
             out[n["id"]] = pr
         return out
 
@@ -4859,6 +5243,120 @@ def read_session_cwds(profile_dir: Path, ids: list[str]) -> dict[str, str]:
     return {str(sid): str(cwd) for sid, cwd in rows if isinstance(cwd, str) and cwd}
 
 
+THREAD_ROWS_MAX = 2000  # a thread's newest user and assistant rows read for its PR links
+# The summary "carrier" row Hermes writes when it compresses a conversation (session_rules/turns.py: SUMMARY_PREFIX and
+# every shipped prefix begin "[CONTEXT COMPACTION", the legacy one "[CONTEXT SUMMARY]:"; _SUMMARY_END_MARKER,
+# _MERGED_PRIOR_CONTEXT_HEADER and _MERGED_SUMMARY_DELIMITER mark the merged forms). It is the compression model's
+# summary of earlier turns, which can quote the person's or a tool's links, never the bot's answer: such a row is read
+# with no text at all (the turns it summarises are read from the sessions before it).
+COMPACTION_PREFIXES = ("[CONTEXT COMPACTION", "[CONTEXT SUMMARY]:")
+COMPACTION_MARKERS = ("--- END OF CONTEXT SUMMARY", "[PRIOR CONTEXT — for reference only; not a new message]",
+                      "[END OF PRIOR CONTEXT — COMPACTION SUMMARY BELOW]")
+LINEAGE_STEPS = 32      # compression steps followed from a thread's id, each way
+LINEAGE_MAX = 64        # sessions of one thread's compression lineage read at most
+
+
+def _continues(model_config, source) -> bool:
+    """A child session that continues its parent's conversation after Hermes compressed it, as Hermes' own lineage
+    walk decides: not a branch, a reset, a delegated subagent or a tool session."""
+    if source == "tool":
+        return False
+    try:
+        mc = json.loads(model_config) if isinstance(model_config, str) and model_config else {}
+    except ValueError:
+        mc = {}
+    return not (isinstance(mc, dict) and any(mc.get(k) is not None for k in ("_branched_from", "_delegate_from", "_reset_from")))
+
+
+def thread_lineage(con, session_id: str) -> list[str]:
+    """`session_id` and the sessions Hermes' compression of it made one conversation with (`sessions`: a parent that
+    ended with `end_reason = 'compression'` and its continuing child, followed both ways, LINEAGE_STEPS at most, as
+    Hermes' own history read does), through an open read-only connection. Only `session_id` when the table has no
+    such columns."""
+    import sqlite3
+    seen, frontier = [session_id], [session_id]
+    try:
+        for _ in range(LINEAGE_STEPS):
+            found = []
+            for sid in frontier:
+                end = con.execute("SELECT end_reason FROM sessions WHERE id = ?", (sid,)).fetchone()
+                if end and end[0] == "compression":
+                    found += [cid for cid, mc, src in con.execute(
+                        "SELECT id, model_config, source FROM sessions WHERE parent_session_id = ?", (sid,)).fetchall()
+                        if _continues(mc, src)]
+                up = con.execute("SELECT c.parent_session_id, c.model_config, c.source, p.end_reason FROM sessions c"
+                                 " JOIN sessions p ON p.id = c.parent_session_id WHERE c.id = ?", (sid,)).fetchone()
+                if up and up[3] == "compression" and _continues(up[1], up[2]):
+                    found.append(up[0])
+            frontier = [x for x in dict.fromkeys(found) if isinstance(x, str) and x not in seen]
+            seen += frontier[:LINEAGE_MAX - len(seen)]
+            if not frontier or len(seen) >= LINEAGE_MAX:
+                break
+    except sqlite3.Error:
+        return [session_id]
+    return seen
+
+
+def thread_last_row(profile_dir: Path, session_id: str) -> int | None:
+    """The id of the newest saved row (`messages`) of a thread across Hermes' compression of it (thread_lineage), from
+    the profile's state.db opened read-only: when it has not moved, the thread's PR links have not either. None when
+    it has none (or no state.db). Nothing is written."""
+    import sqlite3
+    db = profile_dir / "state.db"
+    if not session_id or not db.is_file():
+        return None
+    try:
+        con = sqlite3.connect(ro_uri(db), uri=True, timeout=1.0)
+        try:
+            ids = thread_lineage(con, session_id)
+            row = con.execute(f"SELECT MAX(id) FROM messages WHERE session_id IN ({','.join('?' * len(ids))})",
+                              ids).fetchone()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return None
+    return row[0] if row and isinstance(row[0], int) else None
+
+
+def read_thread_rows(profile_dir: Path, session_id: str) -> list[dict]:
+    """One thread's saved user and assistant rows (`messages`: id, role, content, timestamp, and display_kind where the
+    column exists) across Hermes' compression of it (thread_lineage), oldest first, the newest THREAD_ROWS_MAX, from
+    the profile's state.db opened read-only; [] when it has none (or no state.db). Never a tool row, Hermes'
+    compaction summary (COMPACTION_PREFIXES, COMPACTION_MARKERS), reasoning or any other column. Nothing is written."""
+    import sqlite3
+    db = profile_dir / "state.db"
+    if not session_id or not db.is_file():
+        return []
+    cols = ("id", "role", "content", "timestamp", "display_kind")
+    try:
+        con = sqlite3.connect(ro_uri(db), uri=True, timeout=1.0)
+        try:
+            ids = thread_lineage(con, session_id)
+            for use in (cols, cols[:4]):  # an older state.db has no display_kind
+                try:
+                    got = con.execute(f"SELECT {', '.join(use)} FROM messages WHERE session_id IN"
+                                      f" ({','.join('?' * len(ids))}) AND role IN ('user', 'assistant')"
+                                      " ORDER BY id DESC LIMIT ?", (*ids, THREAD_ROWS_MAX)).fetchall()
+                    break
+                except sqlite3.OperationalError:
+                    if use is not cols:
+                        raise
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return []
+    out = []
+    for r in reversed(got):
+        text = r[2] if isinstance(r[2], str) else ""
+        if text.lstrip().startswith(COMPACTION_PREFIXES) or any(m in text for m in COMPACTION_MARKERS):
+            text = ""  # Hermes' compaction summary, nobody's message: kept empty, so a user row still ends a turn
+        row = {"row_id": r[0], "role": r[1], "content": text, "timestamp": r[3]}
+        if len(r) > 4 and isinstance(r[4], str):
+            row["display_kind"] = r[4]
+        out.append(row)
+    return out
+
+
 def read_session_title(profile_dir: Path, session_id: str) -> tuple[str, str] | None:
     """One session's saved title and folder (`sessions.title`, `sessions.cwd`) from the profile's state.db, opened
     read-only; None when it has no such row (or no state.db). Nothing is written."""
@@ -6038,7 +6536,7 @@ class Bridge:
             "folder.open": self.op_folder_open, "folder.close": self.op_folder_close,
             "folder.resume": self.op_folder_resume,
             "thread.create": self.op_thread_create, "thread.list": self.op_thread_list,
-            "thread.open": self.op_thread_open, "thread.remove": self.op_thread_remove,
+            "thread.open": self.op_thread_open, "thread.remove": self.op_thread_remove, "thread.prs": self.op_thread_prs,
             "panel.terminal": self.op_panel_terminal, "panel.worktrees": self.op_panel_worktrees,
             "panel.diff": self.op_panel_diff, "media.read": self.op_media_read,
             "chat.attach": self.op_chat_attach, "runs.list": self.op_runs_list, "runs.get": self.op_runs_get,
@@ -6054,6 +6552,8 @@ class Bridge:
             "plugins.inspect": self.op_plugins_inspect, "plugins.install": self.op_plugins_install,
             "plugins.toggle": self.op_plugins_toggle, "plugins.update": self.op_plugins_update,
             "plugins.remove": self.op_plugins_remove, "plugins.reload": self.op_plugins_reload,
+            "apps.list": self.op_apps_list, "apps.install": self.op_apps_install, "apps.login": self.op_apps_login,
+            "apps.remove": self.op_apps_remove,
             "bots.restart": self.op_bots_restart, "bots.restart_scope": self.op_bots_restart_scope,
             "peers.probe": self.op_peers_probe, "peers.attach": self.op_peers_attach, "peers.detach": self.op_peers_detach,
         }
@@ -6061,6 +6561,7 @@ class Bridge:
         self._peers_seen: set[str] = set()  # peer ids attached before: a later attach is the same bots coming back
         self.announce_media = False  # amain: tell the app (stdout) which files it may open
         self._restarting: set[str] = set()      # bots whose restart command runs now
+        self._apps_busy: set[str] = set()       # bots whose `hermes mcp` run (rule 41) runs now
         self._refused: dict[str, float] = {}     # bot -> when Hermes last refused its restart (live work)
         self._reattaching: set[str] = set()     # bots that omher's own restart attaches again (`_reattach`)
         self._recovering: set[str] = set()      # bots a `_recover` looks for
@@ -6068,6 +6569,9 @@ class Bridge:
         self.cli = CliRuns()
         self.node_sessions = NodeSessions(delegations=self.runs.delegations)
         self.prs = PrStates()
+        # a thread's PR links by (bot, thread): (its newest row id, whether a turn ran, the links), so a re-read whose
+        # thread has no new row goes straight to the PR states
+        self._thread_refs: dict[tuple[str, str], tuple[int, bool, list[dict]]] = {}
 
     # ------------------------------------------------------------ lifecycle
 
@@ -7320,6 +7824,30 @@ class Bridge:
                 await self._batch_clarify(conn, x)
         return Reply(result, replay if prompts or asks else None)
 
+    async def op_thread_prs(self, p) -> dict:
+        """The PRs a thread's bot named and GitHub's word on each (BOUNDARY rules 21 and 40): the thread's saved
+        messages read, never written, from the bot's own state.db (read_thread_rows; no gateway call, so a thread not
+        attached in this bridge is never resumed for it), the full PR links in the bot's answers there (thread_pr_refs:
+        newest first, at most PR_THREAD_MAX), then each one's state and checks through the shared PrStates (its cache,
+        pool and per-minute cap). ``fresh``: the person asked for a refresh. {prs: [{number, repo, url, state, checks,
+        head?}]}. Only a thread this bridge created or listed."""
+        conn = await self._conn(p.get("bot"))
+        tid = self._thread_known(conn, p.get("thread"))
+        chat = conn.folders.get(tid)
+        sid, running = chat.stored_id if chat else tid, bool(chat and chat.in_turn)
+        last = await asyncio.to_thread(thread_last_row, conn.bot["path"], sid)
+        kept = self._thread_refs.get((conn.name, tid))
+        if last is not None and kept and kept[:2] == (last, running):
+            refs = kept[2]
+        else:
+            rows = await asyncio.to_thread(read_thread_rows, conn.bot["path"], sid)
+            refs = thread_pr_refs(chat_messages(rows, running=running))
+            if last is not None:
+                if len(self._thread_refs) > 500:
+                    self._thread_refs.clear()
+                self._thread_refs[(conn.name, tid)] = (last, running, refs)
+        return {"prs": await asyncio.to_thread(self.prs.thread, refs, p.get("fresh") is True) if refs else []}
+
     def _hint_rows(self, conn: Conn) -> list[dict]:
         """The bot's open threads for the note, newest activity first: attached ones with their latest answer's last
         line, then listed ones with Hermes' preview."""
@@ -7694,7 +8222,7 @@ class Bridge:
         return await asyncio.to_thread(read_bot_facts, bot["path"])
 
     async def op_bots_page(self, p) -> dict:
-        """The bot page's persona and memory: files of the bot's own profile, read-only (rule 40). For a bot on
+        """The bot page's persona and memory: files of the bot's own profile, read-only (rule 42). For a bot on
         another computer this op is forwarded to that computer's bridge (PEER_FORWARD), which reads its own files."""
         bot = self._bot(p.get("bot"))
         return await asyncio.to_thread(read_bot_page, bot["path"])
@@ -8034,6 +8562,76 @@ class Bridge:
         conn = await self._conn(bot["name"])
         await self._plugins(conn, "remove", name=name)
         return {"name": name}
+
+    # ------------------------------------------------------------ apps (BOUNDARY rule 41)
+    # Reads are files only (Hermes' MCP catalog, the bot's `mcp_servers` names and switches, a token file's stat).
+    # A press runs `hermes -p <bot> mcp install|login|remove <name>`: one run at a time per bot, the name from the
+    # catalog just read, and the outcome read back from the files, never from Hermes' exit code alone.
+
+    async def op_apps_list(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        return await asyncio.to_thread(read_apps, bot["path"])
+
+    async def op_apps_install(self, p) -> dict:
+        return await self._apps_run(p, "install")
+
+    async def op_apps_login(self, p) -> dict:
+        return await self._apps_run(p, "login")
+
+    async def op_apps_remove(self, p) -> dict:
+        return await self._apps_run(p, "remove")
+
+    async def _apps_run(self, p, verb: str) -> dict:
+        bot = self._bot(p.get("bot"))
+        name, app = bot["name"], p.get("name")
+        if not PROFILE_ID.fullmatch(name):
+            raise BridgeError("bad_request", f"{name} is not a profile id Hermes accepts")
+        if not isinstance(app, str) or not MCP_NAME.fullmatch(app):
+            raise BridgeError("bad_request", "need an app from Hermes' MCP catalog")
+        catalog = await asyncio.to_thread(read_mcp_catalog, _hermes_dir("HERMES_OPTIONAL_MCPS", "optional-mcps"))
+        entry = next((e for e in catalog or [] if e["name"] == app), None)
+        if entry is None:
+            raise BridgeError("not_found", f"{app} is not in Hermes' MCP catalog")
+        config = bot["path"] / "config.yaml"
+        servers = await asyncio.to_thread(mcp_server_names, config, MCP_KEYS)
+        if verb != "install" and (servers is None or app not in servers):
+            raise BridgeError("not_found", f"{bot['display_name']} has no {app}")
+        # Connect only what the page offers it for: Hermes' install replaces a server's whole block and turns it on,
+        # so a server that is already there (on, off or set up by hand) or a config omher cannot read is refused
+        if verb == "install" and servers is None:
+            raise BridgeError("bad_request", f"omher cannot read {bot['display_name']}'s config, so it does not add {app}")
+        if verb == "install" and app in servers:
+            raise BridgeError("exists", f"{bot['display_name']} already has {app}")
+        if verb == "login" and entry["auth"] != "oauth":
+            raise BridgeError("bad_request", f"{app} has no sign-in")
+        if verb == "login" and _device_signin(servers, app):
+            raise BridgeError("bad_request", f"{app} signs in with a device code here: run `hermes -p {name} mcp login {app}` in a terminal")
+        if name in self._apps_busy:
+            raise BridgeError("busy", f"{bot['display_name']} is still changing an app")
+        hermes = hermes_path()
+        if not hermes:
+            return {"outcome": "failed", "line": "Hermes is not on this computer.", "state": app_state(entry, servers, False)}
+        before = _token_stamp(bot["path"], app)
+        self._apps_busy.add(name)
+        try:
+            code, output = await asyncio.to_thread(run_hermes_mcp, hermes, name, verb, app, self.home, MCP_TIMEOUT[verb])
+        finally:
+            self._apps_busy.discard(name)
+        servers = await asyncio.to_thread(mcp_server_names, config, MCP_KEYS)
+        after = _token_stamp(bot["path"], app)
+        state = app_state(entry, servers, after is not None)
+        # Hermes' `mcp login` and `mcp remove` exit 0 whatever happened: the files say whether it did
+        done = {"install": code == 0 and servers is not None and app in servers,
+                "login": after is not None and after != before,
+                "remove": servers is not None and app not in servers}[verb]
+        if done:
+            return {"outcome": "ok", "state": state}
+        said = hermes_said(output)
+        if code is None:
+            line = f"Hermes did not finish in {int(MCP_TIMEOUT[verb])} seconds." + (f"\n{said}" if said else "")
+        else:
+            line = said or f"Hermes exited with code {code}."
+        return {"outcome": "failed", "line": line, "state": state}
 
     def poll_routines(self) -> list[tuple[str, dict]]:
         """Compare each profile's cron/jobs.json to the last look; returns (bot, job) for each new run. A changed

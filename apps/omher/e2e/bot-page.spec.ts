@@ -2,7 +2,7 @@
 // is, read-only. Persona (`SOUL.md`) and memory (`memories/MEMORY.md`, `memories/USER.md`) come from `bots.page`, read
 // when the page opens and on Read again; automations, sessions elsewhere and open threads come from what the app
 // already reads. Edit never writes: it opens the bot's main chat with a request in the composer, and nothing is sent
-// (BOUNDARY rule 40). Each section's empty and error states, a bot on another computer, keyboard use, and Korean.
+// (BOUNDARY rule 42). Each section's empty and error states, a bot on another computer, keyboard use, and Korean.
 import { expect, test, type Page } from "@playwright/test";
 
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);

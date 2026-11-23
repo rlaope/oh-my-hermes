@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **GLM 5.4 is mapped to Z.ai.** `glm-5.4` (opened to every GLM Coding Plan user on 2026-11-23) now resolves to the
+  `zai` provider family, so a chain or override that names it routes to Z.ai. It joins no shipped chain, and it has
+  no contract or price row until Z.ai publishes a model page and list price.
+- **A large workspace no longer logs a warning after every shell command.** When the shell round end re-indexes a
+  workspace past its entry or time budget, that designed skip is now logged at debug (`shell_changed skipped=`)
+  instead of warning on nearly every `terminal` / `execute_code` call (~700 lines a day in one workspace). A real
+  fault inside the walk still warns (`shell_changed failed=`). (#3140, carried; thanks @probepark)
 - **`omh_delegate_route` can hand a child the rest of its chain, each step at its own effort (opt-in).** With
   `{"schema_version": "delegate_route_options/v1", "write_fallback_providers": true}` in
   `~/.omh/routing/delegate-route.json`, `set` also writes the positions after the head into
@@ -109,20 +116,6 @@ All notable changes will be documented here.
   `_section_node_is_sequence`, `_block_header`, `_skills_document_parts`)
   `enabled:` or `provider:` key written above it, which Hermes could not load. Reported by @chhxbchhxb in #3075.
   (`src/install/config_adapter.py` `_root_is_plain_block_mapping`, `_section_node_is_sequence`)
-- **omher: a bot's page shows who the bot is: its persona, what it remembers, and its work.** A bot's page in Settings
-  (the row menu's Edit bot, or Edit in the Details panel) showed only its picture, name and a few counts. It now shows
-  the profile's `SOUL.md` as plain text with its size; Hermes' built-in memory (`memories/MEMORY.md`, what the bot
-  remembers, and `memories/USER.md`, what it knows about you) as entries split on Hermes' delimiter, each with its
-  characters against the limit `config.yaml` sets (Hermes' 2,200 and 1,375 when unset) and an Off mark when the profile
-  switches it off; the bot's automations, each opening the Automations page on that job, with Open in Automations
-  filtered to the bot; its Slack, Discord, Telegram and cron sessions, read-only; and its open threads with their
-  status, each opening the thread. Nothing on the page writes: Edit opens the bot's main chat with a request such as
-  "Update your SOUL.md: " in the composer after anything you had typed there, and nothing is sent until you send it. The
-  files are read when the page opens and on Read again, at most 1 MB each (a larger file is sized and not read), only
-  the fixed paths and never through a link, with CRLF and non-UTF-8 bytes tolerated. A bot on another computer is read
-  there by its own bridge, over the same SSH link. Picture and name editing stay where they were.
-  (`apps/omher/bridge/omher_bridge.py` `read_bot_page`, `apps/omher/src/settings/BotSections.tsx`;
-  `docs/OMHER-BOUNDARY.md` rule 40)
 - **omher 1.1.3.** GitHub across your repositories and accounts, a Claude usage meter that shows numbers, and terminals
   and bridges that recover by themselves.
   - **GitHub:** Tasks gains a "나" scope: your review requests, your pull requests, issues assigned to you and mentions,
@@ -150,6 +143,23 @@ All notable changes will be documented here.
   come from chats only. Before the first reading the meter says it shows after your next
   Claude turn in omher. Local only: nothing is sent and no token is read.
   (`docs/OMHER-BOUNDARY.md` rules 11, 17 and 18)
+- **omher: a thread shows the pull requests its bot linked, and whether their checks pass.** A bot's thread often
+  ends with "opened https://github.com/<owner>/<repo>/pull/<n>", and omher showed only a link: the thread list could
+  not say whether that PR was open, merged or failing. Now a thread's row carries a small mark for the newest PR link
+  the bot wrote in its answers there (number, state, and the checks for an open PR or a draft: passing, failing or
+  running), and the transcript shows a card under the answer that named each one (the newest three), with the
+  repository; a click opens the PR on GitHub, Refresh asks again. Any full PR link in the bot's own answers counts,
+  whoever's PR it is; the person's words and a tool's output never do. They are read from the thread's saved rows in
+  the bot's `state.db` (across Hermes' compression of a long thread), with no gateway call, so a thread is never resumed for it. An open PR with failing checks
+  puts its thread in Needs you ("checks failing on #n") until the checks pass or it is merged or closed, and rings
+  at most once per failing head commit and never twice for the same PR within 6 hours. The state comes from the same
+  one `gh pr view` the Plans graph uses, now with `statusCheckRollup` and `headRefOid`, reduced to one word from the
+  checks' status fields (a check's name is never read); answers are kept 5 minutes, at most 4 calls run at once and
+  30 a minute, of which threads take at most 20. A row in view, or a thread in Needs you, is read again every
+  5 minutes at the soonest, only while its PR may still change, also while the window is hidden, with a doubling
+  wait after a failed read. Without `gh`, a login or the network the mark shows the number with no state; a bot on
+  another computer has no threads in omher. This is a display: it never changes a thread's state and starts, steers
+  or stops nothing. (`docs/OMHER-BOUNDARY.md` rules 21 and 40)
 - **omher Tasks shows my pull requests, reviews and issues across repositories and GitHub accounts.** The Tasks page
   has a scope toggle, "이 저장소 | 나". "나" lists, across every repository, the open pull requests asking for my
   review, my open pull requests, the open issues assigned to me and the last 7 days' mentions (folded until opened).
@@ -348,6 +358,63 @@ All notable changes will be documented here.
   arms, every live run). The change now clears the total in `reset()`, so the case asks only whether the reviewer
   sees the lock the caller holds. Results recorded before this fix overstate false alarms on this case.
   (`benchmarks/review-false-alarms/corpus/trap-lock-held-by-caller`)
+- **omher's sidebar shows each TERMINALS split as one layout card, with live state per pane.** With the search box
+  empty, a split of 2 to 4 panes is a card at the top of TERMINALS drawn like the split (one cell per pane, real
+  proportions, the CLI's mark, name and last line), and its members leave the folder rows. Text follows the cell's
+  size; each cell's edge shows its state (a light segment circling a busy one, a dashed flowing edge for background
+  work, a blinking amber edge when a bot asks to type into it, red on error), with how long a busy cell has run after a minute.
+  A click focuses a pane, a right-click opens the row menu, and a grip under the card sets its height, kept with the
+  split (`SplitGroup.mapH` in `omher.splits`). Animation is CSS only and stops under reduced motion. Terminals that
+  report no background work never show the dashed edge. A terminal's bell, OSC 9 message or progress done is now quiet
+  news everywhere (an accent dot on the row and the folder summary, a slowly breathing accent edge on the cell, "rang"
+  in the notification), and the amber warning is kept for waits omher knows: a bot's request to type, a chat's approval
+  or question. (`apps/omher/src/sessions/SplitLayoutCard.tsx`) (#3138)
+- **omher: an Apps page connects a bot to Notion, Linear, Jira and the rest of Hermes' MCP catalog.** The plug in
+  the sidebar's foot opens one bot's apps: every entry of Hermes' MCP catalog and its integration skills (Google
+  Workspace, Obsidian, Apple Notes and Reminders, Microsoft Office and others), grouped as work apps, ops and data,
+  then the rest, each with its state for that bot (not connected, connected, turned off, needs sign-in, or state
+  unknown when the bot's config cannot be read). Connect, Sign in and Remove run the bot's own
+  `hermes -p <bot> mcp install|login|remove <name>`; the sign-in is Hermes' own browser page, a value an install asks
+  for is typed in a terminal, and Hermes' own words are shown when a run does not work. New chats get the app's tools
+  within about a minute (Hermes' gateway reconciles its MCP servers on its own); an open chat gets them after
+  `/reload-mcp`. The Tasks page's Linear screen now opens this page instead of printing the command. omher reads the
+  catalog files, the bot's `mcp_servers` names and switches and whether a sign-in token file exists, and never sees a
+  key or a token (`docs/OMHER-BOUNDARY.md` rule 41). (`apps/omher/src/apps/`)
+
+- **omher: a bot's page shows who the bot is: its persona, what it remembers, and its work.** A bot's page in Settings
+  (the row menu's Edit bot, or Edit in the Details panel) showed only its picture, name and a few counts. It now shows
+  the profile's `SOUL.md` as plain text with its size; Hermes' built-in memory (`memories/MEMORY.md`, what the bot
+  remembers, and `memories/USER.md`, what it knows about you) as entries split on Hermes' delimiter, each with its
+  characters against the limit `config.yaml` sets (Hermes' 2,200 and 1,375 when unset) and an Off mark when the profile
+  switches it off; the bot's automations, each opening the Automations page on that job, with Open in Automations
+  filtered to the bot; its Slack, Discord, Telegram and cron sessions, read-only; and its open threads with their
+  status, each opening the thread. Nothing on the page writes: Edit opens the bot's main chat with a request such as
+  "Update your SOUL.md: " in the composer after anything you had typed there, and nothing is sent until you send it. The
+  files are read when the page opens and on Read again, at most 1 MB each (a larger file is sized and not read), only
+  the fixed paths and never through a link, with CRLF and non-UTF-8 bytes tolerated. A bot on another computer is read
+  there by its own bridge, over the same SSH link. Picture and name editing stay where they were.
+  (`apps/omher/bridge/omher_bridge.py` `read_bot_page`, `apps/omher/src/settings/BotSections.tsx`;
+  `docs/OMHER-BOUNDARY.md` rule 42)
+- The OMH TUI no longer asks for kitty image previews in an omher terminal that cannot paint them. omher 1.1.3
+  and earlier set `TERM_PROGRAM=omher` but draw no kitty Unicode placeholders, so pasting an image showed a block of
+  tofu boxes in the transcript and the picture itself over the composer. omher now also sets
+  `TERM_PROGRAM_VERSION`, and the TUI takes real pixels only from omher 1.1.4 on; older omher terminals get the
+  coloured half-block preview.
+
+- **Enter on a subagent in the OMH TUI shows its session on the main screen, as Claude Code shows a teammate's.**
+  Before, Enter in the agent list opened a read-only log in a pager, and the only way to talk to a subagent was `s`
+  then a line. Now Enter (or a click, or Enter on a dag node's child) shows a dim `› From main` row, the brief as the
+  first prompt, the tool rows, the reply, and the agent's own working row while it runs. The composer's top rule ends
+  with the agent's name and reads `Message @<name>…`. What you send goes to that agent: a steer while it runs; once it
+  ended, on Hermes' stdio gateway a turn that continues it, while the shared gateway says it cannot continue it and
+  keeps your text. Esc, or the list's `main` row, goes back to main, whose transcript kept everything meanwhile; the
+  list marks the agent shown `⏺` and the rest `◯`, and its hint reads `⏎ view · x stop · s steer · esc back`. Where
+  Hermes cannot show the session the log pager opens as before. Main and the view each keep their own draft, and a
+  late refusal returns text to the screen it was typed on, added after what is kept there; a paste belongs to the
+  composer it was typed in; `s` and the view both refuse slash commands, `!` lines and images for a subagent; main's
+  questions and stop keys stay on main's screen; on the shared gateway the view reads one page at a time until an
+  empty page, at most 50 reads after the agent ends, then says it could not read the rest. (`src/tui/subagent_session.py`,
+  `src/tui/agent_view.py`, `src/tui/app.py`, `src/tui/frame.py`)
 
 ## 5.0.0 - 2026-11-21
 

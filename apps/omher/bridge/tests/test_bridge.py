@@ -1626,8 +1626,9 @@ class ReadOnlyRule(BridgeCase):
                     if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id == "subprocess" \
                             and n.attr in ("run", "Popen", "call", "check_call", "check_output"):
                         uses.append(fn.name)
-        # _hermes_run: rule 24's one `hermes -p <bot> cron create` for the briefing (test_brief_setup pins its argv)
-        self.assertEqual(uses, ["_git", "_hermes_run", "gh_pr_view", "run_hermes_restart"])
+        # _hermes_run: rule 24's one `hermes -p <bot> cron create` for the briefing (test_brief_setup pins its argv);
+        # run_hermes_mcp: rule 41's `hermes -p <bot> mcp install|login|remove <name>` (test_apps pins its argv)
+        self.assertEqual(uses, ["_git", "_hermes_run", "gh_pr_view", "run_hermes_restart", "run_hermes_mcp"])
         self.assertNotIn("create_subprocess", src)
         self.assertNotIn("os.system", src)
         self.assertEqual(ob.GIT_READS, {("worktree", "list"), ("rev-parse",), ("status",), ("diff",), ("log",),
@@ -3393,9 +3394,10 @@ class RunsPr(unittest.TestCase):
         run = {"nodes": [{"id": "a", "pr": {"number": 101, "repo": "o/r"}}, {"id": "b", "pr": {"number": 102, "repo": "o/r"}},
                          {"id": "c", "pr": {"number": 7}}, {"id": "d"}]}
         got = prs.states(run)
-        self.assertEqual(got, {"a": {"number": 101, "repo": "o/r", "state": "merged", "url": "https://github.com/o/r/pull/101"},
-                               "b": {"number": 102, "repo": "o/r", "state": "unknown"},
-                               "c": {"number": 7, "state": "unknown"}})  # no repo: not asked
+        self.assertEqual(got, {"a": {"number": 101, "repo": "o/r", "state": "merged", "checks": "none",
+                                     "url": "https://github.com/o/r/pull/101"},
+                               "b": {"number": 102, "repo": "o/r", "state": "unknown", "checks": "none"},
+                               "c": {"number": 7, "state": "unknown", "checks": "none"}})  # no repo: not asked
         self.assertEqual(sorted(calls), [("o/r", 101), ("o/r", 102)])
         now[0] += ob.PR_TTL_MISS + 1
         prs.states(run)
@@ -3414,7 +3416,8 @@ class RunsPr(unittest.TestCase):
 
         with mock.patch.object(ob.subprocess, "run", run):
             self.assertEqual(ob.gh_pr_view("rlaope/oh-my-hermes", 2360, gh="/bin/gh")["isDraft"], True)
-        self.assertEqual(seen["argv"], ["/bin/gh", "pr", "view", "2360", "-R", "rlaope/oh-my-hermes", "--json", "state,isDraft,mergedAt,url"])
+        self.assertEqual(seen["argv"], ["/bin/gh", "pr", "view", "2360", "-R", "rlaope/oh-my-hermes", "--json",
+                                        "state,isDraft,mergedAt,url,statusCheckRollup,headRefOid"])
         self.assertEqual(seen["timeout"], ob.PR_TIMEOUT)
         self.assertEqual(seen["env"]["GH_PROMPT_DISABLED"], "1")
 
@@ -3426,7 +3429,8 @@ class RunsPr(unittest.TestCase):
                 self.assertIsNone(ob.gh_pr_view("o/r", 1, gh="/bin/gh"))
         with mock.patch.object(ob, "_gh_path", return_value=None):
             self.assertIsNone(ob.gh_pr_view("o/r", 1))  # no gh: no state, nothing run
-        for repo, n in (("o/r; rm -rf /", 1), ("-R/x", 1), ("o/r", 0), ("o/r", True), ("o/r", "1")):
+        for repo, n in (("o/r; rm -rf /", 1), ("-R/x", 1), ("o/r", 0), ("o/r", True), ("o/r", "1"), ("o/..", 1),
+                        ("o/.", 1), ("o/r", 10**7), ("o/r/x", 1)):
             with self.assertRaises(ValueError):
                 ob.gh_pr_view(repo, n, gh="/bin/gh")
 
@@ -3449,7 +3453,8 @@ class RunsPrOps(BridgeCase):
             self.assertEqual({n["id"]: n.get("pr", {}).get("number") for n in r["result"]["run"]["nodes"]}, {"implement": None, "verify": 9})
             r = await s.req("runs.prs", bot="kami", run=run_id)
             self.assertTrue(r["ok"], r)
-            self.assertEqual(r["result"], {"prs": {"verify": {"number": 9, "repo": "o/r", "url": "https://github.com/o/r/pull/9", "state": "draft"}}})
+            self.assertEqual(r["result"], {"prs": {"verify": {"number": 9, "repo": "o/r", "url": "https://github.com/o/r/pull/9",
+                                                              "state": "draft", "checks": "none"}}})
             self.assertEqual((await s.req("runs.prs", bot="kami"))["error"]["code"], "bad_request")
             self.assertEqual((await s.req("runs.prs", bot="kami", run="dag:x/y"))["error"]["code"], "not_found")
             self.assertEqual((await s.req("runs.prs", bot="kami", run="claude:abc"))["result"], {"prs": {}})
@@ -4873,13 +4878,22 @@ class TasksLinear(unittest.TestCase):
         self.assertEqual(ob.read_linear_mcp(d), {"configured": False, "server": ""})
 
     def test_enabled_reads_as_the_config_loader_reads_it(self):
-        # the event reader and the bridge's loader must agree on `enabled` for every plain word: under Hermes'
-        # own hermes_yaml (YAML 1.1 in ruamel) `n` and `N` are false too, under PyYAML they are strings (on)
-        for word in ("true", "false", "yes", "no", "on", "off", "y", "Y", "n", "N", "Off", "NO", "maybe", "0", "1"):
+        # the event reader agrees with Hermes on `enabled` for every word: the YAML loader's value, then Hermes'
+        # `_parse_boolish` (a bool or number as itself, true/1/yes/on and false/0/no/off in any case); any other value is
+        # "?" (Hermes takes its default, on). Under Hermes' own hermes_yaml (ruamel) `y`/`n` are bools, under PyYAML strings
+        def hermes(v):
+            if isinstance(v, (bool, int, float)):
+                return bool(v)
+            w = str(v).strip().lower()
+            return True if w in ("true", "1", "yes", "on") else False if w in ("false", "0", "no", "off") else "?"
+        for word in ("true", "false", "yes", "no", "on", "off", "y", "Y", "n", "N", "Off", "NO", "maybe", "0", "1",
+                     "'false'", "'1'", "FaLsE", "2", "0.0"):
             d = self._dir(f"mcp_servers:\n  linear:\n    enabled: {word}\n")
             loaded = ob._load_yaml(d / "config.yaml")["mcp_servers"]["linear"]["enabled"]
             ob._YAML_CACHE.clear()
-            self.assertEqual(ob.mcp_server_names(d / "config.yaml")["linear"].get("enabled"), loaded is not False, word)
+            self.assertEqual(ob.mcp_server_names(d / "config.yaml")["linear"].get("enabled"), hermes(loaded), word)
+            # the Linear source counts a server as on unless Hermes would read it as off
+            self.assertEqual(ob.read_linear_mcp(d)["configured"], hermes(loaded) is not False, word)
 
     def test_reads_only_the_names_and_enabled(self):
         # the verifier's probe (V3 on PR #2908): every value read is recorded; only the Linear server's `enabled` may be
@@ -4963,8 +4977,13 @@ class TasksLinear(unittest.TestCase):
     def test_names_and_enabled_only(self):
         d = self._dir("mcp_servers:\n  notion: {url: x}\n  lin:\n    nested: {enabled: false}\n    enabled: off\n"
                       "  q:\n    enabled: 'false'\nskills:\n  mcp_servers: {linear: {}}\n")
-        self.assertEqual(ob.mcp_server_names(d / "config.yaml"), {"notion": {}, "lin": {"enabled": False}, "q": {}})
-        self.assertEqual(ob.mcp_server_names(self._dir("mcp_servers: {linear: {enabled: false}\n") / "config.yaml"), {})
+        # a quoted 'false' is off too: Hermes' `_parse_boolish` reads the string "false" as off
+        self.assertEqual(ob.mcp_server_names(d / "config.yaml"), {"notion": {}, "lin": {"enabled": False}, "q": {"enabled": False}})
+        # a file that does not parse is None (the Apps page says "state unknown"); the Linear source reads it as off
+        broken = self._dir("mcp_servers: {linear: {enabled: false}\n")
+        self.assertIsNone(ob.mcp_server_names(broken / "config.yaml"))
+        self.assertEqual(ob.read_linear_mcp(broken), {"configured": False, "server": ""})
+        self.assertEqual(ob.mcp_server_names(broken / "missing.yaml"), {})
 
     def test_none_off_or_broken(self):
         for text in ("", "mcp_servers: []\n", "mcp_servers:\n  notion:\n    url: https://mcp.notion.com/mcp\n",

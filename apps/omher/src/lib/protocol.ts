@@ -258,6 +258,38 @@ export interface PluginRow {
   needs_env: string[];
 }
 
+/** One entry of Hermes' MCP catalog for one bot (`apps.list`, BOUNDARY rule 41). `state` comes from the bot's
+ *  `mcp_servers` and whether Hermes keeps a sign-in for it; `unknown` when the bot's config could not be read. */
+export type AppState = "available" | "installed" | "disabled" | "needs_signin" | "unknown";
+export interface AppRow {
+  name: string;
+  description: string;
+  /** The catalog's auth type: an `oauth` entry signs in through Hermes' own browser flow. */
+  auth: "oauth" | "api_key" | "none";
+  /** Values Hermes asks for when it installs this entry (env names); it asks in a terminal, never through omher. */
+  asks: string[];
+  /** One of them can only be typed in a terminal (Hermes never takes a non-secret value from `.env`, and with no stdin
+   *  its prompt answers nothing): Connect from omher always fails, so the card shows the command instead. */
+  terminal: boolean;
+  /** The bot's own config sets this server's sign-in to a device code (`oauth.flow: device`): Hermes shows the code
+   *  only in a terminal, so the page offers no Sign in and shows the command instead. */
+  device: boolean;
+  state: AppState;
+}
+/** One of Hermes' integration skills for one bot: the bot has it (installed or turned off) or Hermes ships it. */
+export interface AppSkill {
+  name: string;
+  description: string;
+  state: "installed" | "disabled" | "available";
+}
+/** What one `hermes -p <bot> mcp install|login|remove <name>` came to, read back from the bot's files; a run that did
+ *  not work carries Hermes' own words (`line`). */
+export interface AppRun {
+  outcome: "ok" | "failed";
+  state: AppState;
+  line?: string;
+}
+
 export interface CatalogResult {
   total: number;
   matched: number;
@@ -442,6 +474,13 @@ export interface OpMap {
   "peers.attach": { params: { peer: string; label: string; host: string; url: string }; result: { peer: string; bots: Bot[] } };
   "peers.detach": { params: { peer: string }; result: Record<string, never> };
   "plugins.remove": { params: { bot: string; name: string }; result: { name: string } };
+  /** Hermes' MCP catalog with each entry's state for `bot`, and its integration skills (files only). */
+  "apps.list": { params: { bot: string }; result: { catalog: boolean; apps: AppRow[]; skills: AppSkill[] } };
+  /** `hermes -p <bot> mcp install <name>`, `mcp login <name>` (Hermes' own browser sign-in) and `mcp remove <name>`:
+   *  a name from the catalog just read, one run at a time per bot. */
+  "apps.install": { params: { bot: string; name: string }; result: AppRun };
+  "apps.login": { params: { bot: string; name: string }; result: AppRun };
+  "apps.remove": { params: { bot: string; name: string }; result: AppRun };
   "models.options": { params: { bot: string }; result: ModelOptions };
   /** Can the bot answer (read-only)? With `provider` (openai-codex, anthropic or nous) the strict check for it. */
   "bots.ready": { params: { bot: string; provider?: string }; result: BotReady };
@@ -457,7 +496,7 @@ export interface OpMap {
     result: { avatar_rev: number | null };
   };
   "bots.info": { params: { bot: string }; result: BotInfo };
-  /** The bot page's persona and memory files, read-only (BOUNDARY rule 40); a bot on another computer is read there. */
+  /** The bot page's persona and memory files, read-only (BOUNDARY rule 42); a bot on another computer is read there. */
   "bots.page": { params: { bot: string }; result: BotPage };
   /** The bot's skills from its profile folder (read-only), sorted by name. */
   "skills.list": { params: { bot: string }; result: { skills: Skill[] } };

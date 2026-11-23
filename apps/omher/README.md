@@ -125,15 +125,6 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
 - **While it answers** (Settings › General): a message sent while a bot is answering waits in the steer queue until
   the turn ends (the default), or, set to Steer, is steered into the running answer at once, as its Steer button
   would; a message behind another held one still waits its turn (`e2e/steer-queue.spec.ts`).
-- **A bot's page** (Settings › Bots › the bot; the row menu's Edit bot, or Edit in the Details panel): its picture and
-  name (editable), then who it is, read-only. Persona is the profile's `SOUL.md` as plain text with its size; Memory is
-  Hermes' built-in `memories/MEMORY.md` and `memories/USER.md`, each as its entries with its characters against the
-  limit `config.yaml` sets and an Off mark when it is switched off; then the bot's automations (Open in Automations
-  shows them filtered), its sessions elsewhere and its open threads with their status. The bridge reads the three
-  files with `bots.page` when the page opens and on Read again, at most 1 MB each, only the fixed paths and never
-  through a link (`read_bot_page`). Edit writes nothing: it opens the bot's main chat with a request added after what
-  the person already typed there, for them to finish and send. A bot on another computer is read by that computer's own bridge over the SSH link.
-  `BOUNDARY.md` rule 40.
 - **Remote machines over SSH** (`src-tauri/src/peers.rs`, `src/peers/`): the sidebar `+` › Connect over SSH (or the
   chip under a bot's `omher-peer` reply, or Settings › Remote machines) takes a host from `~/.ssh/config` or
   `user@host`, checks it and shows the exact `ssh` command, the Hermes found there and its bots; only Connect saves it
@@ -170,12 +161,41 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   conversation, else the CLI's name. Above the bots, the Tasks row opens the Tasks page: open issues and pull or merge
   requests of the repository, read-only through your own `gh` or `glab` (`BOUNDARY.md` rule 33), with a drawer for
   one item and Start in thread, which opens a thread under the bot you pick with the issue as its first message.
-  Linear shows a connect screen naming the `hermes -p <bot> mcp install linear` command; omher keeps no Linear key.
+  Linear shows a connect screen that opens the Apps page for the bot; omher keeps no Linear key.
   The page's "나" (Me) scope (`src/tasks/MeView.tsx`, `src-tauri/src/gh_me.rs`) lists, across every repository, the
   open pull requests asking for your review, your open pull requests, the open issues assigned to you and the last
   week's mentions, for the GitHub accounts you add in Settings › Accounts › GitHub (the ones your `gh` is signed in
   to), with what needs action first; the sidebar's Tasks row counts the review requests. A non-active `gh` account is
   read with its token passed only to that one `gh` call (`BOUNDARY.md` rules 18 and 33).
+- **A thread's pull requests** (`src/threads/prs.ts`, `src/threads/ThreadPrs.tsx`, the bridge's `thread.prs`): when a
+  bot's answer in a thread links a pull request by its full `https://github.com/<owner>/<repo>/pull/<n>` address
+  (whoever's PR it is), the thread's row shows the newest one's number, state (open, draft, merged, closed) and, for
+  an open PR or a draft, its checks (passing, failing, running); the transcript shows a card under the answer that
+  named each (the newest three) with the repository, which opens the PR in the browser on a click, and Refresh. An
+  open PR with failing checks lists its thread in Needs you and rings at most once per failing head commit, never
+  twice for one PR within 6 hours. The bridge reads the thread's own saved rows from the bot's `state.db`, across Hermes'
+  compression of it (read only, no gateway call, again only when the thread has a new row) and asks your own `gh` with the same one fixed
+  `gh pr view` the Plans graph uses, sharing its 5 minute cache, at most 4 calls at once and 30 a minute (threads at
+  most 20). A row in view or a thread in Needs you is read again every 5 minutes at the soonest while its PR may
+  still change (twice as long after each failed read, up to an hour; a minute after the cap held it back), also while
+  the window is hidden; a thread is also read when opened, after its turn ends and on Refresh, two at most at a time.
+  Without `gh`, a login or the network the mark shows the number only (`BOUNDARY.md` rules 21 and 40,
+  `e2e/thread-prs.spec.ts`).
+- **Split card** (`src/sessions/SplitLayoutCard.tsx`, `splitCard.ts`): while the search box is empty, each TERMINALS split
+  (2 to 4 panes) is one card at the top of the list, drawn like the split itself: one cell per pane in its real place and
+  proportions, each with the CLI's mark, the session's name and its last line. Its members are not listed again as rows.
+  Text follows the cell's size: name and mark on one line in a short cell, mark beside the name in a normal one, and the
+  mark above the name in a tall, narrow one. The open pane has a solid accent edge. Other cells show their state on the
+  edge: a light segment circling it while output flows (and, after a minute, how long it has been busy: `14m`, `2h`,
+  dimmer after ten minutes), a flowing dashed edge while the session reports background work, an amber blinking edge
+  when a bot asks to type into it, a soft accent edge breathing slowly when it rang unseen, a red edge after an error. A click focuses that pane and a
+  right-click opens the row's menu. The band under the card is a height grip: drag it, press ↑ or ↓ (16 px), or double-click
+  for the default. The height is kept with that split across restarts and layout changes. With reduced motion
+  nothing moves: a busy cell gets a thin steady edge and a waiting cell a steady amber one. A terminal's bell, OSC 9
+  message or progress done is shown as news (an accent dot on its row, that soft edge on its cell), since it may mean
+  it finished as well as that it waits; the amber warning sign is kept for a request omher knows about. A terminal that reports no
+  background work never shows the dashed edge. The Plans panel keeps its own split map. The layout card borrows its
+  ideas from kasaterm's sidebar map (2rami/kasaterm, MIT); the code is written fresh.
 - **ACP agents** (`src-tauri/src/acp_chat.rs`): one adapter for agents that speak the Agent Client Protocol
   (JSON-RPC on stdio), one table row per agent. OpenCode (`opencode acp`) is the first. omher turns off the
   protocol's file and terminal capabilities, so the agent uses its own tools; its permission requests become
@@ -231,6 +251,22 @@ Rules the code keeps:
   `cron/jobs.json` and changes a job only with that bot's `cron.manage` (add, pause, resume, remove); Run now and
   Edit are chat messages. The Plugins page reads the catalog cache and the profile's plugin folder names and changes
   a plugin only with the bot's `plugins.manage`; installs are catalog-only, inspected first and confirmed.
+- **Apps through the bot's own Hermes.** The Apps page (`src/apps/`, the plug in the sidebar's foot) lists Hermes' MCP
+  catalog and its integration skills (Google Workspace, Obsidian, Apple Notes and the rest) for one bot, grouped work
+  apps, ops and data, then the rest, each with its state: not connected, connected, turned off, needs sign-in, or state
+  unknown when the bot's config cannot be read. Connect, Sign in and Remove run that bot's own
+  `hermes -p <bot> mcp install|login|remove <name>` (`BOUNDARY.md` rule 41); the sign-in is Hermes' own browser page,
+  a value an install asks for is typed in a terminal, and omher never sees a key or a token. Skills only show their
+  state.
+- **A bot's page** (Settings › Bots › the bot; the row menu's Edit bot, or Edit in the Details panel): its picture and
+  name (editable), then who it is, read-only. Persona is the profile's `SOUL.md` as plain text with its size; Memory is
+  Hermes' built-in `memories/MEMORY.md` and `memories/USER.md`, each as its entries with its characters against the
+  limit `config.yaml` sets and an Off mark when it is switched off; then the bot's automations (Open in Automations
+  shows them filtered), its sessions elsewhere and its open threads with their status. The bridge reads the three
+  files with `bots.page` when the page opens and on Read again, at most 1 MB each, only the fixed paths and never
+  through a link (`read_bot_page`). Edit writes nothing: it opens the bot's main chat with a request added after what
+  the person already typed there, for them to finish and send. A bot on another computer is read by that computer's own bridge over the SSH link.
+  `BOUNDARY.md` rule 42.
 - **A Slack briefing with nothing to set up.** For a bot whose Hermes profile has Slack connected, omher sets up one
   automation, `omher-brief`, by itself: every 15 minutes the channel-watch collector checks the Slack channels the bot
   shares with you and wakes the bot only when something needs you (someone asked you and got no answer, a thread it
