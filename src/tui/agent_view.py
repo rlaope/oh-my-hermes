@@ -781,15 +781,18 @@ class AgentViewMixin:
             return
         if self.viewing is not None:
             self._leave_view(redraw=False)
+        # The roster's end wins: a read the host answered before it delivered the end still says running (R1-D6).
+        stale = result.get(contract.TRANSCRIPT_RUNNING) is True and agent.status in FINISHED_STATUSES
         view = SubagentView(subagent_id, agent.name, sid, wire, Transcript(self.clock), watch_sid=watch,
-                            running=result.get(contract.TRANSCRIPT_RUNNING) is True,
+                            running=result.get(contract.TRANSCRIPT_RUNNING) is True and not stale,
                             cursor=as_text(result.get(contract.TRANSCRIPT_NEXT_CURSOR)), polled_at=self.clock())
         view.transcript.cwd = self.transcript.cwd
         rows = result.get("messages") if wire == WIRE_WATCH else result.get(contract.TRANSCRIPT_ROWS)
         self._fill_view(view, rows, agent.goal)
         if wire == WIRE_POLL and not view.running:  # a finished child: its pages are read until an empty one
             view.pages_left = view_state.CATCH_UP_PAGES - 1  # the open's own read was one, sent after the end
-            if not view_state.page_read(view, counts=True, empty=view_state.caught_up(result)):
+            # A read answered before the end never says caught up: its rows may stop short of the last reply.
+            if not view_state.page_read(view, counts=True, empty=view_state.caught_up(result) and not stale):
                 self._read_spent(view)
         main = self._screen_draft()  # whatever the composer holds now is main's: set aside whole, the view's comes in
         main._drop_pending()
@@ -829,6 +832,13 @@ class AgentViewMixin:
         if view is None:
             return
         self.transcript.offscreen = False
+        tell_text, tell_images = "", []
+        if self.tell_draft is not None and self.tell_owner and self.tell_owner == view.watch_sid:
+            # The child's tell field leaves with its view: its text is kept for that child, never main's (R2-F3).
+            tell = self.composer
+            tell._drop_pending()
+            tell_text, tell_images = tell.expanded(), [image for _label, image in tell.images.values()]
+            self.composer, self.tell_draft, self.tell_owner = self.tell_draft, None, ""
         if view.main_draft is not None:
             child = self._swap_draft(view.main_draft)
             child._drop_pending()
@@ -839,6 +849,10 @@ class AgentViewMixin:
                 else:  # a late refusal kept text for it already: both stay, this draft on a new line after it
                     self._give_back(child.expanded(), [image for _label, image in child.images.values()], into=kept)
             view.main_draft = None
+        if tell_text.strip() or tell_images:
+            kept = self.child_drafts.setdefault(view.subagent_id, Composer(history=self.composer.history,
+                                                                            on_record=self.composer.on_record))
+            self._give_back(tell_text, tell_images, into=kept)
         view.sent_steers.clear()
         if view.watch_sid and close:
             self._request("session.close", {"session_id": view.watch_sid}, lambda _result: None, lambda _error: True)
@@ -904,6 +918,9 @@ class AgentViewMixin:
         gone = [intake for intake in self.intakes if intake.owner and intake.owner not in self.roster.agents]
         for intake in gone:
             self.intakes.remove(intake)
+        for owner in {intake.owner for intake in gone}:
+            # A submit held for an image that will never join it goes back whole, never as its text alone (D12).
+            self._give_back_held(owner)
         if gone:
             self._release_held()
             self._pump_claims()
