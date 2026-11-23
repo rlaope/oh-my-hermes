@@ -41,6 +41,14 @@ All notable changes will be documented here.
   discarded elsewhere (Hermes' own app, `/discard`) clears the note at once. A message waiting in Hermes' queue behind
   a turn that is still running (nothing lost) also stays in the chat after a restart, as "Waiting · runs after the
   current turn". (#3123; `docs/OMHER-BOUNDARY.md` rule 3)
+- **omher: hand a terminal's folder or a worktree to a bot.** Right-click a TERMINALS row, or a row of the right
+  panel's Worktrees tab, and pick Hand to <bot> (Hand to a bot… when there are several; the card has the bot
+  picker). A small card shows the first message before anything is sent: the folder, its branch, a short git status
+  and diff stat, and a goal line you can type. Open thread starts a thread under that bot, the same way Start in
+  thread does, with that message first. The git facts come only from the bot's own Worktrees list and one diff of a
+  worktree in it (`docs/OMHER-BOUNDARY.md` rule 10); a terminal folder outside the bot's worktrees goes with its path
+  and a line asking the bot to check `git status` itself. Nothing moves on disk, the session stays open and omher
+  types nothing into it: the bot works with its own tools and approvals. (`apps/omher/src/handover/`)
 - **omher's reasoning picker offers every level Hermes accepts, ultra included.** The chat model picker's Reasoning
   control showed none, low, medium, high and xhigh only, so minimal, max and ultra could not be picked. The bridge now
   reads the installed Hermes' own levels (`hermes_constants.VALID_REASONING_EFFORTS`, after "none") and offers them in
