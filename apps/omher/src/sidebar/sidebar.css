@@ -1157,7 +1157,8 @@ body.row-dragging * {
 }
 .bot-w:hover .bot-r1 .bot-t,
 .bot-w.menu-open .bot-r1 .bot-t,
-.bot-w:has(.bot-more:focus-visible) .bot-r1 .bot-t {
+.bot-w:has(.bot-more:focus-visible) .bot-r1 .bot-t,
+.bot-w:has(.bot-new:focus-visible) .bot-r1 .bot-t {
   visibility: hidden;
 }
 /* "+" for a new thread, left of ⋯ on hover (bots that can have one); the name gives way so neither covers it */

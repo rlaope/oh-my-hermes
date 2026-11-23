@@ -81,8 +81,9 @@ async function expectReplyClear(page: Page, session: string) {
   await expect(st).toBeVisible(); // the time shows until the row is hovered
   await r.hover();
   await expect(btn).toHaveCSS("opacity", "1");
-  // the time gives way to the button: no two layers of text in one place
-  await expect(st).toHaveCSS("visibility", "hidden");
+  // the time gives way to the button: no two layers of text in one place; it is only out of sight (opacity), so it
+  // stays in the link's accessible name
+  await expect(st).toHaveCSS("opacity", "0");
   const b = (await btn.boundingBox())!;
   for (const t of await visibleTextBoxes(r)) {
     expect(overlaps(b, t.box), `Reply there ${JSON.stringify(b)} covers ${t.cls} "${t.text}" ${JSON.stringify(t.box)}`).toBe(false);
@@ -124,3 +125,61 @@ for (const lang of ["ko", "en"] as const) {
     });
   }
 }
+
+test("keyboard: Tab to a row shows Reply there in the time's place; the time stays in the link's name", async ({ page }) => {
+  await open(page, "en", "dark");
+  const r = row(page, "discord-cron-openmaus");
+  const link = r.locator("a.ew-ss");
+  const btn = r.getByTestId("where-reply");
+  const st = r.locator(".ew-ss > .st");
+  const time = (await st.textContent())!.trim();
+  expect(time).not.toBe("");
+  await page.mouse.move(0, 0);
+  // walk the focus order to the row's link, as a keyboard user does
+  await page.getByTestId("details-edit").focus();
+  for (let i = 0; i < 20 && !(await link.evaluate((el) => el === document.activeElement)); i++) await page.keyboard.press("Tab");
+  await expect(link).toBeFocused();
+  await expect(btn).toHaveCSS("opacity", "1");
+  await expect(st).toHaveCSS("opacity", "0");
+  await expect(link).toHaveAccessibleName(new RegExp(time.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  const b = (await btn.boundingBox())!;
+  for (const t of await visibleTextBoxes(r)) expect(overlaps(b, t.box), `covers ${t.cls} "${t.text}"`).toBe(false);
+  // Tab once more lands on the button itself, still shown
+  await page.keyboard.press("Tab");
+  await expect(btn).toBeFocused();
+  await expect(btn).toHaveCSS("opacity", "1");
+});
+
+test("a mouse click leaves focus on the row, but not its hover state once the pointer leaves", async ({ page }) => {
+  await open(page, "en", "dark");
+  const r = row(page, "discord-cron-openmaus");
+  const link = r.locator("a.ew-ss");
+  // keep the click from opening the thread: the focus a click leaves (Chromium, WebView2) is what is under test
+  await link.evaluate((el) =>
+    el.addEventListener(
+      "click",
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      },
+      { capture: true },
+    ),
+  );
+  await link.click();
+  await expect(link).toBeFocused();
+  await page.mouse.move(0, 0);
+  await expect(r.getByTestId("where-reply")).toHaveCSS("opacity", "0");
+  await expect(r.locator(".ew-ss > .st")).toHaveCSS("opacity", "1");
+});
+
+test("Japanese UI puts the Japanese fonts before the Chinese ones", async ({ page }) => {
+  await open(page, "ja", "dark");
+  const fam = await page.evaluate(() => getComputedStyle(document.body).fontFamily);
+  for (const f of ["Segoe UI", "Hiragino Sans", "Yu Gothic UI", "Meiryo", "PingFang SC", "Microsoft YaHei UI", "Malgun Gothic"]) {
+    expect(fam, f).toContain(f);
+  }
+  expect(fam.indexOf("Hiragino Sans")).toBeLessThan(fam.indexOf("PingFang SC"));
+  expect(fam.indexOf("Yu Gothic UI")).toBeLessThan(fam.indexOf("Microsoft YaHei"));
+  // Latin still comes first
+  expect(fam.indexOf("Segoe UI")).toBeLessThan(fam.indexOf("Hiragino Sans"));
+});

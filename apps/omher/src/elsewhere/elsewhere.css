@@ -163,16 +163,19 @@
   border-width: 0 1px;
   align-self: start;
 }
+/* keyboard focus shows it too, but not the focus a mouse click leaves on the link or the button (Chromium and WebView2
+   focus both on click): with :focus-within the row stayed in its hover state after the pointer left */
 .ew-sess > li.ew-has-reply:hover .ew-reply-room,
-.ew-sess > li.ew-has-reply:focus-within .ew-reply-room {
+.ew-sess > li.ew-has-reply:has(:focus-visible) .ew-reply-room {
   display: block;
 }
+/* the time is only out of sight: it stays in the link's accessible name ("gateway 502 3h Slack") */
 .ew-sess > li.ew-has-reply:hover .ew-ss > .st,
-.ew-sess > li.ew-has-reply:focus-within .ew-ss > .st {
-  visibility: hidden;
+.ew-sess > li.ew-has-reply:has(:focus-visible) .ew-ss > .st {
+  opacity: 0;
 }
 .ew-sess > li.ew-has-reply:hover .ew-reply,
-.ew-sess > li.ew-has-reply:focus-within .ew-reply {
+.ew-sess > li.ew-has-reply:has(:focus-visible) .ew-reply {
   opacity: 1;
   pointer-events: auto;
 }
