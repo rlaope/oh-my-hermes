@@ -1916,8 +1916,10 @@ const OPS = {
     const q = lostQueue.get(key) ?? [];
     lostQueue.delete(key);
     const f = p.session !== undefined ? folders.get(p.session) : null;
+    // a thread keeps its rows; a plain folder chat has none here, so it gets a list (its rows are never dropped)
+    if (f && !threadHistory.has(p.session)) threadHistory.set(p.session, []);
     const rows = f ? threadHistory.get(p.session) : history[b.name];
-    for (const { text, ts } of q) rows?.push({ id: nextId("u"), role: "user", text, ts });
+    for (const { text, ts } of q) rows.push({ id: nextId("u"), role: "user", text, ts });
     if (q.length) {
       queues[key] = [...q.slice(1).map((x) => x.text), ...(queues[key] ?? [])];
       setTimeout(() => (f ? startTurn(key, q[0].text, f) : startTurn(key, q[0].text)), 0);
