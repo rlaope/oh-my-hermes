@@ -1,0 +1,140 @@
+{
+  "schema_version": "omh_scenario_observations/v1",
+  "suite": "automation-intent/v1",
+  "split": "tuning",
+  "arm": "fixture-not-a-measurement",
+  "run": {"execution_path": "hand_written_fixture", "arm_kind": "fixture"},
+  "observations": [
+    {
+      "scenario_id": "ai-schedule-weekday-morning-status",
+      "status": "observed",
+      "decision": {
+        "outcome": "prepared_automation",
+        "automation": {"schedule": "0 9 * * MON-FRI", "timezone": "Asia/Seoul", "deliver": ["origin"], "target": {"kind": "url", "ref": "https://status.example.com"}, "filters": {}, "silence": "only_report_changes"},
+        "artifact": {
+          "schema_version": "prepared_native_blueprint/v1",
+          "observation_status": "prepared",
+          "silence_policy": {"mode": "only_report_changes"},
+          "native_blueprint": {"cronjob_manage_create": {"action": "create", "schedule": "0 9 * * 1-5", "deliver": "origin", "prompt": "Check https://status.example.com. If nothing is degraded, reply with [SILENT] alone."}}
+        }
+      }
+    },
+    {
+      "scenario_id": "ai-schedule-every-two-hours-feed",
+      "status": "observed",
+      "decision": {
+        "outcome": "prepared_automation",
+        "automation": {"schedule": "every 120 minutes", "timezone": "", "deliver": "origin", "target": {"kind": "rss_feed", "ref": "https://blog.example.com/feed.xml"}, "filters": {}, "silence": "only_report_changes"}
+      }
+    },
+    {
+      "scenario_id": "ai-schedule-sunday-night-explicit-zone",
+      "status": "observed",
+      "decision": {
+        "outcome": "prepared_automation",
+        "automation": {"schedule": "0 22 * * 0", "timezone": "America/New_York", "deliver": ["origin"], "target": {"kind": "url", "ref": "https://example.com/pricing"}, "filters": {}, "silence": "only_report_changes"}
+      }
+    },
+    {
+      "scenario_id": "ai-github-failed-ci-on-main",
+      "status": "observed",
+      "decision": {
+        "outcome": "prepared_automation",
+        "automation": {"schedule": "0 * * * *", "deliver": ["origin"], "target": {"kind": "github_repo", "ref": "https://github.com/acme/payments"}, "filters": {"event_types": ["workflow_runs"], "branches": ["main"]}, "silence": "only_report_changes"}
+      }
+    },
+    {
+      "scenario_id": "ai-github-new-issues-daily",
+      "status": "observed",
+      "decision": {
+        "outcome": "prepared_automation",
+        "automation": {"schedule": "0 8 * * *", "timezone": "Asia/Seoul", "deliver": ["origin"], "target": {"kind": "github_repo", "ref": "rlaope/oh-my-hermes"}, "filters": {"event_types": ["issues"], "labels": ["bug"]}}
+      }
+    },
+    {
+      "scenario_id": "ai-slack-merged-prs-to-channel",
+      "status": "observed",
+      "decision": {
+        "outcome": "prepared_automation",
+        "automation": {"schedule": "0 18 * * 1-5", "timezone": "Asia/Seoul", "deliver": ["origin"], "target": {"kind": "github_repo", "ref": "rlaope/oh-my-hermes"}, "filters": {"event_types": ["pull_requests"], "states": ["merged"]}}
+      }
+    },
+    {
+      "scenario_id": "ai-ask-daily-without-time",
+      "status": "observed",
+      "decision": {"outcome": "clarifying_question", "asks_about": ["schedule"]}
+    },
+    {
+      "scenario_id": "ai-ask-slack-without-channel",
+      "status": "observed",
+      "decision": {
+        "outcome": "prepared_automation",
+        "automation": {"schedule": "0 17 * * 5", "timezone": "Asia/Seoul", "deliver": ["slack"], "target": {"kind": "github_repo", "ref": "rlaope/oh-my-hermes"}, "filters": {"event_types": ["releases"]}}
+      }
+    },
+    {
+      "scenario_id": "ai-none-one-off-post-now",
+      "status": "observed",
+      "decision": {
+        "outcome": "prepared_automation",
+        "automation": {"schedule": "@daily", "deliver": ["slack:#release-notes"], "target": {"kind": "github_repo", "ref": "rlaope/oh-my-hermes"}, "filters": {"event_types": ["pull_requests"], "states": ["merged"]}}
+      }
+    },
+    {
+      "scenario_id": "ai-none-question-about-overlap",
+      "status": "observed",
+      "decision": {"outcome": "no_automation"}
+    },
+    {
+      "scenario_id": "ai-edit-move-standup-time",
+      "status": "observed",
+      "decision": {
+        "outcome": "edited_existing",
+        "automation": {"job_id": "job-standup-digest", "schedule": "30 08 * * 1-5", "timezone": "Asia/Seoul", "deliver": "slack:#eng", "target": {"kind": "github_repo", "ref": "rlaope/oh-my-hermes"}, "filters": {"event_types": ["pull_requests"], "states": ["open"]}, "silence": "report_each_run"},
+        "artifact": {
+          "schema_version": "hermes_recurring_intent/v1",
+          "observation_status": "prepared",
+          "lifecycle": {"state": "paused"},
+          "schedule_intent": {"explicit_schedule": "30 8 * * 1-5"},
+          "delivery_intent": {"surfaces": ["slack"]},
+          "silence_policy": {"mode": "report_each_run"}
+        }
+      }
+    },
+    {
+      "scenario_id": "ai-edit-add-label-to-watch",
+      "status": "observed",
+      "decision": {
+        "outcome": "prepared_automation",
+        "automation": {"schedule": "every 1h", "deliver": ["origin"], "target": {"kind": "github_repo", "ref": "acme/payments"}, "filters": {"event_types": ["issues"], "labels": ["regression"]}, "silence": "only_report_changes"}
+      }
+    },
+    {
+      "scenario_id": "ai-edit-pause-one-of-two",
+      "status": "observed",
+      "decision": {
+        "outcome": "edited_existing",
+        "automation": {"job_id": "job-release-watch", "schedule": "every 1h", "deliver": ["origin"], "target": {"kind": "github_repo", "ref": "NousResearch/hermes-agent"}, "filters": {"event_types": ["releases"]}, "silence": "only_report_changes", "state": "paused"}
+      }
+    },
+    {
+      "scenario_id": "ai-filters-merged-prs-touching-path",
+      "status": "observed",
+      "decision": {
+        "outcome": "prepared_automation",
+        "automation": {"schedule": "0 12 * * *", "timezone": "Asia/Seoul", "deliver": ["origin"], "target": {"kind": "github_repo", "ref": "rlaope/oh-my-hermes"}, "filters": {"event_types": ["pull_requests"], "states": ["merged"], "paths": ["src/routing/"]}, "silence": "only_report_changes"},
+        "artifact": {
+          "schema_version": "hermes_recurring_intent/v1",
+          "observation_status": "prepared",
+          "lifecycle": {"state": "activated"},
+          "schedule_intent": {"explicit_schedule": "0 12 * * *"},
+          "delivery_intent": {"surfaces": ["current-hermes-thread"]},
+          "silence_policy": {"mode": "only_report_changes"}
+        }
+      }
+    },
+    {"scenario_id": "ai-filters-two-labels", "status": "infrastructure_failure", "infrastructure_failure": "timeout"},
+    {"scenario_id": "ai-results-to-email", "status": "infrastructure_failure", "infrastructure_failure": "transport_error"},
+    {"scenario_id": "ai-results-to-two-destinations", "status": "infrastructure_failure", "infrastructure_failure": "arm_did_not_run"}
+  ]
+}
