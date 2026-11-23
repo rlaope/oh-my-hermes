@@ -86,6 +86,25 @@ describe("obsidian:// links", () => {
     expect(out).not.toContain('data-testid="mention"');
   });
 
+  it("a second address after a folded one in the same text is a chip too", () => {
+    const cases: [string, string[]][] = [
+      ["obsidian://open?vault=x&file=*a*b obsidian://open?vault=y z", ["obsidian://open?vault=x&amp;file=*a*b", "obsidian://open?vault=y"]],
+      ["obsidian://open?vault=x&file=*a*b obsidian://open?vault=y&file=www.f.com z", ["obsidian://open?vault=x&amp;file=*a*b", "obsidian://open?vault=y&amp;file=www.f.com"]],
+      ["obsidian://open?vault=x&file=~a~b, then obsidian://open?vault=y", ["obsidian://open?vault=x&amp;file=~a~b", "obsidian://open?vault=y"]],
+    ];
+    for (const [md, titles] of cases) {
+      const out = html(md);
+      expect([...out.matchAll(/data-service="obsidian"[^>]*title="([^"]*)"/g)].map((m) => m[1]), md).toEqual(titles);
+      expect(out, md).not.toMatch(/<a |<del>|<em>|href=/);
+    }
+  });
+
+  it("an explicit markdown link written right after an address stays the author's link", () => {
+    const out = html("obsidian://open?vault=a[click](https://example.com/z) after");
+    expect(out).toContain('title="obsidian://open?vault=a"');
+    expect(out).toMatch(/<a href="https:\/\/example.com\/z"[^>]*>click<\/a> after<\/p>$/);
+  });
+
   it("leaves the text of a web link alone", () => {
     const out = html("[see obsidian://vault/Work/Ideas](https://example.com/a)");
     expect(out).toContain('href="https://example.com/a"');

@@ -1,13 +1,16 @@
 // remark plugin: each `obsidian://` link in markdown (the scheme in any case), bare in the text or written as a link
-// (`[text](obsidian://…)`, `<obsidian://…>`, `[text][ref]` with `[ref]: obsidian://…`), becomes a `span[data-obsidian]`, which Markdown draws as a chip that names the note and opens
-// nothing (rule 22: omher opens only web links and messenger threads). It never stays a link node, so the address
-// never reaches an href or the url transform. Code (inline and fenced) is never text in mdast, and the text of an
-// http(s) link is left alone.
+// (`[text](obsidian://…)`, `<obsidian://…>`, `[text][ref]` with `[ref]: obsidian://…`), becomes a
+// `span[data-obsidian]`, which Markdown draws as a chip that names the note and opens nothing (rule 22: omher opens
+// only web links and messenger threads). It never stays a link node, so the address never reaches an href or the url
+// transform. Code (inline and fenced) is never text in mdast, and the text of an http(s) link is left alone.
 // GFM reads its own literals before this runs, so a bare address's query can arrive split: `file=https://…`,
 // `www.…` or `me@example.com` as links, `~x~` or `*x*` as strikethrough or emphasis. Where the source shows one
 // unbroken address, those pieces are folded back into it (by their source offsets, or for the nodes GFM adds without
 // offsets, by their text matching the source), so the chip names the whole address and none of it becomes a link of
-// its own. Only the mdast shapes used here are typed.
+// its own. A link the author wrote out (`[text](url)`) right after an address is not a GFM piece and stays a link,
+// ending the address; emphasis or strikethrough written with no space after an address cannot be told from a split
+// query and is folded, as a sent message's plain text reads the same word. The text after an address goes back
+// through this loop, so a second address there is a chip too. Only the mdast shapes used here are typed.
 import { findUrls } from "./linkKinds";
 
 interface MdNode {
@@ -95,7 +98,8 @@ export function remarkObsidianLinks() {
           const [ks, ke] = span(k);
           const shown = plain(k);
           let to: number;
-          if (ks !== undefined && ke !== undefined) to = ks === reach ? ke : -1;
+          // a link is a GFM piece only when its source is its text (a literal), not an author's `[text](url)`
+          if (ks !== undefined && ke !== undefined) to = ks === reach && (k.type !== "link" || src.slice(ks, ke) === shown) ? ke : -1;
           else to = (k.type === "text" || k.type === "link") && shown && src.startsWith(shown, reach) ? reach + shown.length : -1;
           if (to < 0) break; // not the next piece of the same source
           if (to <= end) {
@@ -103,9 +107,10 @@ export function remarkObsidianLinks() {
             i += 1;
             continue;
           }
-          // a text node that starts inside the address and runs past it: its part after the address stays text
+          // a text node that starts inside the address and runs past it: its part after the address goes back
+          // through the loop, with its own source offsets, so another address in it is found
           if (k.type === "text" && k.value !== undefined && src.slice(reach, to) === k.value) {
-            after = { type: "text", value: k.value.slice(end - reach) };
+            after = { type: "text", value: k.value.slice(end - reach), position: { start: { offset: end }, end: { offset: to } } };
             reach = end;
             i += 1;
           }
@@ -116,7 +121,10 @@ export function remarkObsidianLinks() {
         if (start + url.length < reach) next.push({ type: "text", value: src.slice(start + url.length, reach) });
       }
       if (at < text.length) next.push({ type: "text", value: text.slice(at) });
-      if (after) next.push(after);
+      if (after) {
+        kids[i] = after;
+        i -= 1;
+      }
     }
     node.children = next;
   };
