@@ -259,7 +259,11 @@ _CREDENTIAL: Final = re.compile(
 _FORGE_CONFIG_FILES: Final = frozenset({".gitconfig", ".gitmodules", ".git-credentials", ".gitattributes"})
 _FORGE_CONFIG_SUFFIXES: Final = ("git/config", "git/attributes", "gh/config.yml", "gh/hosts.yml",
                                   "github cli/config.yml", "github cli/hosts.yml")
-_SHORT_GIT: Final = re.compile(r"^git~[0-9]+$")
+# An 8.3 short name of a protected entry: `GIT~1` (.git), `GITCON~1` (.gitconfig),
+# `GITMOD~1` (.gitmodules), `GIT-CR~1`, `GITATT~1`, `GITHUB~1` (gh's `GitHub CLI`).
+_SHORT_GIT: Final = re.compile(r"^\.?git[^~/]{0,4}~[0-9]+$")
+# A store path split to dodge a token match (`'runtime/pr_' + 'delivery'`), or written whole.
+_STORE_PATH: Final = re.compile(r"runtime/+pr_(?:delivery|['\"])", re.IGNORECASE)
 
 # The grant's command and store, as tokens.
 _GRANT_GROUP: Final = "capability-policy"
@@ -348,8 +352,8 @@ def _classify(command: object, context: _Context, depth: int) -> str:
         return UNCLASSIFIED
     command = _join_continuations(command)
     mentions_forge = _FORGE_WORD.search(command.replace("\\", "/")) is not None
-    if mentions_forge and _WINDOWS_PATH_BACKSLASH.search(command):
-        return UNCLASSIFIED  # a Windows path or escape the POSIX lexer would misread
+    if mentions_forge and _command_word_is_a_windows_path(command):
+        return UNCLASSIFIED  # the program run is named by a Windows path, which the POSIX lexer would misread
     if _CREDENTIAL.search(command):
         return UNCLASSIFIED  # printing a forge credential takes the next step outside this gate
     if mentions_forge and ("`" in command or "$(" in command or "<(" in command or ">(" in command):
@@ -380,6 +384,35 @@ def _classify(command: object, context: _Context, depth: int) -> str:
         for line in lines:
             classes.extend(_classify_segment(segment, context, depth) for segment in _segments(_tokens(line)))
     return _worst(classes)
+
+
+def _command_word_is_a_windows_path(command: str) -> bool:
+    """Whether some segment's command word, as written, holds a backslash before a letter or digit.
+
+    Only the command word names what runs, so only it is read raw. A
+    backslash inside an argument (`--format='%h\\t%s'`, `-m 'fix\\nbody'`) is
+    read by Git Bash exactly as the POSIX lexer reads it, and is not refused.
+    """
+    lexer = shlex.shlex(command, posix=False, punctuation_chars=True)
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    try:
+        raw = list(lexer)
+    except ValueError:
+        return True
+    starts_segment = True
+    for token in raw:
+        if token in _SEPARATORS or (_OPERATOR_RUN.match(token) and not _REDIRECT.match(token)):
+            starts_segment = True
+            continue
+        if not starts_segment:
+            continue
+        if _ASSIGNMENT.match(token) or _basename(token.strip("'\"")).lower() in _WRAPPERS:
+            continue  # the command word comes after an assignment or a wrapper
+        if _WINDOWS_PATH_BACKSLASH.search(token):
+            return True
+        starts_segment = False
+    return False
 
 
 def _join_continuations(command: str) -> str:
@@ -800,7 +833,7 @@ def _process_data(tool_input: object) -> str | None:
 
 def _names_store(token: str) -> bool:
     lowered = token.lower()
-    if "pr_delivery/" in lowered or lowered.endswith("/pr_delivery") or "runtime/pr_" in lowered:
+    if "pr_delivery/" in lowered or lowered.endswith("/pr_delivery") or _STORE_PATH.search(lowered):
         return True
     # A glob that the shell would expand to the store's directory (`pr_deliver?/`, `pr_*`).
     return any(any(mark in part for mark in _STORE_GLOB) and fnmatch.fnmatchcase(_STORE_DIR, part)
@@ -811,7 +844,7 @@ def _names_grant_change(command: str, depth: int = 0) -> bool:
     """Whether a command line would change the grant or touch its store."""
     command = _join_continuations(command)
     folded = command.replace("\\", "/").lower()
-    if "pr_delivery/" in folded or "runtime/pr_" in folded:
+    if "pr_delivery/" in folded or _STORE_PATH.search(folded):
         return True  # a store path in any spelling, a Windows one included, which the lexer would unescape
     tokens = _tokens(command)
     if not tokens:
@@ -838,7 +871,7 @@ def grant_change_directive(*, tool_name: object, tool_input: object) -> dict[str
         named = data is not None and _names_grant_change(data)
     elif tool == CODE_TOOL:
         code = _text_arg(tool_input, "code").lower()
-        named = "runtime/pr_" in code or "pr_delivery/" in code or _GRANT_GROUP in code
+        named = _STORE_PATH.search(code.replace("\\", "/")) is not None or "pr_delivery/" in code or _GRANT_GROUP in code
     else:
         return None
     if not named:

@@ -2433,6 +2433,65 @@
    "class": "push_bot_branch",
    "verdict": "allowed",
    "why_allowed": "grant-covered, but a cd into another checkout is not followed (stated residual)"
+  },
+  {
+   "command": "git commit -m 'fix\\n\\nbody' && git push origin HEAD:refs/heads/bot/x",
+   "class": "push_bot_branch",
+   "verdict": "allowed",
+   "why_allowed": "grant-covered: allowed with the grant on, refused while it is off"
+  },
+  {
+   "command": "git log --format='%h\\t%s'",
+   "class": "local",
+   "verdict": "allowed",
+   "why_allowed": "local: a backslash inside an argument is read as Git Bash reads it"
+  },
+  {
+   "command": "grep -E '\\bfoo\\b' notes.txt && git push origin HEAD:refs/heads/bot/x",
+   "class": "push_bot_branch",
+   "verdict": "allowed",
+   "why_allowed": "grant-covered: allowed with the grant on, refused while it is off"
+  },
+  {
+   "command": "C:\\Program Files\\Git\\cmd\\git.exe push -f origin HEAD:main",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "\"C:\\Program Files\\Git\\cmd\\git.exe\" push origin HEAD:refs/heads/bot/x",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "& 'C:\\Git\\cmd\\git.exe' push origin HEAD:refs/heads/bot/x",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "FOO=1 C:\\Git\\cmd\\gh.exe pr merge 42",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "g^it push -f origin HEAD:main",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "%G% push origin HEAD:main",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "cmd /c \"git push -f origin HEAD:main\"",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "git push origin HEAD:refs/heads/bot/%X%",
+   "class": "push_bot_branch",
+   "verdict": "allowed",
+   "why_allowed": "grant-covered: `%` is literal under Git Bash; only a `%` in the command word is refused"
   }
  ]
 }

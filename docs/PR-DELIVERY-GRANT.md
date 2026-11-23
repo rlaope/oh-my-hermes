@@ -219,17 +219,21 @@ there, held by tests that run on every platform through fakes.
   home with the folder's own ACL.
 - The file-write guard folds Windows spellings to the file the system opens:
   backslashes, drive letters, letter case, trailing dots and spaces
-  (`.git.`), NTFS stream suffixes (`.git::$INDEX_ALLOCATION`), the 8.3 name
-  `GIT~1`, and gh's `GitHub CLI\config.yml` and `hosts.yml` under AppData.
-- Commands are read with a POSIX shell lexer. `git.exe`, `gh.exe` and
-  PowerShell's `& git ...` are read as git and gh. A command that names git
-  or gh and holds a backslash before a letter or digit (a Windows path such
-  as `C:\Program Files\Git\cmd\git.exe`), a cmd.exe `^` escape or `%VAR%`, a
-  PowerShell backtick, `$env:GH_REPO = ...`, `Set-Item Env:...`, `set` or
-  `setx` of a forge variable, `cmd /c ...`, `powershell -Command ...` or
-  `Start-Process git ...` is refused as unparseable in an unattended run.
-  The cost is that an ordinary command quoting a Windows path next to git is
-  refused too.
+  (`.git.`), NTFS stream suffixes (`.git::$INDEX_ALLOCATION`), the 8.3 short
+  names (`GIT~1`, `GITCON~1`, `GITMOD~1` and their kin), and gh's
+  `GitHub CLI\config.yml` and `hosts.yml` under AppData.
+- Commands are read with a POSIX shell lexer, which is right on Windows
+  too: Hermes runs the terminal through Git Bash there. `git.exe`, `gh.exe`
+  and PowerShell's `& git ...` are read as git and gh. In an unattended run
+  these are refused as unparseable when the command names git or gh:
+  - a command word written as a Windows path (`C:\Program Files\Git\cmd\git.exe`,
+    quoted or not); a backslash inside an argument is read as Git Bash
+    reads it and is not refused, so `git log --format='%h\t%s'` passes;
+  - a command word holding cmd.exe's `^` or `%VAR%`, or a PowerShell
+    backtick (`%` elsewhere is literal under Git Bash, and `cmd /c ...` is
+    refused);
+  - `$env:GH_REPO = ...`, `Set-Item Env:...`, `set` or `setx` of a forge
+    variable, `cmd /c ...`, `powershell -Command ...`, `Start-Process git ...`.
 - Not handled: a PowerShell alias or function (`Set-Alias`, `function git`)
   defined under another name, and `[Environment]::SetEnvironmentVariable`.
 

@@ -323,7 +323,7 @@ class AttendedSessionTests(_Home):
         session_attendance.note_session_platform(SESSION, "cli")
         for command in ("uv run python -m unittest tests/test_pr_delivery_grant.py",
                         "cat src/plugin_bundle/omh/pr_delivery.py", "grep -rn pr_delivery src",
-                        'git commit -m "docs: explain pr-delivery on and off"'):
+                        'git commit -m "docs: explain pr-delivery on and off"', "grep -rn runtime/pr_ src"):
             with self.subTest(command=command):
                 self.assertIsNone(self.terminal(command))
 
@@ -381,6 +381,8 @@ class UnattendedMatrixTests(_Home):
         f"gh pr comment {URL} --body 'Round 1 pushed.'",
         "gh pr comment 42 --repo acme/widgets --body 'Round 1 pushed.'",
         "git commit -m \"subject\n\nbody\" && git push origin HEAD:refs/heads/bot/x",
+        # A literal backslash escape inside an argument reads the same under Git Bash.
+        "git commit -m 'fix\\n\\nbody' && git push origin HEAD:refs/heads/bot/x",
     )
     ALWAYS_REFUSED = {
         "git push --force origin HEAD:refs/heads/bot/fix-ci": gate.FORCE_PUSH,
@@ -548,6 +550,7 @@ class UnattendedMatrixTests(_Home):
         "gh api -X GET repos/acme/widgets/pulls -f state=open", "ls -la", "cat README.md",
         "git config user.email bot@example.invalid", "git config --get remote.origin.url", "git remote -v",
         "gh auth status", "gh repo set-default --view", "git push origin HEAD:refs/heads/bot/x --dry-run",
+        "git log --format='%h\\t%s'", "grep -E '\\bfoo\\b' notes.txt",
     )
 
     def setUp(self) -> None:
@@ -648,7 +651,8 @@ class UnattendedMatrixTests(_Home):
                      "/home/u/.config/gh/config.yml", "repo/.gitmodules",
                      "C:\\repo\\.git\\hooks\\pre-push", "C:\\repo\\.GIT\\hooks\\pre-push", "C:\\repo\\.git.\\config",
                      "C:\\repo\\.git::$INDEX_ALLOCATION\\config", "C:\\repo\\GIT~1\\config", "C:\\Users\\u\\.gitconfig",
-                     "C:\\Users\\u\\AppData\\Roaming\\GitHub CLI\\hosts.yml"):
+                     "C:\\Users\\u\\AppData\\Roaming\\GitHub CLI\\hosts.yml", "C:\\Users\\u\\GITCON~1",
+                     "C:\\repo\\GITMOD~1", "C:\\Users\\u\\AppData\\Roaming\\GITHUB~1\\hosts.yml"):
             with self.subTest(path=path):
                 self.assertEqual(self.pre("write_file", {"path": path, "content": "x"})["action"], "block")
         for tool in ("mcp_github_add_issue_comment", "mcp_github_update_issue", "github_merge_pr",
