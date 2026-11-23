@@ -57,6 +57,18 @@ TERMINATION_GRACE_SECONDS = 30
 Grader = Callable[[Mapping[str, Any], Mapping[str, Any]], tuple[Failure, ...]]
 
 
+def artifact_label(path: Path) -> str:
+    """How a report names its observations file: repository-relative, or a bare name.
+
+    An absolute path outside the checkout can carry a home directory or user
+    name, so it is reduced to its file name.
+    """
+    resolved = Path(path).resolve()
+    if resolved.is_relative_to(ROOT.resolve()):
+        return resolved.relative_to(ROOT.resolve()).as_posix()
+    return f"outside-repository:{resolved.name}"
+
+
 def emit(value: object) -> None:
     print(json.dumps(value, sort_keys=True, indent=2, ensure_ascii=False))
 
@@ -195,7 +207,7 @@ def main(
                 observations=read_json_document(args.observations),
                 grade=grade,
                 categories=suite.CATEGORIES,
-                artifact=str(args.observations),
+                artifact=artifact_label(args.observations),
             )
             if args.output is not None:
                 write_json(args.output, report)
@@ -280,7 +292,7 @@ def _run(parser: argparse.ArgumentParser, args: argparse.Namespace, *, suite: Mo
         )
         # The dispatcher enforces --timeout itself; this outer wait is a backstop.
         launched, timed_out, stdout = _dispatch(command, prompt, args.timeout + 30)
-        decision, _reason = read_decision_file(workspace)
+        decision, reason = read_decision_file(workspace)
         document["observations"].append(observation_from_dispatch(
             scenario["id"],
             launched=launched,
@@ -290,6 +302,7 @@ def _run(parser: argparse.ArgumentParser, args: argparse.Namespace, *, suite: Mo
             decision_keys=suite.DECISION_KEYS,
             # The scenario's own evidence, set here; the model's file never adds any.
             evidence_links=suite.harness_evidence_links(scenario),
+            reason=reason,
         ))
         # Rewritten after every scenario: an interrupted run keeps what it bought.
         write_json(args.output, document)

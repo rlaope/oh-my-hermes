@@ -446,6 +446,17 @@ class DispatchClassificationTests(unittest.TestCase):
         self.assertEqual(self.classify(stdout=_child_stdout("cancelled"))["infrastructure_failure"], "transport_error")
         self.assertEqual(self.classify(stdout=self.failed)["infrastructure_failure"], "transport_error")
 
+    def test_an_infrastructure_failure_keeps_a_short_reason(self) -> None:
+        row = self.classify(stdout=self.failed, reason=".omh-scenario-decision.json was not written")
+        self.assertEqual(row["infrastructure_failure"], "transport_error")
+        self.assertEqual(row["reason"], "child status failed; .omh-scenario-decision.json was not written")
+        long = self.classify(launched=False, reason="x" * 1000)
+        self.assertLessEqual(len(long["reason"]), shared.MAX_REASON_CHARS)
+        self.assertEqual(shared.observations_errors(
+            _observations("s", "tuning", [long]), suite="s", split="tuning"), [])
+        graded = self.classify(decision={"reply": "ok"}, reason="")
+        self.assertNotIn("reason", graded)
+
     def test_non_terminal_or_refused_status_without_a_decision_did_not_run(self) -> None:
         for status in ("prepared", "running", "dispatched"):
             with self.subTest(status):
@@ -641,6 +652,19 @@ class BenchCommandTests(unittest.TestCase):
             with self.subTest(str(lane)):
                 self.assertNotIn("import subprocess", source)
                 self.assertLess(len(source.splitlines()), 40)
+
+    def test_report_artifact_path_is_repository_relative_or_a_bare_name(self) -> None:
+        for _module, lane, bench in self.benches[:1]:
+            fixture = lane / "fixtures" / "recorded-observations.json"
+            _code, out, _err = _run(bench, ["grade", "--observations", str(fixture.resolve())])
+            self.assertEqual(json.loads(out)["headline"]["artifact"], fixture.relative_to(ROOT).as_posix())
+            with TemporaryDirectory() as tmp:
+                outside = Path(tmp) / "private-name.json"
+                outside.write_text(fixture.read_text(encoding="utf-8"), encoding="utf-8")
+                _code, out, _err = _run(bench, ["grade", "--observations", str(outside)])
+            artifact = json.loads(out)["headline"]["artifact"]
+            self.assertEqual(artifact, "outside-repository:private-name.json")
+            self.assertNotIn(tmp, artifact)
 
     def test_live_run_ids_are_unique_per_invocation(self) -> None:
         _module, _lane, bench = self.benches[0]

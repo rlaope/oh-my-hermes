@@ -77,7 +77,10 @@ GROUPS = (REQUEST_DERIVABLE_GROUP, SKILL_RULE_GROUP)
 NOT_OBSERVED = "not_observed"
 EXCLUDED_CLASSES = (*INFRASTRUCTURE_FAILURE_CLASSES, NOT_OBSERVED)
 
-OBSERVATION_KEYS = frozenset({"scenario_id", "status", "infrastructure_failure", "decision", "evidence_links"})
+OBSERVATION_KEYS = frozenset({"scenario_id", "status", "infrastructure_failure", "reason", "decision", "evidence_links"})
+# An infrastructure failure keeps a short reason for diagnosis: the child's
+# terminal status and why no decision was read. Never the prompt or stderr.
+MAX_REASON_CHARS = 200
 RUN_KEYS = frozenset({"execution_path", "arm_kind", "model", "provider", "reasoning", "skill_digest"})
 SCENARIO_ID_LIMIT = 80
 
@@ -328,9 +331,12 @@ def observations_errors(document: object, *, suite: str, split: str) -> list[str
                 errors.append(f"{where}.infrastructure_failure must be one of {', '.join(INFRASTRUCTURE_FAILURE_CLASSES)}")
             if "decision" in row:
                 errors.append(f"{where} is an infrastructure failure and must carry no decision")
+            reason = row.get("reason", "")
+            if not isinstance(reason, str) or len(reason) > MAX_REASON_CHARS:
+                errors.append(f"{where}.reason must be a string of at most {MAX_REASON_CHARS} characters")
         else:
-            if "infrastructure_failure" in row:
-                errors.append(f"{where} is observed and must not name an infrastructure failure")
+            if "infrastructure_failure" in row or "reason" in row:
+                errors.append(f"{where} is observed and must not name an infrastructure failure or reason")
             if not isinstance(row.get("decision"), dict):
                 errors.append(f"{where}.decision must be an object")
         links = row.get("evidence_links", [])
@@ -598,6 +604,7 @@ def observation_from_dispatch(
     decision: Mapping[str, Any] | None,
     decision_keys: Sequence[str],
     evidence_links: Sequence[str] = (),
+    reason: str = "",
 ) -> dict[str, Any]:
     """Classify one live dispatch into an observation row.
 
@@ -616,14 +623,20 @@ def observation_from_dispatch(
     evidence.
     """
     status = child_status(stdout) if launched else ""
+    head = f"child status {status or 'none'}" if launched else "the omh command could not start"
+    diagnosis = "; ".join(part for part in (head, reason.strip()) if part)[:MAX_REASON_CHARS]
+
+    def failure(kind: str) -> dict[str, Any]:
+        return {"scenario_id": scenario_id, "status": INFRASTRUCTURE_FAILURE, "infrastructure_failure": kind, "reason": diagnosis}
+
     if timed_out or status == "timed_out":
-        return {"scenario_id": scenario_id, "status": INFRASTRUCTURE_FAILURE, "infrastructure_failure": "timeout"}
+        return failure("timeout")
     if decision is None and status in {"failed", "cancelled"}:
-        return {"scenario_id": scenario_id, "status": INFRASTRUCTURE_FAILURE, "infrastructure_failure": "transport_error"}
+        return failure("transport_error")
     # Only a child that reported `completed`, or one that wrote a decision, ran.
     # A refusal, a non-terminal status or no status at all started nothing.
     if not launched or (decision is None and status != "completed"):
-        return {"scenario_id": scenario_id, "status": INFRASTRUCTURE_FAILURE, "infrastructure_failure": "arm_did_not_run"}
+        return failure("arm_did_not_run")
     narrowed = {key: decision[key] for key in decision_keys if decision is not None and key in decision}
     row: dict[str, Any] = {"scenario_id": scenario_id, "status": OBSERVED, "decision": narrowed}
     if evidence_links:

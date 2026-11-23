@@ -109,12 +109,22 @@ arm's decisions. Keeping the held-out split out of tuning is the operator's
 discipline: do not read either while editing skill text; grade the run and
 read the report.
 
+What the held-out split can and cannot show: its scenarios are near siblings
+of tuning ones (the same kinds of request with different repositories,
+channels and jobs), so it measures near transfer, not generalisation to new
+kinds of request. It is also small: a perfect score on a split this size has a
+Wilson 95% interval whose lower bound is only around 60-70%, so a held-out number is a
+check against over-fitting the tuning split, not a precise rate.
+
 ## Observation classes and the report
 
 Each observation is `observed` (graded) or an infrastructure failure:
 `arm_did_not_run`, `timeout`, `transport_error`. A scenario with no
 observation is `not_observed`. All four are excluded from the denominator by
-name and counted in `excluded_counts`; none is a pass or a failure.
+name and counted in `excluded_counts`; none is a pass or a failure. An
+infrastructure failure keeps a short `reason` (the child's terminal status and
+why no decision was read, at most 200 characters, never the prompt or the
+child's output) so an outage can be diagnosed.
 
 `bench.py grade` writes `omh_scenario_suite_report/v1`. Every rate is
 `omh_reported_rate/v1` (`numerator_of: ["passed"]`, `denominator_of: "graded
@@ -187,6 +197,13 @@ uv run python benchmarks/automation-intent/v1/bench.py run \
 uv run python benchmarks/automation-intent/v1/bench.py grade \
   --observations benchmarks/automation-intent/v1/artifacts/tuning-skill.json
 ```
+
+`artifacts/` is a scratch directory and is not committed. A run whose number
+will be quoted is committed under `results/` in the lane (its observations file
+and its graded report, side by side), and graded from there, so the report's
+`headline.artifact` names it by its repository-relative path. A report graded
+from a file outside the checkout names it only as
+`outside-repository:<file name>`, never by an absolute local path.
 
 `--scenario <id>` (repeatable) runs a subset of the tuning split. `--split
 held-out` runs or grades the whole held-out split; name it only for a

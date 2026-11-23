@@ -108,6 +108,13 @@ is public in this repository, and a held-out run's observations file holds
 the arm's replies. Keeping the held-out split out of tuning is the operator's
 discipline; do not read either while editing skill text.
 
+What the held-out split can and cannot show: its scenarios are near siblings
+of tuning ones (the same kinds of request with different repositories,
+channels and jobs), so it measures near transfer, not generalisation to new
+kinds of request. It is also small: a perfect score on a split this size has a
+Wilson 95% interval whose lower bound is only around 60-70%, so a held-out number is a
+check against over-fitting the tuning split, not a precise rate.
+
 ## Which numbers measure the skill text
 
 A tuning report splits its scenarios into `request_derivable` (any arm can
@@ -152,7 +159,10 @@ uv run python benchmarks/orchestration/v1/bench.py run \
   --allow-paid-live --max-paid-calls <scenarios> --confirm
 ```
 
-The fixture's numbers measure nothing; do not quote them.
+The fixture's numbers measure nothing; do not quote them. A run whose number
+will be quoted is committed under `results/` in the lane and graded from
+there, as in
+[`automation-intent/v1`](../../automation-intent/v1/README.md#commands).
 
 ## Files
 
