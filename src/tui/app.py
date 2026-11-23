@@ -325,7 +325,7 @@ from .slash import (
 )
 from .style import CSI, NO_COLOR, TRUECOLOR, Line, Span, Style, color_depth
 from .subagent_session import PLACEHOLDER as VIEW_PLACEHOLDER
-from .subagent_session import SubagentView, poll_due_at, rule_label
+from .subagent_session import DEST_MAIN, SubagentView, poll_due_at, rule_label
 from .subagents import Hit, Roster
 from .terminal import (
     INLINE_KITTY,
@@ -1722,7 +1722,8 @@ class HeldSubmit:
     since: float
     cancelled: bool = False
     now: bool = False  # sent with the send-now key (Ctrl+Enter): with images it cuts in (`App._cut_in`)
-    view: Any = None  # the subagent view (`SubagentView`) it was typed in, which it goes to; None for main
+    owner: str = ""  # the composer it was typed in: "" main's, else the agent id of the view shown then
+    dest: tuple[str, str] = DEST_MAIN  # where Enter decided it goes (`AgentViewMixin._submit_dest`), kept while held
 
 
 @dataclass
@@ -1732,7 +1733,7 @@ class Intake:
 
     running: bool = False
     held: HeldSubmit | None = None
-    view: Any = None  # the subagent view (`SubagentView`) it was typed in; None for main's screen
+    owner: str = ""  # the composer it was typed in: "" main's, else the agent id of the view shown then
 
 
 @dataclass(frozen=True)
@@ -5608,11 +5609,12 @@ class App(ModesMixin, AgentViewMixin):
                 and bool(action.text.strip())
             )
             images = tuple(image for _label, image in action.images if isinstance(image, Attachment))
-            if self.slot is None and self.tell_draft is None and self._hold_submit(action, images, steer, now):
-                return  # it goes once the pastes it was typed with are answered, with their images (a view's too)
-            if self.viewing is not None and self.slot is None and self.tell_draft is None and self.agent_steer is None:
-                self._send_to_view(action.text, action.shown, images)  # to the subagent on screen, never main
+            dest = self._submit_dest() if self.slot is None else DEST_MAIN  # decided once, here; a hold keeps it
+            if dest != DEST_MAIN:  # the subagent on screen or the one `s` picked: never main, under the view's policy
+                self._submit_to_child(dest, action, images, steer, now)
                 return
+            if self.slot is None and self.tell_draft is None and self._hold_submit(action, images, steer, now):
+                return  # it goes once the pastes it was typed with are answered, with their images
             if self.slot is not None:
                 question = self.slot.question_index
                 answer = self.slot.submit_text(action.text)
@@ -5772,7 +5774,7 @@ class App(ModesMixin, AgentViewMixin):
         if self.tell_draft is not None:
             self._leave_tell()  # the deny went as the row was picked; nothing more is sent
             return True
-        if not self.composer.text and self._give_back_held():
+        if not self.composer.text and self._give_back_held(self._screen_owner()):
             return True  # what was held for its paste comes back, unsent
         if self._busy() and not self.composer.vim:  # the draft stays: Enter queues it, so Esc is the one-key stop
             self._interrupt()
@@ -5802,7 +5804,7 @@ class App(ModesMixin, AgentViewMixin):
         the exit interrupted a turn: then the second press leaves from there too."""
         return (
             self.exit_armed_at is not None and self.clock() - self.exit_armed_at <= EXIT_CONFIRM_SECONDS
-            and not self.held_submits and self.slot is None and not self._picker_keys()
+            and not self._screen_held() and self.slot is None and not self._picker_keys()
             and self.list_selected is None and self.tree_selected is None
             and (self.exit_armed_by_interrupt or (
                 self.roster.agents.get(self.agent_steer or "") is None and self.rewind is None
@@ -6468,7 +6470,7 @@ class App(ModesMixin, AgentViewMixin):
         whether or not the turn has stopped yet (`interrupting…` can last).
         """
         now = self.clock()
-        if not self._busy() and self._give_back_held():
+        if not self._busy() and self._give_back_held(self._screen_owner()):
             self.dirty = True  # a submit held for its paste comes back, as Esc gives it; this press arms no exit
             return
         if self._exit_said():  # only while the info line says so
@@ -6679,9 +6681,6 @@ class App(ModesMixin, AgentViewMixin):
             # A picked rewind or agent stays picked under a command; a prompt the command sends replaces the rewind's.
             self._run_slash(replace(sent, rewind=self.rewind, images=tuple(images)), echo=f"/{invocation.text}",
                             chips=chips)
-        elif self.agent_steer is not None:
-            self._keep_images(images, "A subagent's steer")
-            self._steer_agent(text)
         elif self.rewind is not None:
             self._send_rewind(text, shown, images=images)
         else:
@@ -6849,7 +6848,7 @@ class App(ModesMixin, AgentViewMixin):
         no prompt's images are out, and no prompt goes until it is answered, its answer having sent the detach
         (`_take_attachment`), or until it has none in its time."""
 
-        intake = Intake(view=self.viewing)
+        intake = Intake(owner=self._screen_owner())
         self.intakes.append(intake)
 
         def run() -> None:
@@ -6991,27 +6990,36 @@ class App(ModesMixin, AgentViewMixin):
             self._give_back_prompt(prompt.text, prompt.images)
         return self._give_back_held() or bool(unsent)
 
-    def _give_back_held(self) -> bool:
-        """Every submit held for its pastes goes back to the draft, its images tokens again; True when one did."""
-        held, self.held_submits = [submit for submit in self.held_submits if not submit.cancelled], []
+    def _screen_held(self) -> list[HeldSubmit]:
+        """The submits held for their pastes that the composer on screen owns (`_screen_owner`)."""
+        owner = self._screen_owner()
+        return [submit for submit in self.held_submits if not submit.cancelled and submit.owner == owner]
+
+    def _give_back_held(self, owner: str | None = None) -> bool:
+        """Every submit held for its pastes (only `owner`'s, when given) goes back to the composer it was typed in,
+        its images tokens again; True when one did."""
+        held = [submit for submit in self.held_submits if not submit.cancelled and owner in (None, submit.owner)]
+        self.held_submits = [submit for submit in self.held_submits if not submit.cancelled and submit not in held]
         for submit in held:
             submit.cancelled = True
-            if submit.view is not None:
-                self._give_back_to_view(submit.view, submit.text, submit.images)
-            else:
-                self._give_back(submit.text, submit.images)
+            self._give_back_to_owner(submit.owner, submit.text, submit.images)
         return bool(held)
 
-    def _hold_submit(self, action: ComposerAction, images: tuple[Attachment, ...], steer: bool, now: bool = False) -> bool:
+    def _hold_submit(
+        self, action: ComposerAction, images: tuple[Attachment, ...], steer: bool, now: bool = False,
+        dest: tuple[str, str] = DEST_MAIN,
+    ) -> bool:
         """A submit made while a paste, drop or `/image` typed before it is still out, or behind one held so, waits
         (`held_submits`): the image each such intake answers joins it, and it goes once they are all answered
         (`_release_held`), as if sent then. True when it was held."""
-        out = [intake for intake in self.intakes if intake.held is None]
-        if not out and not self.held_submits:
+        owner = self._screen_owner()  # only the pastes typed in this same composer hold it, behind its own held ones
+        out = [intake for intake in self.intakes if intake.held is None and intake.owner == owner]
+        if not out and not any(not submit.cancelled and submit.owner == owner for submit in self.held_submits):
             return False
-        self._cancel_auto_continue(AUTO_CONTINUE_SENT)  # a submit, though it waits for its pastes
-        held = HeldSubmit(action.text, action.shown, action.chips, images, steer, self.clock(), now=now,
-                          view=self.viewing if self.agent_steer is None else None)
+        if not owner:
+            self._cancel_auto_continue(AUTO_CONTINUE_SENT)  # main's submit, though it waits for its pastes
+        held = HeldSubmit(action.text, action.shown, action.chips, images, steer, self.clock(), now=now, owner=owner,
+                          dest=dest)
         for intake in out:
             intake.held = held
         self.held_submits.append(held)
@@ -7028,18 +7036,16 @@ class App(ModesMixin, AgentViewMixin):
         return True
 
     def _release_held(self) -> None:
-        """Once no intake a held submit waits on is out, the held submits go, in order, as Enter or Ctrl+Enter sends."""
-        if any(intake.held is not None and not intake.held.cancelled for intake in self.intakes):
-            return
-        held, self.held_submits = self.held_submits, []
-        for submit in held:
-            if submit.cancelled:
+        """Once no intake a composer's held submits wait on is out, that composer's held submits go, in order, to the
+        destination Enter decided (`dest`), as Enter or Ctrl+Enter sends; another composer's wait on their own."""
+        waiting = {intake.owner for intake in self.intakes if intake.held is not None and not intake.held.cancelled}
+        live = [submit for submit in self.held_submits if not submit.cancelled]
+        self.held_submits = [submit for submit in live if submit.owner in waiting]
+        for submit in live:
+            if submit.owner in waiting:
                 continue
-            if submit.view is not None:  # typed in a subagent's session: it goes there, or back to its draft
-                if self.viewing is submit.view:
-                    self._send_to_view(submit.text, submit.shown, submit.images)
-                else:
-                    self._give_back_to_view(submit.view, submit.text, submit.images)
+            if submit.dest != DEST_MAIN:  # a subagent's: there under the view's policy, or back where it was typed
+                self._send_to_dest(submit.dest, submit.owner, submit.text, submit.shown, submit.images)
                 continue
             if submit.steer:
                 self._steer_or_submit(submit.text, submit.shown, submit.chips, submit.images, now=submit.now)
@@ -7049,7 +7055,7 @@ class App(ModesMixin, AgentViewMixin):
     def _image_wait_line(self, cols: int) -> Line | None:
         """`waiting for the image…`, muted, while a submit is held for a paste, drop or `/image` still out, with how
         long once it is `IMAGE_WAIT_ELAPSED_SECONDS` or more; None otherwise."""
-        since = [submit.since for submit in self.held_submits if not submit.cancelled]
+        since = [submit.since for submit in self._screen_held()]
         if not since:
             return None
         seconds = self.clock() - min(since)
@@ -7174,9 +7180,13 @@ class App(ModesMixin, AgentViewMixin):
 
     def _auto_continue_held(self) -> str:
         """Why the person's own state holds a `continue` the TUI would send itself; "" when nothing does."""
-        if self._draft().text.strip() or self.agent_steer is not None or self.rewind is not None:
+        # Main's own state only: a view's draft, `s` or held submit is that subagent's.
+        if self._draft().text.strip() or (self.agent_steer is not None and self.viewing is None) \
+                or self.rewind is not None:
             return AUTO_CONTINUE_DRAFTED
-        if self.queued or self.starting is not None or self.held_submits:
+        if self.queued or self.starting is not None or any(
+            not submit.cancelled and not submit.owner for submit in self.held_submits
+        ):
             return AUTO_CONTINUE_QUEUED
         if self.slot is not None or self.tell_draft is not None:
             return AUTO_CONTINUE_ASKED
@@ -7772,31 +7782,29 @@ class App(ModesMixin, AgentViewMixin):
         else:
             self._steer_unanswered(block, seconds)
 
-    def _on_agent_steer_unanswered(
-        self, sid: str, session: str, block: SteerBlock, seconds: float, view: SubagentView | None = None,
-    ) -> None:
+    def _on_agent_steer_unanswered(self, sid: str, session: str, block: SteerBlock, seconds: float, owner: str = "") -> None:
         """An agent steer with no answer in `seconds`: as the main steer's, and if `sid`, the session it went to, was
-        left, a notice names the agent and `session`. `view`: the subagent session it was typed in, which its text
-        goes back to (`_give_back_from`)."""
+        left, a notice names the agent and `session`. `owner`: the composer it was typed in, which its text goes
+        back to (`_give_back_from`)."""
         if sid != self.sid:
             said = AGENT_STEER_LEFT_UNANSWERED_NOTICE.format(name=block.agent, seconds=seconds, session=session)
-            self._steer_back(block.text, said, view)
+            self._steer_back(block.text, said, owner)
         else:
-            self._steer_unanswered(block, seconds, view)
+            self._steer_unanswered(block, seconds, owner)
 
-    def _steer_unanswered(self, block: SteerBlock, seconds: float, view: SubagentView | None = None) -> None:
+    def _steer_unanswered(self, block: SteerBlock, seconds: float, owner: str = "") -> None:
         """A steer, the main turn's or an agent's, unanswered in the `seconds` its call was waited for: its row says
         so and its text is given back."""
         self.transcript.steer_answered(block, STEER_REFUSED, STEER_UNANSWERED_OUTCOME.format(seconds=seconds))
-        self._give_back_from(view, block.text)
+        self._give_back_from(owner, block.text)
 
-    def _give_back_from(self, view: SubagentView | None, text: str) -> None:
-        """Text not taken back to the screen it was typed on: main's draft for None, else `view`'s
-        (`_give_back_to_view`)."""
-        if view is None:
+    def _give_back_from(self, owner: str, text: str) -> None:
+        """Text not taken back to the composer it was typed in: main's draft for "", else that agent's
+        (`_give_back_to_owner`)."""
+        if not owner:
             self._give_back(text)
         else:
-            self._give_back_to_view(view, text)
+            self._give_back_to_owner(owner, text)
 
     def _steer_refused(self, block: SteerBlock, reason: str, queued: QueuedLine | None = None, turn: int = 0) -> None:
         """The steer says what became of its text (with Hermes' `reason`), which goes as the next prompt.
@@ -7831,9 +7839,9 @@ class App(ModesMixin, AgentViewMixin):
         self.transcript.steer_answered(block, STEER_REFUSED, STEER_REFUSED_OUTCOME.format(fallback=fallback, reason=reason))
         self._send_typed(block.text)
 
-    def _steer_back(self, text: str, notice: str = STEER_LEFT_NOTICE, view: SubagentView | None = None) -> None:
+    def _steer_back(self, text: str, notice: str = STEER_LEFT_NOTICE, owner: str = "") -> None:
         """A steer settled after its session was left: the text returns to the person, never to the live session."""
-        self._give_back_from(view, text)
+        self._give_back_from(owner, text)
         self.transcript.add_notice(notice, NOTICE_WARN)
 
     def _draft(self) -> Composer:
@@ -8764,6 +8772,8 @@ class App(ModesMixin, AgentViewMixin):
         if sid != self.sid:
             self.transcript.add_notice(ATTACH_LEFT_NOTICE.format(name=attachment.name), NOTICE_WARN)
             return
+        if self._intake_draft() is None:
+            return  # typed in the view of an agent no longer listed: detached, and nowhere to go
         if data is None:
             self.transcript.add_notice(IMAGE_UNREADABLE_NOTICE.format(name=attachment.name), NOTICE_WARN)
             return
@@ -8771,7 +8781,7 @@ class App(ModesMixin, AgentViewMixin):
         attachment = replace(attachment, label=IMAGE_LABEL.format(number=self.image_count), data=data)
         self._request_preview(attachment)
         if not self._join_held(self.intake_answering, attachment):
-            self._intake_draft().insert_image(attachment.label, attachment)
+            self._into_intake_draft(image=attachment)
 
     def _request_preview(self, attachment: Attachment) -> None:
         """Ask Hermes to render `attachment` for the prompt echo (`image.render`, by the path it staged it at): kitty
@@ -8860,7 +8870,7 @@ class App(ModesMixin, AgentViewMixin):
         self._take_attachment(sid, attachment)
         remainder = as_text(result.get("remainder")).strip()
         if remainder:  # `/image shot.png what is this?` keeps the question for the person to send
-            self._intake_draft().handle(Paste(remainder))
+            self._into_intake_draft(remainder)
 
     def _on_clipboard_pasted(self, sid: str, result: dict[str, Any]) -> None:
         attachment = attachment_from(result) if result.get("attached") is True else None
@@ -8903,13 +8913,31 @@ class App(ModesMixin, AgentViewMixin):
             held.text += text
             held.shown = held.shown + text if held.shown else ""
             return
-        self._intake_draft().handle(Paste(text))
+        self._into_intake_draft(text)
 
-    def _intake_draft(self) -> Composer:
-        """Where what an intake answers goes: the draft of the screen it was typed on (`_origin_draft`), the screen's
-        own for an agent no longer listed."""
+    def _intake_draft(self) -> Composer | None:
+        """Where what an intake answers goes: the draft of the composer it was typed in (`_owner_draft`); None for one
+        typed in the view of an agent no longer listed, whose intakes were dropped with it."""
         intake = self.intake_answering
-        return (self._origin_draft(intake.view) if intake is not None else None) or self._draft()
+        return self._owner_draft(intake.owner) if intake is not None else self._draft()
+
+    def _into_intake_draft(self, text: str = "", image: Attachment | None = None) -> None:
+        """`text` (or `image`'s token) into the intake's draft (`_intake_draft`): at the caret of a draft in use, after
+        a kept child draft's text on a new line (what is kept for an agent is only ever added to); nowhere for an
+        agent no longer listed."""
+        draft = self._intake_draft()
+        if draft is None:
+            return
+        kept = any(draft is child for child in self.child_drafts.values())
+        if image is not None:
+            if kept:
+                self._give_back(image.label, [image], into=draft)
+            else:
+                draft.insert_image(image.label, image)
+        elif kept:
+            self._give_back(text, into=draft)
+        else:
+            draft.handle(Paste(text))
 
     def _redraw(self, arg: str) -> None:
         self._full_redraw()

@@ -62,7 +62,8 @@ from .composer import Composer
 from .style import Line, Span, Style
 from . import subagent_session as view_state
 from .subagent_session import (
-    CONTINUE_REFUSED, FROM_MAIN, REFUSED_WHILE_VIEWING, VIEW_REFUSED_ARMED, VIEW_TEXT_DROPPED, SEND_CONTINUE, SEND_STEER, SEND_UNSUPPORTED, STILL_RUNNING,
+    CONTINUE_REFUSED, DEST_MAIN, DEST_STEER, DEST_VIEW, FROM_MAIN, REFUSED_FOR_STEER, REFUSED_WHILE_VIEWING,
+    VIEW_TEXT_KEPT, VIEW_REFUSED_ARMED, VIEW_TEXT_DROPPED, SEND_CONTINUE, SEND_STEER, SEND_UNSUPPORTED, STILL_RUNNING,
     UNSUPPORTED_LINE, WIRE_POLL, WIRE_WATCH, SubagentView, mark_rows,
 )
 from .subagents import (
@@ -608,31 +609,31 @@ class AgentViewMixin:
         self.transcript.add_aside(NoticeBlock(notice, NOTICE_WARN))
         return True
 
-    def _steer_agent(self, text: str) -> None:
-        """Send `text`, the line the person typed after `s`, to the agent they picked; back to the composer if it cannot go."""
-        subagent_id, self.agent_steer = self.agent_steer, None
-        view = self.viewing  # typed in a subagent's session: what is not taken goes back there (`_origin_draft`)
-        agent = self.roster.agents.get(subagent_id or "")
+    def _steer_agent(self, subagent_id: str, text: str, owner: str = "") -> None:
+        """Send `text`, the line the person typed after `s`, to the agent they picked (`subagent_id`, decided at Enter);
+        what cannot go or is not taken goes back to the composer it was typed in (`owner`, `_owner_draft`), never
+        into main's queue."""
+        agent = self.roster.agents.get(subagent_id)
         if agent is None or agent.status in FINISHED_STATUSES or not self.sid:
             name = agent.name if agent is not None else "That agent"
-            self.transcript.add_aside(NoticeBlock(AGENT_FINISHED_NOTICE.format(name=name, action="steer"), NOTICE_WARN))
-            self._set_composer(text)
+            self._owner_transcript(owner).add_aside(
+                NoticeBlock(AGENT_FINISHED_NOTICE.format(name=name, action="steer"), NOTICE_WARN))
+            self._give_back_from(owner, text)
             return
         block = self.transcript.add_steer(text, agent=agent.name)  # held under what runs, as the main steer is
         sid, session = self.sid, self.stored_id or self.sid
         self._request(
             "subagent.steer",
             {"session_id": sid, "subagent_id": agent.subagent_id, "text": text},
-            lambda result: self._on_agent_steered(sid, session, block, result, view=view),
+            lambda result: self._on_agent_steered(sid, session, block, result, owner=owner),
             lambda error: self._on_agent_steered(sid, session, block, {}, as_text(error.get("message")).strip().rstrip("."),
-                                                 view=view),
-            lambda seconds: self._on_agent_steer_unanswered(sid, session, block, seconds, view),  # back, never resent
+                                                 owner=owner),
+            lambda seconds: self._on_agent_steer_unanswered(sid, session, block, seconds, owner),  # back, never resent
             steer=block,
         )
 
     def _on_agent_steered(
-        self, sid: str, session: str, block: SteerBlock, result: Mapping[str, Any], reason: str = "",
-        view: SubagentView | None = None,
+        self, sid: str, session: str, block: SteerBlock, result: Mapping[str, Any], reason: str = "", owner: str = "",
     ) -> bool:
         """Hermes' answer to an agent steer: taken, or refused (with `reason` when Hermes gave one) and given back.
 
@@ -640,14 +641,14 @@ class AgentViewMixin:
         comes back with a notice saying so, as the main steer's does.
         """
         if sid != self.sid:
-            self._steer_back(block.text, AGENT_STEER_LEFT_NOTICE.format(name=block.agent, session=session), view)
+            self._steer_back(block.text, AGENT_STEER_LEFT_NOTICE.format(name=block.agent, session=session), owner)
             return True
         if as_text(result.get("status")) == contract.STEER_QUEUED:
             self.transcript.steer_answered(block, STEER_QUEUED)
         else:
             said = AGENT_STEER_REFUSED_BECAUSE.format(reason=reason) if reason else AGENT_STEER_REFUSED
             self.transcript.steer_answered(block, STEER_REFUSED, said)
-            self._give_back_from(view, block.text)
+            self._give_back_from(owner, block.text)
         return True
 
     def _on_mouse(self, event: Mouse) -> None:
@@ -806,6 +807,7 @@ class AgentViewMixin:
         it went with the gateway), and main's transcript, which folded every main event meanwhile, is drawn again. An
         open still out is dropped as it answers."""
         self._cancel_view_open()
+        self.agent_steer = None  # a picked `s` belongs to the composer that armed it
         view, self.viewing = self.viewing, None
         if view is None:
             return
@@ -814,7 +816,11 @@ class AgentViewMixin:
             child = self._swap_draft(view.main_draft)
             child._drop_pending()
             if child.text.strip() or child.images:
-                self.child_drafts[view.subagent_id] = child
+                kept = self.child_drafts.get(view.subagent_id)
+                if kept is None:
+                    self.child_drafts[view.subagent_id] = child
+                else:  # a late refusal kept text for it already: both stay, this draft on a new line after it
+                    self._give_back(child.expanded(), [image for _label, image in child.images.values()], into=kept)
             view.main_draft = None
         view.sent_steers.clear()
         if view.watch_sid and close:
@@ -824,7 +830,9 @@ class AgentViewMixin:
 
     def _swap_draft(self, draft: Composer) -> Composer:
         """Put `draft` where the screen's draft stands (`App._screen_draft`: the composer, or the one a question's or a
-        tell row's own composer set aside) and hand back the one it replaces."""
+        tell row's own composer set aside) and hand back the one it replaces. A picked `s` belongs to the composer
+        that armed it, so it goes."""
+        self.agent_steer = None
         if self.tell_draft is not None:
             old, self.tell_draft = self.tell_draft, draft
         elif self.slot_draft is not None:
@@ -833,31 +841,55 @@ class AgentViewMixin:
             old, self.composer = self.composer, draft
         return old
 
-    def _origin_draft(self, view: SubagentView | None) -> Composer | None:
-        """The draft of the screen something was typed on: main's (`_draft`, set aside while a view is shown) for
-        None; for `view`, its composer while that same view is on screen, else its agent's kept draft
-        (`child_drafts`), which comes back when its view opens again; None for an agent no longer listed."""
-        if view is None:
-            return self._draft()
-        if self.viewing is view:
-            return self._screen_draft()
-        if view.subagent_id not in self.roster.agents:
-            return None
-        return self.child_drafts.setdefault(view.subagent_id, Composer())
+    def _screen_owner(self) -> str:
+        """Who owns the composer on screen: "" for main, else the agent id of the view shown."""
+        return self.viewing.subagent_id if self.viewing is not None else ""
 
-    def _give_back_to_view(self, view: SubagentView, text: str, images: Sequence[Any] = ()) -> None:
-        """Text a view sent and its agent did not take goes back where it was typed (`_origin_draft`), never into
-        main's draft; for an agent no longer listed, one notice on main's screen holds it."""
-        draft = self._origin_draft(view)
+    def _owner_draft(self, owner: str) -> Composer | None:
+        """The draft of the composer `owner` typed in: main's (`_draft`, set aside while a view is shown) for "";
+        for an agent, the composer of whichever view of it is on screen now, else its kept draft (`child_drafts`),
+        which comes back whole when its view opens again; None for an agent no longer listed."""
+        if not owner:
+            return self._draft()
+        if self.viewing is not None and self.viewing.subagent_id == owner:
+            return self._screen_draft()
+        if owner not in self.roster.agents:
+            return None
+        return self.child_drafts.setdefault(owner, Composer())
+
+    def _owner_transcript(self, owner: str) -> Transcript:
+        """Where a notice about what `owner` typed shows: the view of that agent while it is on screen, else main's."""
+        if owner and self.viewing is not None and self.viewing.subagent_id == owner:
+            return self.viewing.transcript
+        return self.transcript
+
+    def _give_back_to_owner(self, owner: str, text: str, images: Sequence[Any] = (), name: str = "") -> None:
+        """Text not sent or not taken goes back to the composer it was typed in (`_owner_draft`), after its draft on
+        a new line; for an agent no longer listed, one notice on main's screen holds it."""
+        draft = self._owner_draft(owner)
         if draft is None:
-            self.transcript.add_notice(VIEW_TEXT_DROPPED.format(name=view.name, text=text), NOTICE_WARN)
+            agent_name = name or owner
+            self.transcript.add_notice(VIEW_TEXT_DROPPED.format(name=agent_name, text=text), NOTICE_WARN)
             return
         self._give_back(text, images, into=draft)
 
+    def _give_back_to_view(self, view: SubagentView, text: str, images: Sequence[Any] = ()) -> None:
+        """Text a view sent and its agent did not take goes back to that agent's composer (`_give_back_to_owner`),
+        never into main's draft."""
+        self._give_back_to_owner(view.subagent_id, text, images, view.name)
+
     def _prune_child_drafts(self) -> None:
-        """Drop the kept drafts of agents the roster no longer holds, so they stay as few as the roster's agents."""
+        """Drop what agents the roster no longer holds owned: their kept drafts, so they stay as few as the roster's
+        agents, and the pastes and drops typed in their views (an image staged for one is detached as it answers,
+        `App._take_attachment`); a submit held for those goes back as `_release_held` decides."""
         for subagent_id in [key for key in self.child_drafts if key not in self.roster.agents]:
             del self.child_drafts[subagent_id]
+        gone = [intake for intake in self.intakes if intake.owner and intake.owner not in self.roster.agents]
+        for intake in gone:
+            self.intakes.remove(intake)
+        if gone:
+            self._release_held()
+            self._pump_claims()
 
     def _view_event(self, view: SubagentView, event: Any) -> None:
         """An event of the viewed child's watch session (Hermes mirrors its `message.*`, `reasoning.*` and `tool.*`
@@ -985,6 +1017,66 @@ class AgentViewMixin:
             lambda seconds: self._view_steered(view, block, {}, f"no answer in {seconds:g} s"),
             steer=block, watch=True,
         )
+
+    def _submit_dest(self) -> tuple[str, str]:
+        """Where Enter sends what the composer holds, decided once, at Enter: the agent `s` picked (it wins), else the
+        subagent on screen, else main (a tell row on screen takes it for main's or the asking child's turn)."""
+        if self.agent_steer is not None:
+            return (DEST_STEER, self.agent_steer)
+        if self.viewing is not None and self.tell_draft is None:
+            return (DEST_VIEW, self.viewing.subagent_id)
+        return DEST_MAIN
+
+    def _submit_to_child(
+        self, dest: tuple[str, str], action: Any, images: Sequence[Any], steer: bool, now: bool,
+    ) -> None:
+        """Enter on a subagent destination (`_submit_dest`): the child's policy first (`_child_refuses`: the whole
+        prompt refused, its text kept), then held behind this composer's own pastes still out (`App._hold_submit`,
+        the destination kept with it), else sent (`_send_to_dest`). The `s` that picked it is spent once it goes."""
+        if not action.text.strip():
+            return
+        owner = self._screen_owner()
+        if self._child_refuses(dest, owner, action.text, action.shown, images):
+            return
+        if dest[0] == DEST_STEER:
+            self.agent_steer = None
+        if self._hold_submit(action, tuple(images), steer, now, dest=dest):
+            return
+        self._send_to_dest(dest, owner, action.text, action.shown, images)
+
+    def _child_refuses(self, dest: tuple[str, str], owner: str, text: str, shown: str, images: Sequence[Any]) -> bool:
+        """A child takes text alone: a slash command, a `!` line or any image refuses the whole prompt with one
+        notice where it was typed, and the text goes back to that composer (`_give_back_to_owner`). True when
+        refused."""
+        seen = shown or text
+        if not (images or seen.startswith("!") or seen.startswith("/")):
+            return False
+        kind, subagent_id = dest
+        agent = self.roster.agents.get(subagent_id)
+        name = agent.name if agent is not None else "that agent"
+        notice = REFUSED_WHILE_VIEWING if kind == DEST_VIEW else REFUSED_FOR_STEER
+        self._owner_transcript(owner).add_notice(notice.format(name=name), NOTICE_WARN)
+        self._give_back_to_owner(owner, text, images, name)
+        return True
+
+    def _send_to_dest(self, dest: tuple[str, str], owner: str, text: str, shown: str, images: Sequence[Any]) -> None:
+        """A child submit goes where Enter decided (`dest`), under the child's policy (`_child_refuses`): to the view
+        of that agent while it is on screen (`_send_to_view`), to the agent `s` picked as its steer
+        (`_steer_agent`); a view since left, or an agent gone, gives it back to the composer it was typed in, with a
+        notice, never into main's queue."""
+        if self._child_refuses(dest, owner, text, shown, images):
+            return
+        kind, subagent_id = dest
+        if kind == DEST_STEER:
+            self._steer_agent(subagent_id, text, owner)
+        elif self.viewing is not None and self.viewing.subagent_id == subagent_id:
+            self._send_to_view(text, shown, ())
+        else:
+            agent = self.roster.agents.get(subagent_id)
+            name = agent.name if agent is not None else subagent_id
+            if agent is not None:
+                self.transcript.add_notice(VIEW_TEXT_KEPT.format(name=name), NOTICE_WARN)
+            self._give_back_to_owner(owner, text, (), name)
 
     def _view_steered(self, view: SubagentView, block: SteerBlock, result: Mapping[str, Any], reason: str = "") -> bool:
         """Hermes' answer to a steer sent from the view: taken, or refused and its text back in the composer."""

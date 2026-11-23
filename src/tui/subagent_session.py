@@ -58,6 +58,8 @@ STILL_RUNNING = "{name} is still running; your text is back in the composer."
 CONTINUE_REFUSED = "Hermes did not continue {name}: {reason}. Your text is back in the composer."
 VIEW_REFUSED_ARMED = "A rewind or a tell is armed: send or cancel it (Esc) before opening a subagent's session."
 VIEW_TEXT_DROPPED = "{name} is no longer listed; what was sent to it did not go: {text}"
+REFUSED_FOR_STEER = "Slash commands, ! lines and images cannot be a steer for {name}. Your text is kept."
+VIEW_TEXT_KEPT = "{name}'s session was left before this could go; it is kept in {name}'s composer."
 
 POLL_SECONDS = 1.0  # the most often a running child's transcript is read while it is on screen
 POLL_ANSWER_SECONDS = 10.0  # a poll with no answer this long is forgotten and no longer holds the next one back
@@ -72,6 +74,13 @@ SEND_CONTINUE = "continue"  # it ended, stdio: `prompt.submit` on the watch sid
 SEND_UNSUPPORTED = "unsupported"  # it ended, attached: the dim line, the text kept
 
 MESSAGE_ROW_KINDS = ("", "message")  # transcript rows that are messages (`row_kind`); others are not drawn
+
+# Where a submit goes, decided once at Enter (`AgentViewMixin._submit_dest`): main, the view on screen (by agent id)
+# or the agent `s` picked; a held submit keeps it. The owner of a draft, an intake or a held submit is "" for main,
+# else the agent id of the view whose composer it was typed in.
+DEST_MAIN = ("main", "")
+DEST_VIEW = "view"
+DEST_STEER = "steer"
 
 
 @dataclass
