@@ -66,6 +66,7 @@
   color: var(--ink);
   font-size: 11.5px;
   flex: none;
+  white-space: nowrap;
 }
 .ab-btn:hover:not(:disabled) {
   background: var(--seg-on);
