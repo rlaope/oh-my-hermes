@@ -4,6 +4,12 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher on Windows: a terminal running oh-my-hermes reads oh-my-hermes, not Hermes.** Windows has no terminal
+  foreground process group, so omher looks through the processes under the terminal for a known agent CLI. It took
+  the newest one, and `omh.exe` starts `hermes.exe` beneath itself, so the row read "Hermes" with the Hermes mark and
+  `hermes ·` before its last line. A CLI now owns everything it starts: the row names the CLI that no other CLI
+  started, as macOS and Linux do by reading the foreground process group's leader. A terminal running `hermes` on its
+  own still reads Hermes. Thanks @hajeu. (#3130)
 - **omher: a bot's chat that stopped answering after a crash says why and gets going again.** When Hermes' gateway
   stops in the middle of a turn (a crash, a kill, Windows ending the process), Hermes brings that turn back as lost
   and keeps every later message of the chat in its own queue until someone acknowledges it, because the lost turn may

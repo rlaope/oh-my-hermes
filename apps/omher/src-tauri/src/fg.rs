@@ -3,9 +3,9 @@
 //! The classification is pure ([`agent_for_exe`], [`agent_for_process`]) and reads the agent tables that decide
 //! what omher starts (`sessions::AGENTS`, `sessions::LAYOUTS`, `acp_agents::ACP_LIST`) plus the few CLIs people run
 //! themselves ([`OTHER_PROGRAMS`], [`OTHER_PACKAGES`]). [`Probe`] reads one process (unix: the terminal's foreground
-//! process group leader; Windows: the session program's process tree) with no shelling out; the per-session poller
-//! is `Sessions::watch_foreground`. A shell, an unknown program, or a name that other programs share outside a known
-//! install place is `None`: the row then shows the shell, never a wrong company's mark.
+//! process group leader; Windows: the session program's process tree, [`outermost_agent`]) with no shelling out; the
+//! per-session poller is `Sessions::watch_foreground`. A shell, an unknown program, or a name that other programs share
+//! outside a known install place is `None`: the row then shows the shell, never a wrong company's mark.
 
 use std::path::Path;
 
@@ -317,16 +317,41 @@ fn argv_bytes(pid: u32, out: &mut Vec<u8>) -> bool {
     true
 }
 
-/// Windows has no foreground process group: the newest process under the session's program (itself included)
-/// whose image is a known CLI, else `None`. An npm CLI runs as `node.exe`, whose command line is not read here, so
-/// on Windows only native CLIs (`claude.exe`, `codex.exe`, …) are found.
+/// Windows has no foreground process group: [`outermost_agent`] over the session program's process tree. An npm CLI
+/// runs as `node.exe`, whose command line is not read here, so on Windows only native CLIs (`claude.exe`, `codex.exe`,
+/// …) are found.
 #[cfg(windows)]
 impl Probe {
     pub fn agent(&mut self, root: u32) -> Option<&'static str> {
         let _ = (&self.exe, &self.args, self.pid);
-        self.last = win::newest_agent(root);
+        self.last = win::agent_under(root);
         self.last
     }
+}
+
+/// The agent a terminal runs, from its process tree: `root` (the session's program, itself included) and every
+/// process under it, by `all` ((pid, parent) pairs) and `image` (a process's image path and creation time). A known
+/// CLI owns everything under it, so `omh.exe` that runs `hermes.exe` is omh, as the unix foreground process group
+/// leader is: the CLIs under the shell that no other CLI started, and of those the newest; `None` when there is none.
+#[cfg(any(windows, test))]
+fn outermost_agent(root: u32, all: &[(u32, u32)], image: impl Fn(u32) -> Option<(String, u64)>) -> Option<&'static str> {
+    let mut tree = vec![root];
+    let mut found = None;
+    let mut i = 0;
+    while i < tree.len() {
+        let p = tree[i];
+        i += 1;
+        if let Some((created, a)) = image(p).and_then(|(path, created)| agent_for_exe(&path).map(|a| (created, a))) {
+            // what this CLI runs is its own: not looked at
+            if found.is_none_or(|(t, _)| created > t) {
+                found = Some((created, a));
+            }
+            continue;
+        }
+        let kids: Vec<u32> = all.iter().filter(|(c, parent)| *parent == p && *c != p && !tree.contains(c)).map(|(c, _)| *c).collect();
+        tree.extend(kids);
+    }
+    found.map(|(_, a)| a)
 }
 
 #[cfg(windows)]
@@ -406,21 +431,8 @@ mod win {
         }
     }
 
-    pub(super) fn newest_agent(root: u32) -> Option<&'static str> {
-        let all = processes();
-        let mut tree = vec![root];
-        let mut i = 0;
-        while i < tree.len() {
-            let p = tree[i];
-            let kids: Vec<u32> = all.iter().filter(|(c, parent)| *parent == p && *c != p && !tree.contains(c)).map(|(c, _)| *c).collect();
-            tree.extend(kids);
-            i += 1;
-        }
-        tree.iter()
-            .filter_map(|p| image(*p))
-            .filter_map(|(path, created)| super::agent_for_exe(&path).map(|a| (created, a)))
-            .max_by_key(|(created, _)| *created)
-            .map(|(_, a)| a)
+    pub(super) fn agent_under(root: u32) -> Option<&'static str> {
+        super::outermost_agent(root, &processes(), image)
     }
 }
 
@@ -652,6 +664,75 @@ mod tests {
         for e in &ACP_LIST {
             assert_eq!(agent_for_exe(e.agent.program), Some(e.agent.id), "{}", e.agent.id);
         }
+    }
+
+    /// The Windows probe's choice over a fake process tree: (pid, parent, image, creation time).
+    fn pick(root: u32, procs: &[(u32, u32, &str, u64)]) -> Option<&'static str> {
+        let all: Vec<(u32, u32)> = procs.iter().map(|(p, parent, _, _)| (*p, *parent)).collect();
+        outermost_agent(root, &all, |pid| procs.iter().find(|(p, ..)| *p == pid).filter(|(_, _, exe, _)| !exe.is_empty()).map(|(_, _, exe, t)| (exe.to_string(), *t)))
+    }
+
+    const CMD: &str = "C:\\Windows\\System32\\cmd.exe";
+    const PY: &str = "C:\\Users\\me\\AppData\\Local\\omh\\venv\\Scripts\\python.exe";
+    const OMH: &str = "C:\\Users\\me\\AppData\\Local\\omh\\venv\\Scripts\\omh.exe";
+    const HERMES: &str = "C:\\Users\\me\\AppData\\Local\\hermes\\hermes-agent\\venv\\Scripts\\hermes.exe";
+    const NODE: &str = "C:\\Program Files\\nodejs\\node.exe";
+
+    /// #3130: the tree under a Windows terminal running `omh` (a Toolhelp32 snapshot): omh.exe starts hermes.exe,
+    /// which is newer, yet the terminal runs omh, as the unix foreground process group leader says.
+    #[test]
+    fn windows_a_cli_owns_the_cli_it_runs() {
+        let tree = [
+            (1, 0, "C:\\Users\\me\\AppData\\Local\\omher\\omher.exe", 1),
+            (2, 1, CMD, 2),
+            (3, 2, OMH, 3),
+            (4, 3, PY, 4),
+            (5, 4, PY, 5),
+            (6, 5, HERMES, 6),
+            (7, 6, PY, 7),
+            (8, 7, NODE, 8),
+            (9, 8, PY, 9),
+            (10, 9, PY, 10),
+            (11, 10, PY, 11),
+            // another terminal's newer Hermes is not under this one
+            (12, 1, HERMES, 12),
+        ];
+        assert_eq!(agent_for_exe(OMH), Some("omh"));
+        assert_eq!(agent_for_exe(HERMES), Some("hermes"));
+        assert_eq!(pick(2, &tree), Some("omh"));
+        // the session's program is omh itself
+        assert_eq!(pick(3, &tree), Some("omh"));
+        // what omh runs is not looked at: images read are cmd's and omh's only
+        let reads = std::cell::Cell::new(0);
+        let all: Vec<(u32, u32)> = tree.iter().map(|(p, parent, _, _)| (*p, *parent)).collect();
+        let got = outermost_agent(2, &all, |pid| {
+            reads.set(reads.get() + 1);
+            tree.iter().find(|(p, ..)| *p == pid).map(|(_, _, exe, t)| (exe.to_string(), *t))
+        });
+        assert_eq!((got, reads.get()), (Some("omh"), 2));
+    }
+
+    #[test]
+    fn windows_hermes_on_its_own_is_hermes() {
+        let tree = [(2, 1, CMD, 2), (6, 2, HERMES, 6), (7, 6, PY, 7), (8, 7, NODE, 8), (9, 8, PY, 9)];
+        assert_eq!(pick(2, &tree), Some("hermes"));
+        assert_eq!(pick(6, &tree), Some("hermes"));
+    }
+
+    #[test]
+    fn windows_the_outermost_cli_below_programs_that_are_none() {
+        let codex = "C:\\Users\\me\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\vendor\\x86_64-pc-windows-msvc\\codex\\codex.exe";
+        let claude = "C:\\Users\\me\\.local\\bin\\claude.exe";
+        // npm's codex.cmd: cmd > node (no CLI by its image here) > codex.exe
+        assert_eq!(pick(2, &[(2, 1, CMD, 2), (3, 2, NODE, 3), (4, 3, codex, 4)]), Some("codex"));
+        // a process whose image cannot be read (another user's, elevated) is searched through
+        assert_eq!(pick(2, &[(2, 1, CMD, 2), (3, 2, "", 3), (4, 3, claude, 4)]), Some("claude"));
+        // two CLIs the shell started side by side: the newer; a CLI one of them runs does not count
+        let side = [(2, 1, CMD, 2), (3, 2, claude, 3), (4, 2, codex, 5), (5, 4, HERMES, 9)];
+        assert_eq!(pick(2, &side), Some("codex"));
+        // a shell at its prompt, a pid with no process
+        assert_eq!(pick(2, &[(2, 1, CMD, 2), (3, 2, NODE, 3)]), None);
+        assert_eq!(pick(99, &[(2, 1, CMD, 2)]), None);
     }
 
     #[cfg(unix)]
