@@ -24,6 +24,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from _module_patch import patch_modules
 from omh.plugin_bundle.omh import delegation_fallback_chain
 from omh.plugin_bundle.omh.delegation_fallback_chain import (
     DELEGATE_ROUTE_OPTIONS_SCHEMA_VERSION,
@@ -645,7 +646,9 @@ class BlockWriterTest(unittest.TestCase):
         result = write_delegation_route(self.hermes_home, model="m", fallback_providers=chain)
 
         self.assertEqual(result["status"], "error")
-        self.assertIn("symlink", result["error"])
+        if hasattr(os, "O_NOFOLLOW"):
+            # Windows has no O_NOFOLLOW and refuses on the stamp instead.
+            self.assertIn("symlink", result["error"])
         self.assertEqual(target.read_text(encoding="utf-8"), "delegation:\n  max_iterations: 5\n")
 
     def test_a_chain_hermes_re_dumped_in_pyyamls_shape_is_still_omhs(self) -> None:
@@ -745,23 +748,21 @@ class HostSupportTest(unittest.TestCase):
 
     def test_the_capability_loaded_in_this_process_is_support(self) -> None:
         loaded = mock.Mock(resolve_fallback_reasoning=lambda agent, entry, cfg: None, __file__="loaded.py")
-        with mock.patch.dict(sys.modules, {"agent.fallback_reasoning": loaded}), \
+        with patch_modules({"agent.fallback_reasoning": loaded}), \
                 mock.patch.object(delegation_fallback_chain, "running_hermes_code_root", return_value=None):
             self.assertEqual(host_support()["reason"], "capability_loaded")
 
     def test_the_running_hermes_is_found_without_importing_it(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = _fake_hermes(Path(temporary) / "hermes-agent", honours_entry_effort=True)
-            saved = {name: module for name, module in sys.modules.items() if name == "agent" or name.startswith("agent.")}
-            for name in saved:
-                del sys.modules[name]
+            if "agent" in sys.modules:
+                self.skipTest("an `agent` package is already imported in this process")
             sys.path.insert(0, str(root))
             try:
                 found = delegation_fallback_chain.running_hermes_code_root()
                 self.assertNotIn("agent", sys.modules)
             finally:
                 sys.path.remove(str(root))
-                sys.modules.update(saved)
             self.assertEqual(Path(os.path.realpath(found)), Path(os.path.realpath(root)))
 
     def test_no_running_hermes_is_not_support(self) -> None:
