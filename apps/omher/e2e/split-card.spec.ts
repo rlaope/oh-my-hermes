@@ -1,13 +1,13 @@
 // The TERMINALS split card: every split is one card on top of the TERMINALS list (no search typed), its cells at the
 // panes' real places with each pane's CLI mark, title and last line; the members are not rows in their folders again.
 // A cell click focuses that pane, a right-click opens the row menu, output makes the cell's edge orbit (still under
-// reduced motion), a bell on a cell not in view makes it wait, the grip sets the card's height (kept after a restart,
+// reduced motion), a bell on a cell not in view is quiet news while a bot's request to type makes it wait, the grip sets the card's height (kept after a restart,
 // double-click goes back), a search draws rows instead, and a 1+3 split's tall cell stacks its text.
 import { expect, test, type Page } from "@playwright/test";
 import { mock, openApp } from "./term-find-helpers";
 import { closeFromSidebar, dragRowOnto, type Side } from "./split-drag-helpers";
 
-type Sessions = { startTerminal(a: string, cwd: string): string; ptyOf(id: string): number | null };
+type Sessions = { startTerminal(a: string, cwd: string): string; ptyOf(id: string): number | null; linkOf(id: string): string | null };
 const start = (page: Page, cwd: string, agent = "shell") => page.evaluate(([c, a]) => (window as unknown as { __omherSessions: Sessions }).__omherSessions.startTerminal(a, c), [cwd, agent] as const);
 const ptyOf = async (page: Page, id: string) => {
   await expect.poll(() => page.evaluate((i) => (window as unknown as { __omherSessions: Sessions }).__omherSessions.ptyOf(i), id)).not.toBeNull();
@@ -91,7 +91,7 @@ test("a right-click on a cell opens the row menu and Rename renames that session
   await expect(cell(page, a).getByTestId("split-cell-name")).toHaveText("left side");
 });
 
-test("output makes a cell work with an orbiting edge, still under reduced motion; a bell on a cell not in view makes it wait", async ({ page }) => {
+test("output makes a cell work with an orbiting edge, still under reduced motion; a bell on a cell not in view is quiet news", async ({ page }) => {
   await openApp(page);
   // a runs Claude Code (the mock's agent terminal takes `after <ms> bell`), b and c are shells
   const [a] = await sessions(page, ["/w/a"], "claude");
@@ -120,9 +120,30 @@ test("output makes a cell work with an orbiting edge, still under reduced motion
   await page.keyboard.press("Enter");
   await page.getByTestId(`session-${c}`).locator(".ss-open").click();
   await expect(card(page)).toHaveAttribute("data-away", "true");
+  // a ring is news (it may have finished): a soft accent edge breathing slowly, never the amber wait (khope 2026-11-23)
+  await expect(cell(page, a)).toHaveAttribute("data-state", "news", { timeout: 8000 });
+  await expect(cell(page, b)).not.toHaveAttribute("data-state", "news");
+  await expect(cell(page, a).locator(".sc-wait")).toHaveCount(0);
+  const news = cell(page, a).locator(".sc-news");
+  await expect(news).toHaveCount(1);
+  await expect.poll(() => news.evaluate((e) => getComputedStyle(e).animationName)).toBe("sc-breath");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect.poll(() => news.evaluate((e) => getComputedStyle(e).animationName)).toBe("none");
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+});
+
+test("a bot's request to type into a cell's session is the amber wait, not news", async ({ page }) => {
+  await openApp(page);
+  const [a, b] = await sessions(page, ["/w/a", "/w/b"]);
+  await splitWith(page, a, b);
+  await expect.poll(() => page.evaluate((i) => (window as unknown as { __omherSessions: Sessions }).__omherSessions.linkOf(i), a)).not.toBeNull();
+  const link = (await page.evaluate((i) => (window as unknown as { __omherSessions: Sessions }).__omherSessions.linkOf(i), a))!.slice(-10);
+  // what the OMH tool writes into the session's inbox
+  await page.evaluate((l) => ((window as unknown as { __omherMockInbox?: unknown[] }).__omherMockInbox ??= []).push({ id: `${Date.now()}`, link: l, prompt: "make test", from: "Kami", session: "s-1" }), link);
   await expect(cell(page, a)).toHaveAttribute("data-state", "wait", { timeout: 8000 });
-  await expect(cell(page, b)).not.toHaveAttribute("data-state", "wait");
   await expect(cell(page, a).locator(".sc-wait")).toHaveCount(1);
+  await expect(cell(page, a).locator(".sc-news")).toHaveCount(0);
+  await expect(cell(page, b)).not.toHaveAttribute("data-state", "wait");
 });
 
 test("the grip sets the card's height, kept after a restart; a double-click goes back to the default", async ({ page }) => {

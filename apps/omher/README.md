@@ -174,10 +174,12 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   mark above the name in a tall, narrow one. The open pane has a solid accent edge. Other cells show their state on the
   edge: a light segment circling it while output flows (and, after a minute, how long it has been busy: `14m`, `2h`,
   dimmer after ten minutes), a flowing dashed edge while the session reports background work, an amber blinking edge
-  when it is waiting for you (a bell or an open bot request), a red edge after an error. A click focuses that pane and a
+  when a bot asks to type into it, a soft accent edge breathing slowly when it rang unseen, a red edge after an error. A click focuses that pane and a
   right-click opens the row's menu. The band under the card is a height grip: drag it, press ↑ or ↓ (16 px), or double-click
   for the default. The height is kept with that split across restarts and layout changes. With reduced motion
-  nothing moves: a busy cell gets a thin steady edge and a waiting cell a steady amber one. A terminal that reports no
+  nothing moves: a busy cell gets a thin steady edge and a waiting cell a steady amber one. A terminal's bell, OSC 9
+  message or progress done is shown as news (an accent dot on its row, that soft edge on its cell), since it may mean
+  it finished as well as that it waits; the amber warning sign is kept for a request omher knows about. A terminal that reports no
   background work never shows the dashed edge. The Plans panel keeps its own split map. The layout card borrows its
   ideas from kasaterm's sidebar map (2rami/kasaterm, MIT); the code is written fresh.
 - **ACP agents** (`src-tauri/src/acp_chat.rs`): one adapter for agents that speak the Agent Client Protocol

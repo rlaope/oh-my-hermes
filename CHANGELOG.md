@@ -303,10 +303,13 @@ All notable changes will be documented here.
   empty, a split of 2 to 4 panes is a card at the top of TERMINALS drawn like the split (one cell per pane, real
   proportions, the CLI's mark, name and last line), and its members leave the folder rows. Text follows the cell's
   size; each cell's edge shows its state (a light segment circling a busy one, a dashed flowing edge for background
-  work, a blinking amber edge when it waits for you, red on error), with how long a busy cell has run after a minute.
+  work, a blinking amber edge when a bot asks to type into it, red on error), with how long a busy cell has run after a minute.
   A click focuses a pane, a right-click opens the row menu, and a grip under the card sets its height, kept with the
   split (`SplitGroup.mapH` in `omher.splits`). Animation is CSS only and stops under reduced motion. Terminals that
-  report no background work never show the dashed edge. (`apps/omher/src/sessions/SplitLayoutCard.tsx`) (#TBD)
+  report no background work never show the dashed edge. A terminal's bell, OSC 9 message or progress done is now quiet
+  news everywhere (an accent dot on the row and the folder summary, a slowly breathing accent edge on the cell, "rang"
+  in the notification), and the amber warning is kept for waits omher knows: a bot's request to type, a chat's approval
+  or question. (`apps/omher/src/sessions/SplitLayoutCard.tsx`) (#TBD)
 
 ## 5.0.0 - 2026-11-21
 
