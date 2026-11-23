@@ -12,10 +12,10 @@ const base: SessionRec = { id: "s1", agent: "claude", cwd: "/home/k/web-app", st
 const idle = { turn: false, needsYou: false };
 
 describe("a session row's state", () => {
-  it("is waiting while it waits for the person: an open ask, or its terminal rang", () => {
+  it("is waiting while it waits for the person: an open ask; its terminal ringing is news", () => {
     expect(rowModel(base, { turn: true, needsYou: true })).toMatchObject({ mark: "needs", needsYou: true, sub: "Claude Code" });
     const term: SessionRec = { ...base, view: "terminal", open: "terminal" };
-    expect(rowModel(term, undefined, undefined, "bell")).toMatchObject({ mark: "needs", needsYou: false, sub: "Claude Code", over: false });
+    expect(rowModel(term, undefined, undefined, "bell")).toMatchObject({ mark: "news", needsYou: false, sub: "Claude Code", over: false });
     // a ring from a program that has since ended is not a wait: how it ended says more
     expect(rowModel({ ...term, status: "exited", exitCode: 0 }, undefined, undefined, "bell").mark).toBeNull();
   });
@@ -47,7 +47,7 @@ describe("the notification for a session's own state", () => {
     expect(sessionNote("s1", { kind: "ended", name, code: 2 }).body).toBe("Ended · exit 2");
     expect(sessionNote("s1", { kind: "ended", name, code: null, error: "Claude Code is not signed in." }).body).toBe("Claude Code is not signed in.");
     expect(sessionNote("s1", { kind: "failed", name, error: "" })).toMatchObject({ title: "web-app · Claude Code could not start", body: "Could not start" });
-    expect(sessionNote("s1", { kind: "bell", name })).toEqual({ title: "web-app · Claude Code wants your attention", body: "It rang its terminal's bell.", bot: "s1", tag: "s1:bell" });
+    expect(sessionNote("s1", { kind: "bell", name })).toEqual({ title: "web-app · Claude Code rang", body: "It may have finished or be waiting for input.", bot: "s1", tag: "s1:bell" });
   });
 });
 

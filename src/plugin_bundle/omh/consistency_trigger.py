@@ -364,6 +364,9 @@ def shell_changed_files(session_id: object, turn_id: object, tool_call_id: objec
             return ()
         return tuple(sorted(path for path in set(start) | set(current)
                             if _differs(start.get(path), current.get(path), path)))
+    except _Budget as exc:  # a walk past its entries or deadline: the designed undecidable case, not a fault
+        _LOG.debug("consistency_trigger shell_changed skipped=%s: %s", type(exc).__name__, exc)
+        return ()
     except Exception as exc:  # noqa: BLE001 - an undecidable call says nothing, as on a turn without this check
         _LOG.warning("consistency_trigger shell_changed failed=%s: %s", type(exc).__name__, exc)
         return ()

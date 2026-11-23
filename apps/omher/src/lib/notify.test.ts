@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createNoteGate, HOLD_MS, noteFor, sessionNote, sessionRings, spoken } from "./notify";
 import type { BridgeEvent } from "./protocol";
+import { setLang } from "../i18n";
 
 const ctx = (errors?: boolean) => ({ name: (b: string) => (b === "kami" ? "Kami" : b), watching: () => false, errors });
 const ev = (e: Record<string, unknown>) => ({ bot: "kami", ...e }) as unknown as BridgeEvent;
@@ -70,6 +71,16 @@ describe("sessionRings: a program end notifies only when it went wrong", () => {
     expect(sessionNote("s1", { kind: "ended", name, code: 1, error: "Could not read /home/you/.config/app/auth.json (missing). Sign in again." }).body).toBe(
       "Could not read auth.json.",
     );
+  });
+});
+
+describe("a session's ring: it rang, not that it waits (khope 2026-11-23)", () => {
+  afterEach(() => setLang("en"));
+  it("says it rang and that it may have finished or be waiting", () => {
+    const name = "web-app · Claude Code";
+    expect(sessionNote("s1", { kind: "bell", name, agent: true })).toEqual({ title: "web-app · Claude Code rang", body: "It may have finished or be waiting for input.", bot: "s1", tag: "s1:bell" });
+    setLang("ko");
+    expect(sessionNote("s1", { kind: "bell", name, agent: true })).toMatchObject({ title: "web-app · Claude Code 세션에서 알림이 왔어요", body: "끝났거나 입력을 기다릴 수 있어요." });
   });
 });
 

@@ -2,7 +2,7 @@
 // "New folder…" are parsed defensively, listed once, put at the top of the saved order, and removed without
 // touching the rest.
 import { describe, expect, it } from "vitest";
-import { addFolder, addedFolders, allCollapsed, goneFolders, isFolderGone, ranElsewhere, setFolderGone, collapseOthers, folderGroups, pathKey, isCollapsed, moveFolder, orderFolders, parseFolderPrefs, removeFolder, setAllFolders, toggleFolder, withAdded, type FolderPrefs } from "./folders";
+import { addFolder, addedFolders, allCollapsed, folderSummary, goneFolders, isFolderGone, ranElsewhere, setFolderGone, collapseOthers, folderGroups, pathKey, isCollapsed, moveFolder, orderFolders, parseFolderPrefs, removeFolder, setAllFolders, toggleFolder, withAdded, type FolderPrefs } from "./folders";
 
 const NONE: FolderPrefs = { collapsed: [], order: [] };
 const shown = (p: FolderPrefs, sessions: string[]) => orderFolders(withAdded(sessions.map((cwd) => ({ cwd, rows: [cwd] })), addedFolders(p)), p.order).map((g) => g.cwd);
@@ -253,5 +253,14 @@ describe("a folder found gone", () => {
     expect(goneFolders()).toEqual([]);
     setFolderGone("", true);
     expect(goneFolders()).toEqual([]);
+  });
+});
+
+describe("folderSummary", () => {
+  it("counts only a known wait (a bot's request, `bell`) as needs; an unseen ring is news", () => {
+    expect(folderSummary(["news", null])).toEqual({ count: 2, busy: false, needs: false, news: true, failed: false });
+    expect(folderSummary(["bell", "busy"])).toEqual({ count: 2, busy: true, needs: true, news: false, failed: false });
+    expect(folderSummary(["news", "bell", "err"])).toEqual({ count: 3, busy: false, needs: true, news: true, failed: true });
+    expect(folderSummary([])).toEqual({ count: 0, busy: false, needs: false, news: false, failed: false });
   });
 });

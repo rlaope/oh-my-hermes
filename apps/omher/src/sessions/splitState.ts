@@ -8,12 +8,15 @@
 // Saved on this computer (`omher.splits`) on every change; read once at load. Panes whose session is gone are dropped
 // when the session list says so (SplitView prunes), and a split left with one pane ends.
 import { useSyncExternalStore } from "react";
+import { clampCardHeight } from "./splitCard";
 import { equalize, MAX_PANES, neighbor, panesOf, parseLayout, removePane, setRatioAt, splitLayout, stepPane, swapPanes, type FocusDir, type Layout, type PaneKey } from "../terminal/layout";
 
 export interface SplitGroup {
   layout: Layout;
   /** the focused pane fills the split; the others keep running behind it */
   zoom?: boolean;
+  /** the sidebar card's map height, px, once someone dragged its grip (none: the default for its panes) */
+  mapH?: number;
 }
 
 /** Which side of a pane a new one goes: the keys split right and down; a drop on a pane's part may take any side. */
@@ -55,6 +58,9 @@ export function groupOf(groups: SplitGroup[], id: string): SplitGroup | null {
 /** Splits with one pane or none end. */
 const tidy = (groups: SplitGroup[]) => groups.filter((g) => panesOf(g.layout).length > 1);
 
+/** A rebuilt group keeps the card height dragged for it (a layout change is not a reason to lose it). */
+const keepH = (g: SplitGroup): { mapH?: number } => (g.mapH === undefined ? {} : { mapH: g.mapH });
+
 /** `id` taken out of whichever split holds it; `heir` is the pane nearest to where it was (null when none). */
 export function leaveIn(groups: SplitGroup[], id: string): { groups: SplitGroup[]; heir: string | null } {
   const n = paneOf(id);
@@ -62,7 +68,7 @@ export function leaveIn(groups: SplitGroup[], id: string): { groups: SplitGroup[
   if (n === null || !g) return { groups, heir: null };
   const { layout, heir } = removePane(g.layout, n);
   // a pane leaving a zoomed split shows every pane again (tmux): the zoom was the focused pane's, and the layout changed
-  const next = groups.map((x) => (x === g ? { layout: layout ?? x.layout } : x));
+  const next = groups.map((x) => (x === g ? { layout: layout ?? x.layout, ...keepH(x) } : x));
   return { groups: tidy(layout ? next : groups.filter((x) => x !== g)), heir: heir === null ? null : sessionOf(heir) };
 }
 
@@ -79,7 +85,9 @@ export function splitIn(groups: SplitGroup[], at: string, dir: SplitDirName, add
   const g = groupOf(rest, at);
   const layout = splitLayout(g?.layout ?? { pane: a }, a, dir === "right" || dir === "left" ? "row" : "col", b, dir === "left" || dir === "up");
   if (!layout) return groups;
-  return g ? rest.map((x) => (x === g ? { layout } : x)) : [...rest, { layout }].slice(-MAX_GROUPS);
+  // no split of `at`'s left after `add` went: a new one, unless `add` only moved within `at`'s two-pane split (which
+  // ended for that moment), which keeps its card height
+  return g ? rest.map((x) => (x === g ? { layout, ...keepH(x) } : x)) : [...rest, { layout, ...(current ? keepH(current) : {}) }].slice(-MAX_GROUPS);
 }
 
 /** The split holding `id`, changed by `fn` (the same list when there is none). */
@@ -93,12 +101,18 @@ function inGroup(groups: SplitGroup[], id: string, fn: (g: SplitGroup) => SplitG
 export const moveIn = (groups: SplitGroup[], id: string, dir: FocusDir): SplitGroup[] =>
   inGroup(groups, id, (g) => {
     const to = neighbor(g.layout, paneOf(id)!, dir);
-    return to === null ? g : { layout: swapPanes(g.layout, paneOf(id)!, to) };
+    return to === null ? g : { layout: swapPanes(g.layout, paneOf(id)!, to), ...keepH(g) };
   });
 
 export const ratioIn = (groups: SplitGroup[], id: string, path: string, ratio: number): SplitGroup[] => inGroup(groups, id, (g) => ({ ...g, layout: setRatioAt(g.layout, path, ratio) }));
 export const equalizeIn = (groups: SplitGroup[], id: string): SplitGroup[] => inGroup(groups, id, (g) => ({ ...g, layout: equalize(g.layout) }));
 export const zoomIn = (groups: SplitGroup[], id: string, on?: boolean): SplitGroup[] => inGroup(groups, id, (g) => ({ ...g, zoom: on ?? !g.zoom }));
+/** The split holding `id` with its card's map height set (clamped), or back to the default when `h` is null. */
+export const mapHeightIn = (groups: SplitGroup[], id: string, h: number | null): SplitGroup[] =>
+  inGroup(groups, id, (g) => {
+    const { mapH: _, ...rest } = g;
+    return h === null ? rest : { ...rest, mapH: clampCardHeight(h) };
+  });
 
 /** Panes whose session is not in `alive` dropped (splits left with one pane end). */
 export function pruneIn(groups: SplitGroup[], alive: Set<string>): SplitGroup[] {
@@ -124,7 +138,8 @@ export function parseSplits(raw: string | null): SplitGroup[] {
     const panes = panesOf(layout);
     if (panes.length < 2 || panes.some((p) => p < 1 || seen.has(p))) continue;
     for (const p of panes) seen.add(p);
-    out.push({ layout, ...((g as { zoom?: unknown }).zoom === true ? { zoom: true } : {}) });
+    const mapH = (g as { mapH?: unknown }).mapH;
+    out.push({ layout, ...((g as { zoom?: unknown }).zoom === true ? { zoom: true } : {}), ...(typeof mapH === "number" && Number.isFinite(mapH) ? { mapH: clampCardHeight(mapH) } : {}) });
   }
   return out;
 }
@@ -164,6 +179,11 @@ const subscribe = (fn: () => void) => {
 };
 export const getSplit = (): SplitState => state;
 export const useSplit = (): SplitState => useSyncExternalStore(subscribe, getSplit, getSplit);
+
+/** The card's map height for the split holding `id` (null: back to the default), saved with the split. */
+export function setMapHeight(id: string, h: number | null): void {
+  setSplit({ groups: mapHeightIn(state.groups, id, h) });
+}
 
 /** Tests: start from nothing. */
 export function resetSplit(): void {

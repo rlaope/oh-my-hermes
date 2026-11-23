@@ -186,7 +186,7 @@ test("OSC 7: a TERMINALS row takes this computer's own name before the bottom pa
   await expect(row.getByTestId("term-cwd")).toHaveText("api-server");
 });
 
-test("OSC 9;4: progress keeps the row working, and done while the person looks elsewhere marks it as the bell does", async ({ page }) => {
+test("OSC 9;4: progress keeps the row working, and done while the person looks elsewhere marks it as news, as the bell does", async ({ page }) => {
   await page.addInitScript(() => {
     const w = window as unknown as { __notes: string[]; Notification: unknown };
     w.__notes = [];
@@ -216,16 +216,16 @@ test("OSC 9;4: progress keeps the row working, and done while the person looks e
   expect(b).not.toBe(a);
   await out(page, ptyA, OSC("9;4;1;80"));
   await out(page, ptyA, OSC("9;4;0"));
-  await expect(row).toHaveAttribute("data-term-status", "bell");
+  await expect(row).toHaveAttribute("data-term-status", "news");
   expect(await page.evaluate(() => (window as unknown as { __notes: string[] }).__notes)).toEqual([]);
   // the escape's text is not on the row
   await expect(row).not.toContainText("9;4");
   // back to it: seen
   await row.locator(".ss-open").click();
-  await expect(row).not.toHaveAttribute("data-term-status", "bell");
+  await expect(row).not.toHaveAttribute("data-term-status", "news");
   // done while looked at, after working: no mark
   await out(page, ptyA, OSC("9;4;1;10"));
   await out(page, ptyA, OSC("9;4;0"));
   await page.waitForTimeout(100);
-  await expect(row).not.toHaveAttribute("data-term-status", "bell");
+  await expect(row).not.toHaveAttribute("data-term-status", "news");
 });

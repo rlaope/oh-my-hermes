@@ -33,10 +33,10 @@ async function dragFrom(page: Page, from: { x: number; y: number }, onto: string
   await expect(shade).toHaveCount(0);
 }
 
-/** Drag TERMINALS row `id` onto the `side` part of `onto`'s pane. */
+/** Drag TERMINALS row `id` (its cell in a split's card, when it is in a split) onto the `side` part of `onto`'s pane. */
 export async function dragRowOnto(page: Page, id: string, onto: string, side: Side, o: { drop?: boolean; esc?: boolean } = {}) {
   // the TERMINALS list scrolls inside its share of the sidebar: a lower row is scrolled to before it is pressed
-  const open = page.getByTestId(`session-${id}`).locator(".ss-open");
+  const open = page.locator(`[data-testid="session-${id}"] .ss-open, [data-testid="split-cell"][data-session="${id}"] .sc-open`).first();
   await open.scrollIntoViewIfNeeded();
   const r = (await open.boundingBox())!;
   await dragFrom(page, { x: r.x + Math.min(40, r.width / 2), y: r.y + r.height / 2 }, onto, side, o);
@@ -47,4 +47,27 @@ export async function dragGripOnto(page: Page, id: string, onto: string, side: S
   await page.locator(`[data-testid="split-pane"][data-session="${id}"]`).hover();
   const g = (await page.locator(`[data-testid="split-grip"][data-session="${id}"]`).boundingBox())!;
   await dragFrom(page, { x: g.x + g.width / 2, y: g.y + g.height / 2 }, onto, side, o);
+}
+
+/** Session `id`'s place in TERMINALS: its row, or its cell in a split's card (a split's sessions are not rows while
+ *  no search is typed). */
+export const sidebarEntry = (page: Page, id: string) => page.locator(`[data-testid="session-${id}"], [data-testid="split-cell"][data-session="${id}"]`).first();
+
+/** Open session `id` from TERMINALS: a click on its row, or on its cell in a split's card. */
+export async function openFromSidebar(page: Page, id: string) {
+  const open = page.locator(`[data-testid="session-${id}"] .ss-open, [data-testid="split-cell"][data-session="${id}"] .sc-open`).first();
+  await open.scrollIntoViewIfNeeded();
+  await open.click();
+}
+
+/** Close session `id` from TERMINALS as a person does: its row's x, or, for a split's cell, Close in its row menu. */
+export async function closeFromSidebar(page: Page, id: string) {
+  const row = page.getByTestId(`session-${id}`);
+  if (await row.count()) {
+    await row.hover();
+    await row.getByTestId("session-close").click();
+    return;
+  }
+  await page.locator(`[data-testid="split-cell"][data-session="${id}"]`).click({ button: "right" });
+  await page.getByTestId("session-row-menu").getByTestId("session-menu-close").click();
 }

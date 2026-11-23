@@ -305,7 +305,7 @@ const OPS: Record<string, (p: Json) => unknown> = {
   "routines.list": (p) => ({
     routines: (ROUTINES[need(p).name] ?? []).map((r) => ({ id: r.id, name: r.name, schedule: r.schedule, next_run_at: nowS() + (r.next as number), last_run_at: nowS() + (r.last as number), last_status: "ok", enabled: true })),
   }),
-  "models.options": (p) => ({ providers: PROVIDERS, current: { ...(models[need(p).name] as object) }, reasoning_levels: ["none", "low", "medium", "high", "xhigh"] }),
+  "models.options": (p) => ({ providers: PROVIDERS, current: { ...(models[need(p).name] as object) }, reasoning_levels: ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"] }),
   "chat.set_model": (p) => {
     const b = need(p);
     const cur = models[b.name];

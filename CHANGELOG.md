@@ -11,6 +11,10 @@ All notable changes will be documented here.
   started, as macOS and Linux do by reading the foreground process group's leader. A terminal running `hermes` on its
   own still reads Hermes. A process older than the one that now holds its parent's pid (Windows reuses pids) is no
   longer taken for part of the terminal, so a row cannot show another session's agent. Thanks @hajeu. (#3130)
+- **A large workspace no longer logs a warning after every shell command.** When the shell round end re-indexes a
+  workspace past its entry or time budget, that designed skip is now logged at debug (`shell_changed skipped=`)
+  instead of warning on nearly every `terminal` / `execute_code` call (~700 lines a day in one workspace). A real
+  fault inside the walk still warns (`shell_changed failed=`). (#3140, carried; thanks @probepark)
 - **`omh_delegate_route` can hand a child the rest of its chain, each step at its own effort (opt-in).** With
   `{"schema_version": "delegate_route_options/v1", "write_fallback_providers": true}` in
   `~/.omh/routing/delegate-route.json`, `set` also writes the positions after the head into
@@ -48,6 +52,16 @@ All notable changes will be documented here.
   discarded elsewhere (Hermes' own app, `/discard`) clears the note at once. A message waiting in Hermes' queue behind
   a turn that is still running (nothing lost) also stays in the chat after a restart, as "Waiting · runs after the
   current turn". (#3123; `docs/OMHER-BOUNDARY.md` rule 3)
+- **omher's reasoning picker offers every level Hermes accepts, ultra included.** The chat model picker's Reasoning
+  control showed none, low, medium, high and xhigh only, so minimal, max and ultra could not be picked. The bridge now
+  reads the installed Hermes' own levels (`hermes_constants.VALID_REASONING_EFFORTS`, after "none") and offers them in
+  Hermes' order: none, minimal, low, medium, high, xhigh, max, ultra. An older Hermes offers only the levels it has,
+  and the bridge refuses any other before asking Hermes. When the levels are not importable the picker offers the
+  full list, and a level the gateway refuses shows the picker's note instead of looking applied. The eight levels sit
+  in two rows of four. A level the route does not send as picked says so, as Hermes' own pickers do: Hermes sends
+  `max` for `ultra` on most routes, so the pill reads "ultra · sends max" and the popover "ultra (sends max on this
+  route)", from Hermes' `reasoning_effort_wire`. (`apps/omher/bridge/omher_bridge.py` `reasoning_levels`,
+  `apps/omher/src/chat/model/levels.ts`)
 - **Fanout hands coding units to a harness CLI you declare, or to one of nine presets.** Put an executor in
   `<omh_home>/routing/executors.toml` (never read from a repository or the working directory) as an `argv` list
   with exactly one `{prompt}` or `{prompt_file}` element, or opt in to a preset with `omh coding executors add
@@ -331,6 +345,23 @@ All notable changes will be documented here.
   arms, every live run). The change now clears the total in `reset()`, so the case asks only whether the reviewer
   sees the lock the caller holds. Results recorded before this fix overstate false alarms on this case.
   (`benchmarks/review-false-alarms/corpus/trap-lock-held-by-caller`)
+- **omher's sidebar shows each TERMINALS split as one layout card, with live state per pane.** With the search box
+  empty, a split of 2 to 4 panes is a card at the top of TERMINALS drawn like the split (one cell per pane, real
+  proportions, the CLI's mark, name and last line), and its members leave the folder rows. Text follows the cell's
+  size; each cell's edge shows its state (a light segment circling a busy one, a dashed flowing edge for background
+  work, a blinking amber edge when a bot asks to type into it, red on error), with how long a busy cell has run after a minute.
+  A click focuses a pane, a right-click opens the row menu, and a grip under the card sets its height, kept with the
+  split (`SplitGroup.mapH` in `omher.splits`). Animation is CSS only and stops under reduced motion. Terminals that
+  report no background work never show the dashed edge. A terminal's bell, OSC 9 message or progress done is now quiet
+  news everywhere (an accent dot on the row and the folder summary, a slowly breathing accent edge on the cell, "rang"
+  in the notification), and the amber warning is kept for waits omher knows: a bot's request to type, a chat's approval
+  or question. (`apps/omher/src/sessions/SplitLayoutCard.tsx`) (#3138)
+
+- The OMH TUI no longer asks for kitty image previews in an omher terminal that cannot paint them. omher 1.1.3
+  and earlier set `TERM_PROGRAM=omher` but draw no kitty Unicode placeholders, so pasting an image showed a block of
+  tofu boxes in the transcript and the picture itself over the composer. omher now also sets
+  `TERM_PROGRAM_VERSION`, and the TUI takes real pixels only from omher 1.1.4 on; older omher terminals get the
+  coloured half-block preview.
 
 ## 5.0.0 - 2026-11-21
 
