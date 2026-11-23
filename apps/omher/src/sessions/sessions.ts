@@ -36,7 +36,7 @@ import { savedPanelKeys } from "../terminal/state";
 import { termTheme } from "./term/themes";
 import { getShellHost, learnThisHost } from "../terminal/host";
 import { onSessionFg } from "./fg";
-import { termActs } from "./termActivity";
+import { nextBusySince, termActs } from "./termActivity";
 import { isLinkId, LINK_COPIED_EVENT, newLinkId, termLinkUrl } from "./termLink";
 import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, idInUse, installLine, isBuiltin, isGone, isShell, isTerminalRec, LAST_LINE_MAX, refusedResume, SHELL, termEnd, termMarkAgent, lastPrintedLine, OPEN_KEY, setsUpScreen, UI_BYTES, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, termGroups, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
@@ -1495,7 +1495,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       const now = Date.now();
       if (!ofChat && now - marked >= OUT_MARK_MS) {
         marked = now;
-        termActs.patch(id, { lastOut: now });
+        // the busy streak's start (the split card's elapsed time): kept while output keeps coming, new after a quiet gap
+        termActs.patch(id, { lastOut: now, busySince: nextBusySince(termActs.get(id), now) });
       }
       if (!ofChat && lineTimer === null) lineTimer = setTimeout(readLine, OUT_MARK_MS);
     };
@@ -1506,7 +1507,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         // a program omher stopped (the row closed, Restart) or one already replaced says nothing more
         if (terms.get(id) !== t || t.run !== run) return;
         t.closed = true;
-        termActs.patch(id, { progress: undefined });
+        termActs.patch(id, { progress: undefined, busySince: undefined });
         if (lineTimer !== null) clearTimeout(lineTimer);
         lineTimer = null;
         fgOff.get(id)?.();
@@ -1777,7 +1778,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       });
       onProgress(el, (st) => {
         if (!rec(id) || tt.closed) return;
-        if (st === "busy") return termActs.patch(id, { progress: true });
+        if (st === "busy") return termActs.patch(id, { progress: true, busySince: nextBusySince(termActs.get(id), Date.now()) });
         if (!termActs.get(id).progress) return;
         termActs.patch(id, { progress: undefined });
         flag(id, "bell");
