@@ -13,7 +13,6 @@ import { t, type Key } from "../i18n";
 import { CloseIcon, IconButton, Popover, PrIcon, SearchIcon, Spinner } from "../ui";
 import { BotChip } from "../pages/kit";
 import { Markdown } from "../chat/parts/Markdown";
-import { CopyButton } from "../chat/parts/Copy";
 import { openExternal } from "../lib/openExternal";
 import { addTerminalTab, getTermPanel, setTerminalCwd } from "../terminal/state";
 import { taskHost } from "./host";
@@ -481,7 +480,8 @@ export function Drawer({ source, repo, kind, item, folder, account, onClose }: {
 }
 
 /** Linear: omher holds no Linear key. It asks whether the bot has a Linear MCP server in its Hermes config; Hermes'
- *  gateway has no call that runs an MCP tool for an app, so omher lists nothing itself and says how to connect. */
+ *  gateway has no call that runs an MCP tool for an app, so omher lists nothing itself. Connecting is the Apps page's
+ *  (src/apps, BOUNDARY rule 41), which this pane opens for the picked bot. */
 function LinearPane() {
   const s = useStore();
   const local = s.bots.filter((b) => !b.host);
@@ -501,7 +501,6 @@ function LinearPane() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bot?.name]);
-  const cmd = bot ? `hermes -p ${bot.name} mcp install linear` : "";
   return (
     <div className="tk-linear" data-testid="tasks-linear">
       <div className="tk-chrome">
@@ -517,13 +516,9 @@ function LinearPane() {
         <div className="tk-empty" data-testid="tasks-linear-connect">
           <p className="tk-big">{t("tasks.linearConnect", { bot: bot.display_name })}</p>
           <p>{t("tasks.linearHow")}</p>
-          <code className="tk-cmd" data-testid="tasks-linear-cmd">
-            {cmd}
-            <CopyButton text={() => cmd} />
-          </code>
           <div className="tk-acts">
-            <button type="button" className="tk-btn" onClick={() => openShellAt(null)} data-testid="tasks-linear-terminal">
-              {t("tasks.openTerminal")}
+            <button type="button" className="tk-btn" onClick={() => s.openApps(bot.name)} data-testid="tasks-linear-apps">
+              {t("tasks.openApps")}
             </button>
           </div>
         </div>

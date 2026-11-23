@@ -375,3 +375,111 @@
   padding: 0 24px;
   word-break: keep-all;
 }
+
+/* ---- a thread's pull request (rule 40): the row's mark and the transcript's card ----------------------------- */
+/* the row: the newest PR on the second line's right, where the › shows on hover (the mark keeps its place) */
+.th-pr {
+  grid-column: 3;
+  grid-row: 2;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  line-height: 15px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.th-pr ~ .th-go {
+  display: none;
+}
+.pr-ck {
+  flex: none;
+  color: var(--muted);
+}
+.pr-ck[data-checks="passing"] {
+  color: var(--ok);
+}
+.pr-ck[data-checks="failing"] {
+  color: var(--danger);
+}
+.pr-ck[data-checks="running"] {
+  color: var(--needs, #e9a23b);
+}
+/* the card under the answer that named it: one line, the whole of it opens the PR's page; Refresh beside it */
+.th-prc {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: min(560px, 100%);
+  margin: 4px 0 8px 36px;
+}
+.th-prc-open {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--card, var(--hover));
+  color: var(--body);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.th-prc-open:hover {
+  border-color: var(--line-strong);
+}
+.th-prc-open:focus-visible,
+.th-prc-refresh:focus-visible {
+  outline: 2px solid var(--muted);
+  outline-offset: 1px;
+}
+.th-prc-n {
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.th-prc-repo {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.th-prc-state,
+.th-prc-checks {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.th-prc-checks[data-checks="failing"] {
+  color: var(--danger);
+}
+.th-prc-none {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--quiet);
+}
+.th-prc-refresh {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-sm);
+  color: var(--muted);
+}
+.th-prc-refresh:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--hover);
+}
+.th-prc-refresh:disabled {
+  opacity: 0.5;
+}

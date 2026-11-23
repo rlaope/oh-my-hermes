@@ -4,15 +4,22 @@
 // last reported, OSC 7), as iTerm2 and Ghostty do; a full split does nothing. A TERMINALS row dragged from the sidebar
 // onto the open terminal puts that session in a pane on the side it is dropped (splitDrag.ts); a pane's grip (top
 // centre) drags the pane itself to another pane's side, and a click on it opens the pane's menu (zoom, even out,
-// close). The pane with the keyboard is the session open in the main column; the others are dimmed (Settings ›
-// Terminal › Dim unfocused panes) and the focused one shows by its cursor. Panes have no title bar (Ghostty / iTerm
-// splits): a 1px divider between them, the grip, and a zoom and an x in the top right corner, which show while the
-// pointer is over the pane. ⌘W closes the pane (the session stays in TERMINALS), ⌘⌥arrows move between panes, ⌘] / ⌘[
-// step through them, ⌘⇧⌥arrows move the pane, ⌘⇧↩ zooms it (the zoom follows the keyboard to another pane; splitting,
-// closing or moving a pane ends it, splitState.ts), ⌘⌃= evens them out (layout.ts paneKey has the keys off macOS).
-// Dividers drag and a double click evens them. Each pane is its session's own terminal (sessions.ts attach), so each
-// keeps its own engine; a pane whose session came back paused after a restart shows it paused. Bot chats never split:
-// only TERMINALS sessions go in a split, and the keys live in TERMINALS terminals only.
+// close). The main column's header (SessionView) drags too, Otty's way: in a split it is the focused pane's grip; a
+// session on its own dragged by it onto its own terminal merges with the next TERMINALS session of its folder in the
+// session list's order (the one before it when it is the last; splitDrag.ts mergePartner), the dragged session on the
+// side the preview shows and the other, named in the preview, in the other half; back onto the header, Escape, or the
+// button let go outside the window changes nothing, and a folder with no other row offers nothing. A zoomed split's
+// header does not drag. The header's x closes the focused pane as ⌘W does, or the session on its own as closeLone
+// does, asking the row's Stop? when that close cannot be undone. The pane with the keyboard is the session open in the
+// main column; the others are dimmed (Settings › Terminal › Dim unfocused panes) and the focused one shows by its
+// cursor. Panes have no title bar (Ghostty / iTerm splits): a 1px divider between them, the grip, and a zoom and an x
+// in the top right corner, which show while the pointer is over the pane. ⌘W closes the pane (the session stays in
+// TERMINALS), ⌘⌥arrows move between panes, ⌘] / ⌘[ step through them, ⌘⇧⌥arrows move the pane, ⌘⇧↩ zooms it (the zoom
+// follows the keyboard to another pane; splitting, closing or moving a pane ends it, splitState.ts), ⌘⌃= evens them out
+// (layout.ts paneKey has the keys off macOS). Dividers drag and a double click evens them. Each pane is its session's
+// own terminal (sessions.ts attach), so each keeps its own engine; a pane whose session came back paused after a
+// restart shows it paused. Bot chats never split: only TERMINALS sessions go in a split, and the keys live in TERMINALS
+// terminals only.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { getStore } from "../state/store";
 import { CloseIcon, ExpandIcon } from "../ui";
