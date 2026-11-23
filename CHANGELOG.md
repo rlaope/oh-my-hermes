@@ -359,6 +359,21 @@ All notable changes will be documented here.
   `TERM_PROGRAM_VERSION`, and the TUI takes real pixels only from omher 1.1.4 on; older omher terminals get the
   coloured half-block preview.
 
+- **Enter on a subagent in the OMH TUI shows its session on the main screen, as Claude Code shows a teammate's.**
+  Before, Enter in the agent list opened a read-only log in a pager, and the only way to talk to a subagent was `s`
+  then a line. Now Enter (or a click, or Enter on a dag node's child) shows a dim `› From main` row, the brief as the
+  first prompt, the tool rows, the reply, and the agent's own working row while it runs. The composer's top rule ends
+  with the agent's name and reads `Message @<name>…`. What you send goes to that agent: a steer while it runs; once it
+  ended, on Hermes' stdio gateway a turn that continues it, while the shared gateway says it cannot continue it and
+  keeps your text. Esc, or the list's `main` row, goes back to main, whose transcript kept everything meanwhile; the
+  list marks the agent shown `⏺` and the rest `◯`, and its hint reads `⏎ view · x stop · s steer · esc back`. Where
+  Hermes cannot show the session the log pager opens as before. Main and the view each keep their own draft, and a
+  late refusal returns text to the screen it was typed on, added after what is kept there; a paste belongs to the
+  composer it was typed in; `s` and the view both refuse slash commands, `!` lines and images for a subagent; main's
+  questions and stop keys stay on main's screen; on the shared gateway the view reads one page at a time until an
+  empty page, at most 50 reads after the agent ends, then says it could not read the rest. (`src/tui/subagent_session.py`,
+  `src/tui/agent_view.py`, `src/tui/app.py`, `src/tui/frame.py`)
+
 ## 5.0.0 - 2026-11-21
 
 - **A mise-managed `codex` or `python3` runs again in `omh coding run`.** mise links every tool it manages to one
