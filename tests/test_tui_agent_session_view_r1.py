@@ -254,6 +254,9 @@ class ReadFenceTests(unittest.TestCase):
         agent_event(app, "complete", FIRST, status="completed", summary="done")
         app._poll_view_when_due()
         self.assertEqual(len(client.named("session.transcript")), 2, "the open's read and the one poll")
+        now[0] = 2.5  # past the pace, the first read still out: it is still the only one
+        app._poll_view_when_due()
+        self.assertEqual(len(client.named("session.transcript")), 2)
 
     def test_an_older_answer_never_duplicates_rows_rolls_the_cursor_back_or_marks_the_child_running(self) -> None:
         app, client, now = viewing(shared=True)
@@ -269,6 +272,21 @@ class ReadFenceTests(unittest.TestCase):
         assert app.viewing is not None
         self.assertEqual((app.viewing.running, app.viewing.cursor), (False, "final"))
         self.assertEqual(texts(app.viewing.transcript).count(f"reply:{REPLY['text']}"), 1)
+
+    def test_a_forgotten_read_answering_first_from_the_same_cursor_is_dropped_for_the_latest(self) -> None:
+        app, client, now = viewing(shared=True)
+        now[0] = 1
+        app._poll_view_when_due()
+        older = call_id(client, "session.transcript")
+        now[0] = 1 + view_state.POLL_ANSWER_SECONDS
+        app._poll_view_when_due()
+        newer = call_id(client, "session.transcript")
+        app._on_response(Response(older, rows_answer([{"role": "assistant", "text": "stale"}], reset=False,
+                                                     cursor="stale"), None))
+        app._on_response(Response(newer, rows_answer([REPLY], running=False, reset=False, cursor="final"), None))
+        assert app.viewing is not None
+        self.assertEqual((app.viewing.cursor, texts(app.viewing.transcript)[-1]), ("final", f"reply:{REPLY['text']}"))
+        self.assertNotIn("reply:stale", texts(app.viewing.transcript))
 
     def test_a_completion_schedules_one_read_at_the_paced_second(self) -> None:
         app, client, now = viewing(shared=True)
