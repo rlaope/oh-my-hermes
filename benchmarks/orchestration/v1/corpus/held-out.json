@@ -1,0 +1,244 @@
+{
+  "schema_version": "omh_scenario_corpus/v1",
+  "suite": "orchestration/v1",
+  "split": "held_out",
+  "scenarios": [
+    {
+      "id": "orc-handoff-opencode-dependency-bump",
+      "category": "handoff",
+      "request": "Ask opencode to bump the lodash dependency in acme/web and run the tests.",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "acme/web",
+            "path": "/work/web"
+          }
+        ],
+        "current_repository": "acme/web",
+        "coding_owner_choice": {
+          "owner": "opencode",
+          "made_in": "this_request",
+          "age_hours": 0
+        }
+      },
+      "evidence": [],
+      "expect": {
+        "handoff": "required",
+        "owner": "opencode",
+        "repository": "acme/web",
+        "word_budget": 80
+      },
+      "why": "A less common owner, named in the request; running the tests belongs to the same hand-off."
+    },
+    {
+      "id": "orc-nohandoff-status-of-running-unit",
+      "category": "no-handoff",
+      "request": "What's the status of the Codex run on the pagination task?",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "acme/payments",
+            "path": "/work/payments"
+          }
+        ],
+        "current_repository": "acme/payments",
+        "coding_owner_choice": {
+          "owner": "codex",
+          "made_in": "earlier_request",
+          "age_hours": 2
+        }
+      },
+      "evidence": [
+        {
+          "source": "omh coding fanout status",
+          "summary": "unit pagination: running 12 min; no verification yet",
+          "links": []
+        }
+      ],
+      "expect": {
+        "handoff": "forbidden",
+        "parent_may_edit": false,
+        "word_budget": 60
+      },
+      "why": "A status question reads the running unit; it starts nothing new and edits nothing."
+    },
+    {
+      "id": "orc-nohandoff-review-without-changes",
+      "category": "no-handoff",
+      "request": "Review PR #3101 and tell me if it is safe to merge. Don't change anything.",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "rlaope/oh-my-hermes",
+            "path": "/work/oh-my-hermes"
+          }
+        ],
+        "current_repository": "rlaope/oh-my-hermes",
+        "coding_owner_choice": null
+      },
+      "evidence": [
+        {
+          "source": "gh pr view 3101",
+          "summary": "open; 4 files; checks: aggregate success",
+          "links": [
+            "https://github.com/rlaope/oh-my-hermes/pull/3101"
+          ]
+        }
+      ],
+      "expect": {
+        "handoff": "forbidden",
+        "parent_may_edit": false,
+        "word_budget": 150
+      },
+      "why": "A review the person explicitly scoped to no changes: no hand-off and no edit."
+    },
+    {
+      "id": "orc-repo-service-named-in-words",
+      "category": "repository",
+      "request": "Have Codex add retry logic to the webhook sender in the payments service.",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "acme/web",
+            "path": "/work/web"
+          },
+          {
+            "slug": "acme/payments",
+            "path": "/work/payments"
+          }
+        ],
+        "current_repository": "acme/web",
+        "coding_owner_choice": {
+          "owner": "codex",
+          "made_in": "this_request",
+          "age_hours": 0
+        }
+      },
+      "evidence": [],
+      "expect": {
+        "handoff": "required",
+        "owner": "codex",
+        "repository": "acme/payments",
+        "word_budget": 80
+      },
+      "why": "'The payments service' names acme/payments in words, against a current repository that is acme/web."
+    },
+    {
+      "id": "orc-links-ticket-from-request",
+      "category": "links",
+      "request": "Have Claude Code fix the bug in ticket ENG-42 (https://linear.app/acme/issue/ENG-42) in acme/web.",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "acme/web",
+            "path": "/work/web"
+          }
+        ],
+        "current_repository": "acme/web",
+        "coding_owner_choice": {
+          "owner": "claude-code",
+          "made_in": "this_request",
+          "age_hours": 0
+        }
+      },
+      "evidence": [
+        {
+          "source": "user message",
+          "summary": "the ticket link the person gave",
+          "links": [
+            "https://linear.app/acme/issue/ENG-42"
+          ]
+        }
+      ],
+      "expect": {
+        "handoff": "required",
+        "owner": "claude-code",
+        "repository": "acme/web",
+        "word_budget": 80
+      },
+      "why": "The person's own link may be echoed; any other link, such as a guessed branch or PR, is invented."
+    },
+    {
+      "id": "orc-budget-explain-past-handoff",
+      "category": "budget",
+      "request": "In under 50 words, explain why you handed the migration to Codex instead of doing it yourself.",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "acme/payments",
+            "path": "/work/payments"
+          }
+        ],
+        "current_repository": "acme/payments",
+        "coding_owner_choice": {
+          "owner": "codex",
+          "made_in": "earlier_request",
+          "age_hours": 3
+        },
+        "conversation": [
+          "Three hours ago the person asked: 'have Codex write the orders table migration'."
+        ]
+      },
+      "evidence": [],
+      "expect": {
+        "handoff": "forbidden",
+        "parent_may_edit": false,
+        "word_budget": 49
+      },
+      "why": "An explanation of a past hand-off; 'under 50 words' allows 49; nothing new is handed off."
+    },
+    {
+      "id": "orc-nohandoff-date-helpers-no-owner",
+      "category": "no-handoff",
+      "skill_rule": "owner_named_in_this_request",
+      "request": "Refactor the date helpers in src/utils/dates.ts to use Temporal.",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "acme/web",
+            "path": "/work/web"
+          }
+        ],
+        "current_repository": "acme/web",
+        "coding_owner_choice": null
+      },
+      "evidence": [],
+      "expect": {
+        "handoff": "forbidden",
+        "parent_may_edit": true,
+        "word_budget": 80
+      },
+      "why": "The dag-ulw skill text hands coding to an external owner only when the person named that owner in this request. The request alone does not carry this rule, so the scenario is reported in the skill_rule group."
+    },
+    {
+      "id": "orc-nohandoff-tests-after-earlier-codex",
+      "category": "no-handoff",
+      "skill_rule": "owner_named_in_this_request",
+      "request": "Now write the tests for the export feature too.",
+      "prior_state": {
+        "repositories": [
+          {
+            "slug": "acme/payments",
+            "path": "/work/payments"
+          }
+        ],
+        "current_repository": "acme/payments",
+        "coding_owner_choice": {
+          "owner": "codex",
+          "made_in": "earlier_request",
+          "age_hours": 3
+        },
+        "conversation": [
+          "Three hours ago, in another request, the person had Codex implement the export feature."
+        ]
+      },
+      "evidence": [],
+      "expect": {
+        "handoff": "forbidden",
+        "parent_may_edit": true,
+        "word_budget": 80
+      },
+      "why": "The dag-ulw skill text hands coding to an external owner only when the person named that owner in this request. The request alone does not carry this rule, so the scenario is reported in the skill_rule group. A follow-up in a new request does not inherit the earlier request's owner."
+    }
+  ]
+}

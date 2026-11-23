@@ -178,6 +178,20 @@ All notable changes will be documented here.
   from history recall, a paste or a loaded draft opens no mid-line menu until the next typed key. A line that does
   not start with `/` still goes as a prompt with the `/skill` text in it. (`src/tui/slash.py` `slash_token_at`,
   `skill_completions`, `src/tui/app.py`)
+- **Two scenario suites measure automation intent and coding hand-off, before their skill text changes.**
+  `benchmarks/automation-intent/v1` grades whether a plain-language request becomes the right prepared automation
+  (schedule, target, delivery, filters, silence) or correctly a clarifying question, no automation, or an edit of
+  the existing job. `benchmarks/orchestration/v1` grades whether the parent hands coding to the owner the person
+  named in that request (and only then), targets the right repository, cites only links the observed evidence
+  returned, and stays within a word budget. Grading is a deterministic structural function; reports use
+  `omh_reported_rate/v1` with a Wilson 95% interval, infrastructure failures (`arm_did_not_run`, `timeout`,
+  `transport_error`) and unobserved scenarios excluded by name, and `percent: null` over an empty denominator. Each
+  suite has a held-out split read only when named, reported as counts only, and kept out of skill and routing
+  sources by test. The live arm is opt-in and runs only through `omh coding hermes-child dispatch
+  --confirm-dispatch`; neither suite has been run live, so both are `prepared_not_observed`.
+  (`src/quality/scenario_suite.py`, `src/quality/automation_intent_grading.py`,
+  `src/quality/orchestration_grading.py`, `benchmarks/scenario_suite_bench.py`; `benchmarks/automation-intent/v1/README.md`,
+  `benchmarks/orchestration/v1/README.md`, `docs/CAPABILITY_IMPACT.md` "Growth Gate")
 - **omher: the bridge comes back after it dies.** If the Python bridge stopped after it was ready, nothing started it
   again: Hermes bots and folder chats stayed on "Connecting to Hermes…" until omher was restarted, because the shell
   kept handing the page the dead bridge's port. The shell now notices the exit (the bridge's output closes, or a check
