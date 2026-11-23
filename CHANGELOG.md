@@ -233,6 +233,18 @@ All notable changes will be documented here.
   `--script`, drops events the bot's own runs caused and more than 5 events per 15 minutes. Both scripts are inert
   package data the person's Hermes runs (owner-approved scoped integration, 2026-11-23); OMH never runs them.
   (`src/skills/pr_watch_toolkit/`, `src/skills/catalog_feature_surfaces.py`, `src/routing/policy.py`)
+- **automation-blueprint: be told when something happens on a platform that sends no webhook.** Asking Hermes to
+  be told when new mail matches a filter, a calendar event is about to start, a Notion page or database changes, a
+  Linear or Jira issue is assigned, an Obsidian vault folder changes, or a Sentry issue opens ("tell me when a mail
+  from my boss arrives", "노션 데이터베이스 바뀌면 알려줘") now reaches `automation-blueprint`, whose monitor recipes
+  (`references/monitor-recipes.md`) prepare one paused Hermes cron monitor job per trigger. Its script, from
+  `toolkit/monitors/`, prints only ids and the platform's own timestamps, so the agent wakes only when they change:
+  `api_watch.py` reads Notion, Linear, Jira and Sentry with a key from one environment name, sent only to that
+  platform's fixed host; `google_watch.py` runs Hermes' own google-workspace skill CLI; `vault_watch.py` lists an
+  Obsidian folder's file metadata. A missing or rejected credential is reported once; a network failure is a failed
+  monitor tick, never a change. The scripts write nothing and are inert package data the person's Hermes runs, the
+  same scoped-integration class as the PR watch scripts; OMH never runs them.
+  (`src/skills/monitor_recipes.py`, `src/skills/monitor_watch_toolkit/`, `src/routing/policy.py`)
 - **Work that starts in another app: a spec, a mail, an alert, a meeting, a vault, a Figma frame.** A new skill,
   `app-work-intake`, reads the item through the bot's own Hermes tool and takes one of three paths: a Notion or
   Confluence page or a Linear or Jira issue becomes a plan, a fanout run and a PR, with the PR link written back to

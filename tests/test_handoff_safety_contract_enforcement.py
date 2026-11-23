@@ -54,6 +54,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -196,6 +197,15 @@ PROCESS_SPAWN_ALLOWLIST: dict[str, str] = {
         "interpreter; spawns exactly one read-only `gh pr view` per tick (argv pinned in "
         "GH_INVOCATION_EXCEPTIONS), no shell, stdin closed, a 30 s timeout. Nothing in src/ imports it "
         "(test_core_never_imports_the_pr_watch_toolkit); stated in docs/IMPLEMENTATION-BOUNDARIES.md."
+    ),
+    "src/skills/monitor_watch_toolkit/scripts/google_watch.py": (
+        "the Gmail and Calendar monitor -- inert package data that only a Hermes cron job runs, as the "
+        "`--monitor-script` of a copy the person installed into `<profile>/scripts/`, on Hermes' interpreter; "
+        "spawns exactly one read of Hermes' own google-workspace skill CLI per tick (`<python> "
+        "<profile>/skills/productivity/google-workspace/scripts/google_api.py gmail search --max <n> -- <query>` or "
+        "`... calendar list --start <t> --end <t> --max 100 --calendar <id>`), no shell, stdin closed, a 90 s "
+        "timeout; it holds and reads no credential. Nothing in src/ imports it "
+        "(test_core_never_imports_the_monitor_watch_toolkit); stated in docs/IMPLEMENTATION-BOUNDARIES.md."
     ),
     "src/install/agent_skills_projection.py": (
         "explicit `omh install --target agents --scope repo` (including read-only --status); "
@@ -769,6 +779,69 @@ class NoHiddenProcessSpawn(unittest.TestCase):
                 for dotted in paths:
                     self.assertNotIn("pr_watch_toolkit", dotted.split("."), (relative_path, node.lineno, dotted))
 
+    def test_core_never_imports_the_monitor_watch_toolkit(self) -> None:
+        """The monitor-recipe scripts are run by the person's Hermes, never by omh."""
+        companion = "src/skills/monitor_watch_toolkit/"
+        self.assertEqual(
+            {p for p in PROCESS_SPAWN_ALLOWLIST if p.startswith(companion)}, {companion + "scripts/google_watch.py"}
+        )
+        self.assertEqual({p for p in NETWORK_CLIENT_BRIDGES if p.startswith(companion)}, {companion + "scripts/api_watch.py"})
+        for relative_path, tree in _source_modules():
+            if relative_path.startswith(companion):
+                continue
+            for stem in ("api_watch", "google_watch", "vault_watch", "monitor_watch_toolkit"):
+                self.assertFalse(_imports_module_named(tree, stem), (relative_path, stem))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    paths = [alias.name for alias in node.names]
+                elif isinstance(node, ast.ImportFrom):
+                    paths = [node.module or "", *(f"{node.module or ''}.{alias.name}" for alias in node.names)]
+                else:
+                    continue
+                for dotted in paths:
+                    self.assertNotIn("monitor_watch_toolkit", dotted.split("."), (relative_path, node.lineno, dotted))
+
+    def test_the_monitor_watch_scripts_are_stdlib_only_and_write_nothing(self) -> None:
+        """Each script reaches only what its kind needs, and its only output is stdout and stderr.
+
+        `api_watch.py` is the network client and starts no process; `google_watch.py`
+        starts the one skill CLI and opens no connection; `vault_watch.py` does
+        neither. None imports a third-party or Hermes module, and none calls a
+        filesystem write: no `open` for writing, no `write_text`/`write_bytes`, no
+        `mkdir`, rename, replace, unlink, chmod or link, no `shutil` or `tempfile`.
+        """
+        companion = "src/skills/monitor_watch_toolkit/scripts/"
+        trees = {path: tree for path, tree in _source_modules() if path.startswith(companion)}
+        self.assertEqual(set(trees), {companion + name for name in ("api_watch.py", "google_watch.py", "vault_watch.py")})
+        allowed_extra = {
+            companion + "api_watch.py": {"urllib"},
+            companion + "google_watch.py": {"subprocess"},
+            companion + "vault_watch.py": set(),
+        }
+        os_writes = {"replace", "rename", "renames", "remove", "unlink", "mkdir", "makedirs", "rmdir", "removedirs",
+                     "chmod", "chown", "symlink", "link", "truncate", "open", "write", "system", "popen"}
+        path_writes = {"write_text", "write_bytes", "mkdir", "touch", "unlink", "rmdir", "rename", "chmod",
+                       "symlink_to", "hardlink_to"}
+        for path, tree in trees.items():
+            tops = {module.split(".")[0] for module, _names, _lineno in _imported_modules(tree) if module}
+            self.assertLessEqual(tops - {"__future__"}, set(sys.stdlib_module_names), path)
+            self.assertEqual(tops & {"shutil", "tempfile", "socket", "http", "ssl", "asyncio"}, set(), path)
+            self.assertEqual(tops & {"urllib", "subprocess"}, allowed_extra[path], path)
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                if isinstance(func, ast.Attribute):
+                    if isinstance(func.value, ast.Name) and func.value.id == "os":
+                        self.assertNotIn(func.attr, os_writes, (path, node.lineno))
+                    self.assertNotIn(func.attr, path_writes, (path, node.lineno))
+                    if func.attr == "open" and not (isinstance(func.value, ast.Name) and func.value.id == "self"):
+                        modes = [a.value for a in node.args if isinstance(a, ast.Constant)]
+                        modes += [k.value.value for k in node.keywords if k.arg == "mode" and isinstance(k.value, ast.Constant)]
+                        self.assertTrue(all(isinstance(m, str) and set(m) <= {"r", "b"} for m in modes), (path, node.lineno))
+                if isinstance(func, ast.Name) and func.id == "open":
+                    self.fail(f"{path} line {node.lineno} calls open(); the monitor scripts read with read_text only")
+
     def test_only_allowlisted_modules_import_subprocess(self) -> None:
         for relative_path, tree in _source_modules():
             for module, _names, lineno in _imported_modules(tree):
@@ -971,6 +1044,17 @@ NETWORK_CLIENT_BRIDGES: dict[str, str] = {
         "host (tests), sent direct and never through a proxy. Nothing in src/ imports it; owner approved as a scoped "
         "integration 2026-11-15, documented in AGENTS.md."
     ),
+    "src/skills/monitor_watch_toolkit/scripts/api_watch.py": (
+        "the Notion, Linear, Jira and Sentry monitor -- inert package data that only a Hermes cron job runs, as the "
+        "`--monitor-script` of a copy the person installed into `<profile>/scripts/`, on Hermes' interpreter; reads "
+        "only: `GET /v1/pages/<id>` and the database query on api.notion.com, one GraphQL query on api.linear.app, "
+        "`GET /rest/api/3/search/jql` on <site>.atlassian.net, `GET /api/0/organizations/<org>/issues/` on sentry.io "
+        "or de.sentry.io, each host fixed in the script; the credential comes only from its environment name and is "
+        "never printed or written; redirects refused, a 15 s read timeout and a 30 s reply deadline, a bounded reply; `api_base` only to a loopback "
+        "host (tests), sent direct and never through a proxy; it writes nothing. Nothing in src/ imports it "
+        "(test_core_never_imports_the_monitor_watch_toolkit); the same class of scoped integration the owner approved "
+        "for the PR watch scripts on 2026-11-23, documented in AGENTS.md."
+    ),
 }
 # `ProxyHandler` is imported only to pass an empty mapping, which turns proxies
 # off for the Jev local plain-HTTP endpoint (and the collector's loopback test base) so no proxy reads the key in clear.
@@ -981,6 +1065,7 @@ NETWORK_CLIENT_BRIDGE_IMPORTERS: dict[str, frozenset[str]] = {
     "src/plugin_bundle/omh/jev_ask_client.py": frozenset({"src/plugin_bundle/omh/tools/jev_ask_tool.py"}),
     "src/tui/update_notice.py": frozenset({"src/tui/app.py", "src/commands/setup.py"}),
     "src/skills/channel_watch_toolkit/scripts/channel_watch.py": frozenset(),
+    "src/skills/monitor_watch_toolkit/scripts/api_watch.py": frozenset(),
 }
 
 

@@ -103,7 +103,7 @@ from .policy import (
     meets_confidence_threshold,
     point_in_time_web_guard_applies,
 )
-from .policy import _doctor_health_guard_applies
+from .policy import _doctor_health_guard_applies, monitor_trigger_guard_applies
 from .policy import asks_to_produce_materials, command_request_is_failure_or_agent_question, guard_label_dispatch_trust
 from .policy import _explicit_skill_candidate_is_negated, employer_hiring_intent
 from .policy import EXPLICIT_INVOCATION_PREFIXES, bare_name_reports_or_asks
@@ -5342,8 +5342,12 @@ def _operator_surface_fast_path_decision(
         return None
     # "turn Linear issue ENG-42 into a PR" and "turn the meeting transcript into Linear issues" name a
     # tracker phrase this fast path holds; the work they ask for is app-work-intake's and operating-rhythm's,
-    # which scoring reaches through their guards.
-    if selected_skill == "connector-operator" and _app_work_or_meeting_issues_applies(routing_message):
+    # which scoring reaches through their guards. "ping me when a Linear issue is assigned to me" holds it too,
+    # but it asks for a monitor recipe, not a connector action.
+    if selected_skill == "connector-operator" and (
+        _app_work_or_meeting_issues_applies(routing_message)
+        or monitor_trigger_guard_applies(normalized_phrase(prepare_routing_text(routing_message).scoring_text))
+    ):
         return None
     if selected_skill == "live-info-operator" and _is_live_info_operator_setup_or_research_request(routing_message):
         return None

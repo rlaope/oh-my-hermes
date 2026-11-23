@@ -572,7 +572,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # verification round adds the state_unreadable recovery note; only github-event-ops moves, and the pin
         # before it was 64aaeb57...2733. Its final round puts the state file's path in that note; only
         # github-event-ops moves, and the pin before it was c839b0a3...23f3.
-        self.assertEqual(_digest(legacy_hashes), 'fe24412b11e012ca774bd5da97a4a7425b0bbc2b37dd2212c4b925ab75ff1dd4')
+        # automation-blueprint then points platform triggers (Gmail, Calendar, Notion, Linear, Jira, Obsidian,
+        # Sentry) at its monitor recipes; only automation-blueprint moves, and the pin before it was fe24412b...1dd4.
+        self.assertEqual(_digest(legacy_hashes), '0bcfad3d42ac8910b2deebc133673bbfd11ab9ca06a5ee0a58e15a9a83796abf')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

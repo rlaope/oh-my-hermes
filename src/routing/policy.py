@@ -5402,6 +5402,127 @@ _CHANNEL_WATCH_BLOCKERS = (
     "슬랙으로",
     "디스코드로",
 )
+# "Tell me when a mail from my boss arrives", "노션 페이지 바뀌면 알려줘": a
+# trigger on a platform that sends Hermes no webhook (Gmail, Google Calendar,
+# Notion, Linear, Jira, Obsidian, Sentry) is one of automation-blueprint's
+# monitor recipes, a Hermes cron monitor job. Measured before the
+# `monitor_trigger_before_connector_or_wiki` guard, these clarified toward
+# morning-brief, connector-operator, wiki or operating-rhythm, fell back, or
+# dispatched connector-operator, wiki or github-event-ops; none listed
+# automation-blueprint. It needs all three: the platform named, a tell-me cue,
+# and an event cue that is about the platform's own items (arrives, changes,
+# is assigned, opens; 오면, 바뀌면, 배정되면, 생기면) or a time before a start
+# ("10 minutes before", "시작 15분 전에"). A bare `when` or `before` is not an
+# event: "tell me when my next meeting is" is a question. A question about
+# time, a how-to, a service outage or API, the platform as the delivery target,
+# the bot's own work, or a write that follows the trigger stands it down.
+_MONITOR_TRIGGER_SPOKEN_PLATFORMS = (
+    "gmail", "inbox", "mail", "mails", "calendar", "notion", "jira", "obsidian", "sentry",
+)
+_MONITOR_TRIGGER_PLATFORMS = (
+    "linear issue",
+    "linear ticket",
+    "linear app",
+    "지메일",
+    "메일",
+    "받은편지함",
+    "캘린더",
+    "노션",
+    "리니어",
+    "지라",
+    "옵시디언",
+    "센트리",
+)
+_MONITOR_TRIGGER_NOTIFY_CUES = (
+    "tell me",
+    "ping me",
+    "notify me",
+    "alert me",
+    "let me know",
+    "remind me",
+    "message me",
+    "알려줘",
+    "알려 줘",
+    "알려주",
+    "알림",
+)
+_MONITOR_TRIGGER_SPOKEN_EVENTS = (
+    "arrives",
+    "arrive",
+    "comes in",
+    "come in",
+    "changes",
+    "changed",
+    "is updated",
+    "gets updated",
+    "is edited",
+    "is assigned",
+    "gets assigned",
+    "assigned to me",
+    "is opened",
+    "opens",
+    "is created",
+    "minutes before",
+    "minute before",
+    "mins before",
+    "hour before",
+    "hours before",
+    "before it starts",
+    "before each",
+    "starts soon",
+)
+_MONITOR_TRIGGER_KO_EVENTS = (
+    "오면",
+    "들어오면",
+    "생기면",
+    "바뀌면",
+    "변경되면",
+    "수정되면",
+    "배정되면",
+    "할당되면",
+    "올라오면",
+    "열리면",
+    "분 전에",
+    "분 전",
+    "시간 전에",
+    "시작 전",
+    "시작하기 전",
+)
+_MONITOR_TRIGGER_SPOKEN_BLOCKERS = (
+    "when is",
+    "when my next",
+    "when did",
+    "when i",
+    "when you",
+    "before you",
+    "is down",
+    "back up",
+    "back online",
+    "api",
+    "docs",
+    "and then",
+    "and update",
+    "then update",
+    "and create",
+    "and reply",
+    "and send",
+    "and post",
+    "email me",
+    "mail me",
+    "video",
+)
+_MONITOR_TRIGGER_BLOCKERS = (
+    *_GREENFIELD_QUESTION_OPENERS,
+    "what's",
+    "whats",
+    "영상",
+    "방법",
+    "왜",
+    "설정",
+    "끄는",
+    "이전에",
+    "보내",
+)
 # "Watch PR 42 until its checks finish" is a wait on one pull request: a Hermes
 # cron monitor job from github-event-ops' PR watch recipe, not a model polling
 # loop. Measured before the `pr_watch_before_loop_or_ultrawork` guard, the
@@ -6388,6 +6509,15 @@ APP_WORK_INTAKE_GUARD = RoutingGuardRule(
     why="Matched an app item and the work it should become; app-work-intake reads the item through the bot's own Hermes tool, picks the path, and writes back only as an approved action.",
     activation_status="active",
 )
+MONITOR_TRIGGER_GUARD = RoutingGuardRule(
+    id="monitor_trigger_before_connector_or_wiki",
+    rule="Being told when something happens on Gmail, Google Calendar, Notion, Linear, Jira, Obsidian, or Sentry should route to automation-blueprint's monitor recipes before the connector, wiki, or briefing lanes.",
+    matched_label="guard:monitor_trigger",
+    preferred_skills=("automation-blueprint",),
+    score_boost=36,
+    why="Matched a platform with no webhook, a tell-me cue, and an event cue; the trigger is a paused Hermes cron monitor job whose script wakes the agent only on a change, not a one-off read.",
+    activation_status="active",
+)
 PR_WATCH_GUARD = RoutingGuardRule(
     id="pr_watch_before_loop_or_ultrawork",
     rule="Waiting on one pull request until its checks finish, it merges, or it settles should route to github-event-ops' PR watch recipe before the loop or ultrawork lanes.",
@@ -6462,6 +6592,7 @@ ROUTING_GUARD_RULES = (
     RESEARCH_DEPARTMENT_GUARD,
     SCHEDULED_OPS_BLUEPRINT_GUARD,
     CHANNEL_WATCH_GUARD,
+    MONITOR_TRIGGER_GUARD,
     PR_WATCH_GUARD,
     APP_WORK_INTAKE_GUARD,
     MEETING_TO_ISSUES_GUARD,
@@ -6590,6 +6721,7 @@ GUARD_DISPATCH_TRUST: dict[str, tuple[str, str]] = {
     "risky_refactor_before_cleanup": (GUARD_TRUSTED, "risky refactor named as the change; no measured record as a winner, keeps its shape label"),
     "safe_feature_change_before_generic_plan": (GUARD_TRUSTED, "a safe feature change named as the change; no measured record as a winner, keeps its shape label"),
     "channel_watch_before_gateway_or_connector": (GUARD_TRUSTED, "a watch verb on a Slack or Discord channel plus a tell-me cue; no measured record as a winner, keeps its shape label"),
+    "monitor_trigger_before_connector_or_wiki": (GUARD_TRUSTED, "a platform with no webhook, a tell-me cue and an event cue; no measured record as a winner, keeps its shape label"),
     "vault_knowledge_before_research_department": (GUARD_TRUSTED, "a vault plus a recall, journal, or memory use; no measured record as a winner, keeps its shape label"),
     "meeting_to_issues_before_connector": (GUARD_TRUSTED, "a meeting record plus the issues it should become; no measured record as a winner, keeps its shape label"),
     "app_work_intake_before_connector_or_coding": (GUARD_TRUSTED, "an app item plus the work it should become; no measured record as a winner, keeps its shape label"),
@@ -7128,8 +7260,17 @@ def _active_routing_guard_rules_cached(
         and (explicit_scheduled_ops_blueprint or not research_department_applies)
     ):
         rules.append(SCHEDULED_OPS_BLUEPRINT_GUARD)
-    if not direct_coding_task_applies and channel_watch_guard_applies(normalized_query):
+    channel_watch_applies = not direct_coding_task_applies and channel_watch_guard_applies(normalized_query)
+    if channel_watch_applies:
         rules.append(CHANNEL_WATCH_GUARD)
+    # A monitor trigger names the platform as what is watched, so the connector
+    # and GitHub event lanes, which fire on the same platform and issue words,
+    # stand down for it.
+    monitor_trigger_applies = (
+        not direct_coding_task_applies and not channel_watch_applies and monitor_trigger_guard_applies(normalized_query)
+    )
+    if monitor_trigger_applies:
+        rules.append(MONITOR_TRIGGER_GUARD)
     if not direct_coding_task_applies and pr_watch_guard_applies(normalized_query):
         rules.append(PR_WATCH_GUARD)
     if app_work_intake_guard_applies(normalized_query):
@@ -7176,7 +7317,7 @@ def _active_routing_guard_rules_cached(
         rules.append(MISSED_WORKFLOW_WEB_RESEARCH_GUARD)
     if _github_issue_intake_guard_applies(normalized_query, query_tokens):
         rules.append(GITHUB_ISSUE_INTAKE_GUARD)
-    if _github_event_ops_guard_applies(normalized_query, query_tokens):
+    if not monitor_trigger_applies and _github_event_ops_guard_applies(normalized_query, query_tokens):
         rules.append(GITHUB_EVENT_OPS_GUARD)
     if contract_redline_guard_applies(normalized_query):
         rules.append(CONTRACT_REDLINE_GUARD)
@@ -7253,6 +7394,7 @@ def _active_routing_guard_rules_cached(
     if (
         not direct_coding_task_applies
         and not feedback_before_coding_applies
+        and not monitor_trigger_applies
         and _connector_operator_guard_applies(normalized_query, query_tokens)
     ):
         rules.append(CONNECTOR_OPERATOR_GUARD)
@@ -11122,14 +11264,20 @@ def _app_work_words_said(words: list[str], phrase: str) -> bool:
 
 
 def _app_work_trigger_or_cadence(normalized_query: str) -> bool:
-    return has_cadence(normalized_query, routing_tokens(normalized_query)) or _contains_phrase(
-        normalized_query, _APP_WORK_TRIGGER_CUES
+    """A schedule or a trigger is the entry point: automation-blueprint owns it, and its job runs this skill."""
+    return (
+        has_cadence(normalized_query, routing_tokens(normalized_query))
+        or _contains_phrase(normalized_query, _APP_WORK_TRIGGER_CUES)
+        or monitor_trigger_guard_applies(normalized_query)
     )
 
 
 def vault_knowledge_guard_applies(normalized_query: str) -> bool:
     """An Obsidian or notes vault and a recall, journal, or memory-record use of it, said as a phrase."""
     if _contains_phrase(normalized_query, _VAULT_KNOWLEDGE_BLOCKERS):
+        return False
+    # Told when a vault folder changes is a monitor recipe, not a use of the vault.
+    if monitor_trigger_guard_applies(normalized_query):
         return False
     if not _contains_phrase(normalized_query, _VAULT_KNOWLEDGE_VAULTS):
         return False
@@ -11145,6 +11293,8 @@ def vault_knowledge_guard_applies(normalized_query: str) -> bool:
 def meeting_to_issues_guard_applies(normalized_query: str) -> bool:
     """A meeting's notes or transcript, a creation verb, and the tracker issues it should become, together."""
     if _contains_phrase(normalized_query, _MEETING_TO_ISSUES_BLOCKERS):
+        return False
+    if monitor_trigger_guard_applies(normalized_query):
         return False
     if not _contains_phrase(normalized_query, _MEETING_RECORD_PHRASES):
         return False
@@ -11217,6 +11367,25 @@ def app_work_intake_guard_applies(normalized_query: str) -> bool:
         or _contains_phrase(normalized_query, _APP_WORK_FIX_CUES_KO)
     )
     return alert and fix
+
+
+def monitor_trigger_guard_applies(normalized_query: str) -> bool:
+    """A platform with no webhook, a tell-me cue, and an event cue on its items together; none alone."""
+    if not (
+        any(phrase_is_spoken(normalized_query, word) for word in _MONITOR_TRIGGER_SPOKEN_PLATFORMS)
+        or _contains_phrase(normalized_query, _MONITOR_TRIGGER_PLATFORMS)
+    ):
+        return False
+    if not _contains_phrase(normalized_query, _MONITOR_TRIGGER_NOTIFY_CUES):
+        return False
+    if not (
+        any(phrase_is_spoken(normalized_query, phrase) for phrase in _MONITOR_TRIGGER_SPOKEN_EVENTS)
+        or _contains_phrase(normalized_query, _MONITOR_TRIGGER_KO_EVENTS)
+    ):
+        return False
+    if any(phrase_is_spoken(normalized_query, phrase) for phrase in _MONITOR_TRIGGER_SPOKEN_BLOCKERS):
+        return False
+    return not _contains_phrase(normalized_query, _MONITOR_TRIGGER_BLOCKERS)
 
 
 def pr_watch_guard_applies(normalized_query: str) -> bool:
