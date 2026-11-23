@@ -318,6 +318,8 @@ export interface Chat {
   model: string;
   provider: string;
   reasoning: string;
+  /** What the route sends for `reasoning` when Hermes says so (`reasoning_wire`); "" when it does not. */
+  reasoningWire: string;
   loaded: boolean;
   sessionId: string | null;
   turnSeq: number;
@@ -527,6 +529,7 @@ const emptyChat = (): Chat => ({
   model: "",
   provider: "",
   reasoning: "",
+  reasoningWire: "",
   loaded: false,
   sessionId: null,
   turnSeq: 0,
@@ -897,6 +900,7 @@ function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string, 
     model: res.model,
     provider: res.provider,
     reasoning: res.reasoning,
+    reasoningWire: res.reasoning_wire ?? "",
     loaded: true,
     sessionId: res.session_id,
     stale: false,
@@ -1535,6 +1539,7 @@ export function reduce(state: AppState, a: Action): AppState {
         model: a.current.model,
         provider: a.current.provider,
         reasoning: a.current.reasoning,
+        reasoningWire: a.current.reasoning_wire ?? "",
       }));
       return {
         ...next,

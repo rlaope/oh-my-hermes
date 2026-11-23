@@ -850,6 +850,8 @@ export const en = {
   "mp.noAccount": "{bot} has no AI account yet. Sign in below the chat, then its models show here.",
   "mp.reasoning": "Reasoning",
   "mp.inHermes": "Change it in Hermes for now",
+  "mp.sendsOnRoute": "{level} (sends {sent} on this route)",
+  "mp.pillSends": "{level} · sends {sent}",
   "mp.appliesChat": "Applies to this chat · {link}",
   "mp.botSettings": "Bot settings",
   "head.details": "Details ({key})",

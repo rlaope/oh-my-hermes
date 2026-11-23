@@ -4,7 +4,7 @@ import { useStore } from "../../state/store";
 import { slots } from "../../features";
 import { Avatar, Pill } from "../../ui";
 import { isMac } from "../../app/shortcuts";
-import { reasoningLabel } from "../model/levels";
+import { reasoningLabel, reasoningPill } from "../model/levels";
 import { t } from "../../i18n";
 import { PanelButton } from "./PanelButton";
 import { SshMarker } from "../../peers/SshMarker";
@@ -18,7 +18,7 @@ export function Header({ bot, chat }: { bot: Bot; chat: Chat | undefined }) {
   const Places = slots.headerPlaces;
   const Picker = slots.modelPicker;
   const model = chat?.model || bot.model;
-  const reasoning = reasoningLabel(chat?.reasoning ?? "");
+  const reasoning = reasoningPill(chat?.reasoning ?? "", chat?.reasoningWire);
   return (
     <header className="head" data-testid="header">
       <button
