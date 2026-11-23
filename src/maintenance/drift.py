@@ -1670,7 +1670,9 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # Cross-platform, merged with monitor recipes: two trigger sentences that name the work they become (a
             # Linear issue to a PR, a Korean Notion change to a PR) stay with automation-blueprint (+2).
             # Merged: 1390 (#3153) + 37 cross-platform cases = 1427, re-derived from the producer.
-            expected=1427,
+            # Its verification round: an existing PR link opened from a Jira ticket keeps connector-operator, and an
+            # urgent Linear issue to PR and a recall said apart from the vault still reach their recipes (+3).
+            expected=1430,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

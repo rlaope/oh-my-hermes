@@ -311,7 +311,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # Its review round adds eight more sentences in another lane that keep their owner.
         # Cross-platform, merged with monitor recipes: two trigger sentences naming their work stay with
         # automation-blueprint. Merged: 1390 (monitor recipes) + 37 cross-platform cases = 1427.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1427)
+        # Its verification round adds three: an existing PR link, an urgent spec to PR, a recall apart from the vault.
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1430)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

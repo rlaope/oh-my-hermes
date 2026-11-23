@@ -12154,6 +12154,12 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     # automation-blueprint owns the entry point, and the job runs app-work-intake.
     RoutingInterventionCase("app-work-trigger-to-pr-stays-blueprint", "Told when a Linear issue is assigned and turning it into a PR is a monitor job", "tell me when a Linear issue is assigned and turn it into a PR", "dispatch", "automation-blueprint", "prepare_scheduled_ops_blueprint", "automation_blueprint"),
     RoutingInterventionCase("app-work-korean-trigger-to-pr-stays-blueprint", "A Korean Notion change turned into a PR is a monitor job", "노션 페이지 바뀌면 알려주고 PR로 만들어줘", "dispatch", "automation-blueprint", "prepare_scheduled_ops_blueprint", "automation_blueprint"),
+    # Verification round: opening an existing PR link is a read, "as soon as
+    # possible" is urgency, not a trigger, and recall said apart from the vault
+    # still recalls from it.
+    RoutingInterventionCase("app-work-open-linked-pr-stays-connector", "Opening the PR linked in a Jira ticket is a read, not spec to PR", "open the PR linked in Jira ticket PAY-2", "dispatch", "connector-operator", "prepare_connector_operator_card", "connector_operator"),
+    RoutingInterventionCase("spec-to-pr-as-soon-as-possible", "An urgent Linear issue to PR is still spec to PR", "as soon as possible turn Linear issue ENG-3 into a PR", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
+    RoutingInterventionCase("vault-knowledge-recall-apart-from-vault", "Recall said apart from the vault reaches wiki", "recall what I wrote about RAG from my Obsidian vault", "dispatch", "wiki", "prepare_wiki_blueprint", "wiki_blueprint"),
     RoutingInterventionCase("alert-to-fix-sdk-crash-stays-feedback", "A Sentry SDK crash report stays feedback triage", "the Sentry SDK crashes the app on startup, fix it", "dispatch", "feedback-triage", "triage_feedback", "feedback_triage"),
     RoutingInterventionCase(
         "open-issue-event-stays-event-ops",

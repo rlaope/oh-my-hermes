@@ -5670,8 +5670,10 @@ _APP_WORK_SPEC_NOUNS = frozenset(
 _APP_WORK_SPEC_NOUNS_KO = ("티켓", "이슈", "페이지", "스펙", "문서")
 _APP_WORK_ISSUE_KEY = re.compile(r"\b[a-z][a-z0-9]{1,9}-\d+\b")
 _APP_WORK_PR_VERBS = frozenset(
-    {"turn", "turning", "make", "convert", "implement", "implementing", "build", "building", "open", "raise", "create"}
+    {"turn", "turning", "make", "convert", "implement", "implementing", "build", "building", "raise", "create"}
 )
+# `open` creates a PR only as "open a PR": "open the PR linked in Jira ticket PAY-2" reads one that exists.
+_APP_WORK_OPEN_PR_PHRASES = ("open a pr", "open a pull request", "open prs")
 _APP_WORK_PR_VERBS_KO = ("만들", "올려", "열어", "생성")
 # Building from the item with no PR named needs the item named as one that is
 # read: "implement this Notion spec", "build what this Confluence page describes".
@@ -11265,9 +11267,11 @@ def _app_work_words_said(words: list[str], phrase: str) -> bool:
 
 def _app_work_trigger_or_cadence(normalized_query: str) -> bool:
     """A schedule or a trigger is the entry point: automation-blueprint owns it, and its job runs this skill."""
+    # "as soon as possible" and "asap" are urgency, not a trigger.
+    unhurried = normalized_query.replace(normalized_phrase("as soon as possible"), " ")
     return (
         has_cadence(normalized_query, routing_tokens(normalized_query))
-        or _contains_phrase(normalized_query, _APP_WORK_TRIGGER_CUES)
+        or _contains_phrase(unhurried, _APP_WORK_TRIGGER_CUES)
         or monitor_trigger_guard_applies(normalized_query)
     )
 
@@ -11281,7 +11285,8 @@ def vault_knowledge_guard_applies(normalized_query: str) -> bool:
         return False
     if not _contains_phrase(normalized_query, _VAULT_KNOWLEDGE_VAULTS):
         return False
-    if not _contains_phrase(normalized_query, _VAULT_KNOWLEDGE_USES):
+    # "recall what I wrote about RAG from my Obsidian vault": recall counts beside the vault wherever it is said.
+    if not (_contains_phrase(normalized_query, _VAULT_KNOWLEDGE_USES) or "recall" in routing_terms(normalized_query)):
         return False
     # Research collected on a cadence keeps the research department; the vault is only where it lands.
     research = bool(_VAULT_KNOWLEDGE_RESEARCH_TERMS & routing_terms(normalized_query)) or _contains_phrase(
@@ -11340,7 +11345,11 @@ def app_work_intake_guard_applies(normalized_query: str) -> bool:
     words = _app_work_words(normalized_query)
     item, read = _app_work_spec_item(words, normalized_query)
     if item:
-        pr_verb = bool(_APP_WORK_PR_VERBS & terms) or _contains_phrase(normalized_query, _APP_WORK_PR_VERBS_KO)
+        pr_verb = (
+            bool(_APP_WORK_PR_VERBS & terms)
+            or any(_app_work_words_said(words, phrase) for phrase in _APP_WORK_OPEN_PR_PHRASES)
+            or _contains_phrase(normalized_query, _APP_WORK_PR_VERBS_KO)
+        )
         if _app_work_pr_named(words) and pr_verb:
             return True
         if read and _APP_WORK_BUILD_VERBS & terms:
