@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import sqlite3
+import time
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -24,6 +25,7 @@ from omh.maintenance.cache_report import (  # noqa: E402
     render_cache_report,
 )
 from omh.paths import OmhPaths  # noqa: E402
+from omh.surfaces.hud import _cache_field  # noqa: E402
 
 NOW = 1_800_000_000.0
 H = 3600.0
@@ -206,6 +208,47 @@ class HudCacheFieldTests(unittest.TestCase):
             payload = build_hud_payload(paths, delegation_graph=False)
         self.assertNotIn("cache", payload)
         self.assertIn("display", payload)
+
+    def _hud_text(self, root: Path) -> str:
+        out = io.StringIO()
+        argv = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes"), "hud"]
+        with mock.patch.object(cache_report.time, "time", return_value=NOW), redirect_stdout(out):
+            self.assertEqual(omh_main(argv), 0)
+        return out.getvalue()
+
+    def test_plain_hud_text_shows_the_cache_segment(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _state_db(root / ".hermes")
+            line = self._hud_text(root).splitlines()[0]
+        self.assertIn(" | cache:90%", line)
+
+    def test_plain_hud_text_leaves_the_segment_out_without_the_field(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".hermes").mkdir()
+            text = self._hud_text(root)
+        self.assertTrue(text.startswith("[omh] v"))
+        self.assertNotIn("cache:", text)
+
+    def test_hud_cache_read_gives_up_at_once_on_a_locked_state_db(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db_path = _state_db(root / ".hermes")
+            paths = OmhPaths(omh_home=root / ".omh", hermes_home=root / ".hermes")
+            writer = sqlite3.connect(db_path, isolation_level=None)
+            self.addCleanup(writer.close)
+            writer.execute("BEGIN EXCLUSIVE")
+            took = []
+            for _ in range(3):
+                start = time.perf_counter()
+                self.assertIsNone(_cache_field(paths))
+                took.append(time.perf_counter() - start)
+            payload = build_hud_payload(paths, delegation_graph=False)
+            writer.execute("ROLLBACK")
+        self.assertLess(sorted(took)[1], 0.2)
+        self.assertNotIn("cache", payload)
+        self.assertNotIn("cache:", payload["display"]["line"])
 
 
 if __name__ == "__main__":

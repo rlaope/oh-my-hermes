@@ -53,11 +53,11 @@ class CacheReportError(RuntimeError):
     """The profile has no readable ``state.db`` or it lacks the ``sessions`` table."""
 
 
-def _connect(state_db: Path) -> sqlite3.Connection:
+def _connect(state_db: Path, *, timeout: float = 0.25) -> sqlite3.Connection:
     if not state_db.is_file():
         raise CacheReportError(f"no state.db at {state_db}")
     try:
-        return sqlite3.connect(f"file:{quote(str(state_db))}?mode=ro", uri=True, timeout=0.25)
+        return sqlite3.connect(f"file:{quote(str(state_db))}?mode=ro", uri=True, timeout=timeout)
     except sqlite3.Error as exc:
         raise CacheReportError(f"cannot open {state_db} read-only: {exc}") from exc
 
@@ -274,10 +274,11 @@ def main_read_share(hermes_home: str | Path, *, hours: float = 24, now: float | 
     """Cache read share of the main sessions (human-paced, no parent) active in the last ``hours``; the HUD's field.
 
     One aggregate query over at most 500 recent sessions, through the effective-activity index when the column
-    exists. Returns None when the window has no input.
+    exists. Returns None when the window has no input. The read never waits on a lock (``timeout=0``): a writer
+    holding state.db makes it raise ``sqlite3.OperationalError`` at once, which the HUD takes as "leave it out".
     """
     since = (time.time() if now is None else now) - hours * 3600
-    connection = _connect(Path(hermes_home) / "state.db")
+    connection = _connect(Path(hermes_home) / "state.db", timeout=0)
     try:
         columns = _columns(connection, "sessions")
         activity = "COALESCE(last_activity_at, started_at)" if "last_activity_at" in columns else "started_at"

@@ -53,6 +53,9 @@ days. The report prints the window's start and end times.
 `cache` object: `{"window_hours": 24, "sessions": N, "read_share": 0.958}`.
 It is the read share of the main sessions, meaning human-paced sessions with no
 parent, active in the last 24 hours. One aggregate query over at most 500
-recent rows opens `state.db` read-only with a 0.25 s lock timeout. When the
+recent rows opens `state.db` read-only and never waits on a lock (timeout 0):
+a writer holding the database makes the read give up at once. When the
 database is missing, unreadable, locked or empty for the window, the field is
-left out and the rest of the payload is unchanged.
+left out and the rest of the payload is unchanged. With the field, the HUD's
+text line (`omh hud`, `omh status`) ends its focused and full presets with
+`cache:NN%`; without it, the segment is left out.

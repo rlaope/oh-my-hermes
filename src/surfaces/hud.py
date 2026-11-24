@@ -6,7 +6,7 @@ from typing import Any
 from ..version import __version__
 from ..paths import OmhPaths
 from ..maintenance.cache_report import CacheReportError, main_read_share
-from ..plugin_bundle.omh.runtime_reader import read_omh_hud
+from ..plugin_bundle.omh.runtime_reader import _hud_segments, read_omh_hud
 
 
 def build_hud_payload(
@@ -33,6 +33,10 @@ def build_hud_payload(
     cache = _cache_field(paths)
     if cache is not None:
         payload["cache"] = cache
+        # The display was drawn before the field existed; draw it again so the text line carries `cache:`.
+        segments = _hud_segments(payload, preset=str(payload.get("preset", "focused")))
+        payload["display"]["segments"] = segments
+        payload["display"]["line"] = " | ".join(segments)
     return payload
 
 

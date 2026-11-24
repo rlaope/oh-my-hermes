@@ -675,7 +675,8 @@ All notable changes will be documented here.
   than 1h after the job's previous one), churn (a warm run whose system prompt changed) and other (growth inside
   runs), using the job's smallest run write as its prefix. For the top churn job it prints the first differing system
   prompt line, cut to 160 characters, then one to three suggestions. The HUD payload gains a `cache` field: the last
-  24h read share of main sessions from one bounded read-only query, left out when it cannot be read. It sends no model request.
+  24h read share of main sessions from one bounded read-only query that never waits on a lock, left out when it
+  cannot be read, and shown on the plain `omh hud` / `omh status` line as `cache:NN%`. It sends no model request.
   (`src/maintenance/cache_report.py`, `src/commands/cache.py`, `src/surfaces/hud.py`, `docs/PROMPT-CACHE.md`)
 
 ## 5.0.0 - 2026-11-21
