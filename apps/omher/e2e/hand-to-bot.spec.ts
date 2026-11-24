@@ -12,7 +12,10 @@
 // 6. one bot of this computer online: the item names it and the card has no picker; with several, Escape in the bot
 //    list closes only the list; the keyboard's context-menu key opens a Worktrees row's menu at the row;
 // 7. a terminal in a split (a cell of the split card) hands its folder as a row does: the same item, the same reads,
-//    the same thread and message; reached from the keyboard; no Hand with no bot of this computer online.
+//    the same thread and message; reached from the keyboard; no Hand with no bot of this computer online;
+// 8. focus order (WCAG 2.4.3), for a row and a cell alike: the menu opened from the keyboard and closed with Escape,
+//    and the Hand card closed with Escape, Cancel or Open thread, give the keyboard back to the row's or cell's face;
+//    a press outside the card leaves it where that press put it.
 import { expect, test, type Page } from "@playwright/test";
 import { dragRowOnto } from "./split-drag-helpers";
 
@@ -428,7 +431,9 @@ test("each cell of a split of two folders hands its own folder, focused or not",
   made = await handCalls(from);
   expect(made.find((x) => x.op === "thread.create")!.params.title).toBe("gateway-keepalive (fix/keepalive)");
   expect(made.find((x) => x.op === "chat.send")!.params.text).toBe([...KEEPALIVE, CLOSING].join("\n\n"));
-  for (const x of made.filter((y) => y.op === "panel.diff")) expect(x.params.path).toBe("/w/gateway-keepalive");
+  const diffs = made.filter((y) => y.op === "panel.diff");
+  expect(diffs.length).toBeGreaterThan(0);
+  for (const x of diffs) expect(x.params.path).toBe("/w/gateway-keepalive");
 });
 
 test("a cell's Hand item is reached from the keyboard and named for assistive technology", async ({ page }) => {
@@ -475,3 +480,80 @@ test("with no bot of this computer online, a cell offers no Hand and nothing is 
   expect(await calls("panel.diff")).toHaveLength(0);
   expect(await calls("panel.worktrees")).toHaveLength(0);
 });
+
+/** Whether `face` holds the keyboard: document.activeElement itself, not a class or an attribute. */
+const holds = (face: ReturnType<Page["locator"]>) => face.evaluate((el) => el === document.activeElement);
+
+/** The TERMINALS row's face, or the split card cell's, of session `id`. */
+const faceOf = (page: Page, kind: "row" | "cell", id: string) => (kind === "row" ? page.getByTestId(`session-${id}`).locator(".ss-open") : cell(page, id).locator(".sc-open"));
+
+/** A shell in /w/gateway-keepalive whose `kind` face is drawn: a row, or a cell of a split with a second shell. */
+async function faceFor(page: Page, kind: "row" | "cell") {
+  await open(page, "/w/gateway-keepalive");
+  const a = await newShell(page);
+  if (kind === "cell") await split(page, a, await newShell(page));
+  return faceOf(page, kind, a);
+}
+
+/** The menu opened from the keyboard on `face` (the context-menu key), its Hand item chosen with the arrows and Enter:
+ *  the card is open with the goal field holding the keyboard. */
+async function handFromKeys(page: Page, face: ReturnType<Page["locator"]>) {
+  await face.focus();
+  await face.dispatchEvent("contextmenu", { clientX: 0, clientY: 0, button: 0 });
+  const menu = page.getByRole("menu", { name: /actions/i });
+  await expect(menu.getByRole("menuitem", { name: "Rename" })).toBeFocused();
+  await page.keyboard.press("End");
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("ArrowUp");
+  await expect(menu.getByRole("menuitem", { name: "Hand to a bot…" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("handover")).toBeVisible();
+  await expect(page.getByTestId("handover-goal")).toBeFocused();
+  await expect(menu).toHaveCount(0);
+}
+
+for (const kind of ["row", "cell"] as const) {
+  test(`a ${kind}'s menu closed with Escape gives the keyboard back to the ${kind}`, async ({ page }) => {
+    const face = await faceFor(page, kind);
+    await face.focus();
+    await face.dispatchEvent("contextmenu", { clientX: 0, clientY: 0, button: 0 });
+    const menu = page.getByRole("menu", { name: /actions/i });
+    await expect(menu.getByRole("menuitem", { name: "Rename" })).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Escape");
+    await expect(menu).toHaveCount(0);
+    await expect.poll(() => holds(face)).toBe(true);
+  });
+
+  test(`a ${kind}'s Hand card gives the keyboard back to the ${kind} on Escape, Cancel and Open thread, not after a press outside`, async ({ page }) => {
+    const face = await faceFor(page, kind);
+    const card = page.getByTestId("handover");
+    // Escape
+    await handFromKeys(page, face);
+    await page.keyboard.press("Escape");
+    await expect(card).toHaveCount(0);
+    await expect.poll(() => holds(face)).toBe(true);
+    // Cancel, reached with the keyboard
+    await handFromKeys(page, face);
+    await page.getByTestId("handover-cancel").focus();
+    await page.keyboard.press("Enter");
+    await expect(card).toHaveCount(0);
+    await expect.poll(() => holds(face)).toBe(true);
+    expect(await calls("thread.create")).toHaveLength(0);
+    // a press outside: on the terminal, which takes the keyboard; the card does not take it back for the face
+    await handFromKeys(page, face);
+    await page.getByTestId("terminal").first().click();
+    await expect(card).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => document.activeElement?.classList.contains("xterm-helper-textarea") ?? false)).toBe(true);
+    await page.waitForTimeout(200);
+    expect(await holds(face)).toBe(false);
+    expect(await page.evaluate(() => document.activeElement?.classList.contains("xterm-helper-textarea") ?? false)).toBe(true);
+    // Open thread (Enter in the goal field): the thread starts and the keyboard is back on the face
+    await handFromKeys(page, face);
+    await expect(card.getByTestId("handover-preview")).toContainText("- Folder: `/w/gateway-keepalive`");
+    await page.keyboard.press("Enter");
+    await expect(card).toHaveCount(0);
+    await expect.poll(async () => (await calls("chat.send")).length).toBe(1);
+    await expect.poll(() => holds(face)).toBe(true);
+  });
+}

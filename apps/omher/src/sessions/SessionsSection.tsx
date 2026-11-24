@@ -1196,8 +1196,8 @@ const ROW_ACTION_ID: Record<RowAction, string> = {
 };
 
 /** Right-click menu of a session row (rowMenuItems). Placed at the pointer, inside the window. Arrow keys move,
- *  Home / End jump, Enter picks, Esc closes. */
-export function SessionMenu({ at, name, actions, onPick, onDismiss }: { at: { x: number; y: number }; name: string; actions: RowAction[]; onPick: (a: RowAction) => void; onDismiss: () => void }) {
+ *  Home / End jump, Enter picks, Esc closes and gives the keyboard back to `back` (the row or cell that opened it). */
+export function SessionMenu({ at, name, actions, onPick, onDismiss, back }: { at: { x: number; y: number }; name: string; actions: RowAction[]; onPick: (a: RowAction) => void; onDismiss: () => void; back?: () => HTMLElement | null }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     ref.current?.querySelector<HTMLButtonElement>("button")?.focus();
@@ -1220,6 +1220,7 @@ export function SessionMenu({ at, name, actions, onPick, onDismiss }: { at: { x:
           e.preventDefault();
           e.stopPropagation();
           onDismiss();
+          back?.()?.focus();
           return;
         }
         const btns = [...(ref.current?.querySelectorAll<HTMLButtonElement>("button") ?? [])];
@@ -1320,8 +1321,17 @@ export const termItems = (rec: SessionRec) => termMenuItems(rec, handBots(getSto
 
 /** Hand to <bot> of TERMINALS session `rec`, from a row or a split card cell: the folder the session started in
  *  (never one its shell reported later through OSC 7, which stays in the page). */
-function TermHand({ at, rec, onClose }: { at: { x: number; y: number }; rec: SessionRec; onClose: () => void }) {
-  return <HandoverCard at={at} from={{ kind: "terminal", folder: rec.cwd }} onClose={onClose} />;
+function TermHand({ at, rec, back, onClose }: { at: { x: number; y: number }; rec: SessionRec; back: () => HTMLElement | null; onClose: () => void }) {
+  return <HandoverCard at={at} from={{ kind: "terminal", folder: rec.cwd }} back={() => termBack(back(), rec.id)} onClose={onClose} />;
+}
+
+/** Where the keyboard goes back to when a TERMINALS session's menu or Hand card closes: `invoker` (the row's or cell's
+ *  face that opened it) while it is on the page; else the session's face as the list draws it now (its split made or
+ *  ended since); else, the session gone, the list's New terminal button. Never the page's body. */
+export function termBack(invoker: HTMLElement | null, id: string, doc: Pick<Document, "querySelector"> = document): HTMLElement | null {
+  if (invoker?.isConnected) return invoker;
+  const sel = CSS.escape(id);
+  return doc.querySelector<HTMLElement>(`[data-testid="session-${sel}"] .ss-open, [data-testid="split-cell"][data-session="${sel}"] .sc-open`) ?? doc.querySelector<HTMLElement>('[data-testid="session-new"]');
 }
 
 /** The row menu as a split card's cells use it: the same items, actions, placement, menu, name field and Hand card as
@@ -1408,6 +1418,8 @@ const TermRow = memo(function TermRow({ rec, agents, unseen, active, ticking, on
   // Hand to <bot> opens its card at the menu's place (a split card's cells do the same); every other item is the
   // shared row action
   const pick = (a: RowAction) => (a === "hand" ? setHand(menu) : termRowAct(rec, a, () => setEditing(true), onClose));
+  // the row's face: the keyboard goes back to it when its menu or Hand card closes
+  const opener = () => wrap.current?.querySelector<HTMLElement>(".ss-open") ?? null;
   const endEdit = (name: string | null | undefined) => {
     setEditing(false);
     if (name !== undefined) getSessions().rename(rec.id, name);
@@ -1510,8 +1522,8 @@ const TermRow = memo(function TermRow({ rec, agents, unseen, active, ticking, on
           <CloseIcon />
         </button>
       )}
-      {menu && <SessionMenu at={menu} name={title.title} actions={actions} onPick={pick} onDismiss={() => setMenu(null)} />}
-      {hand && <TermHand at={hand} rec={rec} onClose={() => setHand(null)} />}
+      {menu && <SessionMenu at={menu} name={title.title} actions={actions} onPick={pick} onDismiss={() => setMenu(null)} back={opener} />}
+      {hand && <TermHand at={hand} rec={rec} back={opener} onClose={() => setHand(null)} />}
     </div>
   );
 });

@@ -54,11 +54,13 @@ describe("a split card cell's menu", () => {
 
   it("opens the row's card for the folder its own session started in, one per cell", () => {
     const onClose = () => {};
-    const hand = ROW_MENU.Hand as (p: { at: { x: number; y: number }; rec: SessionRec; onClose: () => void }) => ReactElement;
-    const left = hand({ at: { x: 4, y: 5 }, rec: rec({ id: "s1", cwd: "/w/demo" }), onClose });
-    const right = hand({ at: { x: 4, y: 5 }, rec: rec({ id: "s2", cwd: "/w/other" }), onClose });
+    const back = () => null;
+    const hand = ROW_MENU.Hand as (p: { at: { x: number; y: number }; rec: SessionRec; back: () => HTMLElement | null; onClose: () => void }) => ReactElement;
+    const left = hand({ at: { x: 4, y: 5 }, rec: rec({ id: "s1", cwd: "/w/demo" }), back, onClose });
+    const right = hand({ at: { x: 4, y: 5 }, rec: rec({ id: "s2", cwd: "/w/other" }), back, onClose });
     expect(left.type).toBe(HandoverCard);
-    expect(left.props).toEqual({ at: { x: 4, y: 5 }, from: { kind: "terminal", folder: "/w/demo" }, onClose });
+    // the card gives the keyboard back to the cell's face, else termBack's fallbacks (termBack.test.ts)
+    expect(left.props).toEqual({ at: { x: 4, y: 5 }, from: { kind: "terminal", folder: "/w/demo" }, back: expect.any(Function), onClose });
     expect((right.props as { from: unknown }).from).toEqual({ kind: "terminal", folder: "/w/other" });
   });
 });
