@@ -136,11 +136,16 @@ _ITEM_ACTION_WORDS = frozenset(
         "merge", "merging", "close", "closing", "comment", "commenting", "label", "labels", "publish", "publishing",
         "post", "posting", "create", "creating", "fix", "fixing", "research", "review", "reviewing", "open", "run",
         "now", "fired", "then", "first",
+        # app-work-intake's own action verbs: "..., investigate why it is noisy"
+        "investigate", "investigating", "debug", "debugging", "handoff", "triage", "triaging",
     }
 )
 _KOREAN_ITEM_ACTION_STEMS = tuple(
     normalized_phrase(p)
-    for p in ("고쳐", "수정", "발행", "코멘트", "리뷰", "머지", "닫아", "만들어", "조사", "올려", "게시", "지금")
+    for p in (
+        "고쳐", "수정", "발행", "코멘트", "리뷰", "머지", "닫아", "만들어", "조사", "올려", "게시", "지금", "디버그", "원인",
+        "넘겨", "분류", "트리아지",
+    )
 )
 # GitHub's own CI and config: "apply the pr-review bot template to the github action workflow" edits a workflow file.
 _FORGE_CONFIG_WORDS = frozenset({"action", "actions", "workflow", "workflows", "ci", ".github"})

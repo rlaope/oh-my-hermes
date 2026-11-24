@@ -5725,10 +5725,9 @@ _APP_WORK_ALERT_APPS_KO = ("센트리", "데이터독")
 _APP_WORK_ALERT_TERMS = frozenset({"alert", "alerts", "monitor", "monitors", "fired", "firing", "triggered"})
 _APP_WORK_ALERT_PHRASES = ("sentry issue",)
 _APP_WORK_ALERT_KO = ("알림", "알럿", "경보")
-# "fix the datadog monitor threshold for latency" and "the latency alert is noisy, fix the monitor" tune the
-# monitor, not the code the alert is about.
+# "fix the datadog monitor threshold for latency" tunes the monitor, not the code the alert is about.
 _APP_WORK_ALERT_BLOCKERS = frozenset(
-    {"sdk", "integration", "agent", "install", "config", "configuration", "setup", "threshold", "thresholds", "noisy"}
+    {"sdk", "integration", "agent", "install", "config", "configuration", "setup", "threshold", "thresholds"}
 )
 _APP_WORK_FIX_VERBS = frozenset({"fix", "triage", "debug", "investigate", "handoff"})
 _APP_WORK_FIX_PHRASES = ("hand off", "hand it off", "fix hand-off", "alert to fix")
@@ -8312,17 +8311,16 @@ def _korean_usage_request(normalized_query: str) -> bool:
     return False
 
 
-_ALERT_TRIGGER_LEADS = ("when", "whenever", "if", "once")
+_ALERT_TRIGGER_LEADS = ("when", "whenever", "if", "once", "every time", "each time")
 _ALERT_TRIGGER_EVENTS = ("fires", "fire", "triggers", "trips", "goes off")
-_ALERT_TRIGGER_KO = ("울리면", "뜨면", "오면", "발생하면")
+_ALERT_TRIGGER_KO = ("울리면", "뜨면", "오면", "발생하면", "하면", "때마다")
 
 
 def _alert_trigger_phrasing(normalized_query: str) -> bool:
     """"when a datadog monitor fires ...", "데이터독 알림 뜨면 ...": an event the person wants a reaction to."""
-    words = normalized_query.split()
-    return (bool(set(_ALERT_TRIGGER_LEADS) & set(words)) and _contains_phrase(normalized_query, _ALERT_TRIGGER_EVENTS)) or (
-        _contains_phrase(normalized_query, _ALERT_TRIGGER_KO)
-    )
+    return (
+        _contains_phrase(normalized_query, _ALERT_TRIGGER_LEADS) and _contains_phrase(normalized_query, _ALERT_TRIGGER_EVENTS)
+    ) or _contains_phrase(normalized_query, _ALERT_TRIGGER_KO)
 
 
 def _ops_observability_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:

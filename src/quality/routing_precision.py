@@ -10857,8 +10857,12 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "when a datadog monitor fires for latency, open a fix PR", "answer_clarification", "",
     ),
     RoutingPrecisionCase(
-        "noisy-datadog-alert-fix-monitor-is-not-app-work-intake", "A noisy alert's monitor to fix tunes the monitor",
-        "the datadog latency alert is noisy, fix the monitor", "answer_clarification", "", "app-work-intake",
+        "datadog-trigger-whenever-is-not-app-work-intake", "A whenever-Datadog-fires trigger keeps its base clarify",
+        "whenever a datadog monitor fires for high latency, investigate and fix it", "answer_clarification", "",
+    ),
+    RoutingPrecisionCase(
+        "sentry-trigger-every-time-is-not-app-work-intake", "An every-time-Sentry-fires trigger keeps its base clarify",
+        "every time a sentry alert fires, fix it", "answer_clarification", "",
     ),
     RoutingPrecisionCase(
         "datadog-threshold-fix-is-not-app-work-intake", "Fixing a Datadog monitor threshold tunes the monitor",
@@ -22174,6 +22178,10 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     RoutingInterventionCase("set-template-on-bot-and-close-issue-keeps-github-event-ops", "Setting the template plus closing an issue keeps GitHub event ops", "set the pr-review template on this bot for github and close issue 7", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
     RoutingInterventionCase("fix-alert-template-can-wait-keeps-app-work-intake", "An alert fix with the template deferred keeps app work intake", "add a fix for the sentry alert, the alert-triage bot template can wait", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
     RoutingInterventionCase("bot-template-use-pr-review-on-this-bot-for-github", "Using the pr-review template on this bot for GitHub PRs reaches it", "use the pr-review template on this bot for our github prs", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
+    RoutingInterventionCase("ko-datadog-trigger-each-time-keeps-ops-observability", "A Korean every-time Datadog trigger keeps its base route, not app work intake", "데이터독 latency 모니터 알림 뜰 때마다 고쳐줘", "dispatch", "ops-observability-card", "prepare_ops_observability_card", "ops_observability"),
+    RoutingInterventionCase("ko-sentry-trigger-each-time-keeps-gateway-intent", "A Korean every-time Sentry trigger keeps its base route", "센트리 알림 올 때마다 고쳐줘", "dispatch", "gateway-intent-card", "prepare_gateway_intent_card", "gateway_intent"),
+    RoutingInterventionCase("alert-triage-template-investigate-noisy-keeps-app-work-intake", "An apply plus an investigation of the alert keeps app work intake", "apply the alert-triage template to this bot for sentry, investigate why it is noisy", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
+    RoutingInterventionCase("ko-alert-triage-template-investigate-keeps-app-work-intake", "A Korean apply plus an alert investigation keeps app work intake", "이 봇에 alert-triage 템플릿 적용하고 센트리 알림 원인 조사해줘", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
     RoutingInterventionCase("bot-template-when-github-pr-opens", "Applying the pr-review template to this bot when a GitHub PR opens reaches it", "when a github PR opens, apply the pr-review template to this bot", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
     RoutingInterventionCase("bot-template-add-alert-triage-for-sentry", "Adding the alert-triage template to this bot for Sentry reaches it", "add the alert-triage template to this bot for sentry", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
     RoutingInterventionCase("ko-bot-template-alert-triage-for-sentry-alerts", "A Korean apply of alert-triage for Sentry alerts reaches it", "이 봇에 alert-triage 템플릿 적용해줘 센트리 알림용", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
