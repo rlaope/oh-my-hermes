@@ -4381,4 +4381,4 @@ How to read it:
   corpus.
 
 Records, manifests, and lane scripts are in
-`~/Desktop/khope/bench-archive/prompt-audit-2026-10-04/runs` (outside git).
+the owner's local `bench-archive/prompt-audit-2026-10-04/runs` (outside git).

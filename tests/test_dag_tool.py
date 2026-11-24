@@ -244,7 +244,8 @@ class DefineTests(unittest.TestCase):
                 for node_id, task in zip(call_row["nodes"], call_row["tasks"]):
                     with self.subTest(node=node_id):
                         self.assertIn(f"Run goal (saved):\n{goal}\n", task["context"])
-                        self.assertTrue(task["context"].startswith(PROMPT + "\n"))
+                        self.assertTrue(task["context"].startswith(f"Run goal (saved):\n{goal}\n"))
+                        self.assertIn(f"\n\n{PROMPT}\n", task["context"])
                         self.assertEqual(task["goal"], f"Node {node_id} [dag:feat/{node_id}]")
                         self.assertIn("The run goal is acceptance context, not permission to widen your SCOPE.",
                                       task["context"])

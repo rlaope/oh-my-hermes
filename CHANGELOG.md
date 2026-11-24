@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: a slash command reaches the bot as typed.** omher appended its own notes (the open-threads note, the
+  terminal-link blocks, the peer note) to every main-chat message, slash commands included. Hermes reads all of a
+  slash command's text as its arguments, so `/usage` answered `Unknown /usage subcommand: [omher] Open threads:
+  none. ...`. A message that starts with `/` now goes with no note, and a slash command with a reply target is
+  refused instead of sent with the target block. (`apps/omher/bridge/omher_bridge.py`)
+- **omher: Settings › Accounts › GitHub keeps Add and Remove on one line.** A GitHub account row reused the
+  accounts grid, whose last column is the 26px ⋯ menu. 추가 just fit there in macOS's font; on Windows, whose Korean
+  font is wider, it broke into 추 / 가 and was clipped. That row's button column now takes the label's width in any
+  language and font. (`apps/omher/src/settings/accounts/accounts.css`)
 - **omher: Ctrl+V pastes and Ctrl+C copies in a Windows terminal, as in Windows Terminal.** On Windows, Ctrl+V in a
   terminal used to reach the program as ^V; only Ctrl+Shift+V and Shift+Insert pasted. Now Ctrl+V pastes through the
   same path as those keys (the multi-line confirm, and a pasted picture's saved path), and the paste happens once.
@@ -112,6 +121,20 @@ All notable changes will be documented here.
   worktree in it (`docs/OMHER-BOUNDARY.md` rule 10); a terminal folder outside the bot's worktrees goes with its path
   and a line asking the bot to check `git status` itself. Nothing moves on disk, the session stays open and omher
   types nothing into it: the bot works with its own tools and approvals. (`apps/omher/src/handover/`)
+- **omher: a terminal in a split hands its folder to a bot too.** A TERMINALS session in a split shows as a cell of
+  the split card, and its right-click menu had every item of a row's menu but Hand to <bot>. A cell's menu now offers
+  it under the same conditions (a folder, and a bot of this computer online) and opens the same card, which sends the
+  same first message through the same thread start as from a row. Nothing new is read or sent.
+  (`apps/omher/src/sessions/SplitLayoutCard.tsx`; `docs/OMHER-BOUNDARY.md` rule 10)
+- **omher: closing a TERMINALS menu or the Hand to <bot> card puts the keyboard back on the row or cell.** After
+  Escape in a TERMINALS row's or split card cell's menu, or Escape, Cancel or Open thread on its Hand to <bot> card,
+  the keyboard landed on the page itself: the menu item that opened the card was gone before the card noted where the
+  keyboard was. It now goes back to the row or cell that opened the menu. If that row or cell is gone (its split made
+  or ended meanwhile), it goes to the session's row or cell as drawn now; with the session closed, to the TERMINALS
+  New terminal button. A press outside the
+  card leaves the keyboard where that press put it. UI only: nothing new is read or sent.
+  (`apps/omher/src/handover/HandoverCard.tsx`, `apps/omher/src/sessions/SessionsSection.tsx`,
+  `apps/omher/src/sessions/SplitLayoutCard.tsx`)
 - **omher's reasoning picker offers every level Hermes accepts, ultra included.** The chat model picker's Reasoning
   control showed none, low, medium, high and xhigh only, so minimal, max and ultra could not be picked. The bridge now
   reads the installed Hermes' own levels (`hermes_constants.VALID_REASONING_EFFORTS`, after "none") and offers them in
@@ -141,6 +164,16 @@ All notable changes will be documented here.
   `user_executor_platform_unsupported`.
   (`src/coding/user_executors.py`, `src/coding/executor_presets.py`, `src/coding/fanout_remote_pr.py`,
   `src/commands/coding.py`; `docs/FANOUT.md` "Your own harness", `docs/FANOUT-EXECUTOR-EVIDENCE.md`)
+- **Two `omh coding executors add` or `remove` at once on Windows no longer refuse each other as `path_escape`.**
+  The home check resolved `routing/executors.toml` itself while the other writer was replacing it. On Windows,
+  `realpath` of a file mid-replace can come back with its `\\?\` extended-length prefix, which never sits under the
+  resolved home, so a legitimate add, or a `list` or dispatch reading at that moment, was refused as `path_escape`.
+  The check now resolves only the `routing` directory, which no writer replaces; the file is refused if it is a
+  symlink, without following it, and writers make that check under the registry lock. A `routing` directory linked
+  outside the home is still `path_escape`; a symlinked registry file is `symlink_refused` (a link pointing outside
+  the home used to report `path_escape`); nothing is written through either. A read that races a write can still
+  report `not_regular_file` for that one read, on every platform; that predates this change and is a follow-up.
+  (`src/coding/user_executors.py`)
 - **`omh setup` connects to a Hermes config whose root keys hold column-0 lists, or whose section keys carry a
   comment.** Step 2 stopped with "non-mapping or unsupported root YAML is user-owned" on a `config.yaml` that writes a
   root key's list items at the left edge (`toolsets:` then `- hermes-cli`), the spelling older Hermes releases, hand
@@ -196,6 +229,35 @@ All notable changes will be documented here.
   missing, never as healthy. The fix is always Hermes' own command; OMH stops and restarts nothing.
   (`src/maintenance/gateway_health.py`, `src/maintenance/hermes_gateway_formats.py`,
   `src/system/process_listing.py`; `docs/INSTALLATION.md` "Bot Profiles")
+- **`omh doctor` no longer calls a client's idle-exit gateway a stray.** Every `hermes chat` reaches Hermes through
+  a gateway, and in a home with none (a scratch home, such as the child an OMH dispatch or a bench run starts) Hermes
+  starts a detached `gateway run --idle-exit`. When its idle exit is armed, Hermes ends it after
+  `gateway.unmanaged_idle_exit_seconds` (600 s by default) with nothing to do. It is not armed when that home sets 0
+  or Hermes detects a supervisor, and it stays up while an idle check fails or work holds it. Doctor read each one as
+  a stray to find and stop.
+  Because Hermes names such a home `--profile default`, doctor also read it as a second gateway of the default
+  profile. Doctor now says what started it and when Hermes does and does not end it, and still counts it in the
+  fleet line. It raises no finding or action for one until it has run for more than an hour; after that it is
+  reported as a stray that has not exited. The
+  `--json` report gains `idle_exit` and `overdue` per gateway. (`src/maintenance/gateway_health.py` `_unrecorded_line`,
+  `IDLE_EXIT_STALE_SECONDS`, `src/system/process_listing.py` `IDLE_EXIT_FLAG`)
+- **omher 1.2.0.** Hand a terminal to a bot, a page per bot with its apps, Google's Antigravity CLI in TERMINALS, and
+  a Windows pass.
+  - **Agents:** Google's Antigravity CLI (`agy`) starts from the TERMINALS `+` menu with its official mark, shows its
+    mark on a running row, in Settings › Agents and on a Hermes child that runs `agy acp` (#3176).
+  - **Hand to a bot:** right-click a TERMINALS row, a split cell or a worktree to hand its folder to a bot, with the
+    keyboard back on the row after the card closes (#3143, #3163, #3171).
+  - **Bots:** a bot's page shows its persona, memory and work (#3148), an Apps page connects it to Hermes' MCP catalog
+    (#3152), a bot whose Discord or Slack stopped connecting says so (#3157), a chat that stopped after a crash says
+    why and recovers (#3127, #3129), and the reasoning picker offers every level Hermes accepts (#3134).
+  - **Terminals:** drag a header to merge two terminals of one folder (#3145), each split shows as one layout card
+    (#3138, #3167), make a folder from the right-click menu with sharp pictures in terminals (#3073), and a panel tab
+    click right after maximise picks that tab (#3146).
+  - **Threads and links:** a thread lists the pull requests its bot linked with their checks (#3149), and links to
+    Jira, Confluence, Sentry, Asana, Todoist, ClickUp, GitLab and Obsidian become chips (#3151).
+  - **Windows:** Ctrl+V pastes and Ctrl+C copies as in Windows Terminal (#3132), "Reply there" and fonts fixed
+    (#3142), an oh-my-hermes terminal reads oh-my-hermes (#3135), and SSH to a Windows Hermes with only `hermes.cmd`
+    works (#3118). Settings › Accounts › GitHub keeps Add and Remove on one line (#3174).
 - **omher 1.1.3.** GitHub across your repositories and accounts, a Claude usage meter that shows numbers, and terminals
   and bridges that recover by themselves.
   - **GitHub:** Tasks gains a "나" scope: your review requests, your pull requests, issues assigned to you and mentions,
@@ -518,6 +580,13 @@ All notable changes will be documented here.
   news everywhere (an accent dot on the row and the folder summary, a slowly breathing accent edge on the cell, "rang"
   in the notification), and the amber warning is kept for waits omher knows: a bot's request to type, a chat's approval
   or question. (`apps/omher/src/sessions/SplitLayoutCard.tsx`) (#3138)
+- **A bot reading an omher terminal's status sees `news` for a ring nobody has seen, as the person does.** The
+  status file (`omh_omher_terminal` `status`) said `waiting` for a session that rang its bell or reported its work
+  done while the person was not looking, though omher itself showed news. It now says `news` (a state the file and the
+  link chip share), and a reported working again turns it back to `working`. The split card's grip test no longer
+  loses its keys to a pane that takes focus a moment late on a slow runner, and the argv-cache test waits for macOS's
+  `/bin/sh` to exec its shell before counting. (`apps/omher/src-tauri/src/term_share.rs`,
+  `apps/omher/src/chat/parts/TermLinkChip.tsx`) (#3167)
 - **omher: an Apps page connects a bot to Notion, Linear, Jira and the rest of Hermes' MCP catalog.** The plug in
   the sidebar's foot opens one bot's apps: every entry of Hermes' MCP catalog and its integration skills (Google
   Workspace, Obsidian, Apple Notes and Reminders, Microsoft Office and others), grouped as work apps, ops and data,
@@ -589,6 +658,46 @@ All notable changes will be documented here.
   questions and stop keys stay on main's screen; on the shared gateway the view reads one page at a time until an
   empty page, at most 50 reads after the agent ends, then says it could not read the rest. (`src/tui/subagent_session.py`,
   `src/tui/agent_view.py`, `src/tui/app.py`, `src/tui/frame.py`)
+- **omher: Google's Antigravity CLI (`agy`) is an agent you can start in TERMINALS.** The TERMINALS `+` menu offers
+  Antigravity with its official mark, and starts `agy` with no arguments in a terminal in the folder you pick; when it
+  is not installed, More agents shows its official installer line (`curl -fsSL https://antigravity.google/cli/install.sh | bash`).
+  omher finds `agy` where that installer puts it (`~/.local/bin`, and `%LOCALAPPDATA%\agy\bin` on Windows, now
+  searched too) even when omher was started from the Dock with a short PATH. A terminal row running `agy`, also one
+  you typed into a Shell, shows the Antigravity mark and name; Settings › Agents lists it as an ACP agent; and a
+  Hermes child that works through `agy acp` shows the Antigravity mark. Its ACP row is `agy acp`; signed out, it ends
+  with one line naming `agy acp --login`, checked against a real Antigravity CLI 1.5.16 handshake. Signed-in turns and
+  its approval cards were not run. (`apps/omher/src-tauri/src/acp_agents.rs`; `docs/OMHER-BOUNDARY.md` rule 11)
+
+- **Sibling dag-ulw child tasks start with the same bytes, so a provider prompt cache can serve the shared part.**
+  Each child task used to open with its own node prompt, so two siblings of one run shared almost no prefix (6
+  characters in a 3-node sample). Now the run-wide block comes first: the saved run goal with its acceptance-context
+  line, then the stay-inside-your-SCOPE rule, the same bytes for every node whatever its role, so a writer and a
+  verify node in one call share it too, with or without a saved goal. The node's own block follows: prompt, review
+  focus, resume, escalation and re-plan text, handoff, read-first, the verify lines, and the commit-only-your-SCOPE and
+  shared-machine rules that only writing nodes get. The same sample now shares 300 characters. No line was reworded or
+  dropped, and the `[dag:run/node]` goal is unchanged. A
+  `ready` call that carries several tasks now has a `note`: OMH does not stagger their start. (`src/plugin_bundle/omh/dag_run.py`)
+
+- **`omh doctor` now says when the prompt-cache TTL does not match what the route keeps, and why warming stopped.**
+  A new `prompt_cache_route` row and **Prompt cache (read-only)** section read only `config.yaml` and the tail of
+  `logs/agent.log`. On a route that keeps 1h entries (a loopback, localhost or private `base_url` serving Claude, as
+  CLIProxyAPI does; the provider name counts only when no `base_url` is set, so `api.anthropic.com` is never a proxy)
+  they warn when `prompt_caching.cache_ttl` is pinned to `5m` (a `1h` route ceiling does not lift a `5m` pin) or when
+  the route has no `1h` ceiling, and when caching is off, and print only the fix that applies:
+  `hermes config set prompt_caching.cache_ttl auto` and/or
+  `hermes config set prompt_caching.route_ttl_ceilings.<provider> 1h`. They also count the warmer's stop reasons
+  over the last 24h with a plain explanation of each. `omh model` repeats the TTL warning. No model request is sent.
+  (`src/maintenance/prompt_cache_route.py`, `src/maintenance/doctor.py`)
+
+- **Cron, webhook and other machine-paced sessions no longer pay for the identity catalog in their system prompt.**
+  `omh.awareness` already left the identity catalog out of `delegate_task` children. It now leaves it out of every
+  platform Hermes counts as machine-paced, the `MACHINE_PACED_SOURCES` list in its `agent/prompt_caching.py`, copied
+  as data (`subagent`, `cron`, `oneshot`, `webhook`, `kanban`, `api`, `api_server`, `tool`, `batch`, `curator`, `a2a`,
+  `msgraph_webhook`, `gateway_hygiene`). Those sessions keep the full primer, boundary lines included. A cron session
+  with custom identities drops from 3,689 to 1,667 section chars on the test fixture. A new test renders every OMH
+  system-prompt section in two Python processes with different `PYTHONHASHSEED` and `TZ` and checks the bytes match,
+  so a set order, clock or mtime that reaches the frozen prefix fails CI. No difference was found. OMH adds no skill
+  index or candidate text to the system prompt. (`src/plugin_bundle/omh/hooks/llm_hooks.py`)
 
 ## 5.0.0 - 2026-11-21
 
@@ -13456,7 +13565,7 @@ Highlights of this major release (details in the entries below):
   skill name that resolves to two different files across
   `skills.external_dirs`, and every generation refresh made the two copies
   differ, so after each update every OMH skill present in both failed to
-  load by name in that bot (#1857; on the owner machine `profiles/miku`
+  load by name in that bot (#1857; on the owner machine `profiles/mbot`
   recorded `Ambiguous skill name 'omh-model-setup'`). `_apply_result` run
   from the installer-managed command now retires every other OMH-managed
   entry in the same config write that registers the pointer, so the home

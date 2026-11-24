@@ -1214,7 +1214,7 @@ def _managed_workflow_dir_candidates(paths: OmhPaths) -> list[Path]:
     neither has actually opted out.
 
     Reading "registered" as "names today's path" is what froze the owner's
-    `profiles/miku`: the profile pointed at `~/.omh/skills` while the primary
+    `profiles/mbot`: the profile pointed at `~/.omh/skills` while the primary
     home had moved to the generation pointer, so every `omh update` scored it
     as the deliberate opt-out (plugin directory present, registration
     "absent"), skipped the whole profile, and left its plugin bundle and TUI
@@ -2484,7 +2484,7 @@ def _doctor_operator_summary(checks: list[object]) -> dict[str, object]:
             _doctor_group("runtime", check_dicts, ("runtime_artifacts", "workflow_state", "runtime_state")),
             _doctor_group("hermes_registration", check_dicts, ("hermes_config", "external_dir", "identity_conflicts", "runtime_context", "hermes_skill_visibility")),
             _doctor_group("targets", check_dicts, ("target_registry", "target_topology")),
-            _doctor_group("model_routing", check_dicts, ("hermes_model_routing", "provider_entitlements")),
+            _doctor_group("model_routing", check_dicts, ("hermes_model_routing", "provider_entitlements", "prompt_cache_route")),
             _doctor_group("optional_surfaces", check_dicts, ("plugin_", "team_profile_packs", "structural_search", "trigger_language_packs")),
         ],
     }
@@ -5803,10 +5803,11 @@ def _print_doctor_summary(payload: dict[str, object], *, language: str = "en") -
         print(f"  {tr(language, 'state_log', path=state_log.get('path'), entry=state_log.get('entry'))}")
     _print_doctor_privacy_controls(payload)
     _print_doctor_gateway_health(checks, language=language, use_color=use_color)
+    _print_doctor_prompt_cache(checks, language=language, use_color=use_color)
     for check in checks:
         if not isinstance(check, dict) or (check.get("ok") and check.get("severity") != "warning"):
             continue
-        if check.get("name") == "gateway_health":
+        if check.get("name") in {"gateway_health", "prompt_cache_route"}:
             continue  # printed whole, as its own section, above
         name = check.get("name", "unknown")
         message = check.get("message", "")
@@ -5834,6 +5835,17 @@ def _print_doctor_gateway_health(checks: list[object], *, language: str, use_col
         print(f"  {line}")
     for action in detail.get("next_actions", []) if detail.get("findings") else []:
         print(f"    {tr(language, 'doctor_fix')}: {action}")
+
+
+def _print_doctor_prompt_cache(checks: list[object], *, language: str, use_color: bool) -> None:
+    """The `prompt_cache_route` row's report, every line: route TTL, fixes, warmer stop reasons."""
+    check = next((item for item in checks if isinstance(item, dict) and item.get("name") == "prompt_cache_route"), None)
+    detail = check.get("detail") if check else None
+    if not isinstance(detail, dict):
+        return
+    print(_color(tr(language, "doctor_prompt_cache"), "1;32", use_color))
+    for line in detail.get("lines", []):
+        print(f"  {line}")
 
 
 def _print_doctor_privacy_controls(payload: dict[str, object]) -> None:

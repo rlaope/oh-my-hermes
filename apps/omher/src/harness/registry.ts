@@ -5,7 +5,8 @@
 // `harnessOf(facts)` decides WHO is working, in this order:
 //   1. an explicit kind or executor / fanout owner (`claude-code` → claude, `codex`, `omp`…); a named kind or
 //      executor no row knows → `generic` (kind `hermes` falls through to 3);
-//   2. the ACP command's basename (`claude-agent-acp` → claude, `codex-acp` → codex, `gemini --acp` → gemini…);
+//   2. the ACP command's basename (`claude-agent-acp` → claude, `codex-acp` → codex, `gemini --acp` → gemini,
+//      `agy acp` → antigravity…);
 //   3. otherwise a plain Hermes child: the harness is `hermes`, and the model's maker (Claude, OpenAI, xAI, Z.ai…)
 //      is a second, smaller fact (`modelMark`). A Hermes child that merely runs a Claude model is never shown as
 //      Claude Code.
@@ -22,6 +23,7 @@ export type HarnessId =
   | "qwen"
   | "copilot"
   | "cline"
+  | "antigravity"
   | "goose"
   | "cursor"
   | "amp"
@@ -59,6 +61,8 @@ export const HARNESSES: readonly Harness[] = [
   { id: "qwen", label: "Qwen Code", mark: "qwen-color.svg", aliases: ["qwen-code"] },
   { id: "copilot", label: "GitHub Copilot", mark: "githubcopilot.svg", aliases: ["github-copilot", "githubcopilot", "copilot-cli"] },
   { id: "cline", label: "Cline", mark: "cline.svg" },
+  // Google Antigravity CLI: its program is `agy` (`agy acp` over ACP)
+  { id: "antigravity", label: "Antigravity", mark: "antigravity-color.svg", aliases: ["agy", "antigravity-cli", "agy-cli"] },
   { id: "goose", label: "Goose", mark: "goose.svg" },
   { id: "cursor", label: "Cursor", mark: "cursor.svg", aliases: ["cursor-agent"] },
   { id: "amp", label: "Amp", mark: "amp-color.svg" },

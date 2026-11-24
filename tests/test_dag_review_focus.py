@@ -99,9 +99,11 @@ class ReviewFocusTaskTests(unittest.TestCase):
                 node("ui", scope=("src/ui.py",))], time.time())
             api = context_of(record, "api", home)
             ui = context_of(record, "ui", home)
-        self.assertTrue(api.startswith(
-            f"{PROMPT}\n\n{FOCUS_PREFIX}가나다 no new prompt bytes in the frozen head\n\n"), api[:400])
-        self.assertTrue(ui.startswith(f"{PROMPT}\n\nHandoff:"), ui[:400])
+        # The node block starts after the run-wide head both siblings share.
+        head = api[:api.index(PROMPT)]
+        self.assertTrue(ui.startswith(head), ui[:400])
+        self.assertIn(f"\n\n{PROMPT}\n\n{FOCUS_PREFIX}가나다 no new prompt bytes in the frozen head\n\n", api)
+        self.assertIn(f"\n\n{PROMPT}\n\nHandoff:", ui)
         self.assertNotIn("Review focus", ui)
 
     def test_a_verify_task_lists_each_producers_focus_and_its_own_once(self) -> None:
@@ -121,7 +123,7 @@ class ReviewFocusTaskTests(unittest.TestCase):
         self.assertFalse(lines[start + 3].startswith("- "), lines[start + 3])
         self.assertNotIn("- ui:", context)
         self.assertEqual(context.count("the full goal, not one node"), 1)
-        self.assertTrue(context.startswith(f"{PROMPT}\n\n{FOCUS_PREFIX}the full goal, not one node\n\n"))
+        self.assertIn(f"\n\n{PROMPT}\n\n{FOCUS_PREFIX}the full goal, not one node\n\n", context)
 
     def test_a_verify_task_without_any_focus_has_no_heading(self) -> None:
         with homes() as home:
@@ -181,7 +183,9 @@ class SharedMachineLineTests(unittest.TestCase):
         api = contexts.pop("api")
         self.assertEqual(api.count(SHARED_MACHINE), 1)
         self.assertLess(api.index("Commit only your own SCOPE paths"), api.index(SHARED_MACHINE))
-        self.assertLess(api.index(SHARED_MACHINE), api.index("Stay inside your SCOPE"))
+        # The scope rule leads, in the run-wide head; the commit and shared-machine lines end the node block.
+        self.assertLess(api.index("Stay inside your SCOPE"), api.index("Commit only your own SCOPE paths"))
+        self.assertTrue(api.endswith("\n" + SHARED_MACHINE), api[-300:])
         for node_id, context in contexts.items():
             with self.subTest(node=node_id):
                 self.assertNotIn(SHARED_MACHINE, context)

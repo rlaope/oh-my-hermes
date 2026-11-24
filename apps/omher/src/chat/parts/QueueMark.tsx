@@ -6,7 +6,7 @@ export type QueueOffReasons = Partial<Record<QueueChoice, string>>;
 
 export type QueueChoice = "now" | "steer" | "edit" | "delete" | "send";
 
-/** The buttons before a held message (steer queue), with no menu between the person and the action (khope: a menu
+/** The buttons before a held message (steer queue), with no menu between the person and the action (a menu
  *  for this is one step too many).
  *  - ↵ sends it now: Steer, into the running answer without stopping it; where the agent has no steer of its own,
  *    Send now (stop the answer, send this one first). A steer whose answer never came: send it again as a new one.

@@ -41,6 +41,7 @@ describe("the Agents page model", () => {
       ["kimi", "acp", false],
       ["copilot", "acp", false],
       ["cline", "acp", false],
+      ["agy", "acp", false],
     ]);
     // the person's own: the command with every argument, found or not; the broken entries are listed, never as agents
     expect(m.mine).toEqual([

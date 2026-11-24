@@ -716,10 +716,19 @@ def validate_executor_entry(
 
 
 def _escapes_home(path: Path, home: Path) -> bool:
+    """Whether the directory holding `path` resolves outside `home`.
+
+    Only the parent is resolved, never the file: another OMH writer may be
+    replacing the file at this instant, and on Windows `realpath` of a leaf
+    mid-replace can come back in its `\\\\?\\` extended-length spelling, which
+    never sits under the resolved home. The file itself is refused by an
+    lstat-style link check that does not follow it, so a link leaf cannot
+    carry the registry out of the home either.
+    """
     home_real = Path(os.path.realpath(home))
-    path_real = Path(os.path.realpath(path))
+    parent_real = Path(os.path.realpath(path.parent))
     try:
-        path_real.relative_to(home_real)
+        parent_real.relative_to(home_real)
     except ValueError:
         return True
     return False
@@ -743,9 +752,9 @@ def _read_document(
     """Read and parse the file; None means "absent" or "refused" (see problems).
 
     No probe, no spawn and no write happens here. Refusals are the trust
-    boundary: an absolute home is required, the path may not resolve outside
-    it, and the file itself may not be a symlink (a link inside the home still
-    lets another tree's file become the registry).
+    boundary: an absolute home is required, the file's directory may not
+    resolve outside it, and the file itself may not be a symlink (a link
+    inside the home still lets another tree's file become the registry).
     """
     if _escapes_home(path, home):
         problems.append(("path", "path_escape"))
@@ -873,18 +882,22 @@ def _trusted_path(omh_home: Path) -> Path:
     path = user_executors_path(home)
     if _escapes_home(path, home):
         raise ExecutorConfigError("path_escape")
-    if path.is_symlink():
-        raise ExecutorConfigError("symlink_refused")
     return path
 
 
 def _read_for_write(path: Path, home: Path) -> dict[str, dict[str, Any]]:
     """The current entries, or a typed refusal -- never a lossy rewrite.
 
+    Called only under the registry lock, so no other OMH writer is replacing
+    the file while it is probed here; the link check lives here, not before
+    the lock, for that reason.
+
     A file this module would not load in full is refused as a whole: rewriting
     it from a partial parse is how unrelated entries, nested tables and a
     person's own values get dropped.
     """
+    if path.is_symlink():
+        raise ExecutorConfigError("symlink_refused")
     problems: list[_Problem] = []
     document = _read_document(path, home, problems)
     if problems:

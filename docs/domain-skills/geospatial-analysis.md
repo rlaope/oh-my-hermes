@@ -28,7 +28,7 @@ The standalone direct-Shapely/PyProj helper now has fixed conservative limits:
 ### Fresh verification of the repaired source
 
 Evidence is retained only under
-`/Users/rlaope/.hermes/cache/scratch/omh-domain-dag-evidence-20261022/repair-verify/gis-budget-fix/`.
+`$HOME/.hermes/cache/scratch/omh-domain-dag-evidence-20261022/repair-verify/gis-budget-fix/`.
 `commands.jsonl` records literal argv, cwd, TMPDIR, UTC times, exits and stream
 hashes; `probe_budget.py` instruments the actual helper, not a mock GIS backend.
 
@@ -50,10 +50,10 @@ deprecation warnings remain visible in in-process test logs; no runtime backend
 migration is claimed.
 
 Reproduction commands, from the checkout, always use
-`TMPDIR=/Users/rlaope/.hermes/cache/scratch` and `PYTHONPATH=tests`:
+`TMPDIR=$HOME/.hermes/cache/scratch` and `PYTHONPATH=tests`:
 
 ```sh
-EVIDENCE=/Users/rlaope/.hermes/cache/scratch/omh-domain-dag-evidence-20261022
+EVIDENCE=$HOME/.hermes/cache/scratch/omh-domain-dag-evidence-20261022
 OMH_GIS_RUN_REAL=1 "$EVIDENCE/gis/venv/bin/python" -m unittest test_geospatial_analysis_skill -v
 # Exit 0: 31 tests.
 OMH_GIS_RUN_REAL= .venv/bin/python -m unittest test_geospatial_analysis_skill test_broad_exception_policy test_handoff_safety_contract_enforcement -v
@@ -145,12 +145,12 @@ as a general real-world area projection.
 ## Observed isolated environment and provenance
 
 Evidence root:
-`/Users/rlaope/.hermes/cache/scratch/omh-domain-dag-evidence-20261022/gis/`.
+`$HOME/.hermes/cache/scratch/omh-domain-dag-evidence-20261022/gis/`.
 Setup commands (each exit 0; no science dependency added to core):
 
 ```sh
-export TMPDIR=/Users/rlaope/.hermes/cache/scratch
-EVIDENCE=/Users/rlaope/.hermes/cache/scratch/omh-domain-dag-evidence-20261022/gis
+export TMPDIR=$HOME/.hermes/cache/scratch
+EVIDENCE=$HOME/.hermes/cache/scratch/omh-domain-dag-evidence-20261022/gis
 uv venv --python 3.12 "$EVIDENCE/venv"
 uv pip install --python "$EVIDENCE/venv/bin/python" shapely pyproj
 ```
@@ -165,11 +165,11 @@ unit tests do not need science libraries.
 
 ## Reproducible command and observed exits
 
-From `/Users/rlaope/.hermes/cache/scratch/omh-domain-dag-20261022`:
+From `$HOME/.hermes/cache/scratch/omh-domain-dag-20261022`:
 
 ```sh
-export TMPDIR=/Users/rlaope/.hermes/cache/scratch
-EVIDENCE=/Users/rlaope/.hermes/cache/scratch/omh-domain-dag-evidence-20261022/gis
+export TMPDIR=$HOME/.hermes/cache/scratch
+EVIDENCE=$HOME/.hermes/cache/scratch/omh-domain-dag-evidence-20261022/gis
 KIT="$PWD/src/skills/geospatial_analysis_toolkit"
 "$EVIDENCE/venv/bin/python" -I "$KIT/scripts/analyze.py" \
   --input "$KIT/examples/input.json" --overlay "$KIT/examples/overlay.json" \
@@ -181,21 +181,21 @@ KIT="$PWD/src/skills/geospatial_analysis_toolkit"
 Verification commands/results:
 
 ```sh
-TMPDIR=/Users/rlaope/.hermes/cache/scratch PYTHONPATH=tests uv run python -m unittest tests.test_geospatial_analysis_skill -v
+TMPDIR=$HOME/.hermes/cache/scratch PYTHONPATH=tests uv run python -m unittest tests.test_geospatial_analysis_skill -v
 # Exit 0: 23 discovered/unique tests, 16 passed, 7 optional backend tests skipped.
-TMPDIR=/Users/rlaope/.hermes/cache/scratch PYTHONPATH=tests OMH_GIS_RUN_REAL=1 "$EVIDENCE/venv/bin/python" -m unittest tests.test_geospatial_analysis_skill -v
+TMPDIR=$HOME/.hermes/cache/scratch PYTHONPATH=tests OMH_GIS_RUN_REAL=1 "$EVIDENCE/venv/bin/python" -m unittest tests.test_geospatial_analysis_skill -v
 # Exit 0: all 23 passed, no skips. No mocked engine satisfies this gate.
-TMPDIR=/Users/rlaope/.hermes/cache/scratch PYTHONPATH=tests uv run python -m unittest tests.test_broad_exception_policy tests.test_handoff_safety_contract_enforcement -q
+TMPDIR=$HOME/.hermes/cache/scratch PYTHONPATH=tests uv run python -m unittest tests.test_broad_exception_policy tests.test_handoff_safety_contract_enforcement -q
 # Exit 0: 41 tests, OK; source safety allowlists unchanged.
-TMPDIR=/Users/rlaope/.hermes/cache/scratch .venv/bin/python -I -S "$KIT/scripts/analyze.py" --help
+TMPDIR=$HOME/.hermes/cache/scratch .venv/bin/python -I -S "$KIT/scripts/analyze.py" --help
 # Exit 0 without site packages.
-TMPDIR=/Users/rlaope/.hermes/cache/scratch .venv/bin/python -I -S "$KIT/scripts/analyze.py" --input "$KIT/examples/input.json" --overlay "$KIT/examples/overlay.json" --input-crs EPSG:3857 --overlay-crs EPSG:3857 --target-crs EPSG:3857 --output-dir "$EVIDENCE/missing-result"
+TMPDIR=$HOME/.hermes/cache/scratch .venv/bin/python -I -S "$KIT/scripts/analyze.py" --input "$KIT/examples/input.json" --overlay "$KIT/examples/overlay.json" --input-crs EPSG:3857 --overlay-crs EPSG:3857 --target-crs EPSG:3857 --output-dir "$EVIDENCE/missing-result"
 # Exit 2: actionable missing shapely/pyproj message; missing-result does not exist.
-TMPDIR=/Users/rlaope/.hermes/cache/scratch uv run --group lint ruff check src/skills/geospatial_analysis_skill.py src/skills/geospatial_analysis_toolkit/scripts/analyze.py tests/test_geospatial_analysis_skill.py
+TMPDIR=$HOME/.hermes/cache/scratch uv run --group lint ruff check src/skills/geospatial_analysis_skill.py src/skills/geospatial_analysis_toolkit/scripts/analyze.py tests/test_geospatial_analysis_skill.py
 # Exit 0: All checks passed.
-TMPDIR=/Users/rlaope/.hermes/cache/scratch uv run python -m compileall -q src/skills/geospatial_analysis_skill.py src/skills/geospatial_analysis_toolkit/scripts/analyze.py tests/test_geospatial_analysis_skill.py
+TMPDIR=$HOME/.hermes/cache/scratch uv run python -m compileall -q src/skills/geospatial_analysis_skill.py src/skills/geospatial_analysis_toolkit/scripts/analyze.py tests/test_geospatial_analysis_skill.py
 # Exit 0.
-TMPDIR=/Users/rlaope/.hermes/cache/scratch PYTHONPATH=tests uv run python -m unittest tests.test_show_reel_support_files tests.test_render_skill_pack -q
+TMPDIR=$HOME/.hermes/cache/scratch PYTHONPATH=tests uv run python -m unittest tests.test_show_reel_support_files tests.test_render_skill_pack -q
 # Exit 0: 7 existing regression tests, OK.
 ```
 

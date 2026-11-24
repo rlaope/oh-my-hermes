@@ -10,12 +10,12 @@ const html = (md: string) => renderToStaticMarkup(<Markdown text={md} />);
 
 describe("the terminal link chip's state", () => {
   const now = 100_000;
-  it("working while output flows or progress is reported, waiting at its prompt or when it rang", () => {
+  it("working while output flows or progress is reported, waiting at its prompt, news when it rang unseen", () => {
     expect(termLinkState({ status: "running" }, { lastOut: now - 500 }, undefined, now)).toBe("working");
     expect(termLinkState({ status: "running" }, { lastOut: now - 60_000, progress: true }, undefined, now)).toBe("working");
     expect(termLinkState({ status: "running" }, { lastOut: now - 60_000 }, undefined, now)).toBe("waiting");
     expect(termLinkState({ status: "starting" }, {}, undefined, now)).toBe("waiting");
-    expect(termLinkState({ status: "running" }, { lastOut: now - 10 }, "bell", now)).toBe("waiting");
+    expect(termLinkState({ status: "running" }, { lastOut: now - 10 }, "bell", now)).toBe("news");
   });
   it("done when it ended with 0, ended otherwise (an error, a signal, could not start, paused after a restart)", () => {
     expect(termLinkState({ status: "exited", exitCode: 0 }, {}, undefined, now)).toBe("done");
@@ -24,15 +24,17 @@ describe("the terminal link chip's state", () => {
     expect(termLinkState({ status: "failed" }, {}, undefined, now)).toBe("ended");
     expect(termLinkState({ status: "exited", exitCode: null, paused: true }, {}, undefined, now)).toBe("ended");
   });
-  it("shows a ring nobody saw as news on the chip (the bots' status file still says waiting)", () => {
+  it("shows a ring nobody saw as news, on the chip and in the bots' status file alike", () => {
     expect(termChipState({ status: "running" }, { lastOut: now - 60_000 }, "bell", now)).toBe("news");
+    expect(termLinkState({ status: "running" }, { lastOut: now - 60_000 }, "bell", now)).toBe("news");
+    expect(termLinkState({ status: "running" }, { lastOut: now - 500 }, "bell", now)).toBe("news");
     expect(termChipState({ status: "running" }, { lastOut: now - 60_000 }, undefined, now)).toBe("waiting");
     expect(termChipState({ status: "running" }, { lastOut: now - 500 }, undefined, now)).toBe("working");
     expect(termChipState({ status: "exited", exitCode: 0 }, {}, "bell", now)).toBe("done");
   });
   it("a quiet done (progress reported done, unseen) is news too, and reported working again beats any stale news", () => {
     expect(termChipState({ status: "running" }, { lastOut: now - 60_000 }, "quiet", now)).toBe("news");
-    expect(termLinkState({ status: "running" }, { lastOut: now - 60_000 }, "quiet", now)).toBe("waiting");
+    expect(termLinkState({ status: "running" }, { lastOut: now - 60_000 }, "quiet", now)).toBe("news");
     // the review's stale case: a ring nobody saw, then the program reports working again
     expect(termChipState({ status: "running" }, { lastOut: now - 60_000, progress: true }, "bell", now)).toBe("working");
     expect(termLinkState({ status: "running" }, { lastOut: now - 60_000, progress: true }, "bell", now)).toBe("working");

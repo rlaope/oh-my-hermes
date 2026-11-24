@@ -55,7 +55,7 @@ try:
 except ImportError:
     msvcrt = None
 
-VERSION = "1.1.3"
+VERSION = "1.2.0"
 BOT_CHAT_TITLE = "Bot Chat"
 FOLDER_CHAT_PREFIX = "omher · "
 MAX_FOLDER_CHATS = 16
@@ -7408,6 +7408,11 @@ class Bridge:
         reply_to = p.get("reply_to")
         if reply_to is not None and (not isinstance(reply_to, str) or not reply_to):
             raise BridgeError("bad_request", "reply_to must be a session id")
+        # A slash command goes as typed: Hermes reads all of its text as the command and its arguments, so a note
+        # appended to it becomes an argument ("Unknown /usage subcommand: [omher] Open threads: ...").
+        command = text.lstrip().startswith("/")
+        if command and reply_to is not None:
+            raise BridgeError("bad_request", "a slash command takes no reply target")
         conn = await self._conn(p.get("bot"))
         main, chat = await self._target(conn, p)
         if reply_to is not None:
@@ -7419,13 +7424,13 @@ class Bridge:
             if ref is None:
                 raise BridgeError("bad_request", "that session has no thread to reply in")
             text = f"{text.rstrip()}\n\n{reply_block(*ref)}"
-        if chat is None:
+        if chat is None and not command:
             blocks = await asyncio.to_thread(term_link_blocks, text, self.omher_home)
             if blocks:
                 text = f"{text.rstrip()}\n\n{blocks}"
-        if peer_hint_wanted(text):
+        if not command and peer_hint_wanted(text):
             text = f"{text.rstrip()}\n\n{PEER_HINT}"
-        if chat is None and conn.threads_shown:
+        if chat is None and conn.threads_shown and not command:
             text = f"{text.rstrip()}\n\n{thread_hint(self._hint_rows(conn))}"
         input_id = str(uuid.uuid4())
         await self._probe_clarify_batch(conn)

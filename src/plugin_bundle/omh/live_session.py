@@ -123,7 +123,7 @@ def session_row(hermes_home: str, session_id: str) -> dict[str, Any] | None:
     so shares none of them.
 
     The distinction is not academic. Routes are written from whatever surface
-    the agent runs on: measured on the owner's two homes, the miku profile's
+    the agent runs on: measured on the owner's two homes, the mbot profile's
     routes come from ``slack`` (132) and ``subagent`` (33) sessions and none
     from a TUI, and the default home already has ``desktop`` ones beside its
     TUI ones. Asking the TUI list whether a slack writer is live answers
