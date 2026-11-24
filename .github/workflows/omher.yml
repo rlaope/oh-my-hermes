@@ -75,11 +75,12 @@ jobs:
       - name: Install Chromium (and WebKit on macOS) for Playwright
         working-directory: apps/omher
         run: pnpm exec playwright install chromium ${{ runner.os == 'macOS' && 'webkit' || '' }}
-      # Three shards at once, each its own Vite + mock bridge on its own ports (one serial run took about an hour
-      # on both runners). macos-latest has 3 cores, windows-latest 4.
+      # Shards at once, each its own Vite + mock bridge on its own ports (one serial run took about an hour on both
+      # runners). macOS runs 3 (63 -> 30 min, green twice in PR #3191). Windows runs 2: at 3 its shards took 31-35 min
+      # but each run lost a different test per shard past its retry, which a lighter load avoids.
       - name: End-to-end tests against the mock bridge
         working-directory: apps/omher
-        run: bash scripts/e2e-shards.sh 3
+        run: bash scripts/e2e-shards.sh ${{ runner.os == 'Windows' && 2 || 3 }}
       - name: Rust tests (Tauri shell)
         working-directory: apps/omher/src-tauri
         run: cargo test
