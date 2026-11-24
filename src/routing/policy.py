@@ -5725,7 +5725,10 @@ _APP_WORK_ALERT_APPS_KO = ("센트리", "데이터독")
 _APP_WORK_ALERT_TERMS = frozenset({"alert", "alerts", "monitor", "monitors", "fired", "firing", "triggered"})
 _APP_WORK_ALERT_PHRASES = ("sentry issue",)
 _APP_WORK_ALERT_KO = ("알림", "알럿", "경보")
-_APP_WORK_ALERT_BLOCKERS = frozenset({"sdk", "integration", "agent", "install", "config", "configuration", "setup"})
+# "fix the datadog monitor threshold for latency" tunes the monitor, not the code the alert is about.
+_APP_WORK_ALERT_BLOCKERS = frozenset(
+    {"sdk", "integration", "agent", "install", "config", "configuration", "setup", "threshold", "thresholds"}
+)
 _APP_WORK_FIX_VERBS = frozenset({"fix", "triage", "debug", "investigate", "handoff"})
 _APP_WORK_FIX_PHRASES = ("hand off", "hand it off", "fix hand-off", "alert to fix")
 _APP_WORK_FIX_CUES_KO = ("고쳐", "수정해", "수정까지", "트리아지", "분류하고", "넘겨")

@@ -111,9 +111,9 @@ from .policy import _greenfield_project_bootstrap_requested
 from .policy import _hermes_setup_guide_requested
 from .policy import _github_event_ops_guard_applies
 from .policy import app_work_intake_guard_applies, meeting_to_issues_guard_applies
-from .bot_template_cues import bot_template_id_applied
 from .policy import _github_issue_intake_guard_applies
 from .policy import _invocation_token
+from .bot_template_cues import bot_template_id_applied
 from .recommend import (
     has_strong_named_catalog_owner,
     recommendation_for_definition,

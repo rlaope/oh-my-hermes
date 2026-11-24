@@ -10848,6 +10848,14 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "github-bot-from-a-template-is-not-bot-template", "Setting up a GitHub bot from a template names no OMH template",
         "set up a github bot from a template", "answer_clarification", "", "bot-template",
     ),
+    RoutingPrecisionCase(
+        "template-aside-publish-release-is-not-bot-template", "A template set aside for a release to publish is not an apply",
+        "set the release-notes bot template aside and publish the github release", "answer_clarification", "", "bot-template",
+    ),
+    RoutingPrecisionCase(
+        "datadog-threshold-fix-is-not-app-work-intake", "Fixing a Datadog monitor threshold tunes the monitor",
+        "fix the datadog monitor threshold for latency", "answer_clarification", "", "app-work-intake",
+    ),
     # app-work-intake: latency or a monitor read as a status, a setup or a "tell me
     # when" stays off the alert-to-fix card.
     RoutingPrecisionCase(
@@ -22135,6 +22143,21 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     RoutingInterventionCase("inbox-triage-template-github-keeps-github-event-ops", "A template that reads no forge does not excuse GitHub", "apply the inbox-triage template to this bot for our github issues", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
     RoutingInterventionCase("pr-review-template-github-python-keeps-github-event-ops", "The pr-review template for GitHub in Python keeps GitHub event ops", "apply the pr-review template to this bot for our github prs in python", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
     RoutingInterventionCase("ko-pr-review-template-github-repo-keeps-github-event-ops", "A Korean pr-review bot template put in a GitHub repo keeps GitHub event ops", "pr-review 봇 템플릿 깃허브 레포에 올려줘", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
+    RoutingInterventionCase("dont-apply-template-review-pr-keeps-github-event-ops", "A declined apply beside a PR review keeps GitHub event ops", "don't apply the pr-review template to this bot, just review github PR 12", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
+    RoutingInterventionCase("instead-of-template-merge-pr-keeps-github-event-ops", "A merge instead of the apply keeps GitHub event ops", "instead of applying the pr-review bot template, merge github PR 12", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
+    RoutingInterventionCase("ko-template-declined-pr-review-keeps-github-event-ops", "A Korean declined apply beside a PR review keeps GitHub event ops", "이 봇에 pr-review 템플릿 적용하지 말고 깃허브 PR 12 리뷰해줘", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
+    RoutingInterventionCase("label-pr-template-can-wait-keeps-github-event-ops", "A label on a PR with the template deferred keeps GitHub event ops", "apply the label to this PR, the pr-review bot template can wait", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
+    RoutingInterventionCase("github-bot-set-template-label-keeps-github-event-ops", "A bot that set a label on a PR keeps GitHub event ops", "the github bot set the pr-review template label on PR 9", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
+    RoutingInterventionCase("apply-template-and-merge-pr-keeps-github-event-ops", "An apply plus a merge of a PR keeps GitHub event ops", "apply the pr-review template to this bot and merge github PR 12", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
+    RoutingInterventionCase("ko-apply-template-and-comment-pr-keeps-github-event-ops", "A Korean apply plus a PR comment keeps GitHub event ops", "이 봇에 pr-review 템플릿 적용하고 깃허브 PR 12에 코멘트 달아줘", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
+    RoutingInterventionCase("template-github-action-workflow-keeps-github-event-ops", "A template for a GitHub Actions workflow keeps GitHub event ops", "apply the pr-review bot template to the github action workflow", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
+    RoutingInterventionCase("apply-template-and-fix-alert-keeps-app-work-intake", "An apply plus an alert that fired to fix keeps app work intake", "apply the alert-triage template to this bot and fix the sentry alert that fired", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
+    RoutingInterventionCase("template-later-fix-alert-keeps-app-work-intake", "A deferred apply and an alert to fix first keeps app work intake", "apply the alert-triage bot template later, first fix the sentry checkout alert", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
+    RoutingInterventionCase("apply-template-and-create-linear-issue-keeps-connector", "An apply plus a Linear issue to create keeps the connector card", "apply the meeting-to-issues template to this bot and create a linear issue for the login bug", "dispatch", "connector-operator", "prepare_connector_operator_card", "connector_operator"),
+    RoutingInterventionCase("set-of-bot-templates-on-github-keeps-github-event-ops", "A set of bot templates on GitHub is a noun, not an apply", "the set of pr-review bot templates on github", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
+    RoutingInterventionCase("bot-template-when-github-pr-opens", "Applying the pr-review template to this bot when a GitHub PR opens reaches it", "when a github PR opens, apply the pr-review template to this bot", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
+    RoutingInterventionCase("bot-template-add-alert-triage-for-sentry", "Adding the alert-triage template to this bot for Sentry reaches it", "add the alert-triage template to this bot for sentry", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
+    RoutingInterventionCase("ko-bot-template-alert-triage-for-sentry-alerts", "A Korean apply of alert-triage for Sentry alerts reaches it", "이 봇에 alert-triage 템플릿 적용해줘 센트리 알림용", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
     RoutingInterventionCase("github-issue-template-keeps-github-event-ops", "A GitHub issue template stays with GitHub event ops", "github issue template for feature requests", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
 )
 

@@ -347,6 +347,15 @@ class BotTemplateRoutingTests(unittest.TestCase):
             "pr-review 봇 템플릿 깃허브 레포에 올려줘",
             "update the release-notes template in .github",
             "remove the pr-review template from this bot",
+            # the apply must govern the template, be neither declined nor deferred, and carry no other action
+            "don't apply the pr-review template to this bot, just review github PR 12",
+            "이 봇에 pr-review 템플릿 적용하지 말고 깃허브 PR 12 리뷰해줘",
+            "apply the label to this PR, the pr-review bot template can wait",
+            "the github bot set the pr-review template label on PR 9",
+            "apply the pr-review template to this bot and merge github PR 12",
+            "이 봇에 pr-review 템플릿 적용하고 깃허브 PR 12에 코멘트 달아줘",
+            "apply the pr-review bot template to the github action workflow",
+            "apply the alert-triage template to this bot and fix the sentry alert that fired",
         ):
             with self.subTest(message=message):
                 self.assertFalse(bot_template_id_applied(normalized_phrase(message)))
