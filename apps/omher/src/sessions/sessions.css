@@ -2049,3 +2049,32 @@ body.split-dragging .xterm {
     transition: none;
   }
 }
+
+/* a folder header's +: a new terminal in that folder (the + menu with the folder picked); shows on hover or focus */
+.tg-h {
+  position: relative;
+}
+.tg-plus {
+  position: absolute;
+  top: 3px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+}
+.tg-h:hover .tg-plus,
+.tg-plus:focus-visible {
+  opacity: 1;
+}
+.tg-plus:hover {
+  background: var(--hover, rgba(127, 127, 127, 0.14));
+  color: inherit;
+}

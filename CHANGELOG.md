@@ -4,6 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: TERMINALS folders say where they are, and a split stays in its folder.** A folder header showed only the
+  folder's last name, so `~`, `~/Desktop/khope` and `~/work/khope` read alike; it now shows the path from home under
+  the name, with the git branch after it. A split's card sat above every folder; it now sits at the top of its first
+  pane's folder, and that folder's count and live state include the split's sessions. The `+` menu starts in the open
+  terminal's folder, and each folder header has its own `+` that opens the menu in that folder.
 - **omher: a slash command reaches the bot as typed.** omher appended its own notes (the open-threads note, the
   terminal-link blocks, the peer note) to every main-chat message, slash commands included. Hermes reads all of a
   slash command's text as its arguments, so `/usage` answered `Unknown /usage subcommand: [omher] Open threads:

@@ -1673,6 +1673,7 @@ export const ja: Record<Key, string> = {
   "term.shellTip": "下のフォルダでログインシェルを開きます",
   "term.st.busy": "出力中",
   "term.here": "ここで新しいターミナル",
+  "term.newIn": "{name}で新しいターミナル",
   "term.shellPick": "シェルを選ぶ",
   "term.shellDefault": "既定",
   "term.shellDefaultOf": "{shell}（既定）",

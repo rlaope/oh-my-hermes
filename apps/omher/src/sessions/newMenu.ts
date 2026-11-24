@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { getShellHost, type ShellInfo } from "../terminal/host";
 
-const openers = new Set<() => void>();
+const openers = new Set<(folder?: string) => void>();
 
 let shellsAsked: Promise<ShellInfo[]> | null = null;
 /** The shells a Shell row may run here (the shell's `shells_available`, default first); [] when it cannot say. */
@@ -30,13 +30,14 @@ export function useShells(): ShellInfo[] | null {
   return list;
 }
 
-export function onOpenNewSessionMenu(f: () => void): () => void {
+export function onOpenNewSessionMenu(f: (folder?: string) => void): () => void {
   openers.add(f);
   return () => {
     openers.delete(f);
   };
 }
 
-export function openNewSessionMenu(): void {
-  for (const f of [...openers]) f();
+/** Open the + menu; `folder` (a folder header's +) is the folder its new terminal starts in. */
+export function openNewSessionMenu(folder?: string): void {
+  for (const f of [...openers]) f(folder);
 }

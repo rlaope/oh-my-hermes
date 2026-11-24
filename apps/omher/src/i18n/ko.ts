@@ -1673,6 +1673,7 @@ export const ko: Record<Key, string> = {
   "term.shellTip": "아래 폴더에서 로그인 shell을 열어요",
   "term.st.busy": "출력 중",
   "term.here": "여기서 새 터미널",
+  "term.newIn": "{name}에서 새 터미널",
   "term.shellPick": "shell 고르기",
   "term.shellDefault": "기본",
   "term.shellDefaultOf": "{shell} (기본)",

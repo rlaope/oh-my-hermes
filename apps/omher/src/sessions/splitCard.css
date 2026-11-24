@@ -325,3 +325,8 @@
     opacity: 0.7;
   }
 }
+
+/* a split card inside its folder group sits in the folder's content column, as the folder's rows do */
+.tg > .split-card {
+  margin-inline-start: calc(var(--side-x) + 10px);
+}
