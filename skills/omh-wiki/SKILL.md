@@ -82,7 +82,7 @@ A `wiki_blueprint/v1` is a prepared design artifact, not evidence that a store w
 
 Use to design a wiki someone can start today - model, skeleton, conventions, seed pages, and maintenance sized to a personal, small-group, team, or organization audience - and to capture durable knowledge into markdown vaults, Obsidian, Notion, Google Drive/Docs, databases, or local folders.
 
-    Strong routing signals: `wiki`, `project wiki`, `write a handover guide`, `build a wiki`, `start a wiki`, `organize my notes`, `external knowledge store`, `knowledge base`, `Obsidian`, `markdown vault`, `Notion knowledge base`, `Google Drive wiki`, `옵시디언`, `마크다운 볼트`, `노션 지식베이스`, `위키`, `위키 만들`, `지식베이스`, `지식 정리 체계`, `인수인계 문서 써줘`
+    Strong routing signals: `wiki`, `project wiki`, `write a handover guide`, `build a wiki`, `start a wiki`, `organize my notes`, `external knowledge store`, `knowledge base`, `Obsidian`, `markdown vault`, `Notion knowledge base`, `Google Drive wiki`, `vault as knowledge`, `vault as memory`, `recall from my vault`, `journal in my vault`, `daily journal in obsidian`, `옵시디언`, `마크다운 볼트`, `노션 지식베이스`, `위키`, `위키 만들`, `지식베이스`, `지식 정리 체계`, `인수인계 문서 써줘`
 
 ## Catalog Metadata
 
@@ -103,6 +103,7 @@ Quality bar:
 - Mark stale or uncertain knowledge instead of presenting it as permanent truth.
 - Extract separate coding tasks instead of burying them in notes.
 - Before writing a page to a shared or synced store, strip credentials and personal data from it, or ask: a note's destination decides who can read it.
+- Vault as knowledge: when the person names an Obsidian vault as a source for recall, or as where the bot writes its daily journal and approved `.omh/memory` records, follow `references/vault-knowledge.md` with Hermes' bundled `obsidian` skill; writes go only to the vault folder the person named, only approved records are copied there, and Hermes' `MEMORY.md` and `USER.md` are never written from or to the vault.
 
 Handoff policy:
 

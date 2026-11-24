@@ -17,6 +17,7 @@ Trigger phrases and the role registry live in `references/workflow-registry.md`;
 - `omh-ai-job-search`: [omh] Career search to interview: find verified opportunities, tailor evidence-grounded applications and track confirmed outcomes.
 - `omh-ai-slop-cleaner`: [omh] Messy or AI-generated code to clean up: delete AI-generated slop, dead code, and duplication while observable behavior stays identical.
 - `omh-app-debugging`: [omh] Application code misbehaves: a wrong value, a flaky test, a lost update; reproduce it first, form competing hypotheses, discriminate them with the cheapest observation, and only then fix the demonstrated root cause.
+- `omh-app-work-intake`: [omh] Spec, issue, mail or alert to turn into work: read a Notion or Confluence page, a Linear or Jira issue, a mail message, or a Sentry or Datadog alert through the bot's own Hermes tool, then plan it to a PR and link the PR back, open a work thread or a Needs item, or triage it to a fix hand-off.
 - `omh-apple-design`: [omh] Designing or reviewing an iOS, macOS or Apple UI: prepare native Apple UI or Apple marketing product-visual direction, review, and improvement briefs with evidence-backed remediation handoffs.
 - `omh-application-threat-model`: [omh] Attack paths into an operated system: turn a system's components and data flows into assets, trust boundaries, attack scenarios, controls, and the security test that proves each control holds.
 - `omh-ask`: [omh] Outside AI critique wanted: consulting an external advisor when configured.
