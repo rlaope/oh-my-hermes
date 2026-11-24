@@ -779,12 +779,14 @@ class ScratchHomeCleanupTests(unittest.TestCase):
         self.addCleanup(no_wait.stop)
         self.env = {**os.environ, "OMH_HOME": str(self.root / ".omh")}
 
-    def home(self, name: str, *, age: float, text: str = "omh-hermes-child-scratch/v1\n") -> Path:
+    def home(self, name: str, *, age: float, text: str | None = None, deadline: float | None = None) -> Path:
         directory = self.tmp / name
         (directory / "hermes").mkdir(parents=True)
         marker = directory / ".omh-hermes-child-scratch"
-        marker.write_text(text, encoding="utf-8")
         stamp = time.time() - age
+        if text is None:
+            text = f"omh-hermes-child-scratch/v1\n{int(stamp + 900 if deadline is None else deadline)}\n"
+        marker.write_text(text, encoding="utf-8")
         os.utime(marker, (stamp, stamp))
         return directory
 
@@ -819,7 +821,8 @@ class ScratchHomeCleanupTests(unittest.TestCase):
         self.assertEqual(getattr(result, "scratch_left", None), str(scratch))
         self.assertIn(f"scratch home left at {scratch}", getattr(result, "cleanup_note", ""))
         self.assertTrue(seen and seen[0], "the scratch root carries OMH's marker while it exists")
-        self.assertTrue((scratch / ".omh-hermes-child-scratch").is_file(), "a left home keeps its marker")
+        self.assertTrue((scratch / ".omh-hermes-child-scratch").read_text(encoding="utf-8").startswith(
+            "omh-hermes-child-scratch/v1\n"), "a home recreated after removal is left with a valid marker again")
 
     def test_a_left_home_that_lost_its_marker_gets_it_back_and_a_later_sweep_takes_it(self) -> None:
         # NTFS lists `.omh-hermes-child-scratch` before `hermes`, so a removal that stops at the open log has
@@ -833,16 +836,51 @@ class ScratchHomeCleanupTests(unittest.TestCase):
         scratch = self.scratch_root()
         self.addCleanup(_REAL_RMTREE, scratch, True)
         self.assertEqual(result.status, "completed")
-        self.assertTrue((scratch / ".omh-hermes-child-scratch").is_file())
+        restored = (scratch / ".omh-hermes-child-scratch").read_text(encoding="utf-8").split("\n")
+        self.assertEqual(restored[0], "omh-hermes-child-scratch/v1")
+        self.assertGreater(int(restored[1]), time.time() + 5.0, "the restored marker keeps this dispatch's deadline")
+        self.assertIn("older than 86400 s and past this dispatch's deadline", result.cleanup_note)
         with patch.object(hermes_child_dispatch, "_clock", lambda: time.time() + 2 * 86400):
             hermes_child_dispatch._sweep_scratch_homes()
         self.assertFalse(scratch.exists())
 
-    def test_a_timeout_longer_than_half_the_sweep_age_is_refused(self) -> None:
-        with self.assertRaisesRegex(ValueError, "timeout must be at most 43200 seconds"):
-            self.dispatch(timeout=43201.0)
+    def test_a_live_dispatchs_home_is_kept_until_its_own_deadline(self) -> None:
+        # Two days old, but its dispatch has a three-day timeout: still running, so never swept before its deadline.
+        deadline = time.time() - 2 * 86400 + 3 * 86400 + 3600
+        live = self.home("omh-hermes-child-live", age=2 * 86400, deadline=deadline)
+        hermes_child_dispatch._sweep_scratch_homes()
+        self.assertTrue(live.exists())
+        with patch.object(hermes_child_dispatch, "_clock", lambda: deadline + 1):
+            hermes_child_dispatch._sweep_scratch_homes()
+        self.assertFalse(live.exists())
+
+    def test_a_long_timeout_is_accepted_and_written_as_the_markers_deadline(self) -> None:
+        seen: list[str] = []
+
+        def read_marker(path, *args, **kwargs):
+            seen.append((Path(path).parent / ".omh-hermes-child-scratch").read_text(encoding="utf-8"))
+            _REAL_RMTREE(path, *args, **kwargs)
+
+        with patch.object(hermes_child_dispatch, "_clock", lambda: 1_600_000_000.0), \
+                patch("shutil.rmtree", side_effect=read_marker):
+            result = self.dispatch(timeout=5 * 86400.0)
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(seen[0], f"omh-hermes-child-scratch/v1\n{1_600_000_000 + 5 * 86400 + 3600 + 1}\n")
+
+    def test_a_forged_far_deadline_garbage_or_an_old_header_only_marker_keeps_the_home(self) -> None:
+        kept = [
+            self.home("omh-hermes-child-far", age=2 * 86400, deadline=time.time() + 10 ** 12),
+            self.home("omh-hermes-child-garbage", age=2 * 86400, text="omh-hermes-child-scratch/v1\n12e5\n"),
+            self.home("omh-hermes-child-negative", age=2 * 86400, text="omh-hermes-child-scratch/v1\n-5\n"),
+            self.home("omh-hermes-child-extra", age=2 * 86400, text="omh-hermes-child-scratch/v1\n5\nmore\n"),
+            self.home("omh-hermes-child-header-only", age=2 * 86400, text="omh-hermes-child-scratch/v1\n"),
+        ]
+        hermes_child_dispatch._sweep_scratch_homes()
+        self.assertTrue(all(directory.exists() for directory in kept))
 
     def test_young_homes_named_first_do_not_starve_an_old_one(self) -> None:
+        for index in range(40):
+            (self.tmp / f"aaa-other-{index:02d}").mkdir()
         young = [self.home(f"omh-hermes-child-a{index:02d}", age=60) for index in range(32)]
         old = self.home("omh-hermes-child-zzz", age=2 * 86400)
         hermes_child_dispatch._sweep_scratch_homes()
@@ -850,7 +888,7 @@ class ScratchHomeCleanupTests(unittest.TestCase):
         self.assertTrue(all(directory.exists() for directory in young))
 
     def test_the_sweep_takes_no_link_no_foreign_owner_and_no_other_marker(self) -> None:
-        wrong_text = self.home("omh-hermes-child-wrong", age=2 * 86400, text="omh-hermes-child-scratch/v2\n")
+        wrong_text = self.home("omh-hermes-child-wrong", age=2 * 86400, text="omh-hermes-child-scratch/v2\n1\n")
         foreign = self.home("omh-hermes-child-foreign", age=2 * 86400)
         target = self.home("target-old", age=2 * 86400)
         links: list[Path] = []
@@ -926,7 +964,8 @@ class ScratchHomeCleanupTests(unittest.TestCase):
         for directory in (old, young, unmarked, foreign):
             (directory / "hermes").mkdir(parents=True)
         for directory in (old, young, foreign):
-            (directory / ".omh-hermes-child-scratch").write_text("omh-hermes-child-scratch/v1\n", encoding="utf-8")
+            (directory / ".omh-hermes-child-scratch").write_text(
+                f"omh-hermes-child-scratch/v1\n{int(day_and_more) + 900}\n", encoding="utf-8")
         for directory in (old, unmarked, foreign):
             os.utime(directory / ".omh-hermes-child-scratch" if directory != unmarked else directory,
                      (day_and_more, day_and_more))

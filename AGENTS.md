@@ -94,10 +94,12 @@ and evidence obvious to a reviewer reading the PR without the chat history.
   Hermes' own one-level `delegate_task` children are allowed when the run's
   `--arm-toolsets` names `delegation`), runs safe-mode file tools by default, records
   authenticated `routing_observation/v1` evidence, and never runs
-  automatically. Before each dispatch it removes, at most 32 per dispatch,
+  automatically. Besides its own dispatch's scratch home, it removes only
+  old scratch homes it created and marked: before each dispatch, at most 32
   temp-root directories named `omh-hermes-child-*` that this user owns, that
-  are not links, and whose exact OMH marker is older than a day: scratch homes
-  earlier dispatches had to leave while Hermes' gateway still used them.
+  are not links, whose exact OMH marker is older than a day, and whose
+  recorded deadline (that dispatch's start, timeout and a margin) has passed.
+  Nothing else.
   Two front doors reuse it without adding a process authority:
   - `omh coding paired-run dispatch` for confirmed evaluation cells: one
     digest-matching task file per frozen task, task bytes over child stdin,

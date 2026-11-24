@@ -14,7 +14,10 @@ moves the code, this page and that test together.
 
 The Hermes-native child boundary (`omh coding hermes-child dispatch`, with its
 paired-run and final-review front doors) is not repeated here: its one copy
-stays in `AGENTS.md`, where `tests/test_paired_run_arm_home.py` reads it.
+stays in `AGENTS.md`, where `tests/test_paired_run_arm_home.py` reads it. The
+one deletion it makes beyond its own dispatch's scratch home is stated there
+too: old scratch homes that OMH created and marked, swept only under the
+conditions the code checks (`_sweep_scratch_homes`), and nothing else.
 
 - **Fanout dispatch bridge** (`omh coding fanout dispatch`, plus its
   `omh coding run` entry that builds and dispatches a one-unit contract
