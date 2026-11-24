@@ -168,12 +168,14 @@ All notable changes will be documented here.
   `src/system/process_listing.py`; `docs/INSTALLATION.md` "Bot Profiles")
 - **`omh doctor` no longer calls a client's idle-exit gateway a stray.** Every `hermes chat` reaches Hermes through
   a gateway, and in a home with none (a scratch home, such as the child an OMH dispatch or a bench run starts) Hermes
-  starts a detached `gateway run --idle-exit`. Hermes ends it once it has been idle for
-  `gateway.unmanaged_idle_exit_seconds` (600 s by default), unless that home turns this off, a supervisor launched
-  it, one of its own idle checks fails, or work keeps it busy. Doctor read each one as a stray to find and stop.
+  starts a detached `gateway run --idle-exit`. When its idle exit is armed, Hermes ends it after
+  `gateway.unmanaged_idle_exit_seconds` (600 s by default) with nothing to do. It is not armed when that home sets 0
+  or Hermes detects a supervisor, and it stays up while an idle check fails or work holds it. Doctor read each one as
+  a stray to find and stop.
   Because Hermes names such a home `--profile default`, doctor also read it as a second gateway of the default
-  profile. Doctor now says what started it and when Hermes ends it, and still counts it in the fleet line. It raises
-  no finding or action for one until it has run for more than an hour; after that it is reported as a stray. The
+  profile. Doctor now says what started it and when Hermes does and does not end it, and still counts it in the
+  fleet line. It raises no finding or action for one until it has run for more than an hour; after that it is
+  reported as a stray that has not exited. The
   `--json` report gains `idle_exit` and `overdue` per gateway. (`src/maintenance/gateway_health.py` `_unrecorded_line`,
   `IDLE_EXIT_STALE_SECONDS`, `src/system/process_listing.py` `IDLE_EXIT_FLAG`)
 - **omher 1.1.3.** GitHub across your repositories and accounts, a Claude usage meter that shows numbers, and terminals

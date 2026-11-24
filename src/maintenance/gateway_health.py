@@ -227,7 +227,7 @@ def gateway_health(
     list_processes: Callable[[], GatewayListing] = hermes_gateway_processes,
     process_start: Callable[[int], float | None] = _process_start,
     log_tail_bytes: int = GATEWAY_LOG_TAIL_BYTES,
-    now: Callable[[], float] = time.time,
+    now: Callable[[], float] | None = None,  # the clock an idle-exit gateway's age is read against; None: `time.time`
 ) -> GatewayHealth:
     root = hermes_root(hermes_home)
     install_dir = hermes_install_dir(root)
@@ -239,13 +239,14 @@ def gateway_health(
     listing = list_processes()
     listed_ok, listed = listing.listed, listing.gateways
     recorded_pids = {process.pid for process in recorded}
+    clock = time.time if now is None else now
     unrecorded = []
     for pid, profile in listed:
         if pid in recorded_pids:
             continue
         started = process_start(pid)
         idle_exit = pid in listing.idle_exit
-        overdue = idle_exit and started is not None and now() - started > IDLE_EXIT_STALE_SECONDS
+        overdue = idle_exit and started is not None and clock() - started > IDLE_EXIT_STALE_SECONDS
         unrecorded.append(GatewayProcess(pid, profile, False, started_at=iso_utc(started),
                                          build=_build_verdict(build, "", started), idle_exit=idle_exit, overdue=overdue))
     shared = _shared_profiles(recorded)
@@ -746,11 +747,9 @@ def _unrecorded_line(process: GatewayProcess, built: str, recorded: list[Gateway
                 f"root names it{started}{_unrecorded_build(process, built)}: a Hermes client started it for its own "
                 "home (`hermes chat` in a scratch home, such as an OMH dispatch's child, the TUI, or cron)")
         if process.overdue:
-            return (f"{head}, and it has not exited after more than {IDLE_EXIT_STALE_SECONDS} s. Hermes keeps such a "
-                    f"gateway up while {IDLE_EXIT_HOLDS}.")
-        unknown = "" if process.started_at else "; its start time could not be read"
-        return (f"{head}. Hermes ends it once it has been idle for `gateway.unmanaged_idle_exit_seconds` (600 s by "
-                f"default), unless {IDLE_EXIT_HOLDS}{unknown}.")
+            return (f"{head}, and it has not exited after more than {IDLE_EXIT_STALE_SECONDS} s. {IDLE_EXIT_TERMS}")
+        unknown = "" if process.started_at else " Its start time could not be read."
+        return f"{head}. {IDLE_EXIT_TERMS}{unknown}"
     build = _unrecorded_build(process, built)
     owner = next((other.pid for other in recorded if (process.profile or DEFAULT_PROFILE) in other.serves), None)
     also = (f"; it carries the same profile name as PID {owner} here, and which home it serves is not recorded"
@@ -759,9 +758,11 @@ def _unrecorded_line(process: GatewayProcess, built: str, recorded: list[Gateway
             f"{started}{build}{also}.")
 
 
-IDLE_EXIT_HOLDS = (
-    "its home sets `gateway.unmanaged_idle_exit_seconds: 0`, a supervisor launched it, an idle check of its own "
-    "fails, or a client, adapter, cron or kanban job keeps it busy"
+IDLE_EXIT_TERMS = (
+    "When its idle exit is armed, Hermes ends it after `gateway.unmanaged_idle_exit_seconds` (600 s by default) "
+    "with nothing to do. It is not armed when that home sets the value to 0 or when Hermes detects a supervisor, "
+    "and an armed one stays up while an idle check of its own fails (Hermes counts that as work) or while a client, "
+    "adapter, cron or kanban job holds it."
 )
 
 
