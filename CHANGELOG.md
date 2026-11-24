@@ -114,10 +114,12 @@ All notable changes will be documented here.
 - **Two `omh coding executors add` or `remove` at once on Windows no longer refuse each other as `path_escape`.**
   The home check resolved `routing/executors.toml` itself while the other writer was replacing it. On Windows,
   `realpath` of a file mid-replace can come back with its `\\?\` extended-length prefix, which never sits under the
-  resolved home, so a legitimate add (or a `list` or dispatch reading at that moment) was refused. The check now
-  resolves only the `routing` directory, which no writer replaces; the file is refused if it is a symlink, without
-  following it, and writers make that check under the registry lock. A `routing` directory linked outside the home
-  is still `path_escape`, a symlinked registry file is still `symlink_refused`, and nothing is written through either.
+  resolved home, so a legitimate add, or a `list` or dispatch reading at that moment, was refused as `path_escape`.
+  The check now resolves only the `routing` directory, which no writer replaces; the file is refused if it is a
+  symlink, without following it, and writers make that check under the registry lock. A `routing` directory linked
+  outside the home is still `path_escape`; a symlinked registry file is `symlink_refused` (a link pointing outside
+  the home used to report `path_escape`); nothing is written through either. A read that races a write can still
+  report `not_regular_file` for that one read, on every platform; that predates this change and is a follow-up.
   (`src/coding/user_executors.py`)
 - **`omh setup` connects to a Hermes config whose root keys hold column-0 lists, or whose section keys carry a
   comment.** Step 2 stopped with "non-mapping or unsupported root YAML is user-owned" on a `config.yaml` that writes a
