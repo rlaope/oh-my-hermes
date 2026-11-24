@@ -11,7 +11,7 @@ tests, the desktop shell's recorded streams and its Rust sources, whose tests li
 and replay fixtures, the in-page mock hosts and the preview build that ships them). Other product code and docs
 are out of scope here; a fixture is where a pasted value most often hides.
 
-The check is deliberately narrow (three patterns, one `git ls-files`) so it stays cheap; it reports where a
+The check is deliberately narrow (four patterns, one `git ls-files`) so it stays cheap; it reports where a
 value is, never the value itself, so a failure log does not repeat the leak.
 """
 
@@ -59,27 +59,30 @@ RESERVED_DOMAIN = re.compile(
 PROTOCOL_LOCAL = {"git", "noreply", "no-reply"}
 
 # A SaaS tenant lives in the host's first label (`<team>.slack.com`) or the first path segment
-# (`linear.app/<workspace>/`). Only obviously made-up tenants pass, plus a product's own fixed hosts and paths.
+# (`linear.app/<workspace>/`, `notion.so/<workspace>/`; a root page `notion.so/<Title>-<id>` has no slash after it). Only obviously made-up tenants pass, plus a product's own fixed hosts and paths.
 TENANT_HOST = re.compile(
     r"\b([a-z0-9-]+)\.(slack\.com|atlassian\.net|notion\.site|zendesk\.com|okta\.com|sharepoint\.com|monday\.com)\b", re.IGNORECASE
 )
-TENANT_PATH = re.compile(r"\blinear\.app/([a-z0-9-]+)/", re.IGNORECASE)
+TENANT_PATH = re.compile(r"\b(?:linear\.app|notion\.so)/([a-z0-9-]+)/", re.IGNORECASE)
 SYNTHETIC_TENANT = {"example", "demo", "acme", "x", "team", "app", "www", "api", "hooks", "files", "status", "sse", "mcp"}
 
 # A user folder names a person: only placeholder users pass (compared case-folded). A dot-name (`/home/.local`,
-# `/home/..`) or an all-digit one is a path test's directory, not an account, so it is skipped.
-USER_DIR = re.compile(r"(?:/Users/|/home/|[A-Za-z]:\\\\?Users\\\\?)([A-Za-z0-9._@-]+)")
-PLACEHOLDER_USER = {"you", "demo", "me", "user", "runner", "runneradmin", "name", "username", "alice", "bob", "jane", "x", "a", "u",
+# `/home/..`) or an all-digit one is a path test's directory, not an account, so it is skipped. A folder name with
+# spaces (`/Users/<First> <Last>/`) is read whole when a path separator follows it, and passes only when every word is
+# a placeholder (`Demo User`, `Jane Doe`), so a real surname cannot ride behind an allowlisted first name.
+USER_DIR = re.compile(r"(?:/Users/|/home/|[A-Za-z]:\\\\?Users\\\\?)([A-Za-z0-9._@-]+(?:(?: [A-Za-z0-9._@-]+)+(?=[\\/]))?)")
+PLACEHOLDER_USER = {"you", "demo", "me", "user", "runner", "runneradmin", "name", "username", "alice", "bob", "jane", "x", "a", "b", "u",
                     "k", "k2", "h", "o", "test", "tester", "example", "someone", "foo", "shared", "public", "private", "dev", "operator",
                     "person", "admin", "one", "two", "other", "owner", "plain", "secret", "victim", "ci", "user2", "user2024",
-                    "project", "repo", "config", "tests"}
+                    "project", "repo", "config", "tests", "doe"}
 
 
 def _names_a_user(user: str) -> bool:
     # a macOS account named by its email (`/Users/<you>@<domain>/`) passes when the domain is reserved
     reserved_mail = "@" in user and RESERVED_DOMAIN.search(user.rsplit("@", 1)[1].lower())
     skipped = user.startswith(".") or user.isdigit()
-    return not (user.lower() in PLACEHOLDER_USER or reserved_mail or skipped)
+    placeholder = all(word in PLACEHOLDER_USER for word in user.lower().split(" "))
+    return not (placeholder or reserved_mail or skipped)
 
 
 def _scoped_files() -> list[str]:
@@ -97,7 +100,7 @@ def _findings() -> list[str]:
         except FileNotFoundError:  # tracked but deleted in the working tree: nothing on disk to leak
             continue
         for n, line in enumerate(text.split("\n"), 1):
-            for m in EMAIL.finditer(line):
+            for m in EMAIL.finditer(line.replace("%40", "@")):  # a URL-encoded `@` is still an address
                 domain = (m.group(2) + m.group(3)).lower()
                 if m.group(1).lower() not in PROTOCOL_LOCAL and not RESERVED_DOMAIN.search(domain):
                     found.append(f"{rel}:{n}: email outside the reserved domains")
@@ -129,10 +132,12 @@ class IdentityFixturePolicyTests(unittest.TestCase):
         self.assertEqual(TENANT_HOST.search("https://" + "acme-corp" + ".slack.com/archives/C1").group(1), "acme-corp")
         self.assertEqual(TENANT_HOST.search("https://" + "Acme-Corp" + ".Slack.com/").group(1), "Acme-Corp")
         self.assertEqual(TENANT_PATH.search("https://linear.app/" + "acme-corp" + "/issue/X-1").group(1), "acme-corp")
-        for path in ("/Users/" + "pat" + "/work", "/home/" + "pat" + "/work", "C:\\Users\\" + "pat" + "\\work"):
+        self.assertEqual(TENANT_PATH.search("https://www.notion.so/" + "acme-corp" + "/Plan-0f1e").group(1), "acme-corp")
+        self.assertIsNone(TENANT_PATH.search("https://www.notion.so/Release-Notes-0f1e2d3c"))
+        for path in ("/Users/" + "pat" + "/work", "/home/" + "pat" + "/work", "C:\\Users\\" + "pat" + "\\work", "/Users/Jane " + "Smith" + "/work"):
             with self.subTest(path=path):
                 self.assertTrue(_names_a_user(USER_DIR.search(path).group(1)))
-        for path in ("/home/.local/bin", "/home/../etc", "/home/1100/x", "/Users/Demo/x", "/Users/demo@example.com/x"):
+        for path in ("/home/.local/bin", "/home/../etc", "/home/1100/x", "/Users/Demo/x", "/Users/demo@example.com/x", "C:\\Users\\Demo User\\npm", "/home/u -la"):
             with self.subTest(path=path):
                 self.assertFalse(_names_a_user(USER_DIR.search(path).group(1)))
 
