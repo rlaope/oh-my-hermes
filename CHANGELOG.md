@@ -704,6 +704,17 @@ All notable changes will be documented here.
   so a set order, clock or mtime that reaches the frozen prefix fails CI. No difference was found. OMH adds no skill
   index or candidate text to the system prompt. (`src/plugin_bundle/omh/hooks/llm_hooks.py`)
 
+- **`omh cache` shows how warm a profile's prompt cache is and why it goes cold.** It reads the profile's `state.db`
+  read-only and prints, for the last 7 days (`--days N`, `--json`): the cache read share per session source; the gaps
+  between user messages in human-paced sessions (`<5m`, `5-60m`, `>1h`); per cron job (title before `' · '`) the runs,
+  model runs, cache writes, median gap and distinct system prompts; and the cron write split into cold (a run more
+  than 1h after the job's previous one), churn (a warm run whose system prompt changed) and other (growth inside
+  runs), using the job's smallest run write as its prefix. For the top churn job it prints the first differing system
+  prompt line, cut to 160 characters, then one to three suggestions. The HUD payload gains a `cache` field: the last
+  24h read share of main sessions from one bounded read-only query that never waits on a lock, left out when it
+  cannot be read, and shown on the plain `omh hud` / `omh status` line as `cache:NN%`. It sends no model request.
+  (`src/maintenance/cache_report.py`, `src/commands/cache.py`, `src/surfaces/hud.py`, `docs/PROMPT-CACHE.md`)
+
 ## 5.0.0 - 2026-11-21
 
 - **A mise-managed `codex` or `python3` runs again in `omh coding run`.** mise links every tool it manages to one
