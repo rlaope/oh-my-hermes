@@ -4,6 +4,10 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: Settings › Accounts › GitHub keeps Add and Remove on one line.** A GitHub account row reused the
+  accounts grid, whose last column is the 26px ⋯ menu. 추가 just fit there in macOS's font; on Windows, whose Korean
+  font is wider, it broke into 추 / 가 and was clipped. That row's button column now takes the label's width in any
+  language and font. (`apps/omher/src/settings/accounts/accounts.css`)
 - **omher: Ctrl+V pastes and Ctrl+C copies in a Windows terminal, as in Windows Terminal.** On Windows, Ctrl+V in a
   terminal used to reach the program as ^V; only Ctrl+Shift+V and Shift+Insert pasted. Now Ctrl+V pastes through the
   same path as those keys (the multi-line confirm, and a pasted picture's saved path), and the paste happens once.
