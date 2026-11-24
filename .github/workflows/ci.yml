@@ -32,6 +32,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # The PR scope step diffs against the base branch's merge base.
+          fetch-depth: 0
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.12"
@@ -55,12 +58,23 @@ jobs:
       # round trip 4 s, PowerShell parse/redirect ~7 s, compile). Re-read them
       # when those gates change. The serial quarantine runs after the last
       # shard's tests, and the planner seeds its duration onto that shard.
+      # A pull request that changes only apps/omher/ (and CHANGELOG.md) plans
+      # the unit tests whose source reads those paths, ~6% of the suite; any
+      # other change and every main push plans the whole inventory, and main
+      # re-runs everything on the merged tree (tools/test_sharding/scope.py).
+      - name: PR scope
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git diff --name-only "origin/${{ github.base_ref }}...HEAD" > changed-paths.txt
+            echo "SCOPE_ARGS=--changed-paths changed-paths.txt" >> "$GITHUB_ENV"
+            wc -l < changed-paths.txt
+          fi
       - name: Plan test shards
         run: >-
           python tools/test_sharding/plan.py --shards 2 --shard0-offset 25
           --durations timings-history/timings.json
           --quarantine tools/test_sharding/quarantine.json
-          --out shard-plan/plan.json
+          --out shard-plan/plan.json $SCOPE_ARGS
       # Windows runs the same suite more than twice as slowly as Linux, so its lane
       # gets its own 4-shard plan over the same inventory and quarantine; the
       # Linux lanes keep 2. The aggregate validates each lane against the plan
@@ -70,7 +84,7 @@ jobs:
           python tools/test_sharding/plan.py --shards 4 --shard0-offset 90
           --durations timings-history/timings.json
           --quarantine tools/test_sharding/quarantine.json
-          --out shard-plan/plan-windows.json
+          --out shard-plan/plan-windows.json $SCOPE_ARGS
       - name: Upload shard plan
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -126,7 +140,7 @@ jobs:
       - name: Unit tests (shard ${{ matrix.shard }})
         run: >-
           python tools/test_sharding/run.py --plan shard-plan/plan.json
-          --lane linux-${{ matrix.python-version }} --shard ${{ matrix.shard }} --workers 2
+          --lane linux-${{ matrix.python-version }} --shard ${{ matrix.shard }} --workers 4
           --attempt ${{ github.run_attempt }}
           --out results/result-linux-${{ matrix.python-version }}-${{ matrix.shard }}-attempt-${{ github.run_attempt }}.json
       - name: Upload shard result
@@ -286,7 +300,7 @@ jobs:
           PYTHONPATH: tests
         run: >-
           python tools/test_sharding/run.py --plan shard-plan/plan-windows.json
-          --lane windows-3.12 --shard ${{ matrix.shard }} --workers 2
+          --lane windows-3.12 --shard ${{ matrix.shard }} --workers 4
           --attempt ${{ github.run_attempt }}
           --out results/result-windows-3.12-${{ matrix.shard }}-attempt-${{ github.run_attempt }}.json
       - name: Upload shard result
