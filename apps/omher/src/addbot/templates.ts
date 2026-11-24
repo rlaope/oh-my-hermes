@@ -6,8 +6,10 @@
 export const PROFILE_NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 /** Names Hermes keeps for itself (`hermes_cli/profiles.py` `_RESERVED_NAMES`); `default` is the main profile. */
 export const PROFILE_RESERVED: readonly string[] = ["hermes", "default", "test", "tmp", "root", "sudo"];
-/** OMH's own TUI runtime profile (`TUI_PROFILE`): `omh update` never gives it OMH's skills. */
+/** OMH's own TUI runtime profile (`TUI_PROFILE`): neither `omh update` nor `omh apply --profile` gives it OMH's skills. */
 export const OMH_PROFILES: readonly string[] = ["omh-tui"];
+/** OMH's one-profile registration (`omh apply --profile`): the command the page shows, never runs. */
+export const skillSyncCmd = (bot: string) => `omh apply --profile ${bot}`;
 /** The skill that applies a template, as the `/command` Hermes registers for it. */
 export const APPLY_SKILL = "omh-bot-template";
 /** A template id as OMH's catalog writes it. */

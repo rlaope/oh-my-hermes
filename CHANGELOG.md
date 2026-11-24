@@ -357,6 +357,19 @@ All notable changes will be documented here.
   that guard now stands down when an alert should become a fix, and a latency status read keeps it. A monitor
   threshold to fix is the monitor's config and stays off the alert-to-fix card.
   (`src/routing/bot_template_cues.py`, `src/routing/policy.py`, `src/routing/chat.py`)
+- **A bot made after install gets OMH's skills without `omh update`: `omh apply --profile <name>`.** A Hermes
+  profile created after OMH was installed had no OMH skills until the next `omh update`, which also updates OMH and
+  touches every Hermes home. `omh apply --profile <name>` runs the update's own per-profile pass for that one profile
+  (one function now serves both), with the same plugin bundle, manifest and opt-out rules: no OMH self-update, no
+  network, no Hermes command, and the main home and every other profile are left byte-identical. It refuses a name
+  outside Hermes' profile rule, `default`, a name Hermes reserves, `omh-tui`, and anything that is not a live profile
+  under `profiles/`, and it is idempotent; `--dry-run` previews and `--json` prints the profile's row. Hermes re-reads
+  `skills.external_dirs` when `config.yaml` changes, so a running gateway finds the skills without a restart; OMH's
+  plugin tools there load at the gateway's next start, which the command names when the gateway's record shows it.
+  `omh update`'s failure path changes with it (its success path is byte-identical): a bot whose config OMH cannot
+  edit used to get the plugin bundle and no registration, which every later update read as the deliberate opt-out;
+  now the registration is tried as a dry run before the first bundle goes in, a write that still fails takes the
+  bundle back, and a rerun after the repair sets the bot up.
 - **automation-blueprint: be told when something happens on a platform that sends no webhook.** Asking Hermes to
   be told when new mail matches a filter, a calendar event is about to start, a Notion page or database changes, a
   Linear or Jira issue is assigned, an Obsidian vault folder changes, or a Sentry issue opens ("tell me when a mail
@@ -596,6 +609,9 @@ All notable changes will be documented here.
   messaging platforms; without `omh`, or with one from before bot templates, the gallery says so and an empty bot still
   works. (`apps/omher/src/addbot/NewBot.tsx`, `apps/omher/bridge/omher_bridge.py` `op_bots_create`;
   `docs/OMHER-BOUNDARY.md` rule 44)
+- **omher: a new bot waiting for its template names the command for that bot.** The New bot gallery's waiting step
+  and the bot page's pending-template line used to say `omh update`; they now show `omh apply --profile <name>` for
+  the bot, which sets up only that bot and needs no Hermes restart. omher shows the command and does not run it.
 - **A bot whose Discord or Slack stopped connecting now says so in omher and on the OMH TUI bot board.** A Discord
   bot whose profile gained a role allowlist can be refused at its next reconnect (Discord's Server Members privileged
   intent) and stay offline, with only Hermes' gateway log saying why; `omh doctor` now reads it, but nothing showed
