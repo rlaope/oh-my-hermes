@@ -99,6 +99,9 @@ FINDING_STALE_GATEWAY = "gateway_older_than_build"
 FINDING_PENDING_RESTART = "hermes_pending_fleet_restart"
 FINDING_INCOMPLETE_RESTART = "hermes_restart_incomplete"
 FINDING_UNRECORDED = "unrecorded_gateway_process"  # its build and its home are unknown: never counted as stale
+# An idle-exit gateway still running after this long is reported as a stray: six times Hermes' documented default
+# `gateway.unmanaged_idle_exit_seconds` (600 s), since the value its own launch home sets cannot be read from here.
+IDLE_EXIT_STALE_SECONDS = 3600
 FINDING_SHARED_PROFILE = "profile_served_twice"
 FINDING_ADAPTER_DOWN = "adapter_not_connected"
 STATE_STALE = "no_line_this_run"  # every adapter line for it predates the start of the gateway serving it
@@ -140,6 +143,8 @@ class GatewayProcess:
     active_turns: int = 0
     code_sha: str = ""
     build: str = BUILD_UNKNOWN  # one of the BUILD_* names
+    idle_exit: bool = False  # an unrecorded `gateway run --idle-exit`: a Hermes client's own start, which Hermes ends once idle
+    overdue: bool = False  # an idle-exit gateway running longer than IDLE_EXIT_STALE_SECONDS: reported as a stray
 
 
 @dataclass(frozen=True)
@@ -222,6 +227,7 @@ def gateway_health(
     list_processes: Callable[[], GatewayListing] = hermes_gateway_processes,
     process_start: Callable[[int], float | None] = _process_start,
     log_tail_bytes: int = GATEWAY_LOG_TAIL_BYTES,
+    now: Callable[[], float] | None = None,  # the clock an idle-exit gateway's age is read against; None: `time.time`
 ) -> GatewayHealth:
     root = hermes_root(hermes_home)
     install_dir = hermes_install_dir(root)
@@ -233,12 +239,16 @@ def gateway_health(
     listing = list_processes()
     listed_ok, listed = listing.listed, listing.gateways
     recorded_pids = {process.pid for process in recorded}
+    clock = time.time if now is None else now
     unrecorded = []
     for pid, profile in listed:
         if pid in recorded_pids:
             continue
         started = process_start(pid)
-        unrecorded.append(GatewayProcess(pid, profile, False, started_at=iso_utc(started), build=_build_verdict(build, "", started)))
+        idle_exit = pid in listing.idle_exit
+        overdue = idle_exit and started is not None and clock() - started > IDLE_EXIT_STALE_SECONDS
+        unrecorded.append(GatewayProcess(pid, profile, False, started_at=iso_utc(started),
+                                         build=_build_verdict(build, "", started), idle_exit=idle_exit, overdue=overdue))
     shared = _shared_profiles(recorded)
     logs, adapters = _adapter_states(homes, serving, log_tail_bytes)
     gateways = (*recorded, *unrecorded)
@@ -600,7 +610,7 @@ def _findings(
         found.append(FINDING_PENDING_RESTART)
     if restart.restart_incomplete or restart.phase_error or restart.stale_fleet:
         found.append(FINDING_INCOMPLETE_RESTART)
-    if any(not process.recorded for process in gateways):
+    if any(not process.recorded and _stray(process) for process in gateways):
         found.append(FINDING_UNRECORDED)
     if shared:
         found.append(FINDING_SHARED_PROFILE)
@@ -649,8 +659,9 @@ def _report(
             actions.append(f"restart PID {process.pid}{turns} with `{command}`; {RESTART_NOTE}")
     for process in unrecorded:
         lines.append(_unrecorded_line(process, built, recorded))
-    if unrecorded:
-        pids = ", ".join(str(process.pid) for process in unrecorded)
+    strays = [process for process in unrecorded if _stray(process)]
+    if strays:
+        pids = ", ".join(str(process.pid) for process in strays)
         actions.append(
             f"find what started PID {pids}: a gateway of another Hermes home (a scratch or test home) or one left "
             "running. Stop it from the home that started it with `hermes gateway stop`, or end that process; "
@@ -729,18 +740,43 @@ def _unrecorded_line(process: GatewayProcess, built: str, recorded: list[Gateway
     """Which home and which checkout an unrecorded process runs is not known: nothing here claims either."""
     named = f"`--profile {process.profile}` on its command line" if process.profile else "no profile on its command line"
     started = f", started {process.started_at}" if process.started_at else ""
-    if process.build == BUILD_BEFORE:
-        build = (f"; that is before this install's build ({built}): if it runs this install, it serves "
-                 "pre-update code")
-    elif process.build == BUILD_CURRENT:
-        build = "; that is after this install's build"
-    else:
-        build = ""
+    if process.idle_exit:
+        # Hermes passes `--profile default` as the selector of any home outside `<root>/profiles/` (a throwaway
+        # home included), so the shared-name note below would read as a second default gateway.
+        head = (f"PID {process.pid} runs `hermes gateway run --idle-exit` ({named}) and no record under this Hermes "
+                f"root names it{started}{_unrecorded_build(process, built)}: a Hermes client started it for its own "
+                "home (`hermes chat` in a scratch home, such as an OMH dispatch's child, the TUI, or cron)")
+        if process.overdue:
+            return (f"{head}, and it has not exited after more than {IDLE_EXIT_STALE_SECONDS} s. {IDLE_EXIT_TERMS}")
+        unknown = "" if process.started_at else " Its start time could not be read."
+        return f"{head}. {IDLE_EXIT_TERMS}{unknown}"
+    build = _unrecorded_build(process, built)
     owner = next((other.pid for other in recorded if (process.profile or DEFAULT_PROFILE) in other.serves), None)
     also = (f"; it carries the same profile name as PID {owner} here, and which home it serves is not recorded"
             if owner is not None else "")
     return (f"PID {process.pid} runs `hermes gateway run` ({named}) and no record under this Hermes root names it"
             f"{started}{build}{also}.")
+
+
+IDLE_EXIT_TERMS = (
+    "When its idle exit is armed, Hermes ends it after `gateway.unmanaged_idle_exit_seconds` (600 s by default) "
+    "with nothing to do. It is not armed when that home sets the value to 0 or when Hermes detects a supervisor, "
+    "and an armed one stays up while an idle check of its own fails (Hermes counts that as work) or while a client, "
+    "adapter, cron or kanban job holds it."
+)
+
+
+def _stray(process: GatewayProcess) -> bool:
+    """An unrecorded process the person should find: any but an idle-exit gateway still inside the threshold."""
+    return not process.idle_exit or process.overdue
+
+
+def _unrecorded_build(process: GatewayProcess, built: str) -> str:
+    if process.build == BUILD_BEFORE:
+        return f"; that is before this install's build ({built}): if it runs this install, it serves pre-update code"
+    if process.build == BUILD_CURRENT:
+        return "; that is after this install's build"
+    return ""
 
 
 def _fleet_line(
@@ -756,6 +792,8 @@ def _fleet_line(
     shape = f"{total} gateway process(es) running, {len(recorded)} recorded, serving {len(served)} profile(s)"
     if unrecorded:
         shape += f"; {len(unrecorded)} not recorded by this Hermes root"
+        if idle := sum(process.idle_exit for process in unrecorded):
+            shape += f", {idle} of them a client's idle-exit gateway"
     if shared:
         shape += f"; {len(shared)} profile(s) served by more than one"
     return shape + "."

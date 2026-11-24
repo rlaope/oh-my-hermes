@@ -122,6 +122,11 @@ _GUARDRAIL_CANDIDATE_INJECTION_IDS = frozenset(
         # "watch PR 42 until its checks finish" scores on ultrawork's `until` and
         # `finish` triggers and on nothing of github-event-ops'.
         "pr_watch_before_loop_or_ultrawork",
+        # "센트리 에러 알림 왔어 고쳐줘" and "이 메일 답장하지 말고 작업으로 만들어줘" name no
+        # English trigger of app-work-intake, so its guard needs a candidate to land on.
+        "app_work_intake_before_connector_or_coding",
+        # "회의록 리니어 이슈로 만들어줘" names no operating-rhythm trigger the frozen Korean table holds.
+        "meeting_to_issues_before_connector",
         # "does this change introduce a bug?" names no word `code-review`
         # triggers on, so the guard's boost needs a candidate to land on.
         "code_review_request_before_generic_clarify",
@@ -2072,6 +2077,11 @@ _SKILL_POLICIES.update(
             evidence_boundary="A GitHub event ops card is not webhook delivery, API mutation, label application, review completion, CI rerun, or fix execution evidence.",
             wrapper_guidance="Classify PR, issue, review, and CI events into triage/review/label/fix-handoff actions; record GitHub mutations only when observed.",
         ),
+        "app-work-intake": RecommendationPolicy(
+            next_action="prepare_app_work_intake_card",
+            evidence_boundary="An app work intake card is not an app read, a plan, a dispatch, a PR, a write-back to the source, a thread, or a fix.",
+            wrapper_guidance="Read the spec, issue, mail, or alert through the bot's own Hermes tool, choose spec to PR, inbox to work, or alert to fix, and record each write to the app only with its read-back.",
+        ),
         "github-issue-intake": RecommendationPolicy(
             next_action="prepare_github_issue_intake",
             evidence_boundary=(
@@ -3036,7 +3046,19 @@ _SIBLING_POINTER_METADATA_TOKENS = {
 # `models` and `work` look like observed-work inventory requests.
 _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
     # `write a handover guide`: the skill's closing handover. Each word is everyday alone.
-    "wiki": frozenset({"write", "handover", "guide"}),
+    # The vault-as-knowledge phrases add `memory`, `recall`, `journal` and `daily`: each is
+    # everyday alone, and the vault guard reaches the recipe when a vault is named beside one.
+    "wiki": frozenset({"write", "handover", "guide", "memory", "recall", "journal", "daily"}),
+    # Every app-work-intake trigger is a phrase of everyday words and app names; its guard
+    # needs the app item and the work it becomes together, so the words alone score nothing
+    # ("set an alert for 5pm", "summarize the Sentry issues").
+    "app-work-intake": frozenset({
+        "app", "work", "intake", "spec", "pr", "notion", "confluence", "linear", "issue", "into", "jira",
+        "ticket", "link", "back", "inbox", "email", "task", "mail", "alert", "fix", "sentry", "error", "datadog",
+    }),
+    # The meeting-to-issues phrases add `issues`, `tickets`, `transcript`, `notes`, `items` and
+    # `into` to operating-rhythm; alone they are a tracker's, a media input's, or no one's.
+    "operating-rhythm": frozenset({"issues", "tickets", "transcript", "notes", "items", "into"}),
     # The audit phrases name the instrumentation review. Alone these words mean a school's
     # instruments, a race car's sensors and contact tracing, and `audit` is code review's.
     "agent-ops-review": frozenset({"instrumentation", "audit", "telemetry", "tracing"}),
@@ -4377,6 +4399,14 @@ _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
             "feels",
             "like",
             "screams",
+            # The design-to-code phrases ("figma frame", "implement this figma") add these;
+            # a Figma file to export, a picture frame, or code sent by Friday is not a UI.
+            "figma",
+            "frame",
+            "code",
+            "implement",
+            "build",
+            "this",
         }
     ),
     # `anti-slop pass`, `anti-slop review`, `anti-slop sweep`, `ai slop`, and

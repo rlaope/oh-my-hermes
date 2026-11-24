@@ -12,11 +12,14 @@ This module holds the one writer of the grant, `write_pr_delivery_grant`.
 no plugin tool, hook or skill can turn the grant on. `on` and `off` also
 refuse to run inside a Hermes session (a `HERMES_SESSION_ID` in the
 environment, which Hermes sets for every command its terminal tool runs),
-`on` needs a yes typed at the controlling terminal, and the plugin's tool
-hook refuses any command line naming them, so a bot can only tell the person
-the command. A model that sets out to evade all three (a pseudo-terminal it
-drives, an environment it scrubs, a command line spelled past the hook) is
-the stated residual, not a case this module claims to stop.
+they also refuse when any other marker Hermes puts in a child's environment
+is present (`HERMES_MARKERS`), `on` needs a yes typed at a terminal a person
+can see, and the plugin's tool hook refuses any command line naming them.
+That stops a cooperating agent and an agent without a terminal. A bot that
+spells the command past the hook, unsets every marker and spawns its own
+pseudo-terminal (the terminal tool's `pty=true`) can answer the prompt
+itself: the same class as the other stated residuals, not a case this module
+claims to stop.
 
 The grant is per Hermes profile: the file names the profile's Hermes home,
 and a grant for one profile never reads as on for another, even when both
@@ -40,6 +43,25 @@ CHANGE_SCHEMA_VERSION = "omh_pr_delivery_grant_change/v1"
 # (`tools/environments/local.py` copies the session's context variables into
 # the child's environment). A person's own shell does not have it.
 HERMES_SESSION_ENV = "HERMES_SESSION_ID"
+# Variables Hermes puts in its own and its children's environment, read from
+# its source: the session context (`gateway/session_context.py`, every
+# `HERMES_SESSION_*`, `HERMES_UI_SESSION_ID`, `HERMES_CRON_SESSION`), the
+# agent process (`HERMES_AGENT`, set by `hermes_cli/main.py` and
+# `gateway/run.py`), the gateway's approval mode (`HERMES_EXEC_ASK`) and a
+# one-shot run (`HERMES_SINGLE_QUERY_SESSION`). `HERMES_HOME` is not one: a
+# person sets it in their own shell.
+HERMES_MARKERS = ("HERMES_UI_SESSION_ID", "HERMES_CRON_SESSION", "HERMES_AGENT", "HERMES_EXEC_ASK",
+                  "HERMES_SINGLE_QUERY_SESSION")
+HERMES_MARKER_PREFIX = "HERMES_SESSION_"
+
+
+def hermes_marker(environ) -> str:
+    """The first Hermes marker in an environment, or "": seen without spawning anything."""
+    for name in sorted(environ):
+        value = str(environ.get(name, "") or "").strip()
+        if value and (name.startswith(HERMES_MARKER_PREFIX) or name in HERMES_MARKERS):
+            return name
+    return ""
 EXIT_REFUSED = 2
 
 
@@ -85,18 +107,49 @@ def write_pr_delivery_grant(paths, *, state: str, branch_prefix: str, previous: 
     return document
 
 
+def on_windows() -> bool:
+    """Whether the console rules apply. A seam, so tests decide it on every host."""
+    return os.name == "nt"
+
+
 def terminal_devices() -> tuple[str, str]:
     """(read, write) devices of the controlling terminal: the console on Windows, `/dev/tty` elsewhere."""
-    return ("CONIN$", "CONOUT$") if os.name == "nt" else ("/dev/tty", "/dev/tty")
+    return ("CONIN$", "CONOUT$") if on_windows() else ("/dev/tty", "/dev/tty")
+
+
+def console_is_visible() -> bool:
+    """Whether this process's console has a window a person can see. Windows only.
+
+    Hermes spawns every terminal child with `CREATE_NO_WINDOW`
+    (`tools/environments/local.py`, `windows_hide_flags`): such a child has a
+    console, so `CONIN$` opens, but no visible window, so nobody can type the
+    yes. Any failure to ask answers no.
+    """
+    try:
+        import ctypes
+
+        window = ctypes.windll.kernel32.GetConsoleWindow()  # type: ignore[attr-defined]
+        return bool(window) and bool(ctypes.windll.user32.IsWindowVisible(window))  # type: ignore[attr-defined]
+    except (AttributeError, OSError, ImportError):
+        return False
 
 
 def confirm_on_terminal(prompt: str) -> bool:
-    """A yes typed at the controlling terminal. A gateway- or cron-run child has none, so it is a no.
+    """A yes typed at a terminal a person can see; every doubt is a no.
+
+    A Hermes pipe-mode child has no controlling terminal, so `/dev/tty`
+    fails and the answer is no. A child Hermes spawns with `pty=true` does
+    have one, and so can answer: that is why the marker check runs first and
+    why this is stated as a residual, not a proof.
 
     POSIX reads `/dev/tty`. Windows has none; its equivalent is the console
-    itself, `CONIN$` and `CONOUT$`, which a process without a console cannot
-    open. Either way a missing terminal is a no, never a crash.
+    itself, `CONIN$` and `CONOUT$`. A Hermes child owns a hidden console
+    (`CREATE_NO_WINDOW`) where those open with nobody at it, so on Windows
+    the console window must also be visible. A missing or hidden terminal is
+    a no, never a wait and never a crash.
     """
+    if on_windows() and not console_is_visible():
+        return False  # a hidden console (Hermes spawns its children with CREATE_NO_WINDOW) has nobody at it
     reader, writer = terminal_devices()
     try:
         with open(writer, "w", encoding="utf-8") as out:
@@ -144,9 +197,10 @@ def cmd_pr_delivery_off(args: argparse.Namespace) -> int:
 
 
 def _change(args: argparse.Namespace, *, state: str) -> int:
-    if str(os.environ.get(HERMES_SESSION_ENV, "") or "").strip():
+    marker = hermes_marker(os.environ)
+    if marker:
         message = (
-            f"Refused: this runs inside a Hermes session ({HERMES_SESSION_ENV} is set). Only the person changes "
+            f"Refused: this runs inside a Hermes session ({marker} is set). Only the person changes "
             "the PR delivery grant, at their own terminal, outside Hermes."
         )
         if _wants_json(args):

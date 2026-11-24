@@ -25,7 +25,7 @@ export interface ShareStatus {
   title: string;
   agent: string;
   cwd: string;
-  state: "working" | "waiting" | "done" | "ended";
+  state: "working" | "news" | "waiting" | "done" | "ended";
   /** ms since the epoch */
   started: number;
   lastLine: string;

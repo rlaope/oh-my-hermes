@@ -142,27 +142,6 @@ const AWAY_SEED = {
   friren: [{ id: "telegram-reading-list", source: "telegram", title: "Reading list", started: 6 * 3600, last: 4 * 3600, count: 5, running: false }],
   default: [],
 };
-const PEEK_SEED = {
-  "slack-og-dev-502": [
-    ["user", "minji", "502s are back on /v1/responses since 14:10", 9],
-    ["assistant", "", "Reading gateway logs. Upstream resets look like keep-alive expiry.", 8],
-    ["user", "jun", "can we raise the pool idle timeout?", 6],
-    ["assistant", "", "Trying that now, rolling to one replica first.", 4],
-    ["user", "minji", "ok, watching the error rate", 2],
-  ],
-  "discord-cron-openmaus": [
-    ["assistant", "", "Briefing: OpenMausBot ships weekly, 3 open issues, nothing blocking.", 120],
-    ["user", "khope", "good, thanks", 118],
-  ],
-  "discord-omh-2657": [
-    ["user", "rlaope", "PR #2657 is ready for review", 1600],
-    ["assistant", "", "Reviewed. One blocking comment on the retry loop, otherwise fine.", 1590],
-    ["user", "rlaope", "fixed, please re-check", 1570],
-    ["assistant", "", "Approved.", 1560],
-  ],
-  "telegram-reading-list": [["user", "khope", "add the Tauri updater post", 240], ["assistant", "", "Added.", 239]],
-};
-
 const ROUTINE_SEED = {
   kami: [
     { id: "cron-repo-watch", name: "Repo watch", schedule: "Daily 09:00", next: 15 * 3600, last: -9 * 3600, status: "ok", enabled: true },
@@ -1579,20 +1558,6 @@ const OPS = {
     return {};
   },
   "elsewhere.list": (p) => ({ sessions: awayFor(needBot(p).name) }),
-  "elsewhere.peek": (p) => {
-    const b = needBot(p);
-    const sid = needStr(p, "session_id");
-    const away = awayFor(b.name).find((a) => a.id === sid);
-    if (!away) throw new OpError("not_found", `no session ${sid} for ${b.name}`);
-    const limit = Number.isInteger(p.limit) && p.limit > 0 ? p.limit : 4;
-    const rows = (PEEK_SEED[sid] ?? []).map(([role, author, text, ago]) => ({
-      role,
-      ...(author ? { author } : {}),
-      text: text.slice(0, 400),
-      ts: now() - ago,
-    }));
-    return { messages: rows.slice(-limit), total: Math.max(away.message_count, rows.length) };
-  },
   "bots.rename": (p) => {
     const b = needBot(p);
     if (typeof p.name !== "string") throw new OpError("bad_request", "name must be text");

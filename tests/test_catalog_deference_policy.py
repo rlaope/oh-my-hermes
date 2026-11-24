@@ -381,9 +381,13 @@ NON_SKILL_BACKTICKS = frozenset(
 # to `skill-scout`, comparing agents to `agent-evaluation` and a broken install
 # to `doctor`; no sibling gains a line pointing back. Four cases, four pairs,
 # one new owner.
-EXPECTED_DEFERENCE_CASES = 473
-EXPECTED_DEFERENCE_PAIRS = 500
-EXPECTED_DEFERRING_OWNERS = 140
+# `app-work-intake` defers one action in an app to `connector-operator`, a GitHub
+# event to `github-event-ops`, a meeting's issues to `operating-rhythm` and a
+# declared outage to `live-incident-response`; no sibling gains a line pointing
+# back. Four cases, four pairs, one new owner.
+EXPECTED_DEFERENCE_CASES = 477
+EXPECTED_DEFERENCE_PAIRS = 504
+EXPECTED_DEFERRING_OWNERS = 141
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,
 # not one more dict line with a plausible sentence attached.

@@ -831,6 +831,25 @@ mod tests {
         let mut child = std::process::Command::new("/bin/sh").arg(&script).stdin(std::process::Stdio::null()).spawn().unwrap();
         let pid = child.id();
         assert_eq!(wait_for(|| Probe::default().agent(pid).map(String::from)).as_deref(), Some("claude"));
+        // macOS's /bin/sh is a stub that execs the selected shell (/bin/bash) a moment after it starts: a program
+        // change the cache rightly reads the argv again for. Start counting once the program has stopped changing,
+        // or a loaded runner's late exec lands inside the 60 probes as a 14th read
+        let exe_now = || {
+            let mut b = [0u8; 4096];
+            exe_path(pid, &mut b).map(|n| b[..n].to_vec())
+        };
+        let mut stable = 0;
+        let mut last = exe_now();
+        for _ in 0..100 {
+            std::thread::sleep(Duration::from_millis(20));
+            let now = exe_now();
+            stable = if now.is_some() && now == last { stable + 1 } else { 0 };
+            last = now;
+            if stable >= 10 {
+                break;
+            }
+        }
+        assert!(stable >= 10, "the program kept changing: {last:?}");
         let t0 = Instant::now();
         // the cache is what is under test, not the OS: read the real argv once (retrying, as a loaded macOS runner's
         // KERN_PROCARGS2 can fail for a moment) and hand those bytes to every read the cache asks for

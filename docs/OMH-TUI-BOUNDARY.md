@@ -427,7 +427,16 @@ and `O_NONBLOCK`), keeps its bytes in memory and nowhere else, and has
 Hermes let go of it (`image.detach`). A prompt that goes with the image
 stages those bytes again through Hermes' `image.attach_bytes`, the call
 Hermes' own remote clients use, and nothing else is staged until Hermes has
-taken them. Proofreading's dictionary, `<omh_home>/proofread/dictionary.txt`
+taken them. When Hermes finds no image for a Ctrl+V, the TUI pastes the
+clipboard's text into the composer instead, as a terminal that pastes on
+Ctrl+V itself would have (`src/tui/clipboard.py`): only with no SSH variable
+set (inside tmux, also only when its last client did not attach over SSH),
+through the Win32 clipboard API on Windows, one fixed `pbpaste` on a Mac, or
+on Linux `wl-paste`, `xclip` or `xsel`, each with a one-second timeout (the
+first that runs past it ends the search), never reading more than 4 MiB and
+a byte of it; text past 4 MiB counts as none. The text goes nowhere but the
+composer: a prompt the person sent before Hermes answered goes as they typed
+it, and the text waits in the composer with a notice. Proofreading's dictionary, `<omh_home>/proofread/dictionary.txt`
 (mode 0600, at most 64 KiB) and its `.dictionary.txt.lock` sidecar, is written
 only by an explicit Add or Remove ([Proofreading](#proofreading)). The explicit `/omh-model` save also edits the person's existing
 `routing/identities.json` under the active OMH home: only the chosen identities'

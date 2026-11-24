@@ -1972,7 +1972,7 @@ def _slack_dm_users(profile_dir: Path) -> list[tuple[str, str]]:
 
 
 def _person_name(raw: str) -> str:
-    """`김희망 (Khope)` -> `김희망`: the name without a bracketed alias."""
+    """`홍길동 (Gildong)` -> `홍길동`: the name without a bracketed alias."""
     return re.split(r"\s*[(（]", raw, maxsplit=1)[0].strip() or raw.strip()
 
 
@@ -5290,17 +5290,6 @@ def set_active_account(cli, account_id, user_home: Path | None = None) -> None:
 
 # ---------------------------------------------------------------- transcript helpers
 
-_AUTHOR_RE = re.compile(r"^\[(?P<author>[^\]|]+?)\s*\|[^\]]*\]\s*(?P<rest>.*)$", re.DOTALL)
-
-
-def split_author(text: str) -> tuple[str | None, str]:
-    """``[김희망 (Khope) | Slack user <@U0…>] hi`` -> (``김희망 (Khope)``, ``hi``)."""
-    m = _AUTHOR_RE.match(text or "")
-    if not m:
-        return None, text
-    return m.group("author").strip() or None, m.group("rest")
-
-
 # The argument a person recognises for each tool. Hermes' own `context` summarises (e.g. a two-command
 # shell line becomes "date + 1 command"), which hides what actually ran.
 _DETAIL_ARG = {
@@ -5988,7 +5977,7 @@ PEER_FORWARD = frozenset({
     "chat.open", "chat.send", "chat.interrupt", "chat.discard", "chat.steer", "approval.respond", "clarify.respond", "chat.attach", "chat.set_model",
     "models.options", "bots.ready", "bots.rename", "bots.avatar", "bots.set_avatar", "bots.info", "skills.list",
     "commands.list", "bots.page",
-    "links.places", "tasks.linear", "elsewhere.list", "elsewhere.peek", "routines.list", "runs.list", "runs.get", "runs.prs",
+    "links.places", "tasks.linear", "elsewhere.list", "routines.list", "runs.list", "runs.get", "runs.prs",
     "runs.node_session",
     "panel.terminal", "panel.worktrees", "panel.diff", "media.read", "automations.add", "automations.pause",
     "automations.resume", "automations.remove", "plugins.list", "plugins.catalog", "plugins.inspect",
@@ -6694,7 +6683,7 @@ class Bridge:
             "chat.send": self.op_chat_send, "chat.interrupt": self.op_chat_interrupt,
             "chat.discard": self.op_chat_discard, "chat.steer": self.op_chat_steer,
             "approval.respond": self.op_approval_respond, "clarify.respond": self.op_clarify_respond,
-            "elsewhere.list": self.op_elsewhere_list, "elsewhere.peek": self.op_elsewhere_peek,
+            "elsewhere.list": self.op_elsewhere_list,
             "routines.list": self.op_routines_list, "models.options": self.op_models_options,
             "chat.set_model": self.op_set_model, "bots.ready": self.op_bots_ready,
             "bots.rename": self.op_bots_rename, "bots.avatar": self.op_bots_avatar,
@@ -9121,33 +9110,6 @@ class Bridge:
     async def op_elsewhere_list(self, p) -> dict:
         conn = await self._conn(p.get("bot"))
         return {"sessions": await self._elsewhere(conn)}
-
-    async def op_elsewhere_peek(self, p) -> dict:
-        sid = p.get("session_id")
-        if not isinstance(sid, str) or not sid:
-            raise BridgeError("bad_request", "missing session_id")
-        limit = p.get("limit", 4)
-        if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 50:
-            raise BridgeError("bad_request", "limit must be 1..50")
-        conn = await self._conn(p.get("bot"))
-        res = await self._call(conn, "session.history", session_id=sid)  # read only: never resumed
-        rows = []
-        for r in res.get("messages") or []:
-            if not isinstance(r, dict) or r.get("role") not in ("user", "assistant") or r.get("display_kind") == "hidden":
-                continue
-            text = _row_text(r)
-            if not text.strip():
-                continue
-            if r["role"] == "user":
-                text = unwrap_steer(text)[0]
-                if not text:
-                    continue
-            author, text = split_author(text) if r["role"] == "user" else (None, text)
-            m = {"role": r["role"], "text": _clip(text), "ts": float(r.get("timestamp") or 0.0)}
-            if author:
-                m["author"] = author
-            rows.append(m)
-        return {"messages": rows[-limit:], "total": len(rows)}
 
 
 # ---------------------------------------------------------------- entry point

@@ -193,6 +193,39 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
     RoutingPrecisionCase("monitor-trigger-on-linear-models", "`on linear models` is not the Linear app", "let me know when the error on linear models goes down", "answer_clarification", "", "automation-blueprint"),
     RoutingPrecisionCase("monitor-trigger-korean-earlier-mail", "Korean 이전에 is earlier, not a time before a start", "이전에 받은 메일 알려줘", "answer_clarification", "", "automation-blueprint"),
     RoutingPrecisionCase("monitor-trigger-korean-plugin-update", "An Obsidian plugin update is not a vault folder change", "옵시디언 플러그인 업데이트 뜨면 알려줘", "answer_clarification", "", "automation-blueprint"),
+    # Cross-platform workflows: each needs an app item and the work it becomes
+    # together. A reply, a calendar question, a reminder alert, a Sentry concept
+    # question, a bare vault, and a Figma export use their words without asking
+    # for that work. "open my vault" keeps wiki as a clarify option, as on main,
+    # so it pins only the verdict.
+    RoutingPrecisionCase("inbox-to-work-a-reply-is-not-work", "Replying to an email is not inbox to work", "reply to this email", "answer_clarification", "", "app-work-intake"),
+    RoutingPrecisionCase("inbox-to-work-korean-reply-is-not-work", "A Korean email reply is not inbox to work", "이 메일에 답장해줘", "answer_clarification", "", "app-work-intake"),
+    RoutingPrecisionCase("meeting-to-issues-calendar-question-stays-direct", "Asking what is on the calendar is not meeting to issues", "what's on my calendar", "answer_directly", "direct_answer", "operating-rhythm"),
+    RoutingPrecisionCase("meeting-to-issues-korean-calendar-question", "A Korean calendar question is not meeting to issues", "오늘 일정 뭐 있어", "answer_clarification", "", "operating-rhythm"),
+    RoutingPrecisionCase("alert-to-fix-a-reminder-is-not-an-alert", "Setting a reminder alert is not alert to fix", "set an alert for 5pm", "answer_clarification", "", "app-work-intake"),
+    RoutingPrecisionCase("alert-to-fix-sentry-question-stays-direct", "Asking what a Sentry error means is answered directly", "what does this Sentry error mean", "answer_directly", "direct_answer", "app-work-intake"),
+    RoutingPrecisionCase("vault-knowledge-open-my-vault-is-not-recall", "Opening a vault is not vault as knowledge", "open my vault", "answer_clarification", ""),
+    RoutingPrecisionCase("design-to-code-figma-export-is-not-a-build", "Exporting a Figma frame as PNG is not design to code", "export this Figma frame as PNG", "answer_clarification", "", "frontend"),
+    RoutingPrecisionCase("design-to-code-korean-figma-export", "A Korean Figma export is not design to code", "피그마 프레임 PNG로 내보내줘", "answer_clarification", "", "frontend"),
+    # `view` is a read verb, the very sense frontend's Figma row withdraws, so it is
+    # not an anchor; nor are `interface` and `screens`, which kept frontend on
+    # "take screenshots of these screens from the Figma frame".
+    RoutingPrecisionCase("design-to-code-viewing-a-figma-frame-is-a-question", "Viewing a Figma frame in presentation mode is a question, not design to code", "how do I view the Figma frame in presentation mode", "answer_directly", "direct_answer", "frontend"),
+    # Review round: the guards matched inside longer words ("create a pr" in
+    # "create a private", 지라 in 지라도), an app name used as a common noun,
+    # a one-off alert read, a reply, a secrets vault, and questions about meeting
+    # notes. The secrets vault and "M8 볼트 규격 기억나" keep wiki and the
+    # meeting-notes question keeps operating-rhythm as a clarify option through
+    # their own vault and meeting phrases, so those three pin only the verdict;
+    # the sentences that dispatch another lane are intervention cases below.
+    RoutingPrecisionCase("app-work-linear-as-a-common-noun", "Linear interpolation is not a Linear issue", "implement linear interpolation for this issue", "answer_clarification", "", "app-work-intake"),
+    RoutingPrecisionCase("app-work-korean-jira-inside-even-if", "\uc9c0\ub77c\ub3c4 is not Jira", "테스트가 실패할지라도 PR 올려줘", "answer_clarification", "", "app-work-intake"),
+    RoutingPrecisionCase("alert-to-fix-reading-an-alert-is-not-a-fix", "Showing the latest Sentry alert is a read", "show me the latest Sentry alert", "answer_clarification", "", "app-work-intake"),
+    RoutingPrecisionCase("inbox-to-work-korean-reply-about-work", "A Korean reply saying one is busy with work is a reply", "이 메일 작업으로 바빠서 못 본다고 답장해줘", "answer_clarification", "", "app-work-intake"),
+    RoutingPrecisionCase("vault-knowledge-secrets-vault", "DNS records stored in a secrets Vault are not vault knowledge", "store these DNS records in Vault", "answer_clarification", ""),
+    RoutingPrecisionCase("vault-knowledge-korean-bolt", "A bolt (\ubcfc\ud2b8) is not a vault", "M8 볼트 규격 기억나", "answer_clarification", ""),
+    RoutingPrecisionCase("meeting-to-issues-question-about-notes", "Asking which issues came up is a question, not issue creation", "which issues came up in the meeting notes", "answer_clarification", ""),
+    RoutingPrecisionCase("meeting-to-issues-korean-question-about-minutes", "A Korean question about issues left in the minutes is not issue creation", "회의록에서 이슈로 남은 것만 알려줘", "answer_clarification", "", "operating-rhythm"),
     RoutingPrecisionCase("repro-audit-weather-conditions", "Weather conditions are not evaluation conditions", "Summarize the reported conditions from the weather report", "answer_clarification", "", "repro-audit"),
     RoutingPrecisionCase("repro-audit-soccer-evaluations", "Player evaluations are not benchmark records", "Compare evaluation results for our soccer players this season", "answer_clarification", ""),
     RoutingPrecisionCase("repro-audit-student-evaluations", "Student evaluations are not benchmark records", "Compare evaluation results for my students between midterm and final", "answer_clarification", ""),
@@ -12075,6 +12108,63 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     RoutingInterventionCase("pr-watch-after-a-declined-review", "Declining a review first, then a PR watch, is a PR watch", "don't review it yet, watch PR 42 until CI passes", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
     RoutingInterventionCase("pr-watch-korean-after-a-declined-review", "A Korean declined review, then a PR watch, is a PR watch", "리뷰는 하지 말고 PR 42 체크 끝날 때까지 지켜봐줘", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
     RoutingInterventionCase("pr-watch-pr-that-fixes-the-deploy-script", "A PR that fixes the deploy script, watched until checks pass, is a PR watch", "keep an eye on PR 3137 until the checks pass, it fixes the deploy script", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
+    # Spec to PR, inbox to work, and alert to fix reach app-work-intake. Before its
+    # guard the tracker sentences dispatched connector-operator or ultrawork, the
+    # mail ones clarified, and the alert ones clarified toward build-failure-triage.
+    RoutingInterventionCase("spec-to-pr-linear-issue", "A Linear issue turned into a PR with the link written back reaches app work intake", "turn Linear issue ENG-42 into a PR and link the PR back", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
+    RoutingInterventionCase("spec-to-pr-notion-spec", "A Notion spec implemented as a PR reaches app work intake", "implement this Notion spec and open a PR", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
+    RoutingInterventionCase("spec-to-pr-confluence-page", "A Confluence page built and opened as a PR reaches app work intake", "build what this Confluence page describes and open a PR", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
+    RoutingInterventionCase("spec-to-pr-jira-ticket", "A PR opened for a Jira ticket and linked back reaches app work intake", "open a PR for Jira ticket PAY-118 and link it back on the ticket", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
+    RoutingInterventionCase("spec-to-pr-korean-jira-ticket", "A Korean Jira ticket to PR reaches app work intake", "Jira 티켓 PAY-118 PR로 만들어줘", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
+    RoutingInterventionCase("inbox-to-work-email-to-task", "An email turned into a task instead of a reply reaches app work intake", "turn this email into a task instead of replying", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
+    RoutingInterventionCase("inbox-to-work-inbox-to-tasks", "Work requests in the inbox turned into tasks reach app work intake", "go through my inbox and turn the work requests into tasks", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
+    RoutingInterventionCase("inbox-to-work-korean-email-to-task", "A Korean email turned into work instead of a reply reaches app work intake", "이 메일 답장하지 말고 작업으로 만들어줘", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
+    RoutingInterventionCase("alert-to-fix-sentry-alert", "A Sentry alert to triage and hand off reaches app work intake", "this Sentry alert fired, triage it and hand off a fix", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
+    RoutingInterventionCase("alert-to-fix-datadog-monitor", "A Datadog monitor alert to investigate and fix reaches app work intake", "the Datadog monitor alert for checkout errors fired, investigate and fix it", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
+    RoutingInterventionCase("alert-to-fix-korean-sentry", "A Korean Sentry error alert to fix reaches app work intake", "센트리 에러 알림 왔어 고쳐줘", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
+    # Meeting to issues is operating-rhythm's recipe over Hermes' meeting-action-items;
+    # before its guard the tracker sentences dispatched connector-operator's one-ticket card.
+    RoutingInterventionCase("meeting-to-issues-transcript-to-linear", "A meeting transcript turned into Linear issues reaches operating rhythm", "turn the meeting transcript into Linear issues", "dispatch", "operating-rhythm", "prepare_operating_record", "operating_rhythm"),
+    RoutingInterventionCase("meeting-to-issues-notes-to-jira", "Meeting notes turned into Jira tickets reach operating rhythm", "turn yesterday's meeting notes into Jira tickets", "dispatch", "operating-rhythm", "prepare_operating_record", "operating_rhythm"),
+    RoutingInterventionCase("meeting-to-issues-korean-minutes-to-linear", "Korean minutes turned into Linear issues reach operating rhythm", "회의록 내용으로 리니어 이슈 만들어줘", "dispatch", "operating-rhythm", "prepare_operating_record", "operating_rhythm"),
+    # Vault as knowledge is wiki's recipe; before its guard "daily" and "obsidian" read
+    # as a recurring research department.
+    RoutingInterventionCase("vault-knowledge-memory-and-journal", "An Obsidian vault as memory and daily journal reaches wiki", "use my Obsidian vault as memory and write my daily journal there", "dispatch", "wiki", "prepare_wiki_blueprint", "wiki_blueprint"),
+    RoutingInterventionCase("vault-knowledge-daily-journal", "A daily journal in Obsidian reaches wiki", "write today's daily journal in obsidian", "dispatch", "wiki", "prepare_wiki_blueprint", "wiki_blueprint"),
+    RoutingInterventionCase("vault-knowledge-korean-journal", "A Korean daily work journal in an Obsidian vault reaches wiki", "옵시디언 볼트에 매일 작업 일지 써줘", "dispatch", "wiki", "prepare_wiki_blueprint", "wiki_blueprint"),
+    # Design to code is frontend's Figma frame section.
+    RoutingInterventionCase("design-to-code-figma-frame", "Implementing a Figma frame reaches frontend", "implement this Figma frame", "dispatch", "frontend", "prepare_frontend_handoff", "frontend_handoff"),
+    RoutingInterventionCase("design-to-code-figma-to-react", "A Figma frame turned into a React component reaches frontend", "turn this Figma frame into a React component", "dispatch", "frontend", "prepare_frontend_handoff", "frontend_handoff"),
+    # Their words in another lane keep that lane's owner: one action in the app,
+    # a plain bug fix, a GitHub issue, and a transcript to summarize.
+    RoutingInterventionCase("spec-to-pr-summarize-notion-stays-connector", "Summarizing a Notion page stays one connector action", "summarize this Notion page", "dispatch", "connector-operator", "prepare_connector_operator_card", "connector_operator"),
+    RoutingInterventionCase("spec-to-pr-korean-summarize-notion-stays-connector", "A Korean Notion page summary stays one connector action", "노션 페이지 요약해줘", "dispatch", "connector-operator", "prepare_connector_operator_card", "connector_operator"),
+    RoutingInterventionCase("spec-to-pr-new-linear-issue-stays-connector", "Creating one Linear issue stays a connector action", "create a Linear issue for the login bug", "dispatch", "connector-operator", "prepare_connector_operator_card", "connector_operator"),
+    RoutingInterventionCase("spec-to-pr-link-back-alone-stays-connector", "Linking an existing PR on a Linear issue stays a connector action", "link the PR back to the Linear issue", "dispatch", "connector-operator", "prepare_connector_operator_card", "connector_operator"),
+    RoutingInterventionCase("inbox-to-work-draft-reply-stays-connector", "Drafting an email reply stays a connector action", "draft a reply to the email from finance", "dispatch", "connector-operator", "prepare_connector_operator_card", "connector_operator"),
+    RoutingInterventionCase("alert-to-fix-plain-bug-stays-coding", "A plain bug fix with no alert stays a coding handoff", "fix this bug", "dispatch", "ultrawork", "choose_executor", "handoff"),
+    RoutingInterventionCase("spec-to-pr-github-issue-stays-event-ops", "A GitHub issue to a PR stays GitHub event ops", "turn this GitHub issue into a PR", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
+    RoutingInterventionCase("meeting-to-issues-summarize-transcript-stays-media", "Summarizing a meeting transcript stays a media input", "summarize the meeting transcript", "dispatch", "media-input-operator", "prepare_media_input_card", "media_input"),
+    # Review round: one action in the app, a cadence, research collected into a
+    # vault, a transcript to translate, and an SDK crash keep their owners.
+    RoutingInterventionCase("app-work-create-private-page-stays-connector", "Creating a private Notion page stays a connector action", "create a private Notion page for the offsite", "dispatch", "connector-operator", "prepare_connector_operator_card", "connector_operator"),
+    RoutingInterventionCase("app-work-move-issue-to-project-stays-connector", "Moving a Linear issue to a project stays a connector action", "move this Linear issue to project Apollo", "dispatch", "connector-operator", "prepare_connector_operator_card", "connector_operator"),
+    RoutingInterventionCase("app-work-presentation-from-page-stays-connector", "A presentation from a Notion page stays a connector action", "make a presentation from this Notion page", "dispatch", "connector-operator", "prepare_connector_operator_card", "connector_operator"),
+    RoutingInterventionCase("app-work-prioritize-issues-stays-connector", "Prioritizing Linear issues stays a connector action", "help me prioritize these Linear issues to prepare for the sprint", "dispatch", "connector-operator", "prepare_connector_operator_card", "connector_operator"),
+    RoutingInterventionCase("inbox-to-work-on-a-cadence-stays-blueprint", "Inbox work turned into tasks every morning is a scheduled job", "every morning go through my inbox and turn work requests into tasks", "dispatch", "automation-blueprint", "prepare_scheduled_ops_blueprint", "automation_blueprint"),
+    RoutingInterventionCase("vault-knowledge-research-on-a-cadence-stays-department", "Research collected into a vault every morning stays a research department", "every morning research AI news and save a summary to my Obsidian vault daily journal", "dispatch", "research-department", "prepare_research_department_plan", "research_department"),
+    RoutingInterventionCase("meeting-to-issues-translate-transcript-stays-media", "Translating a transcript stays a media input", "translate this transcript for the support ticket", "dispatch", "media-input-operator", "prepare_media_input_card", "media_input"),
+    # A trigger that names the work the item becomes is still a monitor job:
+    # automation-blueprint owns the entry point, and the job runs app-work-intake.
+    RoutingInterventionCase("app-work-trigger-to-pr-stays-blueprint", "Told when a Linear issue is assigned and turning it into a PR is a monitor job", "tell me when a Linear issue is assigned and turn it into a PR", "dispatch", "automation-blueprint", "prepare_scheduled_ops_blueprint", "automation_blueprint"),
+    RoutingInterventionCase("app-work-korean-trigger-to-pr-stays-blueprint", "A Korean Notion change turned into a PR is a monitor job", "노션 페이지 바뀌면 알려주고 PR로 만들어줘", "dispatch", "automation-blueprint", "prepare_scheduled_ops_blueprint", "automation_blueprint"),
+    # Verification round: opening an existing PR link is a read, "as soon as
+    # possible" is urgency, not a trigger, and recall said apart from the vault
+    # still recalls from it.
+    RoutingInterventionCase("app-work-open-linked-pr-stays-connector", "Opening the PR linked in a Jira ticket is a read, not spec to PR", "open the PR linked in Jira ticket PAY-2", "dispatch", "connector-operator", "prepare_connector_operator_card", "connector_operator"),
+    RoutingInterventionCase("spec-to-pr-as-soon-as-possible", "An urgent Linear issue to PR is still spec to PR", "as soon as possible turn Linear issue ENG-3 into a PR", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
+    RoutingInterventionCase("vault-knowledge-recall-apart-from-vault", "Recall said apart from the vault reaches wiki", "recall what I wrote about RAG from my Obsidian vault", "dispatch", "wiki", "prepare_wiki_blueprint", "wiki_blueprint"),
+    RoutingInterventionCase("alert-to-fix-sdk-crash-stays-feedback", "A Sentry SDK crash report stays feedback triage", "the Sentry SDK crashes the app on startup, fix it", "dispatch", "feedback-triage", "triage_feedback", "feedback_triage"),
     RoutingInterventionCase(
         "open-issue-event-stays-event-ops",
         "An already-open issue event with failing CI stays in GitHub event ops",

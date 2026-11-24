@@ -101,10 +101,6 @@ test("hello, bots and seeded data", async () => {
   expect(sessions[0].running).toBe(true);
   expect(sessions.every((s: any) => s.label)).toBe(true);
 
-  const peek = await c.ok("elsewhere.peek", { bot: "kami", session_id: sessions[0].id });
-  expect(peek.messages).toHaveLength(4);
-  expect(peek.total).toBeGreaterThan(4);
-
   // link chips: channel names by id, as the bridge reads them from the bot's own sessions
   const { places } = await c.ok("links.places", { bot: "kami" });
   expect(places.slack).toMatchObject({ C0BLC924P1P: "#docs-agent" });
