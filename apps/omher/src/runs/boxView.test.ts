@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fromDag, type AgentRun, type RunNode } from "../lib/runs";
 import {
@@ -31,6 +31,15 @@ import { modelName } from "./format";
  *  pause between their runs the worker never answers vitest's own messages on a slow CI runner, and vitest fails
  *  the job with "Timeout calling onTaskUpdate" although every test passed. */
 const breathe = () => new Promise<void>((r) => setTimeout(r, 0));
+
+/** Keep each test's work bounded without resetting the generator between batches. */
+function batches<T>(fixtures: T[], size: number) {
+  return Array.from({ length: Math.ceil(fixtures.length / size) }, (_, batch) => {
+    const start = batch * size;
+    const runs = fixtures.slice(start, start + size);
+    return { start, end: start + runs.length - 1, runs };
+  });
+}
 
 const G = GEOMETRY;
 const node = (id: string, deps: string[] = [], extra: Partial<RunNode> = {}): RunNode => ({ id, label: id, deps, layer: 0, state: "done", attempts: [], ...extra });
@@ -1068,38 +1077,39 @@ describe("the layout", () => {
     expect(lay(sample(), 1136, { stretch: 1.25 }).w).toBe(1136);
   });
 
-  it("gives a dense run fewer boxes to a row rather than two lines one place: no fault at any panel width", async () => {
+  const denseRuns = (() => {
     // seeded, so the same runs every time: 12 to 50 nodes, each waiting on some of the nodes before it
     let seed = 1;
-    let shared = 0; // the layouts in which lines share a place
     const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
-    for (let k = 0; k < 36; k++) {
-      await breathe();
+    return Array.from({ length: 36 }, (_, k) => {
       const n = 12 + Math.floor(rnd() * 39);
       const p = 0.05 + rnd() * 0.2;
-      const nodes = Array.from({ length: n }, (_, i) => node(`n${i}`, Array.from({ length: i }, (_, j) => `n${j}`).filter(() => rnd() < p), { label: `Node ${i} of run ${k}` }));
+      return Array.from({ length: n }, (_, i) => node(`n${i}`, Array.from({ length: i }, (_, j) => `n${j}`).filter(() => rnd() < p), { label: `Node ${i} of run ${k}` }));
+    });
+  })();
+  it.each(batches(denseRuns, 4))("gives a dense run fewer boxes to a row rather than two lines one place: no fault at any panel width (runs $start-$end)", async ({ start, runs }) => {
+    for (const [offset, nodes] of runs.entries()) {
+      await breathe();
       for (const width of [428, 460, 528]) {
         const l = lay(dag(nodes), width);
-        const what = `run ${k} (${n} nodes) at ${width}px`;
-        expect(l.boxes.length, what).toBe(n);
+        const what = `run ${start + offset} (${nodes.length} nodes) at ${width}px`;
+        expect(l.boxes.length, what).toBe(nodes.length);
         expect(l.crowded - l.shared, what).toBe(l.heads.filter((h) => l.tight.includes(h.to)).length); // what is crowded besides is the lines into a tight child
         expect([...l.drawn].sort(), what).toEqual(edgesOf(l));
         sharesOnlyAtTwoToARow(l, what);
-        shared += l.shared ? 1 : 0;
+        expect(l.shared, what).toBe(0);
       }
     }
-    expect(shared).toBe(0);
-  }, 120_000);
+  }, 30_000);
 
-  it("keeps a line into a child clear of the lines that leave the row above it, however many there are", async () => {
+  const stubRuns = (() => {
     // seeded runs with many start nodes, where every fifth node waits on half of the nodes before it: its top
     // edge takes many lines, right under the stubs of the row above (found by an independent check: a point that
     // stayed on another net's stub once the first six places beside it were taken)
     let seed = 7;
     const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
     const states: RunNode["state"][] = ["done", "running", "failed", "waiting", "done", "cancelled", "parked"];
-    for (let k = 0; k < 30; k++) {
-      await breathe();
+    return Array.from({ length: 30 }, () => {
       const roots = 2 + Math.floor(rnd() * 14);
       const n = roots + 3 + Math.floor(rnd() * 30);
       const nodes: RunNode[] = [];
@@ -1107,6 +1117,12 @@ describe("the layout", () => {
         const deps = i < roots ? [] : Array.from({ length: i }, (_, j) => `n${j}`).filter(() => rnd() < (i % 5 === 0 ? 0.5 : 0.12));
         nodes.push(node(`n${i}`, deps, { label: `Task ${i} with a fairly long title for wrapping`, state: states[Math.floor(rnd() * states.length)] }));
       }
+      return nodes;
+    });
+  })();
+  it.each(batches(stubRuns, 3))("keeps a line into a child clear of the lines that leave the row above it, however many there are (runs $start-$end)", async ({ start, runs }) => {
+    for (const [offset, nodes] of runs.entries()) {
+      await breathe();
       for (const capRows of [undefined, 8])
         for (const [width, stretch] of [
           [428, 1],
@@ -1114,9 +1130,9 @@ describe("the layout", () => {
           [1136, 1.25],
         ]) {
           const l = lay(dag(nodes), width, { capRows, stretch });
-          const what = `run ${k} (${n} nodes) at ${width}px${capRows ? ", capped" : ""}`;
+          const what = `run ${start + offset} (${nodes.length} nodes) at ${width}px${capRows ? ", capped" : ""}`;
           expect(l.shared, what).toBe(0);
-        expect(l.crowded, what).toBe(l.heads.filter((h) => l.tight.includes(h.to)).length); // what is crowded besides is the lines into a tight child
+          expect(l.crowded, what).toBe(l.heads.filter((h) => l.tight.includes(h.to)).length); // what is crowded besides is the lines into a tight child
           expect(faults(l), what).toEqual([]);
         }
     }
@@ -1125,7 +1141,7 @@ describe("the layout", () => {
   // the generator of the check that found two lines on one place in 54-60-node runs at 428px and 460px (its runs
   // 11, 13, 27 and 47): one column of boxes at the comfortable width left the lines too little room beside them.
   // Seeded: 10 to 60 nodes, some with many roots, some with one node that waits on most of the others. Its 80 runs
-  // are laid out in four tests of 20 (it took 73 s in one on windows-latest), with a breath between runs
+  // are split into small batches (a batch of 20 took 73 s on windows-latest), with a breath between runs
   const checkRuns = (() => {
     let seed = 12345;
     const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
@@ -1154,12 +1170,12 @@ describe("the layout", () => {
       return { n, hub, nodes };
     });
   })();
-  let checkShared = 0; // the panel layouts of this generator in which lines share a place
-  for (let part = 0; part < 4; part++)
-    it(`gives every passing line a place of its own in runs up to 60 nodes at the panel's widths (an independent check's generator, runs ${part * 20}-${part * 20 + 19})`, async () => {
-      for (let k = part * 20; k < part * 20 + 20; k++) {
+  describe("gives every passing line a place of its own in runs up to 60 nodes at the panel's widths (an independent check's generator)", () => {
+    let checkShared = 0; // the panel layouts of this generator in which lines share a place
+    it.each(batches(checkRuns, 4))("runs $start-$end", async ({ start, runs }) => {
+      for (const [offset, { n, hub, nodes }] of runs.entries()) {
         await breathe();
-        const { n, hub, nodes } = checkRuns[k];
+        const k = start + offset;
         // the two panel widths for every run; the full view for every fourth
         for (const [width, stretch] of [
           [428, 1],
@@ -1171,13 +1187,14 @@ describe("the layout", () => {
           expect(l.crowded - l.shared, what).toBe(l.heads.filter((h) => l.tight.includes(h.to)).length); // what is crowded besides is the lines into a tight child
           if (width > 600) expect(l.shared, what).toBe(0);
           sharesOnlyAtTwoToARow(l, what);
-          checkShared += l.shared ? 1 : 0;
+          if (width <= 600 && l.shared) checkShared++;
         }
       }
-    }, 120_000);
-  it("shares a place in few of that generator's panel layouts: its densest runs, 48 nodes and up at two boxes to a row", () => {
-    // of its 160 panel layouts (the four tests above ran first: vitest runs a file's tests in order)
-    expect(checkShared).toBeLessThanOrEqual(18);
+    }, 30_000);
+    afterAll(() => {
+      // Of its 160 panel layouts, few share a place: its densest runs, 48 nodes and up at two boxes to a row.
+      expect(checkShared).toBeLessThanOrEqual(18);
+    });
   });
 
   it("calls a child tight when more lines lead into it than its top edge holds an arrowhead apart, and only then", () => {
