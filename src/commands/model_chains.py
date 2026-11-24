@@ -195,6 +195,17 @@ def _state(omh_home, hermes_home=None) -> dict[str, object]:
     }
 
 
+def _print_prompt_cache_hint(hermes_home) -> None:
+    """One read-only hint when the main route's cache TTL is off or mis-set (config read only)."""
+    from ..maintenance.prompt_cache_route import prompt_cache_hint_lines
+
+    lines = prompt_cache_hint_lines(hermes_home)
+    if lines:
+        print("Prompt cache (read-only; `omh doctor` shows warmer stop reasons):")
+        for line in lines:
+            print(f"  {line}")
+
+
 def _print_state(state: dict[str, object]) -> None:
     print("Current model chains (category -> effective order):")
     for row in state["categories"]:
@@ -356,6 +367,7 @@ def cmd_model_chains_show(args: argparse.Namespace) -> int:
         _print_sensitive_state(state)
     else:
         _print_state(state)
+        _print_prompt_cache_hint(paths.hermes_home)
     return _sensitive_chain_exit_code(state)
 
 

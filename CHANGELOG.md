@@ -668,6 +668,27 @@ All notable changes will be documented here.
   with one line naming `agy acp --login`, checked against a real Antigravity CLI 1.5.16 handshake. Signed-in turns and
   its approval cards were not run. (`apps/omher/src-tauri/src/acp_agents.rs`; `docs/OMHER-BOUNDARY.md` rule 11)
 
+- **`omh doctor` now says when the prompt-cache TTL does not match what the route keeps, and why warming stopped.**
+  A new `prompt_cache_route` row and **Prompt cache (read-only)** section read only `config.yaml` and the tail of
+  `logs/agent.log`. On a route that keeps 1h entries (a loopback, localhost or private `base_url` serving Claude, as
+  CLIProxyAPI does; the provider name counts only when no `base_url` is set, so `api.anthropic.com` is never a proxy)
+  they warn when `prompt_caching.cache_ttl` is pinned to `5m` (a `1h` route ceiling does not lift a `5m` pin) or when
+  the route has no `1h` ceiling, and when caching is off, and print only the fix that applies:
+  `hermes config set prompt_caching.cache_ttl auto` and/or
+  `hermes config set prompt_caching.route_ttl_ceilings.<provider> 1h`. They also count the warmer's stop reasons
+  over the last 24h with a plain explanation of each. `omh model` repeats the TTL warning. No model request is sent.
+  (`src/maintenance/prompt_cache_route.py`, `src/maintenance/doctor.py`)
+
+- **Cron, webhook and other machine-paced sessions no longer pay for the identity catalog in their system prompt.**
+  `omh.awareness` already left the identity catalog out of `delegate_task` children. It now leaves it out of every
+  platform Hermes counts as machine-paced, the `MACHINE_PACED_SOURCES` list in its `agent/prompt_caching.py`, copied
+  as data (`subagent`, `cron`, `oneshot`, `webhook`, `kanban`, `api`, `api_server`, `tool`, `batch`, `curator`, `a2a`,
+  `msgraph_webhook`, `gateway_hygiene`). Those sessions keep the full primer, boundary lines included. A cron session
+  with custom identities drops from 3,689 to 1,667 section chars on the test fixture. A new test renders every OMH
+  system-prompt section in two Python processes with different `PYTHONHASHSEED` and `TZ` and checks the bytes match,
+  so a set order, clock or mtime that reaches the frozen prefix fails CI. No difference was found. OMH adds no skill
+  index or candidate text to the system prompt. (`src/plugin_bundle/omh/hooks/llm_hooks.py`)
+
 - **`omh cache` shows how warm a profile's prompt cache is and why it goes cold.** It reads the profile's `state.db`
   read-only and prints, for the last 7 days (`--days N`, `--json`): the cache read share per session source; the gaps
   between user messages in human-paced sessions (`<5m`, `5-60m`, `>1h`); per cron job (title before `' · '`) the runs,

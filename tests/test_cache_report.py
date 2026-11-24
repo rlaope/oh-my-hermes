@@ -237,15 +237,19 @@ class HudCacheFieldTests(unittest.TestCase):
             db_path = _state_db(root / ".hermes")
             paths = OmhPaths(omh_home=root / ".omh", hermes_home=root / ".hermes")
             writer = sqlite3.connect(db_path, isolation_level=None)
-            self.addCleanup(writer.close)
-            writer.execute("BEGIN EXCLUSIVE")
-            took = []
-            for _ in range(3):
-                start = time.perf_counter()
-                self.assertIsNone(_cache_field(paths))
-                took.append(time.perf_counter() - start)
-            payload = build_hud_payload(paths, delegation_graph=False)
-            writer.execute("ROLLBACK")
+            # Close inside the with-block: Windows cannot delete state.db while this handle is open, so an
+            # addCleanup close (run after TemporaryDirectory.__exit__) fails the cleanup with WinError 32.
+            try:
+                writer.execute("BEGIN EXCLUSIVE")
+                took = []
+                for _ in range(3):
+                    start = time.perf_counter()
+                    self.assertIsNone(_cache_field(paths))
+                    took.append(time.perf_counter() - start)
+                payload = build_hud_payload(paths, delegation_graph=False)
+                writer.execute("ROLLBACK")
+            finally:
+                writer.close()
         self.assertLess(sorted(took)[1], 0.2)
         self.assertNotIn("cache", payload)
         self.assertNotIn("cache:", payload["display"]["line"])
