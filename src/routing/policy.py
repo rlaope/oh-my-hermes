@@ -41,6 +41,7 @@ from .bot_template_cues import (
     BOT_TEMPLATE_ANCHORS,
     BOT_TEMPLATE_SHARED_PHRASES,
     bot_template_code_sense,
+    bot_template_id_applied,
     bot_template_phrase_spoken,
 )
 from ..plugin_bundle.omh.dag_ulw_cues import DAG_ULW, asks_about_dag_ulw, dag_ulw_control, declines_dag_ulw, invokes_dag_ulw
@@ -5724,7 +5725,10 @@ _APP_WORK_ALERT_APPS_KO = ("센트리", "데이터독")
 _APP_WORK_ALERT_TERMS = frozenset({"alert", "alerts", "monitor", "monitors", "fired", "firing", "triggered"})
 _APP_WORK_ALERT_PHRASES = ("sentry issue",)
 _APP_WORK_ALERT_KO = ("알림", "알럿", "경보")
-_APP_WORK_ALERT_BLOCKERS = frozenset({"sdk", "integration", "agent", "install", "config", "configuration", "setup"})
+# "fix the datadog monitor threshold for latency" tunes the monitor, not the code the alert is about.
+_APP_WORK_ALERT_BLOCKERS = frozenset(
+    {"sdk", "integration", "agent", "install", "config", "configuration", "setup", "threshold", "thresholds"}
+)
 _APP_WORK_FIX_VERBS = frozenset({"fix", "triage", "debug", "investigate", "handoff"})
 _APP_WORK_FIX_PHRASES = ("hand off", "hand it off", "fix hand-off", "alert to fix")
 _APP_WORK_FIX_CUES_KO = ("고쳐", "수정해", "수정까지", "트리아지", "분류하고", "넘겨")
@@ -8307,6 +8311,18 @@ def _korean_usage_request(normalized_query: str) -> bool:
     return False
 
 
+_ALERT_TRIGGER_LEADS = ("when", "whenever", "if", "once", "every time", "each time")
+_ALERT_TRIGGER_EVENTS = ("fires", "fire", "triggers", "trips", "goes off")
+_ALERT_TRIGGER_KO = ("울리면", "뜨면", "오면", "발생하면", "하면", "때마다")
+
+
+def _alert_trigger_phrasing(normalized_query: str) -> bool:
+    """"when a datadog monitor fires ...", "데이터독 알림 뜨면 ...": an event the person wants a reaction to."""
+    return (
+        _contains_phrase(normalized_query, _ALERT_TRIGGER_LEADS) and _contains_phrase(normalized_query, _ALERT_TRIGGER_EVENTS)
+    ) or _contains_phrase(normalized_query, _ALERT_TRIGGER_KO)
+
+
 def _ops_observability_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if _public_plugin_connector_readiness_requested(normalized_query):
         return False
@@ -8315,6 +8331,11 @@ def _ops_observability_guard_applies(normalized_query: str, query_tokens: set[st
         PUBLIC_PLUGIN_CONNECTOR_ALIAS_PHRASES,
     )
     if ops_observability_external_blocked(normalized_query):
+        return False
+    # "Datadog monitor fired for high latency, investigate and fix it": latency is what the alert is about, and the
+    # alert should become a fix, not a status card. "when a datadog monitor fires ..." is a trigger, which belongs to
+    # automation-blueprint, so this does not widen app-work-intake over it.
+    if app_work_intake_guard_applies(normalized_query) and not _alert_trigger_phrasing(normalized_query):
         return False
     if _contains_phrase(normalized_query, _OPS_OBSERVABILITY_PHRASES):
         return True
@@ -8886,6 +8907,9 @@ def _explicit_material_export_requested(normalized_query: str, query_tokens: set
 
 def _research_department_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if is_explicit_one_off_request(normalized_query, query_tokens):
+        return False
+    # "apply the research-vault template to this bot with obsidian" sets a bot up; the id is not a research request.
+    if bot_template_id_applied(normalized_query):
         return False
     if _wiki_capture_destination_request(normalized_query, query_tokens):
         return False
@@ -9667,6 +9691,9 @@ def _github_event_ops_guard_applies(normalized_query: str, query_tokens: set[str
     if {"plan", "spec", "roadmap"} & query_tokens and _contains_phrase(normalized_query, ("into a", "into the")):
         return False
     if _github_issue_intake_guard_applies(normalized_query, query_tokens):
+        return False
+    # "apply the pr-review template to this bot for our github prs" sets a bot up; GitHub is where it will work.
+    if bot_template_id_applied(normalized_query):
         return False
     if _contains_phrase(normalized_query, _SECURITY_EVENT_OVER_GITHUB_EVENT_PHRASES):
         return False
@@ -10891,6 +10918,9 @@ def _command_operator_guard_applies(normalized_query: str, query_tokens: set[str
 def _connector_operator_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if _contains_phrase(normalized_query, _CONNECTOR_OPERATOR_BLOCKERS):
         return False
+    # "apply the meeting-to-issues template to this bot for our linear issues" sets a bot up, not one Linear action.
+    if bot_template_id_applied(normalized_query):
+        return False
     # Work started from an app item is app-work-intake, and a meeting's issues are operating-rhythm's;
     # this lane is one action in the app.
     if app_work_intake_guard_applies(normalized_query) or meeting_to_issues_guard_applies(normalized_query):
@@ -11357,6 +11387,9 @@ def app_work_intake_guard_applies(normalized_query: str) -> bool:
     if _contains_phrase(normalized_query, _APP_WORK_BLOCKERS):
         return False
     if _app_work_trigger_or_cadence(normalized_query):
+        return False
+    # "apply the alert-triage template to this bot for our sentry alerts" sets a bot up; no alert is to be fixed.
+    if bot_template_id_applied(normalized_query):
         return False
     terms = routing_terms(normalized_query)
     words = _app_work_words(normalized_query)

@@ -28,10 +28,12 @@ from omh.commands.main import build_parser  # noqa: E402
 from omh.core.errors import OmhError  # noqa: E402
 from omh.routing.bot_template_cues import (  # noqa: E402
     bot_template_code_sense,
+    bot_template_id_applied,
     bot_template_korean_match,
     bot_template_names_the_job,
 )
-from omh.routing.localization import normalized_phrase  # noqa: E402
+from omh.routing import policy  # noqa: E402
+from omh.routing.localization import normalized_phrase, routing_tokens  # noqa: E402
 from omh.routing.policy import everyday_sense_phrase_unanchored  # noqa: E402
 from omh.skills.catalog import installable_skill_names  # noqa: E402
 from omh.skills.catalog_feature_surfaces import _UNATTENDED_GATE  # noqa: E402
@@ -322,6 +324,87 @@ class BotTemplateRoutingTests(unittest.TestCase):
         ):
             with self.subTest(message=message):
                 self.assertFalse(bot_template_names_the_job(normalized_phrase(message)))
+
+    def test_a_github_template_applied_to_a_bot_excuses_its_forge(self) -> None:
+        # The forge is where the bot works, only beside a GitHub template's id, an apply verb and the word bot.
+        for message in (
+            "apply the pr-review template to this bot for our github prs",
+            "set this bot up with the pr-review template for github pull requests",
+            "apply the release-notes template to this bot for our gitlab merge requests",
+            "이 봇에 깃허브 PR용 pr-review 템플릿 적용해줘",
+        ):
+            with self.subTest(message=message):
+                self.assertTrue(bot_template_names_the_job(normalized_phrase(message)))
+                self.assertTrue(bot_template_id_applied(normalized_phrase(message)))
+        self.assertFalse(bot_template_code_sense(normalized_phrase("apply the pr-review bot template for our github prs")))
+        for message in (
+            "apply the pr-review template to our github repo",
+            "apply the pr-review template to this bot in the github repo",
+            "edit the pr-review template on github for this bot",
+            "apply the inbox-triage template to this bot for our github issues",
+            "apply the pr-review template to this bot for our github prs in python",
+            "the pr-review template for this bot on github",
+            "pr-review 봇 템플릿 깃허브 레포에 올려줘",
+            "update the release-notes template in .github",
+            "remove the pr-review template from this bot",
+            # the apply must govern the template, be neither declined nor deferred, and carry no other action
+            "don't apply the pr-review template to this bot, just review github PR 12",
+            "이 봇에 pr-review 템플릿 적용하지 말고 깃허브 PR 12 리뷰해줘",
+            "apply the label to this PR, the pr-review bot template can wait",
+            "the github bot set the pr-review template label on PR 9",
+            "apply the pr-review template to this bot and merge github PR 12",
+            "이 봇에 pr-review 템플릿 적용하고 깃허브 PR 12에 코멘트 달아줘",
+            "apply the pr-review bot template to the github action workflow",
+            "apply the alert-triage template to this bot and fix the sentry alert that fired",
+        ):
+            with self.subTest(message=message):
+                self.assertFalse(bot_template_id_applied(normalized_phrase(message)))
+        self.assertTrue(bot_template_code_sense(normalized_phrase("apply a github bot template")))
+
+    def test_the_stand_down_reads_the_apps_each_template_declares(self) -> None:
+        # Pinned, so a template whose apps or Hermes skills change fails here and its stand-down is reviewed.
+        from omh.catalogs.bot_templates import bot_template, bot_template_ids
+        from omh.routing.bot_template_cues import _TEMPLATE_APP_NAMES
+
+        declared = {
+            template_id: {app.name for app in bot_template(template_id).apps} | set(bot_template(template_id).hermes_skills)
+            for template_id in bot_template_ids()
+        }
+        self.assertEqual(
+            declared,
+            {
+                "pr-review": {"github"},
+                "inbox-triage": {"email-inbox-triage", "google-workspace"},
+                "release-notes": {"github"},
+                "alert-triage": {"sentry", "datadog", "grafana"},
+                "meeting-to-issues": {"meeting-action-items", "google-workspace", "linear", "atlassian"},
+                "research-vault": {"obsidian", "notion"},
+                "channel-watch": set(),
+            },
+        )
+        for template_id, names in declared.items():
+            for name in names:
+                self.assertIn(normalized_phrase(name), _TEMPLATE_APP_NAMES[template_id])
+        self.assertNotIn("github", _TEMPLATE_APP_NAMES["inbox-triage"])
+
+    def test_the_app_lanes_stand_down_for_a_template_applied_to_a_bot(self) -> None:
+        for message, guard in (
+            ("apply the pr-review template to this bot for our github prs", policy._github_event_ops_guard_applies),
+            ("apply the alert-triage template to this bot for our sentry alerts", lambda q, _: policy.app_work_intake_guard_applies(q)),
+            ("apply the meeting-to-issues template to this bot for our linear issues", policy._connector_operator_guard_applies),
+            ("apply the research-vault template to this bot with obsidian", policy._research_department_guard_applies),
+        ):
+            query = normalized_phrase(message)
+            with self.subTest(message=message):
+                self.assertFalse(guard(query, routing_tokens(query)))
+        # without the template the same lanes keep their sentences
+        for message, guard in (
+            ("review my github prs", policy._github_event_ops_guard_applies),
+            ("apply the pr-review template to our github repo", policy._github_event_ops_guard_applies),
+        ):
+            query = normalized_phrase(message)
+            with self.subTest(message=message):
+                self.assertTrue(guard(query, routing_tokens(query)))
 
     def test_korean_counts_alone_or_anchored_and_never_as_code(self) -> None:
         for message, expected in (
