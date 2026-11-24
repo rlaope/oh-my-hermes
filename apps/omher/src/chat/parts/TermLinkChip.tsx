@@ -1,6 +1,6 @@
 // An omher terminal link (`omher://terminal/<id>`) wherever omher draws links: an omher chip. The omher face, then the
-// session's CLI mark, its title and a live state dot (working: output flowing; news: it rang unseen, finished or
-// waiting; waiting: idle at its prompt; done: ended with 0; ended: ended otherwise, failed, or paused after a restart). A click opens the session. A link
+// session's CLI mark, its title and a live state dot (working: output flowing; news: it rang or reported done unseen,
+// so it may have finished or be waiting; waiting: idle at its prompt; done: ended with 0; ended: ended otherwise, failed, or paused after a restart). A click opens the session. A link
 // whose session is not in this computer's TERMINALS reads "Terminal not on this computer" and opens nothing.
 import { memo, type MouseEvent } from "react";
 import logo from "../../assets/omher-mark.png";
@@ -13,28 +13,26 @@ import { TermRowMark } from "../../sessions/TermRowMark";
 import { pickTitle } from "../../sessions/titles";
 import { parseTermLink } from "../../sessions/termLink";
 
-/** A session's state as its status file tells bots (termShare.ts): an unseen ring stays `waiting` there. */
-export type ShareState = "working" | "waiting" | "done" | "ended";
-/** The chip's dot: the file's states, plus `news` for a ring nobody has seen (it may have finished or be waiting). */
-export type TermLinkState = ShareState | "news";
+/** A session's state as its status file tells bots (termShare.ts, term_share.rs `STATES`) and as the chip's dot
+ *  shows it: `news` is a ring or a reported done nobody has seen (it may have finished or be waiting). */
+export type ShareState = "working" | "news" | "waiting" | "done" | "ended";
+/** The chip's dot: the same states as the status file. */
+export type TermLinkState = ShareState;
 
 /** What a session's status file says of it at `now` (`progress`/`lastOut` from its terminal's activity). Pure. */
 export function termLinkState(rec: Pick<SessionRec, "status" | "exitCode" | "paused">, act: { lastOut?: number; progress?: boolean }, unseen: Unseen | undefined, now: number): ShareState {
   if (rec.paused) return "ended";
   if (rec.status === "exited") return rec.exitCode === 0 ? "done" : "ended";
   if (rec.status === "failed" || rec.status === "draft") return "ended";
-  // working while its program reports progress, even over a ring nobody saw (that ring is behind it); a bell just
-  // after output still reads waiting, as an agent rings when it stops for the person
+  // working while its program reports progress, even over a ring nobody saw (that ring is behind it); a ring or a
+  // reported done nobody saw is news, even just after output (an agent rings when it stops, for the person or done)
   if (act.progress) return "working";
-  if (unseen === "bell") return "waiting";
+  if (isNews(unseen)) return "news";
   return flowing(act, now) ? "working" : "waiting";
 }
 
-/** What the chip's dot says: as the status file, but a running session that rang unseen is news, not waiting. Pure. */
-export function termChipState(rec: Pick<SessionRec, "status" | "exitCode" | "paused">, act: { lastOut?: number; progress?: boolean }, unseen: Unseen | undefined, now: number): TermLinkState {
-  const st = termLinkState(rec, act, unseen, now);
-  return st === "waiting" && isNews(unseen) ? "news" : st;
-}
+/** What the chip's dot says: the status file's state. Pure. */
+export const termChipState = termLinkState;
 
 const STATE_KEY: Record<TermLinkState, Key> = { working: "tlink.st.working", news: "tlink.st.news", waiting: "tlink.st.waiting", done: "tlink.st.done", ended: "tlink.st.ended" };
 

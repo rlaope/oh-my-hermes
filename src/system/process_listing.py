@@ -33,6 +33,9 @@ KERN_PROCARGS2 = 49
 INTERPRETER_FLAGS = frozenset({"-I", "-B", "-E", "-s", "-S", "-u", "-O", "-OO", "-P"})  # flags before `-m`
 
 
+# Hermes' `spawn_unmanaged_gateway` adds it for a client's own start (chat, TUI, cron); `gateway/run_idle_exit.py`
+# then ends that gateway once it is idle for `gateway.unmanaged_idle_exit_seconds`.
+IDLE_EXIT_FLAG = "--idle-exit"
 RETITLED_ARGV = ["hermes"]  # Hermes' optional `setproctitle("hermes")` replaces the whole command line with this
 LAUNCH_SHAPES = (
     "`python -m hermes_cli.main [--profile N] gateway run`, `python …/hermes-agent/hermes gateway run` and Hermes' "
@@ -45,6 +48,7 @@ class GatewayListing:
     listed: bool  # False where this platform offers no listing: never read as an empty one
     gateways: tuple[tuple[int, str], ...] = ()  # (pid, the profile its command line names, "" for none)
     retitled: tuple[int, ...] = ()  # this user's processes titled just `hermes`, whose arguments cannot be read
+    idle_exit: tuple[int, ...] = ()  # gateways launched with `--idle-exit`: a Hermes client's own start, ended once idle
 
 
 def process_argvs() -> list[tuple[int, list[str]]] | None:
@@ -62,11 +66,18 @@ def hermes_gateway_processes() -> GatewayListing:
     if argvs is None:
         return GatewayListing(False)
     retitled = tuple(pid for pid, argv in argvs if argv == RETITLED_ARGV)
-    return GatewayListing(True, tuple(gateway_runs(argvs)), retitled)
+    runs = _gateway_run_options(argvs)
+    idle_exit = tuple(pid for pid, _profile, options in runs if IDLE_EXIT_FLAG in options)
+    return GatewayListing(True, tuple((pid, profile) for pid, profile, _options in runs), retitled, idle_exit)
 
 
 def gateway_runs(argvs: list[tuple[int, list[str]]]) -> list[tuple[int, str]]:
-    """The `(pid, profile)` of each argv that runs `hermes gateway run`; profile "" when the command line names none.
+    """The `(pid, profile)` of each argv that runs `hermes gateway run`; profile "" when the command line names none."""
+    return [(pid, profile) for pid, profile, _options in _gateway_run_options(argvs)]
+
+
+def _gateway_run_options(argvs: list[tuple[int, list[str]]]) -> list[tuple[int, str, list[str]]]:
+    """`(pid, profile, the arguments after `gateway run`)` of each argv that runs `hermes gateway run`.
 
     Recognized: `python -m hermes_cli.main [--profile N|-p N|--profile=N] gateway run …`
     and `python …/hermes-agent/hermes [profile] gateway run …`, after any interpreter
@@ -76,7 +87,7 @@ def gateway_runs(argvs: list[tuple[int, list[str]]]) -> list[tuple[int, str]]:
     wrapper whose arguments start otherwise (Hermes' `--run-module` stderr
     stamper around the launcher) is not a gateway itself.
     """
-    found: list[tuple[int, str]] = []
+    found: list[tuple[int, str, list[str]]] = []
     for pid, argv in argvs:
         if len(argv) < 2 or not Path(argv[0]).name.startswith("python"):
             continue
@@ -93,7 +104,7 @@ def gateway_runs(argvs: list[tuple[int, list[str]]]) -> list[tuple[int, str]]:
             continue
         split = _profile_and_command(arguments)
         if split is not None and split[1][:2] == ["gateway", "run"]:
-            found.append((pid, split[0]))
+            found.append((pid, split[0], split[1][2:]))
     return found
 
 

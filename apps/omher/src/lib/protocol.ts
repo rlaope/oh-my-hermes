@@ -231,13 +231,6 @@ export interface Away {
   reply_target?: string | null;
 }
 
-export interface PeekMsg {
-  role: string;
-  author?: string;
-  text: string;
-  ts: number;
-}
-
 export interface Routine {
   id: string;
   name: string;
@@ -474,10 +467,6 @@ export interface OpMap {
   /** Only a session the bridge made for that folder (its saved title `omher · <folder name>`); any other: not_found. */
   "folder.resume": { params: { bot: string; cwd: string; stored: string }; result: FolderResumeResult };
   "elsewhere.list": { params: { bot: string }; result: { sessions: Away[] } };
-  "elsewhere.peek": {
-    params: { bot: string; session_id: string; limit?: number };
-    result: { messages: PeekMsg[]; total: number };
-  };
   "routines.list": { params: { bot: string }; result: { routines: Routine[] } };
   /** Every bot's cron jobs, each tagged with its bot (read from files; no gateway). */
   "automations.list": { params: Record<string, never>; result: { automations: Automation[] } };

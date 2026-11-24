@@ -1253,40 +1253,6 @@ class Elsewhere(BridgeCase):
             self.assertEqual(rows[0]["last_active"], 500.0)
             self.assertEqual(rows[1]["id"], "s29")
 
-    async def test_peek_parses_slack_author_and_reads_only(self):
-        hist = {"s-slack": [
-            {"role": "user", "text": "[김희망 (Khope) | Slack user <@U0ABC123>] 게이트웨이 502 났어요", "timestamp": 10.0},
-            {"role": "assistant", "text": "확인할게요", "timestamp": 11.0},
-            {"role": "tool", "text": "{}", "timestamp": 12.0},
-            {"role": "user", "text": "plain without header", "timestamp": 13.0},
-            {"role": "assistant", "text": "x" * 900, "timestamp": 14.0},
-        ]}
-        async with Env(history=hist) as env:
-            s = await self.open(env)
-            r = await s.req("elsewhere.peek", bot="kami", session_id="s-slack", limit=3)
-            self.assertTrue(r["ok"], r)
-            msgs, total = r["result"]["messages"], r["result"]["total"]
-            self.assertEqual(total, 4)
-            self.assertEqual([m["role"] for m in msgs], ["assistant", "user", "assistant"])
-            self.assertNotIn("author", msgs[0])
-            self.assertNotIn("author", msgs[1])
-            self.assertEqual(len(msgs[2]["text"]), 400)
-            r = await s.req("elsewhere.peek", bot="kami", session_id="s-slack", limit=10)
-            first = r["result"]["messages"][0]
-            self.assertEqual(first["author"], "김희망 (Khope)")
-            self.assertEqual(first["text"], "게이트웨이 502 났어요")
-            self.assertEqual(first["ts"], 10.0)
-            c = env.clients["kami"]
-            self.assertEqual({p["session_id"] for p in c.find("session.history")}, {"s-slack"})
-            for m in ("session.resume", "session.create", "prompt.submit", "session.interrupt"):
-                self.assertEqual(c.find(m), [], m)  # a peek never attaches to or writes the session
-            self.assertEqual((await s.req("elsewhere.peek", bot="kami"))["error"]["code"], "bad_request")
-
-    async def test_split_author(self):
-        self.assertEqual(ob.split_author("[Bob | Discord user <@1>] hi | there"), ("Bob", "hi | there"))
-        self.assertEqual(ob.split_author("no header"), (None, "no header"))
-        self.assertEqual(ob.split_author("[just brackets] x"), (None, "[just brackets] x"))
-
 
 class Routines(BridgeCase):
     def write_jobs(self, env: Env, jobs):
@@ -1580,7 +1546,7 @@ class ReadOnlyRule(BridgeCase):
         async with Env(sessions=sessions, history=hist) as env:
             s = await self.open(env)
             for op, kw in [("chat.open", {}), ("chat.send", {"text": "hi", "session_id": foreign}),
-                           ("elsewhere.list", {}), ("elsewhere.peek", {"session_id": foreign}),
+                           ("elsewhere.list", {}),
                            ("chat.interrupt", {"session_id": foreign}),
                            ("approval.respond", {"request_id": "ap-x", "choice": "deny", "session_id": foreign}),
                            ("clarify.respond", {"request_id": "cl-x", "answer": "x", "session_id": foreign}),
@@ -2560,8 +2526,8 @@ class ReplyThere(BridgeCase):
         self.assertEqual(ob.reply_target({"platform": "discord", "chat_id": "42", "chat_name": "G / #ops"}),
                          ("discord:42", "#ops"))
         self.assertEqual(ob.reply_target({"platform": "slack", "chat_id": "D0CB1", "chat_type": "dm",
-                                          "chat_name": "김희망 (Khope)", "thread_id": "1793.5"}),
-                         ("slack:D0CB1:1793.5", "김희망 (Khope)"))
+                                          "chat_name": "홍길동 (Gildong)", "thread_id": "1793.5"}),
+                         ("slack:D0CB1:1793.5", "홍길동 (Gildong)"))
         # no messenger thread -> no chip
         for origin in ({}, {"platform": "local", "chat_id": "local"}, {"platform": "slack"},
                        {"platform": "slack", "chat_id": "C1 ; rm -rf"}, {"platform": "discord", "chat_id": "1", "thread_id": "a:b"},
