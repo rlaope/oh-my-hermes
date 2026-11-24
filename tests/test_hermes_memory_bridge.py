@@ -263,8 +263,8 @@ class ConfiguredCapTests(unittest.TestCase):
 
 class SimilarityTests(unittest.TestCase):
     def test_reworded_fact_scores_above_the_duplicate_threshold(self) -> None:
-        left = "document-harness: sionic-ai 레포의 에이전트 하네스 기반 문서 작성 시스템"
-        right = "document-harness는 sionic-ai 레포의 에이전트 하네스 기반 문서 작성 시스템이다"
+        left = "document-harness: example 레포의 에이전트 하네스 기반 문서 작성 시스템"
+        right = "document-harness는 example 레포의 에이전트 하네스 기반 문서 작성 시스템이다"
         self.assertGreaterEqual(similarity(left, right), 0.6)
 
     def test_unrelated_texts_score_low(self) -> None:

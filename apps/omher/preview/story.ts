@@ -35,7 +35,7 @@ const runName = () => RUN.split("/").pop()!;
 // points at the staged acme/web-app (Tasks); guard.ts keeps every chip from opening anything.
 const REQUEST = "Can you add dark mode to the docs today? Open a PR when it's done.";
 const PROGRESS =
-  "I'm following Mina's notes in https://acme.slack.com/archives/C02DESIGN/p1794195216893139?thread_ts=1794195216.893139: links stay purple, and the theme follows the system. " +
+  "I'm following Mina's notes in https://acme.slack.com/archives/C02DESIGN/p1700000000000001?thread_ts=1700000000.000001: links stay purple, and the theme follows the system. " +
   "Sam asked for the same in https://discord.com/channels/1/900000000000000009, so I'll tell him there when it's live. " +
   "The new code colors also fix https://github.com/acme/web-app/issues/139. " +
   "I'll post the PR here once every page passes a contrast check in both themes.";

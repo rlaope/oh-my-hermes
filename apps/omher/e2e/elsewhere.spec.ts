@@ -85,7 +85,7 @@ test("other places stay out of the chat: the timeline has no away line, the pane
     }) as typeof window.open;
   });
   await open(page);
-  // khope: answers from other channels in this chat, with nothing saying where they came from, were hard to follow
+  // demo: answers from other channels in this chat, with nothing saying where they came from, were hard to follow
   await expect(page.getByTestId("places")).toHaveText("3 other places");
   await expect(page.getByTestId("timeline").getByTestId("away")).toHaveCount(0);
   await page.getByTestId("places").click();

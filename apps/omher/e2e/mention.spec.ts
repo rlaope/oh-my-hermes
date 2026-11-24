@@ -83,7 +83,7 @@ test("the open chat's own bot is not a link; unknown names and code stay text", 
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
 
   await mock("mock.emit", {
-    events: [{ event: "message", bot: "kami", id: "mn-unknown", text: "Ask @foo, mail kami@friren.dev, run `@friren`, or @file:notes.md." }],
+    events: [{ event: "message", bot: "kami", id: "mn-unknown", text: "Ask @foo, mail kami@friren.example, run `@friren`, or @file:notes.md." }],
   });
   const last = page.getByTestId("bubble-bot").filter({ hasText: "Ask @foo" });
   await expect(last).toBeVisible();

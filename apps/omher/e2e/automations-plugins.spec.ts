@@ -101,7 +101,7 @@ test("a row opens its detail: when, what, where it delivers, last run, and the n
   // a job delivered to the bot's own chat says so
   await page.getByTestId("auto-row-a1f0c2d9e801").click();
   await expect(d.getByTestId("auto-deliver")).toHaveText("Kami chat (omher)");
-  // Run now is a quiet text action at the end of the row, not a filled button (khope: it looked like one you must
+  // Run now is a quiet text action at the end of the row, not a filled button (demo: it looked like one you must
   // press): no fill, the quiet colour, after Delete
   const run = d.getByTestId("auto-run");
   expect(await run.evaluate((el) => [getComputedStyle(el).backgroundColor, getComputedStyle(el).backgroundImage])).toEqual(["rgba(0, 0, 0, 0)", "none"]);

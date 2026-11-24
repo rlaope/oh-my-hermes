@@ -700,7 +700,7 @@ mod tests {
         }
         for bad in [
             "", "octo", "@github.com", "octo@", "-x@github.com", "_x@github.com", "octo@--hostname", "octo@github.com;rm -rf", "octo@github.com:8080", "o cto@github.com", "octo@../etc",
-            "octo@localhost", "octo@GITHUB.COM", "octo@-bad.com", "octo@github.com\n", "a@b@github.com", "octo@github..com", "octo@github.com/x", "$(id)@github.com",
+            "octo@localhost", "octo@GITHUB.COM", "octo@-bad.example", "octo@github.com\n", "a@b@github.com", "octo@github..com", "octo@github.com/x", "$(id)@github.com",
         ] {
             assert!(parse_account_id(bad).is_err(), "{bad:?}");
         }

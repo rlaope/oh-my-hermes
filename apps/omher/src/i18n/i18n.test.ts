@@ -21,7 +21,7 @@ describe("i18n", () => {
   });
 
   it("keeps setting values, the agents' mode names and technical terms in English in every language", () => {
-    // khope 2026-11-16: what needs no translation stays as written (a translated term hides which setting it is)
+    // demo 2026-11-16: what needs no translation stays as written (a translated term hides which setting it is)
     const same = ["ctl.mode.ask", "ctl.mode.plan", "ctl.mode.acceptEdits", "ctl.mode.readOnly", "ctl.mode.auto", "sq.steer",
       "pn.diff", "pn.worktree", "pn.worktrees", "pn.detached", "rn.chainHead", "rn.fallback", "graph.effort", "graph.main",
       "term.scrollback", "term.gpu", "look.graphite", "look.ocean", "look.forest", "look.sunset", "look.rose"] as const;

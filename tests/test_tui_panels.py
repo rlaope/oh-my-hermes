@@ -338,7 +338,7 @@ class AgentsBlockTests(unittest.TestCase):
                 agent_row(0),
                 agent_row(1, state="done", category="critic", model="gpt-6.1-sol", effort="xhigh", route_origin="fallback"),
                 agent_row(
-                    2, state="queued", lane_backend="kanban", assignee="miku", native_status="ready", model="kimi-k3", effort=""
+                    2, state="queued", lane_backend="kanban", assignee="mbot", native_status="ready", model="kimi-k3", effort=""
                 ),
                 agent_row(3, dispatch_lane="maestro", executor_profile="claude_code", model="claude-fable-5-1"),
                 agent_row(4, category="inherit", model="glm-5.3", effort=""),
@@ -350,7 +350,7 @@ class AgentsBlockTests(unittest.TestCase):
         body = "\n".join(rows)
         self.assertIn("category:architect(claude-opus-5-5:high)", body)
         self.assertIn("category:critic(gpt-6.1-sol:xhigh fallback)", body)
-        self.assertIn("kanban/miku(kimi-k3)", body)
+        self.assertIn("kanban/mbot(kimi-k3)", body)
         self.assertIn("(claude/maestro claude-fable-5-1)", body)
         self.assertIn("inherit(glm-5.3)", body)
         self.assertNotIn("anthropic/", body, "the route names the model, not who serves it")
@@ -1050,7 +1050,7 @@ def parity_cases() -> list[dict]:
         agent_row(0, turn_count=3, tool_count=12, cost_usd=0.0431, cost_approximate=True, tokens_per_second=41.6,
                   cache_hit_percentage=88, context_percentage=40, fallback_count=1),
         agent_row(1, state="done", category="critic", model="gpt-6.1-sol", effort="xhigh", route_origin="fallback"),
-        agent_row(2, state="queued", lane_backend="kanban", assignee="miku", native_status="ready", model="kimi-k3"),
+        agent_row(2, state="queued", lane_backend="kanban", assignee="mbot", native_status="ready", model="kimi-k3"),
         agent_row(3, dispatch_lane="maestro", executor_profile="claude_code", model="claude-fable-5-1"),
         agent_row(
             4, state="blocked", action="Blocked worker 한글 제목", category="inherit", cost_usd=0, cost_status="included"

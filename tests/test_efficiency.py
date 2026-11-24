@@ -481,7 +481,7 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertIn("never quoted to the user", awareness_primer_context())
         # The reply rule names what the persona owns, not only "the host's own
         # voice": that phrase alone left a casual-register Korean persona
-        # answering in English in its interim progress lines (miku,
+        # answering in English in its interim progress lines (mbot,
         # 2026-09-30). The persona owns the reply language too, so a SOUL
         # that sets one wins over the user's; the user's language is only the
         # fallback. Each of those, and OMH's structure-only role, has to

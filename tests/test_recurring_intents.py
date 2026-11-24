@@ -525,7 +525,7 @@ class RecurringIntentStoreTests(unittest.TestCase):
             paths = _paths_from_tmp(tmp)
             intent = build_recurring_intent(
                 REQUEST,
-                owner="khope",
+                owner="demo",
                 owner_kind="human",
                 created_at="2026-06-16T00:00:00Z",
                 **COMPLETE_FAILURE_POLICY,
@@ -620,7 +620,7 @@ class RecurringIntentCliTests(unittest.TestCase):
                     "recurring-intent",
                     REQUEST,
                     "--owner",
-                    "khope",
+                    "demo",
                     "--owner-kind",
                     "human",
                     *COMPLETE_FAILURE_POLICY_CLI_ARGS,
@@ -748,7 +748,7 @@ class RecurringIntentCliTests(unittest.TestCase):
 def _activated_intent() -> dict:
     intent = build_recurring_intent(
         REQUEST,
-        owner="khope",
+        owner="demo",
         owner_kind="human",
         created_at="2026-06-16T00:00:00Z",
         **COMPLETE_FAILURE_POLICY,

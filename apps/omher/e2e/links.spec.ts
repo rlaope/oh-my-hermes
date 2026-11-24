@@ -60,9 +60,9 @@ test("six bare Slack thread URLs become Slack chips named by their channel, the 
   for (const c of await chips.all()) {
     await expect(c).toHaveAttribute("data-service", "slack");
     await expect(c.locator("svg.src-ic-slack")).toHaveCount(1); // the same Slack mark as the header's other places
-    expect(await c.getAttribute("title")).toMatch(/^https:\/\/sionicai\.slack\.com\/archives\/C[0-9A-Z]+\/p\d{16}$/);
+    expect(await c.getAttribute("title")).toMatch(/^https:\/\/example\.slack\.com\/archives\/C[0-9A-Z]+\/p\d{16}$/);
   }
-  await expect(b).not.toContainText("https://sionicai.slack.com"); // no raw URL left in the text
+  await expect(b).not.toContainText("https://example.slack.com"); // no raw URL left in the text
   // each chip stays on its item's line: one line box, its mark left of the label and on the label's middle
   const geo = await chips.evaluateAll((els) =>
     els.map((a) => {
@@ -111,7 +111,7 @@ test("chips per service: mark, kind and label; a lookalike host stays a plain li
     ["googlemeet", "meeting", "Meet · abc-defg-hij", "googlemeet"],
     ["googlecalendar", "event", "Calendar event", "googlecalendar"],
     ["x", "post", "@NousResearch · post", "x"],
-    ["linkedin", "profile", "in/khope", "linkedin"],
+    ["linkedin", "profile", "in/demo", "linkedin"],
     ["youtube", "video", "YouTube · video · 1:23", "youtube"],
     ["notion", "page", "Notion · Release Notes", "notion"],
     ["linear", "issue", "OG-123", "linear"],
@@ -240,7 +240,7 @@ test("a chip opens its URL through the opener, once, and a lookalike link is not
   const chip = slackBubble(page).getByTestId("link-chip").first();
   await chip.scrollIntoViewIfNeeded();
   await chip.click();
-  await expect.poll(() => opened).toEqual(["https://sionicai.slack.com/archives/C0BLC924P1P/p1794195216893139"]);
+  await expect.poll(() => opened).toEqual(["https://example.slack.com/archives/C0000000001/p1700000000000001"]);
   const yt = servicesBubble(page).locator('[data-testid=link-chip][data-service="youtube"]');
   await yt.click();
   await expect.poll(() => opened.length).toBe(2);
@@ -307,5 +307,5 @@ test("the plan node drawer lists the handoff's links as a Links block of chips",
 });
 
 test("the seed carries the owner's six-link answer verbatim", () => {
-  expect(LINKS.owner.match(/https:\/\/sionicai\.slack\.com\/archives\//g)).toHaveLength(7);
+  expect(LINKS.owner.match(/https:\/\/example\.slack\.com\/archives\//g)).toHaveLength(7);
 });

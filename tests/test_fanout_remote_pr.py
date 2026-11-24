@@ -56,7 +56,7 @@ _GOAL = "hand one bounded unit to the cloud lane"
 
 _SESSION_ID = "0123456789abcdef0123456789abcdef"
 _SESSION_URL = f"https://app.devin.ai/sessions/{_SESSION_ID}"
-_PR_URL = "https://github.com/khope-sionic/oh-my-hermes/pull/1"
+_PR_URL = "https://github.com/demo-org/oh-my-hermes/pull/1"
 
 # A fake harness CLI that commits, so the local lane stays provably unaffected
 # by the refusal hook. It is a script on a temporary PATH, never a vendor CLI.
@@ -344,7 +344,7 @@ class SessionUrlTests(unittest.TestCase):
 class PullRequestUrlTests(unittest.TestCase):
     """`https://github.com/<owner>/<repo>/pull/<n>` for the trusted identity."""
 
-    OWNER = "khope-sionic"
+    OWNER = "demo-org"
     REPO = "oh-my-hermes"
 
     def test_the_documented_shape_is_accepted(self) -> None:
@@ -375,8 +375,8 @@ class PullRequestUrlTests(unittest.TestCase):
     def test_a_different_repository_is_refused(self) -> None:
         for token in (
             "https://github.com/someone-else/oh-my-hermes/pull/1",
-            "https://github.com/khope-sionic/another-repo/pull/1",
-            "https://github.com/khope-sionic/pull/1",
+            "https://github.com/demo-org/another-repo/pull/1",
+            "https://github.com/demo-org/pull/1",
         ):
             with self.subTest(token=token):
                 self.assertIsNone(
@@ -387,7 +387,7 @@ class PullRequestUrlTests(unittest.TestCase):
         # GitHub's namespace is case-insensitive; the stored URL is the
         # operator's spelling so output can never choose a fetch target.
         parsed = parse_pull_request_url(
-            "https://github.com/Khope-Sionic/OH-MY-HERMES/pull/7",
+            "https://github.com/Demo-Org/OH-MY-HERMES/pull/7",
             owner=self.OWNER,
             repository=self.REPO,
         )

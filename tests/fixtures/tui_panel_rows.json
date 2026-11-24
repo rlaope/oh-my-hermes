@@ -123,7 +123,7 @@
    "  [!] unit2 · failed · blocked_by unit0 + unit1",
    "⠋ [sub] worker0  Worker …  ·  architect(claude-opus-5-5:high)     run   · 30s     ·   1.2k tokens",
    "✓ [sub] worker1  Worker …  ·  critic(gpt-6.1-sol:xhigh fallback)  done  · 31s     ·   2.4k tokens",
-   "· [bot] worker2  Worker …  ·  kanban/miku(kimi-k3:high)           ready ·         ·   3.6k tokens",
+   "· [bot] worker2  Worker …  ·  kanban/mbot(kimi-k3:high)           ready ·         ·   3.6k tokens",
    "⠋       worker3  Worker …  ·  (claude/maestro claude-fable-5-1)   run   · 33s     ·   4.8k tokens",
    "▲ [sub] worker4  Blocked…  ·  inherit(claude-opus-5-5:high)       block · 34s     ·   6.0k tokens"
   ],
@@ -180,7 +180,7 @@
    "  [!] unit2 · failed · blocked_by unit0 + unit1",
    "⠋ [sub] worker0  Worker…  ·  architect(claude-opus-5-5:high)     running · 30s     ·   1.2k tokens",
    "✓ [sub] worker1  Worker…  ·  critic(gpt-6.1-sol:xhigh fallback)  done    · 31s     ·   2.4k tokens",
-   "· [bot] worker2  Worker…  ·  kanban/miku(kimi-k3:high)           ready   ·         ·   3.6k tokens",
+   "· [bot] worker2  Worker…  ·  kanban/mbot(kimi-k3:high)           ready   ·         ·   3.6k tokens",
    "⠋       worker3  Worker…  ·  (claude/maestro claude-fable-5-1)   running · 33s     ·   4.8k tokens",
    "▲ [sub] worker4  Blocke…  ·  inherit(claude-opus-5-5:high)       blocked · 34s     ·   6.0k tokens"
   ],
@@ -237,7 +237,7 @@
    "  [!] unit2 · failed · blocked_by unit0 + unit1",
    "⠋ [sub] worker0  Worker 0 action                         ·  category:architect(claude-opus-5-5:high)     running · 30s     ·   1.2k tokens",
    "✓ [sub] worker1  Worker 1 action                         ·  category:critic(gpt-6.1-sol:xhigh fallback)  done    · 31s     ·   2.4k tokens",
-   "· [bot] worker2  Worker 2 action                         ·  kanban/miku(kimi-k3:high)                    ready   ·         ·   3.6k tokens",
+   "· [bot] worker2  Worker 2 action                         ·  kanban/mbot(kimi-k3:high)                    ready   ·         ·   3.6k tokens",
    "⠋       worker3  Worker 3 action                         ·  (claude/maestro claude-fable-5-1)            running · 33s     ·   4.8k tokens",
    "▲ [sub] worker4  Blocked worker 한글 제목                ·  inherit(claude-opus-5-5:high)                blocked · 34s     ·   6.0k tokens"
   ],
@@ -294,7 +294,7 @@
    "  [!] unit2 · failed · blocked_by unit0 + unit1",
    "⠋ [sub] worker0  Worker 0 action                                   ·  category:architect(claude-opus-5-5:high)     running · 30s     ·   1.2k tokens  ·  fallback:1  ·  cache 88%  ·  ctx 40%",
    "✓ [sub] worker1  Worker 1 action                                   ·  category:critic(gpt-6.1-sol:xhigh fallback)  done    · 31s     ·   2.4k tokens",
-   "· [bot] worker2  Worker 2 action                                   ·  kanban/miku(kimi-k3:high)                    ready   ·         ·   3.6k tokens",
+   "· [bot] worker2  Worker 2 action                                   ·  kanban/mbot(kimi-k3:high)                    ready   ·         ·   3.6k tokens",
    "⠋       worker3  Worker 3 action                                   ·  (claude/maestro claude-fable-5-1)            running · 33s     ·   4.8k tokens",
    "▲ [sub] worker4  Blocked worker 한글 제목                          ·  inherit(claude-opus-5-5:high)                blocked · 34s     ·   6.0k tokens  ·  $0.0000 (included)"
   ],

@@ -62,7 +62,7 @@ describe("session agents", () => {
     expect(folderName("C:\\")).toBe("C:\\");
     expect(folderName("/")).toBe("/");
     expect(tildePath("/home/k/code", "/home/k")).toBe("~/code");
-    expect(tildePath("/home/kim/code", "/home/k")).toBe("/home/kim/code");
+    expect(tildePath("/home/k2/code", "/home/k")).toBe("/home/k2/code");
     expect(tildePath("/home/k", "/home/k/")).toBe("~");
     expect(parentPath("~/code/x")).toBe("~/code");
     expect(parentPath("/x")).toBe("/");
@@ -271,7 +271,7 @@ describe("splitPaneName", () => {
   });
 });
 
-// khope 2026-11-23: a bell, an OSC 9 message or a progress done is news (it may have finished or be waiting); only a
+// demo 2026-11-23: a bell, an OSC 9 message or a progress done is news (it may have finished or be waiting); only a
 // wait omher knows (an approval or question, a bot's request to type) is the amber warning
 describe("a ring is news, a known wait is the warning", () => {
   const term: SessionRec = { id: "t1", agent: "claude", cwd: "/home/k/web-app", startedAt: 1_700_000_000_000, status: "running", view: "terminal", open: "terminal" };

@@ -242,7 +242,7 @@ test("the bell and an OSC 9 message from a hidden terminal still reach its row",
   await type("after 1200 bell");
   const b = await tagged(page);
   await expect(row).toHaveAttribute("data-term-status", "news", { timeout: 8000 });
-  // news is a small accent dot with the rang tooltip, never the warning triangle (khope 2026-11-23)
+  // news is a small accent dot with the rang tooltip, never the warning triangle (demo 2026-11-23)
   const glyph = row.getByTestId("term-status");
   await expect(glyph).toHaveAttribute("title", "Rang (it may have finished or be waiting)");
   await expect(glyph.locator("svg circle")).toHaveCount(1);
