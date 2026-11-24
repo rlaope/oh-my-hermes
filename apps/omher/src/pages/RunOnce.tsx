@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { t } from "../i18n";
 
 /** "Run now" for an automation: a small quiet link at the end of its buttons, not a button that asks to be pressed
- *  (owner: it looked like something you must click). A click only asks; the run is one more step (Run · Cancel),
+ *  (it looked like something you must click). A click only asks; the run is one more step (Run · Cancel),
  *  since it fires the job outside its schedule. */
 export function RunOnce({ label, onRun, resetKey, testId }: { label: string; onRun: () => void; resetKey?: string; testId: string }) {
   const [asking, setAsking] = useState(false);
