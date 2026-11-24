@@ -361,6 +361,32 @@ class BotTemplateRoutingTests(unittest.TestCase):
                 self.assertFalse(bot_template_id_applied(normalized_phrase(message)))
         self.assertTrue(bot_template_code_sense(normalized_phrase("apply a github bot template")))
 
+    def test_the_stand_down_reads_the_apps_each_template_declares(self) -> None:
+        # Pinned, so a template whose apps or Hermes skills change fails here and its stand-down is reviewed.
+        from omh.catalogs.bot_templates import bot_template, bot_template_ids
+        from omh.routing.bot_template_cues import _TEMPLATE_APP_NAMES
+
+        declared = {
+            template_id: {app.name for app in bot_template(template_id).apps} | set(bot_template(template_id).hermes_skills)
+            for template_id in bot_template_ids()
+        }
+        self.assertEqual(
+            declared,
+            {
+                "pr-review": {"github"},
+                "inbox-triage": {"email-inbox-triage", "google-workspace"},
+                "release-notes": {"github"},
+                "alert-triage": {"sentry", "datadog", "grafana"},
+                "meeting-to-issues": {"meeting-action-items", "google-workspace", "linear", "atlassian"},
+                "research-vault": {"obsidian", "notion"},
+                "channel-watch": set(),
+            },
+        )
+        for template_id, names in declared.items():
+            for name in names:
+                self.assertIn(normalized_phrase(name), _TEMPLATE_APP_NAMES[template_id])
+        self.assertNotIn("github", _TEMPLATE_APP_NAMES["inbox-triage"])
+
     def test_the_app_lanes_stand_down_for_a_template_applied_to_a_bot(self) -> None:
         for message, guard in (
             ("apply the pr-review template to this bot for our github prs", policy._github_event_ops_guard_applies),

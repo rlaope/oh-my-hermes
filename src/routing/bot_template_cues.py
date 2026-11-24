@@ -118,7 +118,7 @@ _KOREAN_JOB_STEMS = tuple(normalized_phrase(p) for p in ("봇",))
 # bot will work: "apply the pr-review template to this bot for our github prs" excuses GitHub as a code word
 # (`_sense_tokens`), and the lanes that react to that app's own items stand down (`bot_template_id_applied`).
 _EN_APPLY_LEADS = (
-    ("apply", "the"), ("applying", "the"), ("set", "up", "the"), ("add", "the"),
+    ("apply", "the"), ("applying", "the"), ("use", "the"), ("set", "up", "the"), ("add", "the"),
     ("set", "this", "bot", "up", "with", "the"), ("set", "the", "bot", "up", "with", "the"),
 )
 _KOREAN_APPLY_STEMS = tuple(normalized_phrase(p) for p in ("적용", "설정"))
@@ -144,6 +144,7 @@ _KOREAN_ITEM_ACTION_STEMS = tuple(
 )
 # GitHub's own CI and config: "apply the pr-review bot template to the github action workflow" edits a workflow file.
 _FORGE_CONFIG_WORDS = frozenset({"action", "actions", "workflow", "workflows", "ci", ".github"})
+_KOREAN_FORGE_CONFIG_STEMS = tuple(normalized_phrase(p) for p in ("액션", "워크플로", "워크플로우"))
 _FORGE_TOKENS = frozenset({"github", "gitlab"})
 _KOREAN_FORGE_STEMS = tuple(normalized_phrase(p) for p in ("깃허브", "깃랩"))
 _FORGE_TEMPLATE_IDS = frozenset(
@@ -184,11 +185,28 @@ def _template_follows(words: list[str], index: int) -> bool:
     return bool(following) and (following[0].startswith("template") or following[0].startswith(_KOREAN_TEMPLATE_STEM))
 
 
+_BOT_DETERMINERS = ("this", "the", "our", "my")
+
+
 def _apply_governs(words: list[str], index: int) -> bool:
-    """The apply verb takes the template at *index*: an English lead before it, or a Korean apply word after it."""
-    if any(tuple(words[max(0, index - len(lead)):index]) == lead for lead in _EN_APPLY_LEADS):
-        return True
-    return any(word.startswith(_KOREAN_APPLY_STEMS) for word in words[index + 2:index + 5])
+    """The apply verb takes the template at *index*, and the template goes to a bot.
+
+    English: a lead before it ("apply the", "set this bot up with the"), and the bot inside the phrase ("<id> bot
+    template"), in the lead, or right after it ("... template to|on|for this bot"). Korean: an apply word after
+    "<id> (봇) 템플릿", with 봇 said in the message ("이 봇에 pr-review 템플릿 적용해줘").
+    """
+    lead = next(
+        (lead for lead in _EN_APPLY_LEADS if tuple(words[max(0, index - len(lead)):index]) == lead), None
+    )
+    if lead is not None:
+        if "bot" in lead or words[index + 1:index + 2] == ["bot"]:
+            return True
+        after = words[index + 2:index + 5]
+        return len(after) == 3 and after[0] in ("to", "on", "for") and after[1] in _BOT_DETERMINERS and after[2] in (
+            "bot", "bots"
+        )
+    korean_bot = any(word.startswith(_KOREAN_BOT) for word in words)
+    return korean_bot and any(word.startswith(_KOREAN_APPLY_STEMS) for word in words[index + 2:index + 5])
 
 
 def _another_action_or_deferral(normalized_query: str, words: list[str]) -> bool:
@@ -237,7 +255,10 @@ def _sense_tokens(normalized_query: str) -> set[str]:
         return tokens
     if not _applied_template_ids(normalized_query) & _FORGE_TEMPLATE_IDS:
         return tokens
-    if tokens & _FORGE_CONFIG_WORDS or _FORGE_CONFIG_WORDS & set(_words(normalized_query)):
+    words = _words(normalized_query)
+    if tokens & _FORGE_CONFIG_WORDS or _FORGE_CONFIG_WORDS & set(words):
+        return tokens
+    if any(word.startswith(_KOREAN_FORGE_CONFIG_STEMS) for word in words):
         return tokens
     return {token for token in tokens if token not in _FORGE_TOKENS and not token.startswith(_KOREAN_FORGE_STEMS)}
 
