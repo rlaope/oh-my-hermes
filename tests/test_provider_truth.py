@@ -367,8 +367,9 @@ class DoctorProviderCheckTests(unittest.TestCase):
             checks = run_doctor(paths)
             summary = setup_module._doctor_operator_summary(checks)
             groups = {group["name"]: group for group in summary["groups"]}
-            self.assertEqual(groups["model_routing"]["total"], 2)
-            self.assertEqual(groups["model_routing"]["passing"], 2)
+            # hermes_model_routing, provider_entitlements and prompt_cache_route.
+            self.assertEqual(groups["model_routing"]["total"], 3)
+            self.assertEqual(groups["model_routing"]["passing"], 3)
             self.assertEqual(groups["model_routing"]["status"], "warning")
             self.assertEqual(groups["model_routing"]["failed"], [])
             # The two checks belong to this group and to no other: a summary
@@ -395,7 +396,7 @@ class DoctorProviderCheckTests(unittest.TestCase):
                 status, stdout, stderr = run_cli(base + ["doctor"], output_json=False)
 
             self.assertEqual(status, 0, stderr)
-            self.assertIn("Model routing: warning (2/2)", stdout)
+            self.assertIn("Model routing: warning (3/3)", stdout)
             self.assertIn("- provider_entitlements: chain entries routed to a provider neither recorded nor linked: glm-5.3 -> work-relay", stdout)
             self.assertIn("Fix: Repair the named routing document", stdout)
 
