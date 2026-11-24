@@ -943,7 +943,7 @@ mod tests {
 
     #[test]
     fn hosts_are_aliases_or_user_at_host_and_never_options_or_shell() {
-        for ok in ["mini", "sionic@10.1.145.204", "build-box.local", "u_1@host-2", "10.0.0.7", "_svc@h"] {
+        for ok in ["mini", "demo@host.example", "build-box.local", "u_1@host-2", "10.0.0.7", "_svc@h"] {
             assert!(valid_host(ok), "{ok}");
         }
         for bad in [
@@ -958,7 +958,7 @@ mod tests {
     #[test]
     fn peers_json_rows_are_checked_on_every_read() {
         let text = r#"{"peers": [
-            {"id": "mini", "label": "Mac mini", "host": "sionic@10.1.145.204"},
+            {"id": "mini", "label": "Mac mini", "host": "demo@host.example"},
             {"id": "mini", "label": "dup", "host": "x"},
             {"id": "Bad", "label": "x", "host": "x"},
             {"id": "evil", "label": "x", "host": "-oProxyCommand=sh"},
@@ -982,7 +982,7 @@ mod tests {
     fn write_then_read_round_trips_and_refuses_a_bad_row() {
         let dir = std::env::temp_dir().join(format!("omher-peers-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        let p = Peer { id: "mini".into(), label: "Mac mini".into(), host: "sionic@10.1.145.204".into(), port: None };
+        let p = Peer { id: "mini".into(), label: "Mac mini".into(), host: "demo@host.example".into(), port: None };
         write_peers(&dir, &[p.clone()]).unwrap();
         assert_eq!(read_peers(&dir), vec![p.clone()]);
         let text = std::fs::read_to_string(peers_path(&dir)).unwrap();
@@ -1004,7 +1004,7 @@ mod tests {
 
     #[test]
     fn ssh_config_aliases_skip_patterns_and_bad_names() {
-        let cfg = "# mine\nHost mini macmini\n  HostName 10.1.145.204\n  User sionic\nHost *\n  ServerAliveInterval 30\n\
+        let cfg = "# mine\nHost mini macmini\n  HostName host.example\n  User demo\nHost *\n  ServerAliveInterval 30\n\
                    host build-* !nope gpu?\nHOST=box # trailing comment\nMatch host x\nHost \"quoted\" -bad mini\n\tHost tabbed\n";
         assert_eq!(ssh_config_hosts(cfg), ["mini", "macmini", "box", "quoted", "tabbed"]);
         assert!(ssh_config_hosts("").is_empty());
@@ -1012,19 +1012,19 @@ mod tests {
 
     #[test]
     fn the_argv_is_fixed_and_the_host_comes_after_double_dash() {
-        let a = ssh_args("sionic@10.1.145.204", None, 50001, 40002, "echo hi");
+        let a = ssh_args("demo@host.example", None, 50001, 40002, "echo hi");
         assert_eq!(
             a,
             [
                 "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ExitOnForwardFailure=yes", "-o",
                 "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3", "-T", "-L", "127.0.0.1:50001:127.0.0.1:40002",
-                "--", "sionic@10.1.145.204", "sh -c 'echo hi'",
+                "--", "demo@host.example", "sh -c 'echo hi'",
             ]
         );
         let p = ssh_args("box", Some(2222), 1, 2, "x");
         assert_eq!(&p[13..17], ["-p", "2222", "--", "box"]);
         assert_eq!(shown_command(&a).split(' ').next(), Some("ssh"));
-        assert!(shown_command(&a).ends_with("-- sionic@10.1.145.204 sh -c '<remote script>'"));
+        assert!(shown_command(&a).ends_with("-- demo@host.example sh -c '<remote script>'"));
     }
 
     #[test]
@@ -1293,7 +1293,7 @@ mod tests {
     #[test]
     fn failures_read_as_plain_kinds() {
         let l = |s: &str| s.lines().map(String::from).collect::<Vec<_>>();
-        assert_eq!(classify(&l("sionic@10.1.145.204: Permission denied (publickey,password)."), false), FailKind::Auth);
+        assert_eq!(classify(&l("demo@host.example: Permission denied (publickey,password)."), false), FailKind::Auth);
         assert_eq!(classify(&l("Host key verification failed."), false), FailKind::HostKey);
         assert_eq!(classify(&l("ssh: connect to host 10.9.9.9 port 22: Operation timed out"), false), FailKind::Timeout);
         assert_eq!(classify(&l("ssh: Could not resolve hostname nowhere: nodename nor servname provided"), false), FailKind::Unreachable);

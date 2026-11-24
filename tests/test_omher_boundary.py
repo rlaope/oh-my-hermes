@@ -511,8 +511,8 @@ RULES = (
     " value an install asks for, never reads, writes or shows a key or a token, never edits `config.yaml`, `.env` or"
     " `mcp-tokens/` itself, and never reloads or restarts anything after a change:",
     "to connect Linear the page opens the Apps page for that bot (rule 41); it lists nothing from Linear itself.",
-    "\"Hand to <bot>\" (a TERMINALS row's menu, a Worktrees row's menu) adds no read: its git facts are that Worktrees"
-    " list and one `panel.diff` of a worktree in it,",
+    "\"Hand to <bot>\" (a TERMINALS row's menu and a split card cell's, a Worktrees row's menu) adds no read: its git"
+    " facts are that Worktrees list and one `panel.diff` of a worktree in it,",
     "and a folder inside none of those worktrees goes with no git facts.",
     "The folder is the one the TERMINALS session started in, never a folder its shell reported (OSC 7, rule 11).",
     "Open thread starts the thread as \"Start in thread\" does (rule 33: `thread.create`, then `chat.send` of that"
@@ -2981,6 +2981,13 @@ class HandToBotAddsNoRead(unittest.TestCase):
         self.assertIn('export const handBots = (bots: Bot[]) => bots.filter((b) => !b.host && b.status !== "offline");', self.card)
         rows = (UI_SRC / "sessions" / "SessionsSection.tsx").read_text(encoding="utf-8")
         self.assertIn("termMenuItems(rec, handBots(getStore().getSnapshot().bots).length > 0)", rows)
+        # a split card's cell offers it through the row's own items and card, never a Hand path of its own
+        self.assertIn("items: termItems, act: termRowAct, spot: menuSpot, Menu: SessionMenu, Name: NameInput, Hand: TermHand", rows)
+        cell = (UI_SRC / "sessions" / "SplitLayoutCard.tsx").read_text(encoding="utf-8")
+        self.assertIn('(a === "hand" ? setHand(menu) : kit.act(', cell)
+        self.assertIn("<kit.Hand at={hand} rec={rec}", cell)
+        for bad in ("HandoverCard", "handBots", "startTaskThread", "panelDiff", "loadTrees"):
+            self.assertNotIn(bad, cell, bad)
         # no bot to send to: no read at all
         self.assertIn("if (!reader) return;", self.card)
 

@@ -112,6 +112,20 @@ All notable changes will be documented here.
   worktree in it (`docs/OMHER-BOUNDARY.md` rule 10); a terminal folder outside the bot's worktrees goes with its path
   and a line asking the bot to check `git status` itself. Nothing moves on disk, the session stays open and omher
   types nothing into it: the bot works with its own tools and approvals. (`apps/omher/src/handover/`)
+- **omher: a terminal in a split hands its folder to a bot too.** A TERMINALS session in a split shows as a cell of
+  the split card, and its right-click menu had every item of a row's menu but Hand to <bot>. A cell's menu now offers
+  it under the same conditions (a folder, and a bot of this computer online) and opens the same card, which sends the
+  same first message through the same thread start as from a row. Nothing new is read or sent.
+  (`apps/omher/src/sessions/SplitLayoutCard.tsx`; `docs/OMHER-BOUNDARY.md` rule 10)
+- **omher: closing a TERMINALS menu or the Hand to <bot> card puts the keyboard back on the row or cell.** After
+  Escape in a TERMINALS row's or split card cell's menu, or Escape, Cancel or Open thread on its Hand to <bot> card,
+  the keyboard landed on the page itself: the menu item that opened the card was gone before the card noted where the
+  keyboard was. It now goes back to the row or cell that opened the menu. If that row or cell is gone (its split made
+  or ended meanwhile), it goes to the session's row or cell as drawn now; with the session closed, to the TERMINALS
+  New terminal button. A press outside the
+  card leaves the keyboard where that press put it. UI only: nothing new is read or sent.
+  (`apps/omher/src/handover/HandoverCard.tsx`, `apps/omher/src/sessions/SessionsSection.tsx`,
+  `apps/omher/src/sessions/SplitLayoutCard.tsx`)
 - **omher's reasoning picker offers every level Hermes accepts, ultra included.** The chat model picker's Reasoning
   control showed none, low, medium, high and xhigh only, so minimal, max and ultra could not be picked. The bridge now
   reads the installed Hermes' own levels (`hermes_constants.VALID_REASONING_EFFORTS`, after "none") and offers them in
