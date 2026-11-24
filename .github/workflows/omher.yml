@@ -75,9 +75,11 @@ jobs:
       - name: Install Chromium (and WebKit on macOS) for Playwright
         working-directory: apps/omher
         run: pnpm exec playwright install chromium ${{ runner.os == 'macOS' && 'webkit' || '' }}
+      # Three shards at once, each its own Vite + mock bridge on its own ports (one serial run took about an hour
+      # on both runners). macos-latest has 3 cores, windows-latest 4.
       - name: End-to-end tests against the mock bridge
         working-directory: apps/omher
-        run: pnpm exec playwright test --reporter=line
+        run: bash scripts/e2e-shards.sh 3
       - name: Rust tests (Tauri shell)
         working-directory: apps/omher/src-tauri
         run: cargo test

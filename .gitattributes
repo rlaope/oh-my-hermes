@@ -78,3 +78,6 @@ src/skills/monitor_watch_toolkit/** text eol=lf
 # The gateway health fixture is Hermes' log bytes as written (LF); the reader is
 # tested on those bytes on every checkout.
 tests/fixtures/gateway_health/** text eol=lf
+
+# Run by bash in the omher workflow on windows-latest too, where a CRLF checkout breaks it.
+apps/omher/scripts/*.sh text eol=lf
