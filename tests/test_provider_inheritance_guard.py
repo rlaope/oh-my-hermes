@@ -269,13 +269,74 @@ class ProviderInheritanceGuardTests(unittest.TestCase):
         self._entitlements({"zai": "zai"})
         self.assertEqual(self._pinned("glm-5.3"), "zai")
 
-    def test_two_recorded_claude_providers_still_refuse_beside_the_plugin(self) -> None:
+    def test_the_plugin_recorded_beside_anthropic_keeps_anthropic(self) -> None:
+        # `omh setup` records every row it found, the plugin included, so a
+        # record naming both is not a preference for the plugin: it is set
+        # aside and the pin is the one the machine had without it.
         self._session_on("openai-codex")
         self._directsdk_plugin()
         self._entitlements({DIRECTSDK: "anthropic", "anthropic": "anthropic"})
+        self.assertEqual(self._pinned(), "anthropic")
+
+    def test_two_recorded_claude_providers_besides_the_plugin_still_refuse(self) -> None:
+        self._session_on("openai-codex")
+        self._directsdk_plugin()
+        self._entitlements({DIRECTSDK: "anthropic", "anthropic": "anthropic", "ccapi": "ccapi"})
         result = self._call(action="set", model="claude-opus-5-5")
         self.assertEqual(result["status"], "error", result)
-        self.assertEqual(result["providers_serving_alias"], ["anthropic", DIRECTSDK])
+        self.assertEqual(result["providers_serving_alias"], ["anthropic", "ccapi", DIRECTSDK])
+
+    def test_with_the_plugin_set_aside_the_one_recorded_provider_is_the_pin(self) -> None:
+        # Without the plugin, a recorded `anthropic` beside a linked
+        # `my-anthropic` block pins `anthropic`; recording the plugin too
+        # must not change that.
+        head = (
+            "model:\n  provider: openai-codex\n"
+            "providers:\n  my-anthropic:\n    base_url: https://api.anthropic.com/v1\n"
+        )
+        self.config.write_text(head, encoding="utf-8")
+        self._entitlements({"anthropic": "anthropic"})
+        self.assertEqual(self._pinned(), "anthropic")
+        self.config.write_text(head, encoding="utf-8")
+        self._directsdk_plugin()
+        self._entitlements({"anthropic": "anthropic", DIRECTSDK: "anthropic"})
+        self.assertEqual(self._pinned(), "anthropic")
+
+    def test_a_default_setup_beside_an_anthropic_login_keeps_the_anthropic_pin(self) -> None:
+        # Regression: Anthropic login + plugin + session on openai-codex.
+        # The setup interview pre-ticks every found row, so the default
+        # answer records all three; the pin must match the same home
+        # without the plugin instead of turning into a refusal.
+        from omh.commands import setup as setup_module
+        from omh.plugin_bundle.omh.provider_detection import LINKED_SOURCE_ENV, detect_linked_providers
+
+        def default_setup() -> dict[str, str]:
+            candidates = [
+                (row["id"], row["kind"], row["evidence"] if row["source"] == LINKED_SOURCE_ENV else row["source"])
+                for row in detect_linked_providers(self.home, env_names=())
+            ]
+            _options, preselected, kinds = setup_module._provider_entitlement_options(candidates, {}, "en")
+            recorded = {provider_id: kinds[provider_id] for provider_id in preselected}
+            self._entitlements(recorded)
+            return recorded
+
+        for with_plugin in (False, True):
+            with self.subTest(with_plugin=with_plugin):
+                self._tmp = tempfile.TemporaryDirectory()
+                self.addCleanup(self._tmp.cleanup)
+                self.home = Path(self._tmp.name)
+                self.config = self.home / "config.yaml"
+                self.omh_home = self.home / ".omh"
+                self._session_on("openai-codex")
+                (self.home / "auth.json").write_text(
+                    json.dumps({"version": 1, "providers": {"anthropic": {"access_token": "t"}}}), encoding="utf-8"
+                )
+                if with_plugin:
+                    self._directsdk_plugin()
+                recorded = default_setup()
+                expected = {"anthropic", "openai-codex"} | ({DIRECTSDK} if with_plugin else set())
+                self.assertEqual(set(recorded), expected)
+                self.assertEqual(self._pinned(), "anthropic")
 
     def test_beside_a_relay_the_plugin_is_still_the_pin(self) -> None:
         # OpenRouter serves everything as a fail-open default, never as a

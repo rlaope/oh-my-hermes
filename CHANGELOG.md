@@ -4,6 +4,19 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Claude lanes can run on a Claude Pro/Max subscription through Hermes' DirectSDK plugin.** OMH did not see
+  Hermes' official `claude-subscription-directsdk` model-provider plugin, so on a machine where it was the only
+  Claude path, Claude aliases counted as unserved: Claude-headed chains (`deep`, `architect`, `writing`,
+  `ultrabrain`, ...) fell to the next model and a delegated Claude lane was refused. Now an installed plugin that is
+  not in `plugins.disabled` (in `config.yaml` or Hermes' managed config) counts as an `anthropic` provider under the id
+  `claude-subscription-directsdk-experimental`, with the source `plugin`. Claude aliases count as served, the chains
+  reorder, and a Claude lane on a session that cannot serve it is pinned to the plugin. OMH reads only the manifest's
+  `name` and `kind`; it never imports or runs the plugin. When another Claude provider is also there (a Hermes
+  Anthropic login, `ANTHROPIC_API_KEY`, a recorded `ccapi`), the pin stays on that provider, as before the plugin was
+  installed, even after `omh setup` records both. To pin the plugin instead, record only it
+  (`omh model-chains provider set claude-subscription-directsdk-experimental anthropic`), route the alias to it, or
+  clear the other provider. `omh setup` labels the plugin's row.
+  (#3186, carried; thanks @jaehyeokl; `docs/INSTALLATION.md`)
 - **omher: a slash command reaches the bot as typed.** omher appended its own notes (the open-threads note, the
   terminal-link blocks, the peer note) to every main-chat message, slash commands included. Hermes reads all of a
   slash command's text as its arguments, so `/usage` answered `Unknown /usage subcommand: [omher] Open threads:

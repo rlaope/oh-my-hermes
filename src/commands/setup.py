@@ -4346,9 +4346,10 @@ def _ask_provider_entitlements(args: argparse.Namespace, paths: OmhPaths, langua
     A confirmed Claude Code subscription is a Maestro-lane entitlement here:
     its only routing consequence is the Claude Code `--model` preference,
     seeded to the Claude chain head when the operator has not set one. The
-    Hermes lane spends a Claude subscription only when the DirectSDK provider
-    plugin (`claude-subscription-directsdk-experimental`) is installed, and
-    detection already counts that plugin as an `anthropic` provider.
+    Hermes lane spends a Claude subscription's plan allowance only when the
+    DirectSDK provider plugin (`claude-subscription-directsdk-experimental`)
+    is installed, and detection already counts that plugin as an `anthropic`
+    provider.
     """
     if not _will_ask_provider_entitlements(args, paths):
         # A repeat call keeps the answer it already has; a first call with

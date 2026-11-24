@@ -51,9 +51,9 @@ StepFun, LM Studio) are ignored rather than mapped to `unknown`, because
 the strength of a key OMH cannot place. `CLAUDE_CODE_OAUTH_TOKEN` is
 likewise not evidence: Hermes' own registry marks it implicit (Claude Code
 sets it, the operator did not configure Anthropic in Hermes). Hermes can
-spend a Claude subscription only through a provider plugin that registers
-it (`claude-subscription-directsdk-experimental`), and that plugin -- not
-the token -- is what counts.
+spend a Claude subscription's plan allowance only through a provider
+plugin that registers it (`claude-subscription-directsdk-experimental`),
+and that plugin -- not the token -- is what counts.
 
 Standalone: this module is copied into `$HERMES_HOME/plugins/omh` and
 imports nothing from the `omh` package. The registry tables below mirror
@@ -70,6 +70,7 @@ import re
 from typing import Any, Collection, Iterable, Mapping
 
 from . import runtime_paths
+from .route_endpoint_guard import managed_config_layer
 
 PROVIDER_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$")
 
@@ -455,25 +456,46 @@ def env_key_names(
 
 
 def _unquote_scalar(value: str) -> str:
-    cleaned = value.split("#", 1)[0].strip()
-    if len(cleaned) >= 2 and cleaned[0] == cleaned[-1] and cleaned[0] in ("'", '"'):
-        return cleaned[1:-1].strip()
-    return cleaned
+    """A YAML scalar's text: a quoted one is read before any `#`, so `"a#b"` is `a#b`.
+
+    An unquoted one ends at a comment (`#` after whitespace, or at its start).
+    """
+    cleaned = value.strip()
+    if cleaned[:1] in ("'", '"'):
+        closing = cleaned.find(cleaned[0], 1)
+        if closing > 0:
+            return cleaned[1:closing].strip()
+    return re.split(r"(?:^|\s)#", cleaned, maxsplit=1)[0].strip()
+
+
+def _flow_list_items(body: str) -> list[str]:
+    return [item for item in (_unquote_scalar(part) for part in body.split(",")) if item]
 
 
 def config_disabled_plugins(config_text: str) -> frozenset[str]:
-    """The names under `plugins.disabled` in `config.yaml`.
+    """The names under `plugins.disabled` in a Hermes `config.yaml`.
 
     Line-shaped like the other config readers here (no YAML dependency):
-    a block list (`- name` lines, at or below the key's indent) or an inline
-    `[a, b]` list under the top-level `plugins:` mapping. A scalar is not a
-    list and names nothing, as in Hermes (`_get_disabled_plugins`).
+    a block list (`- name` lines, at or below the key's indent) or a flow
+    `[a, b]` list, on one line or continued over several, under the
+    top-level `plugins:` mapping. A scalar is not a list and names nothing,
+    as in Hermes (`_get_disabled_plugins`).
     """
     names: list[str] = []
     in_plugins = False
     child_indent: int | None = None
     list_indent: int | None = None
+    flow: list[str] | None = None
     for line in config_text.splitlines():
+        if flow is not None:
+            body = re.split(r"(?:^|\s)#", line, maxsplit=1)[0]
+            if "]" in body:
+                flow.append(body.split("]", 1)[0])
+                names.extend(_flow_list_items(",".join(flow)))
+                flow = None
+            else:
+                flow.append(body)
+            continue
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
@@ -498,11 +520,13 @@ def config_disabled_plugins(config_text: str) -> frozenset[str]:
         key, separator, rest = stripped.partition(":")
         if not separator or key.strip().strip("\"'") != "disabled":
             continue
-        value = rest.split("#", 1)[0].strip()
+        value = re.split(r"(?:^|\s)#", rest, maxsplit=1)[0].strip()
         if not value:
             list_indent = indent
         elif value.startswith("[") and value.endswith("]"):
-            names.extend(item for item in (_unquote_scalar(part) for part in value[1:-1].split(",")) if item)
+            names.extend(_flow_list_items(value[1:-1]))
+        elif value.startswith("["):
+            flow = [value[1:]]
     return frozenset(names)
 
 
@@ -542,12 +566,16 @@ def installed_provider_plugins(hermes_home: Path, config_text: str) -> list[tupl
     manifest declares `kind: model-provider` (the `model-providers`
     directory itself and names starting `_` or `.` skipped in both), each
     with an `__init__.py`, minus a plugin `plugins.disabled` names by its
-    directory, `model-providers/<dir>`, or manifest `name`. The name is the
-    manifest `name`, else the directory name; the evidence is the plugin's
-    path under the home. Nothing is imported or executed.
+    directory, `model-providers/<dir>`, or manifest `name`. The disabled
+    names are read from the home's `config.yaml` and from Hermes' managed
+    config (`managed_config_layer`), and a name either one disables is not
+    counted. The name is the manifest `name`, else the directory name; the
+    evidence is the plugin's path under the home. Nothing is imported or
+    executed.
     """
     plugins_dir = hermes_home / "plugins"
-    disabled = config_disabled_plugins(config_text)
+    _managed_path, managed_text, _managed_error = managed_config_layer()
+    disabled = config_disabled_plugins(config_text) | config_disabled_plugins(managed_text or "")
     candidates = [
         (child, f"plugins/{MODEL_PROVIDERS_PLUGIN_DIR}/{child.name}")
         for child in _plugin_child_dirs(plugins_dir / MODEL_PROVIDERS_PLUGIN_DIR)

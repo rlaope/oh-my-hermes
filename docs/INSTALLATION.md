@@ -3442,9 +3442,10 @@ to OMH.
 
 OMH counts the installed plugin as an `anthropic` provider under the id
 `claude-subscription-directsdk-experimental`, with the source `plugin`. It
-finds the plugin the way Hermes does — under `$HERMES_HOME/plugins/` or
-`$HERMES_HOME/plugins/model-providers/`, with a manifest declaring
-`kind: model-provider` — and reads only the manifest's `name` and `kind`;
+finds the plugin the way Hermes does — in `$HERMES_HOME/plugins/model-providers/<dir>/`,
+or cloned flat into `$HERMES_HOME/plugins/<dir>/` with a manifest declaring
+`kind: model-provider` (only the flat layout needs it) — and reads only the
+manifest's `name` and `kind`;
 the plugin is never imported or called, and the Claude CLI login is never
 read. Claude aliases then count as served and the chains reorder, and a
 delegated Claude lane on a session whose provider cannot serve it is pinned
@@ -3456,11 +3457,14 @@ login, an `ANTHROPIC_API_KEY`, a recorded `ccapi` — the automatic pin keeps
 choosing that provider, as it did before the plugin was installed: OMH does
 not pick between two billing paths on its own. To prefer the subscription:
 
-- record it: `omh model-chains provider set
+- record only it: `omh model-chains provider set
   claude-subscription-directsdk-experimental anthropic`. When several
-  providers could be pinned, the one you recorded wins; recording both it
-  and the other provider is no preference, and the pin is refused as
-  before;
+  providers could be pinned and exactly one of them is recorded, that one
+  wins. `omh setup` records every provider it found, the plugin included,
+  so after a default setup the plugin is set aside and the other provider
+  stays the pin; to prefer the plugin, the other provider must not be in
+  the record as well (`omh model-chains provider clear <id>`, or untick it
+  in `omh setup`, below);
 - or route the alias to it in `~/.omh/routing/model-providers.json`, for
   example `"claude-opus-5-5": {"provider":
   "claude-subscription-directsdk-experimental", "model": "claude-opus-5-5"}`;
@@ -3468,8 +3472,8 @@ not pick between two billing paths on its own. To prefer the subscription:
   written to `excluded_providers`) or remove it from the record.
 
 To stop OMH counting the plugin, add it to `plugins.disabled` in Hermes'
-`config.yaml` (Hermes then stops loading it as well), or untick it in
-`omh setup`.
+`config.yaml` or in Hermes' managed config (Hermes then stops loading it as
+well), or untick it in `omh setup`.
 
 A private gateway is the case no host can answer, and the interview does not
 answer it either: a detected `providers.<id>` row arrives ticked at the kind
@@ -3501,8 +3505,9 @@ the HUD labels, and `omh model-chains show`, which marks a reordered chain.
 A confirmed Claude Code subscription is a Maestro-lane entitlement: its only
 effect is seeding the Claude Code `--model` preference in
 `dispatch-models.json` when none is set (Hermes spends a Claude
-subscription only through the DirectSDK provider plugin, which is counted
-under providers as above; a Codex login is spent by Hermes' own
+subscription's plan allowance only through the DirectSDK provider plugin,
+which is counted under providers as above; Hermes' own Anthropic OAuth login
+draws on extra-usage credits instead; a Codex login is spent by Hermes' own
 `openai-codex` provider and is counted under providers the moment `hermes
 auth` records it). `--yes`, `--json`, and runs without
 `--interactive` on a non-TTY ask nothing and write nothing; rerun `omh setup`

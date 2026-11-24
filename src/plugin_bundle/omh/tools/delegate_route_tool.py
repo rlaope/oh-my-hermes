@@ -59,7 +59,7 @@ from ..delegation_backend_mode import (
 )
 from ..route_endpoint_guard import managed_config_layer, route_endpoint_refusal
 from ..provider_detection import (
-    LINKED_SOURCE_PLUGIN,
+    HERMES_PLUGIN_PROVIDER_KINDS,
     config_provider_base_url_hosts,
     config_provider_declared_models,
     configured_provider_ids,
@@ -516,14 +516,19 @@ def _inherited_provider_view(
     with ``entitlements``. They settle a tie, and only a tie: when more than
     one provider is pinnable, in this order --
 
-    1. exactly one of them is `recorded` (the operator named it in
-       `routing/providers.json`, e.g. `omh model-chains provider set`): that
-       one is the pin. The record is the operator's word, so it is their
-       preference between two providers of the same models; two or more
-       recorded ones are no preference and fall through.
-    2. exactly one of them was found some way other than an installed
-       provider plugin (`source` `plugin`): that one is the pin. Installing
-       the plugin must not turn the pin a machine already had (a Hermes
+    1. exactly one of them is `recorded` in `routing/providers.json`: that
+       one is the pin. A record is taken as the operator's word, so a single
+       recorded provider is their preference between two providers of the
+       same models (`omh model-chains provider set` writes one). Note that
+       `omh setup` pre-ticks and records every provider it found, so after a
+       default setup several are recorded and this step says nothing.
+    2. the providers that are an installed provider plugin
+       (`HERMES_PLUGIN_PROVIDER_KINDS`) are set aside, whatever their row's
+       `source` -- recorded included, since setup records the plugin beside
+       the provider the machine already pinned. If exactly one provider is
+       left, or exactly one of those left is recorded, that one is the pin:
+       the pin the machine would have without the plugin. Installing the
+       plugin must not turn the pin a machine already had (a Hermes
        Anthropic login, a key, a recorded `ccapi`) into a refusal.
     3. otherwise nothing is pinnable and the caller refuses, as before.
 
@@ -555,18 +560,24 @@ def _settle_pin_tie(pinnable: tuple[str, ...], provider_rows: Any) -> tuple[str,
     """The one provider a tie of pinnable providers resolves to, else the tie.
 
     See `_inherited_provider_view`: the single recorded provider first, then
-    the single provider not found only as a plugin.
+    the single provider (or single recorded provider) left once the installed
+    provider plugins are set aside.
     """
     sources: dict[str, str] = {}
     for row in provider_rows:
         if isinstance(row, Mapping):
             sources[str(row.get("id", "")).casefold()] = str(row.get("source", ""))
-    recorded = tuple(item for item in pinnable if sources.get(item.casefold()) == PROVIDER_ENTITLEMENT_SOURCE_RECORDED)
-    if len(recorded) == 1:
-        return recorded
-    held_before = tuple(item for item in pinnable if sources.get(item.casefold()) != LINKED_SOURCE_PLUGIN)
+
+    def recorded(items: tuple[str, ...]) -> tuple[str, ...]:
+        return tuple(item for item in items if sources.get(item.casefold()) == PROVIDER_ENTITLEMENT_SOURCE_RECORDED)
+
+    if len(recorded(pinnable)) == 1:
+        return recorded(pinnable)
+    held_before = tuple(item for item in pinnable if item.casefold() not in HERMES_PLUGIN_PROVIDER_KINDS)
     if len(held_before) == 1:
         return held_before
+    if len(recorded(held_before)) == 1:
+        return recorded(held_before)
     return pinnable
 
 

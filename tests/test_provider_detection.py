@@ -443,11 +443,21 @@ class DetectionTests(unittest.TestCase):
 class ProviderPluginTests(unittest.TestCase):
     """A model-provider plugin Hermes would load counts, by Hermes' own discovery rules."""
 
+    def setUp(self) -> None:
+        # Hermes' managed config layer is read for `plugins.disabled`; keep
+        # this machine's `/etc/hermes` out of the tests.
+        managed = TemporaryDirectory()
+        self.addCleanup(managed.cleanup)
+        self.managed_dir = Path(managed.name)
+        env = patch.dict(os.environ, {"HERMES_MANAGED_DIR": str(self.managed_dir)})
+        env.start()
+        self.addCleanup(env.stop)
+
     def _rows(self, home: Path) -> list[tuple[str, str, str, str]]:
         return [(row["id"], row["kind"], row["source"], row["evidence"]) for row in detection.detect_linked_providers(home)]
 
     def test_a_flat_installed_plugin_is_an_anthropic_provider(self) -> None:
-        with TemporaryDirectory() as tmp, patch.dict(os.environ, {}, clear=True):
+        with TemporaryDirectory() as tmp, patch.dict(os.environ, {"HERMES_MANAGED_DIR": str(self.managed_dir)}, clear=True):
             home = Path(tmp) / "hermes"
             _provider_plugin(home / "plugins" / "directsdk")
             # OMH's own bundle sits beside it and declares no provider kind.
@@ -485,6 +495,9 @@ class ProviderPluginTests(unittest.TestCase):
             "block at the key's indent, manifest name": f"plugins:\n  enabled: [x]\n  disabled:\n  - '{DIRECTSDK}'  # off\n",
             "inline, manifest name": f"plugins:\n  disabled: [other, \"{DIRECTSDK}\"]\n",
             "inline, model-providers key": "plugins:\n  disabled: [model-providers/dsdk]\n",
+            "flow list over several lines": f"plugins:\n  disabled: [other,  # first\n    \"{DIRECTSDK}\",\n    x]\n",
+            "flow list closing on its own line": "plugins:\n  disabled: [\n    dsdk\n  ]\n",
+            "quoted block item with a comment": "plugins:\n  disabled:\n    - \"dsdk\"  # off\n",
         }
         with TemporaryDirectory() as tmp:
             home = Path(tmp) / "hermes"
@@ -503,6 +516,30 @@ class ProviderPluginTests(unittest.TestCase):
                 with self.subTest(config=config):
                     _write(home / "config.yaml", config)
                     self.assertEqual(self._rows(home), [(DIRECTSDK, "anthropic", "plugin", "plugins/dsdk")])
+
+    def test_plugins_disabled_in_the_managed_config_removes_it_too(self) -> None:
+        with TemporaryDirectory() as tmp:
+            home = Path(tmp) / "hermes"
+            _provider_plugin(home / "plugins" / "dsdk")
+            _write(home / "config.yaml", "plugins:\n  disabled: [other]\n")
+            _write(self.managed_dir / "config.yaml", "plugins:\n  enabled: [dsdk]\n")
+            self.assertEqual(self._rows(home), [(DIRECTSDK, "anthropic", "plugin", "plugins/dsdk")])
+            _write(self.managed_dir / "config.yaml", f"plugins:\n  disabled:\n    - {DIRECTSDK}\n")
+            self.assertEqual(self._rows(home), [])
+
+    def test_a_quoted_scalar_is_read_before_a_comment(self) -> None:
+        cases = {
+            '"a#b"': "a#b",
+            "'a # b'  # note": "a # b",
+            "a#b": "a#b",
+            "a # note": "a",
+            "# only a comment": "",
+            '  "dsdk"  ': "dsdk",
+        }
+        for raw, expected in cases.items():
+            with self.subTest(raw=raw):
+                self.assertEqual(detection._unquote_scalar(raw), expected)
+        self.assertEqual(detection.config_disabled_plugins('plugins:\n  disabled: ["a#b", c # d\n  ]\n'), {"a#b", "c"})
 
     def test_only_a_loadable_model_provider_plugin_the_table_names_counts(self) -> None:
         cases = {

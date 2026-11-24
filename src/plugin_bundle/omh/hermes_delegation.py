@@ -415,9 +415,10 @@ def effective_mixture_category_chains(
 # subscription the operator confirmed and that only the Maestro lane can
 # spend. Claude Code is the one such CLI today, and the answer's only effect
 # is the Claude Code `--model` preference. Hermes itself spends a Claude
-# subscription only through an installed provider plugin
+# subscription's plan allowance only through an installed provider plugin
 # (`claude-subscription-directsdk-experimental`), which detection counts
-# under `providers` as `anthropic`. A Codex login is spent by Hermes' own
+# under `providers` as `anthropic`; Hermes' own Anthropic OAuth login draws
+# on extra-usage credits instead. A Codex login is spent by Hermes' own
 # openai-codex provider and therefore belongs under `providers`, not here.
 PROVIDER_ENTITLEMENTS_SCHEMA_VERSION = "provider_entitlements/v1"
 PROVIDER_KIND_GATEWAY = "gateway"
