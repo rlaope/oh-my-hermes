@@ -412,6 +412,25 @@ class IdentityCatalogRegressionTests(IdentityHookTest):
             if line.startswith("- "):
                 self.assertRegex(line.split(" ", 2)[1], r"^(builtin|custom):")
 
+    def test_machine_paced_sessions_keep_primer_without_catalog(self):
+        from omh.plugin_bundle.omh import turn_budget
+
+        self.write_identities()
+        primer = turn_budget.render("primer")
+        human = awareness_system_prompt_section({"session_id": "cli", "platform": "cli", "omh_home": str(self.home)})
+        self.assertIn("[OMH Identity Catalog]", human)
+        for platform in ("cron", "CRON", "webhook", "api_server", "kanban", "gateway_hygiene"):
+            section = awareness_system_prompt_section(
+                {"session_id": f"m-{platform}", "platform": platform, "omh_home": str(self.home)})
+            # The whole primer, safety and boundary lines included, and only it.
+            self.assertEqual(section, primer)
+            self.assertIn("Boundary: ", section)
+        # Messaging and terminal sessions are human-paced and keep the directory.
+        for platform in ("discord", "telegram", "tui", ""):
+            section = awareness_system_prompt_section(
+                {"session_id": f"h-{platform}", "platform": platform, "omh_home": str(self.home)})
+            self.assertIn("[OMH Identity Catalog]", section)
+
     def test_child_and_all_disabled_have_no_catalog(self):
         self.write_identities()
         self.assertNotIn("Identity Catalog", awareness_system_prompt_section({"session_id": "child", "platform": "subagent", "omh_home": str(self.home)}))

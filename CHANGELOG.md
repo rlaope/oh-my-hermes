@@ -642,6 +642,16 @@ All notable changes will be documented here.
   empty page, at most 50 reads after the agent ends, then says it could not read the rest. (`src/tui/subagent_session.py`,
   `src/tui/agent_view.py`, `src/tui/app.py`, `src/tui/frame.py`)
 
+- **Cron, webhook and other machine-paced sessions no longer pay for the identity catalog in their system prompt.**
+  `omh.awareness` already left the identity catalog out of `delegate_task` children. It now leaves it out of every
+  platform Hermes counts as machine-paced, the `MACHINE_PACED_SOURCES` list in its `agent/prompt_caching.py`, copied
+  as data (`subagent`, `cron`, `oneshot`, `webhook`, `kanban`, `api`, `api_server`, `tool`, `batch`, `curator`, `a2a`,
+  `msgraph_webhook`, `gateway_hygiene`). Those sessions keep the full primer, boundary lines included. A cron session
+  with custom identities drops from 3,689 to 1,667 section chars on the test fixture. A new test renders every OMH
+  system-prompt section in two Python processes with different `PYTHONHASHSEED` and `TZ` and checks the bytes match,
+  so a set order, clock or mtime that reaches the frozen prefix fails CI. No difference was found. OMH adds no skill
+  index or candidate text to the system prompt. (`src/plugin_bundle/omh/hooks/llm_hooks.py`)
+
 ## 5.0.0 - 2026-11-21
 
 - **A mise-managed `codex` or `python3` runs again in `omh coding run`.** mise links every tool it manages to one
