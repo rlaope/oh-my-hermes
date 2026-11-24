@@ -15,19 +15,20 @@ import { TERM_MENU_EVENT, type TermMenuRequest } from "./menu-event";
 
 type ItemKey = "copy" | "paste" | "selectAll" | "find" | "clear" | "reset" | "splitRight" | "splitDown";
 
-/** The key shown beside an item on this platform ("" for none). */
-function termMenuShortcut(k: ItemKey, onMac: boolean): string {
-  const keys: Record<ItemKey, [string, string]> = {
-    copy: ["⌘C", "Ctrl+Shift+C"],
-    paste: ["⌘V", "Ctrl+Shift+V"],
-    selectAll: ["⌘A", ""],
-    find: ["⌘F", "Ctrl+Shift+F"],
-    clear: ["⌘K", ""],
-    reset: ["", ""],
-    splitRight: ["⌘D", "Ctrl+Shift+D"],
-    splitDown: ["⌘⇧D", "Alt+Shift+D"],
+type MenuOs = "mac" | "win" | "linux";
+/** The key shown beside an item on this platform ("" for none): macOS, Windows, Linux (engine-input.ts has the keys). */
+function termMenuShortcut(k: ItemKey, os: MenuOs): string {
+  const keys: Record<ItemKey, [string, string, string]> = {
+    copy: ["⌘C", "Ctrl+C", "Ctrl+Shift+C"],
+    paste: ["⌘V", "Ctrl+V", "Ctrl+Shift+V"],
+    selectAll: ["⌘A", "Ctrl+Shift+A", "Ctrl+Shift+A"],
+    find: ["⌘F", "Ctrl+Shift+F", "Ctrl+Shift+F"],
+    clear: ["⌘K", "Ctrl+Shift+K", "Ctrl+Shift+K"],
+    reset: ["", "", ""],
+    splitRight: ["⌘D", "Ctrl+Shift+D", "Ctrl+Shift+D"],
+    splitDown: ["⌘⇧D", "Alt+Shift+D", "Alt+Shift+D"],
   };
-  return keys[k][onMac ? 0 : 1];
+  return keys[k][os === "mac" ? 0 : os === "win" ? 1 : 2];
 }
 
 /** Where the split items act: a TERMINALS session's terminal, a bottom-panel pane, or neither (no split items). */
@@ -118,7 +119,7 @@ export function TermMenu() {
     setReq(null);
     if (refocus) term.focus();
   };
-  const mac = isMac();
+  const os: MenuOs = isMac() ? "mac" : /^Win/.test(navigator.platform) ? "win" : "linux";
   const to = splitTarget(host);
   const full = !!to && splitFull(to);
   const items: { key: ItemKey; label: Key; run: () => void; disabled?: boolean; gap?: boolean }[] = [
@@ -203,7 +204,7 @@ export function TermMenu() {
           }}
         >
           <span className="term-mi-l">{t(it.label)}</span>
-          {termMenuShortcut(it.key, mac) && <kbd className="term-mi-k">{termMenuShortcut(it.key, mac)}</kbd>}
+          {termMenuShortcut(it.key, os) && <kbd className="term-mi-k">{termMenuShortcut(it.key, os)}</kbd>}
         </button>
       ))}
     </div>

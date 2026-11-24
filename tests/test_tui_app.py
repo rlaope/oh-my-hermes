@@ -364,6 +364,8 @@ class Run:
 class AppTestCase(unittest.TestCase):
     def prepare(self, scenario: Scenario, *, rows: int = 24, cols: int = 80, env: dict | None = None) -> Run:
         root = Path(self.enterContext(make_test_tempdir("omh-tui-app-")))
+        # `main` builds the App itself: a Ctrl+V that finds no image never reads the machine's real clipboard here.
+        self.enterContext(patch("omh.tui.app.clipboard_text", lambda *args, **kwargs: None))
         materialize(root, scenario)
         environ = {
             **replay_env(root),
@@ -2558,6 +2560,29 @@ class AttachmentTests(AppTestCase):
         self.assertEqual([frame["params"] for frame in run.calls("clipboard.paste")], [{"session_id": LIVE_ID}] * 2)
         (detach,) = run.calls("image.detach")  # at once, as it was staged; Ctrl+C sends nothing more
         self.assertEqual(detach["params"], {"session_id": LIVE_ID, "path": CLIP["path"]})
+
+    def test_ctrl_v_with_no_image_pastes_the_clipboard_text_and_says_so_only_when_there_is_none(self) -> None:
+        """#3131: a terminal that sends Ctrl+V on as ^V (no paste of its own) still pastes the clipboard's text; an
+        image still wins, and a clipboard with neither keeps Hermes' notice."""
+        clipboard = ["echo pasted by ctrl+v", None]
+        no_image = ("clipboard.paste", {"result": {"attached": False, "message": "No image found in clipboard"}})
+        answers = (*startup_answers(), no_image, no_image, ("clipboard.paste", {"result": CLIP}), DETACHED, RENDERED_OFF)
+        run = self.prepare(Scenario("session", spans("session", "startup", "create"), answers=answers))
+        terminal = run.terminal
+        terminal.script(
+            Step(b"\x16", when=terminal.idle, label="idle"),
+            Step(b"\x16", when=terminal.shows("❯ echo pasted by ctrl+v"), capture="text", label="the pasted text"),
+            Step(b"\x16", when=terminal.shows("No image found in clipboard"), label="the empty-clipboard notice"),
+            Step(b"\x03\x04", when=terminal.shows("[Image #1]"), capture="image", label="the clipboard image's token"),
+        )
+        with patch("omh.tui.app.clipboard_text", lambda *args: clipboard.pop(0)):
+            self.run_main(run)
+        self.assert_clean_run(run)
+        self.assertEqual(composer_row(terminal.captures["text"]), "❯ echo pasted by ctrl+v")
+        self.assertNotIn("No image found", "\n".join(terminal.captures["text"]))
+        self.assertEqual(composer_row(terminal.captures["image"]), "❯ echo pasted by ctrl+v [Image #1]")
+        self.assertEqual(clipboard, [])  # read for the two Ctrl+V that found no image, never for the image
+        self.assertEqual(len(run.calls("clipboard.paste")), 3)
 
     def test_a_one_line_paste_is_offered_to_detect_drop_first(self) -> None:
         answers = (

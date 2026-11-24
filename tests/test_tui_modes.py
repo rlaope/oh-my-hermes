@@ -130,6 +130,8 @@ def make_app(*, busy: bool = False, rows: int = 24, cols: int = 80, **options: o
     # byte for byte; `tests/test_tui_main_mouse.py` turns it on.
     environ = {"OMH_TUI_WALLPAPER": "0", "OMH_TUI_UPDATE_CHECK": "0", "OMH_TUI_MOUSE": "0",
                **options.pop("environ", {})}  # type: ignore[dict-item]
+    # Never the machine's real clipboard: a Ctrl+V that finds no image reads no text unless a test hands one in.
+    options.setdefault("read_clipboard_text", lambda: None)
     app = App(ScriptedTerminal(rows, cols), client, environ, poller=FakePoller(), **options)  # type: ignore[arg-type]
     app.sid = SID
     app.turn_pending = busy
