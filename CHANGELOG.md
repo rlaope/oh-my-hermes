@@ -4,6 +4,16 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: a click on a side-panel tab right after maximise or restore picks that tab.** While the panel slides,
+  a press on a tab that is still moving counts as the tab row's own press (for a double-click on the row), and its
+  click goes nowhere. The check for "still moving" looked at every frame of the last 60 ms. So a tab that had already
+  stopped, two or three frames before the click, still read as moving if an earlier frame in that window had moved
+  it. The click was dropped and the panel stayed on its old tab. Now a tab counts as moving in three cases: while
+  the slide runs, when it moved between the frame the person saw at the press and the moment omher reads the click,
+  or when it had only just arrived in that frame. A tab that held still from the frame before the press is the
+  person's to click.
+  (`apps/omher/src/elsewhere/PanelTabs.tsx`, `apps/omher/src/elsewhere/rowMotion.ts`; e2e `panel-max.spec.ts`, seen
+  on macOS CI)
 - **omher on Windows: "Reply there" no longer draws over the row's time, and the app names Windows' own fonts.** In
   the side panel's "Where your bot is", hovering a Slack or Discord row showed "거기에 답장" on top of the row's time
   ("거기에답장일"): the button floated over the time and its hover fill was see-through. Now the time gives way while
