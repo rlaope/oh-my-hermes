@@ -225,7 +225,9 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   (`kimi acp`), Copilot CLI (`copilot --acp`), Cline (`cline --acp`) and Google's Antigravity CLI (`agy acp`) are rows
   of one list in the shell
   (`src-tauri/src/acp_agents.rs`: program, argument, sign-in and install lines, mark), which the agent look-up hands
-  to the UI; they use their own approval requests, with no permission override from omher. Their signed-in turns have not been tested. An agent that is not signed in
+  to the UI; they use their own approval requests, with no permission override from omher. Antigravity CLI 1.5.16
+  signed-in turns are checked against recorded runs (`tests/fixtures/acp/agy-*.jsonl`); the other five generic ACP
+  agents' signed-in turns have not been tested. An agent that is not signed in
   ends its session with one line naming its own sign-in command (`gemini`, `kimi login`, `cline auth`, `agy acp --login`, ...) and
   Open in Terminal; omher never signs in for it and never takes a key.
 - **Your own ACP agents** (Settings › Agents, `src-tauri/src/custom_agents.rs`): the page lists every offered

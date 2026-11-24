@@ -122,7 +122,7 @@ class DistributionParityTests(unittest.TestCase):
                 convert_support_from_dir(source)
 
     def test_clone_adapters_preserve_edited_and_foreign_support(self):
-        for host in ("cursor", "claude", "codex", "opencode", "openclaw", "pi"):
+        for host in ("cursor", "claude", "codex", "opencode", "openclaw", "pi", "antigravity"):
             with self.subTest(host=host), tempfile.TemporaryDirectory() as td:
                 base = Path(td)
                 target = base / (".claude/skills" if host == "claude" else ".agents/skills")

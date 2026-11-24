@@ -53,7 +53,8 @@ const fn generic(
 }
 
 /// Gemini CLI 0.68.0, Qwen Code 0.27.2, Kimi Code 2.6.0, Copilot CLI 1.0.110, Cline 3.0.74 and Antigravity CLI 1.5.16,
-/// checked up to their signed-out `session/new` (`tests/fixtures/acp/<agent>-signed-out.jsonl`). Gemini's
+/// checked up to their signed-out `session/new` (`tests/fixtures/acp/<agent>-signed-out.jsonl`), plus Antigravity CLI
+/// 1.5.16 signed-in runs (`tests/fixtures/acp/agy-1-plain.jsonl` .. `agy-7-lifecycle.jsonl`). Gemini's
 /// `--experimental-acp` is deprecated. Sign-in lines from each agent's own help; install lines from each one's README
 /// (Antigravity's from antigravity.google/docs/cli: a native binary with no npm package, so its line is the official
 /// installer, which puts `agy` in `~/.local/bin`, `%LOCALAPPDATA%\agy\bin` on Windows).
