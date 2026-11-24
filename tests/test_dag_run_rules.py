@@ -1680,7 +1680,7 @@ class VerifyAttributionAndRepairLeftoversTests(unittest.TestCase):
         self.assertIn("or `unattributed`: by declared scope, not proven cause.", line)
         self.assertTrue(line.endswith("Scopes: api: src/api.py; ui: src/ui.py, src/ui/"), line)
         self.assertNotIn("elsewhere", line)
-        self.assertLess(context.index(ATTRIBUTION), context.index("Stay inside your SCOPE"))
+        self.assertLess(context.index("Stay inside your SCOPE"), context.index(ATTRIBUTION))
 
     def test_a_producer_behind_another_verify_node_is_still_upstream(self) -> None:
         with homes() as home:
@@ -1761,7 +1761,7 @@ class VerifyAttributionAndRepairLeftoversTests(unittest.TestCase):
         self.assertIn(LEFTOVERS + " src/api.py src/fix.py" + CLOSE, last_context)
         # After the re-plan block, which keeps its own bound up to the handoff line.
         self.assertLess(last_context.index("Handoff:"), last_context.index(LEFTOVERS))
-        self.assertLess(last_context.index(LEFTOVERS), last_context.index("Stay inside your SCOPE"))
+        self.assertLess(last_context.index("Stay inside your SCOPE"), last_context.index("Handoff:"))
 
     def test_a_scopeless_node_in_a_repair_group_gets_no_leftovers_line(self) -> None:
         with homes() as home:
@@ -1814,7 +1814,16 @@ class VerifyAttributionAndRepairLeftoversTests(unittest.TestCase):
             context = dag_run.task_for(record, record["nodes"][1], home.omh, derived)["context"]
             handoff_path = dag_run.node_handoff(record, home.omh, "ui")
             read_path = dag_run.node_handoff(record, home.omh, "api")
+        # The run-wide head first (the same bytes for every sibling), then the node's own block.
         self.assertEqual(context, "\n".join([
+            "Commit only your own SCOPE paths: stage them by name (`git add -- <paths>`), never `git add -A`, "
+            "`git add .` or `git commit -a`, and never `git stash`; the index and stash are shared with the "
+            "parallel parts.",
+            "Other agents share this machine: run only the builds and tests you need at once, and before you stop, "
+            "stop the background jobs you started and remove the temporary files you created.",
+            "Stay inside your SCOPE: other parts of this run work at the same time. If you cannot finish, "
+            "say plainly that you are blocked and why; do not report blocked work as done.",
+            "",
             PROMPT, "",
             f"Handoff: before you stop, write your report to {handoff_path}: what you did, the files you changed, "
             "what VERIFY showed, and anything still open. The parent reads that file and your final message.",
@@ -1823,13 +1832,6 @@ class VerifyAttributionAndRepairLeftoversTests(unittest.TestCase):
             "If the task turns on a judgement you cannot settle with confidence (a design choice, a root cause you "
             "cannot pin down), do not guess: before editing, write ESCALATE: <the question> and what you found into "
             "the handoff, and stop.",
-            "Commit only your own SCOPE paths: stage them by name (`git add -- <paths>`), never `git add -A`, "
-            "`git add .` or `git commit -a`, and never `git stash`; the index and stash are shared with the "
-            "parallel parts.",
-            "Other agents share this machine: run only the builds and tests you need at once, and before you stop, "
-            "stop the background jobs you started and remove the temporary files you created.",
-            "Stay inside your SCOPE: other parts of this run work at the same time. If you cannot finish, "
-            "say plainly that you are blocked and why; do not report blocked work as done.",
         ]))
 
     def test_a_writing_node_is_told_to_commit_only_its_own_scope_paths(self) -> None:

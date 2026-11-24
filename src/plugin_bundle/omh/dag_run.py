@@ -176,6 +176,10 @@ REVIEW_FOCUS_PREFIX: Final = "Review focus (what the parent will check when it r
 SHARED_MACHINE_LINE: Final = ("Other agents share this machine: run only the builds and tests you need at once, and before "
                               "you stop, stop the background jobs you started and remove the temporary files you "
                               "created.")
+# What a call with sibling tasks says: `task_for` puts the run-wide block first, but OMH starts nothing itself, so it
+# does not stagger the start of tasks in one call (fanout does: `CACHE_WARM_SPAWN_STAGGER_SECONDS`).
+SAME_LAYER_NOTE: Final = ("These tasks start with the same run-wide block. OMH does not stagger their start, so "
+                          "children that start together may each write that block to the provider prompt cache.")
 NODE_FIELDS: Final = frozenset({"id", "label", "category", "prompt", "depends_on", "write_scope", "role", "owner",
                                 "local", "read_only", "identity", "review_focus"})
 # What a node is for, as the parent declares it (``build`` when it names none). A ``build`` node with a write scope is a
@@ -1629,8 +1633,29 @@ def _leftovers_line(record: Mapping[str, Any], node: Mapping[str, Any]) -> str:
 def task_for(
     record: Mapping[str, Any], node: Mapping[str, Any], omh_home: Path, derived: Mapping[str, Mapping[str, Any]]
 ) -> dict[str, str]:
-    """One `delegate_task` task: the marked goal, and the node's prompt with where to write and read handoffs."""
+    """One `delegate_task` task: the marked goal, and the node's prompt with where to write and read handoffs.
+
+    The run-wide block (run goal, commit, shared-machine and scope rules) comes first and the node's own block after
+    it, so sibling tasks of one run start with the same bytes and a provider prompt cache can serve that prefix.
+    """
     run = str(record["run"])
+    head: list[str] = []
+    goal = record.get("goal")
+    if isinstance(goal, str) and goal.strip():
+        head.extend([
+            f"Run goal (saved):\n{goal}\n",
+            "The run goal is acceptance context, not permission to widen your SCOPE.",
+            "",
+        ])
+    if node["write_scope"] and not node.get("read_only"):
+        # Parallel parts share the checkout's index and stash, so a whole-tree add or stash takes their files too.
+        head.append("Commit only your own SCOPE paths: stage them by name (`git add -- <paths>`), never `git add -A`, "
+                    "`git add .` or `git commit -a`, and never `git stash`; the index and stash are shared with the "
+                    "parallel parts.")
+        if node_role(node) == DEFAULT_ROLE:
+            head.append(SHARED_MACHINE_LINE)
+    head.append("Stay inside your SCOPE: other parts of this run work at the same time. If you cannot finish, "
+                "say plainly that you are blocked and why; do not report blocked work as done.")
     lines = [str(node["prompt"]), ""]
     if node.get("review_focus"):
         lines.extend([f"{REVIEW_FOCUS_PREFIX}{node['review_focus']}", ""])
@@ -1649,13 +1674,6 @@ def task_for(
                       f"previous attempt stopped on this question: {question}{stop} Read its handoff at "
                       f"{node_handoff(record, omh_home, str(node['id']))} for what it found, decide the question, "
                       "then do the task.", ""])
-    goal = record.get("goal")
-    if isinstance(goal, str) and goal.strip():
-        lines.extend([
-            f"Run goal (saved):\n{goal}\n",
-            "The run goal is acceptance context, not permission to widen your SCOPE.",
-            "",
-        ])
     if node.get("cycle") == REPLAN_CYCLE:
         root = _root(node)
         earlier = {root}
@@ -1741,18 +1759,9 @@ def task_for(
         lines.append("If the task turns on a judgement you cannot settle with confidence (a design choice, a root "
                      "cause you cannot pin down), do not guess: before editing, write ESCALATE: <the question> and "
                      "what you found into the handoff, and stop.")
-    if node["write_scope"] and not node.get("read_only"):
-        # Parallel parts share the checkout's index and stash, so a whole-tree add or stash takes their files too.
-        lines.append("Commit only your own SCOPE paths: stage them by name (`git add -- <paths>`), never `git add -A`, "
-                     "`git add .` or `git commit -a`, and never `git stash`; the index and stash are shared with the "
-                     "parallel parts.")
-        if node_role(node) == DEFAULT_ROLE:
-            lines.append(SHARED_MACHINE_LINE)
-    lines.append("Stay inside your SCOPE: other parts of this run work at the same time. If you cannot finish, "
-                 "say plainly that you are blocked and why; do not report blocked work as done.")
     # The marker ends the goal: Hermes previews each goal by its first 40 characters, and a person reads the label
     # there. It stays on the label's line, since Hermes prints `goal[:40]` as a one-line completion label.
-    return {"goal": f"{node['label']} [dag:{run}/{node['id']}]", "context": "\n".join(lines)}
+    return {"goal": f"{node['label']} [dag:{run}/{node['id']}]", "context": "\n".join([*head, "", *lines])}
 
 
 def retry_count(node: Mapping[str, Any]) -> int:
@@ -1908,6 +1917,8 @@ def calls_for(
             if option:
                 tasks = [{**task, "option": option} for task in tasks]
             call = {"category": category, "route": dict(route), "nodes": chunk, "tasks": tasks}
+            if len(tasks) > 1:
+                call["note"] = SAME_LAYER_NOTE
             if identity:
                 call["identity"] = identity
             calls.append(call)

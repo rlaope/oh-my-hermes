@@ -641,6 +641,13 @@ All notable changes will be documented here.
   questions and stop keys stay on main's screen; on the shared gateway the view reads one page at a time until an
   empty page, at most 50 reads after the agent ends, then says it could not read the rest. (`src/tui/subagent_session.py`,
   `src/tui/agent_view.py`, `src/tui/app.py`, `src/tui/frame.py`)
+- **Sibling dag-ulw child tasks start with the same bytes, so a provider prompt cache can serve the shared part.**
+  Each child task used to open with its own node prompt, so two siblings of one run shared almost no prefix (6
+  characters in a 3-node sample). Now the run-wide block comes first: the saved run goal with its acceptance-context
+  line, then the commit-only-your-SCOPE, shared-machine and stay-inside-your-SCOPE rules. The node's own block follows:
+  prompt, review focus, resume, escalation and re-plan text, handoff, read-first, and the verify lines. The same
+  sample now shares 691 characters. No line was reworded or dropped, and the `[dag:run/node]` goal is unchanged. A
+  `ready` call that carries several tasks now has a `note`: OMH does not stagger their start. (`src/plugin_bundle/omh/dag_run.py`)
 
 ## 5.0.0 - 2026-11-21
 
