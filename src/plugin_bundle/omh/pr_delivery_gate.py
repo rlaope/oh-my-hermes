@@ -56,6 +56,7 @@ from typing import Final
 
 from . import pr_delivery
 from .consistency_trigger import _edit_targets
+from .tools.lsp_nav_tool import _workspace_root
 from .hooks.nudge_budget import session_is_delegated
 from .hooks.session_attendance import SINGLE_QUERY_SESSION_ENV, UNATTENDED_APPROVAL_PLATFORMS, session_platform
 
@@ -124,13 +125,21 @@ _UNREADABLE_WRAPPER_OPTIONS: Final = frozenset({"-S", "--split-string"})
 _ASSIGNMENT: Final = re.compile(r"^([A-Za-z_][A-Za-z_0-9]*)\+?=")
 # Variables that redirect or reprogram git or gh: their `-c`, `--repo` and
 # `--exec-path` in another spelling.
-_FORGE_ENV: Final = re.compile(r"^(?:GIT_|GH_|GITHUB_|PATH$|HOME$|XDG_CONFIG_HOME$)", re.IGNORECASE)
+# Plus the variables git, gh or a pager they start read as a program to run
+# (git(1) ENVIRONMENT and git-var(1): EDITOR, VISUAL, PAGER, SSH_ASKPASS, the
+# GIT_* family incl. GIT_EDITOR, GIT_SEQUENCE_EDITOR, GIT_ASKPASS, GIT_SSH,
+# GIT_SSH_COMMAND, GIT_PAGER, GIT_EXTERNAL_DIFF, GIT_PROXY_COMMAND; gh's
+# environment help: GH_EDITOR, GH_BROWSER, GH_PAGER, BROWSER; less(1):
+# LESS, LESSOPEN, LESSCLOSE, LESSKEY*; man(1): MANPAGER).
+_ENV_NAMES: Final = (r"GIT_\w*|GH_\w*|GITHUB_\w*|PATH|HOME|XDG_CONFIG_HOME|EDITOR|VISUAL|PAGER|MANPAGER|LESS\w*|"
+                     r"SSH_ASKPASS|BROWSER")
+_FORGE_ENV: Final = re.compile(rf"^(?:{_ENV_NAMES})$", re.IGNORECASE)
 _DECLARERS: Final = frozenset({"export", "declare", "typeset", "readonly", "local", "set", "setx"})
 # Marks in a command word that a shell resolves before it runs it: POSIX
 # expansion and quoting, cmd.exe's `^` escape and `%VAR%`, PowerShell's backtick.
 _HIDING_MARKS: Final = "$\\'\"^%`"
 # PowerShell's environment assignment (`$env:GH_REPO = ...`), the twin of `GH_REPO=...`.
-_POWERSHELL_ENV: Final = re.compile(r"^\$?env:(?:GIT_|GH_|GITHUB_|PATH\b|HOME\b|XDG_CONFIG_HOME\b)", re.IGNORECASE)
+_POWERSHELL_ENV: Final = re.compile(rf"^\$?env:(?:{_ENV_NAMES})\b", re.IGNORECASE)
 _WINDOWS_EXECUTABLE: Final = re.compile(r"\.(?:exe|cmd|bat|com)$", re.IGNORECASE)
 # A backslash before a letter or digit: a Windows path, which the POSIX lexer
 # would read as escapes (`C:\Program Files\Git\cmd\git.exe` loses every one).
@@ -182,7 +191,7 @@ _PUSH_LONG_BOOL: Final = frozenset({
 _PUSH_LONG_OPTIONAL_VALUE: Final = frozenset({"--signed", "--recurse-submodules"})
 _FORCE_LONG: Final = frozenset({"--force", "--force-with-lease", "--force-if-includes", "--delete", "--mirror", "--prune"})
 _WIDE_LONG: Final = frozenset({"--all", "--branches", "--tags", "--follow-tags"})
-_NOT_LITERAL: Final = re.compile(r"[$`*?\[\\~^\s'\"]|\.\.|@\{")
+_NOT_LITERAL: Final = re.compile(r"[$`*?\[\\~^%\s'\"]|\.\.|@\{")
 _PUSH_REMOTE: Final = "origin"
 
 # gh -------------------------------------------------------------------------
@@ -247,6 +256,21 @@ _MCP_FORGE_WRITE: Final = re.compile(
 
 # An HTTP client writing to a forge API without gh: the cheap, common shape only.
 _HTTP_CLIENTS: Final = frozenset({"curl", "wget", "http", "https", "xh"})
+# Shells that take a command in a form this gate cannot read (`-EncodedCommand`).
+_WINDOWS_SHELLS: Final = frozenset({"powershell", "pwsh", "cmd"})
+_POWERSHELL_PLAIN_OPTIONS: Final = frozenset({"-noprofile", "-nologo", "-noninteractive", "-nop", "-noni"})
+_POWERSHELL_VALUE_OPTIONS: Final = frozenset({"-executionpolicy", "-ep", "-ex"})
+_SCRIPT_SUFFIX: Final = re.compile(r"\.(?:ps1|bat|cmd)$", re.IGNORECASE)
+# Programs that make links (`ln -s .git g`, `mklink /J g .git`, PowerShell `New-Item -ItemType Junction`).
+_LINKERS: Final = frozenset({"ln", "mklink", "new-item", "ni", "cp", "mv", "install", "rsync", "tar", "unzip"})
+# Programs that only read the files they name.
+# `tree` (`-o` writes) and `rg` (`--pre` runs a program) are not on it.
+# Programs that cannot run a command or write a file from their arguments or
+# environment. Pagers, `find`, `tree`, `rg`, `sed`, `awk`, `xargs`, `sort` and
+# anything with an output-file or preprocessor option are not on it.
+_READERS: Final = frozenset({"cat", "head", "tail", "ls", "stat", "wc", "grep", "egrep", "fgrep"})
+# A variable that makes a reader (or a pager it starts) run something, anywhere on the line.
+_READER_ENV: Final = re.compile(r"\b(?:LESS\w*|PAGER|GIT_PAGER|MANPAGER|MORE|GREP_\w*|LS_\w*)\b")
 _FORGE_API_HOST: Final = re.compile(r"api\.github\.com|/api/v3/|/api/graphql", re.IGNORECASE)
 _WRITE_METHOD: Final = re.compile(r"\b(?:PUT|POST|PATCH|DELETE)\b|--data|(?:^|\s)-d\b|--json|--form", re.IGNORECASE)
 
@@ -258,8 +282,13 @@ _CREDENTIAL: Final = re.compile(
 # Files git or gh read as configuration (global, XDG, submodules, gh's own).
 _FORGE_CONFIG_FILES: Final = frozenset({".gitconfig", ".gitmodules", ".git-credentials", ".gitattributes"})
 _FORGE_CONFIG_SUFFIXES: Final = ("git/config", "git/attributes", "gh/config.yml", "gh/hosts.yml",
-                                  "github cli/config.yml", "github cli/hosts.yml")
-_SHORT_GIT: Final = re.compile(r"^git~[0-9]+$")
+                                  "github cli/config.yml", "github cli/hosts.yml", "etc/gitconfig",
+                                  "git/credentials", ".ssh/config")
+# An 8.3 short name of a protected entry: `GIT~1` (.git), `GITCON~1` (.gitconfig),
+# `GITMOD~1` (.gitmodules), `GIT-CR~1`, `GITATT~1`, `GITHUB~1` (gh's `GitHub CLI`).
+_SHORT_GIT: Final = re.compile(r"^\.?git[^~/]{0,4}~[0-9]+$")
+# A store path split to dodge a token match (`'runtime/pr_' + 'delivery'`), or written whole.
+_STORE_PATH: Final = re.compile(r"runtime/+pr_(?:delivery|['\"])", re.IGNORECASE)
 
 # The grant's command and store, as tokens.
 _GRANT_GROUP: Final = "capability-policy"
@@ -279,6 +308,7 @@ class _Context:
         self.pr_head = ""
         self.pr_creates = 0
         self.segments = 0
+        self.line = ""
 
 
 def nobody_can_answer(session_id: object) -> bool:
@@ -348,8 +378,8 @@ def _classify(command: object, context: _Context, depth: int) -> str:
         return UNCLASSIFIED
     command = _join_continuations(command)
     mentions_forge = _FORGE_WORD.search(command.replace("\\", "/")) is not None
-    if mentions_forge and _WINDOWS_PATH_BACKSLASH.search(command):
-        return UNCLASSIFIED  # a Windows path or escape the POSIX lexer would misread
+    if mentions_forge and _command_word_is_a_windows_path(command):
+        return UNCLASSIFIED  # the program run is named by a Windows path, which the POSIX lexer would misread
     if _CREDENTIAL.search(command):
         return UNCLASSIFIED  # printing a forge credential takes the next step outside this gate
     if mentions_forge and ("`" in command or "$(" in command or "<(" in command or ">(" in command):
@@ -367,11 +397,12 @@ def _classify(command: object, context: _Context, depth: int) -> str:
         return UNCLASSIFIED
     for index, token in enumerate(whole[:-1]):
         # A here-string or redirection hands its target to the program as input.
-        if _REDIRECT.match(token) and _FORGE_WORD.search(whole[index + 1]):
+        if _REDIRECT.match(token) and (_FORGE_WORD.search(whole[index + 1]) or _configures_forge(whole[index + 1])):
             return UNCLASSIFIED
     segments = _segments(whole)
     if depth == 0:
         context.segments = len(segments) if len(lines) <= 1 else len(segments) + len(lines)
+        context.line = command
     classes = [_classify_segment(segment, context, depth) for segment in segments]
     # The per-line pass catches a push on its own line, which `shlex` reads as
     # more arguments of the line before; a line that does not tokenize alone
@@ -380,6 +411,82 @@ def _classify(command: object, context: _Context, depth: int) -> str:
         for line in lines:
             classes.extend(_classify_segment(segment, context, depth) for segment in _segments(_tokens(line)))
     return _worst(classes)
+
+
+def _command_word_is_a_windows_path(command: str) -> bool:
+    """Whether some segment's command word, as written, holds a backslash before a letter or digit.
+
+    Only the command word names what runs, so only it is read raw. A
+    backslash inside an argument (`--format='%h\\t%s'`, `-m 'fix\\nbody'`) is
+    read by Git Bash exactly as the POSIX lexer reads it, and is not refused.
+    """
+    lexer = shlex.shlex(command, posix=False, punctuation_chars=True)
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    try:
+        raw = list(lexer)
+    except ValueError:
+        return True
+    segments: list[list[str]] = [[]]
+    for token in raw:
+        if token in _SEPARATORS or (_OPERATOR_RUN.match(token) and not _REDIRECT.match(token)):
+            segments.append([])
+        else:
+            segments[-1].append(token)
+    return any(_WINDOWS_PATH_BACKSLASH.search(word) for word in map(_raw_command_word, segments) if word)
+
+
+def _raw_command_word(segment: list[str]) -> str:
+    """The token that names what runs, found past assignments and wrappers with `_unwrap`'s option table."""
+    index = 0
+    while index < len(segment):
+        token = segment[index]
+        if _ASSIGNMENT.match(token):
+            index += 1
+            continue
+        name = _basename(token.strip("'\"")).lower()
+        if name not in _WRAPPERS:
+            return token
+        index += 1
+        while index < len(segment) and segment[index].startswith("-") and segment[index] != "-":
+            option = segment[index].split("=", 1)[0]
+            index += 2 if option in _WRAPPERS[name] and "=" not in segment[index] else 1
+        index += _WRAPPER_POSITIONALS.get(name, 0)
+    return ""
+
+
+def _runs_only_a_script(name: str, args: list[str]) -> bool:
+    """`powershell -NoProfile -File x.ps1 ...`, `pwsh x.ps1`, `cmd /c x.bat`: a script file and nothing else."""
+    if name == "cmd":
+        return len(args) >= 2 and args[0].lower() == "/c" and bool(_SCRIPT_SUFFIX.search(args[1]))
+    index = 0
+    while index < len(args):
+        option = args[index].lower()
+        if option in _POWERSHELL_PLAIN_OPTIONS:
+            index += 1
+        elif option in _POWERSHELL_VALUE_OPTIONS:
+            index += 2
+        elif option in ("-file", "-f"):
+            return index + 1 < len(args) and bool(_SCRIPT_SUFFIX.search(args[index + 1]))
+        else:
+            return not option.startswith("-") and bool(_SCRIPT_SUFFIX.search(args[index]))
+    return False
+
+
+def _plain_read(name: str, assignments: list[str], line: str) -> bool:
+    """A reader on `_READERS` with no assignment in its segment and no reader variable on the line.
+
+    It earns exactly one exception: a protected path it names is neither the
+    protected-path refusal's business nor a forge word for the fallback.
+    Every other check runs on it as on any program.
+    """
+    return name in _READERS and not assignments and not _READER_ENV.search(line)
+
+
+def _names_forge_config(word: str) -> bool:
+    """A command argument naming `.git` itself, a path under it, or a git or gh config file."""
+    value = word.split("=", 1)[-1] if word.startswith("-") else word
+    return bool(value) and _configures_forge(value)
 
 
 def _join_continuations(command: str) -> str:
@@ -478,6 +585,16 @@ def _classify_segment(segment: list[str], context: _Context, depth: int) -> str:
         if carried:
             return UNCLASSIFIED
         return _classify_git(words[1:], context, depth) if name == "git" else _classify_gh(words[1:], context)
+    if name in _WINDOWS_SHELLS:
+        # Decided by the executable, never by the flag spelling: PowerShell
+        # accepts any unambiguous prefix of `-EncodedCommand`, and cmd runs
+        # `/c`, `/k` and `/r`. Only a plain script file stays a script residual.
+        return LOCAL if _runs_only_a_script(name, words[1:]) and not forge_text else UNCLASSIFIED
+    if name in _LINKERS and any(_names_forge_config(word) for word in words[1:]):
+        return UNCLASSIFIED  # a link to `.git` or a git config lets a later plain write land there
+    reader = _plain_read(name, names, context.line)
+    if not reader and any(_names_forge_config(word) for word in words[1:]) and not _FORGE_CLI.match(name):
+        return UNCLASSIFIED  # a shell write into `.git/` or a git or gh config file
     if name in _SHELLS:
         payload = _shell_payload(words)
         if payload is not None:
@@ -488,6 +605,11 @@ def _classify_segment(segment: list[str], context: _Context, depth: int) -> str:
         return UNCLASSIFIED if any("$" in word for word in words[1:]) else _nested(words[1:], context, depth)
     if name in _HTTP_CLIENTS and _FORGE_API_HOST.search(text) and _WRITE_METHOD.search(text):
         return OTHER_PR_OR_REPO  # a forge API write that skips gh
+    if reader:
+        # The one exception: protected paths a plain reader names are not forge words. The rest of
+        # its text is judged by the fallback exactly as for any other program.
+        text = " ".join(word for word in words if not _names_forge_config(word))
+        forge_text = _FORGE_WORD.search(text) is not None
     if forge_text and _FORGE_VERB.search(text):
         return UNCLASSIFIED
     return LOCAL
@@ -800,7 +922,7 @@ def _process_data(tool_input: object) -> str | None:
 
 def _names_store(token: str) -> bool:
     lowered = token.lower()
-    if "pr_delivery/" in lowered or lowered.endswith("/pr_delivery") or "runtime/pr_" in lowered:
+    if "pr_delivery/" in lowered or lowered.endswith("/pr_delivery") or _STORE_PATH.search(lowered):
         return True
     # A glob that the shell would expand to the store's directory (`pr_deliver?/`, `pr_*`).
     return any(any(mark in part for mark in _STORE_GLOB) and fnmatch.fnmatchcase(_STORE_DIR, part)
@@ -811,7 +933,7 @@ def _names_grant_change(command: str, depth: int = 0) -> bool:
     """Whether a command line would change the grant or touch its store."""
     command = _join_continuations(command)
     folded = command.replace("\\", "/").lower()
-    if "pr_delivery/" in folded or "runtime/pr_" in folded:
+    if "pr_delivery/" in folded or _STORE_PATH.search(folded):
         return True  # a store path in any spelling, a Windows one included, which the lexer would unescape
     tokens = _tokens(command)
     if not tokens:
@@ -838,7 +960,7 @@ def grant_change_directive(*, tool_name: object, tool_input: object) -> dict[str
         named = data is not None and _names_grant_change(data)
     elif tool == CODE_TOOL:
         code = _text_arg(tool_input, "code").lower()
-        named = "runtime/pr_" in code or "pr_delivery/" in code or _GRANT_GROUP in code
+        named = _STORE_PATH.search(code.replace("\\", "/")) is not None or "pr_delivery/" in code or _GRANT_GROUP in code
     else:
         return None
     if not named:
@@ -854,7 +976,17 @@ def grant_change_directive(*, tool_name: object, tool_input: object) -> dict[str
     }
 
 
-def _tool_class(tool: str, tool_input: object, prefix: str, opened: frozenset[tuple[str, int]]) -> str:
+def _resolved(target: str, task_id: object) -> str:
+    """The real path a file tool would write: relative to the session's workspace, every link followed."""
+    base = _workspace_root(task_id) or os.getcwd()
+    try:
+        return os.path.realpath(os.path.join(base, os.path.expanduser(target)))
+    except (OSError, ValueError):
+        return target
+
+
+def _tool_class(tool: str, tool_input: object, prefix: str, opened: frozenset[tuple[str, int]],
+                task_id: object = None) -> str:
     if tool == TERMINAL_TOOL:
         return classify_command(_text_arg(tool_input, "command"), prefix=prefix, opened=opened)
     if tool == PROCESS_TOOL:
@@ -872,9 +1004,11 @@ def _tool_class(tool: str, tool_input: object, prefix: str, opened: frozenset[tu
         code = _text_arg(tool_input, "code")
         return UNCLASSIFIED if _FORGE_WORD.search(code) and _FORGE_VERB.search(code) else LOCAL
     if tool in FILE_TOOLS:
-        # A file under `.git/` (a hook, the config) runs on the next git command.
+        # A file under `.git/` (a hook, the config) runs on the next git command. Read both as
+        # written and resolved: a symlinked or junctioned parent (`g -> .git`) must not hide it.
         targets = _edit_targets(tool, dict(tool_input) if isinstance(tool_input, Mapping) else {})
-        return UNCLASSIFIED if any(_configures_forge(target) for target in targets) else LOCAL
+        return UNCLASSIFIED if any(_configures_forge(target) or _configures_forge(_resolved(target, task_id))
+                                   for target in targets) else LOCAL
     lowered = tool.lower()
     if (lowered.startswith("mcp") or "github" in lowered or "gitlab" in lowered) and _MCP_FORGE_WRITE.search(tool):
         return OTHER_PR_OR_REPO
@@ -903,7 +1037,8 @@ def _windows_part(part: str) -> str:
 
 
 def delivery_directive(
-    *, tool_name: object, tool_input: object, session_id: str, omh_home: str, hermes_home: str
+    *, tool_name: object, tool_input: object, session_id: str, omh_home: str, hermes_home: str,
+    task_id: object = None,
 ) -> dict[str, str] | None:
     """The block for a forge command an unattended session may not run, else None."""
     tool = str(tool_name or "")
@@ -912,7 +1047,7 @@ def delivery_directive(
     grant = pr_delivery.read_grant(omh_home, hermes_home)
     prefix = pr_delivery.branch_prefix(grant)
     opened = pr_delivery.opened_prs(omh_home, hermes_home) if tool in (TERMINAL_TOOL, PROCESS_TOOL) else frozenset()
-    forge_class = _tool_class(tool, tool_input, prefix, opened)
+    forge_class = _tool_class(tool, tool_input, prefix, opened, task_id)
     if forge_class in (LOCAL, NOT_GOVERNED):
         return None
     delegated = _delegated(session_id)

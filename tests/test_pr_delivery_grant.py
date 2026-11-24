@@ -49,7 +49,10 @@ HERMES_SESSION_VARS = ("HERMES_SESSION_ID", "HERMES_SINGLE_QUERY_SESSION")
 
 
 def _without_hermes_session():
-    env = {key: value for key, value in os.environ.items() if key not in HERMES_SESSION_VARS}
+    # Every marker Hermes leaves in a child's environment, so the CLI sees a person's own shell.
+    env = {key: value for key, value in os.environ.items()
+           if key not in HERMES_SESSION_VARS and not key.startswith("HERMES_SESSION_")
+           and key not in ("HERMES_UI_SESSION_ID", "HERMES_CRON_SESSION", "HERMES_AGENT", "HERMES_EXEC_ASK")}
     return mock.patch.dict(os.environ, env, clear=True)
 
 
@@ -180,6 +183,19 @@ class CliTests(_Home):
                 self.assertIn("Only the person", result.stdout)
         self.assertFalse(pr_delivery.grant_path(self.home, self.hermes).exists())
 
+    def test_on_and_off_refuse_on_any_hermes_marker_without_the_session_id(self):
+        # `env -u HERMES_SESSION_ID` alone is not enough: the other markers Hermes sets are read too.
+        for marker in ("HERMES_AGENT", "HERMES_SESSION_PLATFORM", "HERMES_CRON_SESSION", "HERMES_EXEC_ASK",
+                       "HERMES_UI_SESSION_ID", "HERMES_SINGLE_QUERY_SESSION"):
+            for verb in ("on", "off"):
+                with self.subTest(marker=marker, verb=verb), mock.patch.dict(os.environ, {marker: "1"}):
+                    result = self.cli(verb)
+                    self.assertEqual(result.code, 2)
+                    self.assertIn(marker, result.stdout)
+        self.assertFalse(pr_delivery.grant_path(self.home, self.hermes).exists())
+        with mock.patch.dict(os.environ, {"HERMES_HOME": str(self.hermes)}):
+            self.assertEqual(self.cli("on").code, 0)  # a person's own HERMES_HOME is not a marker
+
     def test_on_needs_a_yes_typed_at_the_terminal(self):
         result = self.cli("on", typed_yes=False)
         self.assertEqual(result.code, 2)
@@ -197,14 +213,41 @@ class CliTests(_Home):
             opened.append(name)
             return io.StringIO("yes\n")
 
-        windows = ("CONIN$", "CONOUT$")
-        with mock.patch.object(pr_delivery_cli, "terminal_devices", return_value=windows), \
+        # Host-independent: Windows and the visible console are faked, so a real Windows runner
+        # (whose own console may be hidden) gives the same answer as macOS and Linux.
+        with mock.patch.object(pr_delivery_cli, "on_windows", return_value=True), \
+                mock.patch.object(pr_delivery_cli, "console_is_visible", return_value=True), \
                 mock.patch("builtins.open", fake_open):
             self.assertTrue(pr_delivery_cli.confirm_on_terminal("yes? "))
         self.assertEqual(opened, ["CONOUT$", "CONIN$"])
-        with mock.patch.object(pr_delivery_cli, "terminal_devices", return_value=windows), \
+        with mock.patch.object(pr_delivery_cli, "on_windows", return_value=True), \
+                mock.patch.object(pr_delivery_cli, "console_is_visible", return_value=True), \
                 mock.patch("builtins.open", side_effect=OSError("no console")):
             self.assertFalse(pr_delivery_cli.confirm_on_terminal("yes? "))
+
+    def test_a_hidden_windows_console_is_a_no_without_waiting(self):
+        # Hermes spawns terminal children with CREATE_NO_WINDOW: CONIN$ would open on a console nobody sees.
+        with mock.patch.object(pr_delivery_cli, "on_windows", return_value=True), \
+                mock.patch.object(pr_delivery_cli, "console_is_visible", return_value=False), \
+                mock.patch("builtins.open", side_effect=AssertionError("must not open the console")):
+            self.assertFalse(pr_delivery_cli.confirm_on_terminal("yes? "))
+
+    def test_console_visibility_reads_the_window_and_fails_closed(self):
+        import ctypes
+
+        def windll(window: int, visible: int, *, raises: bool = False):
+            def get_window():
+                if raises:
+                    raise OSError("no console API")
+                return window
+            return SimpleNamespace(kernel32=SimpleNamespace(GetConsoleWindow=get_window),
+                                   user32=SimpleNamespace(IsWindowVisible=lambda handle: visible))
+
+        cases = ((windll(42, 1), True), (windll(42, 0), False), (windll(0, 1), False),
+                 (windll(42, 1, raises=True), False))
+        for fake, expected in cases:
+            with self.subTest(expected=expected), mock.patch.object(ctypes, "windll", fake, create=True):
+                self.assertIs(pr_delivery_cli.console_is_visible(), expected)
 
     def test_on_windows_the_grant_file_mode_is_not_checked(self):
         # POSIX mode bits mean nothing there: the grant reads as recorded (documented residual).
@@ -323,7 +366,7 @@ class AttendedSessionTests(_Home):
         session_attendance.note_session_platform(SESSION, "cli")
         for command in ("uv run python -m unittest tests/test_pr_delivery_grant.py",
                         "cat src/plugin_bundle/omh/pr_delivery.py", "grep -rn pr_delivery src",
-                        'git commit -m "docs: explain pr-delivery on and off"'):
+                        'git commit -m "docs: explain pr-delivery on and off"', "grep -rn runtime/pr_ src"):
             with self.subTest(command=command):
                 self.assertIsNone(self.terminal(command))
 
@@ -381,6 +424,8 @@ class UnattendedMatrixTests(_Home):
         f"gh pr comment {URL} --body 'Round 1 pushed.'",
         "gh pr comment 42 --repo acme/widgets --body 'Round 1 pushed.'",
         "git commit -m \"subject\n\nbody\" && git push origin HEAD:refs/heads/bot/x",
+        # A literal backslash escape inside an argument reads the same under Git Bash.
+        "git commit -m 'fix\\n\\nbody' && git push origin HEAD:refs/heads/bot/x",
     )
     ALWAYS_REFUSED = {
         "git push --force origin HEAD:refs/heads/bot/fix-ci": gate.FORCE_PUSH,
@@ -526,6 +571,17 @@ class UnattendedMatrixTests(_Home):
         "Set-Item -Path Env:GH_REPO -Value x": gate.UNCLASSIFIED,
         "set GIT_SSH_COMMAND=x": gate.UNCLASSIFIED,
         "setx GH_REPO victim/r": gate.UNCLASSIFIED,
+        # Second Windows pass (W1): PowerShell and cmd decided by the executable.
+        "powershell.exe -EncodedCommand ZwBoACAAcAByACAAbQBlAHIAZwBlACAANAAyAA==": gate.UNCLASSIFIED,
+        "powershell -enc ZwBoACAAcAByACAAbQBlAHIAZwBlACAANAAyAA==": gate.UNCLASSIFIED,
+        "pwsh -e ZwBoACAAcAByACAAbQBlAHIAZwBlACAANAAyAA==": gate.UNCLASSIFIED,
+        "pwsh -ec ZwBoACAAcAByACAAbQBlAHIAZwBlACAANAAyAA==": gate.UNCLASSIFIED,
+        "C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -EncodedC ZwBo": gate.UNCLASSIFIED,
+        "cmd.exe /k dir": gate.UNCLASSIFIED,
+        "timeout 5 C:\\Git\\git.exe push origin HEAD:refs/heads/bot/x": gate.UNCLASSIFIED,
+        "sudo -u x C:\\Git\\gh.exe pr merge 1": gate.UNCLASSIFIED,
+        "env -u A C:\\Git\\git.exe push origin HEAD:refs/heads/bot/x": gate.UNCLASSIFIED,
+        "git push origin HEAD:refs/heads/bot/%X%": gate.UNQUALIFIED,
         # Second verification round (R1-R5).
         "git status;(gh pr merge 42)": gate.FORGE_MERGE,
         "git status&&(gh pr merge 42)": gate.FORGE_MERGE,
@@ -548,6 +604,12 @@ class UnattendedMatrixTests(_Home):
         "gh api -X GET repos/acme/widgets/pulls -f state=open", "ls -la", "cat README.md",
         "git config user.email bot@example.invalid", "git config --get remote.origin.url", "git remote -v",
         "gh auth status", "gh repo set-default --view", "git push origin HEAD:refs/heads/bot/x --dry-run",
+        "git log --format='%h\\t%s'", "grep -E '\\bfoo\\b' notes.txt",
+        "powershell -NoProfile -File build.ps1", "pwsh build.ps1", "cmd /c build.bat", "ls .git",
+        # Plain reads of a protected path are not writes.
+        "cat .git/config", "head -5 ~/.gitconfig", "tail .gitmodules", "wc -l .git/config",
+        "grep -n url .git/config", "stat .git/hooks/pre-push", "git config --list",
+        "git config --get remote.origin.url",
     )
 
     def setUp(self) -> None:
@@ -648,13 +710,59 @@ class UnattendedMatrixTests(_Home):
                      "/home/u/.config/gh/config.yml", "repo/.gitmodules",
                      "C:\\repo\\.git\\hooks\\pre-push", "C:\\repo\\.GIT\\hooks\\pre-push", "C:\\repo\\.git.\\config",
                      "C:\\repo\\.git::$INDEX_ALLOCATION\\config", "C:\\repo\\GIT~1\\config", "C:\\Users\\u\\.gitconfig",
-                     "C:\\Users\\u\\AppData\\Roaming\\GitHub CLI\\hosts.yml"):
+                     "C:\\Users\\u\\AppData\\Roaming\\GitHub CLI\\hosts.yml", "C:\\Users\\u\\GITCON~1",
+                     "C:\\repo\\GITMOD~1", "C:\\Users\\u\\AppData\\Roaming\\GITHUB~1\\hosts.yml",
+                     "/etc/gitconfig", "C:\\Users\\u\\AppData\\Local\\Programs\\Git\\etc\\gitconfig"):
             with self.subTest(path=path):
                 self.assertEqual(self.pre("write_file", {"path": path, "content": "x"})["action"], "block")
         for tool in ("mcp_github_add_issue_comment", "mcp_github_update_issue", "github_merge_pr",
                      "MCP_GitHub_Merge", "mcp__github__merge_pull_request", "mcp_github_enable_pr_auto_merge"):
             with self.subTest(tool=tool):
                 self.assertEqual(self.pre(tool, {"body": "/merge"})["action"], "block")
+
+    def test_a_write_through_a_symlinked_parent_is_held(self):
+        if not hasattr(os, "symlink"):
+            self.skipTest("no symlinks on this platform")
+        repo = Path(os.environ["TERMINAL_CWD"])
+        (repo / ".git" / "hooks").mkdir(parents=True)
+        try:
+            (repo / "g").symlink_to(repo / ".git", target_is_directory=True)
+        except OSError:
+            self.skipTest("symlink creation not permitted")
+        self.grant_on()
+        directive = self.pre("write_file", {"path": "g/hooks/pre-push", "content": "#!/bin/sh\n"})
+        self.assertEqual(directive["action"], "block")
+        self.assertIsNone(self.pre("write_file", {"path": "src/app.py", "content": "x = 1\n"}))
+
+    def test_variables_that_name_a_program_are_refused_beside_git_and_gh(self):
+        names = ("EDITOR", "VISUAL", "GIT_EDITOR", "GIT_SEQUENCE_EDITOR", "PAGER", "GIT_PAGER", "GH_PAGER",
+                 "MANPAGER", "LESS", "LESSOPEN", "LESSCLOSE", "LESSKEYIN", "SSH_ASKPASS", "GIT_ASKPASS",
+                 "BROWSER", "GH_BROWSER", "GH_EDITOR", "GIT_EXTERNAL_DIFF", "GIT_PROXY_COMMAND")
+        for name in names:
+            for command in (f"{name}='gh pr merge 42' git commit", f"env {name}='gh pr merge 42' git commit",
+                            f"export {name}='gh pr merge 42'; git commit -m x"):
+                with self.subTest(command=command):
+                    self.assertEqual(gate.classify_command(command, prefix="bot/"), gate.UNCLASSIFIED)
+                    self.assertEqual(self.terminal(command)["action"], "block")
+
+    def test_making_a_link_to_git_config_is_held(self):
+        for command in ("ln -s .git g", "ln -s ../.git/hooks h", "mklink /J g .git", "cmd /c mklink /J g .git",
+                        "New-Item -ItemType Junction -Path g -Target .git", "cp evil.sh .git/hooks/pre-push",
+                        "echo x > .git/hooks/pre-push", "ln -s ~/.gitconfig c", "cat x > .git/hooks/pre-push",
+                        "tee .git/hooks/pre-push", "cp x .git/config", "find .git -delete",
+                        "find .git/hooks -exec rm {} +", "echo x >> ~/.ssh/config",
+                        "LESSOPEN='|gh pr merge 42 %s' less README.md",
+                        "LESSOPEN=\"|git push -f origin HEAD:main %s\" less README.md",
+                        "env LESSOPEN='|gh pr merge 42' less README.md", "LESSOPEN='|gh pr merge 42 %s' more README.md",
+                        "less '+!gh pr merge 42' README.md", "tree -o .git/hooks/pre-push",
+                        "rg --pre ./x url .git/config", "less .git/config", "more .git/config",
+                        "find .git -name config", "LESSCLOSE='|x' cat .git/config", "PAGER=x cat .git/config",
+                        "GIT_PAGER=x cat .git/config", "env LESS=x cat .git/config", "LANG=C cat .git/config",
+                        "export LESSOPEN='|gh pr merge 42'; cat README.md", "grep 'git push' notes.md",
+                        "cat .git/config | sh"):
+            with self.subTest(command=command):
+                self.assertEqual(self.terminal(command)["action"], "block")
+        self.assertIsNone(self.terminal("ln -s build/out latest"))
 
     def test_mcp_forge_writes_and_git_dir_writes_are_held(self):
         self.grant_on()
