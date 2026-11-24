@@ -1673,6 +1673,7 @@ export const zh: Record<Key, string> = {
   "term.shellTip": "在下方文件夹中打开登录 shell",
   "term.st.busy": "正在输出",
   "term.here": "在此新建终端",
+  "term.newIn": "在 {name} 中新建终端",
   "term.shellPick": "选择 shell",
   "term.shellDefault": "默认",
   "term.shellDefaultOf": "{shell}（默认）",

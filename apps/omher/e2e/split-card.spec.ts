@@ -1,4 +1,4 @@
-// The TERMINALS split card: every split is one card on top of the TERMINALS list (no search typed), its cells at the
+// The TERMINALS split card: every split is one card at the top of its first pane's folder (no search typed), its cells at the
 // panes' real places with each pane's CLI mark, title and last line; the members are not rows in their folders again.
 // A cell click focuses that pane, a right-click opens the row menu (Hand to <bot> included), output makes the cell's edge orbit (still under
 // reduced motion), a bell on a cell not in view is quiet news while a bot's request to type makes it wait, the grip sets the card's height (kept after a restart,
@@ -48,9 +48,11 @@ test("two sessions in a split are one card of two cells side by side, gone from 
   await expect(card(page)).toHaveCount(1);
   await expect(card(page)).toHaveAttribute("data-panes", "2");
   await expect(page.getByTestId("split-cell")).toHaveCount(2);
-  // the card is on top of the list, above the folder groups
-  const first = await page.getByTestId("session-list").evaluate((l) => l.firstElementChild?.getAttribute("data-testid"));
-  expect(first).toBe("split-card");
+  // the card sits in its first pane's folder, under that folder's header and above its rows
+  const group = page.locator('[data-testid="term-group"][data-cwd="/w/a"]');
+  await expect(group.getByTestId("split-card")).toHaveCount(1);
+  const order = await group.evaluate((g) => [...g.children].map((c) => c.getAttribute("data-testid")));
+  expect(order.slice(0, 2)).toEqual(["term-group-head", "split-card"]);
   await expect(page.getByTestId(`session-${a}`)).toHaveCount(0);
   await expect(page.getByTestId(`session-${b}`)).toHaveCount(0);
   await expect(page.getByTestId(`session-${c}`)).toBeVisible();
@@ -203,7 +205,8 @@ async function oneThree(page: Page, ids: string[]) {
   // even them out: three thirds on the right
   await term(page, d).locator(".xterm-helper-textarea").focus();
   await page.keyboard.press((await page.evaluate(() => /Mac|iPhone|iPad/.test(navigator.platform))) ? "Meta+Control+Equal" : "Control+Alt+Equal");
-  await expect.poll(() => mapH(page)).toBe(126);
+  // its own height (a tall list may draw it shorter to fit, as a folder header now sits above it)
+  await expect(card(page)).toHaveAttribute("data-map-h", "126");
 }
 
 /** The grip's value as the accessibility tree reports it (what a screen reader hears), with its range. */
@@ -351,7 +354,10 @@ test("a tall card in a short TERMINALS gives way so it is never hidden whole: 12
   const seen = () =>
     page.evaluate(() => {
       const list = document.querySelector<HTMLElement>('[data-testid="session-list"]')!;
+      // the card sits in its folder (/w/a, the oldest, listed last): scroll that folder to the list's top
       list.scrollTop = 0;
+      const group = document.querySelector(".split-card")!.closest<HTMLElement>('[data-testid="term-group"]')!;
+      list.scrollTop = group.getBoundingClientRect().top - list.getBoundingClientRect().top;
       const lb = list.getBoundingClientRect();
       const cut = Number(/inset\(0px 0px ([\d.]+)px/.exec(list.style.clipPath)?.[1] ?? 0);
       const card = document.querySelector(".split-card")!.getBoundingClientRect();
