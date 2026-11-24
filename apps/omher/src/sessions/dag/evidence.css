@@ -1,0 +1,10 @@
+.dag-evidence, .dag-column { display: grid; gap: .65rem; min-width: 0; }
+.dag-card { border: 1px solid var(--line); border-radius: var(--r); padding: .75rem; overflow-wrap: anywhere; color: var(--body); }
+.dag-card p, .dag-card hr { margin: 0; }
+.dag-card pre { white-space: pre-wrap; }
+.dag-card hr { border: 0; border-top: 1px solid var(--line); }
+.dag-caption { color: var(--muted); font-size: .85em; }
+.dag-picks { display: flex; gap: .35rem; flex-wrap: wrap; margin-block: .4rem; }
+.dag-picks button { max-width: 100%; overflow-wrap: anywhere; padding: .35rem .55rem; border: 1px solid var(--line); border-radius: var(--r); color: var(--body); }
+.dag-picks button[aria-pressed=true] { background: var(--raise2); border-color: var(--muted); }
+.dag-picks button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }

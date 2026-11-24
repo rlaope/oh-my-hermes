@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { SlotProps } from "../features";
 import type { ReactNode as JSXChild } from "react";
 import type { Away, Bot, Routine } from "../lib/protocol";
-import { replyChipFor, useStore } from "../state/store";
+import { getStore, replyChipFor, useStore } from "../state/store";
 import { openExternal } from "../lib/openExternal";
 import { shortTime } from "../app/time";
 import { Avatar, CloseIcon, IconButton, SourceIcon } from "../ui";
@@ -24,6 +24,7 @@ import {
   type PanelTab,
 } from "./PanelTabs";
 import { useNow } from "./useNow";
+import { getSessions, useSessions } from "../sessions/sessions";
 import { RunsTab } from "../runs/RunsTab";
 import { markTabPicked } from "../chat/parts/PanelButton";
 import "./elsewhere.css";
@@ -95,6 +96,27 @@ export default function DetailsPanel({ bot, open, onClose }: SlotProps["detailsP
   return <DetailsTab bot={bot} open={open} head={head} />;
 }
 
+/** Existing rows are distinct even for the same directory. Only bridge-attached folder chats are offered. */
+function FolderPlansEntry({ bot }: { bot: string }) {
+  const ss = useSessions();
+  const sessions = getSessions();
+  const rows = ss.list.filter((r) => sessions.folderAttachment(r.id)?.bot === bot);
+  const [picking, setPicking] = useState(false);
+  const [error, setError] = useState("");
+  return <section aria-label={tr("plans.folderSessions")} className="dag-picks">
+    <h2 className="ew-sec">{tr("plans.folderSessions")}</h2>
+    <button type="button" disabled={picking} onClick={async () => {
+      setPicking(true); setError("");
+      try { await sessions.newFolderPlans(bot); } catch (e) { setError(String(e)); } finally { setPicking(false); }
+    }}>{tr("plans.newFolderSession")}</button>
+    {error && <p role="alert">{error}</p>}
+    {rows.map((r) => <button type="button" key={r.id} onClick={() => {
+      getStore().actions.openSession(r.id);
+      getStore().actions.togglePanel(true);
+    }}>{r.cwd} · {sessions.folderAttachment(r.id)?.stored}</button>)}
+  </section>;
+}
+
 function DetailsTab({ bot, open, head }: { bot: Bot; open: boolean; head: JSXChild }) {
   const s = useStore();
   const away: Away[] = s.elsewhere[bot.name] ?? [];
@@ -143,6 +165,7 @@ function DetailsTab({ bot, open, head }: { bot: Bot; open: boolean; head: JSXChi
         </button>
       </div>
       <div className="ew-scroll">
+        {open && !bot.host && <FolderPlansEntry key={bot.name} bot={bot.name} />}
         <div className="ew-sec" data-testid="where-sec">
           {tr("pn.where", { bot: bot.display_name })}
           <span>{away.length + 1}</span>

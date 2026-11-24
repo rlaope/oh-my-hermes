@@ -11,6 +11,8 @@ export default defineConfig({
   use: {
     baseURL: `http://127.0.0.1:${port}`,
     viewport: { width: 1280, height: 820 },
+    // Installed Chrome is a fallback when this Playwright version's bundled Chromium is absent.
+    ...(process.env.OMHER_E2E_CHROME ? { launchOptions: { executablePath: process.env.OMHER_E2E_CHROME } } : {}),
     // past the first-run cards, with all four mock bots in the sidebar list: specs see the app as a returning person
     // who added them does (onboarding.spec.ts and roster.spec.ts start from nothing)
     storageState: {

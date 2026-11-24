@@ -555,6 +555,10 @@ export interface OpMap {
   /** Runs tab, read-only: the bot's agent runs (OMH dag runs today) and one run with its handoffs. */
   "runs.list": { params: { bot: string }; result: { runs: AgentRunSummary[] } };
   "runs.get": { params: { bot: string; run: string }; result: RunDetail };
+  /** A bridge-admitted OMH folder's DAG runs. `session` is its minted fid, never a raw Hermes session id. */
+  "runs.session_list": { params: { bot: string; session: string }; result: { runs: AgentRunSummary[] } };
+  /** One selected DAG, optionally one node's clipped handoff; no sibling handoffs or bot-wide fallback. */
+  "runs.session_get": { params: { bot: string; session: string; run: string; node?: string }; result: RunDetail };
   /** The GitHub state of each PR the run's nodes name, by node id; asked apart from `runs.get` (it waits on `gh`). */
   "runs.prs": { params: { bot: string; run: string }; result: { prs: Record<string, NodePr> } };
   /** CLI agent sessions with sub-runs on this machine (Claude Code subagents, Codex sub-agents), read-only. A run's

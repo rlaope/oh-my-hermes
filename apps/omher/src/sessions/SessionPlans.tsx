@@ -7,7 +7,8 @@
 // filled); a click on a box focuses that pane, and the Plans below follow it.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Bot } from "../lib/protocol";
-import type { AgentRun, AgentRunSummary, CliAgent, RunDetail } from "../lib/runs";
+import { RunEvidence } from "./dag/Evidence";
+import type { AgentRun, AgentRunSummary, CliAgent, RunDetail, RunNode } from "../lib/runs";
 import { CLI_AGENTS } from "../lib/runs";
 import { getStore, useStore, subagentEnded, type Chat, type SubagentRow } from "../state/store";
 import { CloseIcon, IconButton, Spinner } from "../ui";
@@ -89,8 +90,9 @@ function useSessionRun(rec: SessionRec, working: number, moved: string) {
 }
 
 /** The graph, measured once it is on screen (it mounts when the agent's record is found). */
-function SessionGraph({ run, nowS }: { run: AgentRun; nowS: number }) {
-  const [open, setOpen] = useState<string | null>(null);
+function SessionGraph({ run, nowS, text, onNode, selectedNode, inertHandoff = false }: { run: AgentRun; nowS: number; text?: string; onNode?: (node: string | null) => void; selectedNode?: string | null; inertHandoff?: boolean }) {
+  const [localOpen, setOpen] = useState<string | null>(null);
+  const open = selectedNode === undefined ? localOpen : selectedNode;
   const [ref, width] = useWidth<HTMLDivElement>();
   const node = run.nodes.find((x) => x.id === open) ?? null;
   return (
@@ -105,13 +107,124 @@ function SessionGraph({ run, nowS }: { run: AgentRun; nowS: number }) {
           mode="panel"
           width={width}
           open={open}
-          onOpen={setOpen}
+          onOpen={(id) => { setOpen(id); onNode?.(id); }}
           nowS={nowS}
-          detail={node && <NodeDrawer run={run} node={node} nowS={nowS} onClose={() => setOpen(null)} />}
+          detail={node && <NodeDrawer run={run} node={node} text={text} inertHandoff={inertHandoff} nowS={nowS} onClose={() => { setOpen(null); onNode?.(null); }} />}
         />
       )}
     </div>
   );
+}
+
+function scopedRunIds(bot: string, stored: string, runs: AgentRunSummary[]): AgentRunSummary[] {
+  return runs.filter((r) => r.kind === "dag" && r.id.startsWith(`dag:${stored}/`) && r.owner.type === "bot" && r.owner.id === bot);
+}
+
+/** Read-only scoped DAG evidence. A selected folder key is a route, never a raw session-id grant. */
+function OmhSessionPlans({ rec, chat, onClose }: { rec: SessionRec; chat: Chat | undefined; onClose: () => void }) {
+  const conn = useStore().conn;
+  const attachment = getSessions().folderAttachment(rec.id);
+  const fid = attachment?.fid;
+  const stored = attachment?.stored ?? "";
+  const botName = attachment?.bot ?? "";
+  const [tick, setTick] = useState(0);
+  const [scopeRuns, setScopeRuns] = useState<{ scope: string; runs: AgentRunSummary[] } | null>(null);
+  const folderScope = JSON.stringify([botName, fid, stored]);
+  const scope = `${folderScope}:${conn}`;
+  const runs = scopeRuns?.scope === scope ? scopeRuns.runs : [];
+  const [selection, setSelection] = useState<{ scope: string; run: string; node: string | null } | null>(null);
+  const selected = selection?.scope === folderScope ? selection : null;
+  const [detail, setDetail] = useState<{ scope: string; value: RunDetail } | null>(null);
+  const [handoff, setHandoff] = useState<{ scope: string; run: string; node: string; value: { node: RunNode; text: string } } | null>(null);
+  const [error, setError] = useState("");
+  const listFence = useRef(0);
+  const detailFence = useRef(0);
+  const nodeFence = useRef(0);
+  const scopeRef = useRef("");
+  const inScope = scopeRef.current === scope && conn === "open" && !!fid;
+  const run = inScope ? runs.find((r) => r.id === selected?.run) ?? runs[0] : undefined;
+  const runId = run?.id;
+  const selectedNode = selected?.run === runId ? selected?.node ?? null : null;
+  const shownDetail = detail?.scope === scope && detail.value.run.id === runId ? detail.value : null;
+  const shownHandoff = handoff?.scope === scope && handoff.run === runId && handoff.node === selectedNode ? handoff.value : undefined;
+  useEffect(() => {
+    const refresh = () => setTick((n) => n + 1);
+    const foreground = () => { if (!document.hidden) refresh(); };
+    document.addEventListener("visibilitychange", foreground);
+    window.addEventListener("focus", refresh);
+    const timer = window.setInterval(() => { if (!document.hidden) refresh(); }, 15000);
+    return () => { document.removeEventListener("visibilitychange", foreground); window.removeEventListener("focus", refresh); window.clearInterval(timer); };
+  }, []);
+  useEffect(() => {
+    // Reconnect drops cached data, not the same folder's run and node selection.
+    const changedScope = scopeRef.current !== scope;
+    const token = ++listFence.current;
+    scopeRef.current = scope;
+    ++detailFence.current;
+    if (changedScope) { ++nodeFence.current; setScopeRuns(null); setDetail(null); setHandoff(null); }
+    setSelection((previous) => previous?.scope === folderScope ? previous : null);
+    setError("");
+    if (!fid || !botName || conn !== "open") return;
+    getStore().actions.runsSessionList(botName, fid).then(({ runs: found }) => {
+      if (listFence.current === token && scopeRef.current === scope) setScopeRuns({ scope, runs: scopedRunIds(botName, stored, found) });
+    }).catch((e: unknown) => { if (listFence.current === token && scopeRef.current === scope) { setScopeRuns(null); setDetail(null); setHandoff(null); setError(String(e)); } });
+    return () => { ++listFence.current; };
+  }, [botName, fid, stored, tick, conn, folderScope, scope]);
+  useEffect(() => {
+    const token = ++detailFence.current;
+    if (detail?.scope !== scope || detail.value.run.id !== runId) { ++nodeFence.current; setDetail(null); setHandoff(null); }
+    if (!fid || !runId || conn !== "open") return;
+    getStore().actions.runsSessionGet(botName, fid, runId).then((found) => {
+      if (detailFence.current === token && scopeRef.current === scope && found.run.id === runId && found.run.owner.id === botName) setDetail({ scope, value: found });
+    }).catch((e: unknown) => { if (detailFence.current === token && scopeRef.current === scope) { setDetail(null); setHandoff(null); setError(String(e)); } });
+    return () => { ++detailFence.current; };
+  }, [botName, fid, runId, tick, conn, scope]);
+  const onNode = (node: string | null) => {
+    if (!runId) return;
+    ++nodeFence.current;
+    setSelection({ scope: folderScope, run: runId, node });
+    setHandoff(null);
+  };
+  useEffect(() => {
+    const token = ++nodeFence.current;
+    if (!selectedNode || !fid || !runId || conn !== "open") return;
+    const node = selectedNode;
+    getStore().actions.runsSessionGet(botName, fid, runId, node).then((found) => {
+      const item = found.run.nodes.find((n) => n.id === node);
+      if (nodeFence.current === token && scopeRef.current === scope && found.run.id === runId && found.run.owner.id === botName && item)
+        setHandoff({ scope, run: runId, node, value: { node: item, text: Object.hasOwn(found.handoffs, node) ? found.handoffs[node] : "" } });
+    }).catch((e: unknown) => { if (nodeFence.current === token && scopeRef.current === scope) { setHandoff(null); setError(String(e)); } });
+    return () => { ++nodeFence.current; };
+  }, [botName, fid, runId, selectedNode, tick, conn, scope]);
+  const nowS = Date.now() / 1000;
+  const subs = chatSubagents(chat);
+  const waiting = waitingSubs(chat?.items);
+  return <div className="details-in ew-panel pn-wide" data-testid="details-panel" data-tab="runs">
+    <div className="details-h pn-tabs">
+      <span className="pn-tab on">{t("plans.tab")}</span>
+      <IconButton label={t("pn.close")} onClick={onClose}><CloseIcon /></IconButton>
+    </div>
+    <div className="pn-body rn" data-testid="session-dag-panel" data-session={rec.id}>
+      <SplitMap rec={rec} />
+      <h2 className="pn-sec">{t("plans.dag")}</h2>
+      {!fid && <p>{t("plans.dagUnavailable")}</p>}
+      {error && <p role="alert">{t("plans.dagFailed", { error })}</p>}
+      {inScope && runs.length > 0 && <nav className="dag-picks" aria-label={t("plans.dagRuns")}>{runs.map((r) =>
+        <button key={r.id} type="button" aria-pressed={runId === r.id} onClick={() => {
+          if (r.id === runId) return;
+          ++nodeFence.current;
+          setSelection({ scope: folderScope, run: r.id, node: null });
+        }}>{r.title || r.id}</button>
+      )}</nav>}
+      {fid && !error && !runs.length && <p role="status">{t(conn !== "open" ? "plans.dagUnavailable" : scopeRuns?.scope === scope ? "plans.dagNone" : "pn.loading")}</p>}
+      {inScope && run && shownDetail && <div className="rn-run" data-testid="run-graph-box" data-run={run.id} data-state={run.state}>
+        <RunEvidence run={shownDetail.run} selected={selectedNode} onNode={onNode} evidence={shownHandoff} />
+      </div>}
+      {!shownDetail && subs.length > 0 && <div className="sa-rows ss-plans-rows" data-testid="session-plans-rows">
+        {subs.map((sub) => <SubagentLine key={sub.id} sub={sub} now={nowS * 1000} live={!!chat?.turn || !subagentEnded(sub)} waiting={waiting.has(sub.id)} />)}
+      </div>}
+    </div>
+  </div>;
 }
 
 export function SessionPlans({ rec, chat, onClose }: { rec: SessionRec; chat: Chat | undefined; onClose: () => void }) {
@@ -216,5 +329,6 @@ export function SessionPanel({ onClose }: { onClose: () => void }) {
   const rec = ss.list.find((r) => r.id === s.ui.session) ?? null;
   if (!rec) return null;
   const key = getSessions().chatKey(rec.id);
+  if (rec.agent === "omh" && rec.open !== "terminal" && rec.view === "chat") return <OmhSessionPlans key={rec.id} rec={rec} chat={key ? s.chats[key] : undefined} onClose={onClose} />;
   return <SessionPlans key={rec.id} rec={rec} chat={key ? s.chats[key] : undefined} onClose={onClose} />;
 }

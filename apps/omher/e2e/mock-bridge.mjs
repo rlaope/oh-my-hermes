@@ -604,7 +604,7 @@ const current = (m) => ({ ...m, reasoning_wire: wireOf(m.reasoning) });
 let calls = [];
 // What the bridge would hand Hermes' prompt.submit (the text after the reply-target block is added).
 let submits = [];
-let bots, history, models, turns, pending, idSeq, queues, avatars, folders, runs, cliRuns, cliTitles, peers, peerBots;
+let bots, history, models, turns, pending, idSeq, queues, avatars, folders, sessionDags, runs, cliRuns, cliTitles, peers, peerBots;
 // Automations and plugins: what the pages read and change (reset with everything else).
 let automations, plugins, inspected, offlineWrites;
 /** bots.restart: what the next restart answers per bot, which bot refused last (for "Restart anyway"). */
@@ -889,6 +889,7 @@ function reset() {
   threadsShown = new Set();
   answers = {};
   folders = new Map(); // folder chat id -> { bot, cwd, open }; a thread also has thread, title, started, archived
+  sessionDags = new Map(); // opt-in e2e evidence per attached folder; never a bot-wide run grant
   runs = runsSeed();
   cliRuns = cliSeed();
   cliTitles = new Map(); // `<agent>:<session id>` -> the title in the agent's own files (cli.title)
@@ -1100,6 +1101,14 @@ function needBot(p) {
   if (!b) throw new OpError("unknown_bot", `no bot named ${p.bot}`);
   if (b.status === "offline") throw new OpError("bot_offline", `${p.bot} is offline`);
   return b;
+}
+function scopedEvidence(p, keys) {
+  if (Object.keys(p).length !== keys.length || !keys.every((key) => Object.hasOwn(p, key))) throw new OpError("bad_request", "unknown or missing scoped runs parameters");
+  const b = needBot(p);
+  if (typeof p.session !== "string" || !/^f[0-9a-f]{10}$/.test(p.session)) throw new OpError("bad_request", "session must be a bridge-issued folder key");
+  const folder = folders.get(p.session);
+  if (!folder || !folder.open || folder.thread || folder.bot !== b.name) throw new OpError("not_found", "folder is not attached to this bot");
+  return sessionDags.get(p.session);
 }
 /** A bot by name whatever its status (an offline bot can be started). */
 function needBotAny(p) {
@@ -1348,7 +1357,7 @@ const OPS = {
     if (b.host) throw remoteRefusal(b, "folder.open");
     const cwd = needStr(p, "cwd");
     if (!cwd.startsWith("/") && !/^[A-Za-z]:\\/.test(cwd)) throw new OpError("bad_request", "cwd must be an existing folder");
-    const session = nextId("f");
+    const session = `f${String(++idSeq).padStart(10, "0")}`;
     const stored = nextId("stored-f");
     folders.set(session, { bot: b.name, cwd, open: true, stored });
     const m = models[b.name];
@@ -1676,6 +1685,20 @@ const OPS = {
     if (kind === "image") return { kind, name, text: `[User attached image: ${name}]`, ref_text: "", bytes };
     if (kind === "pdf") return { kind, name, text: `[User attached PDF: ${name} (1 page(s))]`, ref_text: "", bytes };
     return { kind, name, text: "", ref_text: `@file:.hermes/attachments/${name}`, bytes };
+  },
+  "runs.session_list": (p) => {
+    const evidence = scopedEvidence(p, ["bot", "session"]);
+    if (!evidence) return { runs: [] };
+    const { nodes, ...run } = evidence.run;
+    return { runs: [{ ...run, counts: runCounts({ nodes }) }] };
+  },
+  "runs.session_get": (p) => {
+    const evidence = scopedEvidence(p, ["bot", "session", "run", ...(Object.hasOwn(p, "node") ? ["node"] : [])]);
+    if (!evidence || p.run !== evidence.run.id) throw new OpError("not_found", "run is not in this folder session");
+    if (p.node !== undefined && !evidence.run.nodes.some((n) => n.id === p.node)) throw new OpError("not_found", "node is not in this run");
+    const graph = { ...evidence.run, nodes: evidence.run.nodes.map((n) => n.id === p.node ? n :
+      { ...Object.fromEntries(Object.entries(n).filter(([k]) => ["id", "label", "deps", "state", "layer", "repairOf"].includes(k))), attempts: [] }) };
+    return { run: graph, handoffs: p.node && evidence.handoffs[p.node] ? { [p.node]: evidence.handoffs[p.node] } : {} };
   },
   "runs.list": (p) => ({
     runs: (runs[needBot(p).name] ?? [])
@@ -2121,6 +2144,20 @@ const OPS = {
   "mock.cliTitle": (p) => {
     cliTitles.set(`${p.agent}:${p.session}`, String(p.title ?? ""));
     return {};
+  },
+  "mock.sessionDag": (p) => {
+    // Test-only: put a seeded DAG on an already attached folder. Reads still use the scoped operations below.
+    const b = needBot(p);
+    const fid = needStr(p, "session");
+    const folder = folders.get(fid);
+    if (!folder || !folder.open || folder.thread || folder.bot !== b.name) throw new OpError("not_found", "folder not attached");
+    const source = needStr(p, "fixture");
+    const run = (runs[b.name] ?? []).find((r) => r.id === source && r.kind === "dag");
+    if (!run) throw new OpError("not_found", "no seeded DAG");
+    const copy = structuredClone(run);
+    copy.id = `dag:${folder.stored}/${source.split("/").at(-1)}`;
+    sessionDags.set(fid, { run: copy, handoffs: structuredClone(HANDOFFS[source] ?? {}) });
+    return { run: copy.id };
   },
   "mock.calls": () => ({ calls: calls.map((c) => ({ ...c })) }),
   "mock.submits": () => ({ submits: submits.map((x) => ({ ...x })) }),

@@ -6,6 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 import type { AgentRun, CliAgent, RunNode } from "../lib/runs";
 import { isCliRun, lengthOf } from "../lib/runs";
 import { Markdown } from "../chat/parts/Markdown";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { LinksBlock } from "../chat/parts/LinkChip";
 import { linksIn } from "../chat/parts/linkKinds";
 import { CloseIcon, IconButton, PrIcon } from "../ui";
@@ -55,6 +57,7 @@ export function NodeDrawer({
   parents = [],
   bot,
   text,
+  inertHandoff = false,
   nowS,
   onClose,
 }: {
@@ -66,6 +69,8 @@ export function NodeDrawer({
    *  shows the node's session as a chat between the bot and the agent that ran it (`runs.node_session`). */
   bot?: { model: string; provider: string; name?: string; display_name?: string };
   text?: string;
+  /** Marked only for selected-folder evidence; ordinary Runs links keep their existing behavior. */
+  inertHandoff?: boolean;
   nowS: number;
   onClose: () => void;
 }) {
@@ -111,7 +116,7 @@ export function NodeDrawer({
           </span>
         )}
         {facts && <span>{facts}</span>}
-        {node.pr && <DrawerPr pr={node.pr} />}
+        {node.pr && (inertHandoff ? <span>{prText(node.pr)}</span> : <DrawerPr pr={node.pr} />)}
         {/* the category is in the facts; this line is why the node went out under it */}
         {node.routeWhy && <span className="rn-routeline">{tr("rn.route", { why: node.routeWhy })}</span>}
       </div>
@@ -137,12 +142,16 @@ export function NodeDrawer({
           ))}
         </ol>
       )}
-      <LinksBlock urls={links} pr={node.pr} />
+      {!inertHandoff && <LinksBlock urls={links} pr={node.pr} />}
       {node.summary && !text && <div className="rn-sum" data-testid="run-summary">{node.summary}</div>}
       {text ? (
         <>
           <div className="rn-md md" data-testid="run-handoff">
-            <Markdown text={all || !long ? text : text.slice(0, PREVIEW) + " …"} />
+            {inertHandoff ? (
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: ({ children }) => <span>{children}</span>, img: ({ alt }) => <span>{alt}</span> }}>
+                {all || !long ? text : text.slice(0, PREVIEW) + " …"}
+              </ReactMarkdown>
+            ) : <Markdown text={all || !long ? text : text.slice(0, PREVIEW) + " …"} />}
           </div>
           {long && (
             <button type="button" className="pn-more" onClick={() => setAll((v) => !v)} data-testid="run-handoff-more">
@@ -153,7 +162,7 @@ export function NodeDrawer({
       ) : (
         !node.summary && <div className="rn-none">{tr("rn.noHandoff")}</div>
       )}
-      {sessionOf && (
+      {sessionOf && !inertHandoff && (
         <section className={`rn-session${chatFull ? " full" : ""}`} data-testid="run-session" aria-label={tr("harness.session")}>
           {!chatFull && <h4 className="rn-sh">{tr("harness.session")}</h4>}
           <AgentChat
@@ -168,7 +177,7 @@ export function NodeDrawer({
           />
         </section>
       )}
-      {bad && !isCliRun(runId) && (
+      {bad && !inertHandoff && !isCliRun(runId) && (
         <div className="rn-ask">
           <button type="button" className="rn-askb" onClick={ask} data-testid="run-ask">
             {tr("rn.ask")}

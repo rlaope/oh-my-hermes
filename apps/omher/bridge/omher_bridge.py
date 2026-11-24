@@ -26,6 +26,7 @@ import argparse
 import asyncio
 import contextlib
 import errno
+import hashlib
 import hmac
 import inspect
 import json
@@ -3566,7 +3567,8 @@ class DagRuns:
             return []
         out = []
         for path in sorted(root.glob("*/*.json")):
-            if path.is_symlink() or path.parent.is_symlink() or not DAG_ID.match(path.stem):
+            if (path.is_symlink() or path.parent.is_symlink() or not DAG_ID.fullmatch(path.stem)
+                    or os.path.commonpath([os.path.realpath(path), os.path.realpath(root)]) != os.path.realpath(root)):
                 continue
             rec = self._record(path)
             if rec is None or str(rec.get("session_id") or "") not in mine:
@@ -3582,7 +3584,7 @@ class DagRuns:
     @staticmethod
     def _handoff_file(root: Path, path: Path, node: str) -> Path | None:
         """`<run>/<node>.md` next to the record, when it is a plain file inside the dag dir (no symlinks)."""
-        if not DAG_ID.match(node):
+        if not DAG_ID.fullmatch(node):
             return None
         folder = path.parent / path.stem
         f = folder / f"{node}.md"
@@ -3596,6 +3598,67 @@ class DagRuns:
     def _handoff_names(self, root: Path, path: Path, rec: dict) -> set[str]:
         ids = [str(n["id"]) for n in rec.get("nodes") or [] if isinstance(n, dict) and isinstance(n.get("id"), str)]
         return {i for i in ids if self._handoff_file(root, path, i) is not None}
+
+    @staticmethod
+    def _session_root(profile_dir: Path) -> Path:
+        home = omh_home_for(profile_dir)
+        root = home / "runtime" / "dag"
+        if any(p.is_symlink() for p in (home, home / "runtime", root)):
+            raise BridgeError("not_found", "invalid DAG root")
+        return root
+
+    def _folder_records(self, bot: str, profile_dir: Path, stored: str, name: str | None = None):
+        if stored not in self._sessions(profile_dir):
+            raise BridgeError("not_found", "folder session is not in this bot's state.db")
+        root = self._session_root(profile_dir)
+        # OMH's delegation_ledger.ledger_key. A scoped read never scans another session's records.
+        reference = stored[:160]
+        slug = re.sub(r"[^A-Za-z0-9_-]+", "_", reference).strip("_-")[:48]
+        digest = hashlib.sha256(reference.encode("utf-8")).hexdigest()[:16]
+        folder = root / (f"{slug}-{digest}" if slug else digest)
+        if folder.is_symlink():
+            raise BridgeError("not_found", "invalid DAG session folder")
+        for path in ([folder / f"{name}.json"] if name else sorted(folder.glob("*.json"))):
+            if not DAG_ID.fullmatch(path.stem) or path.is_symlink() or not path.is_file():
+                continue
+            rec = self._record(path)
+            if not rec or rec.get("session_id") != stored or rec.get("run") != path.stem:
+                continue
+            try:
+                run = dag_to_run(rec, bot)
+            except (ValueError, TypeError, KeyError, RecursionError):
+                continue
+            yield root, path, run
+
+    def session_list(self, bot: str, profile_dir: Path, stored: str) -> list[dict]:
+        runs = [run_summary(run) for _, _, run in self._folder_records(bot, profile_dir, stored)]
+        return sorted(runs, key=lambda r: (r["state"] != "running", -r["updated"]))
+
+    def session_get(self, bot: str, profile_dir: Path, stored: str, run_id: str, node: str | None = None) -> dict:
+        prefix = f"dag:{stored}/"
+        if not isinstance(run_id, str) or not run_id.startswith(prefix) or not DAG_ID.fullmatch(run_id[len(prefix):]):
+            raise BridgeError("not_found", "run is not in this folder session")
+        if node is not None and (not isinstance(node, str) or not DAG_ID.fullmatch(node)):
+            raise BridgeError("bad_request", "invalid node")
+        for root, path, run in self._folder_records(bot, profile_dir, stored, run_id[len(prefix):]):
+            handoffs = {}
+            if node is not None:
+                if not any(n["id"] == node for n in run["nodes"]):
+                    raise BridgeError("not_found", "node is not in this run")
+                f = self._handoff_file(root, path, node)
+                if f is not None:
+                    try:
+                        with f.open("rb") as fh:
+                            handoffs[node] = fh.read(HANDOFF_MAX * 4).decode("utf-8", "replace")[:HANDOFF_MAX]
+                    except OSError as exc:
+                        raise BridgeError("not_found", "selected node handoff is no longer readable") from exc
+            # Allowlist topology, not a blacklist of today's private fields. No sibling file stat/read.
+            for i, item in enumerate(run["nodes"]):
+                if item["id"] != node:
+                    run["nodes"][i] = {k: item[k] for k in ("id", "label", "deps", "state", "layer", "repairOf") if k in item}
+                    run["nodes"][i]["attempts"] = []
+            return {"run": run, "handoffs": handoffs}
+        raise BridgeError("not_found", "run is not in this folder session")
 
     def list(self, bot: str, profile_dir: Path, now: float | None = None) -> list[dict]:
         runs = [run_summary(run) for _, _, run in self._owned(bot, profile_dir, now)]
@@ -5988,6 +6051,8 @@ PEER_REFUSED = {
     "folder.open": "Folder chats run in a folder on this computer; {label}'s bots run on another one.",
     "folder.close": "Folder chats run in a folder on this computer; {label}'s bots run on another one.",
     "folder.resume": "Folder chats run in a folder on this computer; {label}'s bots run on another one.",
+    "runs.session_list": "Folder evidence is available only for this bridge's attached folders.",
+    "runs.session_get": "Folder evidence is available only for this bridge's attached folders.",
     "bots.restart": "omher does not restart Hermes on another computer. Restart it on {label} itself.",
 }
 
@@ -6697,6 +6762,7 @@ class Bridge:
             "panel.terminal": self.op_panel_terminal, "panel.worktrees": self.op_panel_worktrees,
             "panel.diff": self.op_panel_diff, "media.read": self.op_media_read,
             "chat.attach": self.op_chat_attach, "runs.list": self.op_runs_list, "runs.get": self.op_runs_get,
+            "runs.session_list": self.op_runs_session_list, "runs.session_get": self.op_runs_session_get,
             "runs.cli": self.op_runs_cli, "runs.prs": self.op_runs_prs, "runs.node_session": self.op_runs_node_session, "cli.title": self.op_cli_title,
             "usage.read": self.op_usage_read,
             "accounts.list": self.op_accounts_list, "accounts.add": self.op_accounts_add,
@@ -8465,6 +8531,35 @@ class Bridge:
         if self.announce_media:
             print(MEDIA_READY_PREFIX + json.dumps({"path": out["path"]}), flush=True)
         return out
+
+    def _runs_session_scope(self, p: dict, allowed: set[str]) -> tuple[dict, str, Conn, FolderChat]:
+        if not isinstance(p, dict) or set(p) != allowed | {"id", "op"}:
+            raise BridgeError("bad_request", "unknown or missing scoped runs parameters")
+        bot = self._bot(p["bot"])
+        fid = p["session"]
+        if not isinstance(fid, str) or not re.fullmatch(r"f[0-9a-f]{10}", fid):
+            raise BridgeError("bad_request", "session must be a bridge-issued folder key")
+        conn = self.conns.get(bot["name"])
+        folder = conn.folders.get(fid) if conn else None
+        if folder is None or folder.kind != "folder" or folder.id != fid or not folder.stored_id:
+            raise BridgeError("not_found", "folder is not attached to this bot")
+        return bot, folder.stored_id, conn, folder
+
+    async def op_runs_session_list(self, p) -> dict:
+        bot, stored, conn, folder = self._runs_session_scope(p, {"bot", "session"})
+        result = await asyncio.to_thread(self.runs.session_list, bot["name"], bot["path"], stored)
+        if self._runs_session_scope(p, {"bot", "session"}) != (bot, stored, conn, folder):
+            raise BridgeError("not_found", "folder attachment changed during read")
+        return {"runs": result}
+
+    async def op_runs_session_get(self, p) -> dict:
+        keys = set(p) if isinstance(p, dict) else set()
+        allowed = {"bot", "session", "run"} | ({"node"} if "node" in keys else set())
+        bot, stored, conn, folder = self._runs_session_scope(p, allowed)
+        result = await asyncio.to_thread(self.runs.session_get, bot["name"], bot["path"], stored, p["run"], p.get("node"))
+        if self._runs_session_scope(p, allowed) != (bot, stored, conn, folder):
+            raise BridgeError("not_found", "folder attachment changed during read")
+        return result
 
     async def op_runs_list(self, p) -> dict:
         bot = self._bot(p.get("bot"))

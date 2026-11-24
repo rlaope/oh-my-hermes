@@ -2751,11 +2751,29 @@ class SshPeersOnlyOverTheOwnSsh(unittest.TestCase):
         chip = (self.ui / "PeerChip.tsx").read_text(encoding="utf-8")
         self.assertNotIn("getPeersHost", chip)  # the chip only opens the card
 
+    def test_selected_folder_evidence_has_a_fixed_admitted_scope(self) -> None:
+        doc = DOC.read_text(encoding="utf-8")
+        self.assertIn("a terminal row, cwd or link never grants evidence access", doc)
+        self.assertIn("bridge-issued folder fid", doc)
+        self.assertIn("never sibling handoffs", doc)
+        self.assertIn("static Text, Card, Column and horizontal Divider", doc)
+        evidence = (UI_SRC / "sessions" / "dag" / "Evidence.tsx").read_text()
+        for forbidden in ("openUrl", "invoke(", "dangerouslySetInnerHTML", "getStore(", "rehypeRaw"):
+            self.assertNotIn(forbidden, evidence)
+        self.assertIn("readSurface(message)", evidence)
+        bridge = self.bridge
+        scoped = bridge.split("def _runs_session_scope(", 1)[1].split("\n    async def op_runs_list", 1)[0]
+        self.assertIn('folder.kind != "folder"', scoped)
+        self.assertIn("conn.folders.get(fid)", scoped)
+        self.assertNotIn("self._conn(", scoped)  # reads may not create/attach a session
+        self.assertIn('"runs.session_list": self.op_runs_session_list', bridge)
+        self.assertIn('"runs.session_get": self.op_runs_session_get', bridge)
+
     def test_the_bridge_refuses_this_computers_ops_and_probes_read_only(self) -> None:
         refused = self.bridge.split("PEER_REFUSED = {", 1)[1].split("\n}\n", 1)[0]
-        self.assertEqual(re.findall(r'^    "([a-z.]+)":', refused, re.M), ["folder.open", "folder.close", "folder.resume", "bots.restart"])
+        self.assertEqual(re.findall(r'^    "([a-z._]+)":', refused, re.M), ["folder.open", "folder.close", "folder.resume", "runs.session_list", "runs.session_get", "bots.restart"])
         forward = self.bridge.split("PEER_FORWARD = frozenset({", 1)[1].split("})", 1)[0]
-        for op in ("folder.open", "folder.close", "folder.resume", "bots.restart", "accounts.list", "sessions.start", "usage.read"):
+        for op in ("folder.open", "folder.close", "folder.resume", "runs.session_list", "runs.session_get", "bots.restart", "accounts.list", "sessions.start", "usage.read"):
             self.assertNotIn(f'"{op}"', forward, op)
         probe = self.bridge.split("async def op_peers_probe(", 1)[1].split("\n    async def ", 1)[0]
         self.assertEqual(sorted(set(re.findall(r'call\("([a-z.]+)"', probe))), ["bots.list", "hello"])

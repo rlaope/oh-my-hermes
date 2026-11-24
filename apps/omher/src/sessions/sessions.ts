@@ -214,6 +214,7 @@ interface ChatProc {
   hostId?: number;
   /** bridge folder chat id (folder) */
   fid?: string;
+  stored?: string;
   bot?: string;
   /** set when omher itself stopped it (close, Terminal toggle), so its exit is not an end of the session */
   stopping?: boolean;
@@ -672,6 +673,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       if (!bot) throw new Error(tr("ss.noBot"));
       const res = await store().actions.folderOpen(bot, r.cwd);
       proc.fid = res.session;
+      proc.stored = res.stored;
       if (procs.get(id) !== proc) {
         void store().actions.folderClose(bot, res.session).catch(() => undefined);
         return;
@@ -706,6 +708,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     procs.set(id, proc);
     try {
       const res = await store().actions.folderResume(bot, r.cwd, stored);
+      if (res.stored !== stored) throw new Error(tr("plans.dagUnavailable"));
+      proc.stored = stored;
       proc.fid = res.session;
       if (procs.get(id) !== proc) {
         void store().actions.folderClose(bot, res.session).catch(() => undefined);
@@ -2472,6 +2476,28 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     endAgent,
     draft,
     draftHere,
+    // A separate, explicitly requested folder chat for the selected local bot. Never start a PTY or send a prompt.
+    async newFolderPlans(bot: string) {
+      const app = store();
+      const cwd = await host.pickFolder(state.home || await host.home());
+      const s = app.getState();
+      if (!cwd || s.ui.view !== "chat" || s.selectedBot !== bot || !s.bots.some((b) => b.name === bot && !b.host)) return;
+      const id = `s${++seq}`;
+      const row: SessionRec = { id, agent: "omh", bot, cwd, startedAt: Date.now(), status: "starting", view: "chat" };
+      set({ list: [row, ...state.list] });
+      app.actions.openSession(id);
+      app.actions.togglePanel(true);
+      await startFolderChat(id);
+    },
+    // Only the live folder.open/resume reply supplies this binding; neither a saved row nor a terminal link does.
+    folderAttachment(id: string) {
+      const r = rec(id);
+      const proc = procs.get(id);
+      if (r?.agent !== "omh" || r.open === "terminal" || r.view !== "chat" || r.status !== "running" ||
+          proc?.kind !== "folder" || !r.bot || proc.bot !== r.bot || !proc.stored || !proc.fid ||
+          !/^f[0-9a-f]{10}$/.test(proc.fid) || keys.get(id) !== folderKey(r.bot, proc.fid)) return null;
+      return { bot: r.bot, fid: proc.fid, stored: proc.stored };
+    },
     startTerminal,
     setSessionFg,
     /** The pty id session `id`'s terminal runs on (the `session-fg` event's id), null before it started. */

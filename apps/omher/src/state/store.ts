@@ -2039,6 +2039,8 @@ export interface Actions {
   /** Runs tab reads (read-only: nothing here retries or cancels a run). */
   runsList(bot: string): Promise<{ runs: AgentRunSummary[] }>;
   runsGet(bot: string, run: string): Promise<RunDetail>;
+  runsSessionList(bot: string, session: string): Promise<{ runs: AgentRunSummary[] }>;
+  runsSessionGet(bot: string, session: string, run: string, node?: string): Promise<RunDetail>;
   /** The GitHub state of the PRs a run's nodes name (the bridge asks `gh`, apart from `runsGet`). */
   runsPrs(bot: string, run: string): Promise<{ prs: Record<string, NodePr> }>;
   /** The PRs a thread's bot named and GitHub's state and checks for each (the bridge's `thread.prs`, rule 40). */
@@ -3026,6 +3028,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     readMedia: (bot, path, info) => bridge.request("media.read", info ? { bot, path, info } : { bot, path }),
     runsList: (bot) => bridge.request("runs.list", { bot }),
     runsGet: (bot, run) => bridge.request("runs.get", { bot, run }),
+    runsSessionList: (bot, session) => bridge.request("runs.session_list", { bot, session }),
+    runsSessionGet: (bot, session, run, node) => bridge.request("runs.session_get", node === undefined ? { bot, session, run } : { bot, session, run, node }),
     runsPrs: (bot, run) => bridge.request("runs.prs", { bot, run }),
     threadPrs: (bot, thread, fresh) => threadReq("thread.prs", { bot, thread, ...(fresh ? { fresh } : {}) }),
     runsCli: (params = {}) => bridge.request("runs.cli", params),

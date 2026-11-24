@@ -3299,6 +3299,167 @@ class RunsOps(BridgeCase):
             self.assertEqual((await s.req("runs.list", bot="nobody"))["error"]["code"], "unknown_bot")
 
 
+class ScopedRunsOps(BridgeCase):
+    async def test_folder_open_issues_the_only_route_to_its_stored_dag(self):
+        import hashlib
+        import shutil
+        async with Env() as env:
+            s = await self.open(env)
+            opened = (await s.req("folder.open", bot="kami", cwd=str(env.home)))["result"]
+            fid, stored = opened["session"], opened["stored"]
+            self.assertRegex(fid, r"^f[0-9a-f]{10}$")
+            self.assertTrue(ob.is_folder_chat(env.bridge.omher_home, "kami", str(env.home), stored))
+            prof, dag = _runs_profile(env.home / "fixture", [stored])
+            target = env.home / "profiles" / "kami"
+            for name in ("config.yaml", "state.db"):
+                shutil.copyfile(prof / name, target / name)
+            source = next(dag.glob("*/route-hint-dedup.json"))
+            ledger = dag / (stored + "-" + hashlib.sha256(stored.encode()).hexdigest()[:16])
+            ledger.mkdir()
+            record = json.loads(source.read_text())
+            record["session_id"] = stored
+            (ledger / source.name).write_text(json.dumps(record))
+            listed = await s.req("runs.session_list", bot="kami", session=fid)
+            run = f"dag:{stored}/route-hint-dedup"
+            self.assertEqual([row["id"] for row in listed["result"]["runs"]], [run])
+            self.assertTrue((await s.req("runs.session_get", bot="kami", session=fid, run=run))["ok"])
+            self.assertFalse((await s.req("runs.session_list", bot="kami", session=stored))["ok"])
+            self.assertEqual(env.clients["kami"].find("prompt.submit"), [])
+
+    async def test_two_bots_two_sessions_and_node_handoff_isolation(self):
+        async with Env(profiles=("kami", "sora")) as env:
+            import shutil
+            ids = ("20261028_093610_1b12a114", "20261026_134438_3ae70257")
+            for bot, sid in (("kami", ids[0]), ("sora", ids[1])):
+                home = env.home / bot
+                prof, _ = _runs_profile(home, [sid])
+                target = env.home / "profiles" / bot
+                (target / "config.yaml").unlink()
+                for f in prof.iterdir():
+                    shutil.move(str(f), str(target / f.name))
+                conn = ob.Conn({"name": bot, "path": target})
+                conn.folders[f"f{'a' if bot == 'kami' else 'b'}123456789"] = ob.FolderChat(
+                    f"f{'a' if bot == 'kami' else 'b'}123456789", str(home), "rt-" + bot, sid)
+                env.bridge.conns[bot] = conn
+            s = await self.open(env)
+            a, b = "fa123456789", "fb123456789"
+            listed = await s.req("runs.session_list", bot="kami", session=a)
+            self.assertTrue(listed["ok"], listed)
+            self.assertEqual(len(listed["result"]["runs"]), 1)
+            run = listed["result"]["runs"][0]["id"]
+            self.assertEqual(run, "dag:20261028_093610_1b12a114/route-hint-dedup")
+            detail = await s.req("runs.session_get", bot="kami", session=a, run=run, node="implement")
+            self.assertTrue(detail["ok"], detail)
+            self.assertEqual(set(detail["result"]["handoffs"]), {"implement"})
+            self.assertNotIn("verify", detail["result"]["handoffs"])
+            sibling = next(n for n in detail["result"]["run"]["nodes"] if n["id"] == "verify")
+            self.assertNotIn("handoff", sibling)
+            self.assertNotIn("summary", sibling)
+            self.assertNotIn("pr", sibling)
+            self.assertEqual(set(sibling) - {"id", "label", "deps", "state", "layer", "repairOf", "attempts"}, set())
+            self.assertEqual(sibling["attempts"], [])
+            self.assertTrue(all("reason" not in attempt for attempt in sibling["attempts"]))
+            bare = await s.req("runs.session_get", bot="kami", session=a, run=run)
+            self.assertEqual(bare["result"]["handoffs"], {})
+            for node in bare["result"]["run"]["nodes"]:
+                self.assertNotIn("handoff", node)
+                self.assertNotIn("summary", node)
+                self.assertTrue(all("reason" not in attempt for attempt in node["attempts"]))
+            # A matching record copied into another physical ledger is not an authority. Direct lookup
+            # reads one JSON and at most one selected markdown path; not even a sibling file probe.
+            dag = env.home / "kami/omh/runtime/dag"
+            real = next(dag.glob("*/route-hint-dedup.json"))
+            other = dag / "wrong-ledger"
+            other.mkdir()
+            copied = json.loads(real.read_text())
+            copied["run"] = "wrong-ledger-only"
+            (other / "wrong-ledger-only.json").write_text(json.dumps(copied))
+            self.assertFalse((await s.req("runs.session_get", bot="kami", session=a, run=f"dag:{ids[0]}/wrong-ledger-only"))["ok"])
+            with mock.patch.object(env.bridge.runs, "_record", wraps=env.bridge.runs._record) as records, \
+                 mock.patch.object(env.bridge.runs, "_handoff_file", wraps=env.bridge.runs._handoff_file) as probes:
+                self.assertTrue((await s.req("runs.session_get", bot="kami", session=a, run=run, node="implement"))["ok"])
+            (other / "wrong-ledger-only.json").unlink()  # remove adversarial fixture before ordinary Plans checks
+            self.assertEqual([args.args[0] for args in records.call_args_list], [real])
+            self.assertEqual([args.args[-1] for args in probes.call_args_list], ["implement"])
+            foreign = "dag:20261026_134438_3ae70257/omh-dap"
+            for params in ({"bot": "kami", "session": b}, {"bot": "sora", "session": a},
+                           {"bot": "kami", "session": ids[0]}, {"bot": "kami", "session": "f0000000000"},
+                           {"bot": "kami", "session": a, "extra": True}):
+                self.assertFalse((await s.req("runs.session_list", **params))["ok"], params)
+            for candidate in (foreign, "dag:x/y", "dag:20261028_093610_1b12a114/../x"):
+                self.assertFalse((await s.req("runs.session_get", bot="kami", session=a, run=candidate))["ok"])
+            self.assertFalse((await s.req("runs.session_get", bot="kami", session=a, run=run, node="../verify"))["ok"])
+            self.assertFalse((await s.req("runs.session_get", bot="kami", session=a, run=run, extra=1))["ok"])
+            self.assertEqual(len((await s.req("runs.list", bot="kami"))["result"]["runs"]), 1)
+            self.assertEqual(len((await s.req("runs.get", bot="kami", run=run))["result"]["handoffs"]), 2)
+            self.assertNotIn("runs.session_list", ob.PEER_FORWARD)
+            self.assertIn("runs.session_list", ob.PEER_REFUSED)
+            # A folder key without membership in that profile's state.db grants nothing.
+            env.bridge.conns["kami"].folders[a].stored_id = ids[1]
+            self.assertFalse((await s.req("runs.session_list", bot="kami", session=a))["ok"])
+
+    async def test_close_or_replace_during_scoped_read_refuses_stale_reply(self):
+        async with Env() as env:
+            import shutil
+            sid, fid = "20261028_093610_1b12a114", "fa123456789"
+            prof, _ = _runs_profile(env.home / "r", [sid])
+            target = env.home / "profiles" / "kami"
+            (target / "config.yaml").unlink()
+            for f in prof.iterdir():
+                shutil.move(str(f), str(target / f.name))
+            conn = ob.Conn({"name": "kami", "path": target})
+            conn.folders[fid] = ob.FolderChat(fid, str(env.home / "r"), "rt-kami", sid, subscription_id="sub-kami")
+            env.bridge.conns["kami"] = conn
+            s = await self.open(env)
+            run = f"dag:{sid}/route-hint-dedup"
+            original = ob.asyncio.to_thread
+            for op, extra, change in (("runs.session_list", {}, "close"),
+                                      ("runs.session_get", {"run": run, "node": "implement"}, "replace"),
+                                      ("runs.session_get", {"run": run}, "stored")):
+                entered, resume = asyncio.Event(), asyncio.Event()
+                conn.folders[fid] = ob.FolderChat(fid, str(env.home / "r"), "rt-kami", sid, subscription_id="sub-kami")
+
+                async def delayed(fn, *args, **kwargs):
+                    if fn in (env.bridge.runs.session_list, env.bridge.runs.session_get):
+                        entered.set()
+                        await resume.wait()
+                    return await original(fn, *args, **kwargs)
+
+                with mock.patch.object(ob.asyncio, "to_thread", side_effect=delayed):
+                    pending = asyncio.create_task(s.req(op, bot="kami", session=fid, **extra))
+                    await asyncio.wait_for(entered.wait(), 2)
+                    if change == "close":
+                        closed = await s.req("folder.close", bot="kami", session=fid)
+                        self.assertTrue(closed["ok"], closed)
+                    elif change == "replace":
+                        conn.folders[fid] = ob.FolderChat(fid, str(env.home / "r"), "other-runtime", sid)
+                    else:
+                        conn.folders[fid].stored_id = "other-session"
+                    resume.set()
+                    reply = await asyncio.wait_for(pending, 2)
+                self.assertEqual(reply["error"]["code"], "not_found", reply)
+                if change == "close":
+                    self.assertNotIn(fid, conn.folders)
+
+    async def test_symlinked_dag_root_is_refused(self):
+        async with Env() as env:
+            import sqlite3
+            sid, fid = "20261028_093610_1b12a114", "fa123456789"
+            prof = env.home / "profiles" / "kami"
+            with sqlite3.connect(prof / "state.db") as db:
+                db.execute("CREATE TABLE sessions (id TEXT)")
+                db.execute("INSERT INTO sessions VALUES (?)", (sid,))
+            root = prof / "elsewhere"
+            root.mkdir()
+            (root / "runtime").symlink_to(env.home / "outside", target_is_directory=True)
+            (prof / "config.yaml").write_text(f"plugins:\n  entries:\n    omh:\n      settings:\n        omh_home: {root}\n")
+            conn = ob.Conn({"name": "kami", "path": prof})
+            conn.folders[fid] = ob.FolderChat(fid, str(root), "rt", sid)
+            env.bridge.conns["kami"] = conn
+            s = await self.open(env)
+            self.assertFalse((await s.req("runs.session_list", bot="kami", session=fid))["ok"])
+
+
 class RunsPr(unittest.TestCase):
     """The PR a node produced: parsed from its attempts' reasons, summary and handoff; its state from the person's own
     `gh` (stubbed here), cached, with a hard timeout, and `unknown` whenever gh cannot say."""
