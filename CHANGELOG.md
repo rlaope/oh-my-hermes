@@ -608,6 +608,15 @@ All notable changes will be documented here.
   questions and stop keys stay on main's screen; on the shared gateway the view reads one page at a time until an
   empty page, at most 50 reads after the agent ends, then says it could not read the rest. (`src/tui/subagent_session.py`,
   `src/tui/agent_view.py`, `src/tui/app.py`, `src/tui/frame.py`)
+- **omher: Google's Antigravity CLI (`agy`) is an agent you can start in TERMINALS.** The TERMINALS `+` menu offers
+  Antigravity with its official mark, and starts `agy` with no arguments in a terminal in the folder you pick; when it
+  is not installed, More agents shows its official installer line (`curl -fsSL https://antigravity.google/cli/install.sh | bash`).
+  omher finds `agy` where that installer puts it (`~/.local/bin`, and `%LOCALAPPDATA%\agy\bin` on Windows, now
+  searched too) even when omher was started from the Dock with a short PATH. A terminal row running `agy`, also one
+  you typed into a Shell, shows the Antigravity mark and name; Settings › Agents lists it as an ACP agent; and a
+  Hermes child that works through `agy acp` shows the Antigravity mark. Its ACP row is `agy acp`; signed out, it ends
+  with one line naming `agy acp --login`, checked against a real Antigravity CLI 1.5.16 handshake. Signed-in turns and
+  its approval cards were not run. (`apps/omher/src-tauri/src/acp_agents.rs`; `docs/OMHER-BOUNDARY.md` rule 11)
 
 ## 5.0.0 - 2026-11-21
 
