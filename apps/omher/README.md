@@ -320,6 +320,7 @@ node e2e/mock-bridge.mjs --port 5308   # the mock bridge for that
 pnpm tauri dev            # the app: starts the real bridge from ./bridge
 pnpm typecheck && pnpm test            # tsc, vitest
 pnpm e2e                  # Playwright (chromium) against the mock bridge
+bash scripts/e2e-shards.sh 3           # the same as 3 shards at once, each with its own ports (what CI runs)
 (cd src-tauri && cargo test)           # the shell's Rust tests
 (cd src-tauri && cargo test real_agents_print_their_version -- --ignored --nocapture)  # `claude/codex --version` through the PTY
 python -m unittest discover -s bridge/tests -v   # bridge tests with a FakeGateway; needs no Hermes

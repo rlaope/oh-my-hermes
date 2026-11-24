@@ -8,6 +8,10 @@ export default defineConfig({
   timeout: 30_000,
   // One mock bridge holds shared state (calls log, running turn): spec files must not run against it at once.
   workers: 1,
+  // CI runs three shards at once on a 3-4 core runner (scripts/e2e-shards.sh), and under that load a first page.goto
+  // can miss the 30 s budget (PR #3191: 1 of ~1,180 on windows-latest). One retry on CI only; Playwright still lists
+  // a test that passed on retry as flaky in the log, so it stays visible. Local runs never retry.
+  retries: process.env.CI ? 1 : 0,
   use: {
     baseURL: `http://127.0.0.1:${port}`,
     viewport: { width: 1280, height: 820 },
