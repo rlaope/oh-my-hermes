@@ -4,6 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: a slash command reaches the bot as typed.** omher appended its own notes (the open-threads note, the
+  terminal-link blocks, the peer note) to every main-chat message, slash commands included. Hermes reads all of a
+  slash command's text as its arguments, so `/usage` answered `Unknown /usage subcommand: [omher] Open threads:
+  none. ...`. A message that starts with `/` now goes with no note, and a slash command with a reply target is
+  refused instead of sent with the target block. (`apps/omher/bridge/omher_bridge.py`)
 - **omher on Windows: "Reply there" no longer draws over the row's time, and the app names Windows' own fonts.** In
   the side panel's "Where your bot is", hovering a Slack or Discord row showed "거기에 답장" on top of the row's time
   ("거기에답장일"): the button floated over the time and its hover fill was see-through. Now the time gives way while

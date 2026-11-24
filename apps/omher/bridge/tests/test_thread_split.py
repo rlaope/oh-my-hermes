@@ -136,6 +136,26 @@ class Effects(BridgeCase):
             self.assertTrue(sent.startswith("hello\n\n[omher] Open threads: none."), sent)
             self.assertEqual(ob.split_thread_hint(sent), "hello")
 
+    async def test_a_slash_command_goes_bare_with_no_note(self):
+        # Hermes reads everything after a slash command as its arguments: a note there turned `/usage` into
+        # "Unknown /usage subcommand: [omher] Open threads: none. ..." (reported on Windows, any OS).
+        async with ThreadEnv() as env:
+            s = await self.opened(env)
+            ok(await s.req("thread.list", bot="kami"))
+            for cmd in ("/usage", "  /usage reset", "/model 맥미니 헤르메스 붙여줘", "/new look at omher://terminal/abcdefgh23"):
+                ok(await s.req("chat.send", bot="kami", text=cmd))
+                self.assertEqual(env.clients["kami"].find("prompt.submit")[-1]["text"], cmd, cmd)
+            ok(await s.req("chat.send", bot="kami", text="hello"))
+            self.assertIn("[omher] Open threads:", env.clients["kami"].find("prompt.submit")[-1]["text"])
+
+    async def test_a_slash_command_with_a_reply_target_is_refused_not_mangled(self):
+        async with ThreadEnv() as env:
+            s = await self.opened(env)
+            before = len(env.clients["kami"].find("prompt.submit"))
+            r = await s.req("chat.send", bot="kami", text="/usage", reply_to="s-any")
+            self.assertFalse(r["ok"], r)
+            self.assertEqual(len(env.clients["kami"].find("prompt.submit")), before)
+
     async def test_note_lists_open_threads_and_never_rides_a_thread_turn(self):
         async with ThreadEnv(HermesStore()) as env:
             s = await self.opened(env)
