@@ -7120,7 +7120,7 @@ def awareness_primer_payload() -> dict[str, object]:
         # language, the speech level and endings, and progress updates, with
         # the user's language only as the fallback, because the older
         # "the host's own voice" named none of them: on a casual-register
-        # Korean persona (bot4, 2026-09-30) the final answer kept the persona
+        # Korean persona (mbot, 2026-09-30) the final answer kept the persona
         # while 13 of 17 interim progress lines in one session came out in
         # English. The last sentence carries the human-voice pass into every
         # session: owners read OMH-guided replies that opened with praise,

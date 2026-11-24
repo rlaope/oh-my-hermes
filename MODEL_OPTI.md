@@ -2324,7 +2324,7 @@ which models keep the persona's language at that point. Every number in it
 was measured.
 
 **Probe.** Each request is the real request from one session on the
-owner's `bot4` profile (Slack, Korean casual-register `SOUL.md`):
+owner's `mbot` profile (Slack, Korean casual-register `SOUL.md`):
 - the stored system prompt, with main's reply line;
 - the stored history, through the final briefing;
 - a Korean request to review a pull request;

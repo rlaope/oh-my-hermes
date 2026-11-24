@@ -46,7 +46,7 @@ from .awareness import awareness_primer_context, awareness_primer_markdown
 # updates included, with the user's language only where the persona sets
 # none -- and says OMH shapes structure and content only. "The
 # host's own voice" alone named none of them, and a casual-register Korean
-# persona (bot4, deepseek-v4.1-flash-ultrafast, 2026-09-30) kept its voice in
+# persona (mbot, deepseek-v4.1-flash-ultrafast, 2026-09-30) kept its voice in
 # the final answer while 13 of 17 interim progress lines in one session came
 # out in English. The compact rail measured 1434 and the markdown 3509
 # (re-derived from the producers, standing headroom kept as above).

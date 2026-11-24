@@ -146,7 +146,7 @@ export interface PlatformsRead {
 }
 
 /** One of a bot's skills (a `SKILL.md` under `<profile>/skills`), for the composer's `./` picker. */
-/** `{slack: {C0000000001: "#docs-harness"}, discord: {9000…: "#cron"}}`: names for link chips. */
+/** `{slack: {C0000000001: "#docs-harness"}, discord: {1100…: "#cron"}}`: names for link chips. */
 export interface LinkPlaces {
   slack: Record<string, string>;
   discord: Record<string, string>;
