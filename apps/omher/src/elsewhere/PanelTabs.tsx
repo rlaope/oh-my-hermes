@@ -313,7 +313,7 @@ function Refresh({ onClick }: { onClick: () => void }) {
 }
 
 const home = (p: string) => p.replace(/^\/Users\/[^/]+|^C:\\Users\\[^\\]+/i, "~");
-/** "~/Desktop/khope/oh-my-hermes-worktrees/omher-panel" -> "~/…/oh-my-hermes-worktrees/omher-panel" */
+/** "~/Desktop/demo/oh-my-hermes-worktrees/omher-panel" -> "~/…/oh-my-hermes-worktrees/omher-panel" */
 const shortPath = (p: string) => {
   const h = home(p);
   const sep = h.includes("\\") && !h.includes("/") ? "\\" : "/";

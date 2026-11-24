@@ -2388,7 +2388,7 @@ FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 # 120,000 -> 130,000: the reply rule on every body's tail now says the host
 # persona owns the reply language, tone, speech level, and sentence endings,
 # progress updates included, with the user's language only where the persona
-# sets none (miku, 2026-09-30: 13 of 17 interim lines in English). Measured
+# sets none (mbot, 2026-09-30: 13 of 17 interim lines in English). Measured
 # 117,742; one worst-case ordinary lane member (+2,547) no longer fit under
 # 120,000, which is the re-derive signal above. 117,742 plus 10%, rounded up
 # to the next 10,000, is 130,000.

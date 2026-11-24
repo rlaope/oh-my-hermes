@@ -13499,7 +13499,7 @@ Highlights of this major release (details in the entries below):
   skill name that resolves to two different files across
   `skills.external_dirs`, and every generation refresh made the two copies
   differ, so after each update every OMH skill present in both failed to
-  load by name in that bot (#1857; on the owner machine `profiles/miku`
+  load by name in that bot (#1857; on the owner machine `profiles/mbot`
   recorded `Ambiguous skill name 'omh-model-setup'`). `_apply_result` run
   from the installer-managed command now retires every other OMH-managed
   entry in the same config write that registers the pointer, so the home

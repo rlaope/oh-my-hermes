@@ -1810,7 +1810,7 @@ export function mustHold(state: AppState, bot: string): boolean {
 
 /**
  * The bot's timeline: its chat rows in order. The bot's sessions elsewhere (Slack, Discord, cron) are not placed in
- * it: the header's "N other places" and the side panel show them (khope: answers from other channels in this chat,
+ * it: the header's "N other places" and the side panel show them (answers from other channels in this chat,
  * with nothing saying where they came from, made the chat hard to follow).
  */
 export function selectTimeline(state: AppState, bot: string): TimelineItem[] {
