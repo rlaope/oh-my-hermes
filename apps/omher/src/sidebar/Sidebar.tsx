@@ -126,8 +126,9 @@ export function Sidebar() {
           {bots.map((b) => {
             const pinned = s.ui.pinned.includes(b.name);
             const hasThreads = (s.threads[b.name]?.length ?? 0) > 0;
-            // a new thread runs on this computer, on a bot that is up (host and offline bots get none, as in the menu)
-            const onNew = b.host || b.status === "offline" ? undefined : () => void s.newThread(b.name);
+            // a new thread on a bot that is up; a bot on another computer gets it too (its thread is a session on its
+            // own gateway, made by that computer's bridge); an offline bot gets none, as in the menu
+            const onNew = b.status === "offline" ? undefined : () => void s.newThread(b.name);
             const groupId = `threads-of-${b.name.replace(/[^A-Za-z0-9_-]/g, "_")}`;
             return (
             <BotRow

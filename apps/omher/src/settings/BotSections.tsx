@@ -45,7 +45,7 @@ export function BotSections({ bot }: { bot: Bot }) {
     void s.loadElsewhere(bot.name);
     void s.loadAutomations();
     if (!remote) void s.loadPlatforms(seq > 0);
-    if (!remote) void s.loadThreads(bot.name);
+    void s.loadThreads(bot.name);
     return () => {
       live = false;
     };
@@ -95,7 +95,7 @@ export function BotSections({ bot }: { bot: Bot }) {
 
       <Automations bot={bot} />
       <Elsewhere bot={bot} />
-      <Threads bot={bot} remote={remote} />
+      <Threads bot={bot} />
     </div>
   );
 }
@@ -284,16 +284,14 @@ function Elsewhere({ bot }: { bot: Bot }) {
   );
 }
 
-function Threads({ bot, remote }: { bot: Bot; remote: boolean }) {
+function Threads({ bot }: { bot: Bot }) {
   const s = useStore();
   const rows = s.threads[bot.name] ?? [];
   return (
     <>
       <div className="st-gh">{t("bp.threads")}</div>
       <div className="st-grp bp-grp" data-testid="bp-threads">
-        {remote ? (
-          <p className="bp-empty">{t("bp.threadsRemote")}</p>
-        ) : rows.length === 0 ? (
+        {rows.length === 0 ? (
           <p className="bp-empty">{t("bp.noThreads")}</p>
         ) : (
           <ul className="bp-rows">

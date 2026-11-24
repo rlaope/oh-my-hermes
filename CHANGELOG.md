@@ -14,6 +14,16 @@ All notable changes will be documented here.
   slash command's text as its arguments, so `/usage` answered `Unknown /usage subcommand: [omher] Open threads:
   none. ...`. A message that starts with `/` now goes with no note, and a slash command with a reply target is
   refused instead of sent with the target block. (`apps/omher/bridge/omher_bridge.py`)
+- **omher: a bot on another computer has threads, like a local one** (#3172). A bot connected over SSH
+  (`<peer>:<name>`) had only its main chat: no New thread on its row, no `./thread`, and its page said threads ran on
+  this computer only, because the peer link refused `thread.*` and every `session=` op. Its threads are sessions of
+  that bot on its own gateway, so the link now forwards `thread.create`, `thread.list`, `thread.open` and
+  `thread.remove` to that computer's bridge, and forwards `session=<id>` on send, interrupt, steer, approval, question
+  and model, and that session's events back, only for an id the peer's bridge itself answered as one of the bot's
+  threads; a folder chat there or any other id is still refused. A new thread there takes no folder from this computer
+  and its folder never starts this computer's terminal panel; a dropped link ends a running thread turn as stopped,
+  as it does the main chat's. Folder chats, Restart and a thread's pull requests stay on this computer (BOUNDARY rule
+  31).
 - **omher: Settings › Accounts › GitHub keeps Add and Remove on one line.** A GitHub account row reused the
   accounts grid, whose last column is the 26px ⋯ menu. 추가 just fit there in macOS's font; on Windows, whose Korean
   font is wider, it broke into 추 / 가 and was clipped. That row's button column now takes the label's width in any
