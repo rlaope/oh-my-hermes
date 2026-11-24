@@ -432,7 +432,8 @@ class Fleet(unittest.TestCase):
         return root
 
     def run_health(self, root: Path, records: dict[str, Gateway] | None = None,
-                   listed: tuple[bool, list[tuple[int, str]]] = (True, []), starts: dict[int, float] | None = None):
+                   listed: tuple[bool, list[tuple[int, str]]] = (True, []), starts: dict[int, float] | None = None,
+                   idle_exit: tuple[int, ...] = ()):
         records = records or {}
 
         def reader(home: Path) -> Gateway:
@@ -440,7 +441,7 @@ class Fleet(unittest.TestCase):
 
         return gateway_health(
             root, environ={"HERMES_GATEWAY_LOCK_DIR": str(root / "locks")}, gateway_reader=reader,
-            list_processes=lambda: GatewayListing(listed[0], tuple(listed[1])),
+            list_processes=lambda: GatewayListing(listed[0], tuple(listed[1]), (), idle_exit),
             process_start=lambda pid: (starts or {}).get(pid),
         )
 
@@ -501,6 +502,34 @@ class Fleet(unittest.TestCase):
             self.assertIn("carries the same profile name as PID 4100 here, and which home it serves is not recorded", text)
             self.assertNotIn("already serves", text)
             self.assertIn("the process listing recognizes", text)
+
+    def test_a_clients_idle_exit_gateway_is_said_as_ending_itself_and_is_no_finding(self) -> None:
+        # One `hermes chat` in a throwaway home (an OMH dispatch's child, a script, a test) auto-starts a detached
+        # `gateway run --idle-exit` that Hermes ends once idle: not a stray for the person to stop.
+        with TemporaryDirectory() as tmp:
+            root = self.home(tmp)
+            records = {".hermes": Gateway("running", True, 4100, served=("default",), code_sha=COMMIT)}
+            report = self.run_health(root, records, (True, [(5100, "default")]), {5100: BUILT_EPOCH + 10},
+                                     idle_exit=(5100,))
+            self.assertEqual(report.findings, ())
+            self.assertTrue(report.gateways[1].idle_exit)
+            text = "\n".join(report.lines)
+            self.assertIn("PID 5100 runs `hermes gateway run --idle-exit` (`--profile default` on its command line) "
+                          "and no record under this Hermes root names it", text)
+            self.assertIn("Hermes ends it itself once it has been idle for `gateway.unmanaged_idle_exit_seconds`", text)
+            self.assertNotIn("same profile name as PID 4100", text)
+            self.assertIn("2 gateway process(es) running, 1 recorded, serving 1 profile(s); 1 not recorded by this "
+                          "Hermes root, 1 of them a client's idle-exit gateway.", report.lines)
+            self.assertEqual(report.next_actions, ())
+
+    def test_an_idle_exit_gateway_beside_a_stray_leaves_only_the_stray_to_find(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = self.home(tmp)
+            report = self.run_health(root, {}, (True, [(5100, "default"), (5200, "")]), idle_exit=(5100,))
+            self.assertEqual(report.findings, (FINDING_UNRECORDED,))
+            actions = "\n".join(report.next_actions)
+            self.assertIn("find what started PID 5200:", actions)
+            self.assertNotIn("5100", actions)
 
     def test_honest_absence(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -700,6 +729,19 @@ class GatewayProcessListing(unittest.TestCase):
         argvs = [(201, ["hermes"]), (202, ["python3", "-m", "hermes_cli.main", "gateway", "run"])]
         with mock.patch.object(process_listing, "process_argvs", return_value=argvs):
             self.assertEqual(process_listing.hermes_gateway_processes(), GatewayListing(True, ((202, ""),), (201,)))
+
+    def test_a_clients_idle_exit_gateway_is_listed_as_such(self) -> None:
+        # Hermes' `spawn_unmanaged_gateway` (a chat/TUI/cron client's own start) adds `--idle-exit`; for a home
+        # outside `<root>/profiles/` it also passes `--profile default` as its selector.
+        py = "/opt/py/bin/python3"
+        argvs = [
+            (301, [py, "-m", "hermes_cli.main", "--profile", "default", "gateway", "run", "--quiet", "--idle-exit"]),
+            (302, [py, "-m", "hermes_cli.main", "--profile", "default", "gateway", "run", "--quiet"]),
+            (303, [py, "-m", "hermes_cli.main", "chat", "--idle-exit"]),
+        ]
+        with mock.patch.object(process_listing, "process_argvs", return_value=argvs):
+            self.assertEqual(process_listing.hermes_gateway_processes(),
+                             GatewayListing(True, ((301, "default"), (302, "default")), (), (301,)))
 
     def test_a_kernel_argument_buffer_yields_its_arguments_and_never_its_environment(self) -> None:
         raw = (struct.pack("i", 3) + b"/opt/py/bin/python3\0\0\0\0" + b"python3\0-m\0hermes_cli.main\0"

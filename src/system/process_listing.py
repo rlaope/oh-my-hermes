@@ -33,6 +33,9 @@ KERN_PROCARGS2 = 49
 INTERPRETER_FLAGS = frozenset({"-I", "-B", "-E", "-s", "-S", "-u", "-O", "-OO", "-P"})  # flags before `-m`
 
 
+# Hermes' `spawn_unmanaged_gateway` adds it for a client's own start (chat, TUI, cron); `gateway/run_idle_exit.py`
+# then ends that gateway once it is idle for `gateway.unmanaged_idle_exit_seconds`.
+IDLE_EXIT_FLAG = "--idle-exit"
 RETITLED_ARGV = ["hermes"]  # Hermes' optional `setproctitle("hermes")` replaces the whole command line with this
 LAUNCH_SHAPES = (
     "`python -m hermes_cli.main [--profile N] gateway run`, `python …/hermes-agent/hermes gateway run` and Hermes' "
@@ -45,6 +48,7 @@ class GatewayListing:
     listed: bool  # False where this platform offers no listing: never read as an empty one
     gateways: tuple[tuple[int, str], ...] = ()  # (pid, the profile its command line names, "" for none)
     retitled: tuple[int, ...] = ()  # this user's processes titled just `hermes`, whose arguments cannot be read
+    idle_exit: tuple[int, ...] = ()  # gateways launched with `--idle-exit`: a Hermes client's own start, ended once idle
 
 
 def process_argvs() -> list[tuple[int, list[str]]] | None:
@@ -62,7 +66,10 @@ def hermes_gateway_processes() -> GatewayListing:
     if argvs is None:
         return GatewayListing(False)
     retitled = tuple(pid for pid, argv in argvs if argv == RETITLED_ARGV)
-    return GatewayListing(True, tuple(gateway_runs(argvs)), retitled)
+    gateways = tuple(gateway_runs(argvs))
+    commands = dict(argvs)
+    idle_exit = tuple(pid for pid, _profile in gateways if IDLE_EXIT_FLAG in commands[pid])
+    return GatewayListing(True, gateways, retitled, idle_exit)
 
 
 def gateway_runs(argvs: list[tuple[int, list[str]]]) -> list[tuple[int, str]]:

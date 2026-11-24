@@ -166,6 +166,13 @@ All notable changes will be documented here.
   missing, never as healthy. The fix is always Hermes' own command; OMH stops and restarts nothing.
   (`src/maintenance/gateway_health.py`, `src/maintenance/hermes_gateway_formats.py`,
   `src/system/process_listing.py`; `docs/INSTALLATION.md` "Bot Profiles")
+- **`omh doctor` no longer calls a client's idle-exit gateway a stray.** Every `hermes chat` reaches Hermes through
+  a gateway, and in a home with none (a scratch home, such as the child an OMH dispatch or a bench run starts) Hermes
+  starts a detached `gateway run --idle-exit` that it ends itself once idle, after
+  `gateway.unmanaged_idle_exit_seconds` (600 s by default). Doctor read each one as a stray to find and stop, and,
+  since Hermes names such a home `--profile default`, as a second gateway of the default profile. It now says what
+  started it and that Hermes ends it, still counts it in the fleet line, and raises no finding or action for it.
+  (`src/maintenance/gateway_health.py` `_unrecorded_line`, `src/system/process_listing.py` `IDLE_EXIT_FLAG`)
 - **omher 1.1.3.** GitHub across your repositories and accounts, a Claude usage meter that shows numbers, and terminals
   and bridges that recover by themselves.
   - **GitHub:** Tasks gains a "나" scope: your review requests, your pull requests, issues assigned to you and mentions,
