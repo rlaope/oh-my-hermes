@@ -1,7 +1,8 @@
 """Providers Hermes is linked to, read from what Hermes records -- keys only.
 
 The bundle's `provider_detection` turns a `hermes auth` login, a config
-provider key, and an API-key variable NAME into the entitlement document's
+provider key, an installed model-provider plugin, and an API-key variable
+NAME into the entitlement document's
 own `provider id -> kind` shape, and `effective_provider_entitlements` lays
 the recorded document over it. These tests pin what is read (ids and names),
 what is never read (a token, a key, a label), which source wins, and that the
@@ -52,6 +53,27 @@ def _auth_store(**sections: object) -> str:
     return json.dumps({"version": 1, **sections})
 
 
+DIRECTSDK = "claude-subscription-directsdk-experimental"
+
+
+def _provider_plugin(
+    plugin_dir: Path,
+    *,
+    name: str | None = DIRECTSDK,
+    kind: str | None = "model-provider",
+    manifest: str = "plugin.yaml",
+) -> None:
+    """A model-provider plugin laid out the way `hermes plugins install` leaves one."""
+    lines = []
+    if name is not None:
+        lines.append(f"name: {name}")
+    if kind is not None:
+        lines.append(f"kind: {kind}")
+    lines.append("version: 0.1.0")
+    _write(plugin_dir / manifest, "\n".join(lines) + "\n")
+    _write(plugin_dir / "__init__.py", "raise RuntimeError('detection must never import a plugin')\n")
+
+
 class TableTests(unittest.TestCase):
     def test_every_kind_is_one_the_document_accepts_and_never_unknown(self) -> None:
         # `unknown` is a multi-vendor kind: mapping a Hermes id to it would
@@ -64,6 +86,23 @@ class TableTests(unittest.TestCase):
         for name, provider_id in detection.HERMES_ENV_KEY_PROVIDERS.items():
             with self.subTest(name=name):
                 self.assertIn(provider_id, detection.HERMES_PROVIDER_KINDS)
+        # Same rule for provider plugins: a named family, never a guess.
+        self.assertTrue(detection.HERMES_PLUGIN_PROVIDER_KINDS)
+        for plugin_name, kind in detection.HERMES_PLUGIN_PROVIDER_KINDS.items():
+            with self.subTest(plugin=plugin_name):
+                self.assertIn(kind, PROVIDER_KIND_VOCABULARY)
+                self.assertNotIn(kind, (PROVIDER_KIND_UNKNOWN, detection.GATEWAY_KIND))
+                self.assertTrue(detection.PROVIDER_ID_RE.fullmatch(plugin_name))
+                self.assertTrue(_CHAIN_TOKEN_RE.fullmatch(plugin_name))
+        self.assertEqual(
+            detection.LINKED_SOURCE_ORDER,
+            (
+                detection.LINKED_SOURCE_LOGIN,
+                detection.LINKED_SOURCE_CONFIG,
+                detection.LINKED_SOURCE_PLUGIN,
+                detection.LINKED_SOURCE_ENV,
+            ),
+        )
         # Detection deliberately keeps its own narrower token grammar; stored
         # routing ids may name Hermes' custom provider, but this reader does
         # not infer a linked account from an unrecognized config/auth key.
@@ -401,6 +440,110 @@ class DetectionTests(unittest.TestCase):
             self.assertEqual(detection.detect_linked_providers(None, env_names=()), [])
 
 
+class ProviderPluginTests(unittest.TestCase):
+    """A model-provider plugin Hermes would load counts, by Hermes' own discovery rules."""
+
+    def _rows(self, home: Path) -> list[tuple[str, str, str, str]]:
+        return [(row["id"], row["kind"], row["source"], row["evidence"]) for row in detection.detect_linked_providers(home)]
+
+    def test_a_flat_installed_plugin_is_an_anthropic_provider(self) -> None:
+        with TemporaryDirectory() as tmp, patch.dict(os.environ, {}, clear=True):
+            home = Path(tmp) / "hermes"
+            _provider_plugin(home / "plugins" / "directsdk")
+            # OMH's own bundle sits beside it and declares no provider kind.
+            _write(home / "plugins" / "omh" / "plugin.yaml", "name: omh\nkind: standalone\n")
+            _write(home / "plugins" / "omh" / "__init__.py", "")
+            _write(home / "auth.json", _auth_store(providers={"openai-codex": {"access_token": TOKEN}}))
+            rows = self._rows(home)
+        self.assertEqual(
+            rows,
+            [
+                ("openai-codex", "openai-codex", "login", "auth.json"),
+                (DIRECTSDK, "anthropic", "plugin", "plugins/directsdk"),
+            ],
+        )
+
+    def test_the_model_providers_layout_is_read_too_and_the_name_falls_back_to_the_directory(self) -> None:
+        with TemporaryDirectory() as tmp:
+            home = Path(tmp) / "hermes"
+            # Under `model-providers/` Hermes imports a plugin without checking
+            # its manifest kind; with no manifest the directory names it.
+            _write(home / "plugins" / "model-providers" / DIRECTSDK / "__init__.py", "")
+            self.assertEqual(
+                self._rows(home), [(DIRECTSDK, "anthropic", "plugin", f"plugins/model-providers/{DIRECTSDK}")]
+            )
+
+    def test_a_yml_manifest_is_read_and_a_quoted_name_unquoted(self) -> None:
+        with TemporaryDirectory() as tmp:
+            home = Path(tmp) / "hermes"
+            _provider_plugin(home / "plugins" / "dsdk", name=f'"{DIRECTSDK}"', kind="'model-provider'  # flat", manifest="plugin.yml")
+            self.assertEqual(self._rows(home), [(DIRECTSDK, "anthropic", "plugin", "plugins/dsdk")])
+
+    def test_plugins_disabled_removes_it_by_any_name_hermes_matches(self) -> None:
+        configs = {
+            "block, directory": "plugins:\n  disabled:\n    - dsdk\n",
+            "block at the key's indent, manifest name": f"plugins:\n  enabled: [x]\n  disabled:\n  - '{DIRECTSDK}'  # off\n",
+            "inline, manifest name": f"plugins:\n  disabled: [other, \"{DIRECTSDK}\"]\n",
+            "inline, model-providers key": "plugins:\n  disabled: [model-providers/dsdk]\n",
+        }
+        with TemporaryDirectory() as tmp:
+            home = Path(tmp) / "hermes"
+            _provider_plugin(home / "plugins" / "dsdk")
+            for label, config in configs.items():
+                with self.subTest(case=label):
+                    _write(home / "config.yaml", config)
+                    self.assertEqual(self._rows(home), [])
+            # Names elsewhere in the config are not the deny-list.
+            for config in (
+                "plugins:\n  enabled:\n    - dsdk\n",
+                "plugins:\n  disabled: dsdk\n",
+                "plugins:\n  entries:\n    disabled:\n      - dsdk\n",
+                "other:\n  disabled:\n    - dsdk\n",
+            ):
+                with self.subTest(config=config):
+                    _write(home / "config.yaml", config)
+                    self.assertEqual(self._rows(home), [(DIRECTSDK, "anthropic", "plugin", "plugins/dsdk")])
+
+    def test_only_a_loadable_model_provider_plugin_the_table_names_counts(self) -> None:
+        cases = {
+            "another kind": {"kind": "standalone"},
+            "no kind in a flat install": {"kind": None},
+            "a name the table does not hold": {"name": "some-other-provider"},
+        }
+        for label, overrides in cases.items():
+            with self.subTest(case=label), TemporaryDirectory() as tmp:
+                home = Path(tmp) / "hermes"
+                _provider_plugin(home / "plugins" / "dsdk", **overrides)
+                self.assertEqual(self._rows(home), [])
+        with TemporaryDirectory() as tmp:
+            home = Path(tmp) / "hermes"
+            # A nested `kind:` is not the manifest's kind.
+            _write(home / "plugins" / "nested" / "plugin.yaml", f"name: {DIRECTSDK}\nmeta:\n  kind: model-provider\n")
+            _write(home / "plugins" / "nested" / "__init__.py", "")
+            # No `__init__.py`: Hermes imports nothing from it.
+            _write(home / "plugins" / "bare" / "plugin.yaml", f"name: {DIRECTSDK}\nkind: model-provider\n")
+            # Hidden and underscore directories are never plugins.
+            _provider_plugin(home / "plugins" / ".dsdk")
+            _provider_plugin(home / "plugins" / "model-providers" / "_dsdk")
+            self.assertEqual(self._rows(home), [])
+
+    def test_the_config_row_for_the_same_id_wins_and_keeps_the_plugin_kind(self) -> None:
+        for config in (
+            f"model:\n  provider: {DIRECTSDK}\n",
+            f"providers:\n  {DIRECTSDK}:\n    models:\n      - claude-opus-5-5\n",
+        ):
+            with self.subTest(config=config), TemporaryDirectory() as tmp:
+                home = Path(tmp) / "hermes"
+                _provider_plugin(home / "plugins" / "dsdk")
+                _write(home / "config.yaml", config)
+                self.assertEqual(self._rows(home), [(DIRECTSDK, "anthropic", "config", "config.yaml")])
+        with TemporaryDirectory() as tmp:
+            # Without the plugin the same config key is an id OMH cannot place.
+            home = Path(tmp) / "hermes"
+            _write(home / "config.yaml", f"model:\n  provider: {DIRECTSDK}\n")
+            self.assertEqual(self._rows(home), [(DIRECTSDK, "gateway", "config", "config.yaml")])
+
+
 class LinkedEntitlementTests(unittest.TestCase):
     """`effective_provider_entitlements`: detection is the baseline, the record wins."""
 
@@ -430,6 +573,50 @@ class LinkedEntitlementTests(unittest.TestCase):
         self.assertNotEqual(quick[0][0], "gpt-6-luna")
         self.assertEqual(chains["quick"][0][0], "gpt-6-luna")
         self.assertEqual(sorted(chains["quick"]), sorted(quick))
+
+    def test_an_installed_provider_plugin_counts_without_an_interview_and_reorders_the_chains(self) -> None:
+        with TemporaryDirectory() as tmp, patch.dict(os.environ, {}, clear=True):
+            omh_home = Path(tmp) / "omh"
+            hermes_home = Path(tmp) / "hermes"
+            _provider_plugin(hermes_home / "plugins" / "dsdk")
+            entitlements, status, providers = effective_provider_entitlements(omh_home, hermes_home)
+            self.assertEqual(entitlements, {"providers": {DIRECTSDK: "anthropic"}, "subscription_clis": []})
+            self.assertEqual(status, "absent")
+            self.assertEqual(
+                providers, ({"id": DIRECTSDK, "kind": "anthropic", "source": "plugin", "evidence": "plugins/dsdk"},)
+            )
+            chains = effective_mixture_category_chains(omh_home, hermes_home)
+        self.assertTrue(alias_is_served("claude-opus-5-5", entitlements))
+        self.assertFalse(alias_is_served("gpt-6.2-sol", entitlements))
+        review = HERMES_MIXTURE_CATEGORY_CHAINS["review"]
+        self.assertNotEqual(review[0][0], "claude-opus-5-5")
+        self.assertEqual(chains["review"][0][0], "claude-opus-5-5")
+        self.assertEqual(sorted(chains["review"]), sorted(review))
+
+    def test_a_plugin_row_sorts_between_config_and_env(self) -> None:
+        with TemporaryDirectory() as tmp, patch.dict(os.environ, {}, clear=True):
+            omh_home, hermes_home = self._login_only(Path(tmp))
+            _provider_plugin(hermes_home / "plugins" / "dsdk")
+            _write(hermes_home / "config.yaml", "providers:\n  zai:\n    base_url: y\n")
+            _write(hermes_home / ".env", f"DEEPSEEK_API_KEY={KEY_VALUE}\n")
+            _entitlements, _status, providers = effective_provider_entitlements(omh_home, hermes_home)
+        self.assertEqual(
+            [(row["id"], row["source"]) for row in providers],
+            [("openai-codex", "login"), ("zai", "config"), (DIRECTSDK, "plugin"), ("deepseek", "env")],
+        )
+
+    def test_a_plugin_beside_another_claude_provider_stays_counted(self) -> None:
+        # The tie between the two is settled only where a route is auto-
+        # pinned (`delegate_route_tool`); here both stay served and
+        # configured, so a route or an explicit provider naming the plugin
+        # keeps working.
+        with TemporaryDirectory() as tmp, patch.dict(os.environ, {}, clear=True):
+            omh_home, hermes_home = self._login_only(Path(tmp))
+            _write(hermes_home / "auth.json", _auth_store(providers={"anthropic": {"access_token": TOKEN}}))
+            _provider_plugin(hermes_home / "plugins" / "dsdk")
+            entitlements, _status, providers = effective_provider_entitlements(omh_home, hermes_home)
+        self.assertEqual(entitlements["providers"], {"anthropic": "anthropic", DIRECTSDK: "anthropic"})
+        self.assertEqual([(row["id"], row["source"]) for row in providers], [("anthropic", "login"), (DIRECTSDK, "plugin")])
 
     def test_the_recorded_kind_wins_and_neither_side_drops_the_other(self) -> None:
         with TemporaryDirectory() as tmp, patch.dict(os.environ, {}, clear=True):
@@ -535,6 +722,16 @@ class SurfaceTests(unittest.TestCase):
             homes[-1] = str(root / "nowhere")
             _status, text, _stderr = run_cli([*homes, "model-chains", "show"], output_json=False)
             self.assertIn("Linked Hermes providers: none found", text)
+
+    def test_show_names_an_installed_provider_plugin(self) -> None:
+        with TemporaryDirectory() as tmp, patch.dict(os.environ, {}, clear=True):
+            root = Path(tmp)
+            _provider_plugin(root / "hermes" / "plugins" / "dsdk")
+            homes = ["--omh-home", str(root / "omh"), "--hermes-home", str(root / "hermes")]
+            status, text, _stderr = run_cli([*homes, "model-chains", "show"], output_json=False)
+        self.assertEqual(status, 0)
+        self.assertIn(f"Linked Hermes providers: {DIRECTSDK} (plugin)", text)
+        self.assertIn("(reordered by this machine's providers)", text)
 
 
 if __name__ == "__main__":

@@ -239,7 +239,7 @@ def _print_state(state: dict[str, object]) -> None:
             print("  none of these names a model family, so no chain is reordered. Record what one serves")
             print("  with `omh model-chains provider set <id> <kind>`.")
     else:
-        print("Linked Hermes providers: none found (a `hermes auth` login, a config provider, or a key name counts)")
+        print("Linked Hermes providers: none found (a `hermes auth` login, a config provider, a provider plugin, or a key name counts)")
     routes_status = str(state.get("routes_status", ""))
     if routes_status.startswith("invalid:"):
         # An absent document is the common case and says nothing; an

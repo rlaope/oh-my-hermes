@@ -58,6 +58,7 @@ from ..delegation_backend_mode import (
 )
 from ..route_endpoint_guard import managed_config_layer, route_endpoint_refusal
 from ..provider_detection import (
+    LINKED_SOURCE_PLUGIN,
     config_provider_base_url_hosts,
     config_provider_declared_models,
     configured_provider_ids,
@@ -494,6 +495,7 @@ def _inherited_provider_view(
     serving: str,
     on_endpoint: bool,
     entitlements: Any,
+    provider_rows: Any = (),
 ) -> tuple[bool | None, tuple[str, ...], tuple[str, ...]]:
     """What a route with no provider would inherit, judged three ways.
 
@@ -508,6 +510,16 @@ def _inherited_provider_view(
     live: a session on `custom:cliproxy`, a block listing only Claude models,
     inherited by a `gpt-6.1-sol` category head, and every child died on
     "model not found" before a single model call.
+
+    ``provider_rows`` are the rows `effective_provider_entitlements` returned
+    with ``entitlements``. When more than one provider is pinnable and only
+    one of them was found some way other than an installed provider plugin
+    (`source` `plugin`), that one alone is pinnable: installing the plugin
+    must not turn the pin a machine already had (a Hermes Anthropic login, a
+    key, a recorded `ccapi`) into a refusal, and OMH never picks between two
+    billing paths for one model on its own. The plugin stays counted,
+    served and configured, so a route or an explicit provider naming it
+    still wins, and excluding the other provider makes it the pin.
     """
     serves = provider_serves_alias(alias, serving, entitlements)
     if serves is None and not on_endpoint:
@@ -521,6 +533,15 @@ def _inherited_provider_view(
     pinnable = tuple(
         item for item in providers_known_to_serve_alias(alias, entitlements) if item.casefold() in configured
     )
+    if len(pinnable) > 1:
+        plugin_only = {
+            str(row.get("id", "")).casefold()
+            for row in provider_rows
+            if isinstance(row, Mapping) and row.get("source") == LINKED_SOURCE_PLUGIN
+        }
+        held_before = tuple(item for item in pinnable if item.casefold() not in plugin_only)
+        if len(held_before) == 1:
+            pinnable = held_before
     return serves, candidates, pinnable
 
 
@@ -529,10 +550,11 @@ def _configured_providers(hermes_home: Any, omh_home: Any) -> frozenset[str]:
 
     A delegated child sends its whole task context to the provider a route
     names, so a route may only name one of these: the providers counted by
-    `effective_provider_entitlements` (linked in auth.json, config.yaml, or
-    `.env`, plus the recorded document, minus what the operator excluded),
-    every `providers.<id>` block and `model.provider` in config.yaml (a
-    loopback block is configured even though entitlements skip it), the
+    `effective_provider_entitlements` (linked in auth.json, config.yaml, an
+    installed provider plugin, or `.env`, plus the recorded document, minus
+    what the operator excluded), every `providers.<id>` block and
+    `model.provider` in config.yaml (a loopback block is configured even
+    though entitlements skip it), the
     `custom:<name>` identities of `providers.<id>` blocks with a `base_url`
     and of legacy `custom_providers` entries, `route_only_provider_ids`
     (minus the same exclusions), and the session's own provider.
@@ -1280,10 +1302,11 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
             # cannot run on dies the same way the head did. Pin the one known
             # server when there is exactly one; otherwise write it as before.
             inherited = read_session_provider(hermes_home)
-            fallback_entitlements, _fs, _fp = effective_provider_entitlements(omh_home, hermes_home)
+            fallback_entitlements, _fs, fallback_rows = effective_provider_entitlements(omh_home, hermes_home)
             fallback_serves, _fc, fallback_pinnable = _inherited_provider_view(
                 hermes_home, omh_home, next_model, wire_model,
                 serving=inherited, on_endpoint=False, entitlements=fallback_entitlements,
+                provider_rows=fallback_rows,
             )
             if fallback_serves is False and len(fallback_pinnable) == 1:
                 next_provider = fallback_pinnable[0]
@@ -1442,9 +1465,16 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
         endpoint = read_child_endpoint(hermes_home) or {}
         on_endpoint = bool(endpoint.get("host"))
         serving = endpoint["provider"] if on_endpoint else read_session_provider(hermes_home)
-        entitlements, _status, _providers = effective_provider_entitlements(omh_home, hermes_home)
+        entitlements, _status, provider_rows = effective_provider_entitlements(omh_home, hermes_home)
         serves, candidates, pinnable = _inherited_provider_view(
-            hermes_home, omh_home, alias, wire_model, serving=serving, on_endpoint=on_endpoint, entitlements=entitlements
+            hermes_home,
+            omh_home,
+            alias,
+            wire_model,
+            serving=serving,
+            on_endpoint=on_endpoint,
+            entitlements=entitlements,
+            provider_rows=provider_rows,
         )
         if not (on_endpoint and serving == "custom") and serves is False:
             if not endpoint and len(pinnable) == 1:

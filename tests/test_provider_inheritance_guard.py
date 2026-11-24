@@ -19,7 +19,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from omh.plugin_bundle.omh.delegation_routing import read_delegation_route
 from omh.plugin_bundle.omh.tools.delegate_route_tool import omh_delegate_route_handler
+
+DIRECTSDK = "claude-subscription-directsdk-experimental"
 
 
 class ProviderInheritanceGuardTests(unittest.TestCase):
@@ -113,6 +116,145 @@ class ProviderInheritanceGuardTests(unittest.TestCase):
                     self._entitlements(providers)
                 result = self._call(action="set", model=model)
                 self.assertEqual(result["status"], "routed", result)
+
+    def _directsdk_plugin(self) -> None:
+        plugin = self.home / "plugins" / "directsdk"
+        plugin.mkdir(parents=True)
+        (plugin / "plugin.yaml").write_text(f"name: {DIRECTSDK}\nkind: model-provider\n", encoding="utf-8")
+        (plugin / "__init__.py").write_text("", encoding="utf-8")
+
+    def _pinned(self, model: str = "claude-opus-5-5") -> str:
+        result = self._call(action="set", model=model)
+        self.assertEqual(result["status"], "routed", result)
+        return result["provider_pinned"]["pinned_provider"]
+
+    def test_an_installed_claude_provider_plugin_is_pinned_for_a_claude_alias(self) -> None:
+        # Nothing recorded: the DirectSDK provider plugin alone is the one
+        # provider known to serve a Claude alias, so a route with no
+        # provider is pinned to it instead of inheriting `openai-codex`.
+        self._session_on("openai-codex")
+        self._directsdk_plugin()
+        result = self._call(action="set", model="claude-opus-5-5")
+        self.assertEqual(result["status"], "routed", result)
+        self.assertEqual(
+            result["provider_pinned"],
+            {"inherited_provider": "openai-codex", "pinned_provider": DIRECTSDK},
+        )
+        self.assertEqual(
+            read_delegation_route(self.home),
+            {"model": "claude-opus-5-5", "provider": DIRECTSDK},
+        )
+
+    # Another Claude provider beside the plugin: (setup, provider pinned
+    # before the plugin was detected, whether it can be excluded -- only a
+    # linked provider can; a recorded one is cleared by editing the record).
+    _CLAUDE_BESIDE_PLUGIN = {
+        "an Anthropic login": ("login", "anthropic", True),
+        "an Anthropic key": ("key", "anthropic", True),
+        "a recorded ccapi": ("ccapi", "ccapi", False),
+        "a recorded anthropic": ("anthropic", "anthropic", False),
+    }
+
+    def _claude_beside_plugin(self, setup: str, *, excluded: str = "", route: bool = False) -> None:
+        self._tmp = tempfile.TemporaryDirectory()  # a fresh home per case
+        self.addCleanup(self._tmp.cleanup)
+        self.home = Path(self._tmp.name)
+        self.config = self.home / "config.yaml"
+        self.omh_home = self.home / ".omh"
+        self._session_on("openai-codex")
+        self._directsdk_plugin()
+        if setup == "login":
+            (self.home / "auth.json").write_text(
+                json.dumps({"version": 1, "providers": {"anthropic": {"access_token": "t"}}}), encoding="utf-8"
+            )
+        elif setup == "key":
+            (self.home / ".env").write_text("ANTHROPIC_API_KEY=filled\n", encoding="utf-8")
+        else:
+            self._entitlements({setup: setup})
+        if excluded:
+            path = self.omh_home / "routing" / "providers.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                json.dumps({"schema_version": "provider_entitlements/v1", "excluded_providers": [excluded]}),
+                encoding="utf-8",
+            )
+        if route:
+            path = self.omh_home / "routing" / "model-providers.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                json.dumps({
+                    "schema_version": "model_provider_routes/v1",
+                    "models": {"claude-opus-5-5": {"provider": DIRECTSDK, "model": "claude-opus-5-5"}},
+                }),
+                encoding="utf-8",
+            )
+
+    def test_installing_the_plugin_keeps_the_existing_claude_pin(self) -> None:
+        # Before the plugin was detected each of these pinned the other
+        # provider. Two pinnable providers would be a refusal; the one found
+        # some way other than the plugin is the pin it always was.
+        for label, (setup, before, _excludable) in self._CLAUDE_BESIDE_PLUGIN.items():
+            with self.subTest(case=label):
+                self._claude_beside_plugin(setup)
+                self.assertEqual(self._pinned(), before)
+                self.assertEqual(read_delegation_route(self.home)["provider"], before)
+
+    def test_a_route_to_the_plugin_wins_over_the_other_claude_provider(self) -> None:
+        for label, (setup, _before, _excludable) in self._CLAUDE_BESIDE_PLUGIN.items():
+            with self.subTest(case=label):
+                self._claude_beside_plugin(setup, route=True)
+                result = self._call(action="set", model="claude-opus-5-5")
+                self.assertEqual(result["status"], "routed", result)
+                self.assertNotIn("provider_pinned", result)
+                self.assertEqual(read_delegation_route(self.home)["provider"], DIRECTSDK)
+
+    def test_an_explicit_plugin_provider_is_not_refused(self) -> None:
+        for label, (setup, _before, _excludable) in self._CLAUDE_BESIDE_PLUGIN.items():
+            with self.subTest(case=label):
+                self._claude_beside_plugin(setup)
+                result = self._call(action="set", model="claude-opus-5-5", provider=DIRECTSDK)
+                self.assertEqual(result["status"], "routed", result)
+                self.assertEqual(read_delegation_route(self.home)["provider"], DIRECTSDK)
+
+    def test_excluding_the_other_claude_provider_makes_the_plugin_the_pin(self) -> None:
+        for label, (setup, before, excludable) in self._CLAUDE_BESIDE_PLUGIN.items():
+            if not excludable:
+                continue
+            with self.subTest(case=label):
+                self._claude_beside_plugin(setup, excluded=before)
+                self.assertEqual(self._pinned(), DIRECTSDK)
+
+    def test_the_tie_break_only_sets_a_plugin_aside(self) -> None:
+        # Two providers neither of which is plugin-only stay a refusal, as
+        # before; so does a plugin the operator recorded by hand.
+        self._session_on("openai-codex")
+        self._directsdk_plugin()
+        (self.home / "auth.json").write_text(
+            json.dumps({"version": 1, "providers": {"anthropic": {"access_token": "t"}}}), encoding="utf-8"
+        )
+        self._entitlements({"ccapi": "ccapi"})
+        result = self._call(action="set", model="claude-opus-5-5")
+        self.assertEqual(result["status"], "error", result)
+        self.assertEqual(result["providers_serving_alias"], ["anthropic", "ccapi", DIRECTSDK])
+        self._entitlements({DIRECTSDK: "anthropic"})
+        result = self._call(action="set", model="claude-opus-5-5")
+        self.assertEqual(result["status"], "error", result)
+        self.assertEqual(result["providers_serving_alias"], ["anthropic", DIRECTSDK])
+
+    def test_beside_a_relay_the_plugin_is_still_the_pin(self) -> None:
+        # OpenRouter serves everything as a fail-open default, never as a
+        # pin, so it does not compete with the plugin.
+        self._session_on("openai-codex")
+        self._directsdk_plugin()
+        (self.home / ".env").write_text("OPENROUTER_API_KEY=filled\n", encoding="utf-8")
+        self.assertEqual(self._pinned(), DIRECTSDK)
+
+    def test_a_session_on_the_plugin_provider_inherits_it(self) -> None:
+        self._session_on(DIRECTSDK)
+        self._directsdk_plugin()
+        result = self._call(action="set", model="claude-opus-5-5")
+        self.assertEqual(result["status"], "routed", result)
+        self.assertNotIn("provider_pinned", result)
 
     def test_a_multi_vendor_session_provider_is_left_alone(self) -> None:
         # A relay serves models of every family, so inheriting one is not a
