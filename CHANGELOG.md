@@ -642,6 +642,15 @@ All notable changes will be documented here.
   empty page, at most 50 reads after the agent ends, then says it could not read the rest. (`src/tui/subagent_session.py`,
   `src/tui/agent_view.py`, `src/tui/app.py`, `src/tui/frame.py`)
 
+- **`omh doctor` now says when the prompt-cache TTL does not match what the route keeps, and why warming stopped.**
+  A new `prompt_cache_route` row and **Prompt cache (read-only)** section read only `config.yaml` and the tail of
+  `logs/agent.log`. They warn when `prompt_caching.cache_ttl` is pinned to `5m` on a route that keeps 1h entries
+  (`claude-proxy` and other known proxies, or a loopback `base_url` serving Claude) with no `1h` route ceiling, or when
+  caching is off, and print the exact `hermes config set prompt_caching.cache_ttl auto` /
+  `hermes config set prompt_caching.route_ttl_ceilings.<provider> 1h` fix. They also count the warmer's stop reasons
+  over the last 24h with a plain explanation of each. `omh model` repeats the TTL warning. No model request is sent.
+  (`src/maintenance/prompt_cache_route.py`, `src/maintenance/doctor.py`)
+
 ## 5.0.0 - 2026-11-21
 
 - **A mise-managed `codex` or `python3` runs again in `omh coding run`.** mise links every tool it manages to one
