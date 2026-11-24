@@ -2,7 +2,7 @@
 //!
 //! While a TERMINALS session is listed, omher keeps one small status file for it:
 //! `<home>/.omher/terminals/<link id>.json`, owner-only (0600), in an owner-only folder (0700). It holds the session's
-//! title, its CLI, its folder (`~`-relative), its state (working, waiting, done, ended), when it started, the last line
+//! title, its CLI, its folder (`~`-relative), its state (working, news, waiting, done, ended; news: it rang or reported done and the person has not looked yet), when it started, the last line
 //! it printed (one line, at most [`LINE_MAX`] characters, the row's second line) and when the file was written. Nothing
 //! else of the terminal is written there. The file goes when the session is closed, the files of sessions no longer
 //! listed go when omher starts, and every one goes when omher quits.
@@ -36,7 +36,7 @@ pub const FROM_MAX: usize = 64;
 /// Inbox files looked at per call (the rest wait for the next look).
 pub const TAKE_MAX: usize = 16;
 /// The states a status file may say.
-pub const STATES: [&str; 4] = ["working", "waiting", "done", "ended"];
+pub const STATES: [&str; 5] = ["working", "news", "waiting", "done", "ended"];
 
 /// Whether status files and inboxes are kept on this system (off on Windows, where the owner-only checks cannot hold).
 pub const ENABLED: bool = cfg!(not(windows));
@@ -469,6 +469,11 @@ mod tests {
         let mut s = st(&h);
         s.state = "running".into();
         assert!(write(&h, "abcdefgh23", &s).is_err());
+        // every state the app sends is accepted, `news` (a ring nobody has seen) among them
+        for ok in STATES {
+            s.state = ok.into();
+            assert!(status_file("abcdefgh23", &s, &h, 1).is_ok(), "{ok}");
+        }
         #[cfg(unix)]
         {
             let elsewhere = h.join("elsewhere");
