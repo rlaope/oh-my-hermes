@@ -294,6 +294,7 @@ def pre_tool_call(**kwargs: object) -> dict[str, object] | None:
         session_id=session_id,
         omh_home=omh_home,
         hermes_home=hermes_home,
+        task_id=kwargs.get("task_id"),
     )
     if delivery is not None:
         return _route_gated(_veto_over_ask(delivery, pending_ask), **route_gate)

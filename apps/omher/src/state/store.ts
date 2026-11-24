@@ -28,7 +28,6 @@ import type {
   FolderResumeResult,
   ModelCurrent,
   ModelOptions,
-  PeekMsg,
   ReplyRef,
   Routine,
   BotInfo,
@@ -359,13 +358,6 @@ export interface ReplyChip {
   kind: "thread" | "channel";
 }
 
-export interface Peek {
-  messages: PeekMsg[];
-  total: number;
-  loading: boolean;
-  error?: string;
-}
-
 export type Theme = "system" | "dark" | "light";
 /** Colour set for bubbles, links and the accent points (send, badges, live dots). The logo never changes. */
 export type Palette = "omh" | "graphite" | "ocean" | "forest" | "sunset" | "rose";
@@ -434,7 +426,6 @@ export interface AppState {
   chats: Record<string, Chat>;
   unread: Record<string, number>;
   elsewhere: Record<string, Away[]>;
-  peeks: Record<string, Peek>;
   routines: Record<string, Routine[]>;
   /** Every bot's automations (`automations.list`, read from each profile's cron/jobs.json); null until read. */
   automations: Automation[] | null;
@@ -622,7 +613,6 @@ export function initialState(): AppState {
     chats: {},
     unread: {},
     elsewhere: {},
-    peeks: {},
     routines: {},
     automations: null,
     platforms: null,
@@ -964,9 +954,6 @@ export type Action =
   | { type: "approval.resolved"; bot: string; request_id: string; choice: ApprovalChoice }
   | { type: "clarify.resolved"; bot: string; request_id: string; answer: string; answers?: ClarifyAnswers }
   | { type: "elsewhere"; bot: string; sessions: Away[] }
-  | { type: "peek.loading"; id: string }
-  | { type: "peek.loaded"; id: string; messages: PeekMsg[]; total: number }
-  | { type: "peek.failed"; id: string; error: string }
   | { type: "routines"; bot: string; routines: Routine[] }
   | { type: "automations"; automations: Automation[] }
   | { type: "platforms"; platforms: PlatformsRead }
@@ -1515,24 +1502,6 @@ export function reduce(state: AppState, a: Action): AppState {
         ...state,
         elsewhere: { ...state.elsewhere, [a.bot]: [...a.sessions].sort((x, y) => y.last_active - x.last_active) },
       };
-    case "peek.loading":
-      return {
-        ...state,
-        peeks: {
-          ...state.peeks,
-          [a.id]: { messages: state.peeks[a.id]?.messages ?? [], total: state.peeks[a.id]?.total ?? 0, loading: true },
-        },
-      };
-    case "peek.loaded":
-      return { ...state, peeks: { ...state.peeks, [a.id]: { messages: a.messages, total: a.total, loading: false } } };
-    case "peek.failed":
-      return {
-        ...state,
-        peeks: {
-          ...state.peeks,
-          [a.id]: { messages: state.peeks[a.id]?.messages ?? [], total: state.peeks[a.id]?.total ?? 0, loading: false, error: a.error },
-        },
-      };
     case "routines":
       return { ...state, routines: { ...state.routines, [a.bot]: a.routines } };
     case "automations":
@@ -2000,7 +1969,6 @@ export interface Actions {
   /** Settings › General › Language: saved on this computer, applied at once (no restart). */
   setLanguage(lang: Lang): void;
   loadModels(bot?: string): Promise<void>;
-  peek(sessionId: string, limit?: number, bot?: string): Promise<void>;
   /** Change the main chat's model (the selected bot's, or `bot`'s). */
   setModel(change: { model?: string; provider?: string; reasoning?: string }, bot?: string): Promise<void>;
   /** Hermes' own readiness probe for a bot (`bots.ready`); never cached in the store (chat/connect/ready.ts keeps it). */
@@ -2910,18 +2878,6 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       }
       setLang(lang);
       dispatch({ type: "ui.lang", lang });
-    },
-    async peek(sessionId, limit, bot) {
-      const b =
-        bot ?? Object.keys(state.elsewhere).find((n) => state.elsewhere[n].some((a) => a.id === sessionId)) ?? state.selectedBot;
-      if (!b) return;
-      dispatch({ type: "peek.loading", id: sessionId });
-      try {
-        const r = await bridge.request("elsewhere.peek", { bot: b, session_id: sessionId, ...(limit ? { limit } : {}) });
-        dispatch({ type: "peek.loaded", id: sessionId, messages: r.messages, total: r.total });
-      } catch (e) {
-        dispatch({ type: "peek.failed", id: sessionId, error: errText(e) });
-      }
     },
     async setModel(change, which) {
       const bot = which ?? state.selectedBot;

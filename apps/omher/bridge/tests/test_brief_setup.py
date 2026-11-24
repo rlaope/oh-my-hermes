@@ -76,7 +76,7 @@ class BriefSetup(unittest.TestCase):
     def test_owner_from_the_dm_majority_with_the_alias_dropped(self) -> None:
         self.env(f"export SLACK_BOT_TOKEN='{SECRET}'\nSLACK_ALLOWED_USERS=UA1,UB2\n")
         dm = lambda u, n: {"platform": "slack", "chat_type": "dm", "user_id": u, "user_name": n}  # noqa: E731
-        self.sessions(dm("UA1", "Ann"), dm("UB2", "홍길동 (Demo)"), dm("UB2", "홍길동 (Demo)"),
+        self.sessions(dm("UA1", "Ann"), dm("UB2", "홍길동 (Gildong)"), dm("UB2", "홍길동 (Gildong)"),
                       {"platform": "slack", "chat_type": "group", "user_id": "UA1", "user_name": "Ann"},
                       {"platform": "slack", "chat_type": "group", "user_id": "UA1", "user_name": "Ann"},
                       {"platform": "discord", "chat_type": "dm", "user_id": "UA1"})

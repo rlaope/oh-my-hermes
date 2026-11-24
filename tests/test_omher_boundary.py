@@ -65,6 +65,8 @@ RULES = (
     " clicked in the window within the last 3 seconds;",
     "Off macOS, Ctrl+Shift+C and Ctrl+Insert copy the selection, and Ctrl+Shift+V and Shift+Insert are the page's own"
     " paste.",
+    "On Windows, as in Windows Terminal, Ctrl+V is the page's own paste too, and Ctrl+C copies the selection and clears"
+    " it; with nothing selected, Ctrl+C is the program's.",
     "Reset puts back the terminal's own state in the page and sends nothing to the program,",
     "On macOS, the person's Cmd+Left, Cmd+Right, Cmd+Backspace and Cmd+Delete reach the program as Ctrl+A, Ctrl+E,"
     " Ctrl+U and Ctrl+K, and Option+Left and Option+Right as ESC b and ESC f",
@@ -944,6 +946,23 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
             if isinstance(n, ast.Constant) and n.value == "prompt.submit"
         ]
         self.assertEqual(len(sites), 1)
+
+    def test_elsewhere_sessions_are_listed_and_never_read(self) -> None:
+        """Rule 2: an elsewhere session is listed and linked, nothing else. The op table has `elsewhere.list` and no
+        op that reads such a session's messages (`elsewhere.peek` was removed), and the bridge's one `session.history`
+        read takes the main chat's id, never an id from the client or the elsewhere list."""
+        tables = [n for n in ast.walk(self.tree) if isinstance(n, ast.Dict)
+                  and any(isinstance(k, ast.Constant) and k.value == "elsewhere.list" for k in n.keys)]
+        self.assertEqual(len(tables), 1)
+        ops = {k.value for k in tables[0].keys if isinstance(k, ast.Constant)}
+        self.assertEqual({op for op in ops if op.startswith("elsewhere.")}, {"elsewhere.list"})
+        self.assertNotIn("elsewhere.peek", self.source)
+        protocol = (UI_SRC / "lib" / "protocol.ts").read_text(encoding="utf-8")
+        self.assertNotIn('"elsewhere.peek"', protocol)
+        reads = [c for c in ast.walk(self.tree) if isinstance(c, ast.Call)
+                 and any(isinstance(a, ast.Constant) and a.value == "session.history" for a in c.args)]
+        self.assertEqual([ast.unparse(k.value) for c in reads for k in c.keywords if k.arg == "session_id"],
+                         ["conn.main_id"])
 
     def test_that_call_takes_the_main_chat_id_variable(self) -> None:
         calls = []

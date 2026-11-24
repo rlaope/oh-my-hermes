@@ -325,7 +325,6 @@ const OPS: Record<string, (p: Json) => unknown> = {
   "approval.respond": (p) => (hooks.approve(need(p).name, String(p.request_id), String(p.choice), p.session ? String(p.session) : undefined), {}),
   "clarify.respond": (p) => (hooks.clarify(need(p).name, String(p.request_id)), {}),
   "elsewhere.list": (p) => ({ sessions: awayRows(need(p).name) }),
-  "elsewhere.peek": (p) => ({ messages: [], total: (away[need(p).name] ?? []).find((a) => a.id === p.session_id)?.count ?? 0 }),
   "routines.list": (p) => ({
     routines: (ROUTINES[need(p).name] ?? []).map((r) => ({ id: r.id, name: r.name, schedule: r.schedule, next_run_at: nowS() + (r.next as number), last_run_at: nowS() + (r.last as number), last_status: "ok", enabled: true })),
   }),
