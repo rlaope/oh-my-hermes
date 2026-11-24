@@ -1,15 +1,17 @@
 // A bot's messaging platforms in front of the person: a small state in its sidebar row when a platform is known not
 // to be connected (words and a mark, never colour alone), and a section of its page with each platform's state, since
 // when, why in plain words, Hermes' own words, and the fix. Read-only (BOUNDARY rule 43): the fix is text, a link the
-// person opens and Hermes' restart command to copy; omher runs none of it and changes nothing here.
+// person opens and Hermes' restart command to copy; omher runs none of it and changes nothing here. A bot on another
+// computer shows what that computer's own bridge read there (rule 45), and says so; when it could not say, the page
+// says it cannot tell.
 import type { Bot, PlatformState, PlatformsRead } from "../lib/protocol";
 import { useStore } from "../state/store";
-import { t } from "../i18n";
+import { t, type Key } from "../i18n";
 import { Spinner } from "../ui";
 import { openExternal } from "../lib/openExternal";
 import { CopyButton } from "../chat/parts/Copy";
 import { useNow } from "../elsewhere/useNow";
-import { DISCORD_PORTAL, NOT_CONNECTED, PLATFORMS_POLL_MS, fixSteps, platformName, rowDown, rowWords, statusWords, whenText, whyWords, type FixStep } from "./platforms";
+import { DISCORD_PORTAL, NOT_CONNECTED, PLATFORMS_POLL_MS, botRead, fixSteps, platformName, rowDown, rowWords, statusWords, whenText, whyWords, type FixStep, type PeerWhy } from "./platforms";
 import "./platforms.css";
 
 /** The sidebar row's platforms from what OMH last said, judged against the clock: it re-renders every
@@ -46,22 +48,29 @@ export function PlatformsSection({ bot }: { bot: Bot }) {
 }
 
 /** The section for what was read: null while the first read is under way. */
+const PEER_WHY: Record<Exclude<PeerWhy, "">, Key> = { offline: "pf.peerOffline", unread: "pf.peerUnread", unasked: "pf.peerUnasked" };
+
 export function PlatformsBody({ bot, read }: { bot: Bot; read: PlatformsRead | null }) {
-  const mine = read?.bots[bot.name];
+  const r = botRead(read, bot.name);
+  const mine = r.entry;
   const rows = mine?.platforms ?? [];
   // "no platform" only when OMH reported this bot and the logs its lines can be in were read (or are not there)
-  const blind = read?.available && (!mine || (rows.length === 0 && mine.log !== "read" && mine.log !== "missing"));
+  const blind = r.available && (!mine || (rows.length === 0 && mine.log !== "read" && mine.log !== "missing"));
+  const label = bot.host?.label ?? "";
+  const there = r.peer !== null;
   return (
     <>
       <div className="st-gh">{t("pf.title")}</div>
       <div className="st-grp bp-grp" data-testid="bp-platforms">
-        {bot.host ? (
-          <p className="bp-empty">{t("pf.remote")}</p>
-        ) : read === null ? (
+        {read === null ? (
           <div className="bp-empty">
             <Spinner size={12} label={t("id.loading")} />
           </div>
-        ) : !read.available ? (
+        ) : there && !r.available ? (
+          <p className="bp-empty" data-testid="pf-peer-cannot-tell" data-why={r.why}>
+            {t(PEER_WHY[r.why || "unread"], { label })}
+          </p>
+        ) : !r.available ? (
           <p className="bp-empty" data-testid="pf-unavailable">
             {t("pf.unavailable")}
           </p>
@@ -76,17 +85,18 @@ export function PlatformsBody({ bot, read }: { bot: Bot; read: PlatformsRead | n
         ) : (
           <ul className="pf-list">
             {rows.map((p) => (
-              <PlatformItem key={p.platform} p={p} bot={bot.name} />
+              <PlatformItem key={p.platform} p={p} bot={r.bare} on={there ? label : ""} />
             ))}
           </ul>
         )}
-        {!bot.host && read?.available && <p className="bp-note">{t("pf.source")}</p>}
+        {r.available && <p className="bp-note">{there ? t("pf.sourcePeer", { label }) : t("pf.source")}</p>}
       </div>
     </>
   );
 }
 
-export function PlatformItem({ p, bot }: { p: PlatformState; bot: string }) {
+/** `bot` is the profile name on its own computer; `on` names that computer for a bot on another one ("" here). */
+export function PlatformItem({ p, bot, on = "" }: { p: PlatformState; bot: string; on?: string }) {
   const down = NOT_CONNECTED.has(p.status);
   const since = down ? whenText(p.since) : "";
   const why = whyWords(p);
@@ -120,7 +130,7 @@ export function PlatformItem({ p, bot }: { p: PlatformState; bot: string }) {
       {steps.length > 0 && (
         <ol className="pf-fix" data-testid={`pf-fix-${p.platform}`}>
           {steps.map((step, i) => (
-            <Step key={i} step={step} />
+            <Step key={i} step={step} on={on} />
           ))}
         </ol>
       )}
@@ -128,7 +138,7 @@ export function PlatformItem({ p, bot }: { p: PlatformState; bot: string }) {
   );
 }
 
-function Step({ step }: { step: FixStep }) {
+function Step({ step, on }: { step: FixStep; on: string }) {
   if (step.kind === "text") return <li>{step.text}</li>;
   if (step.kind === "portal")
     return (
@@ -153,6 +163,7 @@ function Step({ step }: { step: FixStep }) {
         <code data-testid="pf-restart">{step.command}</code>
         <CopyButton text={() => step.command} className="pf-copy" testId="pf-copy" />
       </span>
+      {on && <span className="pf-host">{t("pf.fix.onPeer", { label: on })}</span>}
       {step.gateway && <span className="pf-host">{t("pf.fix.host", { gateway: step.gateway })}</span>}
     </li>
   );

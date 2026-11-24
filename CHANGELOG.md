@@ -621,6 +621,15 @@ All notable changes will be documented here.
   names the gateway's profile in every restart command (`hermes -p default gateway restart`; a bare `hermes gateway
   restart` follows Hermes' sticky active profile). (`src/maintenance/gateway_health.py` `bot_platforms`,
   `src/tui/bot_board.py`, `apps/omher/src/platforms/`; `docs/OMHER-BOUNDARY.md` rule 43)
+- **omher shows a bot's disconnected messaging platform for a bot on another computer too.** A bot reached over SSH
+  now gets the same sidebar marker and the same Messaging section on its page as a bot here, with the same 10-minute
+  threshold for a reconnect. The other computer's own omher bridge reads it there with its own `omh hermes
+  platforms`: this computer asks it over the existing SSH link once per poll interval with the bare op and nothing in
+  it, and checks every field of the answer again (types, states, lengths, control and bidi characters; no fix text,
+  no link). The page names the computer it was read on and says where to run Hermes' restart command. A computer
+  that is offline, gave no usable answer or has no `omh` reads as cannot tell, never as connected or not.
+  (`apps/omher/bridge/omher_bridge.py` `peer_platform_rows`, `apps/omher/src/platforms/`; `docs/OMHER-BOUNDARY.md`
+  rule 45)
 - The OMH TUI no longer asks for kitty image previews in an omher terminal that cannot paint them. omher 1.1.3
   and earlier set `TERM_PROGRAM=omher` but draw no kitty Unicode placeholders, so pasting an image showed a block of
   tofu boxes in the transcript and the picture itself over the composer. omher now also sets

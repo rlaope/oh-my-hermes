@@ -138,11 +138,23 @@ export interface BotPlatforms {
   platforms: PlatformState[];
 }
 
-/** `bots.platforms`: every bot on this computer. `available` is false when oh-my-hermes is not here or its answer
- *  could not be read: then nothing is known, and nothing is shown as connected. */
+/** One attached computer's bots (BOUNDARY rule 45), as its own bridge read them with its own oh-my-hermes, keyed by
+ *  the bare name. `available` is false when it could not say: `offline` (the link is down) or `unread` (an error, an
+ *  older bridge, no oh-my-hermes there, an answer that did not check out). */
+export interface PeerPlatformsRead {
+  available: boolean;
+  why: "" | "offline" | "unread";
+  bots: Record<string, BotPlatforms>;
+}
+
+/** `bots.platforms`: every bot on this computer, and under `peers` (by peer id) every attached computer's. `available`
+ *  is false when oh-my-hermes is not here or its answer could not be read: then nothing is known, and nothing is
+ *  shown as connected. */
 export interface PlatformsRead {
   available: boolean;
   bots: Record<string, BotPlatforms>;
+  /** Absent from a bridge older than rule 45: then a peer's bot reads as cannot tell. */
+  peers?: Record<string, PeerPlatformsRead>;
 }
 
 /** One of a bot's skills (a `SKILL.md` under `<profile>/skills`), for the composer's `./` picker. */
@@ -578,8 +590,9 @@ export interface OpMap {
   "bots.info": { params: { bot: string }; result: BotInfo };
   /** The bot page's persona and memory files, read-only (BOUNDARY rule 42); a bot on another computer is read there. */
   "bots.page": { params: { bot: string }; result: BotPage };
-  /** Every local bot's messaging platforms through OMH's read-only `omh hermes platforms` (BOUNDARY rule 43);
-   *  `fresh` asks again unless the last answer is under two seconds old. */
+  /** Every local bot's messaging platforms through OMH's read-only `omh hermes platforms` (BOUNDARY rule 43), and each
+   *  attached computer's as its own bridge read them (rule 45); `fresh` asks this computer again unless the last
+   *  answer is under two seconds old, and never reaches a peer. */
   "bots.platforms": { params: { fresh?: boolean }; result: PlatformsRead };
   /** OMH's bot templates for Add bot's gallery: rule 43's `omh` runner, its `bot_templates` read (BOUNDARY rule 44). */
   "bots.templates": { params: Record<string, never>; result: BotTemplates };
@@ -875,6 +888,8 @@ export type BridgeEvent =
   | (EventBase & { event: "bot.status"; status: BotStatus; running: boolean })
   | (EventBase & { event: "elsewhere.update" })
   | (EventBase & { event: "bots.update" })
+  /** A peer's platforms (rule 45) landed after `bots.platforms` stopped waiting for them: read them again. */
+  | (EventBase & { event: "platforms.update" })
   /** After `bots.restart` said ok: the bot is attached again (`ok`), or did not come back in time. Also `ok` when a
    *  bot whose gateway went away without omher restarting it (an update, a relaunch) is attached again. */
   | (EventBase & { event: "bot.restarted"; ok: boolean })

@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { Bot, PlatformState, PlatformsRead } from "../lib/protocol";
 import { setLang, t, LANGS } from "../i18n";
 import { PlatformChip, PlatformItem, PlatformsBody } from "./PlatformSection";
-import { ROW_RECONNECT_MS, fixSteps, notConnected, platformName, restartGateway, rowDown, rowWords, statusWords, whyWords } from "./platforms";
+import { ROW_RECONNECT_MS, botRead, fixSteps, notConnected, platformName, restartGateway, rowDown, rowWords, statusWords, whyWords } from "./platforms";
 
 const BOT = { name: "demo-bot", display_name: "Demo" } as Bot;
 const REMOTE = { name: "far:demo-bot", display_name: "Demo", host: { kind: "ssh", peer: "far", label: "Other", host: "h" } } as Bot;
@@ -142,7 +142,7 @@ describe("the bot page's section", () => {
     }
   });
 
-  it("says when OMH could not be asked, when nothing is configured, and that a remote bot is not read", () => {
+  it("says when OMH could not be asked and when nothing is configured", () => {
     expect(renderToStaticMarkup(<PlatformsBody bot={BOT} read={{ available: false, bots: {} }} />)).toContain("pf-unavailable");
     expect(renderToStaticMarkup(<PlatformsBody bot={BOT} read={read()} />)).toContain("pf-none");
     // not "no platform" when it cannot know: the bot is not in the answer, or its logs could not be read
@@ -156,8 +156,9 @@ describe("the bot page's section", () => {
     }
     const missingLog = renderToStaticMarkup(<PlatformsBody bot={BOT} read={{ available: true, bots: { "demo-bot": { log: "missing", platforms: [] } } }} />);
     expect(missingLog).toContain("pf-none");
+    // this computer's answer never speaks for a bot on another one, even under the same bare name
     const remote = renderToStaticMarkup(<PlatformsBody bot={REMOTE} read={read(state())} />);
-    expect(text(remote)).toContain(t("pf.remote"));
+    expect(remote).toContain('data-why="unasked"');
     expect(remote).not.toContain("pf-discord");
     const listed = renderToStaticMarkup(<PlatformsBody bot={BOT} read={read(state(), state({ platform: "slack", status: "connected", attention: false }))} />);
     expect(listed).toContain('data-testid="pf-discord"');
@@ -171,6 +172,72 @@ describe("the bot page's section", () => {
       expect(words).toContain("Discord Developer Portal");
       expect(words).toContain("hermes -p default gateway restart");
       expect(words).not.toMatch(/pf\.[a-z]/); // no key left showing
+    }
+  });
+});
+
+describe("a bot on another computer (rule 45)", () => {
+  const peerRead = (there: PlatformsRead["peers"], local: PlatformState[] = []): PlatformsRead => ({ ...read(...local), peers: there });
+  const up = (...platforms: PlatformState[]) => ({ far: { available: true, why: "" as const, bots: { "demo-bot": { log: "read" as const, platforms } } } });
+
+  it("reads what that computer's own bridge said, under the bare name, never this computer's row", () => {
+    const r = peerRead(up(state()));
+    expect(notConnected(r, "far:demo-bot").map((p) => p.status)).toEqual(["disconnected"]);
+    expect(notConnected(r, "demo-bot")).toEqual([]); // the local bot of the same name is not the peer's
+    expect(botRead(r, "far:demo-bot")).toMatchObject({ available: true, peer: "far", bare: "demo-bot", why: "" });
+    expect(notConnected(peerRead(up(state())), "near:demo-bot")).toEqual([]); // another peer
+  });
+
+  it("the same ten-minute threshold on the row", () => {
+    const at = Date.parse("2020-01-02T03:04:05Z");
+    const re = state({ status: "reconnecting", attention: false, reason_kind: "transient" });
+    expect(rowDown(peerRead(up(re)), "far:demo-bot", at + ROW_RECONNECT_MS - 1)).toHaveLength(0);
+    expect(rowDown(peerRead(up(re)), "far:demo-bot", at + ROW_RECONNECT_MS)).toHaveLength(1);
+  });
+
+  it("offline, an answer it could not use, or not asked yet: cannot tell, never connected or not", () => {
+    const cases: [PlatformsRead, string][] = [
+      [peerRead({ far: { available: false, why: "offline", bots: {} } }), "offline"],
+      [peerRead({ far: { available: false, why: "unread", bots: {} } }), "unread"],
+      [peerRead({}), "unasked"],
+      [read(state()), "unasked"], // a bridge older than rule 45: no `peers` at all
+    ];
+    for (const [r, why] of cases) {
+      expect(notConnected(r, "far:demo-bot")).toEqual([]);
+      const html = renderToStaticMarkup(<PlatformsBody bot={REMOTE} read={r} />);
+      expect(html).toContain(`data-why="${why}"`);
+      for (const word of ["Connected", "Disconnected", "pf-none", "pf-discord"]) expect(text(html)).not.toContain(word);
+      expect(text(html)).toContain("Other");
+    }
+    // `available: false` with rows in it (a peer that says both) shows none of them
+    const both = peerRead({ far: { available: false, why: "unread", bots: up(state()).far.bots } });
+    expect(notConnected(both, "far:demo-bot")).toEqual([]);
+  });
+
+  it("lists its platforms, says where it was read and where to run the restart", () => {
+    const html = renderToStaticMarkup(<PlatformsBody bot={REMOTE} read={peerRead(up(state()))} />);
+    expect(html).toContain('data-testid="pf-discord"');
+    expect(text(html)).toContain(t("pf.sourcePeer", { label: "Other" }));
+    expect(text(html)).toContain(t("pf.fix.onPeer", { label: "Other" }));
+    expect(text(html)).not.toContain(t("pf.source"));
+    // the restart names the bot's own profile there: no "another gateway" note for its own name
+    const own = renderToStaticMarkup(<PlatformsBody bot={REMOTE} read={peerRead(up(state({ restart: "hermes -p demo-bot gateway restart" })))} />);
+    expect(text(own)).not.toContain(t("pf.fix.host", { gateway: "demo-bot" }));
+    // a local bot's restart has no "run it on" note
+    expect(text(item(state()))).not.toContain("Other");
+  });
+
+  it("every language words every peer case", () => {
+    for (const l of LANGS) {
+      setLang(l);
+      for (const why of ["offline", "unread"] as const) {
+        const words = text(renderToStaticMarkup(<PlatformsBody bot={REMOTE} read={peerRead({ far: { available: false, why, bots: {} } })} />));
+        expect(words).toContain("Other");
+        expect(words).not.toMatch(/pf\.[a-z]/);
+      }
+      const words = text(renderToStaticMarkup(<PlatformsBody bot={REMOTE} read={peerRead(up(state()))} />));
+      expect(words).toContain("Other");
+      expect(words).not.toMatch(/pf\.[a-z]/);
     }
   });
 });
