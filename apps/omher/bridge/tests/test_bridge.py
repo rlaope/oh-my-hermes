@@ -3444,9 +3444,12 @@ class ScopedRunsOps(BridgeCase):
     async def test_symlinked_dag_root_is_refused(self):
         async with Env() as env:
             import sqlite3
+            from contextlib import closing
+
             sid, fid = "20261028_093610_1b12a114", "fa123456789"
             prof = env.home / "profiles" / "kami"
-            with sqlite3.connect(prof / "state.db") as db:
+            # Commit and close before Env cleans up; Windows cannot unlink an open database.
+            with closing(sqlite3.connect(prof / "state.db")) as db, db:
                 db.execute("CREATE TABLE sessions (id TEXT)")
                 db.execute("INSERT INTO sessions VALUES (?)", (sid,))
             root = prof / "elsewhere"
