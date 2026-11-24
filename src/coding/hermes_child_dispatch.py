@@ -76,7 +76,13 @@ SCRATCH_REMOVE_RETRY_SECONDS: Final = 0.2
 # A later dispatch removes a scratch home left behind once its marker is older than this. That is far past Hermes'
 # 600 s default idle window for the gateway that held it. The sweep checks at most this many candidates per dispatch.
 SCRATCH_SWEEP_AGE_SECONDS: Final = 86400
-SCRATCH_SWEEP_LIMIT: Final = 32
+SCRATCH_SWEEP_LIMIT: Final = 32  # removal attempts per dispatch, oldest marker first
+SCRATCH_SWEEP_SCAN_LIMIT: Final = 1024  # candidates examined per dispatch
+# A dispatch may not run long enough for another process's sweep to take its live home.
+MAX_TIMEOUT_SECONDS: Final = SCRATCH_SWEEP_AGE_SECONDS / 2
+# The clock and the wait of the scratch step, module-level so tests hold them still.
+_clock: Callable[[], float] = time.time
+_sleep: Callable[[float], None] = time.sleep
 _DISPATCH_ACTIVE = False
 _DISPATCH_OBSERVATION_AUTHORITY: Final = object()
 _SAFE_ENV_NAMES: Final = frozenset(
@@ -319,6 +325,8 @@ def dispatch_hermes_child(
     )
     if not request.prompt or not request.model or request.timeout_seconds <= 0:
         raise ValueError("prompt, model, and a positive timeout are required")
+    if request.timeout_seconds > MAX_TIMEOUT_SECONDS:
+        raise ValueError(f"timeout must be at most {MAX_TIMEOUT_SECONDS:.0f} seconds")
     verdict = _spawn_preflight(request)
     if not verdict["ready"]:
         raise SpawnPreflightError(verdict)
@@ -390,6 +398,7 @@ def _dispatch_guarded(
         return _result(request, depth, "cancelled", None, "", "", {}, True, ())
 
     _sweep_scratch_homes()
+    scratch_created = _clock()
     scratch_path = Path(tempfile.mkdtemp(prefix=SCRATCH_PREFIX))
     try:
         (scratch_path / SCRATCH_MARKER).write_text(SCRATCH_MARKER_TEXT, encoding="utf-8")
@@ -531,7 +540,7 @@ def _dispatch_guarded(
                 # The arm home outlives this child, so its rows are still
                 # there; only names and counts leave the read.
                 cell_trace = read_hermes_child_trace(hermes_home, exclude=prior_sessions)
-        cleanup_note = _remove_scratch(scratch_path)
+        cleanup_note = _remove_scratch(scratch_path, scratch_created)
     if interrupted is not None:
         emit(status)
         raise interrupted
@@ -551,27 +560,47 @@ def _dispatch_guarded(
     )
 
 
-def _remove_scratch(path: Path) -> str:
+def _remove_scratch(path: Path, created: float) -> str:
     """Remove a dispatch's scratch home with a few brief retries; "" once it is gone, else the note that says it was left.
 
-    The note is reported beside the result and never decides its status: what
-    still writes into the home, or holds a file in it open, is Hermes' gateway
-    for that home, which outlives the child by design and is not OMH's to stop.
+    Everything but OMH's marker goes first, then the marker, then the root, so a home
+    that is left still carries its marker; one that lost it gets it back, dated
+    `created`, for a later sweep. The note never decides the result's status: what
+    still writes into the home, or holds a file in it open, is Hermes' gateway for
+    that home, which outlives the child by design and is not OMH's to stop.
     """
     reason = ""
+    marker = path / SCRATCH_MARKER
     for attempt in range(SCRATCH_REMOVE_ATTEMPTS):
         if attempt:
-            time.sleep(SCRATCH_REMOVE_RETRY_SECONDS)
+            _sleep(SCRATCH_REMOVE_RETRY_SECONDS)
         try:
-            shutil.rmtree(path)
+            with os.scandir(path) as listing:
+                entries = [entry for entry in listing if entry.name != SCRATCH_MARKER]
+            for entry in entries:
+                if entry.is_dir(follow_symlinks=False):
+                    shutil.rmtree(entry.path)
+                else:
+                    os.unlink(entry.path)
+            marker.unlink(missing_ok=True)
+            path.rmdir()
         except FileNotFoundError:
-            pass
+            if not path.exists():
+                return ""
+            reason = "FileNotFoundError"
+            continue
         except OSError as exc:
             reason = type(exc).__name__
             continue
         if not path.exists():
             return ""
         reason = "a file was written into it again after removal"
+    if path.is_dir() and not marker.exists():
+        try:
+            marker.write_text(SCRATCH_MARKER_TEXT, encoding="utf-8")
+            os.utime(marker, (created, created))
+        except OSError:
+            reason += "; its marker could not be restored, so no sweep will take it"
     return (
         f"scratch home left at {path}: something still used it after the child exited ({reason}); Hermes' idle-exit "
         f"gateway for that home does until it exits. A later dispatch removes it once it is older than "
@@ -584,19 +613,23 @@ def _sweep_scratch_homes() -> None:
 
     A candidate must be a directory (not a link) directly under the temp root, named with `SCRATCH_PREFIX`, owned
     by this user where the platform has user ids. It must hold `SCRATCH_MARKER` as a regular file with exactly
-    `SCRATCH_MARKER_TEXT`, and that marker must be older than `SCRATCH_SWEEP_AGE_SECONDS`. Each one gets one removal
-    attempt, at most `SCRATCH_SWEEP_LIMIT` of them; one that fails waits for the next dispatch.
+    `SCRATCH_MARKER_TEXT`, and that marker must be older than `SCRATCH_SWEEP_AGE_SECONDS`. At most
+    `SCRATCH_SWEEP_SCAN_LIMIT` candidates are examined; at most `SCRATCH_SWEEP_LIMIT` of the eligible ones, oldest
+    marker first, get one removal attempt each, and one that fails waits for the next dispatch.
     """
-    cutoff = time.time() - SCRATCH_SWEEP_AGE_SECONDS
+    cutoff = _clock() - SCRATCH_SWEEP_AGE_SECONDS
+    candidates: list[Path] = []
     try:
         with os.scandir(tempfile.gettempdir()) as listing:
-            candidates = [
-                Path(entry.path) for entry in listing
-                if entry.name.startswith(SCRATCH_PREFIX) and entry.is_dir(follow_symlinks=False)
-            ]
+            for entry in listing:
+                if entry.name.startswith(SCRATCH_PREFIX) and entry.is_dir(follow_symlinks=False):
+                    candidates.append(Path(entry.path))
+                    if len(candidates) >= SCRATCH_SWEEP_SCAN_LIMIT:
+                        break
     except OSError:
         return
-    for path in sorted(candidates)[:SCRATCH_SWEEP_LIMIT]:
+    eligible: list[tuple[float, Path]] = []
+    for path in candidates:
         marker = path / SCRATCH_MARKER
         try:
             info = marker.lstat()
@@ -604,10 +637,16 @@ def _sweep_scratch_homes() -> None:
                 continue
             if hasattr(os, "getuid") and path.lstat().st_uid != os.getuid():
                 continue
-            if marker.read_text(encoding="utf-8") != SCRATCH_MARKER_TEXT:
-                continue
+            with marker.open("rb") as handle:
+                if handle.read(len(SCRATCH_MARKER_TEXT) + 1) != SCRATCH_MARKER_TEXT.encode("utf-8"):
+                    continue
+        except OSError:
+            continue
+        eligible.append((info.st_mtime, path))
+    for _mtime, path in sorted(eligible)[:SCRATCH_SWEEP_LIMIT]:
+        try:
             shutil.rmtree(path)
-        except (OSError, UnicodeDecodeError):
+        except OSError:
             continue
 
 

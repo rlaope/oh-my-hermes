@@ -117,8 +117,10 @@ All notable changes will be documented here.
   the failed removal turned a `completed` child into `failed`. The status is now the child's own. The removal is
   retried briefly. A home that cannot be removed is left with a `cleanup_note` ("scratch home left at <path>: …") on
   the result, on the fanout recovery record and on the CLI's stderr. Its OMH marker lets a later dispatch remove it
-  once it is older than a day. OMH still never signals that gateway. A child whose own process group or pipes did not
-  finish still fails. (`src/coding/hermes_child_dispatch.py` `_remove_scratch`, `_sweep_scratch_homes`)
+  once it is older than a day (the marker goes last, and is restored if a removal took it), so a dispatch's timeout is
+  now capped at 43200 s. OMH still never signals that gateway. A child whose own process group or pipes did not
+  finish still fails. (`src/coding/hermes_child_dispatch.py` `_remove_scratch`, `_sweep_scratch_homes`; `AGENTS.md`
+  Hermes-native child boundary)
 - **`omh setup` connects to a Hermes config whose root keys hold column-0 lists, or whose section keys carry a
   comment.** Step 2 stopped with "non-mapping or unsupported root YAML is user-owned" on a `config.yaml` that writes a
   root key's list items at the left edge (`toolsets:` then `- hermes-cli`), the spelling older Hermes releases, hand

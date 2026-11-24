@@ -23,6 +23,7 @@ from _local_package import load_local_package
 
 load_local_package()
 
+from omh.coding import hermes_child_dispatch  # noqa: E402
 from omh.coding.hermes_child_dispatch import (  # noqa: E402
     CancellationToken,
     DispatchConfirmationError,
@@ -773,12 +774,24 @@ class ScratchHomeCleanupTests(unittest.TestCase):
         tempdir = patch.object(tempfile, "tempdir", str(self.tmp))
         tempdir.start()
         self.addCleanup(tempdir.stop)
+        no_wait = patch.object(hermes_child_dispatch, "_sleep", lambda seconds: None)
+        no_wait.start()
+        self.addCleanup(no_wait.stop)
         self.env = {**os.environ, "OMH_HOME": str(self.root / ".omh")}
 
-    def dispatch(self, prompt: str = "do focused work"):
+    def home(self, name: str, *, age: float, text: str = "omh-hermes-child-scratch/v1\n") -> Path:
+        directory = self.tmp / name
+        (directory / "hermes").mkdir(parents=True)
+        marker = directory / ".omh-hermes-child-scratch"
+        marker.write_text(text, encoding="utf-8")
+        stamp = time.time() - age
+        os.utime(marker, (stamp, stamp))
+        return directory
+
+    def dispatch(self, prompt: str = "do focused work", timeout: float = 5.0):
         request = HermesChildRequest(
             prompt=prompt, model="fake/model", provider="fake-provider", reasoning="low",
-            parent_run_id="parent-123", run_id="child-456", timeout_seconds=5.0,
+            parent_run_id="parent-123", run_id="child-456", timeout_seconds=timeout,
             termination_grace_seconds=0.2, hermes=str(self.hermes), cwd=self.root, env=self.env,
         )
         return dispatch_hermes_child(request, dispatch_policy="ask_before_dispatch", confirmed=True)
@@ -791,10 +804,11 @@ class ScratchHomeCleanupTests(unittest.TestCase):
         seen: list[bool] = []
 
         def removal_then_a_gateway_write(path, *args, **kwargs):
-            seen.append((Path(path) / ".omh-hermes-child-scratch").is_file())
+            seen.append((Path(path).parent / ".omh-hermes-child-scratch").is_file())
             _REAL_RMTREE(path, *args, **kwargs)
-            (Path(path) / "hermes" / "logs").mkdir(parents=True)
-            (Path(path) / "hermes" / "logs" / "gateway-stdio.log").write_text("late line\n", encoding="utf-8")
+            if Path(path).name == "hermes":
+                (Path(path) / "logs").mkdir(parents=True)
+                (Path(path) / "logs" / "gateway-stdio.log").write_text("late line\n", encoding="utf-8")
 
         with patch("shutil.rmtree", side_effect=removal_then_a_gateway_write):
             result = self.dispatch()
@@ -805,6 +819,70 @@ class ScratchHomeCleanupTests(unittest.TestCase):
         self.assertEqual(getattr(result, "scratch_left", None), str(scratch))
         self.assertIn(f"scratch home left at {scratch}", getattr(result, "cleanup_note", ""))
         self.assertTrue(seen and seen[0], "the scratch root carries OMH's marker while it exists")
+        self.assertTrue((scratch / ".omh-hermes-child-scratch").is_file(), "a left home keeps its marker")
+
+    def test_a_left_home_that_lost_its_marker_gets_it_back_and_a_later_sweep_takes_it(self) -> None:
+        # NTFS lists `.omh-hermes-child-scratch` before `hermes`, so a removal that stops at the open log has
+        # already taken the marker.
+        def marker_first_then_refused(path, *args, **kwargs):
+            (Path(path).parent / ".omh-hermes-child-scratch").unlink(missing_ok=True)
+            raise PermissionError(13, "in use")
+
+        with patch("shutil.rmtree", side_effect=marker_first_then_refused):
+            result = self.dispatch()
+        scratch = self.scratch_root()
+        self.addCleanup(_REAL_RMTREE, scratch, True)
+        self.assertEqual(result.status, "completed")
+        self.assertTrue((scratch / ".omh-hermes-child-scratch").is_file())
+        with patch.object(hermes_child_dispatch, "_clock", lambda: time.time() + 2 * 86400):
+            hermes_child_dispatch._sweep_scratch_homes()
+        self.assertFalse(scratch.exists())
+
+    def test_a_timeout_longer_than_half_the_sweep_age_is_refused(self) -> None:
+        with self.assertRaisesRegex(ValueError, "timeout must be at most 43200 seconds"):
+            self.dispatch(timeout=43201.0)
+
+    def test_young_homes_named_first_do_not_starve_an_old_one(self) -> None:
+        young = [self.home(f"omh-hermes-child-a{index:02d}", age=60) for index in range(32)]
+        old = self.home("omh-hermes-child-zzz", age=2 * 86400)
+        hermes_child_dispatch._sweep_scratch_homes()
+        self.assertFalse(old.exists())
+        self.assertTrue(all(directory.exists() for directory in young))
+
+    def test_the_sweep_takes_no_link_no_foreign_owner_and_no_other_marker(self) -> None:
+        wrong_text = self.home("omh-hermes-child-wrong", age=2 * 86400, text="omh-hermes-child-scratch/v2\n")
+        foreign = self.home("omh-hermes-child-foreign", age=2 * 86400)
+        target = self.home("target-old", age=2 * 86400)
+        links: list[Path] = []
+        try:
+            (self.tmp / "omh-hermes-child-link").symlink_to(target, target_is_directory=True)
+            linked_marker = self.tmp / "omh-hermes-child-linked-marker"
+            (linked_marker / "hermes").mkdir(parents=True)
+            (linked_marker / ".omh-hermes-child-scratch").symlink_to(target / ".omh-hermes-child-scratch")
+            links = [self.tmp / "omh-hermes-child-link", linked_marker]
+        except OSError:
+            pass  # Windows without the symlink privilege: the two link cases cannot be built there
+        owner = foreign.lstat().st_uid
+
+        def uid_for(path_owner: int):
+            # Only the foreign home reads as another user's.
+            real_lstat = Path.lstat
+
+            def lstat(self_path):
+                info = real_lstat(self_path)
+                if self_path == foreign:
+                    return os.stat_result((info.st_mode, info.st_ino, info.st_dev, info.st_nlink,
+                                           path_owner + 1, info.st_gid, info.st_size,
+                                           int(info.st_atime), int(info.st_mtime), int(info.st_ctime)))
+                return info
+            return lstat
+
+        with patch.object(os, "getuid", lambda: owner, create=True), patch.object(Path, "lstat", uid_for(owner)):
+            hermes_child_dispatch._sweep_scratch_homes()
+        self.assertTrue(wrong_text.exists())
+        self.assertTrue(foreign.exists())
+        self.assertTrue((target / ".omh-hermes-child-scratch").is_file())
+        self.assertTrue(all(path.exists() or path.is_symlink() for path in links))
 
     def test_a_file_another_process_holds_open_on_windows_is_a_note_not_a_failure(self) -> None:
         refusal = PermissionError(13, "The process cannot access the file because it is being used by another process")
@@ -835,6 +913,8 @@ class ScratchHomeCleanupTests(unittest.TestCase):
     def test_a_failed_child_stays_failed_and_an_unreaped_child_group_still_fails(self) -> None:
         self.assertEqual(self.dispatch("fail").status, "failed")
         with patch("omh.coding.hermes_child_dispatch._terminate_process_group", return_value=((), False)):
+            self.assertEqual(self.dispatch().status, "failed")
+        with patch("omh.coding.hermes_child_dispatch._await_pipe_threads", return_value=False):
             self.assertEqual(self.dispatch().status, "failed")
 
     def test_the_next_dispatch_sweeps_only_old_scratch_homes_that_carry_omhs_marker(self) -> None:
@@ -870,7 +950,8 @@ class ScratchHomeCleanupTests(unittest.TestCase):
                 parent_run_id="parent-123", run_id="child-456", cwd=self.root, timeout_seconds=5.0,
             )
         self.assertEqual(record["status"], "completed")
-        self.assertIn("scratch home left at", record["cleanup_note"])
+        self.assertIn("scratch home left at <temp>/omh-hermes-child-", record["cleanup_note"])
+        self.assertNotIn(str(self.tmp), record["cleanup_note"])
 
 
 if __name__ == "__main__":
