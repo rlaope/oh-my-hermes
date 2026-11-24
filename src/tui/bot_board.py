@@ -15,7 +15,8 @@ the edges in joints, in the delegation view's charset (`unicode`, or
    carries the gateway's mark, the name (and Hermes' `display_name` from
    `profile.yaml`) and, while the gateway runs, its uptime, agents and
    resident memory; its bottom edge the platforms as chips and a requested
-   restart. Inside: a face drawn from the name (`avatar`), a divider, and the
+   restart, a messaging platform known not to be connected first and in words
+   (`discord ✗ failed to connect`, `✗ disconnected`, `✗ reconnecting`). Inside: a face drawn from the name (`avatar`), a divider, and the
    fields in two columns where the width allows (`model`, `now`, `tokens`,
    `cost` beside `24 h`, `memory`, `user`, `OMH`), else stacked in one: the
    configured default model and the newest session's model when it differs;
@@ -26,8 +27,9 @@ the edges in joints, in the delegation view's charset (`unicode`, or
    store `config.yaml` names. A narrow card gives up its least important
    pieces (`Piece` drop ranks) and never wraps;
 2. one profile's sessions: that profile's box (`profile_box`: the gateway
-   record in full, each platform's error, each memory target's gauge with its
-   exact figures, and sessions by source), then a table box, newest activity
+   record in full, each messaging platform's state with since when, Hermes'
+   reason and the fix when it is not connected, each other platform's error,
+   each memory target's gauge with its exact figures, and sessions by source), then a table box, newest activity
    first, under a muted header row and a rule, one divider between the title
    and the figures, numbers right-aligned, the highlighted row marked `❯` with
    its title bold in the accent and its figures in the text colour (no fill,
@@ -67,6 +69,14 @@ was last recorded. A profile whose own gateway is not running but which the
 default home's running gateway lists in `served_profiles` reads as served
 by it.
 
+A profile's messaging platforms come from the producer `omh doctor` reads
+(`maintenance.gateway_health.bot_platforms`): the serving gateway's own record
+entry first, else the newest gateway log line of that gateway's run, from the
+bounded tails of the host's and the profile's own `logs/gateway.log`. A state
+it cannot place now (an earlier run's line, a profile no gateway serves, a
+failure the log cannot give to one profile) is "unknown", never connected and
+never disconnected; a profile with no platform shows none.
+
 Everything is read off the UI thread (`BoardReader`), every `BOARD_REFRESH_SECONDS`
 and at once when the person moves, so a locked or huge `state.db` never holds a
 frame. Each `state.db` is opened read-only (`connect_readonly`, a quarter-second
@@ -101,6 +111,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import sqlite3
 import struct
 import sys
@@ -108,6 +119,7 @@ import threading
 import time
 from typing import Any, ClassVar
 
+from ..maintenance.hermes_gateway_formats import LogCache
 from ..plugin_bundle.omh import runtime_paths
 from ..skin_pack import TUI_PROFILE, hex_to_rgb
 from ..plugin_bundle.omh.hud_text import compact_count
@@ -144,6 +156,7 @@ MESSAGE_SHOWN_ROWS = 3
 GATEWAY_STATE_FILE = "gateway_state.json"
 SUPERVISED_FLAG = "--external-supervisor"  # in a record's `argv`: a gateway an external supervisor runs
 GATEWAY_STATE_BYTES = 1 << 20
+_COMMIT_SHA = re.compile(r"[0-9a-f]{7,64}")
 STATE_DB = "state.db"
 STATE_DB_BUSY_SECONDS = 0.25
 # The files Hermes reads as a profile's identity (`hermes_constants._PROFILE_IDENTITY_MARKERS`).
@@ -222,6 +235,10 @@ AVATAR_MIN_INNER = 44
 AVATAR_GLYPHS = {"unicode": (" ", "▀", "▄", "█"), "ascii": (" ", "'", ",", "#")}
 GAUGE_GLYPHS = {"unicode": ("▰", "▱"), "ascii": ("#", ".")}
 CHIP_GLYPHS = {"unicode": ("●", "○"), "ascii": ("*", "o")}
+DOWN_GLYPHS = {"unicode": "✗", "ascii": "x"}  # a messaging platform known not to be connected, beside its words
+# Level 2's rows for one messaging platform: the most Hermes' reason and the fix may take before they are cut.
+WHY_ROWS, FIX_ROWS = 2, 4
+EDGE_RECONNECT_SECONDS = 600  # a reconnect Hermes runs by itself shows on a card's edge only after this long
 GATEWAY_MARKS = {"unicode": {}, "ascii": {"●": "*", "○": "o", "◌": "?"}}  # a gateway's mark in a box's top edge  # a platform as its gateway runs it now, or as last recorded
 
 GATEWAY_RUNNING = "running"
@@ -235,6 +252,7 @@ class Platform:
     error: str = ""
     needs_attention: bool = False
     current: bool = False  # stamped by the gateway process that runs now
+    code: str = ""  # Hermes' `error_code` for the state, e.g. `discord_intents_required`
 
 
 @dataclass(frozen=True)
@@ -257,6 +275,41 @@ class Gateway:
     # launchd service runs has no such flag in its argv and drains too: Hermes' restart sends it SIGUSR1
     # (`hermes_cli/gateway.py` `_systemd_graceful_restart_action`). So False does not mean a restart interrupts it.
     supervised: bool = False
+    code_sha: str = ""  # the commit Hermes stamps as the code this gateway runs (`code_sha`); "" when unstamped
+
+
+# A bot's messaging platform as `maintenance.gateway_health.bot_platforms` reads it: the one producer behind
+# `omh doctor`'s adapter lines, `omh hermes platforms` (omher) and this board. Only the three `PLATFORM_NOT_CONNECTED`
+# statuses say "known not to be connected now"; `unknown` is never drawn as connected or as not connected.
+PLATFORM_FAILED = "failed"  # it failed to connect
+PLATFORM_DISCONNECTED = "disconnected"  # it was stopped, or stopped on a fatal error, and nothing later says it connected
+PLATFORM_RECONNECTING = "reconnecting"  # Hermes waits to reconnect it, on its own
+PLATFORM_UNKNOWN = "unknown"
+PLATFORM_NOT_CONNECTED = (PLATFORM_FAILED, PLATFORM_DISCONNECTED, PLATFORM_RECONNECTING)
+PLATFORM_STATUSES = ("connected", "degraded", "connecting", "disabled", *PLATFORM_NOT_CONNECTED, PLATFORM_UNKNOWN)
+
+
+@dataclass(frozen=True)
+class PlatformStatus:
+    platform: str
+    status: str  # one of PLATFORM_STATUSES
+    attention: bool = False  # a person must act: Hermes will not retry it, or flags it as needing attention
+    since: str = ""  # UTC: the first line of the serving gateway's run saying it is not connected, none connected after
+    logged: str = ""  # UTC: the newest line about it ("<stamp> (local time)" when the stamp could not be placed)
+    reason_kind: str = ""  # `hermes_gateway_formats`' REASON_* name; set only for a failure
+    reason: str = ""  # Hermes' own words for it, bounded, without tokens, ids, emails or a URL's query
+    guidance: str = ""  # Hermes' own guidance in its gateway record (`error_message`), bounded and cleaned the same way
+    fix: str = ""  # what to do, in `omh doctor`'s words; OMH runs none of it
+    restart: str = ""  # Hermes' command that restarts the gateway serving the profile, to copy
+    intents: tuple[str, ...] = ()  # a privileged-intents refusal: the intents Hermes' own record says it requests
+    unknown_why: str = ""  # for `unknown`: earlier_run, not_served, ambiguous or unknown_state
+
+
+@dataclass(frozen=True)
+class BotPlatforms:
+    profile: str
+    log: str  # its own gateway log: read, missing, unreadable or unrecognized
+    platforms: tuple[PlatformStatus, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -305,6 +358,7 @@ class Profile:
     memory: tuple[MemoryFile, ...] = ()
     omh_records: int | None = None  # record files in the OMH store config.yaml names; None when it names none
     omh: str = ""  # why that store's records could not be counted
+    messaging: tuple[PlatformStatus, ...] = ()  # its messaging platforms' states (`gateway_health.bot_platforms`)
 
 
 @dataclass(frozen=True)
@@ -549,7 +603,7 @@ def read_gateway(home: Path, now: float | None = None) -> Gateway:
         stamped = entry.get("writer_pid") == pid and entry.get("writer_start_time") == record.get("start_time")
         platforms.append(Platform(
             _text(name), _text(entry.get("state")) or "unknown", _text(entry.get("error_message")),
-            entry.get("needs_attention") is True, live and stamped,
+            entry.get("needs_attention") is True, live and stamped, _text(entry.get("error_code")),
         ))
     agents = record.get("active_agents")
     served = record.get("served_profiles")
@@ -567,6 +621,7 @@ def read_gateway(home: Path, now: float | None = None) -> Gateway:
         restart_requested=record.get("restart_requested") is True,
         rss=resident_bytes(pid) if live and pid is not None else None,
         supervised=isinstance(argv := record.get("argv"), list) and SUPERVISED_FLAG in argv,
+        code_sha=sha if isinstance(sha := record.get("code_sha"), str) and _COMMIT_SHA.fullmatch(sha) else "",
     )
 
 
@@ -908,10 +963,28 @@ def read_messages(home: Path, session_id: str) -> tuple[tuple[MessageRow, ...], 
     return tuple(messages), _session_row(found) if found is not None else None, ""
 
 
+_LOG_CACHE = LogCache()  # the board's reader thread is its only user
+
+
+def read_messaging(root: Path) -> dict[str, tuple[PlatformStatus, ...]]:
+    """Each profile's messaging platforms, from the one producer `omh doctor` and omher read too
+    (`maintenance.gateway_health.bot_platforms`: the gateway records and the bounded tails of the gateway logs). A
+    log unchanged since the last read is not read again (`LogCache`). A read that fails leaves every card without
+    them, never the board without its cards."""
+    from ..maintenance.gateway_health import bot_platforms  # it reads gateway records with this module's reader
+
+    try:
+        return {bot.profile: bot.platforms for bot in bot_platforms(root, log_reader=_LOG_CACHE.read)}
+    except (OSError, ValueError):
+        return {}
+
+
 def read_board(environ: Mapping[str, str], view: BoardView, now: float) -> BoardSnapshot:
     """Every profile's row, and what `view` opens: one profile's sessions, or one session's messages."""
     current, homes = board_homes(environ)
-    profiles = tuple(read_profile(name, home, current, now) for name, home in homes)
+    messaging = read_messaging(homes[0][1]) if homes else {}
+    profiles = tuple(replace(read_profile(name, home, current, now), messaging=messaging.get(name, ()))
+                     for name, home in homes)
     home = next((home for name, home in homes if name == view.profile), None)
     if not view.profile:
         return BoardSnapshot(view, profiles, read_at=now)
@@ -1363,7 +1436,8 @@ def _bot_facts(profile: Profile, now: float, theme: Theme) -> Line:
     return tuple(spans)
 
 
-def _bot_platforms(profile: Profile, served_by: str, width: int, theme: Theme, charset: str, spill: int = 0) -> tuple[Line, Line]:
+def _bot_platforms(profile: Profile, served_by: str, width: int, theme: Theme, charset: str, spill: int = 0,
+                   now: float | None = None) -> tuple[Line, Line]:
     """For the box's bottom edge: what the gateway says when it is not plainly running, each platform as a chip
     coloured by its state, and a restart Hermes was asked for; the last chips go first when they do not fit."""
     gateway = profile.gateway
@@ -1377,8 +1451,13 @@ def _bot_platforms(profile: Profile, served_by: str, width: int, theme: Theme, c
         pieces += [(EDGE_WHY_RANK + number, " · ", (Span(part, style),)) for number, part in enumerate(why)]
     if gateway.restart_requested:  # before the chips, so the chips stay one run however many spill on
         pieces.append((1, "  ", (Span("restart requested", theme.warn),)))
+    down = {state.platform: state for state in profile.messaging if _edge_down(state, now)}
+    # A platform known not to be connected says so in words, kept before every other chip goes.
+    pieces += [(1, "  ", _down_chip(state, theme, charset)) for state in down.values()]
     live, stale = CHIP_GLYPHS[charset]
     for number, platform in enumerate(gateway.platforms):
+        if platform.current and platform.name in down:
+            continue  # its chip above says it in words
         if not platform.current:
             chip: tuple[Span, ...] = (Span(f"{platform.name} {stale}", theme.muted),)
         elif platform.error:
@@ -1395,6 +1474,91 @@ def _bot_platforms(profile: Profile, served_by: str, width: int, theme: Theme, c
     over = [(rank, gap if number else "", chip) for number, (rank, gap, chip) in
             enumerate(piece for piece in pieces if piece not in kept and 2 <= piece[0] < EDGE_WHY_RANK)]
     return (_fit((), kept, width) if kept else (), _fit((), over, spill) if over and spill > 0 else ())
+
+
+DOWN_WORDS = {PLATFORM_FAILED: "failed to connect", PLATFORM_DISCONNECTED: "disconnected",
+              PLATFORM_RECONNECTING: "reconnecting"}
+UNKNOWN_WORDS = {
+    "earlier_run": "its last line is from an earlier gateway run",
+    "not_served": "no running gateway serves it",
+    "ambiguous": "a bot on its gateway failed to connect, and the log does not say which",
+}
+
+
+def _edge_down(state: PlatformStatus, now: float | None) -> bool:
+    """Whether a card's edge names the platform: failed or disconnected at once; reconnecting only when Hermes flags it
+    as needing a person or it has reconnected for EDGE_RECONNECT_SECONDS, so Hermes' routine reconnects stay quiet
+    there (the profile's box says each at once)."""
+    if state.status in (PLATFORM_FAILED, PLATFORM_DISCONNECTED):
+        return True
+    if state.status != PLATFORM_RECONNECTING:
+        return False
+    since = _utc_epoch(state.since)
+    return state.attention or (now is not None and since is not None and now - since >= EDGE_RECONNECT_SECONDS)
+
+
+def _down_style(state: PlatformStatus, theme: Theme) -> Style:
+    return theme.warn if state.status == PLATFORM_RECONNECTING and not state.attention else theme.error
+
+
+def _down_chip(state: PlatformStatus, theme: Theme, charset: str) -> tuple[Span, ...]:
+    """`discord ✗ failed to connect`: the platform, a mark and the state in words, so colour is never the only sign."""
+    return (Span(f"{_text(state.platform)} ", theme.text),
+            Span(f"{DOWN_GLYPHS[charset]} {DOWN_WORDS[state.status]}", _down_style(state, theme)))
+
+
+def _status_words(state: PlatformStatus, theme: Theme, charset: str) -> tuple[Span, ...]:
+    if state.status in PLATFORM_NOT_CONNECTED:
+        retries = " (Hermes retries it on its own)" if state.status == PLATFORM_RECONNECTING and not state.attention else ""
+        return (Span(f"{DOWN_GLYPHS[charset]} {DOWN_WORDS[state.status]}{retries}", _down_style(state, theme)),)
+    if state.status == PLATFORM_UNKNOWN:
+        why = UNKNOWN_WORDS.get(state.unknown_why, "a state this board does not know")
+        return (Span("unknown", theme.muted), Span(f": {why}", theme.muted))
+    words = {"connected": ("connected", theme.ok), "degraded": ("connected, degraded", theme.warn),
+             "connecting": ("connecting", theme.muted), "disabled": ("turned off by Hermes", theme.muted)}
+    text, style = words.get(state.status, (state.status, theme.muted))
+    return (Span(text, style),)
+
+
+def _utc_epoch(text: str) -> float | None:
+    """The producer's UTC time (`2020-01-02T03:04:05Z`) as epoch seconds; None for "" or a local-time stamp."""
+    try:
+        return datetime.strptime(text, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+    except (ValueError, OverflowError, OSError):
+        return None
+
+
+def _wrapped_field(label: str, text: str, style: Style, room: int, rows: int, theme: Theme) -> list[Line]:
+    """`text` under `label`, wrapped at the field's width to at most `rows` rows, the last one cut when more is left."""
+    width = max(room - LABEL_WIDTH, 1)
+    wrapped = wrap_line((Span(_text(text), style),), width)
+    if len(wrapped) > rows:
+        wrapped = [*wrapped[: rows - 1], truncate_line((*wrapped[rows - 1], Span(" …", style)), width)]
+    blank = (Span(" " * LABEL_WIDTH),)
+    return [truncate_line((*(_label(label, theme) if number == 0 else blank), *row), room)
+            for number, row in enumerate(wrapped)]
+
+
+def _messaging_rows(state: PlatformStatus, now: float, room: int, theme: Theme, charset: str) -> list[Line]:
+    """Level 2's rows for one messaging platform: its state in words and since when, then for one that is not
+    connected Hermes' reason and the fix, each wrapped, and Hermes' restart command for its gateway on a row of its
+    own."""
+    pieces: list[Piece] = [(0, "", _status_words(state, theme, charset))]
+    since = _utc_epoch(state.since)
+    if since is not None:
+        pieces.append((2, " · ", (Span("since ", theme.muted),
+                                  Span(f"{_clock_text(since)} ({age_text(since, now)})", theme.text))))
+    rows = [_fit(_label(_text(state.platform), theme), pieces, room)]
+    if state.reason and (state.status in PLATFORM_NOT_CONNECTED or state.unknown_why == "ambiguous"):
+        rows += _wrapped_field("why", state.reason, theme.text, room, WHY_ROWS, theme)
+    fix = state.fix if state.attention or state.status in PLATFORM_NOT_CONNECTED else ""
+    if fix:
+        rows += _wrapped_field("fix", fix, theme.text, room, FIX_ROWS, theme)
+    if state.restart and (state.attention or state.status in (PLATFORM_FAILED, PLATFORM_DISCONNECTED)):
+        # The command to copy on a row of its own, whole however the fix above was cut; OMH runs none of it.
+        lead = () if fix else ((0, "", (Span("if it stays down: ", theme.muted),)),)
+        rows.append(_fit(_label("restart", theme), [*lead, (0, "", (Span(_text(state.restart), theme.text),))], room))
+    return rows
 
 
 def _model_row(profile: Profile, cols: int, theme: Theme) -> Line:
@@ -1516,7 +1680,7 @@ def bot_box(profile: Profile, served_by: str, highlighted: bool, now: float, wid
     top = (_bot_title(profile, served_by, highlighted, theme, charset), _bot_facts(profile, now, theme))
     joints = _joints(widths)
     spill = _box_width(widths) - joints[1] - 6 if split else 0  # past the second joint, before the far corner
-    bottom = _bot_platforms(profile, served_by, _edge_room(widths, faced), theme, charset, spill)
+    bottom = _bot_platforms(profile, served_by, _edge_room(widths, faced), theme, charset, spill, now)
     return _panel(widths, rows, edge, charset, top=top, bottom=bottom, after_first=faced)
 
 
@@ -1549,8 +1713,9 @@ def _edge_room(widths: Sequence[int], after_first: bool) -> int:
 
 def profile_box(profile: Profile, served_by: str, now: float, width: int, theme: Theme, charset: str = "unicode") -> list[Line]:
     """Level 2's header: the profile's card edges around its face and its record in full: the gateway (state, pid,
-    how old), each platform's error, each memory target's gauge with its exact figures, and sessions by source. A
-    narrow box gives up the least of these whole; nothing is cut mid-word."""
+    how old), each messaging platform's state (its reason and fix wrapped beneath, at most `WHY_ROWS` and `FIX_ROWS`
+    rows), each other platform's error, each memory target's gauge with its exact figures, and sessions by source.
+    A narrow box gives up the least of these whole; nothing is cut mid-word but a reason or fix past its rows."""
     faced = width - 4 >= AVATAR_MIN_INNER
     widths = [AVATAR_COLS, width - 15] if faced else [max(width - 4, 1)]
     room = widths[-1]
@@ -1567,9 +1732,12 @@ def profile_box(profile: Profile, served_by: str, now: float, width: int, theme:
     if gateway.updated is not None and not (gateway.problem or served_by or gateway.elsewhere):
         record.append((1, " · ", (Span("updated ", theme.muted), Span(age_text(gateway.updated, now), theme.text))))
     fields = [_fit(_label("gateway", theme), record, room)]
+    said = {state.platform for state in profile.messaging}
     for platform in gateway.platforms:
-        if platform.current and platform.error:
+        if platform.current and platform.error and platform.name not in said:
             fields.append(_fit(_label("error", theme), [(0, "", (Span(f"{platform.name}: {platform.error}", theme.error),))], room))
+    for state in profile.messaging:
+        fields += _messaging_rows(state, now, room, theme, charset)
     fields += [_memory_target_row(memory, room, theme, charset, exact=True) for memory in profile.memory]
     sources = [(1 + number, " · " if number else "", (Span(f"{source} ", theme.muted), Span(f"{count:,}", theme.user)))
                for number, (source, count) in enumerate(profile.sources)]
@@ -1580,7 +1748,7 @@ def profile_box(profile: Profile, served_by: str, now: float, width: int, theme:
     columns = [_face_column(_text(profile.name), height, theme, charset), fields] if faced else [fields]
     rows = [[column[number] for column in columns] for number in range(height)]
     top = (_bot_title(profile, served_by, False, theme, charset), _bot_facts(profile, now, theme))
-    bottom = _bot_platforms(profile, served_by, _edge_room(widths, faced), theme, charset)
+    bottom = _bot_platforms(profile, served_by, _edge_room(widths, faced), theme, charset, now=now)
     return _panel(widths, rows, theme.rule, charset, top=top, bottom=bottom, after_first=faced)
 
 

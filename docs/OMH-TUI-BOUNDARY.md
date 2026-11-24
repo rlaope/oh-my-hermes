@@ -388,7 +388,13 @@ process's SQLite locks on it. It probes the pid a gateway record names with
 signal 0 and reads that process's start time and state (`/proc` on Linux,
 `sysctl(KERN_PROC_PID)` on macOS) and, for a running gateway, its resident
 memory (`/proc/<pid>/statm`, or `proc_pidinfo`, which answers only for this
-user's processes); it sends no other signal, and nothing to the gateway. It reads on one thread for the session, never on the render path,
+user's processes); it sends no other signal, and nothing to the gateway. For
+each bot's messaging platforms it also reads, through `omh doctor`'s own
+gateway health reader (`maintenance.gateway_health.bot_platforms`), the tail
+of the root's and each profile's `logs/gateway.log` (at most 1 MiB, with the
+rotated `gateway.log.1` before it when the log is shorter), keeping only each
+platform's classified state, Hermes' bounded and cleaned reason and the fix,
+never a log line. It reads on one thread for the session, never on the render path,
 and reads nothing while the board is closed.
 
 ## The reasoning before a silent question

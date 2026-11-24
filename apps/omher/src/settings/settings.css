@@ -161,6 +161,7 @@
   background: var(--raise2);
   color: var(--ink);
   font-size: 12px;
+  white-space: nowrap;
 }
 .st-btn:hover:not(:disabled) {
   background: var(--seg-on);
@@ -264,6 +265,7 @@
   color: var(--muted);
   padding: 0 8px;
   border-radius: var(--r-sm);
+  white-space: nowrap;
 }
 .be-link:hover:not(:disabled) {
   color: var(--ink);
@@ -984,6 +986,7 @@
   border-radius: var(--r-sm);
   color: var(--muted);
   font-size: 12.5px;
+  white-space: nowrap;
 }
 .pv-add-btn:hover,
 .pv-add-btn[aria-expanded="true"] {

@@ -172,8 +172,13 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   refuses anything else and never takes a command line or arguments. Closing a session or quitting the app stops
   the program. In a plain browser (dev, e2e) a mock host echoes what you type instead. A row's first line is the
   session's name: the one you gave it (double-click or right-click › Rename), else the title the agent gave the
-  conversation, else the CLI's name. Above the bots, the Tasks row opens the Tasks page: open issues and pull or merge
-  requests of the repository, read-only through your own `gh` or `glab` (`BOUNDARY.md` rule 33), with a drawer for
+  conversation, else the CLI's name. Right-click › Hand to <bot> on a row (and on a row of the right panel's
+  Worktrees tab) opens a small card (`src/handover/`): pick the bot, add an optional goal line, and Open thread
+  starts a thread under that bot whose first message names the folder, its branch, a short git status and diff stat
+  (when the folder is in one of that bot's worktrees; otherwise the bot is asked to read them itself) and the goal.
+  Nothing moves on disk, the session stays open and omher types nothing into it (`BOUNDARY.md` rule 10). Above the
+  bots, the Tasks row opens the Tasks page: open issues and pull or merge requests of the repository, read-only
+  through your own `gh` or `glab` (`BOUNDARY.md` rule 33), with a drawer for
   one item and Start in thread, which opens a thread under the bot you pick with the issue as its first message.
   Linear shows a connect screen that opens the Apps page for the bot; omher keeps no Linear key.
   The page's "나" (Me) scope (`src/tasks/MeView.tsx`, `src-tauri/src/gh_me.rs`) lists, across every repository, the
@@ -281,6 +286,16 @@ Rules the code keeps:
   through a link (`read_bot_page`). Edit writes nothing: it opens the bot's main chat with a request added after what
   the person already typed there, for them to finish and send. A bot on another computer is read by that computer's own bridge over the SSH link.
   `BOUNDARY.md` rule 42.
+- **A bot's messaging platforms.** A bot whose Discord, Slack or other platform failed to connect, was disconnected or
+  is reconnecting says so on its sidebar row ("Discord disconnected"; a reconnect Hermes runs by itself only once
+  Hermes flags it or after 10 minutes), and its page's Messaging section gives each
+  platform's state, since when, why, Hermes' own words and the fix: for a Discord privileged-intents refusal the
+  intents and where to turn them on (with a link to the Developer Portal), then Hermes' `hermes -p <gateway> gateway
+  restart` to copy. omher runs and changes nothing for it. The bridge asks OMH's own read-only
+  `omh hermes platforms` (`bots.platforms`, `PlatformStates`), once per 30 seconds at most, and opens no Hermes log
+  itself; a state OMH cannot place is "not known", and without `omh`, or when a bot's logs could not be read, the
+  section says it cannot tell. A bot on another computer is not read.
+  `BOUNDARY.md` rule 43.
 - **A Slack briefing with nothing to set up.** For a bot whose Hermes profile has Slack connected, omher sets up one
   automation, `omher-brief`, by itself: every 15 minutes the channel-watch collector checks the Slack channels the bot
   shares with you and wakes the bot only when something needs you (someone asked you and got no answer, a thread it

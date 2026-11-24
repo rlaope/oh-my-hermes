@@ -37,6 +37,8 @@ const ALLOWED = new Set([
   "thread.list",
   // every bot's automations, read from files (no gateway)
   "automations.list",
+  // every bot's messaging platforms, through OMH's read-only `omh hermes platforms` (BOUNDARY rule 43)
+  "bots.platforms",
   "bots.list",
   "bots.avatar",
   "bots.info",

@@ -78,16 +78,30 @@
   --side-w: 248px;
   --panel-w: 300px;
   --thread-w: 920px;
-  /* Latin first, then CJK: Simplified Chinese (PingFang SC on macOS, Microsoft YaHei on Windows, Noto on Linux),
-     Japanese and Korean. `<html lang>` (zh-CN / ja / ko) picks the right glyphs for the shared Han characters. */
-  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, "PingFang SC", "Hiragino Sans GB",
-    "Microsoft YaHei", "Noto Sans CJK SC", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo",
-    "Noto Sans CJK JP", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK KR", sans-serif;
-  --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  /* Latin first (macOS SF, Windows Segoe UI, Linux system-ui), then CJK for each script by platform: macOS, Windows,
+     Noto on Linux. Every font is named, so Windows never falls back to Gulim, MS PGothic or SimSun. The CJK order
+     follows the UI language (`:root:lang()` below): a Han character takes the first font that has it, so a Chinese
+     font named first would draw Japanese kanji in Chinese forms and widths. */
+  --font-latin: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "Inter", system-ui;
+  --font-zh: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC";
+  --font-ja: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo UI", "Meiryo", "Noto Sans CJK JP",
+    "Noto Sans JP";
+  --font-ko: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK KR", "Noto Sans KR";
+  --font: var(--font-latin), var(--font-zh), var(--font-ja), var(--font-ko), sans-serif;
+  /* ui-monospace is Safari's only: Windows gets Cascadia Mono or Consolas by name, not the generic fallback */
+  --mono: "SF Mono", ui-monospace, Menlo, "Cascadia Mono", Consolas, monospace;
 
   --shadow: 0 40px 120px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.06);
   --pop-shadow: 0 18px 48px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.04);
   --scrollbar: #2c272f;
+}
+
+/* the UI language's own CJK fonts first (i18n sets `<html lang>`); Latin text still takes the Latin fonts */
+:root:lang(ja) {
+  --font: var(--font-latin), var(--font-ja), var(--font-zh), var(--font-ko), sans-serif;
+}
+:root:lang(ko) {
+  --font: var(--font-latin), var(--font-ko), var(--font-ja), var(--font-zh), sans-serif;
 }
 
 [data-theme="light"] {

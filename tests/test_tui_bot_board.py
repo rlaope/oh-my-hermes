@@ -1191,6 +1191,175 @@ class DeltaReviewTests(unittest.TestCase):
         self.assertIn("lifetime (active 24 h): 6.1M in · 459.7k out", narrow)
 
 
+def demo_down(status: str = "failed", **fields) -> bot_board.PlatformStatus:
+    """A messaging platform as `gateway_health.bot_platforms` hands it to the board."""
+    values = {"attention": status != "reconnecting", "since": "2027-01-15T08:00:00Z", "logged": "2027-01-15T08:30:00Z",
+              "reason_kind": "discord_privileged_intents",
+              "reason": "Shard ID None is requesting privileged intents that have not been explicitly enabled in the "
+                        "developer portal.",
+              "fix": "Discord refused the bot's privileged gateway intents; Hermes requests Message Content and Server "
+                     "Members. Enable them in the Discord Developer Portal, your application's Bot page, Privileged "
+                     "Gateway Intents, and save (or remove the allowlist that needs Server Members). Hermes does not "
+                     "retry this failure on its own: restart the gateway afterwards with "
+                     "`hermes -p default gateway restart`.",
+              "restart": "hermes -p default gateway restart"}
+    values.update(fields)
+    return bot_board.PlatformStatus("discord", status, **values)
+
+
+class MessagingTests(unittest.TestCase):
+    """A bot's messaging platforms from the one producer (`gateway_health.bot_platforms`): level 1 says a platform
+    that is not connected in words in the card's bottom edge, level 2 gives its state, since when, Hermes' reason and
+    the fix; unknown is never drawn as either."""
+
+    def card(self, profile, cols: int, charset: str = "unicode") -> list:
+        lines, _span = profile_lines([profile], 0, NOW, cols, DEFAULT_THEME, charset=charset)
+        self.assertLessEqual(max(line_width(line) for line in lines), cols, "never past the edge, never wrapped")
+        return lines
+
+    def box(self, profile, cols: int, charset: str = "unicode") -> list[str]:
+        snapshot_ = BoardSnapshot(BoardView(profile.name), (profile,), (), read_at=NOW)
+        lines, _span = session_lines(snapshot_, 0, NOW, cols, DEFAULT_THEME, charset=charset)
+        self.assertLessEqual(max(line_width(line) for line in lines), cols)
+        text = lines_text(lines)
+        return text[: text.index("")]
+
+    def demo(self, *messaging) -> bot_board.Profile:
+        return replace(bots()[2], name="demo-bot", messaging=tuple(messaging))
+
+    def test_a_platform_that_is_not_connected_says_so_in_words_before_every_other_chip(self) -> None:
+        for status, words, style in (("failed", "✗ failed to connect", DEFAULT_THEME.error),
+                                     ("disconnected", "✗ disconnected", DEFAULT_THEME.error),
+                                     ("reconnecting", "✗ reconnecting", DEFAULT_THEME.warn)):
+            with self.subTest(status=status):
+                long_ago = "2027-01-15T07:49:00Z"  # 11 minutes before NOW: past EDGE_RECONNECT_SECONDS
+                bottom = self.card(self.demo(demo_down(status, since=long_ago)), 150)[-2]
+                text = squeeze(line_text(bottom))
+                self.assertIn(f"discord {words}", text)
+                self.assertEqual(text.count("discord"), 1, "the record's own discord chip is not drawn twice")
+                self.assertLess(text.index("discord"), text.index("whatsapp"))
+                self.assertEqual(next(span.style for span in bottom if span.text == words), style)
+
+    def test_a_routine_reconnect_stays_off_the_edge_until_ten_minutes_or_hermes_flags_it(self) -> None:
+        def edge(**fields) -> str:
+            return squeeze(lines_text(self.card(self.demo(demo_down("reconnecting", **fields)), 150))[-2])
+
+        self.assertEqual(bot_board.EDGE_RECONNECT_SECONDS, 600)
+        self.assertNotIn("reconnecting", edge(attention=False, since="2027-01-15T07:51:00Z"))  # 9 minutes
+        self.assertIn("discord ✗ reconnecting", edge(attention=False, since="2027-01-15T07:50:00Z"))  # 10 minutes
+        self.assertIn("discord ✗ reconnecting", edge(attention=True, since="2027-01-15T07:59:00Z"))
+        self.assertNotIn("reconnecting", edge(attention=False, since=""))
+        box = self.box(self.demo(demo_down("reconnecting", attention=False, since="2027-01-15T07:59:00Z")), 150)
+        self.assertTrue(field(box, "discord").startswith("discord ✗ reconnecting"), "the box says it at once")
+
+    def test_the_board_judges_the_threshold_by_its_clock_on_an_unchanged_snapshot(self) -> None:
+        # the log cache leaves the answer as it was; the board draws with its own clock each frame, so a reconnect
+        # crosses EDGE_RECONNECT_SECONDS onto the card's edge with no new answer
+        since = datetime(2027, 1, 15, 8, 0, tzinfo=timezone.utc).timestamp()
+        profile = self.demo(demo_down("reconnecting", attention=False, since="2027-01-15T08:00:00Z"))
+        snapshot_ = BoardSnapshot(BoardView(), (profile,), read_at=since)
+        clock = [since + bot_board.EDGE_RECONNECT_SECONDS - 60]
+        board = BotBoard("bots", clock=lambda: clock[0])
+        board.take(snapshot_)
+        board.frame(150, 20, DEFAULT_THEME)
+        self.assertNotIn("reconnecting", " ".join(lines_text(board.lines)))
+        clock[0] = since + bot_board.EDGE_RECONNECT_SECONDS
+        board.frame(150, 20, DEFAULT_THEME)
+        self.assertIn("discord ✗ reconnecting", squeeze(" ".join(lines_text(board.lines))))
+
+    def test_connected_and_unknown_draw_no_state_chip(self) -> None:
+        plain = squeeze(lines_text(self.card(bots()[2], 150))[-2])
+        for status in ("connected", "degraded", "connecting", "disabled", "unknown"):
+            with self.subTest(status=status):
+                bottom = squeeze(lines_text(self.card(self.demo(demo_down(status, attention=False)), 150))[-2])
+                self.assertEqual(bottom, plain)
+                self.assertNotIn("✗", bottom)
+
+    def test_the_ascii_charset_marks_it_with_an_x(self) -> None:
+        bottom = squeeze(lines_text(self.card(self.demo(demo_down()), 150, charset="ascii"))[-2])
+        self.assertIn("discord x failed to connect", bottom)
+
+    def test_a_narrow_card_keeps_the_words_whole_and_gives_up_the_other_chips_first(self) -> None:
+        profile = self.demo(demo_down())
+        seen = []
+        for cols in range(150, 24, -1):
+            bottom = squeeze(lines_text(self.card(profile, cols))[-2])
+            self.assertNotIn("failed to co…", bottom)
+            if "failed to connect" in bottom:
+                seen.append(("whatsapp" in bottom, "slack" in bottom))
+        self.assertIn((False, False), seen, "at some width the words outlast every ordinary chip")
+
+    def test_level_two_gives_the_state_since_reason_and_fix(self) -> None:
+        since = datetime(2027, 1, 15, 8, 0, tzinfo=timezone.utc).timestamp()
+        for cols in (150, 120, 80):
+            with self.subTest(cols=cols):
+                box = self.box(self.demo(demo_down()), cols)
+                self.assertTrue(field(box, "discord").startswith("discord ✗ failed to connect"))
+                if cols >= 120:
+                    self.assertIn(f"since {bot_board._clock_text(since)} (", field(box, "discord"))
+                why = field_row(box, "why")
+                self.assertIn("requesting privileged intents", " ".join(squeeze(row) for row in box[why: why + 2]))
+                fix = field_row(box, "fix")
+                fix_text = " ".join(squeeze(row.split("│")[-2]) for row in box[fix: fix + bot_board.FIX_ROWS])
+                self.assertIn("Bot page, Privileged Gateway Intents", fix_text)
+                self.assertEqual(field(box, "restart"), "restart hermes -p default gateway restart", "whole, to copy")
+                self.assertFalse([row for row in box if "error discord" in squeeze(row)])
+                self.assertEqual({len(row) for row in box}, {cols})
+
+    def test_a_clean_stop_offers_the_restart_command_to_copy(self) -> None:
+        box = self.box(self.demo(demo_down("disconnected", attention=False, reason="", reason_kind="", fix="")), 150)
+        self.assertTrue(field(box, "discord").startswith("discord ✗ disconnected"))
+        self.assertEqual(field(box, "restart"), "restart if it stays down: hermes -p default gateway restart")
+        self.assertEqual(field(box, "fix"), "")
+
+    def test_unknown_says_why_and_never_connected_or_not(self) -> None:
+        for why, words in (("earlier_run", "its last line is from an earlier gateway run"),
+                           ("not_served", "no running gateway serves it"),
+                           ("unknown_state", "a state this board does not know")):
+            with self.subTest(why=why):
+                box = self.box(self.demo(demo_down("unknown", attention=False, since="", unknown_why=why, fix="")), 150)
+                row = field(box, "discord")
+                self.assertEqual(row, f"discord unknown: {words}")
+                self.assertNotIn("fix", [squeeze(cell).split(" ")[0] for line in box for cell in line.split("│")])
+
+    def test_escapes_and_bidi_characters_in_hermes_words_never_reach_the_screen(self) -> None:
+        raw = "\x1b[31mred\x1b[0m \x1b]8;;http://evil.invalid\x07click\x1b]8;;\x07 \u202eevil"
+        box = self.box(self.demo(demo_down(reason=raw, fix=raw)), 150)
+        drawn = "".join(box)
+        self.assertFalse([ch for ch in drawn if ch in "\x1b\x07\u202e"])
+        self.assertIn("red", field(box, "why"))
+
+    def test_a_long_fix_is_wrapped_to_its_rows_and_cut_only_past_them(self) -> None:
+        box = self.box(self.demo(demo_down(fix="word " * 400)), 60)
+        fix = field_row(box, "fix")
+        rows = [squeeze(row.split("│")[-2]) for row in box[fix: fix + bot_board.FIX_ROWS + 1]]
+        self.assertTrue(rows[bot_board.FIX_ROWS - 1].endswith("…"), rows)
+        self.assertFalse(rows[bot_board.FIX_ROWS].startswith("word"), "no fifth row")
+
+
+@POSIX_ONLY
+class MessagingReadTests(FixtureRoot):
+    def test_read_board_hands_each_card_the_producers_states(self) -> None:
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log = self.root / "logs" / "gateway.log"
+        log.parent.mkdir()
+        log.write_text(f"{now},000 WARNING gateway.run: ✗ discord failed to connect\n", encoding="utf-8")
+        before = tree_state(self.root)
+        profiles = {profile.name: profile for profile in snapshot(self.environ).profiles}
+        by_platform = {state.platform: state for state in profiles["default"].messaging}
+        self.assertEqual(by_platform["slack"].status, "connected", "this process's own record entry decides")
+        self.assertEqual(by_platform["discord"].status, "failed", "no entry of this run: the line of this run does")
+        self.assertEqual(by_platform["discord"].restart, "hermes -p default gateway restart")
+        self.assertEqual(profiles["miku"].messaging, (), "no gateway serves it and its log says nothing")
+        self.assertEqual(tree_state(self.root), before, "nothing is written")
+
+    def test_a_producer_that_cannot_read_leaves_the_cards_without_states(self) -> None:
+        with patch("omh.maintenance.gateway_health.bot_platforms", side_effect=OSError("gone")):
+            profiles = snapshot(self.environ).profiles
+        self.assertEqual([profile.name for profile in profiles], ["default", "broken", "locked", "miku"])
+        self.assertEqual({profile.messaging for profile in profiles}, {()})
+
+
 class AvatarTests(unittest.TestCase):
     def test_a_name_draws_the_same_face_on_every_run(self) -> None:
         self.assertEqual(avatar("miku"), [" █▀▄▄▀█ ", " █    █ ", "█▀████▀█", " ▀ ▀▀ ▀ "])  # pinned: sha256 of the name

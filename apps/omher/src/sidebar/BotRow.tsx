@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import type { Bot } from "../lib/protocol";
+import type { Bot, PlatformsRead } from "../lib/protocol";
+import { RowPlatforms } from "../platforms/PlatformSection";
 import { askText, liveLabel, type Ask, type Chat } from "../state/store";
 import { Avatar, LiveRing, Ticker, TypingDots } from "../ui";
 import { AskLine } from "./Needs";
@@ -204,6 +205,7 @@ export function BotRow({
   children,
   groupId,
   latest,
+  platforms = null,
 }: {
   bot: Bot;
   chat: Chat | undefined;
@@ -222,6 +224,8 @@ export function BotRow({
   groupId?: string;
   /** The newest activity in the bot's threads (threadsLatest): the row's time and line when newer than its chat's. */
   latest?: { text: string; ts: number } | null;
+  /** What OMH last said of every bot's messaging platforms (`bots.platforms`, rule 43); null shows nothing. */
+  platforms?: PlatformsRead | null;
 }) {
   // The menu is fixed to the window (the bot list scrolls and would clip it): opened at the pointer on a
   // right-click, under the ⋯ button otherwise, kept inside the sidebar's width and the window's height.
@@ -307,6 +311,7 @@ export function BotRow({
               {needs ? <AskLine text={text} /> : live ? <LiveStep chat={chat} text={text} /> : text}
             </span>
             {live && <TypingDots size={3} testId="bot-typing" />}
+            {!bot.host && <RowPlatforms bot={bot.name} read={platforms} />}
             {needs > 0 ? (
               // a plain amber dot, no number: a count here would read as unread (the strip carries the count)
               <span className="needs-dot" data-testid="needs" role="status" aria-label={t("row.needsAnswer")} title={t("row.needsAnswer")} />

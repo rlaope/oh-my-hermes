@@ -51,6 +51,8 @@
 // signIn: the strict check for that provider passes, as after `hermes auth add <id>`, and its models show in
 // models.options),
 // mock.botPageFail {bot, on} (the bot page's bots.page read fails for that bot until turned off),
+// mock.platforms {available?, bots?} (what bots.platforms answers: OMH's `omh hermes platforms`, rule 43; by default
+// every listed platform is connected),
 // mock.move {on} (the bridge died and came back on a new port: answers `{port}` once a second listener is up, then drops
 // every connection to the first port, which refuses WebSockets until `mock.move {on: false}` or mock.reset).
 import http from "node:http";
@@ -326,7 +328,12 @@ const PANEL_TREES = {
   ],
   friren: [],
   default: [],
+  // a bot over SSH lists folders on its own computer
+  "mac-mini:mini": [{ path: "/home/sionic/build", branch: "main", head: "b1c2d3e4f", repo: "build", dirty: 1, ago: 60 }],
 };
+// worktrees removed on disk since the list was read: still listed, but panel.diff fails for them with the code
+// mock.treeGone names (`not_found` once the bridge's scan no longer lists it, `unavailable` inside that scan's 10 s)
+const goneTrees = new Map();
 const PANEL_DIFF = {
   "/w/gateway-keepalive": {
     scope: "uncommitted",
@@ -651,6 +658,22 @@ let lostQueue = new Map();
 let noSkills;
 // Bots whose bots.page read fails (mock.botPageFail {bot, on}), as a peer whose link dropped answers.
 let botPageFail;
+// Each bot's messaging platforms as the bridge's PlatformStates answers (mock.platforms {available?, bots?}).
+let platformsRead;
+// As OMH reports them: every profile of the Hermes home, most with no messaging platform.
+const PLATFORMS_NONE = () => Object.fromEntries(BOT_SEED.map((b) => [b.name, { log: "read", platforms: [] }]));
+const PLATFORMS_SEED = () => ({
+  available: true,
+  bots: {
+    ...PLATFORMS_NONE(),
+    default: {
+      log: "read",
+      platforms: [
+        { platform: "discord", status: "connected", attention: false, since: "", logged: "2020-01-02T03:04:05Z", reason_kind: "", unknown_why: "", reason: "", guidance: "", restart: "hermes -p default gateway restart", intents: [] },
+      ],
+    },
+  },
+});
 // Tasks › Linear: the bots whose config names a Linear MCP server (mock.linear {bot, server|null})
 let linearMcp;
 // Apps (apps.*, BOUNDARY rule 41): Hermes' MCP catalog (APP_CATALOG) and each bot's state per entry (`<bot>:<name>` ->
@@ -852,6 +875,7 @@ function acctFind(p) {
 }
 
 function reset() {
+  goneTrees.clear();
   usageFixture = "default";
   skillsLater = { add: [], after: 0 };
   providerFixture = "default";
@@ -910,6 +934,7 @@ function reset() {
   lostQueue = new Map();
   noSkills = new Set();
   botPageFail = new Set();
+  platformsRead = PLATFORMS_SEED();
   linearMcp = new Map();
   appState = new Map([["kami:linear", "installed"], ["kami:figma", "needs_signin"], ["kami:datadog", "disabled"]]);
   appsNext = {};
@@ -1605,6 +1630,7 @@ const OPS = {
       routines: (ROUTINE_SEED[b.name] ?? []).length,
     };
   },
+  "bots.platforms": () => structuredClone(platformsRead),
   "bots.page": (p) => {
     const b = needBotAny(p);
     if (botPageFail.has(b.name)) throw new OpError("bot_offline", `${b.name} is offline`);
@@ -1651,7 +1677,8 @@ const OPS = {
   "panel.diff": (p) => {
     const b = needBot(p);
     const w = (PANEL_TREES[b.name] ?? []).find((t) => t.path === p.path);
-    if (!w) throw new OpError("not_found", "not a worktree this bot worked in");
+    if (!w || goneTrees.get(w.path) === "not_found") throw new OpError("not_found", "not a worktree this bot worked in");
+    if (goneTrees.has(w.path)) throw new OpError("unavailable", "git could not read this worktree");
     return { path: w.path, branch: w.branch, repo: w.repo, truncated: false, ...PANEL_DIFF[w.path] };
   },
   "media.read": (p) => {
@@ -2047,6 +2074,10 @@ const OPS = {
     pluginLoadNext = p.load ?? null;
     return {};
   },
+  "mock.treeGone": (p) => {
+    goneTrees.set(needStr(p, "path"), p.code === "unavailable" ? "unavailable" : "not_found");
+    return {};
+  },
   "mock.botStatus": (p) => {
     const b = bots[needStr(p, "bot")];
     if (!b) throw new OpError("unknown_bot", p.bot);
@@ -2211,6 +2242,10 @@ const OPS = {
     const b = needBot(p);
     if (p.server) linearMcp.set(b.name, String(p.server));
     else linearMcp.delete(b.name);
+    return {};
+  },
+  "mock.platforms": (p) => {
+    platformsRead = { available: p.available !== false, bots: { ...PLATFORMS_NONE(), ...(p.bots ?? {}) } };
     return {};
   },
   "mock.botPageFail": (p) => {

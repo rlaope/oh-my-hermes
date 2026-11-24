@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getRestarts } from "./restart";
 import "./sidebar.css";
 import logo from "../assets/omher-mark.png";
-import { selectAsks, selectSidebarBots, useStore } from "../state/store";
+import { getStore, selectAsks, selectSidebarBots, useStore } from "../state/store";
 import { slots } from "../features";
 import { CalendarIcon, GearIcon, GridIcon, IconButton, PlugIcon, PlusIcon, SearchIcon } from "../ui";
 import { BotRow, threadsLatest } from "./BotRow";
@@ -30,6 +30,7 @@ import { SplitDivider, useSideSplit } from "./SideSplit";
 import { useAutoSplit } from "./autoSplit";
 import { TasksBar } from "../tasks/TasksBar";
 import { DiskChip } from "./DiskChip";
+import { PLATFORMS_POLL_MS } from "../platforms/platforms";
 
 const sessionBackground = (target: EventTarget) => target instanceof Element && !target.closest(".ss-row, .tg-h, button, input, textarea, select, a, [contenteditable], [role=menu], [role=menuitem]");
 
@@ -73,6 +74,11 @@ export function Sidebar() {
   const automations = s.automations?.length ?? 0;
   const inChat = s.ui.view === "chat";
   useRevealBot(s.selectedBot, s.ui.thread, inChat);
+  // each bot's messaging platforms (rule 43): read with the bots when the bridge connects, then once a minute
+  useEffect(() => {
+    const id = setInterval(() => void getStore().actions.loadPlatforms(), PLATFORMS_POLL_MS);
+    return () => clearInterval(id);
+  }, []);
   const botList = useRef<HTMLElement>(null);
   const botNav = useEdgeFade<HTMLElement>(botList);
   // the dock: the bots scrolled out of view at the top of BOTS (none at the top: no dock)
@@ -139,6 +145,7 @@ export function Sidebar() {
               drag={drag.row(b.name)}
               groupId={hasThreads ? groupId : undefined}
               latest={hasThreads ? threadsLatest(s.threads[b.name]!, (th) => s.chats[threadKey(b.name, th)]) : null}
+              platforms={s.platforms}
               menu={{
                 onNewThread: onNew,
                 pinned,
