@@ -52,6 +52,20 @@ What has been observed locally is the offline framework running green and the
 generated plan carrying each delegator exactly once. Execution on the Windows
 lane is observed in pull-request CI, from the same plan, and nowhere earlier.
 
+## An omher-Only Pull Request Plans a Slice
+
+A pull request whose every changed path is under `apps/omher/` (or is
+`CHANGELOG.md`) cannot change the Python package. The `plan` job diffs the PR
+against its base and passes `--changed-paths` to `plan.py`; for such a change
+`tools/test_sharding/scope.py` keeps the test modules whose source names omher,
+the changelog, `apps/`, or walks the whole repository tree, about 6% of the
+inventory. Both lanes plan the same slice, and the aggregate reconciles it
+exactly once as usual. Any other change, an empty diff, and every main push plan
+the full inventory, and main re-runs the whole suite on the merged tree, so a
+slice that misses a test fails there. The quarantine is validated against the
+full inventory before it is cut to the slice, so a stale entry still fails the
+plan.
+
 ## Per-Lane Shard Counts
 
 The Windows lane runs the same suite more than twice as slowly as the Linux
