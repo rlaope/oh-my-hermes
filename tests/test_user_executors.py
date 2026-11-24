@@ -652,6 +652,111 @@ class MutationTests(_HomeTestCase):
         self.assertEqual(set(self.load().entries), {"devin", "aider"})
 
 
+class ConcurrentReplaceTests(_HomeTestCase):
+    """A registry file another OMH writer is replacing is not an escape.
+
+    On Windows, `ntpath.realpath` looks the leaf up twice: once to resolve it,
+    then again to check that the plain spelling names the same file. When the
+    second lookup fails with a different error (the leaf is mid-`os.replace`
+    under a concurrent add), CPython keeps the extended-length `\\\\?\\` prefix,
+    and that spelling never sits under the resolved home. The fake returns that
+    spelling for the leaf exactly once, as the transient would.
+    """
+
+    def transient_leaf(self):
+        real = os.path.realpath
+        leaf = os.path.normcase(str(user_executors_path(self.home)))
+        fired: list[str] = []
+
+        def realpath(path: object, *args: object, **kwargs: object) -> str:
+            resolved = real(path, *args, **kwargs)
+            if not fired and os.path.normcase(os.fspath(path)) == leaf:
+                fired.append(resolved)
+                return "\\\\?\\" + resolved
+            return resolved
+
+        return mock.patch.object(os.path, "realpath", realpath)
+
+    def test_add_is_not_refused_while_the_file_is_being_replaced(self) -> None:
+        self.write_config('schema_version = 1\n\n[executors.devin]\npreset = "devin"\n')
+
+        with self.transient_leaf():
+            add_executor_preset(self.home, "aider")
+
+        self.assertEqual(set(self.load().entries), {"devin", "aider"})
+
+    def test_remove_is_not_refused_while_the_file_is_being_replaced(self) -> None:
+        self.write_config(
+            'schema_version = 1\n\n[executors.aider]\npreset = "aider"\n'
+            '\n[executors.devin]\npreset = "devin"\n'
+        )
+
+        with self.transient_leaf():
+            remove_user_executor(self.home, "devin")
+
+        self.assertEqual(set(self.load().entries), {"aider"})
+
+    def test_a_read_is_not_refused_while_the_file_is_being_replaced(self) -> None:
+        self.write_config(VALID_ENTRY_TOML)
+
+        with self.transient_leaf():
+            registry = self.load()
+
+        self.assertEqual(registry.issues, ())
+        self.assertEqual(set(registry.entries), {"my-agent"})
+
+    def test_a_routing_directory_linked_outside_the_home_is_still_refused(self) -> None:
+        outside_holder = make_test_tempdir(prefix="omh-user-executors-outside-")
+        self.addCleanup(outside_holder.cleanup)
+        outside = Path(outside_holder.name)
+        registry_file = outside / "executors.toml"
+        registry_file.write_text(
+            "schema_version = 1\n\n[executors.sneaky]\nargv = ['sneaky', '{prompt}']\n",
+            encoding="utf-8",
+        )
+        before = registry_file.read_bytes()
+        try:
+            (self.home / "routing").symlink_to(outside, target_is_directory=True)
+        except OSError as error:
+            self.skipTest(f"this platform cannot create a directory symlink: {error}")
+
+        registry = self.load()
+        self.assertEqual(dict(registry.entries), {})
+        self.assertEqual(self.reasons(registry), {"path_escape"})
+        mutations = {
+            "add": lambda: add_executor_preset(self.home, "devin"),
+            "remove": lambda: remove_user_executor(self.home, "sneaky"),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(mutation=name), self.assertRaises(ExecutorConfigError) as context:
+                mutate()
+            self.assertEqual(context.exception.reason, "path_escape")
+        self.assertEqual(registry_file.read_bytes(), before)
+        self.assertEqual([path.name for path in outside.iterdir()], ["executors.toml"])
+
+    def test_a_symlinked_file_is_refused_by_add_and_remove(self) -> None:
+        target = self.home / "elsewhere.toml"
+        target.write_text('schema_version = 1\n\n[executors.devin]\npreset = "devin"\n', encoding="utf-8")
+        before = target.read_bytes()
+        link = user_executors_path(self.home)
+        link.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            link.symlink_to(target)
+        except OSError as error:
+            self.skipTest(f"this platform cannot create a file symlink: {error}")
+
+        mutations = {
+            "add": lambda: add_executor_preset(self.home, "aider"),
+            "remove": lambda: remove_user_executor(self.home, "devin"),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(mutation=name), self.assertRaises(ExecutorConfigError) as context:
+                mutate()
+            self.assertEqual(context.exception.reason, "symlink_refused")
+        self.assertTrue(link.is_symlink())
+        self.assertEqual(target.read_bytes(), before)
+
+
 class OperatorHomeTests(unittest.TestCase):
     def test_the_registry_home_is_the_operator_home_under_every_scope(self) -> None:
         holder = make_test_tempdir(prefix="omh-user-executors-operator-")
