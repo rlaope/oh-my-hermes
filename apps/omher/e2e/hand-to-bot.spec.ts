@@ -233,7 +233,7 @@ test("no Hand on a Worktrees row of a bot over SSH", async ({ page }) => {
   await page.getByRole("button", { name: "Add a bot" }).click();
   await page.getByTestId("addbot-ssh").click();
   const peer = page.getByTestId("peer-card");
-  await peer.getByTestId("peer-host").fill("sionic@10.1.145.204");
+  await peer.getByTestId("peer-host").fill("demo@host.example");
   await peer.getByTestId("peer-label").fill("Mac mini");
   await peer.getByTestId("peer-check").click();
   await expect(peer.getByTestId("peer-found")).toBeVisible();

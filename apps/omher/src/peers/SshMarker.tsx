@@ -23,7 +23,7 @@ export function linkText(st: PeerStatus | undefined, short = false): string {
   return "";
 }
 
-/** `SSH · Mac mini`, tooltip `sionic@10.1.145.204`; `full` adds the link state after it. */
+/** `SSH · Mac mini`, tooltip `demo@host.example`; `full` adds the link state after it. */
 export function SshMarker({ bot, full = false, testId }: { bot: Pick<Bot, "host">; full?: boolean; testId?: string }) {
   const h = bot.host;
   const st = usePeer(h?.peer);
