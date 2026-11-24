@@ -76,13 +76,13 @@ class BriefSetup(unittest.TestCase):
     def test_owner_from_the_dm_majority_with_the_alias_dropped(self) -> None:
         self.env(f"export SLACK_BOT_TOKEN='{SECRET}'\nSLACK_ALLOWED_USERS=UA1,UB2\n")
         dm = lambda u, n: {"platform": "slack", "chat_type": "dm", "user_id": u, "user_name": n}  # noqa: E731
-        self.sessions(dm("UA1", "Ann"), dm("UB2", "김희망 (Khope)"), dm("UB2", "김희망 (Khope)"),
+        self.sessions(dm("UA1", "Ann"), dm("UB2", "홍길동 (Gildong)"), dm("UB2", "홍길동 (Gildong)"),
                       {"platform": "slack", "chat_type": "group", "user_id": "UA1", "user_name": "Ann"},
                       {"platform": "slack", "chat_type": "group", "user_id": "UA1", "user_name": "Ann"},
                       {"platform": "discord", "chat_type": "dm", "user_id": "UA1"})
         before = (self.p / "state.db").stat().st_mtime_ns
         p = self.plan()
-        self.assertEqual((p["state"], p["owner"], p["owner_name"]), ("install", "UB2", "김희망"))
+        self.assertEqual((p["state"], p["owner"], p["owner_name"]), ("install", "UB2", "홍길동"))
         self.assertEqual((self.p / "state.db").stat().st_mtime_ns, before)
 
     def test_no_owner_skips(self) -> None:
