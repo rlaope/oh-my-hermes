@@ -668,6 +668,16 @@ All notable changes will be documented here.
   with one line naming `agy acp --login`, checked against a real Antigravity CLI 1.5.16 handshake. Signed-in turns and
   its approval cards were not run. (`apps/omher/src-tauri/src/acp_agents.rs`; `docs/OMHER-BOUNDARY.md` rule 11)
 
+- **Sibling dag-ulw child tasks start with the same bytes, so a provider prompt cache can serve the shared part.**
+  Each child task used to open with its own node prompt, so two siblings of one run shared almost no prefix (6
+  characters in a 3-node sample). Now the run-wide block comes first: the saved run goal with its acceptance-context
+  line, then the stay-inside-your-SCOPE rule, the same bytes for every node whatever its role, so a writer and a
+  verify node in one call share it too, with or without a saved goal. The node's own block follows: prompt, review
+  focus, resume, escalation and re-plan text, handoff, read-first, the verify lines, and the commit-only-your-SCOPE and
+  shared-machine rules that only writing nodes get. The same sample now shares 300 characters. No line was reworded or
+  dropped, and the `[dag:run/node]` goal is unchanged. A
+  `ready` call that carries several tasks now has a `note`: OMH does not stagger their start. (`src/plugin_bundle/omh/dag_run.py`)
+
 - **`omh doctor` now says when the prompt-cache TTL does not match what the route keeps, and why warming stopped.**
   A new `prompt_cache_route` row and **Prompt cache (read-only)** section read only `config.yaml` and the tail of
   `logs/agent.log`. On a route that keeps 1h entries (a loopback, localhost or private `base_url` serving Claude, as

@@ -87,9 +87,12 @@ MAIN_DIGEST = "344a76cb7bfeb253"
 MAIN_STATUS_RUNNING = "DAG Feature · 0/3 done · 0 running"
 MAIN_STATUS_DONE = "DAG Feature · 3/3 done · 0 running"
 MAIN_VERIFY_CONTEXT = (
-    "TASK: do it\nDELIVERABLE: a change\nSCOPE: only its files\nVERIFY: run `make test`, exit 0\nSTOP WHEN: green\n\n"
+    # The run-wide block comes first (shared by every task of the run), then the node's own block.
     "Run goal (saved):\nShip the export API with docs\n\n"
     "The run goal is acceptance context, not permission to widen your SCOPE.\n\n"
+    "Stay inside your SCOPE: other parts of this run work at the same time. If you cannot finish, say plainly that "
+    "you are blocked and why; do not report blocked work as done.\n\n"
+    "TASK: do it\nDELIVERABLE: a change\nSCOPE: only its files\nVERIFY: run `make test`, exit 0\nSTOP WHEN: green\n\n"
     "Handoff: before you stop, write your report to /backend-home/.omh/dag/parent-session-a1bdc27ac7582a74/feat/"
     "verify.md: what you did, the files you changed, what VERIFY showed, and anything still open. The parent reads "
     "that file and your final message.\n"
@@ -102,9 +105,7 @@ MAIN_VERIFY_CONTEXT = (
     # The verify node is on unspecified-high, a rung of dag_run.ESCALATION_LADDER, so it carries the escalate line.
     "If the task turns on a judgement you cannot settle with confidence (a design choice, a root cause you cannot pin "
     "down), do not guess: before editing, write ESCALATE: <the question> and what you found into the handoff, and "
-    "stop.\n"
-    "Stay inside your SCOPE: other parts of this run work at the same time. If you cannot finish, say plainly that "
-    "you are blocked and why; do not report blocked work as done."
+    "stop."
 )
 # The api node is quick, so its task carries the escalate line (dag_run.ESCALATION_LADDER); removing that line alone
 # reproduces main's pin fd8a3794061b97010042cb5340cbcf4991630164ce58ed990667ccfbb5bc146c.
@@ -112,7 +113,10 @@ MAIN_VERIFY_CONTEXT = (
 # previous main pin was fa272bdff1d7b1f0ae032829a98236fa6239cbc0497bdd11885818b345dbb276.
 # Re-pinned after the shared-machine line for writing build nodes (g62-dag); removing that line alone reproduces the
 # previous pin 21c6f77532532a3aef495c180dd84688c362d23564aa9255bd0cada09e3aaef0.
-MAIN_API_CONTEXT_SHA = "fbc73882476a927a6ebc4f8e69ac91c556a107cc38ee9a14c3b6ce19667b4dc6"
+# Re-pinned after task_for put the run-wide block (run goal, scope rule) first (cache-dag-prefix): the same non-blank
+# lines in a new order; the base version of task_for reproduces the previous pin
+# fbc73882476a927a6ebc4f8e69ac91c556a107cc38ee9a14c3b6ce19667b4dc6.
+MAIN_API_CONTEXT_SHA = "ec98f8088e15274c93d7cbc7df10d1324557132826db584bd55811739daf3dad"
 # The two tool-result pins hold the reply as the model reads it: non-ASCII kept as written (#2884), so the `·` of the
 # status line is one character, not `\u00b7`; the ASCII re-encoding of these bytes gives the pins main captured.
 MAIN_RESULT_RUNNING_SHA = "c53744ae5ca1a204693922fbc67dc5eb8b44cc9eb6ae714ac10955ba4fd03d50"
