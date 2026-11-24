@@ -78,7 +78,7 @@ const MIN = 60;
 // ---- seed data -------------------------------------------------------------------------------
 
 const BOT_SEED = [
-  { name: "kami", display_name: "Kami", is_default: false, model: "Opus 5.5", provider: "claude-proxy", description: "khope's everyday assistant", status: "online", running: true, reasoning: "high" },
+  { name: "kami", display_name: "Kami", is_default: false, model: "Opus 5.5", provider: "claude-proxy", description: "demo's everyday assistant", status: "online", running: true, reasoning: "high" },
   { name: "friren", display_name: "Friren", is_default: false, model: "Sonnet 5.5", provider: "claude-proxy", description: "research and reading", status: "online", running: false, reasoning: "medium" },
   { name: "default", display_name: "Hermes", is_default: true, model: "Haiku 5", provider: "claude-proxy", description: "the default profile", status: "online", running: false, reasoning: "low" },
   { name: "omh-tui", display_name: "OMH TUI", is_default: false, model: "Sonnet 5.5", provider: "claude-proxy", description: "", status: "online", running: false, reasoning: "medium" },
@@ -91,7 +91,7 @@ const LINKS = JSON.parse(readFileSync(new URL("./fixtures/links.json", import.me
 // six channels is left out on purpose, so its chip shows the fallback.
 const LINK_PLACES = {
   kami: {
-    slack: { C0BLC924P1P: "#docs-agent", C0C7TPCQZSL: "#product-docs", C0BU9M6C6EA: "#lab" },
+    slack: { C0000000001: "#docs-agent", C0000000004: "#product-docs", C0000000003: "#lab" },
     discord: { "1544259371528232980": "#cron" },
   },
 };
@@ -152,7 +152,7 @@ const PEEK_SEED = {
   ],
   "discord-cron-openmaus": [
     ["assistant", "", "Briefing: OpenMausBot ships weekly, 3 open issues, nothing blocking.", 120],
-    ["user", "khope", "good, thanks", 118],
+    ["user", "demo", "good, thanks", 118],
   ],
   "discord-omh-2657": [
     ["user", "rlaope", "PR #2657 is ready for review", 1600],
@@ -160,7 +160,7 @@ const PEEK_SEED = {
     ["user", "rlaope", "fixed, please re-check", 1570],
     ["assistant", "", "Approved.", 1560],
   ],
-  "telegram-reading-list": [["user", "khope", "add the Tauri updater post", 240], ["assistant", "", "Added.", 239]],
+  "telegram-reading-list": [["user", "demo", "add the Tauri updater post", 240], ["assistant", "", "Added.", 239]],
 };
 
 const ROUTINE_SEED = {
@@ -329,7 +329,7 @@ const PANEL_TREES = {
   friren: [],
   default: [],
   // a bot over SSH lists folders on its own computer
-  "mac-mini:mini": [{ path: "/home/sionic/build", branch: "main", head: "b1c2d3e4f", repo: "build", dirty: 1, ago: 60 }],
+  "mac-mini:mini": [{ path: "/home/demo/build", branch: "main", head: "b1c2d3e4f", repo: "build", dirty: 1, ago: 60 }],
 };
 // worktrees removed on disk since the list was read: still listed, but panel.diff fails for them with the code
 // mock.treeGone names (`not_found` once the bridge's scan no longer lists it, `unavailable` inside that scan's 10 s)
@@ -1314,7 +1314,7 @@ const OPS = {
     if (typeof p.url !== "string" || !PEER_URL.test(p.url)) throw new OpError("bad_request", "url must be the forwarded loopback address");
     return {
       version: "0.2.8",
-      hermes: { home: "/home/sionic/.hermes", version: "0.23.1" },
+      hermes: { home: "/home/demo/.hermes", version: "0.23.1" },
       bots: (peerBots ?? PEER_BOTS_SEED).map(({ name, display_name, model, provider, status }) => ({ name, display_name, model, provider, status })),
     };
   },
@@ -2578,7 +2578,7 @@ function scriptRecorded(bot, text) {
 // to); omher turns it into the Connect over SSH chip. Nothing connects here.
 function scriptPeer(bot, text) {
   const ko = hangul.test(text);
-  const block = '```omher-peer\n{"host": "sionic@10.1.145.204", "label": "Mac mini"}\n```';
+  const block = '```omher-peer\n{"host": "demo@host.example", "label": "Mac mini"}\n```';
   const answer = ko
     ? `맥미니를 SSH로 붙일게요. 아래 버튼을 누르면 omher가 먼저 확인하고, 연결은 직접 눌러야 돼요.\n\n${block}`
     : `I'll connect the Mac mini over SSH. Press the button below: omher checks it first, and nothing connects until you press Connect.\n\n${block}`;

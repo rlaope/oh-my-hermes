@@ -1,0 +1,118 @@
+"""Gate keeping real identities out of test fixtures.
+
+The repository is public. A fixture copied from a live session carries whoever ran it: their email, the
+workspace host of their team's chat or wiki, the user folder of their machine. Each one is read by anyone who
+opens the file, and removing it later does not remove it from history. The only cheap fix is for the value
+never to land, so this module re-reads the fixture tree on every run and fails with the path and line of an
+email address, a SaaS tenant host or a user folder that is not on the reserved list below.
+
+Scope: every tracked file under `tests/` and omher's test trees (e2e specs and their mock bridge, the bridge's
+tests, the desktop shell's recorded streams, the page's unit tests and replay fixtures). Product code and docs
+are out of scope here; a fixture is where a pasted value most often hides.
+
+The check is deliberately narrow (three patterns, one `git ls-files`) so it stays cheap; it reports where a
+value is, never the value itself, so a failure log does not repeat the leak.
+"""
+
+from __future__ import annotations
+
+import re
+import subprocess
+import unittest
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+SCOPE = (
+    "tests",
+    "apps/omher/e2e",
+    "apps/omher/bridge/tests",
+    "apps/omher/src-tauri/tests",
+    "apps/omher/src/state/__fixtures__",
+    "apps/omher/src/**/*.test.ts",
+    "apps/omher/src/**/*.test.tsx",
+)
+BINARY_SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".woff", ".woff2", ".ttf", ".zip", ".gz", ".pdf")
+
+# An address whose last label is a real top-level domain (a filename such as `x@host.com.json` still matches on
+# its `x@host.com` part; a decorator such as `@pytest.mark` does not, its last label being no TLD).
+EMAIL = re.compile(
+    r"(?<![\w.+%-])([A-Za-z0-9._%+-]+)@((?:[A-Za-z0-9-]+\.)+)(com|org|net|io|ai|dev|co|kr|jp|cn|us|uk|de|fr|me|app|xyz|edu|gov)\b",
+    re.IGNORECASE,
+)
+# Reserved and non-routable names (RFC 2606 / RFC 6761: example.*, *.example, *.invalid, *.test, localhost),
+# GitHub's noreply addresses, and the public product addresses tests assert on as protocol shapes: `git@<forge>`
+# (an SSH remote, not a person), WhatsApp's JID domains, Devin's bot address, and the conventional attacker
+# placeholders of URL-userinfo tests. A forge host (github.com, gitlab.com, a GitHub Enterprise `*.ghe.com`) is the
+# `<login>@<host>` account id of omher's Tasks and Accounts (docs/OMHER-BOUNDARY.md rules 18 and 33), not a mailbox.
+RESERVED_DOMAIN = re.compile(
+    r"(^|\.)(example\.(com|org|net)|example\.co\.kr|[a-z0-9-]+\.example|[a-z0-9-]+\.invalid|[a-z0-9-]+\.test"
+    r"|github\.com|gitlab\.com|[a-z0-9-]+\.ghe\.com|users\.noreply\.github\.com|s\.whatsapp\.net|g\.us|app\.devin\.ai|evil\.(com|io))$"
+)
+PROTOCOL_LOCAL = {"git", "noreply", "no-reply"}
+
+# A SaaS tenant lives in the host's first label (`<team>.slack.com`) or the first path segment
+# (`linear.app/<workspace>/`). Only obviously made-up tenants pass, plus a product's own fixed hosts and paths.
+TENANT_HOST = re.compile(r"\b([a-z0-9-]+)\.(slack\.com|atlassian\.net|notion\.site|zendesk\.com|okta\.com|sharepoint\.com|monday\.com)\b")
+TENANT_PATH = re.compile(r"\blinear\.app/([a-z0-9-]+)/")
+SYNTHETIC_TENANT = {"example", "demo", "acme", "x", "team", "app", "www", "api", "hooks", "files", "status", "sse", "mcp"}
+
+# A user folder names a person: only placeholder users pass.
+USER_DIR = re.compile(r"(?:/Users/|[A-Za-z]:\\\\?Users\\\\?)([A-Za-z0-9._@-]+)")
+PLACEHOLDER_USER = {"you", "demo", "me", "user", "runner", "runneradmin", "name", "username", "alice", "bob", "x", "a", "u", "k",
+                    "test", "tester", "example", "someone", "foo", "Shared", "Public", "private", "dev", "operator", "person", "A",
+                    "Admin", "Alice", "Example", "Jane", "Me", "o", "h", "one", "two", "other", "owner", "plain", "secret", "victim", "ci", "user2",
+                    "user2024", "project", "repo", "config", "tests", "Kim", "kim"}
+
+
+def _scoped_files() -> list[str]:
+    out = subprocess.run(["git", "-C", str(REPO_ROOT), "ls-files", "--", *SCOPE], capture_output=True, text=True, check=True)
+    return [f for f in out.stdout.splitlines() if f and not f.endswith(BINARY_SUFFIXES)]
+
+
+def _findings() -> list[str]:
+    found: list[str] = []
+    for rel in _scoped_files():
+        if rel == "tests/test_identity_fixture_policy.py":
+            continue
+        try:
+            text = (REPO_ROOT / rel).read_text(encoding="utf-8")
+        except (UnicodeDecodeError, FileNotFoundError):
+            continue
+        for n, line in enumerate(text.split("\n"), 1):
+            for m in EMAIL.finditer(line):
+                domain = (m.group(2) + m.group(3)).lower()
+                if m.group(1).lower() not in PROTOCOL_LOCAL and not RESERVED_DOMAIN.search(domain):
+                    found.append(f"{rel}:{n}: email outside the reserved domains")
+            for m in TENANT_HOST.finditer(line):
+                if m.group(1) not in SYNTHETIC_TENANT:
+                    found.append(f"{rel}:{n}: SaaS tenant host")
+            for m in TENANT_PATH.finditer(line):
+                if m.group(1) not in SYNTHETIC_TENANT:
+                    found.append(f"{rel}:{n}: SaaS tenant path")
+            for m in USER_DIR.finditer(line):
+                user = m.group(1)
+                # a macOS account named by its email (`/Users/<you>@<domain>/`) passes when the domain is reserved
+                reserved_mail = "@" in user and RESERVED_DOMAIN.search(user.rsplit("@", 1)[1].lower())
+                if user not in PLACEHOLDER_USER and not reserved_mail and not user.startswith(("$", "{", "<", "%")):
+                    found.append(f"{rel}:{n}: user folder of a named user")
+    return found
+
+
+class IdentityFixturePolicyTests(unittest.TestCase):
+    def test_fixtures_name_only_reserved_identities(self) -> None:
+        found = _findings()
+        self.assertEqual(found, [], "replace these with a reserved name (demo@example.com, example.slack.com, /Users/demo):\n" + "\n".join(found))
+
+    def test_the_patterns_catch_the_shapes_they_exist_for(self) -> None:
+        # assembled at run time, so this file holds no such literal itself
+        person = "pat" + "@" + "corp" + ".com"
+        self.assertTrue(EMAIL.search(person) and not RESERVED_DOMAIN.search("corp.com"))
+        self.assertTrue(RESERVED_DOMAIN.search("example.com") and RESERVED_DOMAIN.search("host.example"))
+        self.assertIsNone(EMAIL.search("@pytest.mark.parametrize"))
+        self.assertEqual(TENANT_HOST.search("https://" + "acme-corp" + ".slack.com/archives/C1").group(1), "acme-corp")
+        self.assertEqual(USER_DIR.search("/Users/" + "pat" + "/work").group(1), "pat")
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -68,7 +68,7 @@ test("a status after the turn's end leaves the chat idle: Send, no spinner, Read
   await expect(page.getByTestId("session-status")).toHaveText("Ready");
   await expect(page.locator('[data-testid=activity][data-state="live"]')).toHaveCount(0);
   await expect(page.getByTestId("typing")).toHaveCount(0);
-  await expect(page.getByText("mem:khope-sionic-ai-d09472c9")).toHaveCount(0);
+  await expect(page.getByText("mem:demo-00000000")).toHaveCount(0);
   await expect(page.getByTestId("send")).toBeVisible();
   await expect(page.getByTestId("stop")).toHaveCount(0);
   const row = page.locator("[data-testid=session-list] .ss-row").first();

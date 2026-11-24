@@ -107,7 +107,7 @@ test("hello, bots and seeded data", async () => {
 
   // link chips: channel names by id, as the bridge reads them from the bot's own sessions
   const { places } = await c.ok("links.places", { bot: "kami" });
-  expect(places.slack).toMatchObject({ C0BLC924P1P: "#docs-agent" });
+  expect(places.slack).toMatchObject({ C0000000001: "#docs-agent" });
   expect(places.discord).toEqual({ "1544259371528232980": "#cron" });
   expect((await c.ok("links.places", { bot: "friren" })).places).toEqual({ slack: {}, discord: {} });
 

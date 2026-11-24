@@ -53,7 +53,7 @@ async function attachMini(page: Page, label = "Mac mini") {
   await page.getByTestId("addbot-ssh").click();
   const card = page.getByTestId("peer-card");
   await expect(card).toBeVisible();
-  await card.getByTestId("peer-host").fill("sionic@10.1.145.204");
+  await card.getByTestId("peer-host").fill("demo@host.example");
   await card.getByTestId("peer-label").fill(label);
   await card.getByTestId("peer-check").click();
   await expect(card.getByTestId("peer-found")).toBeVisible();
@@ -83,14 +83,14 @@ test("sidebar + → Connect over SSH: suggestions, Check, the exact command, Can
   await card.getByTestId("peer-host").fill("-oProxyCommand=sh");
   await expect(card.getByTestId("peer-host-bad")).toBeVisible();
   await expect(card.getByTestId("peer-check")).toBeDisabled();
-  await card.getByTestId("peer-host").fill("sionic@10.1.145.204");
+  await card.getByTestId("peer-host").fill("demo@host.example");
   await card.getByTestId("peer-label").fill("Mac mini");
   await card.getByTestId("peer-check").click();
   const found = card.getByTestId("peer-found");
   await expect(found).toBeVisible();
   // shown one option per line; read back as one line it is the shell's exact argv
   const shown = (await card.getByTestId("peer-command").innerText()).replace(/ \\\n\s*/g, " ");
-  expect(shown).toMatch(/^ssh -o BatchMode=yes -o ConnectTimeout=10 .* -L 127\.0\.0\.1:\d+:127\.0\.0\.1:\d+ -- sionic@10\.1\.145\.204 sh -c '<remote script>'$/);
+  expect(shown).toMatch(/^ssh -o BatchMode=yes -o ConnectTimeout=10 .* -L 127\.0\.0\.1:\d+:127\.0\.0\.1:\d+ -- demo@host\.example sh -c '<remote script>'$/);
   await expect(card.getByTestId("peer-command")).toContainText("-o BatchMode=yes \\\n");
   await expect(card.getByTestId("peer-hermes")).toContainText("Hermes 0.23.1 · Python 3.14.9");
   await expect(card.getByTestId("peer-bots")).toContainText("mini");
@@ -108,7 +108,7 @@ test("sidebar + → Connect over SSH: suggestions, Check, the exact command, Can
   await expect(page.getByTestId("bot-mac-mini:mini")).toBeVisible();
   await expect(page.getByTestId("head-ssh")).toContainText("SSH · Mac mini");
   const attach = (await calls()).filter((c) => c.op === "peers.attach");
-  expect(attach.map((c) => [c.params.peer, c.params.label, c.params.host])).toEqual([["mac-mini", "Mac mini", "sionic@10.1.145.204"]]);
+  expect(attach.map((c) => [c.params.peer, c.params.label, c.params.host])).toEqual([["mac-mini", "Mac mini", "demo@host.example"]]);
 });
 
 test("the SSH marker: sidebar row, chat header, bot card and page; link state on the header", async ({ page }) => {
@@ -117,7 +117,7 @@ test("the SSH marker: sidebar row, chat header, bot card and page; link state on
   const row = page.getByTestId("ssh-mark-mac-mini:mini");
   await expect(row).toContainText("SSH");
   await expect(row).toContainText("Mac mini");
-  await expect(row).toHaveAttribute("title", /sionic@10\.1\.145\.204/);
+  await expect(row).toHaveAttribute("title", /demo@host\.example/);
   // the local bots carry none
   await expect(page.getByTestId("ssh-mark-kami")).toHaveCount(0);
   // readable at the type scale's floor (11px), in the row's own line, with the label ending in an ellipsis when long
@@ -193,13 +193,13 @@ test(`a bot asked to connect the Mac mini drafts it (${theme}): the chip opens t
   const reply = page.getByTestId("bubble-bot").last();
   await expect(reply.locator(".b")).toContainText("SSH");
   await expect(reply.locator("pre")).toHaveCount(0);
-  await expect(reply.locator(".b")).not.toContainText("10.1.145.204");
+  await expect(reply.locator(".b")).not.toContainText("host.example");
   await shot(page, `peer-chip-${theme}.png`);
   expect((await calls()).some((c) => c.op === "peers.attach")).toBe(false); // the chip alone connects nothing
   await chip.click();
   const card = page.getByTestId("peer-card");
   await expect(card.getByTestId("peer-by")).toHaveText("Proposed by Friren");
-  await expect(card.getByTestId("peer-host")).toHaveValue("sionic@10.1.145.204");
+  await expect(card.getByTestId("peer-host")).toHaveValue("demo@host.example");
   await expect(card.getByTestId("peer-label")).toHaveValue("Mac mini");
   await card.getByTestId("peer-check").click();
   await expect(card.getByTestId("peer-found")).toBeVisible();
@@ -230,13 +230,13 @@ for (const theme of ["dark", "light"] as const) {
     await page.getByRole("button", { name: "Add a bot" }).click();
     await page.getByTestId("addbot-ssh").click();
     const card = page.getByTestId("peer-card");
-    await card.getByTestId("peer-host").fill("sionic@denied");
+    await card.getByTestId("peer-host").fill("demo@denied");
     await card.getByTestId("peer-label").fill("Mac mini");
     await card.getByTestId("peer-check").click();
     const fail = card.getByTestId("peer-fail");
     await expect(fail).toHaveAttribute("data-kind", "auth");
     await expect(fail).toContainText("did not accept your ssh key");
-    await expect(fail).toContainText("ssh-copy-id sionic@denied");
+    await expect(fail).toContainText("ssh-copy-id demo@denied");
     await expect(card.getByTestId("peer-check")).toHaveText("Check again");
     await expect(card.getByTestId("peer-connect")).toHaveCount(0);
     await card.locator("#peer-card-t").click();
@@ -264,7 +264,7 @@ test("a remote bot: folder chats and Restart refuse it; Settings removes the com
   await page.keyboard.press(process.platform === "darwin" ? "Meta+," : "Control+,");
   await page.getByTestId("settings-nav-general").click();
   const section = page.getByTestId("remote-machines");
-  await expect(section.getByTestId("remote-mac-mini")).toContainText("sionic@10.1.145.204");
+  await expect(section.getByTestId("remote-mac-mini")).toContainText("demo@host.example");
   await section.getByTestId("remote-remove-mac-mini").click();
   await expect(section).toContainText("Remove Mac mini?");
   await section.getByTestId("remote-remove-yes-mac-mini").click();

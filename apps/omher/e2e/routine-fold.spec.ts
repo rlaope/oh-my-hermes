@@ -1,4 +1,4 @@
-// A routine that keeps failing folds into one timeline line that counts its runs (khope: the routine history kept
+// A routine that keeps failing folds into one timeline line that counts its runs (demo: the routine history kept
 // piling up in the bot's chat, one line every 30 minutes).
 import { expect, test, type Page } from "@playwright/test";
 
@@ -35,11 +35,11 @@ test.beforeEach(async () => {
 test("twelve failed runs of one routine read as one line: ×12 and the time range", async ({ page }) => {
   await open(page);
   const t0 = Math.floor(new Date(2026, 10, 17, 3, 56).getTime() / 1000);
-  const fail = (n: number, id = "job-sso") => ({ event: "routine.ran", bot: "kami", routine_id: id, name: "sionic-kami-sso-refresh", status: "delivery_failed", ts: t0 + n * 1860 });
+  const fail = (n: number, id = "job-sso") => ({ event: "routine.ran", bot: "kami", routine_id: id, name: "demo-kami-sso-refresh", status: "delivery_failed", ts: t0 + n * 1860 });
   for (let n = 0; n < 12; n++) await emit(fail(n));
   const lines = page.getByTestId("routine-line");
   await expect(lines).toHaveCount(1);
-  await expect(lines.first()).toContainText("sionic-kami-sso-refresh");
+  await expect(lines.first()).toContainText("demo-kami-sso-refresh");
   await expect(lines.first().getByTestId("routine-when")).toHaveText("×12 · 03:56–09:37");
   // Hermes' delivery_failed reads as a failure in words, in the danger colour
   const word = lines.first().locator(".routine-bad");

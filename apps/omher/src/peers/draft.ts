@@ -33,7 +33,7 @@ export function validLabel(label: string): boolean {
   return n >= 1 && n <= 40 && label.trim() !== "" && !/[\u0000-\u001f\u007f]/.test(label);
 }
 
-/** A default label from the host: `sionic@mac-mini.local` -> `mac-mini`. */
+/** A default label from the host: `demo@mac-mini.local` -> `mac-mini`. */
 export function labelFor(host: string): string {
   const name = host.split("@").pop() ?? host;
   const first = /^\d+(\.\d+){3}$/.test(name) ? name : name.split(".")[0];

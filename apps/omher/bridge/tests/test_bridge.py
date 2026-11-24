@@ -1255,7 +1255,7 @@ class Elsewhere(BridgeCase):
 
     async def test_peek_parses_slack_author_and_reads_only(self):
         hist = {"s-slack": [
-            {"role": "user", "text": "[김희망 (Khope) | Slack user <@U0ABC123>] 게이트웨이 502 났어요", "timestamp": 10.0},
+            {"role": "user", "text": "[홍길동 (Demo) | Slack user <@U0ABC123>] 게이트웨이 502 났어요", "timestamp": 10.0},
             {"role": "assistant", "text": "확인할게요", "timestamp": 11.0},
             {"role": "tool", "text": "{}", "timestamp": 12.0},
             {"role": "user", "text": "plain without header", "timestamp": 13.0},
@@ -1273,7 +1273,7 @@ class Elsewhere(BridgeCase):
             self.assertEqual(len(msgs[2]["text"]), 400)
             r = await s.req("elsewhere.peek", bot="kami", session_id="s-slack", limit=10)
             first = r["result"]["messages"][0]
-            self.assertEqual(first["author"], "김희망 (Khope)")
+            self.assertEqual(first["author"], "홍길동 (Demo)")
             self.assertEqual(first["text"], "게이트웨이 502 났어요")
             self.assertEqual(first["ts"], 10.0)
             c = env.clients["kami"]
@@ -2167,7 +2167,7 @@ class LinkPlaces(unittest.TestCase):
         import omher_bridge
         with tempfile.TemporaryDirectory() as d:
             self._db(Path(d), [
-                {"platform": "slack", "chat_id": "C0BLC924P1P", "chat_name": "docs-harness-ai-agent-loop", "thread_id": "1.2"},
+                {"platform": "slack", "chat_id": "C0000000001", "chat_name": "docs-harness-ai-agent-loop", "thread_id": "1.2"},
                 {"platform": "slack", "chat_id": "C2", "chat_name": "#already-hashed"},
                 {"platform": "slack", "chat_id": "D0CDK7XJL72", "chat_name": "Slack", "chat_type": "dm"},
                 {"platform": "discord", "chat_id": "1564465746325545000", "parent_chat_id": "1544259371528232980",
@@ -2179,7 +2179,7 @@ class LinkPlaces(unittest.TestCase):
                 "not json", None,
             ], messages=True)
             p = omher_bridge.read_link_places(Path(d))
-        self.assertEqual(p["slack"], {"C0BLC924P1P": "#docs-harness-ai-agent-loop", "C2": "#already-hashed"})
+        self.assertEqual(p["slack"], {"C0000000001": "#docs-harness-ai-agent-loop", "C2": "#already-hashed"})
         self.assertEqual(p["discord"], {"1564465746325545000": "#cron", "1544259371528232980": "#cron", "77": "#general"})
         self.assertEqual(set(p), {"slack", "discord"})
 
@@ -2560,8 +2560,8 @@ class ReplyThere(BridgeCase):
         self.assertEqual(ob.reply_target({"platform": "discord", "chat_id": "42", "chat_name": "G / #ops"}),
                          ("discord:42", "#ops"))
         self.assertEqual(ob.reply_target({"platform": "slack", "chat_id": "D0CB1", "chat_type": "dm",
-                                          "chat_name": "김희망 (Khope)", "thread_id": "1793.5"}),
-                         ("slack:D0CB1:1793.5", "김희망 (Khope)"))
+                                          "chat_name": "홍길동 (Demo)", "thread_id": "1793.5"}),
+                         ("slack:D0CB1:1793.5", "홍길동 (Demo)"))
         # no messenger thread -> no chip
         for origin in ({}, {"platform": "local", "chat_id": "local"}, {"platform": "slack"},
                        {"platform": "slack", "chat_id": "C1 ; rm -rf"}, {"platform": "discord", "chat_id": "1", "thread_id": "a:b"},
@@ -3835,7 +3835,7 @@ class CliRunsAgents(unittest.TestCase):
             self.assertEqual(set(out["agents"].values()), {"not_installed"})
 
     def test_claude_slug_matches_claude_codes_folder_names(self):
-        self.assertEqual(ob.claude_slug("/Users/a.b@c.ai/Desktop/x_y"), "-Users-a-b-c-ai-Desktop-x-y")
+        self.assertEqual(ob.claude_slug("/Users/a.b@c.example/Desktop/x_y"), "-Users-a-b-c-example-Desktop-x-y")
 
     def test_cli_homes_follow_the_tools_own_env_vars(self):
         homes = ob.cli_homes({"CLAUDE_CONFIG_DIR": "/c", "CODEX_HOME": "/x"})
@@ -4196,19 +4196,19 @@ class Accounts(unittest.TestCase):
         root = h / ".cli-proxy-api"
         root.mkdir()
         (root / "config.yaml").write_text('oauth:\n  auth-dir: "~/.cli-proxy-api"\n', encoding="utf-8")
-        for name in ("claude-2065f4ca-one@gmail.com.json", "claude-5012cc0d-Owner@Example.com.json",
-                     "claude-a0538558-me@sionic.ai.json", "claude-nomail.json", "codex-x@example.com.json",
+        for name in ("claude-2065f4ca-one@example.net.json", "claude-5012cc0d-Owner@Example.com.json",
+                     "claude-a0538558-me@example.com.json", "claude-nomail.json", "codex-x@example.com.json",
                      "claude-x.json.bak"):
             (root / name).write_text(json.dumps({k: SECRET for k in TOKEN_KEYS}), encoding="utf-8")
         (h / ".claude.json").write_text(json.dumps({"oauthAccount": {"emailAddress": "owner@example.com"}}), encoding="utf-8")
         claude = self.groups(h)["claude"]
         rows = [(a["id"], a["email"], a.get("source"), a.get("in_cpa")) for a in claude["accounts"]]
         # Claude Code's own login is one of CLIProxyAPI's (case-insensitive): marked, not listed twice
-        self.assertEqual(rows, [("default", "owner@example.com", None, True), ("cpa:1", "one@gmail.com", "cpa", None),
-                                ("cpa:3", "me@sionic.ai", "cpa", None), ("cpa:4", "", "cpa", None)])
+        self.assertEqual(rows, [("default", "owner@example.com", None, True), ("cpa:1", "one@example.net", "cpa", None),
+                                ("cpa:3", "me@example.com", "cpa", None), ("cpa:4", "", "cpa", None)])
         self.assertEqual(claude["also"], {"name": "CLIProxyAPI", "accounts": 4})
-        self.assertEqual(ob.cpa_email("claude-89345c0d-rlaope0206@gmail.com.json"), "rlaope0206@gmail.com")
-        self.assertEqual(ob.cpa_email("claude-rlaope0206@gmail.com.json"), "rlaope0206@gmail.com")
+        self.assertEqual(ob.cpa_email("claude-89345c0d-demo2@example.com.json"), "demo2@example.com")
+        self.assertEqual(ob.cpa_email("claude-demo2@example.com.json"), "demo2@example.com")
         self.assertEqual(ob.cpa_email("claude-../../x@y.z.json"), "")
         # a CLIProxyAPI login can never be made the account new sessions use (no folder under ~/.omher)
         with self.assertRaises(ob.BridgeError):
@@ -4594,7 +4594,7 @@ class Peers(BridgeCase):
         return local, remote, url
 
     async def _attach(self, s, url, peer="mac"):
-        r = await s.req("peers.attach", peer=peer, label="Mac mini", host="sionic@10.1.145.204", url=url)
+        r = await s.req("peers.attach", peer=peer, label="Mac mini", host="demo@host.example", url=url)
         self.assertTrue(r["ok"], r)
         return r["result"]
 
@@ -4614,7 +4614,7 @@ class Peers(BridgeCase):
             by = {b["name"]: b for b in bots}
             self.assertIn("kami", by)
             self.assertNotIn("host", by["kami"])  # a local bot has no host field
-            self.assertEqual(by["mac:mini"]["host"], {"kind": "ssh", "peer": "mac", "label": "Mac mini", "host": "sionic@10.1.145.204"})
+            self.assertEqual(by["mac:mini"]["host"], {"kind": "ssh", "peer": "mac", "label": "Mac mini", "host": "demo@host.example"})
             self.assertEqual(remote.connects, [])  # listing never starts a remote gateway
 
     async def test_bot_ops_are_forwarded_with_the_bare_name_and_events_come_back_namespaced(self):

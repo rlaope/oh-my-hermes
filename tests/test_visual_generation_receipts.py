@@ -350,7 +350,7 @@ class VisualGenerationReceiptContractTests(unittest.TestCase):
                 "byte_size": 4096,
             })
         with self.assertRaisesRegex(VisualGenerationReceiptError, "not a filesystem path"):
-            _receipt(card, attempt_id="att-evidence", evidence_refs=("Users/khope/mockups/card.png",))
+            _receipt(card, attempt_id="att-evidence", evidence_refs=("Users/demo/mockups/card.png",))
         # A raw prompt pasted into the one free-text field is redacted, not
         # truncated: the value is not a summary that ran long.
         prompt_line = " ".join(card["generation_prompt"].split())[:180]

@@ -370,8 +370,8 @@ class StandingConditionSuppressionTests(unittest.TestCase):
 class EvictionPlanTests(unittest.TestCase):
     def test_rewordings_of_one_fact_group_into_a_single_cluster(self) -> None:
         entries = (
-            "document-harness는 sionic-ai 레포의 에이전트 하네스 기반 문서 작성 시스템이다",
-            "document-harness: sionic-ai 레포의 에이전트 하네스 기반 문서 작성 시스템",
+            "document-harness는 example 레포의 에이전트 하네스 기반 문서 작성 시스템이다",
+            "document-harness: example 레포의 에이전트 하네스 기반 문서 작성 시스템",
             "커피 원두는 밀봉 용기에 보관한다",
         )
         plan = build_eviction_plan(entries, cap=2200)

@@ -76,13 +76,13 @@ class BriefSetup(unittest.TestCase):
     def test_owner_from_the_dm_majority_with_the_alias_dropped(self) -> None:
         self.env(f"export SLACK_BOT_TOKEN='{SECRET}'\nSLACK_ALLOWED_USERS=UA1,UB2\n")
         dm = lambda u, n: {"platform": "slack", "chat_type": "dm", "user_id": u, "user_name": n}  # noqa: E731
-        self.sessions(dm("UA1", "Ann"), dm("UB2", "김희망 (Khope)"), dm("UB2", "김희망 (Khope)"),
+        self.sessions(dm("UA1", "Ann"), dm("UB2", "홍길동 (Demo)"), dm("UB2", "홍길동 (Demo)"),
                       {"platform": "slack", "chat_type": "group", "user_id": "UA1", "user_name": "Ann"},
                       {"platform": "slack", "chat_type": "group", "user_id": "UA1", "user_name": "Ann"},
                       {"platform": "discord", "chat_type": "dm", "user_id": "UA1"})
         before = (self.p / "state.db").stat().st_mtime_ns
         p = self.plan()
-        self.assertEqual((p["state"], p["owner"], p["owner_name"]), ("install", "UB2", "김희망"))
+        self.assertEqual((p["state"], p["owner"], p["owner_name"]), ("install", "UB2", "홍길동"))
         self.assertEqual((self.p / "state.db").stat().st_mtime_ns, before)
 
     def test_no_owner_skips(self) -> None:
@@ -218,7 +218,7 @@ class BriefSetup(unittest.TestCase):
 
 
 class BriefPrompt(unittest.TestCase):
-    """What the briefing says first (khope, 2026-11-22: a brief that opened with what the bot did or could not do left
+    """What the briefing says first (demo, 2026-11-22: a brief that opened with what the bot did or could not do left
     him guessing what it was about)."""
 
     def test_it_opens_with_a_greeting_and_what_it_is_about(self) -> None:
