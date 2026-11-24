@@ -414,7 +414,8 @@ def _dispatch_guarded(
         diagnostic = f"Hermes child scratch home could not be created ({type(exc).__name__})"
         return _result(request, depth, "failed", None, "", diagnostic, {}, True, ())
     try:
-        (scratch_path / SCRATCH_MARKER).write_text(marker_text, encoding="utf-8")
+        # Bytes, never text mode: Windows would write `\r\n`, which the strict reader refuses, so nothing is swept.
+        (scratch_path / SCRATCH_MARKER).write_bytes(marker_text.encode("ascii"))
     except OSError as exc:
         # Without its marker a left home could never be swept: no child starts on an unmarked home.
         shutil.rmtree(scratch_path, ignore_errors=True)
@@ -508,7 +509,7 @@ def _dispatch_guarded(
                 terminate(signal.SIGTERM)
             deadline = time.monotonic() + request.timeout_seconds
             try:
-                process.wait(timeout=max(0.0, deadline - time.monotonic()))
+                _wait_until(process, deadline)
                 status = "cancelled" if cancelled.is_set() else (
                     "completed" if process.returncode == 0 else "failed"
                 )
@@ -576,6 +577,26 @@ def _dispatch_guarded(
     )
 
 
+# The longest single wait handed to `Popen.wait`. Windows converts it to whole milliseconds for
+# `WaitForSingleObject`: `inf` raises OverflowError there and a huge finite value does not fit, so a long
+# timeout is waited out in slices of this length.
+_WAIT_SLICE_SECONDS = 3600.0
+
+
+def _wait_until(process: subprocess.Popen[bytes], deadline: float) -> None:
+    """Wait for the child until the monotonic `deadline` (which may be `inf`); raises `TimeoutExpired` at it."""
+    while True:
+        remaining = max(0.0, deadline - time.monotonic())
+        if remaining <= _WAIT_SLICE_SECONDS:
+            process.wait(timeout=remaining)
+            return
+        try:
+            process.wait(timeout=_WAIT_SLICE_SECONDS)
+            return
+        except subprocess.TimeoutExpired:
+            continue
+
+
 def _marker_text(deadline: float) -> str:
     """The marker with its deadline line; an infinite or oversized deadline records `_UNBOUNDED_DEADLINE`."""
     value = int(deadline) + 1 if math.isfinite(deadline) and deadline < _UNBOUNDED_DEADLINE else _UNBOUNDED_DEADLINE
@@ -627,7 +648,7 @@ def _remove_scratch(path: Path, created: float, marker_text: str, identity: os.s
         sweep = "Its timeout has no bound, so its deadline never passes and no sweep removes it."
     if path.is_dir() and not marker.exists():
         try:
-            marker.write_text(marker_text, encoding="utf-8")
+            marker.write_bytes(marker_text.encode("ascii"))
             os.utime(marker, (created, created))
         except OSError:
             sweep = "Its marker could not be restored, so no sweep removes it."

@@ -788,7 +788,7 @@ class ScratchHomeCleanupTests(unittest.TestCase):
         stamp = time.time() - age
         if text is None:
             text = f"omh-hermes-child-scratch/v1\n{int(stamp + 900 if deadline is None else deadline)}\n"
-        marker.write_text(text, encoding="utf-8")
+        marker.write_bytes(text.encode("ascii"))
         os.utime(marker, (stamp, stamp))
         return directory
 
@@ -901,14 +901,14 @@ class ScratchHomeCleanupTests(unittest.TestCase):
         self.assertEqual(list(self.tmp.iterdir()), [])
 
     def test_a_marker_that_cannot_be_written_is_a_typed_failure_before_the_child_starts(self) -> None:
-        real_write = Path.write_text
+        real_write = Path.write_bytes
 
         def refuse_marker(self_path, *args, **kwargs):
             if self_path.name == ".omh-hermes-child-scratch":
                 raise OSError(28, "No space left on device")
             return real_write(self_path, *args, **kwargs)
 
-        with patch.object(Path, "write_text", refuse_marker):
+        with patch.object(Path, "write_bytes", refuse_marker):
             result = self.dispatch()
         self.assertEqual((result.status, result.exit_code), ("failed", None))
         self.assertIn("could not be marked (OSError)", result.stderr)
@@ -982,7 +982,7 @@ class ScratchHomeCleanupTests(unittest.TestCase):
 
     def test_a_symlinked_root_is_refused_and_its_target_untouched(self) -> None:
         outside = self.populated_outside()
-        (outside / ".omh-hermes-child-scratch").write_text("omh-hermes-child-scratch/v1\n1\n", encoding="utf-8")
+        (outside / ".omh-hermes-child-scratch").write_bytes(b"omh-hermes-child-scratch/v1\n1\n")
         root = self.tmp / "omh-hermes-child-link"
         self.link(root, outside)
         with self.assertRaises(OSError):
@@ -996,17 +996,67 @@ class ScratchHomeCleanupTests(unittest.TestCase):
         self.assertTrue((outside / ".omh-hermes-child-scratch").is_file())
 
     def test_the_dispatchs_own_home_swapped_after_creation_is_refused(self) -> None:
-        # The dispatch removes only the directory its own mkdtemp made (same st_dev/st_ino).
-        made = self.home("omh-hermes-child-made", age=0)
-        identity = os.lstat(made)
-        _REAL_RMTREE(made)
+        # The dispatch removes only the directory its own mkdtemp made (same st_dev/st_ino). A file system may reuse
+        # an inode for a recreated directory, so the identity it recorded is made to differ here, not left to chance.
         other = self.home("omh-hermes-child-made", age=0)
         (other / "home").mkdir()
-        note = hermes_child_dispatch._remove_scratch(other, time.time(), "omh-hermes-child-scratch/v1\n1\n", identity)
-        if (os.lstat(other).st_dev, os.lstat(other).st_ino) == (identity.st_dev, identity.st_ino):
-            self.skipTest("the file system reused the inode, so the swap cannot be told apart here")
+        seen = os.lstat(other)
+        recorded = types.SimpleNamespace(st_dev=seen.st_dev, st_ino=seen.st_ino + 1)
+        note = hermes_child_dispatch._remove_scratch(other, time.time(), "omh-hermes-child-scratch/v1\n1\n", recorded)
         self.assertIn("changed after it was checked", note)
         self.assertTrue((other / "home").is_dir())
+
+    def test_the_marker_is_written_as_bytes_so_no_platform_translates_its_newlines(self) -> None:
+        # Text mode writes `\r\n` on Windows, which `_marker_deadline` refuses: no home would ever be swept.
+        def no_text_mode(self_path, *args, **kwargs):
+            raise AssertionError(f"text-mode write of {self_path.name}")
+
+        seen: list[bytes] = []
+
+        def read_marker(path, *args, **kwargs):
+            seen.append((self.scratch_dir() / ".omh-hermes-child-scratch").read_bytes())
+            raise PermissionError(13, "in use")
+
+        with patch.object(Path, "write_text", no_text_mode), patch("shutil.rmtree", side_effect=read_marker):
+            result = self.dispatch()
+        self.addCleanup(_REAL_RMTREE, self.scratch_root(), True)
+        self.assertEqual(result.status, "completed")
+        self.assertNotIn(b"\r", seen[0])
+        self.assertIsNotNone(hermes_child_dispatch._marker_deadline(seen[0]))
+
+    def test_a_windows_shaped_sweep_takes_an_old_home_and_keeps_a_young_one(self) -> None:
+        # Windows: no `os.getuid`, no O_NOFOLLOW / dir_fd removal. Both are taken away here.
+        old = self.home("omh-hermes-child-win-old", age=2 * 86400, deadline=time.time() - 86400)
+        young = self.home("omh-hermes-child-win-young", age=60)
+        getuid = getattr(os, "getuid", None)
+        if getuid is not None:
+            del os.getuid
+        try:
+            with patch.object(hermes_child_dispatch, "_descriptor_removal", lambda: False):
+                hermes_child_dispatch._sweep_scratch_homes()
+        finally:
+            if getuid is not None:
+                os.getuid = getuid
+        self.assertFalse(old.exists())
+        self.assertTrue(young.exists())
+
+    def test_a_long_wait_is_taken_in_slices_windows_can_convert(self) -> None:
+        # Windows' `Popen.wait` turns its timeout into whole milliseconds: `inf` raises OverflowError there.
+        real_wait = subprocess.Popen.wait
+        asked: list[float | None] = []
+
+        def windows_like_wait(process, timeout=None):
+            asked.append(timeout)
+            if timeout is not None and (timeout == float("inf") or timeout * 1000 > 2 ** 32 - 2):
+                raise OverflowError("cannot convert float infinity to integer")
+            return real_wait(process, timeout=timeout)
+
+        with patch.object(subprocess.Popen, "wait", windows_like_wait), \
+                patch.object(hermes_child_dispatch, "_WAIT_SLICE_SECONDS", 0.05):
+            for timeout in (float("inf"), 1e30):
+                with self.subTest(timeout=timeout):
+                    self.assertEqual(self.dispatch(timeout=timeout).status, "completed")
+        self.assertTrue(all(value is None or value <= 3600.0 for value in asked))
 
     def test_a_root_swapped_for_a_link_after_the_sweeps_checks_is_refused(self) -> None:
         outside = self.populated_outside()
@@ -1151,8 +1201,8 @@ class ScratchHomeCleanupTests(unittest.TestCase):
         for directory in (old, young, unmarked, foreign):
             (directory / "hermes").mkdir(parents=True)
         for directory in (old, young, foreign):
-            (directory / ".omh-hermes-child-scratch").write_text(
-                f"omh-hermes-child-scratch/v1\n{int(day_and_more) + 900}\n", encoding="utf-8")
+            (directory / ".omh-hermes-child-scratch").write_bytes(
+                f"omh-hermes-child-scratch/v1\n{int(day_and_more) + 900}\n".encode("ascii"))
         for directory in (old, unmarked, foreign):
             os.utime(directory / ".omh-hermes-child-scratch" if directory != unmarked else directory,
                      (day_and_more, day_and_more))
