@@ -6148,8 +6148,6 @@ PEER_LIST_TIMEOUT = 5.0
 PEER_OPEN_TIMEOUT = 15.0
 # A peer's `bots.platforms` (rule 45): its bridge may run its own `omh` read first (OMH_READ_TIMEOUT), then answer.
 PEER_PLATFORMS_TIMEOUT = OMH_READ_TIMEOUT + PEER_LIST_TIMEOUT
-# How long `bots.platforms` waits for a peer's ask: a slower one finishes on its own, and `platforms.update` says so.
-PEER_PLATFORMS_WAIT = 1.5
 # Bot-scoped ops a peer's bot takes: sent to the peer with the bare name, its answer passed back as it came.
 PEER_FORWARD = frozenset({
     "chat.open", "chat.send", "chat.interrupt", "chat.discard", "chat.steer", "approval.respond", "clarify.respond", "chat.attach", "chat.set_model",
@@ -6188,7 +6186,7 @@ class PeerLink:
         self.platforms: dict | None = None
         self.platforms_at = 0.0
         self.platforms_ask: asyncio.Task | None = None
-        self.platforms_late = False  # an ask outlived PEER_PLATFORMS_WAIT: say `platforms.update` when it lands
+        self.platforms_late = False  # an answer went out without this ask: say `platforms.update` when it lands
         self.on_event = None
         self.on_lost = None
 
@@ -9261,9 +9259,9 @@ class Bridge:
         per PLATFORMS_TTL (PLATFORMS_TTL_MISS after an answer it could not use) that overlapping asks share. The ask
         is the bare op with nothing in it: that bridge picks its own Hermes root and runs its own rule 43 read. Its
         answer is checked again here (`peer_platform_rows`). An offline link, an error, an older bridge or a peer
-        without `omh` is `available: false`, so the page says it cannot tell. It waits at most PEER_PLATFORMS_WAIT,
-        so a slow computer never holds back this computer's rows: the last answer stands meanwhile (`unasked` when
-        there is none), and `platforms.update` tells the app once the ask lands."""
+        without `omh` is `available: false`, so the page says it cannot tell. It never waits for the peer: an ask
+        runs in the background (bounded by PEER_PLATFORMS_TIMEOUT), the last checked answer stands meanwhile
+        (`unasked` when there is none), and `platforms.update` tells the app once the ask lands."""
         if not link.connected:
             return {"available": False, "why": "offline", "bots": {}}
         if link.platforms is not None and time.monotonic() - link.platforms_at < (
@@ -9271,9 +9269,6 @@ class Bridge:
             return link.platforms
         if link.platforms_ask is None or link.platforms_ask.done():
             link.platforms_ask = self._spawn(self._ask_peer_platforms(link))
-        done, _ = await asyncio.wait({link.platforms_ask}, timeout=PEER_PLATFORMS_WAIT)
-        if done:
-            return link.platforms_ask.result()
         link.platforms_late = True
         return link.platforms or {"available": False, "why": "unasked", "bots": {}}
 
@@ -9318,6 +9313,7 @@ class Bridge:
             return
         await self._peer_turns_end(link, f"lost the link to {link.label}")
         await self.emit("bots.update", "")
+        await self.emit("platforms.update", "")  # its bots read as cannot tell (offline) at once (rule 45)
 
     # ------------------------------------------------------------ elsewhere (read only)
 

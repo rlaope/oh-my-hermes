@@ -3650,21 +3650,23 @@ class PeerPlatformsThroughTheirOwnBridge(unittest.TestCase):
         " page or from this computer reaches it, and the page's Read again never reaches that computer.",
         "That bridge picks its own Hermes root and runs rule 43's one `omh` read through its own `run_omh_read` and"
         " `OMH_READS`, under rule 43's limits, and answers from its own rule 43 cache.",
-        "That bridge serves only the one link that started it, so asks over a link run `omh` there no more often than"
-        " that cache allows",
+        "That bridge serves only the one link that started it, so within one link asks run `omh` there no more often"
+        " than that cache allows",
+        "a requester that ignored this could make the other computer run its read at most once per reconnect, bounded by"
+        " the desktop shell's reconnect backoff, not by the 30 seconds.",
         "This computer asks each computer at most once every 30 seconds (2 minutes after an answer it could not use), and"
-        " asks that overlap share one; a peer's answer never makes this computer run `omh`. `bots.platforms` stays out"
-        " of `PEER_FORWARD`, so an ask that names one bot there is refused, not sent.",
+        " asks that overlap share one; a peer cannot make this computer run `omh`: its own rule 43 cache holds whatever a"
+        " peer does. `bots.platforms` stays out of `PEER_FORWARD`, so an ask that names one bot there is refused, not"
+        " sent.",
         "What comes back is checked again here as if it were `omh`'s own answer (`peer_platform_rows`):",
         "nothing else kept: no `fix` text, no link (the Discord Developer Portal stays the page's own constant) and none"
         " of that computer's own peers. It is held in memory with the link and never written to disk, logged or sent"
         " anywhere else.",
         "is shown as cannot tell, never as connected or as not connected.",
         "with the same 10-minute threshold for a reconnect (`ROW_RECONNECT_MS`),",
-        "Each new link starts that bridge with an empty cache; this computer keeps its own interval for that computer"
-        " across a reconnect.",
-        "This computer waits at most 1.5 seconds for that computer's answer (`PEER_PLATFORMS_WAIT`), so a slow or hung"
-        " computer never holds back the rows of the bots here:",
+        "This computer never waits for that computer's answer: `bots.platforms` answers at once with the rows of the bots"
+        " here and, for each computer, the last answer it checked (cannot tell when there is none) while the ask runs in"
+        " the background for at most 25 seconds (`PEER_PLATFORMS_TIMEOUT`);",
         "This follows the owner's request (2026-11-24) to do what was left after rule 43, which named this read as"
         " needing a rule of its own.",
     )
@@ -3688,15 +3690,43 @@ class PeerPlatformsThroughTheirOwnBridge(unittest.TestCase):
         forward = ast.literal_eval(self._const("PEER_FORWARD").args[0])
         self.assertNotIn("bots.platforms", forward)
         self.assertNotIn("bots.templates", forward)
-        # no op a peer's bot forwards reaches an `omh` read: its handler names none of rule 43's runner or cache (its
-        # own body only; a helper it calls is not walked)
+        # no op a peer's bot forwards reaches an `omh` read, through its handler or anything it calls
         ops = next(n.value for n in ast.walk(self.tree) if isinstance(n, ast.Assign)
                    and ast.unparse(n.targets[0]) == "self.ops")
         handlers = {k.value: v.attr for k, v in zip(ops.keys, ops.values)}
         for op in forward:
-            body = ast.unparse(self.fns[handlers[op]])
-            for bad in ("run_omh_read", "omh_path", "self.platforms", "_peer_platforms"):
-                self.assertNotIn(bad, body, f"{op}: {bad}")
+            self.assertEqual(self._reaches_omh(self.fns, handlers[op]), None, op)
+        # the walk itself: a handler that reaches the runner one helper deep is caught
+        toy = ast.parse("def run_omh_read(): pass\n"
+                        "def helper(): run_omh_read()\n"
+                        "class B:\n    def op_x(self): return self._h()\n    def _h(self): return helper()\n")
+        toy_fns = {n.name: n for n in ast.walk(toy) if isinstance(n, ast.FunctionDef)}
+        self.assertEqual(self._reaches_omh(toy_fns, "op_x"), "helper")
+
+    OMH_REACH = ("run_omh_read", "omh_path", "omh_read_argv", "PlatformStates", "self.platforms", "_peer_platforms",
+                 "_ask_peer_platforms")
+
+    @classmethod
+    def _reaches_omh(cls, fns: dict, start: str) -> str | None:
+        """The first function, *start* or one it calls (by name, any depth, within this module), whose body names
+        rule 43's runner or cache; None when none does."""
+        seen, todo = set(), [start]
+        while todo:
+            name = todo.pop()
+            if name in seen or name not in fns:
+                continue
+            seen.add(name)
+            fn = fns[name]
+            body = ast.unparse(ast.Module(body=fn.body, type_ignores=[]))
+            if any(bad in body for bad in cls.OMH_REACH) and name not in ("run_omh_read",):
+                return name
+            for c in ast.walk(fn):
+                if isinstance(c, ast.Call):
+                    f = c.func
+                    todo.append(f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", ""))
+                if isinstance(c, ast.Name) and c.id == "run_omh_read":
+                    return name
+        return None
 
     def test_the_one_ask_carries_no_argument_and_shares_one_per_interval(self) -> None:
         # the only `bots.platforms` sent over a link, its params a literal empty dict: nothing from the page or a caller
@@ -3713,9 +3743,11 @@ class PeerPlatformsThroughTheirOwnBridge(unittest.TestCase):
         self.assertIn("if not link.connected:", cache)
         self.assertIn("PLATFORMS_TTL if link.platforms['available'] else PLATFORMS_TTL_MISS", cache)
         self.assertIn("if link.platforms_ask is None or link.platforms_ask.done():", cache)
-        self.assertIn("done, _ = await asyncio.wait({link.platforms_ask}, timeout=PEER_PLATFORMS_WAIT)", cache)
         self.assertIn("return link.platforms or {'available': False, 'why': 'unasked', 'bots': {}}", cache)
-        self.assertIn("PEER_PLATFORMS_WAIT = 1.5", self.source)
+        self.assertNotIn("await asyncio", cache)  # never waits on the peer's ask
+        self.assertIn("link.platforms, link.platforms_at = (old.platforms, old.platforms_at)",
+                      ast.unparse(self.fns["op_peers_attach"]))
+        self.assertIn("await self.emit('platforms.update', '')", ast.unparse(self.fns["_peer_lost"]))
         self.assertIn("await self.emit('platforms.update', '')", ask)
         self.assertNotIn("fresh", cache)
         op = ast.unparse(self.fns["op_bots_platforms"])

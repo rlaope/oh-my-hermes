@@ -347,13 +347,26 @@ class PeerPlatforms(BridgeCase):
         self.assertTrue(r["ok"], r)
         return local, remote, s, url
 
+    @staticmethod
+    def _updates(s) -> int:
+        return sum(1 for e in s.events if e["event"] == "platforms.update")
+
+    async def _peer(self, s, **params) -> dict:
+        """`bots.platforms` once the peer's ask landed: the first answer never waits for it (`unasked`), and
+        `platforms.update` says when to read again."""
+        n = self._updates(s)
+        r = await s.req("bots.platforms", **params)
+        self.assertTrue(r["ok"], r)
+        if r["result"]["peers"]["far"]["why"] != "unasked":
+            return r["result"]
+        await s.until(lambda ev: self._updates(s) > n)
+        return (await s.req("bots.platforms"))["result"]
+
     async def test_the_peers_bots_come_back_checked_from_its_own_read(self):
         from contextlib import AsyncExitStack
         async with AsyncExitStack() as stack:
             local, remote, s, _ = await self._two(stack)
-            r = await s.req("bots.platforms")
-            self.assertTrue(r["ok"], r)
-            res = r["result"]
+            res = await self._peer(s)
             self.assertEqual(set(res["bots"]), {"kami", "default"})  # this computer's, as before
             far = res["peers"]["far"]
             self.assertEqual((far["available"], far["why"]), (True, ""))
@@ -369,8 +382,10 @@ class PeerPlatforms(BridgeCase):
         from contextlib import AsyncExitStack
         async with AsyncExitStack() as stack:
             local, remote, s, _ = await self._two(stack)
+            n = self._updates(s)
             got = await asyncio.gather(*(s.req("bots.platforms", fresh=True) for _ in range(20)))
             self.assertTrue(all(r["ok"] for r in got))
+            await s.until(lambda ev: self._updates(s) > n)
             for _ in range(5):
                 self.assertTrue((await s.req("bots.platforms", fresh=True))["ok"])
             self.assertEqual(len(self.asked), 1, "overlapping and repeated asks share one ask of the peer")
@@ -378,7 +393,9 @@ class PeerPlatforms(BridgeCase):
             self.assertEqual(len(self.remote_runs), 1)
             link = local.bridge.peers["far"]
             link.platforms_at -= ob.PLATFORMS_TTL  # the interval is over
-            self.assertTrue((await s.req("bots.platforms"))["ok"])
+            n = self._updates(s)
+            self.assertTrue((await s.req("bots.platforms"))["result"]["peers"]["far"]["available"])  # last answer stands
+            await s.until(lambda ev: self._updates(s) > n)
             self.assertEqual(len(self.asked), 2)
 
     async def test_a_peer_flooding_the_serving_side_runs_omh_no_more_than_its_cache_allows(self):
@@ -407,12 +424,12 @@ class PeerPlatforms(BridgeCase):
         from contextlib import AsyncExitStack
         async with AsyncExitStack() as stack:  # no `omh` on that computer
             local, remote, s, _ = await self._two(stack, remote_omh=None)
-            far = (await s.req("bots.platforms"))["result"]["peers"]["far"]
+            far = (await self._peer(s))["peers"]["far"]
             self.assertEqual((far["available"], far["why"], far["bots"]), (False, "unread", {}))
             self.assertEqual(self.remote_runs, [])
         async with AsyncExitStack() as stack:  # an answer that is not OMH's
             local, remote, s, _ = await self._two(stack, remote_out="Traceback (most recent call last):")
-            far = (await s.req("bots.platforms"))["result"]["peers"]["far"]
+            far = (await self._peer(s))["peers"]["far"]
             self.assertEqual((far["available"], far["why"]), (False, "unread"))
             # a failed answer is asked again only after PLATFORMS_TTL_MISS
             local.bridge.peers["far"].platforms_at -= ob.PLATFORMS_TTL
@@ -421,13 +438,14 @@ class PeerPlatforms(BridgeCase):
         async with AsyncExitStack() as stack:  # a bridge from before rule 45's op
             local, remote, s, _ = await self._two(stack)
             del remote.bridge.ops["bots.platforms"]
-            far = (await s.req("bots.platforms"))["result"]["peers"]["far"]
+            far = (await self._peer(s))["peers"]["far"]
             self.assertEqual((far["available"], far["why"]), (False, "unread"))
         async with AsyncExitStack() as stack:  # the link is down
             local, remote, s, _ = await self._two(stack)
-            self.assertTrue((await s.req("bots.platforms"))["result"]["peers"]["far"]["available"])
+            self.assertTrue((await self._peer(s))["peers"]["far"]["available"])
+            n = self._updates(s)
             await local.bridge.peers["far"].ws.close()
-            await s.until(lambda ev: any(e["event"] == "bots.update" for e in ev[-3:]))
+            await s.until(lambda ev: self._updates(s) > n)  # the app is told at once, not at the next poll
             far = (await s.req("bots.platforms"))["result"]["peers"]["far"]
             self.assertEqual((far["available"], far["why"], far["bots"]), (False, "offline", {}))
 
@@ -443,7 +461,7 @@ class PeerPlatforms(BridgeCase):
                              + [row(platform=f"p{i}") for i in range(60)]},
                     **{f"b{i}": {"platforms": [row(reason="", guidance="")]} for i in range(400)}}}
             remote.bridge.ops["bots.platforms"] = hostile
-            far = (await s.req("bots.platforms"))["result"]["peers"]["far"]
+            far = (await self._peer(s))["peers"]["far"]
             self.assertTrue(far["available"])
             self.assertEqual(len(far["bots"]), 256)
             self.assertEqual(len(far["bots"]["mini"]["platforms"]), 32)
@@ -454,7 +472,7 @@ class PeerPlatforms(BridgeCase):
             self.assertNotIn("peers", far)
             self.assertEqual(len(self.local_runs), 1, "a peer's answer never makes this computer run omh")
 
-    async def test_a_slow_peer_never_holds_back_this_computers_rows(self):
+    async def test_a_slow_or_hung_peer_never_holds_back_this_computers_rows(self):
         import asyncio
         import time
         from contextlib import AsyncExitStack
@@ -463,26 +481,30 @@ class PeerPlatforms(BridgeCase):
             serve = remote.bridge.ops["bots.platforms"]
             gate = asyncio.Event()
 
-            async def slow(p):
+            async def hung(p):  # answers only when the test says so: a 3 s peer, or one that never answers
                 await gate.wait()
                 return await serve(p)
-            remote.bridge.ops["bots.platforms"] = slow
-            t0 = time.monotonic()
-            r = await s.req("bots.platforms", fresh=True)
-            self.assertLess(time.monotonic() - t0, ob.PEER_PLATFORMS_WAIT + 1.0)
-            self.assertEqual(set(r["result"]["bots"]), {"kami", "default"})  # this computer's rows, at once
-            far = r["result"]["peers"]["far"]
-            self.assertEqual((far["available"], far["why"]), (False, "unasked"))
-            gate.set()  # the ask lands: the app is told, and the next read has the peer's rows
-            await s.until(lambda ev: any(e["event"] == "platforms.update" for e in ev))
+            remote.bridge.ops["bots.platforms"] = hung
+            n = self._updates(s)
+            for fresh in (False, True, True):  # the minute's poll and the local Read again
+                t0 = time.monotonic()
+                r = await s.req("bots.platforms", fresh=fresh)
+                self.assertLess(time.monotonic() - t0, 1.0)  # a generous bound: the local read is faked
+                self.assertEqual(set(r["result"]["bots"]), {"kami", "default"})
+                far = r["result"]["peers"]["far"]
+                self.assertEqual((far["available"], far["why"]), (False, "unasked"))
+            gate.set()  # it lands: the app is told, and the next read has the peer's rows
+            await s.until(lambda ev: self._updates(s) > n)
+            self.assertEqual(len(self.asked), 1)  # the three reads shared one ask
             far = (await s.req("bots.platforms"))["result"]["peers"]["far"]
             self.assertTrue(far["available"])
             self.assertEqual(far["bots"]["mini"]["platforms"][0]["status"], "failed")
-            self.assertEqual(len(self.remote_runs), 1)
-            # stale again and slow again: the last checked answer stands meanwhile, not "cannot tell"
+            # stale and hung again: the last checked answer stands at once, never "cannot tell" for it
             gate.clear()
             local.bridge.peers["far"].platforms_at -= ob.PLATFORMS_TTL
-            far = (await s.req("bots.platforms"))["result"]["peers"]["far"]
+            t0 = time.monotonic()
+            far = (await s.req("bots.platforms", fresh=True))["result"]["peers"]["far"]
+            self.assertLess(time.monotonic() - t0, 1.0)
             self.assertTrue(far["available"])
             gate.set()
 
@@ -490,7 +512,7 @@ class PeerPlatforms(BridgeCase):
         from contextlib import AsyncExitStack
         async with AsyncExitStack() as stack:
             local, remote, s, url = await self._two(stack)
-            await s.req("bots.platforms")
+            await self._peer(s)
             r = await s.req("peers.attach", peer="far", label="Other computer", host="user@host.example", url=url)
             self.assertTrue(r["ok"], r)
             self.assertTrue((await s.req("bots.platforms"))["result"]["peers"]["far"]["available"])
