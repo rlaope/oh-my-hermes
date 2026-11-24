@@ -25,6 +25,7 @@ SUBCOMMAND_REGISTRARS: dict[str, tuple[str, str]] = {
     "apply": ("setup", "_add_top_level_commands"),
     "auto-resume": ("auto_resume", "_add_auto_resume_commands"),
     "benchmark": ("cross_harness_benchmark", "_add_benchmark_commands"),
+    "cache": ("cache", "_add_cache_commands"),
     "capabilities": ("capabilities", "_add_capabilities_commands"),
     "capability-policy": ("setup", "_add_top_level_commands"),
     "cases": ("use_cases", "_add_cases_commands"),
@@ -108,6 +109,9 @@ def _command_module(module: str):
         return loaded
     if module == "auto_resume":
         from . import auto_resume as loaded
+        return loaded
+    if module == "cache":
+        from . import cache as loaded
         return loaded
     if module == "capabilities":
         from . import capabilities as loaded
