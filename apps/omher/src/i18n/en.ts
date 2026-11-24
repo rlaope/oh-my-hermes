@@ -1609,6 +1609,8 @@ export const en = {
   "key.termClear": "Clear the terminal",
   "key.termScroll": "Top, bottom of the scrollback (in a terminal)",
   "key.termCopyPaste": "Copy, paste (in a terminal)",
+  "key.termSelectAll": "Select everything in the terminal",
+  "key.termPrompt": "Previous, next prompt (in a terminal)",
   "tmenu.label": "Terminal",
   "tmenu.copy": "Copy",
   "tmenu.paste": "Paste",

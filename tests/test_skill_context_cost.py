@@ -114,8 +114,9 @@ class SkillContextCostTests(unittest.TestCase):
         # 13,592 -> 12,970: the index producer cuts at a word boundary the way
         # Hermes' `clip_skill_description` does, not at a fixed 57 characters.
         # skill-eval then adds its line + newline; model-compression's clause
-        # then says "smaller or cheaper" again (+3).
-        self.assertEqual(skill_index_chars(), 13_054)
+        # then says "smaller or cheaper" again (+3). app-work-intake adds its
+        # line + newline (+87).
+        self.assertEqual(skill_index_chars(), 13_141)
         # research and web-research add the shipped `ru` trigger pack's routing
         # signals (+446 and +316 bytes, after its review dropped the everyday
         # and nested phrases) to their pre-feature bodies; the search guidance

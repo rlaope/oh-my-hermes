@@ -134,6 +134,13 @@ describe("macOS line editing keys", () => {
     expect(isClearKey(k({ ctrlKey: true, key: "k", code: "KeyK" }), false)).toBe(false);
     expect(isClearKey(k({ metaKey: true, shiftKey: true, key: "K", code: "KeyK" }), true)).toBe(false);
   });
+
+  it("Ctrl+Shift+K clears off macOS (Windows and Linux), never with Alt or AltGr, never on macOS", () => {
+    expect(isClearKey(k({ ctrlKey: true, shiftKey: true, key: "K", code: "KeyK" }), false)).toBe(true);
+    expect(isClearKey(k({ ctrlKey: true, shiftKey: true, key: "ㅏ", code: "KeyK" }), false)).toBe(true);
+    expect(isClearKey(k({ ctrlKey: true, shiftKey: true, altKey: true, key: "K", code: "KeyK" }), false)).toBe(false);
+    expect(isClearKey(k({ ctrlKey: true, shiftKey: true, key: "K", code: "KeyK" }), true)).toBe(false);
+  });
 });
 
 describe("scroll keys", () => {
@@ -152,19 +159,52 @@ describe("scroll keys", () => {
 
 describe("copy and paste keys off macOS", () => {
   const k = (o: Partial<{ key: string; code: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }>) => key({ code: "", ...o });
-  it("Ctrl+Shift+C / Ctrl+Insert copy, Ctrl+Shift+V / Shift+Insert paste; plain Ctrl+C and Ctrl+V stay the program's", () => {
-    expect(clipboardKey(k({ ctrlKey: true, shiftKey: true, key: "C", code: "KeyC" }), false)).toBe("copy");
-    expect(clipboardKey(k({ ctrlKey: true, key: "Insert" }), false)).toBe("copy");
-    expect(clipboardKey(k({ ctrlKey: true, shiftKey: true, key: "V", code: "KeyV" }), false)).toBe("paste");
-    expect(clipboardKey(k({ shiftKey: true, key: "Insert" }), false)).toBe("paste");
-    expect(clipboardKey(k({ ctrlKey: true, key: "c", code: "KeyC" }), false)).toBeNull();
-    expect(clipboardKey(k({ ctrlKey: true, key: "v", code: "KeyV" }), false)).toBeNull();
-    // a Korean layout: the keys where C and V stand
-    expect(clipboardKey(k({ ctrlKey: true, shiftKey: true, key: "ㅊ", code: "KeyC" }), false)).toBe("copy");
+  const ctrlC = k({ ctrlKey: true, key: "c", code: "KeyC" });
+  const ctrlV = k({ ctrlKey: true, key: "v", code: "KeyV" });
+  it("Ctrl+Shift+C / Ctrl+Insert copy, Ctrl+Shift+V / Shift+Insert paste, on Windows and Linux, selection or not", () => {
+    for (const os of ["win", "linux"] as const) {
+      for (const sel of [true, false]) {
+        expect(clipboardKey(k({ ctrlKey: true, shiftKey: true, key: "C", code: "KeyC" }), os, sel)).toBe("copy");
+        expect(clipboardKey(k({ ctrlKey: true, key: "Insert" }), os, sel)).toBe("copy");
+        expect(clipboardKey(k({ ctrlKey: true, shiftKey: true, key: "V", code: "KeyV" }), os, sel)).toBe("paste");
+        expect(clipboardKey(k({ shiftKey: true, key: "Insert" }), os, sel)).toBe("paste");
+        // a Korean layout: the keys where C and V stand
+        expect(clipboardKey(k({ ctrlKey: true, shiftKey: true, key: "ㅊ", code: "KeyC" }), os, sel)).toBe("copy");
+      }
+    }
+  });
+  it("Windows (as Windows Terminal): Ctrl+V pastes; Ctrl+C copies with a selection, else it is the program's ^C", () => {
+    expect(clipboardKey(ctrlV, "win", false)).toBe("paste");
+    expect(clipboardKey(ctrlV, "win", true)).toBe("paste");
+    expect(clipboardKey(ctrlC, "win", true)).toBe("copy");
+    expect(clipboardKey(ctrlC, "win", false)).toBeNull();
+    // Caps Lock, and a Korean or Russian layout: the keys where C and V stand
+    expect(clipboardKey(k({ ctrlKey: true, key: "C", code: "KeyC" }), "win", true)).toBe("copy");
+    expect(clipboardKey(k({ ctrlKey: true, key: "ㅍ", code: "KeyV" }), "win", false)).toBe("paste");
+    expect(clipboardKey(k({ ctrlKey: true, key: "с", code: "KeyC" }), "win", true)).toBe("copy");
+  });
+  it("Linux (as GNOME Terminal): plain Ctrl+C and Ctrl+V stay the program's, selection or not", () => {
+    for (const sel of [true, false]) {
+      expect(clipboardKey(ctrlC, "linux", sel)).toBeNull();
+      expect(clipboardKey(ctrlV, "linux", sel)).toBeNull();
+    }
+  });
+  it("AltGr (Ctrl+Alt on Windows) and Alt never copy or paste: AltGr+C types ć on a Polish layout, AltGr+V @ on others", () => {
+    for (const os of ["win", "linux"] as const) {
+      expect(clipboardKey(k({ ctrlKey: true, altKey: true, key: "ć", code: "KeyC" }), os, true)).toBeNull();
+      expect(clipboardKey(k({ ctrlKey: true, altKey: true, key: "@", code: "KeyV" }), os, false)).toBeNull();
+      expect(clipboardKey(k({ ctrlKey: true, altKey: true, shiftKey: true, key: "C", code: "KeyC" }), os, true)).toBeNull();
+    }
+    // a report that says AltGraph without Alt (some Linux layouts) is AltGr all the same
+    const altGr = { ...ctrlV, getModifierState: (m: string) => m === "AltGraph" };
+    expect(clipboardKey(altGr, "win", false)).toBeNull();
   });
   it("macOS takes none of them (Cmd+C / Cmd+V are the Edit menu's)", () => {
-    expect(clipboardKey(k({ ctrlKey: true, shiftKey: true, key: "C", code: "KeyC" }), true)).toBeNull();
-    expect(clipboardKey(k({ shiftKey: true, key: "Insert" }), true)).toBeNull();
+    expect(clipboardKey(k({ ctrlKey: true, shiftKey: true, key: "C", code: "KeyC" }), "mac", true)).toBeNull();
+    expect(clipboardKey(k({ shiftKey: true, key: "Insert" }), "mac", false)).toBeNull();
+    expect(clipboardKey(ctrlC, "mac", true)).toBeNull();
+    expect(clipboardKey(ctrlV, "mac", false)).toBeNull();
+    expect(clipboardKey(k({ metaKey: true, key: "v", code: "KeyV" }), "mac", false)).toBeNull();
   });
 });
 
@@ -189,7 +229,7 @@ describe("Cmd keys on macOS stay the app's", () => {
   });
 });
 
-describe("Cmd+A selects the terminal on macOS", () => {
+describe("Cmd+A (macOS) or Ctrl+Shift+A (Windows, Linux) selects the terminal", () => {
   const k = (key: string, code: string, mods: Partial<{ metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }> = {}) => ({
     key,
     code,
@@ -203,10 +243,17 @@ describe("Cmd+A selects the terminal on macOS", () => {
     expect(isSelectAllKey(k("a", "KeyA", { metaKey: true }), true)).toBe(true);
     expect(isSelectAllKey(k("ㅁ", "KeyA", { metaKey: true }), true)).toBe(true);
   });
-  it("is not Cmd+Shift+A, Ctrl+A, or anything off macOS", () => {
+  it("is not Cmd+Shift+A or Ctrl+A on macOS, nor Cmd+A off macOS", () => {
     expect(isSelectAllKey(k("a", "KeyA", { metaKey: true, shiftKey: true }), true)).toBe(false);
     expect(isSelectAllKey(k("a", "KeyA", { ctrlKey: true }), true)).toBe(false);
     expect(isSelectAllKey(k("a", "KeyA", { metaKey: true }), false)).toBe(false);
+  });
+  it("is Ctrl+Shift+A off macOS; plain Ctrl+A stays the program's (line start), and AltGr never selects", () => {
+    expect(isSelectAllKey(k("A", "KeyA", { ctrlKey: true, shiftKey: true }), false)).toBe(true);
+    expect(isSelectAllKey(k("ㅁ", "KeyA", { ctrlKey: true, shiftKey: true }), false)).toBe(true);
+    expect(isSelectAllKey(k("a", "KeyA", { ctrlKey: true }), false)).toBe(false);
+    expect(isSelectAllKey(k("A", "KeyA", { ctrlKey: true, shiftKey: true, altKey: true }), false)).toBe(false);
+    expect(isSelectAllKey(k("A", "KeyA", { ctrlKey: true, shiftKey: true }), true)).toBe(false);
   });
 
   it("Option types the ASCII sign a European Mac layout puts there; on a US layout it stays Meta", () => {

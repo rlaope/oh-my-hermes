@@ -80,9 +80,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # reproduces 40241e3b...ba76 / 12894.
         # 12975 -> 12978 and the digest re-derived: model-compression's clause says "smaller or cheaper" again
         # (+3 in its index line); the pin before it was c370d495...0d2c.
-        self.assertEqual(_digest(legacy), '934f22855f11c51758742087aea63159916dba0b7532ad208ed5a436d3b623b4')
-        self.assertEqual(len('\n'.join(legacy)), 12978)
-        delta = len('\n'.join(lines)) - 12978
+        # 12978 -> 13065 and the digest re-derived: app-work-intake adds one index line (+87 with its newline);
+        # dropping only that line reproduces 934f2285...23b4 / 12978.
+        self.assertEqual(_digest(legacy), '35e317fb767116e462375a5211bf27e664ecc1a16e7b0e622c5c55dceac2c6a2')
+        self.assertEqual(len('\n'.join(legacy)), 13065)
+        delta = len('\n'.join(lines)) - 13065
         self.assertGreater(delta, 0)
         self.assertLessEqual(delta, INDEX_DELTA_CAP)
         # A catalog ratchet is exact; do not carry the old row's unused slack.
@@ -209,11 +211,14 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # 546456 -> 546679 and the digest re-derived: OpenAI's GPT-6.2 Codex guide lines move the dag-ulw row
             # (+161) and the agent-instructions row (+62, itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no
             # other row moved, and the pin before it was 59c3f3d0...38b0.
-            (skill_capabilities, 546679, FULL_ROW_DELTA_CAP,
-             '8e3f5c83774996722ca3e5380fb393091eb113ecd5270ef4f6ef39f0f18dd898',
+            # 546679 -> 550928 and the digests re-derived: app-work-intake adds one row to each producer (+4249 and
+            # +952 with separators); dropping only that row reproduces 8e3f5c83...d898 at 546679 and
+            # 7bf53703...578d at 146420.
+            (skill_capabilities, 550928, FULL_ROW_DELTA_CAP,
+             '2fec48bb1e87b82946c4e022849e290bec8c07693076e71041a1c0ff9a62cbd1',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
-            (standalone_skill_capability_items, 146420, STANDALONE_ROW_DELTA_CAP,
-             '7bf537036d7224bf9054e4fc91773dc033d063546267031ea8bbec7f1872578d',
+            (standalone_skill_capability_items, 147372, STANDALONE_ROW_DELTA_CAP,
+             'adad03a49ec76047544490d099be7f9dd53414a9ac71b73b939710d61cae9d4b',
              release.STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
         ):
             with self.subTest(producer=producer.__name__):
@@ -259,16 +264,19 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 33802 -> 34006 and the digest re-derived: skill-eval adds its 190-byte
         # trigger row and a 14-byte tracker token (+204); dropping both
         # reproduces 4be90d47...e2fa / 33802.
-        self.assertEqual(_digest(legacy), '6f986a7057d335efc62b98083e0d3ee7210822c2710a2b38a13afe94d625d8f7')
+        # 34006 -> 34215 and the digest re-derived: app-work-intake adds its trigger row and token (+209);
+        # dropping both reproduces 6f986a70...d8f7 / 34006.
+        self.assertEqual(_digest(legacy), 'd76ce202d5800ae7f00d4cba9d118628c02f76c89306fad8ed48a41f70a9757e')
         baseline = len(''.join(legacy).encode())
-        self.assertEqual(baseline, 34006)
+        self.assertEqual(baseline, 34215)
         # 33_100 -> 33_318: main's ru pack and repro-audit (+222 over 32874) used
         # the gate's room and sprite-forge adds its 221-byte row and token; each
         # side alone fit, the merged tree measures 33317. The gate stays exact.
         # 33_318 -> 33_594: systematic-review's 276 bytes; the gate stays exact.
         # 33_594 -> 33_803: model-compression's 238 bytes; the gate stays exact.
         # 33_803 -> 34_007: skill-eval's 204 bytes; the gate stays exact.
-        self.assertLess(baseline, 34_007)  # The existing content keeps its old gate.
+        # 34_007 -> 34_216: app-work-intake's 209 bytes; the gate stays exact.
+        self.assertLess(baseline, 34_216)  # The existing content keeps its old gate.
         self.assertLessEqual(len(registry.encode()) - baseline, REGISTRY_DELTA_CAP)
 
     def test_repeated_growth_is_only_mandatory_rails_and_existing_bodies_survive(self) -> None:
@@ -579,7 +587,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # those five bodies move, and the pin before it was fe24412b...1dd4. Its review round names a cron
         # turn as held and one PR per run; only github-event-ops moves, and the pin before it was b45d33cc...8367.
         # Merged with the monitor-recipes branch: both moves together; re-derived from the producer.
-        self.assertEqual(_digest(legacy_hashes), 'ba130d2d21a8fccc9fcb82ab9aaeb56f27d115ff79e9a59ddf42c12433337694')
+        # The cross-platform workflows then add app-work-intake and move frontend (the Figma frame line),
+        # operating-rhythm (meeting to issues) and wiki (vault as knowledge), merged with both branches above;
+        # the pin before it was ba130d2d...7694.
+        self.assertEqual(_digest(legacy_hashes), '2f25c65fc8efd3f5de4568ede2d5834cb209c6092bf185bcfef5c96d29cb7a09')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -605,7 +616,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # model-compression's Workflow Lane rail adds 341 to main's 83098.
         # 83439 -> 91443: the one reply line takes back the turn-ending rule (+276 in each repeated section).
         # 91443 -> 91785: skill-eval's Workflow Lane rail adds 342.
-        self.assertEqual(legacy['repeated']['bytes'], 91785)
+        # 91785 -> 93533: app-work-intake's Workflow Lane (342) and Runtime Evidence (1406) rails.
+        self.assertEqual(legacy['repeated']['bytes'], 93533)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
         self.assertLessEqual(delta, REPEATED_DELTA_CAP)

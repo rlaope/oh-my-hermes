@@ -113,7 +113,7 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
                        "The info line says INSERT, NORMAL, VISUAL or VISUAL LINE, NORMAL · SPC while the leader is armed "
                        "(steady block), or REPLACE while r waits for one character (steady underline, CSI 4 SP q). "
                        "A non-character follower cancels r without editing or firing a mode shortcut; continuous R is unsupported"),
-    ("Ctrl+V", "Attaches the clipboard image as an [Image #N] token at the caret"),
+    ("Ctrl+V", "Attaches the clipboard image as an [Image #N] token at the caret; with no image, pastes the clipboard's text"),
     ("Ctrl+O", "Opens the whole transcript with every detail (thinking, tool output, whole diffs) at its end, or, "
                "while Hermes asks something, the whole question (it answers nothing); q leaves it"),
     ("Ctrl+L", "Redraws the screen"),

@@ -4,6 +4,36 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: Ctrl+V pastes and Ctrl+C copies in a Windows terminal, as in Windows Terminal.** On Windows, Ctrl+V in a
+  terminal used to reach the program as ^V; only Ctrl+Shift+V and Shift+Insert pasted. Now Ctrl+V pastes through the
+  same path as those keys (the multi-line confirm, and a pasted picture's saved path), and the paste happens once.
+  Ctrl+C copies while text is selected and then clears the selection; with nothing selected it is the program's ^C.
+  Ctrl+Shift+C / Ctrl+Shift+V and Ctrl+Insert / Shift+Insert still work. Linux keeps the GNOME Terminal keys: plain
+  Ctrl+C and Ctrl+V stay the program's there. Three Mac terminal keys that had no Windows or Linux key now have one:
+  Ctrl+Shift+A selects the whole terminal (Cmd+A), Ctrl+Shift+K clears it (Cmd+K), and Ctrl+Up / Ctrl+Down go to the
+  previous or next prompt (Cmd+Up / Cmd+Down). Ctrl+Up and Ctrl+Down still go to the program while a command runs (an
+  inline program such as the OMH TUI or Claude Code), in a full-screen program, when the shell sent no prompt marks,
+  or when the view is already at the bottom with nowhere to go. A Ctrl+C whose copy the clipboard refused keeps the
+  selection. The terminal's right-click menu and Settings › Keyboard show these keys on Windows and Linux, with no ⌘.
+  None of these keys acts while AltGr is held. (#3131; `docs/OMHER-BOUNDARY.md` rule 11)
+- **The OMH TUI's Ctrl+V pastes the clipboard's text when there is no image.** Ctrl+V asked Hermes only for a
+  clipboard image, and with text on the clipboard said "No image found in clipboard" and inserted nothing. That is
+  what a terminal that sends Ctrl+V on as ^V (instead of pasting) got. Now, when Hermes finds no image, the TUI pastes
+  the clipboard's text into the composer as a paste. An image on the clipboard still attaches as an `[Image #N]`
+  token, and `/paste` stays image only. A prompt sent before Hermes answered goes exactly as typed: the clipboard's
+  text is never added to it, waits in the composer instead, and a notice says so. The text is read only when the
+  screen is this machine's (no SSH, and inside tmux not over SSH): through the Win32 clipboard on Windows, `pbpaste`
+  on a Mac, and `wl-paste`, `xclip` or `xsel` on Linux. (#3131; `docs/OMH-TUI-BOUNDARY.md`)
+- **omher: a click on a side-panel tab right after maximise or restore picks that tab.** While the panel slides,
+  a press on a tab that is still moving counts as the tab row's own press (for a double-click on the row), and its
+  click goes nowhere. The check for "still moving" looked at every frame of the last 60 ms. So a tab that had already
+  stopped, two or three frames before the click, still read as moving if an earlier frame in that window had moved
+  it. The click was dropped and the panel stayed on its old tab. Now a tab counts as moving in three cases: while
+  the slide runs, when it moved between the frame the person saw at the press and the moment omher reads the click,
+  or when it had only just arrived in that frame. A tab that held still from the frame before the press is the
+  person's to click.
+  (`apps/omher/src/elsewhere/PanelTabs.tsx`, `apps/omher/src/elsewhere/rowMotion.ts`; e2e `panel-max.spec.ts`, seen
+  on macOS CI)
 - **omher on Windows: "Reply there" no longer draws over the row's time, and the app names Windows' own fonts.** In
   the side panel's "Where your bot is", hovering a Slack or Discord row showed "거기에 답장" on top of the row's time
   ("거기에답장일"): the button floated over the time and its hover fill was see-through. Now the time gives way while
@@ -310,6 +340,19 @@ All notable changes will be documented here.
   monitor tick, never a change. The scripts write nothing and are inert package data the person's Hermes runs, the
   same scoped-integration class as the PR watch scripts; OMH never runs them.
   (`src/skills/monitor_recipes.py`, `src/skills/monitor_watch_toolkit/`, `src/routing/policy.py`)
+- **Work that starts in another app: a spec, a mail, an alert, a meeting, a vault, a Figma frame.** A new skill,
+  `app-work-intake`, reads the item through the bot's own Hermes tool and takes one of three paths: a Notion or
+  Confluence page or a Linear or Jira issue becomes a plan, a fanout run and a PR, with the PR link written back to
+  the source ("turn Linear issue ENG-42 into a PR and link the PR back"); a mail message becomes a work thread or a
+  Needs item instead of a reply; a Sentry or Datadog alert becomes a triage and a fix hand-off, bounded by the PR
+  watch guards in `github-event-ops`. Three existing skills gain the other three: `operating-rhythm` turns a meeting's
+  notes or transcript into tracker issues through Hermes' `meeting-action-items`, `wiki` uses an Obsidian vault for
+  recall, the bot's daily journal and copies of approved `.omh/memory` records (never Hermes' `MEMORY.md`), and
+  `frontend` reads a Figma frame into `DESIGN.md` tokens and a handoff. Each names the Hermes MCP server or bundled
+  skill it needs and stops with `hermes mcp install <name>` when it is missing; every write to an app stays the bot's
+  own approved action, reported only after reading it back. Replies, summaries, one-ticket actions, calendar
+  questions and Figma exports keep their routes. OMH itself calls no app.
+  (`src/skills/catalog_feature_surfaces.py`, `src/skills/render.py`, `src/routing/policy.py`)
 - **OMH TUI: kitty previews inside omher, and a quiet Ctrl+Enter.** Under `TERM_PROGRAM=omher` the OMH TUI asks for
   kitty previews (tmux and screen keep half-blocks). Ctrl+Enter on a prompt with images during a turn now stops the
   turn and sends the prompt without an `Interrupted.` notice, like Claude Code's send-now; Hermes' "Operation

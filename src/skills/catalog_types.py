@@ -797,6 +797,8 @@ class HermesReferenceLine(str):
 # `llm-wiki` moved to `optional-skills/` on upstream main on 2026-10-28 (commit
 # 183b5ddd5f); it stays bundled at the floor tag, so its handoff line is conditional
 # on the skill being installed.
+# `email-inbox-triage` is bundled at the floor tag and at upstream caafe5389a,
+# read the same way on 2026-11-24.
 HERMES_BUNDLED_SKILL_NAMES = frozenset(
     {
         "architecture-diagram",
@@ -807,6 +809,7 @@ HERMES_BUNDLED_SKILL_NAMES = frozenset(
         "competitor-news-monitor",
         "docx",
         "dogfood",
+        "email-inbox-triage",
         "github",
         "grounded-citations",
         "hermes-agent-skill-authoring",

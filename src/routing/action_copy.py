@@ -129,6 +129,7 @@ NEXT_ACTION_LABELS: dict[str, str] = {
     "prepare_workspace_file_operator_card": "preparing a workspace file operator card",
     "prepare_gateway_intent_card": "preparing a gateway intent card",
     "prepare_github_event_ops_card": "preparing a GitHub event operations card",
+    "prepare_app_work_intake_card": "preparing an app work intake card",
     "prepare_github_issue_intake": "preparing a GitHub issue intake card",
     "prepare_long_document_reading": "preparing a long document reading ledger",
     "prepare_harness_session_inventory": "preparing a harness session inventory",

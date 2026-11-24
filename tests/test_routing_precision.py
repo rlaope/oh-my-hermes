@@ -115,7 +115,13 @@ class RoutingPrecisionTests(unittest.TestCase):
         # Its hold round adds five: four declined watches and CI on main.
         # Monitor recipes add ten platform mentions that ask for no trigger.
         # Their review round adds twelve: time questions, outages, APIs, `in linear`, 이전에, a plugin update.
-        self.assertEqual(payload["summary"]["case_count"], 1584)
+        # Cross-platform workflows add nine: replies, calendar questions, a reminder alert, a Sentry question,
+        # a bare vault and Figma exports.
+        # Its review round adds eight: words matched inside longer words, a common noun, an alert read, a reply,
+        # a secrets vault, a bolt, and two questions about meeting notes.
+        # Merged: 1584 (monitor recipes) + 17 cross-platform cases = 1601.
+        # Its anchor round adds one: viewing a Figma frame is a question.
+        self.assertEqual(payload["summary"]["case_count"], 1602)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -196,7 +202,9 @@ class RoutingPrecisionTests(unittest.TestCase):
         # 371 -> 372: its staging deploy beside a merged PR falls back to a direct answer.
         # 372 -> 374: the monitor-trigger lane's calendar question and linear regression are answered directly.
         # 374 -> 377: its review round's last-mail question, Gmail outage and `in linear regression`.
-        self.assertEqual(payload["summary"]["direct_answer_count"], 377)
+        # 377 -> 379: the cross-platform calendar question and Sentry concept question are answered directly.
+        # 379 -> 380: viewing a Figma frame in presentation mode is answered directly.
+        self.assertEqual(payload["summary"]["direct_answer_count"], 380)
         # show-reel's README-link control is answered as a file lookup (+1).
         # "Use OMH to fix the failing test in billing.py" names a file: a file lookup (+1).
         # Copying the skills OMH selected and summarizing the files it picked
@@ -300,7 +308,13 @@ class RoutingPrecisionTests(unittest.TestCase):
         # Its hold round adds two: a declined review, then a PR watch, in English and Korean.
         # Monitor recipes add seventeen: twelve platform triggers that dispatch and five neighbours that keep their owner.
         # Their review round adds six neighbours that keep connector-operator or gateway-intent-card.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1390)
+        # Cross-platform workflows add twenty-seven: nineteen app items, meeting records, vault uses and Figma
+        # frames that dispatch, and eight sentences in another lane that keep their owner.
+        # Its review round adds eight more sentences in another lane that keep their owner.
+        # Cross-platform, merged with monitor recipes: two trigger sentences naming their work stay with
+        # automation-blueprint. Merged: 1390 (monitor recipes) + 37 cross-platform cases = 1427.
+        # Its verification round adds three: an existing PR link, an urgent spec to PR, a recall apart from the vault.
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1430)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )
