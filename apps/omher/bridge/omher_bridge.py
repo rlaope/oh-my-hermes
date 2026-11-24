@@ -1972,7 +1972,7 @@ def _slack_dm_users(profile_dir: Path) -> list[tuple[str, str]]:
 
 
 def _person_name(raw: str) -> str:
-    """`김희망 (Khope)` -> `김희망`: the name without a bracketed alias."""
+    """`홍길동 (Demo)` -> `홍길동`: the name without a bracketed alias."""
     return re.split(r"\s*[(（]", raw, maxsplit=1)[0].strip() or raw.strip()
 
 
@@ -5294,7 +5294,7 @@ _AUTHOR_RE = re.compile(r"^\[(?P<author>[^\]|]+?)\s*\|[^\]]*\]\s*(?P<rest>.*)$",
 
 
 def split_author(text: str) -> tuple[str | None, str]:
-    """``[김희망 (Khope) | Slack user <@U0…>] hi`` -> (``김희망 (Khope)``, ``hi``)."""
+    """``[홍길동 (Demo) | Slack user <@U0…>] hi`` -> (``홍길동 (Demo)``, ``hi``)."""
     m = _AUTHOR_RE.match(text or "")
     if not m:
         return None, text

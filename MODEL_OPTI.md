@@ -197,7 +197,7 @@ instances per arm, Claude Code subscription:
 
 The head stays. The clarification block also stays: this corpus never
 exercises `input_required`, but real fanout units do. Archive:
-`~/Desktop/khope/bench-archive/prompt-audit-2026-10-04/runs` (outside git).
+the owner's local `bench-archive/prompt-audit-2026-10-04/runs` (outside git).
 
 `src/coding/unit_prompt_protocol.py` attaches four deterministic blocks to
 every dispatched unit prompt, regardless of model, and adds one composer-side
@@ -2324,7 +2324,7 @@ which models keep the persona's language at that point. Every number in it
 was measured.
 
 **Probe.** Each request is the real request from one session on the
-owner's `miku` profile (Slack, Korean casual-register `SOUL.md`):
+owner's `bot4` profile (Slack, Korean casual-register `SOUL.md`):
 - the stored system prompt, with main's reply line;
 - the stored history, through the final briefing;
 - a Korean request to review a pull request;

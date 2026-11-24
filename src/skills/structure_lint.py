@@ -92,7 +92,7 @@ RECOVERY_DEFAULT_ONLY_ALLOWED: tuple[str, ...] = ()
 # and content only. The next hundred, 27_000, is under the measured body, so
 # the ceiling is the hundred above it. "The host's own voice" alone left a
 # casual-register Korean persona writing its interim progress lines in
-# English (miku, 2026-09-30). Same reason as the entries above. Warranted
+# English (bot4, 2026-09-30). Same reason as the entries above. Warranted
 # always-loaded growth, not drift.
 #
 # 27_100 -> 27_200: `ultrawork` ships 27_156 bytes (27_089 before) once its

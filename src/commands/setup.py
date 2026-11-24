@@ -1213,7 +1213,7 @@ def _managed_workflow_dir_candidates(paths: OmhPaths) -> list[Path]:
     neither has actually opted out.
 
     Reading "registered" as "names today's path" is what froze the owner's
-    `profiles/miku`: the profile pointed at `~/.omh/skills` while the primary
+    `profiles/bot4`: the profile pointed at `~/.omh/skills` while the primary
     home had moved to the generation pointer, so every `omh update` scored it
     as the deliberate opt-out (plugin directory present, registration
     "absent"), skipped the whole profile, and left its plugin bundle and TUI
