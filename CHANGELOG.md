@@ -530,6 +530,13 @@ All notable changes will be documented here.
   news everywhere (an accent dot on the row and the folder summary, a slowly breathing accent edge on the cell, "rang"
   in the notification), and the amber warning is kept for waits omher knows: a bot's request to type, a chat's approval
   or question. (`apps/omher/src/sessions/SplitLayoutCard.tsx`) (#3138)
+- **A bot reading an omher terminal's status sees `news` for a ring nobody has seen, as the person does.** The
+  status file (`omh_omher_terminal` `status`) said `waiting` for a session that rang its bell or reported its work
+  done while the person was not looking, though omher itself showed news. It now says `news` (a state the file and the
+  link chip share), and a reported working again turns it back to `working`. The split card's grip test no longer
+  loses its keys to a pane that takes focus a moment late on a slow runner, and the argv-cache test waits for macOS's
+  `/bin/sh` to exec its shell before counting. (`apps/omher/src-tauri/src/term_share.rs`,
+  `apps/omher/src/chat/parts/TermLinkChip.tsx`) (#3167)
 - **omher: an Apps page connects a bot to Notion, Linear, Jira and the rest of Hermes' MCP catalog.** The plug in
   the sidebar's foot opens one bot's apps: every entry of Hermes' MCP catalog and its integration skills (Google
   Workspace, Obsidian, Apple Notes and Reminders, Microsoft Office and others), grouped as work apps, ops and data,
