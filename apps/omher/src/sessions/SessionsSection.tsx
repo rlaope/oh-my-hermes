@@ -1492,7 +1492,8 @@ const TermRow = memo(function TermRow({ rec, agents, unseen, active, ticking, on
       onContextMenu={(e) => {
         if (editing) return;
         e.preventDefault();
-        setMenu(menuSpot(e, wrap.current, actions.length));
+        // counted now, not at the last render: a bot that came online since adds the Hand row
+        setMenu(menuSpot(e, wrap.current, termItems(rec).length));
       }}
     >
       {editing ? (

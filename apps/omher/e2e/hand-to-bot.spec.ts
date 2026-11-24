@@ -361,10 +361,13 @@ test("a terminal in a split hands its folder from its cell exactly as its row do
   await expect(card).toBeVisible();
   await expect(page.getByTestId("handover-goal")).toBeFocused();
   await expect(card.getByTestId("handover-preview")).toHaveText([...KEEPALIVE, CLOSING].join("\n\n"));
-  // a press or a right click inside the card is the card's: no cell menu, no drag, the pane stays focused where it was
+  // a press or a right click inside the card is the card's: no cell menu, no drag, and no cell takes the focus
+  const focusBefore = await page.getByTestId("split-cell").evaluateAll((cs) => cs.map((c) => c.getAttribute("data-focused")));
   await card.getByTestId("handover-preview").click({ button: "right" });
+  await card.getByTestId("handover-preview").click();
   await expect(menu).toHaveCount(0);
   await expect(page.getByTestId("split-drop")).toHaveCount(0);
+  expect(await page.getByTestId("split-cell").evaluateAll((cs) => cs.map((c) => c.getAttribute("data-focused")))).toEqual(focusBefore);
   await page.getByTestId("handover-goal").fill("finish the keepalive fix");
   await page.getByTestId("handover-send").click();
   await expect(card).toHaveCount(0);
@@ -382,6 +385,50 @@ test("a terminal in a split hands its folder from its cell exactly as its row do
   expect(await typed(page)).toBe(before);
   await expect(page.getByTestId("split-cell")).toHaveCount(2);
   await expect(cell(page, a)).toBeVisible();
+});
+
+test("each cell of a split of two folders hands its own folder, focused or not", async ({ page }) => {
+  await open(page, "/w/gateway-keepalive");
+  const a = await newShell(page);
+  await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/code/web-app"));
+  const b = await newShell(page);
+  await split(page, a, b);
+  // a (the first cell) takes the focus: b is now the second cell and not the focused one
+  await cell(page, a).locator(".sc-open").click();
+  await expect(cell(page, a)).toHaveAttribute("data-focused", "true");
+  await expect(cell(page, b)).toHaveAttribute("data-focused", "false");
+  const card = page.getByTestId("handover");
+  const WEB_APP = [
+    "Handover from omher: pick up the work in this folder.",
+    "- Folder: `/home/you/code/web-app`\n- Git: omher did not read this folder's status; check it with `git status` and `git diff --stat` there.",
+  ];
+  // b's cell: its own folder, outside the bot's worktrees, so no git facts and no diff read
+  let from = (await calls()).length;
+  await cell(page, b).click({ button: "right" });
+  await page.getByTestId("session-row-menu").getByTestId("session-hand").click();
+  await expect(card.getByTestId("handover-preview")).toHaveText([...WEB_APP, CLOSING].join("\n\n"));
+  await page.getByTestId("handover-send").click();
+  await expect(card).toHaveCount(0);
+  await expect.poll(async () => (await calls("chat.send")).length).toBe(1);
+  let made = await handCalls(from);
+  expect(made.filter((x) => x.op === "panel.diff")).toEqual([]);
+  expect(made.find((x) => x.op === "chat.send")!.params.text).toBe([...WEB_APP, CLOSING].join("\n\n"));
+  expect(made.find((x) => x.op === "thread.create")!.params.title).not.toContain("gateway-keepalive");
+  // handing b over did not focus b (Open thread opened the new thread instead)
+  await expect(cell(page, b)).toHaveAttribute("data-focused", "false");
+  // a's cell (the first, the one that held the focus): its own folder, with the git facts of the bot's worktree
+  // that holds it
+  from = (await calls()).length;
+  await cell(page, a).click({ button: "right" });
+  await page.getByTestId("session-row-menu").getByTestId("session-hand").click();
+  await expect(card.getByTestId("handover-preview")).toHaveText([...KEEPALIVE, CLOSING].join("\n\n"));
+  await page.getByTestId("handover-send").click();
+  await expect(card).toHaveCount(0);
+  await expect.poll(async () => (await calls("chat.send")).length).toBe(2);
+  made = await handCalls(from);
+  expect(made.find((x) => x.op === "thread.create")!.params.title).toBe("gateway-keepalive (fix/keepalive)");
+  expect(made.find((x) => x.op === "chat.send")!.params.text).toBe([...KEEPALIVE, CLOSING].join("\n\n"));
+  for (const x of made.filter((y) => y.op === "panel.diff")) expect(x.params.path).toBe("/w/gateway-keepalive");
 });
 
 test("a cell's Hand item is reached from the keyboard and named for assistive technology", async ({ page }) => {

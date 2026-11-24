@@ -107,7 +107,8 @@ const SplitCell = memo(function SplitCell({ rec, x, y, w, h, focused, agents, un
       onContextMenu={(e) => {
         if (editing) return;
         e.preventDefault();
-        setMenu(kit.spot(e, wrap.current, actions.length));
+        // counted now, not at the last render: a bot that came online since adds the Hand row
+        setMenu(kit.spot(e, wrap.current, kit.items(rec).length));
       }}
     >
       <svg className="sc-svg" width={w} height={h} aria-hidden="true">

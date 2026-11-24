@@ -79,7 +79,7 @@ describe("omher-peer drafts", () => {
 
   it("is read only in a bot's main chat", () => {
     expect(peerDraftsAllowed("kami")).toBe(true);
-    expect(peerDraftsAllowed("mini:sionic-kami")).toBe(true);
+    expect(peerDraftsAllowed("mini:demo-kami")).toBe(true);
     expect(peerDraftsAllowed("fold:kami:f1")).toBe(false);
     expect(peerDraftsAllowed("agent:s3")).toBe(false);
   });

@@ -18,7 +18,7 @@ vi.mock("../state/store", async (orig) => {
   };
 });
 
-const { ROW_MENU, termItems, termMenuItems } = await import("./SessionsSection");
+const { ROW_MENU, termMenuItems } = await import("./SessionsSection");
 const { HandoverCard } = await import("../handover/HandoverCard");
 
 const bot = (name: string, over: Partial<Bot> = {}): Bot => ({ name, display_name: name, is_default: false, model: "", provider: "", description: "", status: "online", running: true, ...over });
@@ -29,7 +29,6 @@ describe("a split card cell's menu", () => {
   it("offers Hand to <bot> exactly when a row does: a folder, and a bot of this computer online", () => {
     shown.bots = [bot("demo-bot")];
     expect(ROW_MENU.items(rec())).toEqual(["rename", "reveal", "terminal", "link", "hand", "here", "close"]);
-    expect(ROW_MENU.items(rec())).toEqual(termItems(rec()));
     expect(ROW_MENU.items(rec())).toEqual(termMenuItems(rec(), true));
     // no folder: nothing to hand
     expect(ROW_MENU.items(rec({ cwd: "" }))).not.toContain("hand");
@@ -40,7 +39,6 @@ describe("a split card cell's menu", () => {
     for (const bots of [[], [bot("demo-bot", { status: "offline" })], [bot("mini:default", { host: ssh })]]) {
       shown.bots = bots;
       expect(ROW_MENU.items(rec())).toEqual(["rename", "reveal", "terminal", "link", "here", "close"]);
-      expect(ROW_MENU.items(rec())).toEqual(termItems(rec()));
       expect(menu(rec())).not.toContain('data-testid="session-hand"');
     }
   });
@@ -54,11 +52,13 @@ describe("a split card cell's menu", () => {
     expect(menu(rec())).toMatch(/role="menuitem" class="row-mi" data-testid="session-hand">Hand to a bot…<\/button>/);
   });
 
-  it("opens the row's card for the folder the session started in", () => {
+  it("opens the row's card for the folder its own session started in, one per cell", () => {
     const onClose = () => {};
     const hand = ROW_MENU.Hand as (p: { at: { x: number; y: number }; rec: SessionRec; onClose: () => void }) => ReactElement;
-    const el = hand({ at: { x: 4, y: 5 }, rec: rec({ cwd: "/w/demo" }), onClose });
-    expect(el.type).toBe(HandoverCard);
-    expect(el.props).toEqual({ at: { x: 4, y: 5 }, from: { kind: "terminal", folder: "/w/demo" }, onClose });
+    const left = hand({ at: { x: 4, y: 5 }, rec: rec({ id: "s1", cwd: "/w/demo" }), onClose });
+    const right = hand({ at: { x: 4, y: 5 }, rec: rec({ id: "s2", cwd: "/w/other" }), onClose });
+    expect(left.type).toBe(HandoverCard);
+    expect(left.props).toEqual({ at: { x: 4, y: 5 }, from: { kind: "terminal", folder: "/w/demo" }, onClose });
+    expect((right.props as { from: unknown }).from).toEqual({ kind: "terminal", folder: "/w/other" });
   });
 });
