@@ -1,6 +1,7 @@
-// Settings view (main column while `ui.view === "settings"`). Left list: You (Accounts), Bots (one page per bot: Profile,
-// Model, Work) and App (General, Terminal, Agents, Providers, Computer). Pages are `bot:<name>` and the App page names; the
-// page lives in the store (`ui.settingsPage`) so the model popover can deep-link to a bot.
+// Settings view (main column while `ui.view === "settings"`). Left list: You (Accounts), Bots (one page per bot: its
+// picture and name, Persona, Memory, Automations, Elsewhere, Open threads, then Profile, Model, Work) and App (General,
+// Terminal, Agents, Providers, Computer). Pages are `bot:<name>` and the App page names; the page lives in the store
+// (`ui.settingsPage`) so the model popover, the Details panel and the row menu's Edit bot can deep-link to a bot.
 import { useEffect, useState } from "react";
 import "./settings.css";
 import type { SlotProps } from "../features";
@@ -24,6 +25,7 @@ import { Toggle } from "../pages/kit";
 import { awakeEnabled, closeHides, isMacPlatform, setAwakeEnabled, setCloseHides } from "../lib/power";
 import { AgentsPage } from "./agents/AgentsPage";
 import { AvatarEditor, BotFacts, NameEditor, PictureActions, placeName, useBotInfo, usePictureEditor } from "./BotIdentity";
+import { BotSections } from "./BotSections";
 
 export const slot = "settings";
 
@@ -201,6 +203,7 @@ function BotPage({ bot }: { bot: Bot }) {
         </div>
       </div>
       <BotFacts info={info} />
+      <BotSections key={bot.name} bot={bot} />
 
       <div className="st-gh">{t("set.profile")}</div>
       <div className="st-grp">

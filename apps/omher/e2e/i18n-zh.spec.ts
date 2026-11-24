@@ -53,7 +53,7 @@ async function englishLeft(page: Page, root: string): Promise<string[]> {
         out.add(s);
       }
     };
-    const skip = (el: Element | null) => !!el?.closest("code, pre, kbd, .mono, .msg, .md, .ap-preview, [data-testid=bot-sub], [data-testid=bots-grid] .bc-desc, .be-desc, .acc-n, .acc-sub, .pv-ms, .pv-v, .mp-list, .ss-n, .ss-l, .ss-where, [data-testid=session-sub], [data-testid=session-name], .bot-n, .head-title");
+    const skip = (el: Element | null) => !!el?.closest("code, pre, kbd, .mono, .msg, .md, .ap-preview, [data-testid=bot-sub], [data-testid=bots-grid] .bc-desc, .be-desc, .bp-entries, .bp-row-t, .bp-row-s, .acc-n, .acc-sub, .pv-ms, .pv-v, .mp-list, .ss-n, .ss-l, .ss-where, [data-testid=session-sub], [data-testid=session-name], .bot-n, .head-title");
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     for (let n = walker.nextNode(); n; n = walker.nextNode()) {
       const el = n.parentElement;

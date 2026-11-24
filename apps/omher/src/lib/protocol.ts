@@ -62,6 +62,89 @@ export interface BotInfo {
   routines: number;
 }
 
+/** How the bridge found one file of the bot's profile for its page: read (`ok`), absent, larger than it reads
+ *  (`too_big`: sized only), not a regular file or a failed read (`unreadable`), or a link (the file or a folder on
+ *  its path), which it never follows wherever it leads (`link`). */
+export type PageFileState = "ok" | "missing" | "too_big" | "unreadable" | "link";
+
+/** The profile's `SOUL.md` (the bot's persona), read-only. `text` is "" unless `state` is `ok`; `lossy`: some bytes
+ *  were not UTF-8 and show as U+FFFD. */
+export interface BotSoul {
+  file: string;
+  state: PageFileState;
+  size: number | null;
+  text: string;
+  lossy: boolean;
+}
+
+/** One of Hermes' built-in memory targets (`memories/MEMORY.md`, `memories/USER.md`), read-only: its entries split
+ *  on Hermes' delimiter, the characters Hermes counts against `limit`, and whether config.yaml switches it on. */
+export interface MemoryTarget {
+  target: "memory" | "user";
+  file: string;
+  state: PageFileState;
+  size: number | null;
+  lossy: boolean;
+  entries: string[];
+  chars: number;
+  limit: number;
+  enabled: boolean;
+}
+
+/** `bots.page`: what the bot page shows of who the bot is. */
+export interface BotPage {
+  soul: BotSoul;
+  memory: MemoryTarget[];
+}
+
+/** A messaging platform's state as OMH reads it from Hermes' gateway records and logs (`bots.platforms`, BOUNDARY
+ *  rule 43). Only `failed`, `disconnected` and `reconnecting` say "known not to be connected now"; `unknown` is never
+ *  shown as connected or as not connected. */
+export type PlatformStatus =
+  | "connected"
+  | "degraded"
+  | "connecting"
+  | "disabled"
+  | "failed"
+  | "disconnected"
+  | "reconnecting"
+  | "unknown";
+
+/** One platform of one bot. Times are UTC ISO strings ("" when not known); `reason` and `guidance` are Hermes' own
+ *  words, bounded, with credentials, ids, emails, a URL's query and control characters taken out; `restart` is
+ *  Hermes' `hermes -p <profile> gateway restart` for the gateway that serves the bot, to copy (omher never runs it).
+ *  The fix is worded by the page from `reason_kind`. */
+export interface PlatformState {
+  platform: string;
+  status: PlatformStatus;
+  /** A person must act: Hermes will not retry it, or flags it as needing attention. */
+  attention: boolean;
+  since: string;
+  logged: string;
+  reason_kind: string;
+  /** For `unknown`: earlier_run, not_served, ambiguous or unknown_state. */
+  unknown_why: string;
+  reason: string;
+  guidance: string;
+  restart: string;
+  /** A privileged-intents refusal: the intents Hermes' own record says it requests ([] when it does not say). */
+  intents: string[];
+}
+
+export interface BotPlatforms {
+  /** The gateway logs its lines can be in (its own and the root's): an empty list is believable only when `read` or
+   *  `missing`. */
+  log: "read" | "missing" | "unreadable" | "unrecognized" | "unknown";
+  platforms: PlatformState[];
+}
+
+/** `bots.platforms`: every bot on this computer. `available` is false when oh-my-hermes is not here or its answer
+ *  could not be read: then nothing is known, and nothing is shown as connected. */
+export interface PlatformsRead {
+  available: boolean;
+  bots: Record<string, BotPlatforms>;
+}
+
 /** One of a bot's skills (a `SKILL.md` under `<profile>/skills`), for the composer's `./` picker. */
 /** `{slack: {C0BLC924P1P: "#docs-harness"}, discord: {1544…: "#cron"}}`: names for link chips. */
 export interface LinkPlaces {
@@ -461,6 +544,11 @@ export interface OpMap {
     result: { avatar_rev: number | null };
   };
   "bots.info": { params: { bot: string }; result: BotInfo };
+  /** The bot page's persona and memory files, read-only (BOUNDARY rule 42); a bot on another computer is read there. */
+  "bots.page": { params: { bot: string }; result: BotPage };
+  /** Every local bot's messaging platforms through OMH's read-only `omh hermes platforms` (BOUNDARY rule 43);
+   *  `fresh` asks again unless the last answer is under two seconds old. */
+  "bots.platforms": { params: { fresh?: boolean }; result: PlatformsRead };
   /** The bot's skills from its profile folder (read-only), sorted by name. */
   "skills.list": { params: { bot: string }; result: { skills: Skill[] } };
   /** The slash commands Hermes answers for this bot, from Hermes' own registry (read-only). */

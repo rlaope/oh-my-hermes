@@ -17,6 +17,12 @@ import { newer, older, onFirstLine, onLastLine, type Recall, type Step } from ".
 
 const MAX_H = 200;
 
+/** The app's drafts (`ui.draft`) already put into a composer. A draft names one chat key (`draft.bot`: a bot's main
+ *  chat, a thread's `fold:<bot>:<thread>`, a session's key) and each composer takes only its own key; one composer per
+ *  key is mounted at a time (the main column shows the main chat or one thread, never both), so a module-wide set
+ *  marks the draft taken by the one composer it was for. */
+const appliedDrafts = new WeakSet<object>();
+
 /** Autosizing textarea with a + at its left edge for files (menu, drop on the chat, paste). Enter sends,
  * Shift+Enter breaks the line, Stop interrupts. Files go first (`chat.attach`), then
  * the text; if one fails nothing is sent and the chips stay. A "Reply there" chip sits above the text: the
@@ -277,10 +283,12 @@ export function Composer({
     ref.current?.focus();
   }, [bot.name, reply?.session_id]);
 
-  // "Ask in chat" from the Runs drawer: the text lands here for the person to edit and send.
+  // "Ask in chat" from the Runs drawer: the text lands here for the person to edit and send. Each one lands once: a
+  // composer mounted again later (back from Settings) does not put an old one back over what the person typed since.
   const draft = store.ui.draft;
   useLayoutEffect(() => {
-    if (!draft || draft.bot !== bot.name) return;
+    if (!draft || draft.bot !== bot.name || appliedDrafts.has(draft)) return;
+    appliedDrafts.add(draft);
     edit(draft.text);
     // text the app put here (Edit's old message too) does not open the command menu; typing in it does
     const q = commandQuery(draft.text);

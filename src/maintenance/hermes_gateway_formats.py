@@ -32,6 +32,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import unicodedata
 from collections.abc import Mapping
 
 from ..plugin_bundle.omh.iso_datetime import strict_fromisoformat
@@ -49,6 +50,10 @@ LOG_LINE_CHARS = 4096  # a longer line is cut before it is matched: no shape bel
 REASON_CHARS = 200
 # A `✗ … failed to connect` line takes the adapter's own reason only from a line logged this close before it.
 REASON_WINDOW_SECONDS = 120.0
+# A profile's re-serve (`Now serving profile`, `Re-scanned profile … after config/.env change`) is logged after the
+# adapters it restarted connected or failed; its adapter lines logged this close before it are that attempt's, older
+# ones are from before it (Hermes dropped their verdicts: `run_profile_reconcile._drop_stale_platform_verdicts`).
+ATTEMPT_WINDOW_SECONDS = 120.0
 
 STATUS_READ = "read"
 STATUS_MISSING = "missing"
@@ -61,6 +66,7 @@ STATE_FAILED = "failed"
 STATE_FATAL = "fatal"
 STATE_RETRYING = "retrying"  # Hermes waits to reconnect a served profile's adapter (`Secondary … reconnect retry`)
 STATE_DISCONNECTED = "disconnected"  # the adapter was stopped (`✓ … disconnected (…s)`)
+STATE_RESERVED = "reserved"  # no adapter state: the profile was served again (`[MULTIPLEX] …`); platform is ""
 # Adapters that carry no messaging platform: Hermes' in-process `local` adapter connects and disconnects with every
 # local session, and is no bot.
 NON_MESSAGING_PLATFORMS = frozenset({"local"})
@@ -146,11 +152,42 @@ _SECONDARY_RETRY = re.compile(_RUN + "Secondary " + _PLATFORM + r" reconnect ret
 _ADAPTER_REASON = re.compile(
     _STAMP + r"hermes_plugins\.platforms__" + _PLATFORM + r"\.adapter: \[[^\]]+\] Failed to connect to [^:]+: (?P<reason>.+)$"
 )
-# What a reason text never keeps, replaced in this order: credentials first, then ids, addresses and queries.
+# `gateway/run_profile_reconcile.py`: a profile served again, after a config/.env change or when it was added.
+_RESERVED = re.compile(
+    _STAMP + r"gateway\.run_profile_reconcile: \[MULTIPLEX\] (?:Re-scanned profile '(?P<profile>[^'\s]+)' after "
+    r"config/\.env change|Now serving profile '(?P<profile2>[^'\s]+)') \(\d+ adapter\(s\) connected[^()]*\)$"
+)
+# What any line `adapter_events` reads must hold: a cheap test before the patterns run.
+_GATEWAY_MARKS = ("✓ ", "✗ ", "Fatal ", "Secondary ", "⚠ ")
+# ANSI and OSC escape sequences (an OSC 8 link included), dropped from Hermes' text before anything else.
+_ESCAPES = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x9b[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-_]")
+# What a reason text never keeps, replaced in this order: credentials first (tokens, a webhook's path, any long
+# opaque run), then ids, addresses and queries.
 _SCRUBS = (
     (re.compile(r"[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{20,}"), "<redacted>"),  # Discord bot token
     (re.compile(r"xox[a-z]-[A-Za-z0-9-]{10,}"), "<redacted>"),  # Slack token
     (re.compile(r"\b\d{6,}:[A-Za-z0-9_-]{30,}\b"), "<redacted>"),  # Telegram bot token
+    (re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"), "<redacted>"),  # an AWS access key id, with or without a label
+    # A webhook address carries its credential in the path: everything after `webhooks/` (Discord) or `services/`
+    # (Slack) goes.
+    (re.compile(r"(https?://(?:[\w-]+\.)*(?:discord(?:app)?\.com/api(?:/v\d+)?/webhooks|hooks\.slack\.com/services)/)\S+"),
+     r"\1<redacted>"),
+    # A credential after its scheme (`Authorization: Bearer …`, `Basic …`, `Bot …` with a digit in it) or its label
+    # (`token=`, `api_key:`, `password=`, an OAuth `code=` …): the label stays, the value goes.
+    (re.compile(r"(?i)\b((?:authorization:\s*)?(?:bearer|basic)\s+)[A-Za-z0-9._~+/=-]{16,}"), r"\1<redacted>"),
+    (re.compile(r"(?i)\b(bot\s+)(?=[A-Za-z0-9._~+/=-]*\d)[A-Za-z0-9._~+/=-]{16,}"), r"\1<redacted>"),
+    # Not when what follows is an environment variable's name (`missing key: DISCORD_BOT_TOKEN`), and for `code` and
+    # `key` only a value with a letter and a digit, or 16 characters: discord.py's `(error code: 50001)` stays. The
+    # name test also keeps a secret made only of capitals and `_` with no digit; real keys of that shape are rare.
+    (re.compile(r"(?i)\b(token|access_token|refresh_token|api[_-]?key|apikey|client_secret|secret|password|passwd|pwd)"
+                r"(\s*[:=]\s*)(?-i:(?![A-Z][A-Z_]*(?![\w])))[^\s,;'\"&)]{6,}"), r"\1\2<redacted>"),
+    (re.compile(r"(?i)\b(code|key)(\s*[:=]\s*)(?-i:(?![A-Z][A-Z_]*(?![\w])))"
+                r"(?:(?=[^\s,;'\"&)]*[A-Za-z])(?=[^\s,;'\"&)]*\d)[^\s,;'\"&)]{6,}|[^\s,;'\"&)]{16,})"), r"\1\2<redacted>"),
+    # Any other opaque run of 32 or more key characters holding both a letter and a digit: hex, base64 and the rest.
+    # `/` is a base64 character, so a URL path or file path with a digit in a 32-character run goes too (Hermes' own
+    # guidance links hold none); that is the price of never keeping a base64 secret's tail.
+    (re.compile(r"(?<![\w+/=-])(?=[A-Za-z0-9+/=_-]*[0-9])(?=[A-Za-z0-9+/=_-]*[A-Za-z])[A-Za-z0-9+/=_-]{32,}"),
+     "<redacted>"),
     (re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+"), "<email>"),
     (re.compile(r"(https?://[^\s?#]+)[?#]\S*"), r"\1?<redacted>"),  # a URL's query or fragment
     (re.compile(r"\b[UCWTGBDE](?=[A-Z0-9]*\d)[A-Z0-9]{8,}\b"), "<id>"),  # Slack team, user and channel ids
@@ -254,6 +291,37 @@ def read_gateway_log(log_path: Path, *, tail_bytes: int = GATEWAY_LOG_TAIL_BYTES
     return LogRead(str(log_path), STATUS_READ, read, stamped, tuple(adapter_events(lines)))
 
 
+class LogCache:
+    """`read_gateway_log` for a caller that reads the same logs again and again (the TUI bot board): a log whose file
+    and rotated `.1` keep the inode, size and modification time they had at the last read is not read again. It holds
+    at most `limit` logs, the oldest dropped first."""
+
+    def __init__(self, limit: int = 256) -> None:
+        self._limit = limit
+        self._held: dict[tuple[str, int], tuple[tuple[object, object], LogRead]] = {}
+
+    def read(self, path: Path, tail_bytes: int = GATEWAY_LOG_TAIL_BYTES) -> LogRead:
+        key = (str(path), tail_bytes)
+        signature = (_file_signature(path), _file_signature(path.with_name(path.name + ".1")))
+        held = self._held.get(key)
+        if held is not None and signature[0] is not None and held[0] == signature:
+            return held[1]
+        log = read_gateway_log(path, tail_bytes=tail_bytes)
+        self._held.pop(key, None)
+        if len(self._held) >= self._limit:
+            self._held.pop(next(iter(self._held)))
+        self._held[key] = (signature, log)
+        return log
+
+
+def _file_signature(path: Path) -> tuple[int, int, int] | None:
+    try:
+        st = path.stat()
+    except (OSError, ValueError):
+        return None
+    return st.st_ino, st.st_size, st.st_mtime_ns
+
+
 def adapter_events(lines: list[str]) -> list[AdapterEvent]:
     """Every adapter state line in `lines`, in file order.
 
@@ -272,11 +340,25 @@ def adapter_events(lines: list[str]) -> list[AdapterEvent]:
     the reason takes it only when the reason went to Q or to no one; an
     unattributed reason event is then withdrawn, as it was Q's. A reason
     given to another profile's open reconnect stays there.
+
+    A profile served again (`[MULTIPLEX] Now serving profile 'P'`, `… Re-scanned
+    profile 'P' after config/.env change`) comes back as a `STATE_RESERVED`
+    event for P with no platform, in its place in the file.
     """
     events: list[AdapterEvent | None] = []
     reconnecting: dict[str, list[str]] = {}  # platform -> profiles whose reconnect is open, oldest first
     pending: dict[str, tuple[str, float | None, int | None, str | None]] = {}  # platform -> (reason, epoch, index, owner)
     for line in lines:
+        if "gateway.run" not in line and ".adapter: [" not in line:
+            continue  # neither the gateway's nor an adapter's line: no pattern below can match it
+        if (match := _RESERVED.match(line)) is not None:
+            events.append(AdapterEvent(match["profile"] or match["profile2"], "", STATE_RESERVED, match["stamp"],
+                                       _log_epoch(match["stamp"])))
+            continue
+        if ".adapter: [" in line and "Failed to connect" not in line:
+            continue
+        if ".adapter: [" not in line and not any(mark in line for mark in _GATEWAY_MARKS):
+            continue
         if (match := _ADAPTER_REASON.match(line)) is not None:
             platform = match["platform"]
             reason, at = bounded_reason(match["reason"]), _log_epoch(match["stamp"])
@@ -366,13 +448,22 @@ def classify_reason(event: AdapterEvent) -> str:
     return REASON_UNRECOGNIZED
 
 
-def bounded_reason(text: str) -> str:
-    """Hermes' reason text on one line, at most `REASON_CHARS`, without Discord, Slack or Telegram bot tokens, Discord
-    and Slack ids, email addresses, or a URL's query (`_SCRUBS`)."""
-    cleaned = " ".join(text.split())
+def strip_controls(text: str) -> str:
+    """`text` on one line with no escape sequence (ANSI colour, an OSC 8 link) and no control or format character (a
+    bidi override, NUL, BEL): what every string a surface shows from Hermes' files goes through."""
+    cleaned = " ".join(_ESCAPES.sub("", text).split())
+    return "".join(ch for ch in cleaned if unicodedata.category(ch) not in ("Cc", "Cf"))
+
+
+def bounded_reason(text: str, limit: int = REASON_CHARS) -> str:
+    """Hermes' reason text on one line, at most `limit` characters (`REASON_CHARS` unless said): with no escape
+    sequence or control or format character (ANSI colour, an OSC 8 link, a bidi override), and without Discord, Slack
+    or Telegram bot tokens, a Discord or Slack webhook's credential path, a bearer or labelled secret, any other opaque
+    run of 32 or more key characters, Discord and Slack ids, email addresses, or a URL's query (`_SCRUBS`)."""
+    cleaned = strip_controls(text)
     for pattern, replacement in _SCRUBS:
         cleaned = pattern.sub(replacement, cleaned)
-    return cleaned if len(cleaned) <= REASON_CHARS else cleaned[: REASON_CHARS - 1].rstrip() + "…"
+    return cleaned if len(cleaned) <= limit else cleaned[: limit - 1].rstrip() + "…"
 
 
 def iso_utc(epoch: float | None) -> str:

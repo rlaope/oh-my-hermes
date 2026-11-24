@@ -452,7 +452,7 @@ class Fleet(unittest.TestCase):
                                                                  started=BUILT_EPOCH - 2 * 86400)})
             self.assertEqual(report.gateways[0].build, BUILD_BEFORE)
             self.assertIn(FINDING_STALE_GATEWAY, report.findings)
-            self.assertTrue(any("PID 4100 (2 turn(s) live now) with `hermes gateway restart`" in action
+            self.assertTrue(any("PID 4100 (2 turn(s) live now) with `hermes -p default gateway restart`" in action
                                 and RESTART_NOTE in action for action in report.next_actions))
 
     def test_the_records_commit_stamp_is_believed_over_its_start_time(self) -> None:
@@ -557,7 +557,7 @@ class Fleet(unittest.TestCase):
             self.assertIn("requesting privileged intents", harbor.reason)  # the log's own words, this run
             self.assertIn("Hermes requests Message Content and Server Members", harbor.fix)
             self.assertIn("Bot page, Privileged Gateway Intents", harbor.fix)
-            self.assertIn("`hermes gateway restart`", harbor.fix)
+            self.assertIn("`hermes -p default gateway restart`", harbor.fix)  # named: never the sticky profile
             self.assertEqual(by_key[("quay", "slack")].state, STATE_CONNECTED)  # its own log's newer line wins
             self.assertIn(FINDING_ADAPTER_DOWN, report.findings)
             self.assertIn(f"harbor discord: `fatal` by the serving gateway's own record (latest line "
@@ -666,7 +666,7 @@ class Fleet(unittest.TestCase):
             report = self.run_health(root, {"harbor": Gateway("running", True, 4200, code_sha=COMMIT)})
             state = report.adapters[0]
             self.assertEqual((state.profile, state.reason_kind), ("harbor", REASON_TOKEN_REJECTED))
-            self.assertIn("`hermes --profile harbor gateway restart`", state.fix)
+            self.assertIn("`hermes -p harbor gateway restart`", state.fix)
             self.assertNotIn(TOKEN, json.dumps(report.to_dict()))
 
 

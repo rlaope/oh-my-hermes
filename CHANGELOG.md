@@ -467,6 +467,45 @@ All notable changes will be documented here.
   catalog files, the bot's `mcp_servers` names and switches and whether a sign-in token file exists, and never sees a
   key or a token (`docs/OMHER-BOUNDARY.md` rule 41). (`apps/omher/src/apps/`)
 
+- **omher: a bot's page shows who the bot is: its persona, what it remembers, and its work.** A bot's page in Settings
+  (the row menu's Edit bot, or Edit in the Details panel) showed only its picture, name and a few counts. It now shows
+  the profile's `SOUL.md` as plain text with its size; Hermes' built-in memory (`memories/MEMORY.md`, what the bot
+  remembers, and `memories/USER.md`, what it knows about you) as entries split on Hermes' delimiter, each with its
+  characters against the limit `config.yaml` sets (Hermes' 2,200 and 1,375 when unset) and an Off mark when the profile
+  switches it off; the bot's automations, each opening the Automations page on that job, with Open in Automations
+  filtered to the bot; its Slack, Discord, Telegram and cron sessions, read-only; and its open threads with their
+  status, each opening the thread. Nothing on the page writes: Edit opens the bot's main chat with a request such as
+  "Update your SOUL.md: " in the composer after anything you had typed there, and nothing is sent until you send it. The
+  files are read when the page opens and on Read again, at most 1 MB each (a larger file is sized and not read), only
+  the fixed paths and never through a link, with CRLF and non-UTF-8 bytes tolerated. A bot on another computer is read
+  there by its own bridge, over the same SSH link. Picture and name editing stay where they were.
+  (`apps/omher/bridge/omher_bridge.py` `read_bot_page`, `apps/omher/src/settings/BotSections.tsx`;
+  `docs/OMHER-BOUNDARY.md` rule 42)
+- **A bot whose Discord or Slack stopped connecting now says so in omher and on the OMH TUI bot board.** A Discord
+  bot whose profile gained a role allowlist can be refused at its next reconnect (Discord's Server Members privileged
+  intent) and stay offline, with only Hermes' gateway log saying why; `omh doctor` now reads it, but nothing showed
+  it where the person looks. omher's sidebar row now names a platform known not to be connected ("Discord
+  disconnected", "Slack failed to connect"; in words and a mark, never colour alone), and a reconnect Hermes runs by
+  itself only once Hermes flags it or it has gone on for 10 minutes. The bot's page gains a Messaging section with
+  each platform's state, since when, why in plain words, Hermes' own reason and guidance, and the fix: for a
+  privileged-intents refusal which intents to turn on and where (the Discord Developer Portal's Bot page, Privileged
+  Gateway Intents, with a link), or removing the role allowlist; then Hermes' `hermes -p <gateway> gateway restart` to
+  copy, naming the gateway that serves the bot. omher runs none of it, and says it cannot tell when OMH could not
+  read a bot's logs. The OMH TUI bot board (`/bots`, Ctrl+S) shows the same: the card's bottom edge says
+  `discord ✗ disconnected` before any other chip (a routine reconnect after the same 10 minutes), and the profile's
+  box gives the state, since when, Hermes' reason, the fix and the restart command. All three read one producer,
+  `omh doctor`'s gateway health reader, through a new per-bot view (`omh hermes platforms`, JSON
+  `omh_bot_platforms/v1`, which omher's bridge runs): the serving gateway's own record entry first, else the newest
+  line of that gateway's run in the bounded log tails, so a refusal followed by a later connect reads connected, a
+  connect followed by a fatal error reads disconnected, and a line from an earlier run or for a bot no gateway serves
+  reads as not known, never as connected. A platform Hermes stopped judging when it served the bot again after a
+  config or `.env` change (Discord removed, say) shows nothing. A bot with no messaging platform shows nothing. The
+  reader now also takes escape and control characters, bearer and labelled secrets, a Discord or Slack webhook's
+  credential path and long opaque keys out of Hermes' text, names a log as `~/…` rather than with the home folder
+  spelled out, reads only lines that can be an adapter's (the board keeps unchanged logs from its last read), and
+  names the gateway's profile in every restart command (`hermes -p default gateway restart`; a bare `hermes gateway
+  restart` follows Hermes' sticky active profile). (`src/maintenance/gateway_health.py` `bot_platforms`,
+  `src/tui/bot_board.py`, `apps/omher/src/platforms/`; `docs/OMHER-BOUNDARY.md` rule 43)
 - The OMH TUI no longer asks for kitty image previews in an omher terminal that cannot paint them. omher 1.1.3
   and earlier set `TERM_PROGRAM=omher` but draw no kitty Unicode placeholders, so pasting an image showed a block of
   tofu boxes in the transcript and the picture itself over the composer. omher now also sets
