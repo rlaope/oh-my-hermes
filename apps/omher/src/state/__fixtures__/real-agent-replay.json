@@ -7558,7 +7558,7 @@
             "prefix": "/"
           },
           {
-            "description": "사이오닉 테크 블로그(example-website public/blog) 본문에 넣는 인터랙션 블록을 만든다. 글의 표·코드 블록·수치를 읽어 전/후 토글 막대(toggle-bars), 탭으로 골라 보기(tabs), 기준값 슬라이더(threshold) 중 맞는 형식을 고르고, 본문 M…",
+            "description": "예시 테크 블로그(example-website public/blog) 본문에 넣는 인터랙션 블록을 만든다. 글의 표·코드 블록·수치를 읽어 전/후 토글 막대(toggle-bars), 탭으로 골라 보기(tabs), 기준값 슬라이더(threshold) 중 맞는 형식을 고르고, 본문 Mar…",
             "hint": "",
             "kind": "skill",
             "name": "blog-interaction",

@@ -999,11 +999,11 @@ class RemoteBackendTests(unittest.TestCase):
             self.assertEqual(record["handoff_root"], "")
             self.assertIn(f"write your report to {host}:", defined["calls"][0]["tasks"][0]["context"])
         with homes() as home, terminal_env(), Terminal(
-                "docker", Answers({"output": "\x1b]0;t\x07OMH_BACKEND_HOME=/home/dev.ops@corp\n", "returncode": 0})
+                "docker", Answers({"output": "\x1b]0;t\x07OMH_BACKEND_HOME=/home/dev.ops@corp.example\n", "returncode": 0})
         ).modules():
             call(action="define", run="feat", nodes=FEATURE)
             pinned = dag_run.read_run(dag_run.record_path(home.omh, PARENT, "feat"))["handoff_root"]
-        self.assertEqual(pinned, "/home/dev.ops@corp/.omh/dag")
+        self.assertEqual(pinned, "/home/dev.ops@corp.example/.omh/dag")
 
     def test_with_no_terminal_up_nothing_goes_out_until_one_is(self) -> None:
         """Mutation: hand out the host path, start an environment, or say it again once the root is pinned.

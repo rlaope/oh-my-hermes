@@ -62,7 +62,7 @@ describe("session agents", () => {
     expect(folderName("C:\\")).toBe("C:\\");
     expect(folderName("/")).toBe("/");
     expect(tildePath("/home/k/code", "/home/k")).toBe("~/code");
-    expect(tildePath("/home/kim/code", "/home/k")).toBe("/home/kim/code");
+    expect(tildePath("/home/k2/code", "/home/k")).toBe("/home/k2/code");
     expect(tildePath("/home/k", "/home/k/")).toBe("~");
     expect(parentPath("~/code/x")).toBe("~/code");
     expect(parentPath("/x")).toBe("/");
