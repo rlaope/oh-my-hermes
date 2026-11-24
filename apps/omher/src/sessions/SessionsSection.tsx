@@ -832,9 +832,12 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
   const cardFolder = (g: (typeof cards)[number]) => pathKey(cardRecs(g)[0]!.cwd);
   // a row asking "Stop?" (the header's x on a lone terminal) shows whatever the search
   const shown = terms.filter((r) => !inCard.has(r.id) && (r.id === confirm || sessionMatches(r, needle)));
-  // a folder holding only a split is a group too, as is an added folder with no session; a search keeps an added one
-  // only when its path matches
-  const groups = orderFolders(withAdded(folderGroups(shown), [...cards.map(cardFolder), ...(needle ? added.filter((c) => c.toLowerCase().includes(needle)) : added)]), folders.order);
+  // folders keep the order their sessions give (newest first), a split counted by its first pane's session, so a
+  // folder holding only a split stays where it was rather than dropping to the end; an added folder with no session
+  // is a group too, and a search keeps an added one only when its path matches
+  const firsts = new Set(cards.map((g) => cardRecs(g)[0]!.id));
+  const ordered = folderGroups(terms.filter((r) => firsts.has(r.id) || shown.includes(r))).map((g) => ({ cwd: g.cwd, rows: g.rows.filter((r) => !inCard.has(r.id)) }));
+  const groups = orderFolders(withAdded(ordered, needle ? added.filter((c) => c.toLowerCase().includes(needle)) : added), folders.order);
   // asking before a running session closes, in its row's place (a split member's under its card)
   const confirmRow = (rec: SessionRec) => (
     <div
