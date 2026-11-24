@@ -4,6 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: a slash command reaches the bot as typed.** omher appended its own notes (the open-threads note, the
+  terminal-link blocks, the peer note) to every main-chat message, slash commands included. Hermes reads all of a
+  slash command's text as its arguments, so `/usage` answered `Unknown /usage subcommand: [omher] Open threads:
+  none. ...`. A message that starts with `/` now goes with no note, and a slash command with a reply target is
+  refused instead of sent with the target block. (`apps/omher/bridge/omher_bridge.py`)
 - **omher: Settings › Accounts › GitHub keeps Add and Remove on one line.** A GitHub account row reused the
   accounts grid, whose last column is the 26px ⋯ menu. 추가 just fit there in macOS's font; on Windows, whose Korean
   font is wider, it broke into 추 / 가 and was clipped. That row's button column now takes the label's width in any
