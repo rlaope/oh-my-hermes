@@ -670,7 +670,6 @@ export const ko: Record<Key, string> = {
   "bp.noElsewhere": "아직 다른 곳의 세션이 없어요.",
   "bp.threads": "열린 스레드",
   "bp.noThreads": "열린 스레드가 없어요.",
-  "bp.threadsRemote": "스레드는 이 컴퓨터에서만 돌아서, 다른 컴퓨터의 봇은 여기 스레드가 없어요.",
   "bp.draftSoul": "SOUL.md를 이렇게 고쳐줘: ",
   "bp.draftMemory": "기억(memories/MEMORY.md)을 이렇게 고쳐줘: ",
   "bp.draftUser": "나에 대해 기억하는 것(memories/USER.md)을 이렇게 고쳐줘: ",

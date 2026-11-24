@@ -670,7 +670,6 @@ export const zh: Record<Key, string> = {
   "bp.noElsewhere": "还没有其他地方的会话。",
   "bp.threads": "打开的线程",
   "bp.noThreads": "没有打开的线程。",
-  "bp.threadsRemote": "线程只在这台电脑上运行，所以另一台电脑上的机器人在这里没有线程。",
   "bp.draftSoul": "把你的 SOUL.md 改成这样：",
   "bp.draftMemory": "把你的记忆（memories/MEMORY.md）改成这样：",
   "bp.draftUser": "把你对我的记忆（memories/USER.md）改成这样：",

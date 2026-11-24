@@ -1369,7 +1369,8 @@ const OPS = {
   },
   "thread.create": (p) => {
     const b = needBot(p);
-    if (b.host) throw new OpError("remote_bot", `Threads run on this computer; ${b.host.label}'s bots run on another one.`);
+    // a peer's bot: its thread is a session on that computer's gateway; a folder here is refused, as the bridge does
+    if (b.host && p.cwd !== undefined) throw remoteRefusal(b, "folder.open");
     if (p.title !== undefined && (typeof p.title !== "string" || !p.title.trim())) throw new OpError("bad_request", "title must be text");
     const old = typeof p.key === "string" ? [...folders.entries()].find(([, f]) => f.thread && f.key === `${b.name}:${p.key}`) : null;
     const thread = old ? old[0] : nextId("stored-th");

@@ -670,7 +670,6 @@ export const ja: Record<Key, string> = {
   "bp.noElsewhere": "ほかの場所のセッションはまだありません。",
   "bp.threads": "開いているスレッド",
   "bp.noThreads": "開いているスレッドはありません。",
-  "bp.threadsRemote": "スレッドはこのコンピューターでだけ動くため、別のコンピューターのボットにはここにスレッドがありません。",
   "bp.draftSoul": "SOUL.md をこう直して: ",
   "bp.draftMemory": "メモリー（memories/MEMORY.md）をこう直して: ",
   "bp.draftUser": "私について覚えていること（memories/USER.md）をこう直して: ",

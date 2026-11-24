@@ -672,7 +672,6 @@ export const en = {
   "bp.noElsewhere": "No sessions elsewhere yet.",
   "bp.threads": "Open threads",
   "bp.noThreads": "No open threads.",
-  "bp.threadsRemote": "Threads run on this computer only, so a bot on another computer has none here.",
   "bp.draftSoul": "Update your SOUL.md: ",
   "bp.draftMemory": "Update your memory (memories/MEMORY.md): ",
   "bp.draftUser": "Update what you remember about me (memories/USER.md): ",
