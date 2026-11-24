@@ -220,7 +220,8 @@ test("a bot on another computer is read there, and its page says so", async ({ p
   await botPage(page, id);
   await expect(page.getByTestId("bot-sections")).toContainText("Read on Build box by omher's bridge there and sent over SSH.");
   await expect(page.getByTestId("bp-soul-text")).toHaveText("The persona kept on the other computer.");
-  await expect(page.getByTestId("bp-threads")).toHaveText("Threads run on this computer only, so a bot on another computer has none here.");
+  // its threads are sessions on that computer's gateway, listed through its bridge (#3172): none open yet
+  await expect(page.getByTestId("bp-threads")).toHaveText("No open threads.");
 
   // Edit lands in that bot's own main chat, unsent
   const before = (await submits()).length;

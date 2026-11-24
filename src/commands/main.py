@@ -96,6 +96,7 @@ from .goal import (
 )
 from .handoff_risk_scan import add_handoff_risk_scan_command
 from .hermes import _add_hermes_commands, cmd_hermes_plan
+from .cache import _add_cache_commands
 from .hud import _add_hud_commands, cmd_hud
 from .learning import (
     _add_learning_commands,
@@ -303,6 +304,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_coding_commands(sub)
     _add_codegraph_commands(sub)
     _add_hermes_commands(sub)
+    _add_cache_commands(sub)
     _add_hud_commands(sub)
     status = sub.add_parser("status", help="Alias for `omh hud`; show compact OMH status metadata.")
     status.add_argument("--json", action="store_true", help="Print the full machine-readable HUD payload.")
