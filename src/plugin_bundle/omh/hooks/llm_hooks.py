@@ -316,16 +316,28 @@ def _touch_section_session(session_id: str, state: str) -> None:
         del _awareness_section_sessions[next(iter(_awareness_section_sessions))]
 
 
+# Platforms no person types into. Copied as data from Hermes
+# `agent/prompt_caching.py` `MACHINE_PACED_SOURCES` (rev caafe5389a), the
+# list Hermes gives the 5m cache tier; Hermes is not importable from here.
+# Only the identity catalog is skipped for them: a cron or webhook run picks
+# no identity for a person, so the directory is paid prefix nobody reads. The
+# primer, with its boundary and reply lines, is kept on every platform.
+MACHINE_PACED_PLATFORMS = frozenset({
+    "subagent", "cron", "oneshot", "webhook", "kanban", "api", "api_server", "tool", "batch", "curator",
+    "a2a", "msgraph_webhook", "gateway_hygiene"})
+
+
 def awareness_system_prompt_section(session_info: object) -> str:
     """The primer, for Hermes to freeze into a new session's system prompt.
 
-    Main sessions also carry a bounded identity directory from their bound
-    store. Children carry no catalog. Record primer delivery by session id.
+    Human-paced sessions also carry a bounded identity directory from their
+    bound store; children and other machine-paced sessions carry the primer
+    alone. Record primer delivery by session id.
     """
     primer = turn_budget.render("primer")
     session_id = str(session_info.get("session_id") or "") if isinstance(session_info, Mapping) else ""
     info = session_info if isinstance(session_info, Mapping) else {}
-    if info.get("platform") != "subagent":
+    if str(info.get("platform") or "").strip().lower() not in MACHINE_PACED_PLATFORMS:
         try:
             store, _ = runtime_paths.resolve_homes(info.get("omh_home"), info.get("hermes_home"))
             available = max(0, AWARENESS_SECTION_MAX_CHARS - len(primer) - 2)
