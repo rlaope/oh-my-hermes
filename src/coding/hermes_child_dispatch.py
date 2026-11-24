@@ -615,7 +615,7 @@ def _remove_scratch(path: Path, created: float, marker_text: str) -> str:
             reason = "FileNotFoundError"
             continue
         except OSError as exc:
-            reason = type(exc).__name__
+            reason = str(exc) if isinstance(exc, _ScratchRefused) else type(exc).__name__
             continue
         if not path.exists():
             return ""
@@ -636,19 +636,85 @@ def _remove_scratch(path: Path, created: float, marker_text: str) -> str:
     )
 
 
-def _remove_marker_last(path: Path) -> None:
+class _ScratchRefused(OSError):
+    """A scratch home this process will not remove: not a plain directory, or not the one its caller checked."""
+
+
+def _link_like(info: os.stat_result) -> bool:
+    attributes = getattr(info, "st_file_attributes", 0)
+    return stat.S_ISLNK(info.st_mode) or bool(attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT)
+
+
+def _same(info: os.stat_result, other: os.stat_result) -> bool:
+    return (info.st_dev, info.st_ino) == (other.st_dev, other.st_ino)
+
+
+def _descriptor_removal() -> bool:
+    return (
+        getattr(os, "O_NOFOLLOW", 0) != 0 and getattr(os, "O_DIRECTORY", 0) != 0
+        and shutil.rmtree.avoids_symlink_attacks
+        and {os.unlink, os.rmdir, os.stat} <= os.supports_dir_fd and os.scandir in os.supports_fd
+    )
+
+
+def _remove_marker_last(path: Path, expected: os.stat_result | None = None) -> None:
     """One removal attempt of a scratch home: every entry but OMH's marker, then the marker, then the root.
 
-    A failure part way leaves the marker in place, so the home can still be found and swept; raises `OSError`.
+    It never follows a link at any level. The root must be a plain directory, not a link or reparse point, and
+    the same one (`st_dev`/`st_ino`) as `expected`, the caller's own check. Where the platform allows it, the root is
+    opened with `O_NOFOLLOW` and emptied only through that descriptor, and the root's own `rmdir` goes through its
+    parent after the name is checked once more. Without that (Windows), the root and each entry are `lstat`ed
+    just before use, and a link or reparse point is refused; a check-then-use window remains there, under the
+    per-user temp root. A failure part way leaves the marker in place. Raises `OSError` (`_ScratchRefused` for a
+    refusal).
     """
+    before = os.lstat(path)
+    if _link_like(before) or not stat.S_ISDIR(before.st_mode):
+        raise _ScratchRefused(f"{path.name} is not a plain directory")
+    if expected is not None and not _same(before, expected):
+        raise _ScratchRefused(f"{path.name} changed after it was checked")
+    if _descriptor_removal():
+        flags = os.O_RDONLY | getattr(os, "O_DIRECTORY") | getattr(os, "O_NOFOLLOW")
+        fd = os.open(path, flags)
+        try:
+            if not _same(os.fstat(fd), before):
+                raise _ScratchRefused(f"{path.name} changed after it was checked")
+            with os.scandir(fd) as listing:
+                entries = [(entry.name, entry.is_dir(follow_symlinks=False))
+                           for entry in listing if entry.name != SCRATCH_MARKER]
+            for name, is_directory in entries:
+                if is_directory:
+                    shutil.rmtree(name, dir_fd=fd)
+                else:
+                    os.unlink(name, dir_fd=fd)
+            try:
+                os.unlink(SCRATCH_MARKER, dir_fd=fd)
+            except FileNotFoundError:
+                pass
+        finally:
+            os.close(fd)
+        parent = os.open(path.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY"))
+        try:
+            if not _same(os.stat(path.name, dir_fd=parent, follow_symlinks=False), before):
+                raise _ScratchRefused(f"{path.name} changed after it was checked")
+            os.rmdir(path.name, dir_fd=parent)
+        finally:
+            os.close(parent)
+        return
     with os.scandir(path) as listing:
-        entries = [entry for entry in listing if entry.name != SCRATCH_MARKER]
+        entries = [Path(entry.path) for entry in listing if entry.name != SCRATCH_MARKER]
     for entry in entries:
-        if entry.is_dir(follow_symlinks=False):
-            shutil.rmtree(entry.path)
+        info = os.lstat(entry)
+        if _link_like(info):
+            raise _ScratchRefused(f"{entry.name} in {path.name} is a link or reparse point")
+        if stat.S_ISDIR(info.st_mode):
+            shutil.rmtree(entry)
         else:
-            os.unlink(entry.path)
+            os.unlink(entry)
     (path / SCRATCH_MARKER).unlink(missing_ok=True)
+    after = os.lstat(path)
+    if _link_like(after) or not _same(after, before):
+        raise _ScratchRefused(f"{path.name} changed after it was checked")
     path.rmdir()
 
 
@@ -681,7 +747,8 @@ def _sweep_scratch_homes() -> None:
             info = marker.lstat()
             if not stat.S_ISREG(info.st_mode) or info.st_mtime > cutoff:
                 continue
-            if hasattr(os, "getuid") and path.lstat().st_uid != os.getuid():
+            root = path.lstat()
+            if hasattr(os, "getuid") and root.st_uid != os.getuid():
                 continue
             with marker.open("rb") as handle:
                 raw = handle.read(len(SCRATCH_MARKER_TEXT) + _DEADLINE_DIGITS + 2)
@@ -690,10 +757,10 @@ def _sweep_scratch_homes() -> None:
                 continue
         except OSError:
             continue
-        eligible.append((info.st_mtime, path, raw))
-    for mtime, path, raw in sorted(eligible)[:SCRATCH_SWEEP_LIMIT]:
+        eligible.append((info.st_mtime, path, raw, root))
+    for mtime, path, raw, root in sorted(eligible, key=lambda item: (item[0], item[1]))[:SCRATCH_SWEEP_LIMIT]:
         try:
-            _remove_marker_last(path)
+            _remove_marker_last(path, root)
         except OSError:
             # Failed after the marker went (the root could not be removed): put the same marker back, with its old
             # time, so the next dispatch can still take the home.

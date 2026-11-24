@@ -100,7 +100,11 @@ and evidence obvious to a reviewer reading the PR without the chat history.
   are not links, whose exact OMH marker is older than a day, and whose
   recorded deadline (that dispatch's start, timeout and a margin) has passed;
   an infinite or oversized timeout records the largest deadline, so that
-  home is never swept. Nothing else.
+  home is never swept. Nothing else. A removal never follows a link: where
+  the platform has `O_NOFOLLOW` and descriptor-relative removal, it works
+  only through the home's own descriptor; on Windows it refuses any link or
+  reparse point it finds by `lstat` just before use, and a check-then-use
+  window remains there, under the per-user temp root.
   Two front doors reuse it without adding a process authority:
   - `omh coding paired-run dispatch` for confirmed evaluation cells: one
     digest-matching task file per frozen task, task bytes over child stdin,
