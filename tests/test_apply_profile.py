@@ -185,6 +185,60 @@ class ApplyProfileTests(unittest.TestCase):
         self.assertEqual((status, payload["status"]), (1, "unregistered_kept"))
         self.assertEqual((bot / "config.yaml").read_bytes(), before)
 
+    def test_a_failed_registration_takes_its_bundle_back_so_a_rerun_after_repair_sets_it_up(self) -> None:
+        self._setup()
+        bot = self._profile("demo-bot")
+        (bot / "config.yaml").write_text("skills:\n  external_dirs: not-a-list\n", encoding="utf-8")
+
+        status, payload, _stderr = self._apply("--profile", "demo-bot")
+
+        self.assertEqual((status, payload["status"]), (1, "failed"))
+        self.assertIn("external_dirs", str(payload["error"]))
+        self.assertTrue(payload["plugin_bundle_rolled_back"])
+        self.assertFalse((bot / "plugins" / "omh").exists())
+        # still failing, not read as the opt-out
+        again, payload, _stderr = self._apply("--profile", "demo-bot")
+        self.assertEqual((again, payload["status"]), (1, "failed"))
+        (bot / "config.yaml").write_text("model:\n  default: demo-model\n", encoding="utf-8")
+        repaired, payload, _stderr = self._apply("--profile", "demo-bot")
+        self.assertEqual((repaired, payload["status"]), (0, "bootstrapped"))
+        self.assertIn(self._skills_dir(), (bot / "config.yaml").read_text(encoding="utf-8"))
+
+    def test_a_profile_gone_before_the_write_is_not_recreated(self) -> None:
+        self._setup()
+        bot = self._profile("demo-bot")
+        real = _setup_module._profile_clone
+
+        def vanish(args, primary, profile_dir):
+            for path in sorted(profile_dir.rglob("*"), reverse=True):
+                path.unlink() if path.is_file() else path.rmdir()
+            return real(args, primary, profile_dir)
+
+        with mock.patch.object(_setup_module, "_profile_clone", side_effect=vanish):
+            status, payload, _stderr = self._apply("--profile", "demo-bot")
+        self.assertEqual((status, payload["status"]), (1, "failed"))
+        self.assertEqual(list(bot.rglob("*")), [])
+
+    @unittest.skipUnless(hasattr(Path, "symlink_to"), "needs symlinks")
+    def test_refuses_a_profile_that_is_a_link(self) -> None:
+        self._setup()
+        target = self._profile("demo-bot")
+        outside = self.root / "outside"
+        outside.mkdir()
+        (outside / "SOUL.md").write_text("Profile identity\n", encoding="utf-8")
+        try:
+            (self.hermes_home / "profiles" / "link-bot").symlink_to(target, target_is_directory=True)
+            (self.hermes_home / "profiles" / "out-bot").symlink_to(outside, target_is_directory=True)
+        except OSError as exc:  # Windows without the symlink privilege
+            self.skipTest(f"symlinks unavailable: {exc}")
+        before = (_tree(target), _tree(outside))
+        for name in ("link-bot", "out-bot"):
+            with self.subTest(name=name):
+                status, payload, _stderr = self._apply("--profile", name)
+                self.assertEqual((status, payload["status"]), (2, "refused"))
+                self.assertIn("is a link to", str(payload["reason"]))
+        self.assertEqual((_tree(target), _tree(outside)), before)
+
     def test_human_output_says_what_hermes_reads_without_a_restart(self) -> None:
         self._setup()
         self._profile("demo-bot")

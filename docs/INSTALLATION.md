@@ -4107,15 +4107,24 @@ A bot made after install does not have to wait for the next update:
 `omh apply --profile <name>` runs the same per-profile pass for that one
 profile and nothing else. It does not update OMH or its skill pack, does not
 read or write the main home or any other profile, makes no network call and
-runs no Hermes command. It refuses a name outside Hermes' profile rule
+runs no Hermes command; like the update, it records the config write in OMH's
+own `runtime/state.json`, which uninstall reads. It refuses a name outside Hermes' profile rule
 (lowercase letters, digits, `_` and `-`, at most 64 characters), `default`
 (the main home: `omh apply` without `--profile`), a name Hermes reserves,
 `omh-tui` (oh-my-hermes' own TUI profile, which never gets a registration of
 its own), and anything that is not a live profile under
-`<Hermes home>/profiles`; it also refuses before `omh setup` has installed
-OMH's skills. A deliberately unregistered profile stays unregistered. A
-second run changes nothing. `--dry-run` previews and `--json` prints the
-profile's row. Hermes re-reads `skills.external_dirs` when `config.yaml`
+`<Hermes home>/profiles`, a link included (it would write the link's target);
+it also refuses before `omh setup` has installed OMH's skills. A deliberately
+unregistered profile stays unregistered. When the registration fails after
+the plugin bundle went in (a config `skills.external_dirs` OMH cannot edit,
+say), the bundle that pass installed is removed again, so the profile is not
+left looking opted out and a rerun after the repair sets it up. A second run
+changes nothing. `--dry-run` previews. Exit 0 means the profile is
+registered, 1 that it was left unregistered or the pass failed (`error` says
+why), 2 that the name was refused and nothing was attempted. `--json` prints
+the profile's row (`profile`, `status`, `registration`, `registered_dir`,
+plus `hermes_home`, `dry_run` and `gateway_restart_hint`), or for a refusal
+`{"profile", "status": "refused", "reason", "dry_run"}`. Hermes re-reads `skills.external_dirs` when `config.yaml`
 changes, so a running gateway finds the new skills on its next skill lookup
 without a restart; a conversation already open keeps the skill list it
 started with until `/new`, and OMH's plugin tools in that profile load at the

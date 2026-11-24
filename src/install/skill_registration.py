@@ -395,10 +395,15 @@ def named_hermes_profile(hermes_home: Path, name: str) -> tuple[Path | None, str
             f"`{name}` is oh-my-hermes' own TUI profile: it links the main home's skills, OMH's among them, "
             "so a registration of its own would list every OMH skill twice"
         )
+    root = hermes_home / "profiles"
+    entry = root / name
+    if entry.is_symlink() or (entry.is_dir() and entry.resolve().parent != root.resolve()):
+        # Hermes would read and write the link's target, which is another
+        # profile or a folder outside the Hermes home, not this profile.
+        return None, f"{entry} is a link to {entry.resolve()}, not a profile folder of its own"
     for listed, profile_dir in hermes_profile_dirs(hermes_home):
         if listed == name:
             return profile_dir, ""
-    root = hermes_home / "profiles"
     if not (root / name).is_dir():
         return None, f"no Hermes profile named `{name}` under {root}"
     if (root / ".deleted" / name).exists():

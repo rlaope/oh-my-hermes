@@ -84,6 +84,7 @@ from ..install.skill_registration import (
     managed_command_runtime as _managed_command_runtime,
     managed_skill_dir_candidates,
     migrate_managed_registration,
+    PROFILE_IDENTITY_MARKERS,
     named_hermes_profile,
     registered_managed_entries,
     registered_skill_dir,
@@ -835,6 +836,8 @@ def _sync_hermes_profile(
     `failed` status, never an exception: the update goes on to the next home.
     """
     entry: dict[str, object] = {"profile": name}
+    profile_paths: OmhPaths | None = None
+    bundle_was_there = True
     try:
         clone = _profile_clone(args, primary, profile_dir)
         profile_paths = _paths(clone)
@@ -856,6 +859,11 @@ def _sync_hermes_profile(
             "registration": "unchanged",
             "retired_external_dirs": [],
         }
+        # Re-read just before the first write: a profile Hermes deleted since it
+        # was listed must not come back as a shell holding only OMH's files.
+        if not any((profile_dir / m).is_file() or (profile_dir / m).is_symlink() for m in PROFILE_IDENTITY_MARKERS):
+            raise OmhError(f"{profile_dir} is no longer a Hermes profile")
+        bundle_was_there = profile_paths.hermes_plugin_dir.is_dir()
         plugin = install_plugin_bundle(
             profile_paths, force=bool(getattr(args, "force", False)), dry_run=bool(args.dry_run)
         )
@@ -884,6 +892,21 @@ def _sync_hermes_profile(
     except (OSError, UnicodeError, ValueError, PluginPackError, OmhError) as exc:
         entry["status"] = "failed"
         entry["error"] = f"{type(exc).__name__}: {_bounded_command_error(str(exc))}"
+        # A bundle this pass installed into a profile that then could not be
+        # registered would read as the deliberate opt-out (plugin there, no
+        # managed skills directory) to every later pass, so it is taken back
+        # through the same manifest-checked removal uninstall uses: the next
+        # run, once the config is repaired, bootstraps the profile again.
+        if profile_paths is not None and not bundle_was_there and not bool(args.dry_run):
+            if profile_paths.hermes_plugin_dir.is_dir():
+                try:
+                    removed = uninstall_profile_plugin(profile_paths)
+                    entry["plugin_bundle_rolled_back"] = not profile_paths.hermes_plugin_dir.is_dir()
+                    if removed.get("kept_paths"):
+                        entry["kept_paths"] = removed["kept_paths"]
+                except (OSError, PluginPackError, OmhError) as rollback:
+                    entry["plugin_bundle_rolled_back"] = False
+                    entry["rollback_error"] = f"{type(rollback).__name__}: {_bounded_command_error(str(rollback))}"
     return entry
 
 
@@ -7516,7 +7539,8 @@ def _add_top_level_commands(sub) -> None:
         metavar="NAME",
         help=(
             "Register OMH in this one existing Hermes bot profile only, as `omh update` does for each profile: "
-            "no OMH self-update, no other home touched, no Hermes command run."
+            "no OMH self-update, no other Hermes home touched, no Hermes command run; the write is recorded in "
+            "OMH's own state. Exit 0 registered, 1 left unregistered or failed, 2 refused (nothing attempted)."
         ),
     )
     apply.add_argument("--dry-run", action="store_true")
