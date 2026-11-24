@@ -4287,6 +4287,27 @@ shown only when it has something to say). Both read Hermes'
 All of it is local files only, in bounded reads; OMH stops, kills and
 restarts nothing, and the doctor row warns without failing.
 
+`omh doctor` also prints a **Prompt cache (read-only)** section and carries
+the same report as the `prompt_cache_route` row's `detail` in `--json`
+(`omh_prompt_cache_route/v1`). It reads only `<HERMES_HOME>/config.yaml`
+(`model.provider`, `providers.<name>.base_url`, `prompt_caching.cache_ttl`,
+`prompt_caching.route_ttl_ceilings`) and the last 2 MiB of
+`<HERMES_HOME>/logs/agent.log`; it sends no model request. A main route keeps
+1h cache entries when its `base_url` is a loopback, localhost or private
+address serving Claude, as CLIProxyAPI does; any other host, such as
+`api.anthropic.com`, is a direct route whatever the provider is named, and
+OMH's small known-proxy table (`claude-proxy`, ...) is used only when no
+`base_url` is set. On such a route it warns when `cache_ttl` is pinned to `5m`
+(fix: `hermes config set prompt_caching.cache_ttl auto`; a `1h` route ceiling
+does not lift a `5m` pin) and when the route has no `1h` ceiling (fix:
+`hermes config set prompt_caching.route_ttl_ceilings.<provider> 1h`), printing
+only the fixes that apply; `auto` with a `1h` ceiling matches. It also warns
+when prompt caching is disabled. It also
+counts the prompt-cache warmer's stop reasons from the last 24 hours with a
+plain explanation of each; `cache economics unavailable` means the route has
+no cache prices, so no keep-alive is sent and no quota is spent. The row
+warns without failing, and `omh model` repeats the TTL warning and its fix.
+
 `omh doctor` also prints a **Hermes gateways (read-only)** section, whatever
 it finds, and carries the same report as the `gateway_health` row's `detail`
 in `--json` (`omh_gateway_health/v1`, its printed `lines` included). It
