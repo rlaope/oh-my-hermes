@@ -241,6 +241,23 @@ All notable changes will be documented here.
   reported as a stray that has not exited. The
   `--json` report gains `idle_exit` and `overdue` per gateway. (`src/maintenance/gateway_health.py` `_unrecorded_line`,
   `IDLE_EXIT_STALE_SECONDS`, `src/system/process_listing.py` `IDLE_EXIT_FLAG`)
+- **omher 1.2.0.** Hand a terminal to a bot, a page per bot with its apps, Google's Antigravity CLI in TERMINALS, and
+  a Windows pass.
+  - **Agents:** Google's Antigravity CLI (`agy`) starts from the TERMINALS `+` menu with its official mark, shows its
+    mark on a running row, in Settings › Agents and on a Hermes child that runs `agy acp` (#3176).
+  - **Hand to a bot:** right-click a TERMINALS row, a split cell or a worktree to hand its folder to a bot, with the
+    keyboard back on the row after the card closes (#3143, #3163, #3171).
+  - **Bots:** a bot's page shows its persona, memory and work (#3148), an Apps page connects it to Hermes' MCP catalog
+    (#3152), a bot whose Discord or Slack stopped connecting says so (#3157), a chat that stopped after a crash says
+    why and recovers (#3127, #3129), and the reasoning picker offers every level Hermes accepts (#3134).
+  - **Terminals:** drag a header to merge two terminals of one folder (#3145), each split shows as one layout card
+    (#3138, #3167), make a folder from the right-click menu with sharp pictures in terminals (#3073), and a panel tab
+    click right after maximise picks that tab (#3146).
+  - **Threads and links:** a thread lists the pull requests its bot linked with their checks (#3149), and links to
+    Jira, Confluence, Sentry, Asana, Todoist, ClickUp, GitLab and Obsidian become chips (#3151).
+  - **Windows:** Ctrl+V pastes and Ctrl+C copies as in Windows Terminal (#3132), "Reply there" and fonts fixed
+    (#3142), an oh-my-hermes terminal reads oh-my-hermes (#3135), and SSH to a Windows Hermes with only `hermes.cmd`
+    works (#3118). Settings › Accounts › GitHub keeps Add and Remove on one line (#3174).
 - **omher 1.1.3.** GitHub across your repositories and accounts, a Claude usage meter that shows numbers, and terminals
   and bridges that recover by themselves.
   - **GitHub:** Tasks gains a "나" scope: your review requests, your pull requests, issues assigned to you and mentions,
@@ -641,6 +658,15 @@ All notable changes will be documented here.
   questions and stop keys stay on main's screen; on the shared gateway the view reads one page at a time until an
   empty page, at most 50 reads after the agent ends, then says it could not read the rest. (`src/tui/subagent_session.py`,
   `src/tui/agent_view.py`, `src/tui/app.py`, `src/tui/frame.py`)
+- **omher: Google's Antigravity CLI (`agy`) is an agent you can start in TERMINALS.** The TERMINALS `+` menu offers
+  Antigravity with its official mark, and starts `agy` with no arguments in a terminal in the folder you pick; when it
+  is not installed, More agents shows its official installer line (`curl -fsSL https://antigravity.google/cli/install.sh | bash`).
+  omher finds `agy` where that installer puts it (`~/.local/bin`, and `%LOCALAPPDATA%\agy\bin` on Windows, now
+  searched too) even when omher was started from the Dock with a short PATH. A terminal row running `agy`, also one
+  you typed into a Shell, shows the Antigravity mark and name; Settings › Agents lists it as an ACP agent; and a
+  Hermes child that works through `agy acp` shows the Antigravity mark. Its ACP row is `agy acp`; signed out, it ends
+  with one line naming `agy acp --login`, checked against a real Antigravity CLI 1.5.16 handshake. Signed-in turns and
+  its approval cards were not run. (`apps/omher/src-tauri/src/acp_agents.rs`; `docs/OMHER-BOUNDARY.md` rule 11)
 
 ## 5.0.0 - 2026-11-21
 

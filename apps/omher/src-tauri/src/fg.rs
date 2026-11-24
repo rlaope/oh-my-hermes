@@ -603,6 +603,10 @@ mod tests {
             ("aider", Some("aider")),
             ("qwen", Some("qwen")),
             ("COPILOT.EXE", Some("copilot")),
+            // Antigravity CLI: one native binary where its installers copy it (macOS/Linux, Windows); its
+            // self-update replaces that same file, so the foreground process keeps this path
+            ("/Users/me/.local/bin/agy", Some("agy")),
+            ("C:\\Users\\me\\AppData\\Local\\agy\\bin\\agy.exe", Some("agy")),
             ("/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh", Some("dsh")),
         ];
         for (path, want) in table {
