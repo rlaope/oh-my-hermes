@@ -116,6 +116,9 @@ _GUARDRAIL_CANDIDATE_INJECTION_IDS = frozenset(
         # "슬랙 채널 지켜보다가 … 알려줘" scores on gateway-intent-card's platform
         # and notify triggers and on almost nothing of automation-blueprint's.
         "channel_watch_before_gateway_or_connector",
+        # "노션 페이지 바뀌면 알려줘" scores on connector-operator's and wiki's
+        # platform triggers and on nothing of automation-blueprint's.
+        "monitor_trigger_before_connector_or_wiki",
         # "watch PR 42 until its checks finish" scores on ultrawork's `until` and
         # `finish` triggers and on nothing of github-event-ops'.
         "pr_watch_before_loop_or_ultrawork",

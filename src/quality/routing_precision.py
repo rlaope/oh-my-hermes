@@ -162,6 +162,37 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
     RoutingPrecisionCase("pr-watch-do-not-watch", "Do not watch a PR is not a PR watch", "do not watch PR 42 until it merges", "answer_clarification", "", "github-event-ops"),
     RoutingPrecisionCase("pr-watch-korean-dont-watch-just-review", "A Korean declined watch that asks for a review is not a PR watch", "PR 42 머지될 때까지 지켜보지 말고 리뷰만 해줘", "answer_clarification", "", "github-event-ops"),
     RoutingPrecisionCase("pr-watch-ci-on-main-is-another-branch", "A PR watched until CI on main passes waits on another branch", "watch PR 42 until CI on main passes", "answer_clarification", ""),
+    # The monitor-trigger guard needs a platform with no webhook, a tell-me cue
+    # and an event cue together. These name the platform without asking to be
+    # told when something happens on it: a one-off read or tidy-up, a question
+    # about the product, a one-time reminder, the platform as the delivery
+    # target, a video, and `linear` as an adjective. None may even list
+    # automation-blueprint.
+    RoutingPrecisionCase("monitor-trigger-summarize-inbox-is-one-read", "Summarizing an inbox is one read, not a monitor", "summarize my inbox", "answer_clarification", "", "automation-blueprint"),
+    RoutingPrecisionCase("monitor-trigger-korean-gmail-tidy-is-one-task", "A Korean Gmail tidy-up is one task, not a monitor", "gmail 메일 정리해줘", "answer_clarification", "", "automation-blueprint"),
+    RoutingPrecisionCase("monitor-trigger-calendar-today-is-a-question", "Today's calendar is a question, not a monitor", "what's on my calendar today?", "answer_directly", "direct_answer", "automation-blueprint"),
+    RoutingPrecisionCase("monitor-trigger-korean-sentry-analysis-is-triage", "A Korean Sentry root-cause ask is triage, not a monitor", "Sentry 이슈 원인 분석해줘", "answer_clarification", "", "automation-blueprint"),
+    RoutingPrecisionCase("monitor-trigger-obsidian-plugins-is-a-question", "Asking about Obsidian vault plugins is not a monitor", "tell me about Obsidian vault plugins", "answer_clarification", "", "automation-blueprint"),
+    RoutingPrecisionCase("monitor-trigger-one-time-reminder", "A one-time reminder to check Sentry is not a monitor", "remind me to check Sentry tomorrow", "answer_clarification", "", "automation-blueprint"),
+    RoutingPrecisionCase("monitor-trigger-email-me-is-the-delivery-target", "Email as the delivery target is not a mail monitor", "email me when the build fails", "answer_clarification", "", "automation-blueprint"),
+    RoutingPrecisionCase("monitor-trigger-a-video-is-not-a-platform", "Watching a video about Notion is not a Notion monitor", "watch this video about Notion and tell me when it gets interesting", "answer_clarification", "", "automation-blueprint"),
+    RoutingPrecisionCase("monitor-trigger-linear-regression-is-not-linear", "A linear regression is not the Linear app", "tell me when the linear regression loss drops", "answer_directly", "direct_answer", "automation-blueprint"),
+    RoutingPrecisionCase("monitor-trigger-korean-add-a-meeting", "Adding a meeting to the calendar is one action, not a monitor", "캘린더에 회의 추가해줘", "answer_clarification", "", "automation-blueprint"),
+    # Review round: a bare `when` or `before` is not an event, `in linear` is not
+    # the Linear app, and a time question, an outage, an API, a how-to, a
+    # setting or 이전에 is not a trigger. None may even list automation-blueprint.
+    RoutingPrecisionCase("monitor-trigger-next-meeting-is-a-question", "When the next calendar meeting is, is a question", "can you tell me when my next calendar meeting is?", "answer_clarification", "", "automation-blueprint"),
+    RoutingPrecisionCase("monitor-trigger-last-mail-is-a-question", "When the last mail came is a question", "tell me when I got the last mail from Bob", "answer_directly", "direct_answer", "automation-blueprint"),
+    RoutingPrecisionCase("monitor-trigger-mail-server-outage", "A mail server outage is not a mail monitor", "tell me when the mail server is back up", "answer_clarification", "", "automation-blueprint"),
+    RoutingPrecisionCase("monitor-trigger-gmail-down", "Gmail being down is not a mail monitor", "tell me when Gmail is down", "answer_directly", "direct_answer", "automation-blueprint"),
+    RoutingPrecisionCase("monitor-trigger-before-you-send", "A check before the bot sends mail is not a monitor", "let me know before you send the mail", "answer_clarification", "", "automation-blueprint"),
+    RoutingPrecisionCase("monitor-trigger-reminder-before-a-date", "A reminder before a date is not a monitor", "remind me to send the mail before Friday", "answer_clarification", "", "automation-blueprint"),
+    RoutingPrecisionCase("monitor-trigger-inbox-before-9am", "An inbox summary before 9am is one read", "tell me what's in my inbox before 9am", "answer_clarification", "", "automation-blueprint"),
+    RoutingPrecisionCase("monitor-trigger-calendar-api-docs", "Calendar API docs changing is not a calendar monitor", "tell me when the calendar API docs change", "answer_clarification", "", "automation-blueprint"),
+    RoutingPrecisionCase("monitor-trigger-in-linear-regression", "`in linear regression` is not the Linear app", "tell me when the loss in linear regression drops", "answer_directly", "direct_answer", "automation-blueprint"),
+    RoutingPrecisionCase("monitor-trigger-on-linear-models", "`on linear models` is not the Linear app", "let me know when the error on linear models goes down", "answer_clarification", "", "automation-blueprint"),
+    RoutingPrecisionCase("monitor-trigger-korean-earlier-mail", "Korean 이전에 is earlier, not a time before a start", "이전에 받은 메일 알려줘", "answer_clarification", "", "automation-blueprint"),
+    RoutingPrecisionCase("monitor-trigger-korean-plugin-update", "An Obsidian plugin update is not a vault folder change", "옵시디언 플러그인 업데이트 뜨면 알려줘", "answer_clarification", "", "automation-blueprint"),
     RoutingPrecisionCase("repro-audit-weather-conditions", "Weather conditions are not evaluation conditions", "Summarize the reported conditions from the weather report", "answer_clarification", "", "repro-audit"),
     RoutingPrecisionCase("repro-audit-soccer-evaluations", "Player evaluations are not benchmark records", "Compare evaluation results for our soccer players this season", "answer_clarification", ""),
     RoutingPrecisionCase("repro-audit-student-evaluations", "Student evaluations are not benchmark records", "Compare evaluation results for my students between midterm and final", "answer_clarification", ""),
@@ -11987,6 +12018,39 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "prepare_github_issue_intake",
         "github_issue_intake",
     ),
+    # A trigger on a platform with no webhook is one of automation-blueprint's
+    # monitor recipes (a paused Hermes cron monitor job). Before the
+    # monitor_trigger guard these clarified toward morning-brief,
+    # connector-operator, wiki or operating-rhythm, fell back, or dispatched
+    # connector-operator, wiki or github-event-ops.
+    RoutingInterventionCase("monitor-trigger-gmail-from-boss", "Being told when a mail from the boss arrives reaches the monitor recipes", "watch my inbox and tell me when a mail from my boss arrives", "dispatch", "automation-blueprint", "prepare_scheduled_ops_blueprint", "automation_blueprint"),
+    RoutingInterventionCase("monitor-trigger-korean-gmail-new-mail", "A Korean new-mail trigger reaches the monitor recipes", "gmail에 새 메일 오면 알려줘", "dispatch", "automation-blueprint", "prepare_scheduled_ops_blueprint", "automation_blueprint"),
+    RoutingInterventionCase("monitor-trigger-calendar-before-meeting", "A reminder before each calendar meeting reaches the monitor recipes", "remind me 10 minutes before each calendar meeting", "dispatch", "automation-blueprint", "prepare_scheduled_ops_blueprint", "automation_blueprint"),
+    RoutingInterventionCase("monitor-trigger-korean-calendar-before-start", "A Korean reminder before a calendar event reaches the monitor recipes", "캘린더 일정 시작 15분 전에 알려줘", "dispatch", "automation-blueprint", "prepare_scheduled_ops_blueprint", "automation_blueprint"),
+    RoutingInterventionCase("monitor-trigger-notion-page-changes", "A Notion page change reaches the monitor recipes", "tell me when the Notion roadmap page changes", "dispatch", "automation-blueprint", "prepare_scheduled_ops_blueprint", "automation_blueprint"),
+    RoutingInterventionCase("monitor-trigger-korean-notion-database", "A Korean Notion database change reaches the monitor recipes", "노션 데이터베이스 바뀌면 알려줘", "dispatch", "automation-blueprint", "prepare_scheduled_ops_blueprint", "automation_blueprint"),
+    RoutingInterventionCase("monitor-trigger-linear-assigned", "A Linear issue assigned reaches the monitor recipes, not the connector card", "ping me when a Linear issue is assigned to me", "dispatch", "automation-blueprint", "prepare_scheduled_ops_blueprint", "automation_blueprint"),
+    RoutingInterventionCase("monitor-trigger-korean-jira-assigned", "A Korean Jira assignment reaches the monitor recipes", "지라 이슈가 나한테 배정되면 알려줘", "dispatch", "automation-blueprint", "prepare_scheduled_ops_blueprint", "automation_blueprint"),
+    RoutingInterventionCase("monitor-trigger-obsidian-folder", "An Obsidian folder change reaches the monitor recipes, not the wiki", "watch my Obsidian vault Inbox folder and tell me when a note changes", "dispatch", "automation-blueprint", "prepare_scheduled_ops_blueprint", "automation_blueprint"),
+    RoutingInterventionCase("monitor-trigger-korean-obsidian-folder", "A Korean Obsidian folder change reaches the monitor recipes", "옵시디언 볼트 폴더 바뀌면 알려줘", "dispatch", "automation-blueprint", "prepare_scheduled_ops_blueprint", "automation_blueprint"),
+    RoutingInterventionCase("monitor-trigger-sentry-issue-opened", "A new Sentry issue reaches the monitor recipes, not GitHub event ops", "alert me when a new Sentry issue is opened", "dispatch", "automation-blueprint", "prepare_scheduled_ops_blueprint", "automation_blueprint"),
+    RoutingInterventionCase("monitor-trigger-korean-sentry-issue", "A Korean new Sentry issue reaches the monitor recipes", "센트리에 새 이슈 생기면 알려줘", "dispatch", "automation-blueprint", "prepare_scheduled_ops_blueprint", "automation_blueprint"),
+    # The same platform words in other lanes keep their owners: creating an
+    # issue is a connector action, a how-to about notifications and a wait on
+    # the bot's own reading keep the connector card, and a GitHub issue
+    # opening stays with GitHub issue intake.
+    RoutingInterventionCase("monitor-trigger-create-linear-issue-stays-connector", "Creating a Linear issue stays a connector action", "create a Linear issue for this bug", "dispatch", "connector-operator", "prepare_connector_operator_card", "connector_operator"),
+    RoutingInterventionCase("monitor-trigger-korean-create-jira-issue-stays-connector", "A Korean Jira issue creation stays a connector action", "jira 이슈 만들어줘", "dispatch", "connector-operator", "prepare_connector_operator_card", "connector_operator"),
+    RoutingInterventionCase("monitor-trigger-how-to-notion-notify-stays-connector", "A how-to about Notion notifications keeps the connector card", "how do I get notified when a Notion page changes?", "dispatch", "connector-operator", "prepare_connector_operator_card", "connector_operator"),
+    RoutingInterventionCase("monitor-trigger-when-you-finish-stays-connector", "A wait on the bot's own reading keeps the connector card", "let me know when you finish reading my Notion page", "dispatch", "connector-operator", "prepare_connector_operator_card", "connector_operator"),
+    RoutingInterventionCase("monitor-trigger-github-issue-stays-intake", "A GitHub issue opening stays with GitHub issue intake", "tell me when a new GitHub issue is opened", "dispatch", "github-issue-intake", "prepare_github_issue_intake", "github_issue_intake"),
+    # Review round: the same words in a question, a setting or a write keep their owners.
+    RoutingInterventionCase("monitor-trigger-notion-api-webhooks-stays-connector", "Notion API support for webhooks keeps the connector card", "notify me when the Notion API supports webhooks", "dispatch", "connector-operator", "prepare_connector_operator_card", "connector_operator"),
+    RoutingInterventionCase("monitor-trigger-change-then-update-stays-connector", "A trigger followed by a Jira write keeps the connector card", "tell me when the Notion page changes and then update the Jira ticket", "dispatch", "connector-operator", "prepare_connector_operator_card", "connector_operator"),
+    RoutingInterventionCase("monitor-trigger-korean-before-sending-stays-connector", "A Korean check before sending mail keeps the connector card", "메일 보내기 전에 알려줘", "dispatch", "connector-operator", "prepare_connector_operator_card", "connector_operator"),
+    RoutingInterventionCase("monitor-trigger-korean-alert-setting-stays-gateway", "A Korean calendar alert setting keeps the gateway intent card", "회의 전에 캘린더 알림 설정해줘", "dispatch", "gateway-intent-card", "prepare_gateway_intent_card", "gateway_intent"),
+    RoutingInterventionCase("monitor-trigger-korean-alert-off-how-to-stays-gateway", "A Korean how-to for turning calendar alerts off keeps the gateway intent card", "캘린더 알림 끄는 방법 알려줘 회의 전에 자꾸 떠", "dispatch", "gateway-intent-card", "prepare_gateway_intent_card", "gateway_intent"),
+    RoutingInterventionCase("monitor-trigger-korean-why-no-alert-stays-gateway", "A Korean why-no-alert question keeps the gateway intent card", "어제 메일 오면 알림 왜 안 와?", "dispatch", "gateway-intent-card", "prepare_gateway_intent_card", "gateway_intent"),
     # A wait on one pull request is github-event-ops' PR watch recipe (a Hermes
     # cron monitor job), not a model loop. Before the pr_watch guard these
     # clarified toward ultrawork or loop, or dispatched ultrawork.

@@ -35,6 +35,7 @@ STORE_TARGETS = {
     "runs/": "runtime/runs/20260818T025406Z-plan/run.json",
     "todos/": f"runtime/todos/{KEY}.json",
     "todo.json": "runtime/todo.json",
+    "pr_delivery/": "runtime/pr_delivery/grant-0123456789abcdef.json",
 }
 
 

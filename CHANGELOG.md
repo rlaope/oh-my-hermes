@@ -293,6 +293,18 @@ All notable changes will be documented here.
   `--script`, drops events the bot's own runs caused and more than 5 events per 15 minutes. Both scripts are inert
   package data the person's Hermes runs (owner-approved scoped integration, 2026-11-23); OMH never runs them.
   (`src/skills/pr_watch_toolkit/`, `src/skills/catalog_feature_surfaces.py`, `src/routing/policy.py`)
+- **automation-blueprint: be told when something happens on a platform that sends no webhook.** Asking Hermes to
+  be told when new mail matches a filter, a calendar event is about to start, a Notion page or database changes, a
+  Linear or Jira issue is assigned, an Obsidian vault folder changes, or a Sentry issue opens ("tell me when a mail
+  from my boss arrives", "노션 데이터베이스 바뀌면 알려줘") now reaches `automation-blueprint`, whose monitor recipes
+  (`references/monitor-recipes.md`) prepare one paused Hermes cron monitor job per trigger. Its script, from
+  `toolkit/monitors/`, prints only ids and the platform's own timestamps, so the agent wakes only when they change:
+  `api_watch.py` reads Notion, Linear, Jira and Sentry with a key from one environment name, sent only to that
+  platform's fixed host; `google_watch.py` runs Hermes' own google-workspace skill CLI; `vault_watch.py` lists an
+  Obsidian folder's file metadata. A missing or rejected credential is reported once; a network failure is a failed
+  monitor tick, never a change. The scripts write nothing and are inert package data the person's Hermes runs, the
+  same scoped-integration class as the PR watch scripts; OMH never runs them.
+  (`src/skills/monitor_recipes.py`, `src/skills/monitor_watch_toolkit/`, `src/routing/policy.py`)
 - **OMH TUI: kitty previews inside omher, and a quiet Ctrl+Enter.** Under `TERM_PROGRAM=omher` the OMH TUI asks for
   kitty previews (tmux and screen keep half-blocks). Ctrl+Enter on a prompt with images during a turn now stops the
   turn and sends the prompt without an `Interrupted.` notice, like Claude Code's send-now; Hermes' "Operation
@@ -317,6 +329,14 @@ All notable changes will be documented here.
   channel or thread, what happened and whether they need to do anything. The automation-blueprint reference quotes
   the same prompt, and a bridge test keeps the two identical. Applies to briefings omher sets up from now on; an
   existing `omher-brief` job keeps its prompt until it is edited.
+- **A bot can push its own branch and open its own PR unattended, once you grant it.** Off by default for every
+  profile, and only you change it, at your own terminal: `omh capability-policy pr-delivery on` (`show`, `off`,
+  `--json`). With it on, a webhook, one-shot or scheduled run may push a branch under the grant's prefix (`bot/`
+  by default), open a PR from it, and push fixes to and comment on a PR it opened, nothing else. It never merges,
+  force-pushes, pushes to the default branch, or touches a PR it did not open. In a run nobody can answer (a
+  webhook or `api_server` run, a cron turn, `hermes chat -q`, a delegated child), OMH's tool hook refuses those
+  whatever the grant says, and refuses the allowed ones while the grant is off. It holds a bot that follows the
+  skill, not one that sets out to evade it. `omh doctor` lists the profiles whose grant is on. See [PR Delivery Grant](docs/PR-DELIVERY-GRANT.md).
 - **omher keeps every TERMINALS row over a restart, types European Option signs, and gives the keyboard back.**
   - **Restart:** every TERMINALS row comes back, however many there are. Before, only the newest 20 were saved and the
     next start deleted the older rows' history and files, even for a running Claude. Only the newest 20 keep their

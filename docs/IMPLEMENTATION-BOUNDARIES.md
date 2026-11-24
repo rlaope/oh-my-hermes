@@ -136,6 +136,73 @@ stays in `AGENTS.md`, where `tests/test_paired_run_arm_home.py` reads it.
   anything on the forge. Config, output and exit codes are in their
   `README.md`; `tests/test_pr_watch_toolkit.py` runs both on fixture payloads,
   hostile ones included, and the monitor against a fake `gh`.
+- **Monitor-recipe scripts**: `src/skills/monitor_watch_toolkit/scripts/api_watch.py`,
+  `google_watch.py` and `vault_watch.py` ship as inert package data under
+  `automation-blueprint`'s `toolkit/monitors/`, the same class of scoped
+  integration as the PR watch scripts (owner-approved 2026-11-23). OMH core,
+  install, update, routing and doctor never import or execute them, and nothing
+  in `src/` imports them. The person (or their bot, on their request) copies
+  one into `<profile>/scripts/` as `<script>_<watch>.py`, and Hermes runs it as
+  a cron job's `--monitor-script`, on Hermes' interpreter, created paused. All
+  three are stdlib only and write nothing themselves: their only output is
+  stdout and stderr, ids and platform timestamps (and note names for Obsidian),
+  never a message, title or note body. The google-workspace CLI that
+  `google_watch.py` runs rewrites the profile's `google_token.json` when it
+  refreshes the sign-in, as it does when the agent uses it.
+  `api_watch.py` (Notion, Linear, Jira, Sentry) is a read-only network client:
+  `GET /v1/pages/<id>` and the database query on api.notion.com, one GraphQL
+  query on api.linear.app, `GET /rest/api/3/search/jql` on
+  `<site>.atlassian.net`, `GET /api/0/organizations/<org>/issues/` on sentry.io
+  or de.sentry.io, each host fixed in the script. Its credential comes only
+  from its environment name (`NOTION_API_KEY`, `LINEAR_API_KEY`, `JIRA_EMAIL`
+  with `JIRA_API_TOKEN`, `SENTRY_AUTH_TOKEN`), goes only to that host, and is
+  never printed or written; redirects are refused, a read times out after
+  15 s and a whole reply after 30 s, and a reply is capped. It is in
+  INVARIANT 2's `NETWORK_CLIENT_BRIDGES` with no importer. `google_watch.py` (Gmail, Calendar) opens no connection and
+  holds no credential: it runs Hermes' own google-workspace skill CLI, one
+  fixed read argv per tick (`google_api.py gmail search` or `calendar list`),
+  no shell, stdin closed, a 90 s timeout, and that CLI uses the profile's
+  Google sign-in. It is in INVARIANT 1's `PROCESS_SPAWN_ALLOWLIST`.
+  `vault_watch.py` (Obsidian) lists one vault folder and reads file metadata
+  only: no file opened, no connection, no process. A credential or
+  configuration failure prints one fixed `error reason=` line and exits 0 (one
+  agent wake); a network failure exits 1 (a failed monitor source, never a
+  change). Config, output and exit codes are in their `README.md`;
+  `tests/test_monitor_watch_toolkit.py` runs them against a loopback API, a
+  stand-in skill CLI and a temporary vault, and
+  `test_the_monitor_watch_scripts_are_stdlib_only_and_write_nothing` holds the
+  import and write surface.
+- **PR delivery grant** (owner-approved, 2026-11-23): a per-profile setting,
+  off by default, that only the person turns on or off at their own terminal
+  (`omh capability-policy pr-delivery on|off`, which refuses to run inside a
+  Hermes session). With it on, that profile's bot, in a run nobody can answer,
+  may push a new branch under the grant's branch prefix, open a pull request
+  from that branch, and push fix commits to and comment on a pull request it
+  opened; nothing else. Merging, force-pushing, pushing to the default branch,
+  and anything on a pull request the bot did not open stay a person's, grant or
+  no grant. `omh` itself runs no forge command and INVARIANT 3 is unchanged:
+  the bot (Hermes, or the coding owner it handed to) runs `git` and `gh` with
+  the person's own login. The grant is a file under the OMH home naming the
+  profile's Hermes home (`src/plugin_bundle/omh/pr_delivery.py`); an
+  unreadable, malformed or foreign file reads as off, a delegated child does
+  not carry it, and its only writer is the CLI. OMH's `pre_tool_call` hook
+  (`src/plugin_bundle/omh/pr_delivery_gate.py`) refuses a command that would
+  change the grant in every session, and in a session where
+  nobody can answer (a programmatic platform, a cron turn, a single-query
+  process, a delegated child) refuses the never-allowed classes whatever the
+  grant says, the allowed ones while it is off, a push or PR that does not
+  name its destination, and a command it cannot classify. It is a guardrail
+  that stops a cooperating agent's mistakes and the common spellings of a
+  forbidden action, failing closed on what it cannot parse; it is not a
+  sandbox against an agent that deliberately evades it from a shell (by
+  unsetting `HERMES_SESSION_ID` to flip the grant, or by writing its own
+  client). Hermes' approval policy and the forge's branch protection are the
+  controls for that, and the operator page recommends branch protection on
+  the default branch.
+  "A PR this bot opened" is OMH's record of the URL a grant-allowed `gh pr
+  create` printed, never the model's word. The matrix and its residuals are in
+  [`docs/PR-DELIVERY-GRANT.md`](PR-DELIVERY-GRANT.md);
+  `tests/test_pr_delivery_grant.py` holds it.
 - **The OMH TUI** (bare `omh`) is a foreground frontend over Hermes' own
   gateway, not an execution surface: it relays only what the person types,
   answers no request on their behalf, and makes no model call; the one switch
@@ -254,6 +321,15 @@ The one-line form of the same exceptions, formerly under What This Repo Is in
   process): package data the person's Hermes runs. OMH never imports or runs
   them. `pr_watch.py` is in INVARIANT 1's `PROCESS_SPAWN_ALLOWLIST` and its argv
   in INVARIANT 3's `GH_INVOCATION_EXCEPTIONS`.
+- The `automation-blueprint` toolkit scripts `toolkit/monitors/scripts/api_watch.py`
+  (Notion, Linear, Jira and Sentry reads to each platform's fixed host, the
+  credential from one environment name), `google_watch.py` (Hermes'
+  google-workspace skill CLI, one read argv per tick) and `vault_watch.py` (an
+  Obsidian folder's file metadata): Hermes cron monitor scripts the person's
+  Hermes runs, writing nothing themselves (the google-workspace CLI refreshes its
+  own `google_token.json`). OMH never imports or runs them. `api_watch.py`
+  is in INVARIANT 2's `NETWORK_CLIENT_BRIDGES` and `google_watch.py` in
+  INVARIANT 1's `PROCESS_SPAWN_ALLOWLIST`.
 - The OMH TUI's gateway child, `src/tui/attach/gateway_attach.py`: not core.
   It runs only on Hermes' interpreter, spawned by path, imported by nothing in
   `src/`, and reaches the person's own gateway over loopback as Hermes' Ink TUI

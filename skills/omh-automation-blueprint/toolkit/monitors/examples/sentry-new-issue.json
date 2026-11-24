@@ -1,0 +1,1 @@
+{"name": "web-errors", "kind": "sentry", "org": "example-org", "region": "us", "project_ids": [], "query": "is:unresolved", "limit": 10}

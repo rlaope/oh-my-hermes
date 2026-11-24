@@ -113,7 +113,9 @@ class RoutingPrecisionTests(unittest.TestCase):
         # Its verification round adds three: a PR metric and two deploys watched beside a PR.
         # Its final round adds three PR measures watched until a date.
         # Its hold round adds five: four declined watches and CI on main.
-        self.assertEqual(payload["summary"]["case_count"], 1562)
+        # Monitor recipes add ten platform mentions that ask for no trigger.
+        # Their review round adds twelve: time questions, outages, APIs, `in linear`, 이전에, a plugin update.
+        self.assertEqual(payload["summary"]["case_count"], 1584)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -192,7 +194,9 @@ class RoutingPrecisionTests(unittest.TestCase):
         # 364 -> 370: four one-line code backlogs, functions to explain and a one-line typo answer directly.
         # 370 -> 371: the PR watch lane's CI concept question is answered directly.
         # 371 -> 372: its staging deploy beside a merged PR falls back to a direct answer.
-        self.assertEqual(payload["summary"]["direct_answer_count"], 372)
+        # 372 -> 374: the monitor-trigger lane's calendar question and linear regression are answered directly.
+        # 374 -> 377: its review round's last-mail question, Gmail outage and `in linear regression`.
+        self.assertEqual(payload["summary"]["direct_answer_count"], 377)
         # show-reel's README-link control is answered as a file lookup (+1).
         # "Use OMH to fix the failing test in billing.py" names a file: a file lookup (+1).
         # Copying the skills OMH selected and summarizing the files it picked
@@ -294,7 +298,9 @@ class RoutingPrecisionTests(unittest.TestCase):
         # Its verification round adds one: a deploy monitored after a merge keeps deploy-and-monitor.
         # Its final round adds five PR waits that name logs, production, a server or a deploy elsewhere.
         # Its hold round adds two: a declined review, then a PR watch, in English and Korean.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1367)
+        # Monitor recipes add seventeen: twelve platform triggers that dispatch and five neighbours that keep their owner.
+        # Their review round adds six neighbours that keep connector-operator or gateway-intent-card.
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1390)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )
