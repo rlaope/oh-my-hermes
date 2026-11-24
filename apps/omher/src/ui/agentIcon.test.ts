@@ -6,7 +6,7 @@ describe("agentIcon", () => {
     const want: [string, string][] = [
       ["claude", "Claude Code"], ["codex", "Codex"], ["omh", "OMH"], ["pi", "pi"], ["omp", "omp"],
       ["grok", "Grok"], ["grokbot", "Grok Bot"], ["gemini", "Gemini CLI"], ["opencode", "opencode"],
-      ["cursor", "Cursor"], ["amp", "Amp"], ["cline", "Cline"], ["copilot", "GitHub Copilot"], ["goose", "Goose"],
+      ["cursor", "Cursor"], ["amp", "Amp"], ["cline", "Cline"], ["antigravity", "Antigravity"], ["copilot", "GitHub Copilot"], ["goose", "Goose"],
       ["kilo", "Kilo Code"], ["junie", "Junie"], ["qwen", "Qwen Code"], ["windsurf", "Windsurf"], ["trae", "TRAE"],
       ["roo", "Roo Code"], ["openai", "OpenAI"], ["gemini-app", "Gemini"],
     ];
@@ -16,7 +16,7 @@ describe("agentIcon", () => {
       expect(m.id, id).toBe(id);
       expect(m.title, id).toBe(title);
     }
-    expect(AGENT_IDS).toHaveLength(22);
+    expect(AGENT_IDS).toHaveLength(23);
     expect(new Set(AGENT_IDS)).toEqual(new Set(want.map(([id]) => id)));
   });
 
@@ -26,6 +26,7 @@ describe("agentIcon", () => {
     expect(agentIcon("kilocode").id).toBe("kilo");
     expect(agentIcon("RooCode").id).toBe("roo");
     expect(agentIcon("geminicli").id).toBe("gemini");
+    expect(agentIcon("agy").id).toBe("antigravity");
     expect(agentIcon(" Codex ").id).toBe("codex");
   });
 
@@ -41,7 +42,7 @@ describe("agentIcon", () => {
       const m = agentIcon(id);
       expect(m.kind === "svg" && m.mono, id).toBe(true);
     }
-    for (const id of ["claude", "gemini", "amp", "junie", "qwen", "trae", "pi", "omp"]) {
+    for (const id of ["claude", "gemini", "amp", "junie", "qwen", "trae", "pi", "omp", "antigravity"]) {
       const m = agentIcon(id);
       expect(m.kind === "svg" && !m.mono && /fill="/.test(m.body), id).toBe(true);
     }

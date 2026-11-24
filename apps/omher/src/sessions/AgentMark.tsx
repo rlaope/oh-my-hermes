@@ -3,7 +3,8 @@
 // marks, OmO's icon (oh-my-openagent `.github/assets/omo-icon-light.svg`, its viewBox trimmed to the tile) and
 // DeepSeek Harness's mark for DSH (deepseek-harness `apps/web/public/favicon.svg`, MIT, the file unchanged),
 // and OpenCode's mark (Lobe Icons) through AgentIcon. A generic ACP agent draws the mark file its row from the shell
-// names (`mark`: Lobe Icons' Gemini CLI, Qwen Code, GitHub Copilot and Cline marks; Kimi Code's is the icon its own npm
+// names (`mark`: Lobe Icons' Gemini CLI, Qwen Code, GitHub Copilot, Cline and Antigravity marks, the last
+// `@lobehub/icons-static-svg` 1.106.0 `icons/antigravity-color.svg`, MIT, unchanged; Kimi Code's is the icon its own npm
 // package ships, `@moonshot-ai/kimi-code` 2.6.0 `dist-web/favicon.ico`, its 64px image, MIT, unchanged). For a person
 // with Hermes but not oh-my-hermes, the oh-my-hermes
 // row is a plain Hermes chat and shows Hermes Agent's official mark (NousResearch/hermes-agent `assets/icon-master.svg`,

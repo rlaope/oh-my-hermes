@@ -46,7 +46,7 @@ describe("opensAs", () => {
     });
     expect(opensAs("claude")).toEqual({ chat: true, terminal: true });
     // a generic ACP agent opens either way
-    for (const id of ["gemini", "qwen", "kimi", "copilot", "cline"]) expect(opensAs(id)).toEqual({ chat: true, terminal: true });
+    for (const id of ["gemini", "qwen", "kimi", "copilot", "cline", "agy"]) expect(opensAs(id)).toEqual({ chat: true, terminal: true });
   });
 
   it("gives oh-my-hermes the Hermes chat only for a person who has Hermes and no omh", () => {

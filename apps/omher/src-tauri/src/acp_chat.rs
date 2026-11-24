@@ -1,6 +1,7 @@
 //! One chat adapter for every agent that speaks the Agent Client Protocol (ACP: JSON-RPC 2.0, one object per
 //! line on stdio), plus a row per agent: OpenCode (`opencode acp`, [`ACP_AGENTS`], with its own rule check) and the
-//! generic agents of [`crate::acp_agents::ACP_LIST`] (Gemini CLI, Qwen Code, Kimi Code, Copilot CLI, Cline).
+//! generic agents of [`crate::acp_agents::ACP_LIST`] (Gemini CLI, Qwen Code, Kimi Code, Copilot CLI, Cline,
+//! Antigravity).
 //!
 //! - start: `initialize` with the client's file-system and terminal capabilities OFF, so the agent uses its
 //!   own tools and omher reads and writes nothing new; then `session/resume` when the agent offers it and omher
@@ -1367,7 +1368,7 @@ fn decide_on(rules: &[(String, String, String)], tool: &str, input: &str, fold: 
         assert_eq!(written(&a.on_line(&init(json!({"loadSession": true, "sessionCapabilities": {"resume": {}}}))))[0]["method"], "session/new");
     }
 
-    /// Each of the five agents without a free model, as recorded on a Mac where nobody signed it in (scratch HOME):
+    /// Each of the six agents without a free model, as recorded on a Mac where nobody signed it in (scratch HOME):
     /// its real `initialize`, then its real `-32000` to `session/new`. The person sees one line with the row's sign-in
     /// command, the session is marked signed out (the UI ends it), nothing raw reaches the chat, `authenticate` is
     /// never sent, and a second message is refused with the same line.
@@ -1379,6 +1380,8 @@ fn decide_on(rules: &[(String, String, String)], tool: &str, input: &str, fold: 
             ("kimi", "kimi-signed-out.jsonl", "Kimi Code is not signed in. Run `kimi login` in a terminal and sign in.", "--login"),
             ("copilot", "copilot-signed-out.jsonl", "Copilot CLI is not signed in. Run `copilot login` in a terminal and sign in.", "copilot-darwin-arm64"),
             ("cline", "cline-signed-out.jsonl", "Cline is not signed in. Run `cline auth` in a terminal and sign in.", "Call authenticate"),
+            // Antigravity CLI 1.5.16 (`agy acp`): its bare "Authentication required" and its auth method names stay out
+            ("agy", "agy-signed-out.jsonl", "Antigravity is not signed in. Run `agy acp --login` in a terminal and sign in.", "Log in with Google"),
         ] {
             let mut a = Acp::new(acp_agent(id).unwrap(), "/w/proj", None);
             // the person's first message goes in at once, as a draft's first send does; the conversation never opens

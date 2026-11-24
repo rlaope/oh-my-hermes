@@ -19,7 +19,8 @@ UI_AGENTS = ROOT / "apps" / "omher" / "src" / "sessions" / "agents.ts"
 # structured-mode argument each). Kilo Code is no longer on it.
 BUILTIN_AGENTS = ("claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode")
 BUILTIN_MODES = ("Chat", "Chat", "Chat", "Chat", "Hermes", "Chat", "Chat", "Terminal", "Chat")
-ACP_LIST_ARGS = (("gemini", "--acp"), ("qwen", "--acp"), ("kimi", "acp"), ("copilot", "--acp"), ("cline", "--acp"))
+# Antigravity's program is `agy` (its id, as every row's id is its program).
+ACP_LIST_ARGS = (("gemini", "--acp"), ("qwen", "--acp"), ("kimi", "acp"), ("copilot", "--acp"), ("cline", "--acp"), ("agy", "acp"))
 SESSION_AGENTS = BUILTIN_AGENTS + tuple(a for a, _ in ACP_LIST_ARGS)
 CLAUDE_CHAT_ARGS = ("-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
                     "--include-partial-messages", "--permission-prompt-tool", "stdio", "--replay-user-messages")
@@ -201,17 +202,17 @@ RULES = (
     " task id but not its answer, it reads that one record (`st_<task id>.json`, from the same folders and under the"
     " same rules, read-only, and only a record of that session)",
     "omher starts a terminal program only when the person asks for a session (TERMINALS `+`), and only one of a"
-    " fixed allow-list: `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`, `opencode`, `gemini`, `qwen`, `kimi`, `copilot`, `cline`, with no arguments,",
+    " fixed allow-list: `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`, `opencode`, `gemini`, `qwen`, `kimi`, `copilot`, `cline`, `agy`, with no arguments,",
     "A chat session starts the same program with its fixed structured-mode arguments from the allow-list",
     "(`claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages"
-    " --permission-prompt-tool stdio --replay-user-messages`, `codex app-server`, `omo --mode rpc`, `pi --mode rpc`, `omp --mode rpc`, `opencode acp`, `gemini --acp`, `qwen --acp`, `kimi acp`, `copilot --acp`, `cline --acp`) on pipes;",
-    "The last five are the generic Agent Client Protocol agents: each is one fixed row of the shell's own list (`acp_agents.rs`:",
-    "An Agent Client Protocol agent (OpenCode and those five) gets no such argument: omher sends the conversation id it reported",
+    " --permission-prompt-tool stdio --replay-user-messages`, `codex app-server`, `omo --mode rpc`, `pi --mode rpc`, `omp --mode rpc`, `opencode acp`, `gemini --acp`, `qwen --acp`, `kimi acp`, `copilot --acp`, `cline --acp`, `agy acp`) on pipes;",
+    "The last six are the generic Agent Client Protocol agents (`agy` is Google's Antigravity CLI): each is one fixed row of the shell's own list (`acp_agents.rs`:",
+    "An Agent Client Protocol agent (OpenCode and those six) gets no such argument: omher sends the conversation id it reported",
     "omher never sends the protocol's `authenticate` (Cline's opens a browser by itself) and never asks for, takes or shows a key.",
     "These rules are read when the session starts; a deny added later applies from the next session.",
     "an unknown mode refuses, but an unchanged custom agent is allowed.",
     "refuses before the second listing, so the trusted config channel cannot cause the CLI to read a project-named file or variable.",
-    "Gemini CLI, Qwen Code, Kimi Code, Copilot CLI and Cline get no extra variable and no rule check:",
+    "Gemini CLI, Qwen Code, Kimi Code, Copilot CLI, Cline and Antigravity get no extra variable and no rule check:",
     "Besides the fixed list, omher starts a program the person added on the Agents page (Settings › Agents) and confirmed,"
     " exactly with the arguments shown on the card, through ACP on pipes: the confirm card that shows that exact command is the only way an entry is written,",
     "into one file in omher's own folder, `~/.omher/custom-agents.json`, never a CLI's config;",
@@ -1893,7 +1894,7 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         self.assertEqual(re.findall(r'login: "([^"]+)"', rows.group(2)), ["opencode auth login"])
         lst = (SHELL / "acp_agents.rs").read_text(encoding="utf-8").split("#[cfg(test)]\nmod tests", 1)[0]
         self.assertEqual(re.findall(r'generic\("[^"]+", "[^"]+", &\["[^"]+"\], "([^"]+)", ', lst),
-                         ["gemini", "qwen", "kimi login", "copilot login", "cline auth"])
+                         ["gemini", "qwen", "kimi login", "copilot login", "cline auth", "agy acp --login"])
         self.assertNotIn('"authenticate"', acp)
         self.assertNotIn("KILO_ASKED", acp)
         self.assertNotIn("OPENCODE_PERMISSION", acp)

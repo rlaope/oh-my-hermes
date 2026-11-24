@@ -73,9 +73,9 @@ test("the page lists every offered agent read-only with its tier and whether it 
   await open(page);
   await agentsPage(page);
   const rows = page.locator("[data-testid=agents-builtins] [data-testid^=agents-row-]");
-  await expect(rows).toHaveCount(14);
+  await expect(rows).toHaveCount(15);
   expect(await rows.evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!.slice("agents-row-".length)))).toEqual([
-    "claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline",
+    "claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline", "agy",
   ]);
   await expect(page.getByTestId("agents-tier-claude")).toHaveText("Main");
   await expect(page.getByTestId("agents-tier-dsh")).toHaveText("Built-in");

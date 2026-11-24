@@ -23,7 +23,7 @@ describe("the + menu's tiers", () => {
     // the built-ins in any order (the tier decides, not where a row came); the generic agents in the shell's order
     const all = info([]);
     const shuffled = [...all.filter((a) => a.acp), ...all.filter((a) => !a.acp).reverse()];
-    expect(ids(menuOrder(shuffled, []))).toEqual(["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline"]);
+    expect(ids(menuOrder(shuffled, []))).toEqual(["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline", "agy"]);
     // installed first as before, by tier inside: OmO installed with pi and Gemini CLI comes before both
     expect(ids(menuParts(info(["gemini", "pi", "omo"]), []).shown)).toEqual(["omo", "pi", "gemini"]);
     // the last one used never jumps the main tier: it leads only its own tier, and takes the first focus
@@ -52,7 +52,7 @@ describe("the + menu's tiers", () => {
 describe("the generic ACP agents come from the shell's rows", () => {
   it("their install, sign-in and missing lines are 0.2.8's", () => {
     registerAcp(info([]));
-    expect(ACP.map((r) => r.id)).toEqual(["gemini", "qwen", "kimi", "copilot", "cline"]);
+    expect(ACP.map((r) => r.id)).toEqual(["gemini", "qwen", "kimi", "copilot", "cline", "agy"]);
     // 0.2.8's INSTALL lines and acp_chat.rs logins, word for word
     expect(ACP.map((r) => installLine(r.id))).toEqual([
       "npm install -g @google/gemini-cli",
@@ -60,9 +60,10 @@ describe("the generic ACP agents come from the shell's rows", () => {
       "npm install -g @moonshot-ai/kimi-code",
       "npm install -g @github/copilot",
       "npm install -g cline",
+      "curl -fsSL https://antigravity.google/cli/install.sh | bash",
     ]);
-    expect(ACP.map((r) => acpRow(r.id)!.login)).toEqual(["gemini", "qwen", "kimi login", "copilot login", "cline auth"]);
-    expect(ACP.map((r) => agentDef(r.id).label)).toEqual(["Gemini CLI", "Qwen Code", "Kimi Code", "Copilot CLI", "Cline"]);
+    expect(ACP.map((r) => acpRow(r.id)!.login)).toEqual(["gemini", "qwen", "kimi login", "copilot login", "cline auth", "agy acp --login"]);
+    expect(ACP.map((r) => agentDef(r.id).label)).toEqual(["Gemini CLI", "Qwen Code", "Kimi Code", "Copilot CLI", "Cline", "Antigravity"]);
     expect(missingNote("gemini")).toBe("gemini was not found on this computer · install: npm install -g @google/gemini-cli");
     expect(missingNote("kimi")).toBe("kimi was not found on this computer · install: npm install -g @moonshot-ai/kimi-code");
     for (const r of ACP) expect(continues(r.id), r.id).toBe(true);

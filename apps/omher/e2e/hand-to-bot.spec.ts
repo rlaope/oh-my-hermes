@@ -491,7 +491,14 @@ const faceOf = (page: Page, kind: "row" | "cell", id: string) => (kind === "row"
 async function faceFor(page: Page, kind: "row" | "cell") {
   await open(page, "/w/gateway-keepalive");
   const a = await newShell(page);
-  if (kind === "cell") await split(page, a, await newShell(page));
+  if (kind === "cell") {
+    const b = await newShell(page);
+    await split(page, a, b);
+    // the drop gives the new pane the keyboard on the next frame (focusSplitPane); let that land first, or it takes
+    // the keyboard from the menu opened right after
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    await expect.poll(() => page.evaluate((id) => document.activeElement === document.querySelector(`[data-testid="terminal"][data-session="${id}"] .xterm-helper-textarea`), b)).toBe(true);
+  }
   return faceOf(page, kind, a);
 }
 
