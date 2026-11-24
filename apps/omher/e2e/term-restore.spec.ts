@@ -484,8 +484,16 @@ test("a Shell row with Claude Code in front puts it back after a restart, once; 
   await expect.poll(async () => (await shellStarts(page)).length).toBe(1);
   const again = (await shellStarts(page))[0].id;
   await expect.poll(() => shellWrites(page, again), { timeout: 10_000 }).toEqual([`claude --resume ${C}\r`]);
+  // the shell was asked, right before, whether it is itself in front
+  expect((await page.evaluate(() => ((window as unknown as { __omherShellCalls?: { op: string; id?: number }[] }).__omherShellCalls ?? []).filter((c) => c.id !== undefined && (c.op === "front" || c.op === "write")).map((c) => [c.op, c.id])))).toEqual([["front", again], ["write", again]]);
   await page.waitForTimeout(2_500);
   expect(await shellWrites(page, again)).toEqual([`claude --resume ${C}\r`]);
+  // until the CLI it typed is in front, the row still keeps what it puts back (a second restart soon after keeps it);
+  // once Claude Code reports in, it runs that conversation
+  await flush(page);
+  expect(await row(page, withClaude)).toMatchObject({ fgCli: "claude", fgSession: C });
+  await page.evaluate((p) => (window as unknown as { __omherEmitSessionFg(x: { id: number; agent: string }): void }).__omherEmitSessionFg({ id: p, agent: "claude" }), again);
+  await expect.poll(() => row(page, withClaude), { timeout: 3_000 }).toMatchObject({ fgCli: "claude", fgSession: C });
   // the plain one comes back paused, and Resume starts a shell that is typed nothing
   await page.getByTestId(`session-${plain}`).locator(".ss-open").click();
   await page.getByTestId("session-resume").click();
@@ -505,6 +513,9 @@ test("a Claude Code that leaves a Shell row's foreground takes its conversation 
   await page.evaluate(([p, c]) => void (((window as unknown as { __omherMockFgOwn?: Record<number, string> }).__omherMockFgOwn ??= {})[p as number] = c as string), [pty, C] as const);
   await emit("claude");
   await expect.poll(() => row(page, id), { timeout: 15_000 }).toMatchObject({ fgCli: "claude", fgSession: C });
+  // the same Claude Code moves to another conversation (/resume, /clear): the next ask keeps the new one
+  await page.evaluate(([p, c]) => void ((window as unknown as { __omherMockFgOwn: Record<number, string> }).__omherMockFgOwn[p as number] = c as string), [pty, B] as const);
+  await expect.poll(async () => (await row(page, id))?.fgSession, { timeout: 20_000 }).toBe(B);
   // back at the shell's prompt: nothing of it is kept, and after a restart the row is a plain shell, paused
   await emit(null);
   await expect.poll(async () => [(await row(page, id))?.fgCli, (await row(page, id))?.fgSession]).toEqual([undefined, undefined]);
@@ -513,4 +524,61 @@ test("a Claude Code that leaves a Shell row's foreground takes its conversation 
   await expect(page.getByTestId(`session-${id}`)).toBeVisible();
   await page.waitForTimeout(1_500);
   expect(await shellStarts(page)).toEqual([]);
+});
+
+/** Start a Shell row, run `cli` in it (with conversation `conv` when given) and wait until that is saved. */
+async function shellWith(page: Page, cli: string, conv?: string): Promise<string> {
+  const id = await newTerm(page, "shell");
+  const pty = (await ptyOf(page, id))!;
+  if (conv) await page.evaluate(([p, c]) => void (((window as unknown as { __omherMockFgOwn?: Record<number, string> }).__omherMockFgOwn ??= {})[p as number] = c as string), [pty, conv] as const);
+  await page.evaluate(([p, a]) => (window as unknown as { __omherEmitSessionFg(x: { id: number; agent: string }): void }).__omherEmitSessionFg({ id: p as number, agent: a as string }), [pty, cli] as const);
+  await expect.poll(() => row(page, id), { timeout: 15_000 }).toMatchObject(conv ? { fgCli: cli, fgSession: conv } : { fgCli: cli });
+  await flush(page);
+  return id;
+}
+
+test("a Shell row with oh-my-hermes in front types `omh` after a restart, once", async ({ page }) => {
+  await open(page);
+  const id = await shellWith(page, "omh");
+  expect((await row(page, id))?.fgSession).toBeUndefined();
+  await page.reload();
+  await expect.poll(async () => (await shellStarts(page)).length).toBe(1);
+  const pty = (await shellStarts(page))[0].id;
+  await expect.poll(() => shellWrites(page, pty), { timeout: 10_000 }).toEqual(["omh\r"]);
+  await page.waitForTimeout(1_500);
+  expect(await shellWrites(page, pty)).toEqual(["omh\r"]);
+});
+
+test("a CLI in the fresh shell's foreground before the line goes (the rc's own auto-resume) gets nothing typed", async ({ page }) => {
+  test.setTimeout(60_000);
+  await open(page);
+  const id = await shellWith(page, "claude", C);
+  // the person's rc starts a program at the first prompt: the shell's fresh look finds it in front
+  await page.addInitScript(() => ((window as unknown as Record<string, unknown>).__omherMockShellBusy = true));
+  await page.reload();
+  await expect.poll(async () => (await shellStarts(page)).length).toBe(1);
+  const pty = (await shellStarts(page))[0].id;
+  const fronts = () => page.evaluate((p) => ((window as unknown as { __omherShellCalls?: { op: string; id?: number }[] }).__omherShellCalls ?? []).filter((c) => c.op === "front" && c.id === p).length, pty);
+  await expect.poll(fronts, { timeout: 10_000 }).toBe(1);
+  await page.waitForTimeout(1_500);
+  expect(await shellWrites(page, pty)).toEqual([]);
+  // the line is dropped for good: the row keeps nothing for it, so the next restart types nothing either
+  await expect.poll(async () => (await row(page, id))?.fgCli).toBeUndefined();
+});
+
+test("a key the person presses before the line goes cancels it", async ({ page }) => {
+  test.setTimeout(60_000);
+  await open(page);
+  const id = await shellWith(page, "claude", C);
+  await page.reload();
+  // the person opens the row and types at once, inside the shell's quiet wait
+  await page.getByTestId(`session-${id}`).locator(".ss-open").click();
+  await expect(page.getByTestId("terminal")).toBeVisible();
+  await expect(screen(page).last()).toContainText("(mock)");
+  await page.locator("[data-testid=terminal] .xterm-helper-textarea").last().focus();
+  await page.keyboard.type("ls");
+  const pty = (await shellStarts(page))[0].id;
+  await page.waitForTimeout(4_500);
+  expect(await shellWrites(page, pty)).toEqual(["l", "s"]);
+  await expect.poll(async () => (await row(page, id))?.fgCli).toBeUndefined();
 });

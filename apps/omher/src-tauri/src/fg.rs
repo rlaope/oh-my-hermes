@@ -504,17 +504,21 @@ pub fn codex_conversation(_fg: u32, _home: &Path) -> Option<String> {
 const CLAUDE_RECORD_MAX: u64 = 64 * 1024;
 
 /// The Claude Code conversation the Claude Code in the foreground of a terminal runs (a Shell row where the person
-/// typed `claude`). `fg` (the terminal's foreground process) must be Claude Code by the allow-list match above; it and
-/// the Claude Code processes under it (at most [`TREE_MAX`]: a wrapper script runs the CLI as its child) are looked up
-/// in Claude Code's own record of its running sessions, `<home>/sessions/<pid>.json` ([`claude_session_id`]). Only the
-/// id comes back; when several processes name one, the earliest. Windows does not do this (its foreground is a search
-/// of the session's process tree, `outermost_agent`, and the pid Claude Code records there is not checked against
-/// it): `None` there.
+/// typed `claude`). `fg` (the terminal's foreground process) must be Claude Code by the allow-list match above, and its
+/// own record of its running session, `<home>/sessions/<fg>.json` ([`claude_session_id`]), names it. Only when that
+/// process has no record (a wrapper script that runs the CLI as its child) are the Claude Code processes under it looked
+/// up, nearest first (breadth first, at most [`TREE_MAX`] processes), and the first one with a record wins; a `claude -p`
+/// a hook, the status line or a tool runs under the interactive one never does, as its record is not `interactive`.
+/// Only the id comes back. Windows does not do this (its foreground is a search of the session's process tree,
+/// `outermost_agent`, and the pid Claude Code records there is not checked against it): `None` there.
 #[cfg(unix)]
 pub fn claude_conversation(fg: u32, home: &Path) -> Option<String> {
     let is_claude = |pid: u32| Probe::default().agent(pid) == Some("claude");
     if !is_claude(fg) {
         return None;
+    }
+    if let Some(id) = claude_session_id(home, fg, start_secs(fg)) {
+        return Some(id);
     }
     let mut tree = vec![fg];
     let mut i = 0;
@@ -526,7 +530,7 @@ pub fn claude_conversation(fg: u32, home: &Path) -> Option<String> {
         }
         i += 1;
     }
-    tree.into_iter().filter(|p| is_claude(*p)).filter_map(|p| claude_session_id(home, p)).min()
+    tree.into_iter().skip(1).filter(|p| is_claude(*p)).find_map(|p| claude_session_id(home, p, start_secs(p)))
 }
 
 #[cfg(windows)]
@@ -535,24 +539,96 @@ pub fn claude_conversation(_fg: u32, _home: &Path) -> Option<String> {
 }
 
 /// The `sessionId` Claude Code wrote for its running process `pid` in `<home>/sessions/<pid>.json`, lowercased: only
-/// when that is a plain file (not a link) of at most [`CLAUDE_RECORD_MAX`] bytes holding a JSON object whose `pid` is
-/// `pid` and whose `sessionId` is a UUID. A missing, unreadable or malformed file, another pid, or any other id gives
+/// when that is a plain file of at most [`CLAUDE_RECORD_MAX`] bytes, opened without following a link
+/// ([`open_record`]), holding a JSON object whose `pid` is `pid`, whose `kind` (when it has one) is `interactive`, whose
+/// `procStart` (when it has one in the `ps -o lstart` form Claude Code writes, UTC) is within a second of `started` (the
+/// live process's start, seconds since the epoch, when known), and whose `sessionId` is a UUID. A record a crashed
+/// Claude Code left for a pid now reused, a missing, unreadable or malformed file, another pid, or any other id gives
 /// `None`; nothing else of the file is kept.
-pub fn claude_session_id(home: &Path, pid: u32) -> Option<String> {
+pub fn claude_session_id(home: &Path, pid: u32, started: Option<i64>) -> Option<String> {
     use std::io::Read;
-    let path = home.join("sessions").join(format!("{pid}.json"));
-    let meta = std::fs::symlink_metadata(&path).ok()?;
-    if meta.file_type().is_symlink() || !meta.is_file() || meta.len() > CLAUDE_RECORD_MAX {
+    let f = open_record(&home.join("sessions").join(format!("{pid}.json")))?;
+    let meta = f.metadata().ok()?;
+    if !meta.is_file() || meta.len() > CLAUDE_RECORD_MAX {
         return None;
     }
     let mut text = String::new();
-    std::fs::File::open(&path).ok()?.take(CLAUDE_RECORD_MAX).read_to_string(&mut text).ok()?;
+    f.take(CLAUDE_RECORD_MAX).read_to_string(&mut text).ok()?;
     let v: serde_json::Value = serde_json::from_str(&text).ok()?;
     if v.get("pid")?.as_u64()? != u64::from(pid) {
         return None;
     }
+    if v.get("kind").is_some_and(|k| k.as_str() != Some("interactive")) {
+        return None;
+    }
+    let recorded = v.get("procStart").and_then(|s| s.as_str()).and_then(lstart_secs);
+    if let (Some(recorded), Some(started)) = (recorded, started) {
+        if (recorded - started).abs() > 1 {
+            return None;
+        }
+    }
     let id = v.get("sessionId")?.as_str()?;
     crate::sessions::is_uuid(id).then(|| id.to_ascii_lowercase())
+}
+
+/// Open `path` for reading, never through a link: `O_NOFOLLOW` (and `O_NONBLOCK`, so a FIFO in its place is not
+/// waited on) on unix; elsewhere a link is refused by a look first.
+fn open_record(path: &Path) -> Option<std::fs::File> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new().read(true).custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK).open(path).ok()
+    }
+    #[cfg(not(unix))]
+    {
+        if std::fs::symlink_metadata(path).ok()?.file_type().is_symlink() {
+            return None;
+        }
+        std::fs::File::open(path).ok()
+    }
+}
+
+/// `Tue Nov 24 08:40:43 2026` (`ps -o lstart`, read as UTC) as seconds since the epoch; `None` for any other form.
+fn lstart_secs(s: &str) -> Option<i64> {
+    const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    let w: Vec<&str> = s.split_whitespace().collect();
+    let [_, mon, day, time, year] = w.as_slice() else { return None };
+    let m = MONTHS.iter().position(|x| x == mon)? as i64 + 1;
+    let d: i64 = day.parse().ok().filter(|d| (1..=31).contains(d))?;
+    let y: i64 = year.parse().ok().filter(|y| (1970..=9999).contains(y))?;
+    let hms: Vec<i64> = time.split(':').map(|p| p.parse().ok()).collect::<Option<_>>()?;
+    let [h, mi, se] = hms.as_slice() else { return None };
+    if !(0..24).contains(h) || !(0..60).contains(mi) || !(0..61).contains(se) {
+        return None;
+    }
+    // days from 1970-01-01 to y-m-d (proleptic Gregorian)
+    let (y2, m2) = if m <= 2 { (y - 1, m + 9) } else { (y, m - 3) };
+    let era = y2.div_euclid(400);
+    let yoe = y2 - era * 400;
+    let doy = (153 * m2 + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146_097 + doe - 719_468;
+    Some(days * 86_400 + h * 3_600 + mi * 60 + se)
+}
+
+/// When process `pid` started, in seconds since the epoch (macOS `proc_pidinfo` PROC_PIDTBSDINFO); `None` when it
+/// cannot be read.
+#[cfg(target_os = "macos")]
+fn start_secs(pid: u32) -> Option<i64> {
+    let mut info: libc::proc_bsdinfo = unsafe { std::mem::zeroed() };
+    let size = std::mem::size_of::<libc::proc_bsdinfo>() as libc::c_int;
+    let n = unsafe { libc::proc_pidinfo(pid as libc::c_int, libc::PROC_PIDTBSDINFO, 0, (&mut info as *mut libc::proc_bsdinfo).cast(), size) };
+    (n == size).then_some(info.pbi_start_tvsec as i64)
+}
+
+/// Linux: the start tick in `/proc/<pid>/stat` after the boot time in `/proc/stat`.
+#[cfg(all(unix, not(target_os = "macos")))]
+fn start_secs(pid: u32) -> Option<i64> {
+    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    let ticks: i64 = stat.rsplit_once(')')?.1.split_whitespace().nth(19)?.parse().ok()?;
+    let boot: i64 = std::fs::read_to_string("/proc/stat").ok()?.lines().find_map(|l| l.strip_prefix("btime "))?.trim().parse().ok()?;
+    let hz = unsafe { libc::sysconf(libc::_SC_CLK_TCK) };
+    (hz > 0).then(|| boot + ticks / hz as i64)
 }
 
 /// The processes whose parent is `pid`.
@@ -1009,41 +1085,77 @@ mod tests {
         let id = "5d0f3c2a-9b1e-4c7d-8a6f-0e1d2c3b4a59";
         let put = |pid: u32, body: &str| std::fs::write(dir.join(format!("{pid}.json")), body).unwrap();
         put(4101, &format!(r#"{{"pid":4101,"sessionId":"{id}","cwd":"/x","kind":"interactive"}}"#));
-        assert_eq!(claude_session_id(&home, 4101).as_deref(), Some(id));
+        assert_eq!(claude_session_id(&home, 4101, None).as_deref(), Some(id));
         // an upper-case UUID comes back lowercased
         put(4102, &format!(r#"{{"pid":4102,"sessionId":"{}"}}"#, id.to_ascii_uppercase()));
-        assert_eq!(claude_session_id(&home, 4102).as_deref(), Some(id));
+        assert_eq!(claude_session_id(&home, 4102, None).as_deref(), Some(id));
         // not a UUID: a name, a path, a UUID with more after it, a number
         for (pid, bad) in [(4103, r#""my-session""#), (4104, r#""../../etc/passwd""#), (4105, &format!(r#""{id} x""#)), (4106, "12")] {
             put(pid, &format!(r#"{{"pid":{pid},"sessionId":{bad}}}"#));
-            assert_eq!(claude_session_id(&home, pid), None, "{bad}");
+            assert_eq!(claude_session_id(&home, pid, None), None, "{bad}");
         }
         // the file names another process, or none
         put(4107, &format!(r#"{{"pid":4999,"sessionId":"{id}"}}"#));
-        assert_eq!(claude_session_id(&home, 4107), None);
+        assert_eq!(claude_session_id(&home, 4107, None), None);
         put(4108, &format!(r#"{{"pid":"4108","sessionId":"{id}"}}"#));
-        assert_eq!(claude_session_id(&home, 4108), None);
+        assert_eq!(claude_session_id(&home, 4108, None), None);
         put(4109, &format!(r#"{{"sessionId":"{id}"}}"#));
-        assert_eq!(claude_session_id(&home, 4109), None);
+        assert_eq!(claude_session_id(&home, 4109, None), None);
         // missing
-        assert_eq!(claude_session_id(&home, 4110), None);
+        assert_eq!(claude_session_id(&home, 4110, None), None);
         // malformed: not JSON, cut short, not an object
         for (pid, body) in [(4111, "not json"), (4112, &format!(r#"{{"pid":4112,"sessionId":"{id}""#)), (4113, "[4113]")] {
             put(pid, body);
-            assert_eq!(claude_session_id(&home, pid), None, "{body}");
+            assert_eq!(claude_session_id(&home, pid, None), None, "{body}");
         }
         // a folder in the file's place, an oversized file
         std::fs::create_dir_all(dir.join("4114.json")).unwrap();
-        assert_eq!(claude_session_id(&home, 4114), None);
+        assert_eq!(claude_session_id(&home, 4114, None), None);
         put(4115, &format!(r#"{{"pid":4115,"sessionId":"{id}","pad":"{}"}}"#, "x".repeat(70 * 1024)));
-        assert_eq!(claude_session_id(&home, 4115), None);
+        assert_eq!(claude_session_id(&home, 4115, None), None);
         // a link in the file's place is not followed
         #[cfg(unix)]
         {
             std::os::unix::fs::symlink(dir.join("4101.json"), dir.join("4116.json")).unwrap();
-            assert_eq!(claude_session_id(&home, 4116), None);
+            assert_eq!(claude_session_id(&home, 4116, None), None);
         }
+        // only an interactive session's record counts (a `claude -p` a hook or the status line runs has another kind);
+        // a record without the field still does
+        put(4117, &format!(r#"{{"pid":4117,"sessionId":"{id}","kind":"sdk-cli"}}"#));
+        assert_eq!(claude_session_id(&home, 4117, None), None);
+        put(4118, &format!(r#"{{"pid":4118,"sessionId":"{id}","kind":7}}"#));
+        assert_eq!(claude_session_id(&home, 4118, None), None);
+        // a record whose process start is not the live process's: a crashed Claude Code's, its pid reused
+        let at = lstart_secs("Tue Nov 24 08:40:43 2026").unwrap();
+        put(4119, &format!(r#"{{"pid":4119,"sessionId":"{id}","kind":"interactive","procStart":"Tue Nov 24 08:40:43 2026"}}"#));
+        assert_eq!(claude_session_id(&home, 4119, Some(at)).as_deref(), Some(id));
+        assert_eq!(claude_session_id(&home, 4119, Some(at + 1)).as_deref(), Some(id), "a second either way");
+        assert_eq!(claude_session_id(&home, 4119, Some(at + 3600)), None);
+        assert_eq!(claude_session_id(&home, 4119, None).as_deref(), Some(id), "the live start unknown");
+        // a start in a form this does not read is not compared
+        put(4120, &format!(r#"{{"pid":4120,"sessionId":"{id}","procStart":"12345678"}}"#));
+        assert_eq!(claude_session_id(&home, 4120, Some(at)).as_deref(), Some(id));
         let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// `ps -o lstart` as Claude Code records it, read as UTC; nothing else.
+    #[test]
+    fn a_recorded_process_start_reads_as_utc_seconds() {
+        assert_eq!(lstart_secs("Thu Jan  1 00:00:00 1970"), Some(0));
+        assert_eq!(lstart_secs("Tue Nov 24 08:40:43 2026"), Some(1_795_509_643));
+        assert_eq!(lstart_secs("Sat Feb 29 12:00:00 2028"), Some(1_835_438_400));
+        for bad in ["", "12345678", "Tue Nov 24 08:40 2026", "Tue Foo 24 08:40:43 2026", "Tue Nov 32 08:40:43 2026", "Tue Nov 24 25:00:00 2026", "Tue Nov 24 08:40:43 2026 x"] {
+            assert_eq!(lstart_secs(bad), None, "{bad}");
+        }
+    }
+
+    /// The live start of this process is a moment in the recent past.
+    #[cfg(unix)]
+    #[test]
+    fn a_live_process_start_is_read() {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+        let me = start_secs(std::process::id()).unwrap();
+        assert!(me <= now + 1 && me > now - 86_400, "{me} vs {now}");
     }
 
     /// A process that is not Claude Code names no conversation, even with a record of its own (this test's process).
@@ -1056,7 +1168,7 @@ mod tests {
         let me = std::process::id();
         let id = "5d0f3c2a-9b1e-4c7d-8a6f-0e1d2c3b4a59";
         std::fs::write(home.join("sessions").join(format!("{me}.json")), format!(r#"{{"pid":{me},"sessionId":"{id}"}}"#)).unwrap();
-        assert_eq!(claude_session_id(&home, me).as_deref(), Some(id));
+        assert_eq!(claude_session_id(&home, me, None).as_deref(), Some(id));
         assert_eq!(claude_conversation(me, &home), None);
         // a Claude Code stand-in (`sh <dir>/claude`) whose record names it
         let bin = home.join("bin");
@@ -1071,6 +1183,29 @@ mod tests {
         assert_eq!(claude_conversation(pid, &home.join("other-home")), None);
         let _ = claude.kill();
         let _ = claude.wait();
+        // a wrapper that is Claude Code by name runs the CLI as its child: the wrapper has no record, the child's
+        // counts; once the wrapper has one of its own, that one wins over any under it
+        let inner = home.join("inner");
+        std::fs::create_dir_all(&inner).unwrap();
+        std::fs::write(inner.join("claude"), "sleep 30\nexit 0\n").unwrap();
+        std::fs::write(bin.join("claude"), format!("/bin/sh {}\nexit 0\n", inner.join("claude").display())).unwrap();
+        let mut wrapper = std::process::Command::new("/bin/sh").arg(bin.join("claude")).stdin(std::process::Stdio::null()).spawn().unwrap();
+        let outer = wrapper.id();
+        let child = wait_for(|| children(outer).first().map(|c| c.to_string())).unwrap().parse::<u32>().unwrap();
+        assert_eq!(wait_for(|| Probe::default().agent(child).map(String::from)).as_deref(), Some("claude"));
+        let other = "00000000-0000-4000-8000-000000000001";
+        std::fs::write(home.join("sessions").join(format!("{child}.json")), format!(r#"{{"pid":{child},"sessionId":"{id}"}}"#)).unwrap();
+        assert_eq!(claude_conversation(outer, &home).as_deref(), Some(id));
+        let own = "ffffffff-ffff-4fff-bfff-ffffffffffff";
+        std::fs::write(home.join("sessions").join(format!("{outer}.json")), format!(r#"{{"pid":{outer},"sessionId":"{own}"}}"#)).unwrap();
+        assert_eq!(claude_conversation(outer, &home).as_deref(), Some(own), "its own record, not the smallest id");
+        // a record that is not an interactive session's (a `claude -p`) is passed over for the next one
+        std::fs::write(home.join("sessions").join(format!("{outer}.json")), format!(r#"{{"pid":{outer},"sessionId":"{own}","kind":"sdk-cli"}}"#)).unwrap();
+        std::fs::write(home.join("sessions").join(format!("{child}.json")), format!(r#"{{"pid":{child},"sessionId":"{other}","kind":"interactive"}}"#)).unwrap();
+        assert_eq!(claude_conversation(outer, &home).as_deref(), Some(other));
+        unsafe { libc::kill(child as libc::pid_t, libc::SIGKILL) };
+        let _ = wrapper.kill();
+        let _ = wrapper.wait();
         let _ = std::fs::remove_dir_all(&home);
     }
 }

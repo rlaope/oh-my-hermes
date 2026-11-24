@@ -50,15 +50,24 @@ RULES = (
     " pseudo-terminal)",
     "types one line and Enter, once: `claude --resume <id>`, `codex resume <id>` or `omh`, made only from that fixed"
     " program name and the checked UUID (`typeRestore`);",
-    "a key, paste or dropped file of the person's, a bot's prompt typed there first, or a CLI already in front drops the"
-    " line, which is then never typed.",
+    "a key, paste or dropped file of the person's, a bot's prompt typed there first, or anything but the shell in front"
+    " (a CLI the person's rc started, OMH's own auto-resume among them) drops the line, which is then never typed.",
+    "and a fresh look at that terminal's foreground (`session_shell_in_front`: only the session id goes out, only whether"
+    " the shell itself is in front comes back) finds the shell itself there,",
     "A Shell row whose Claude Code or Codex had no id yet, and any other Shell row that was running, comes back paused, as"
     " before.",
-    "`<claude home>/sessions/<pid>.json` (the home that session started with; not through a link, at most 64 KB), and"
-    " takes its `sessionId` only when that file's `pid` is that process and the id is a UUID; only the UUID comes back,"
-    " and nothing else of the file is kept, shown or sent; Windows does not do this.",
+    "first for the foreground Claude Code process and, only when that has none, for the Claude Code processes under it,"
+    " nearest first (at most 64).",
+    "so a `CLAUDE_CONFIG_DIR` the person exports in their shell rc is not seen and such a row comes back paused.",
+    "The file is opened without following a link (`O_NOFOLLOW`), read up to 64 KB, and its `sessionId` is taken only when"
+    " its `pid` is that process, its `kind` (when it has one) is `interactive`, its `procStart` (when it has one) is that"
+    " process's own start time, and the id is a UUID; only the UUID comes back, and nothing else of the file is kept,"
+    " shown or sent; Windows does not do this.",
+    "every 15 s after for as long as it stays there (a CLI can change its conversation without leaving the foreground),"
+    " and keeps the latest answer:",
     "With the row in `omher.resume` the Shell row keeps only which CLI is in its foreground, when it is `claude`, `codex`"
-    " or `omh`, and that UUID, and forgets both once the CLI leaves the foreground.",
+    " or `omh`, and that UUID, and forgets both once the CLI leaves the foreground; a row put back by a restart keeps"
+    " what its line puts back until that CLI is in front again or the line is dropped.",
     "Without the person's Allow, nothing a bot sent is typed.",
     "The sender name is what the requesting local process wrote in the request, and any process of the same OS user"
     " can write any name: omher shows it on the card and never treats it as proof of which bot asked.",
@@ -2361,14 +2370,18 @@ class SessionFilesStayInOmhersFolder(unittest.TestCase):
         allowed = self.ui.split("const typeAllowed = async", 1)[1].split("\n  };\n", 1)[0]
         self.assertEqual(allowed.count("io.write("), 1)
         # the restore line is one fixed program name and a checked UUID (fgResume.ts), typed once, never over the
-        # person: called only from startTerm's readiness wait
-        restore = self.ui.split("const typeRestore = (", 1)[1].split("\n  };\n", 1)[0]
+        # person and never into a CLI in front (a fresh look at the foreground first): called only from startTerm's
+        # readiness wait
+        restore = self.ui.split("const typeRestore = async (", 1)[1].split("\n  };\n", 1)[0]
         self.assertEqual(restore.count("io.write("), 1)
-        self.assertIn("void t.io.write(t.hostId, `${line}\\r`)", restore)
+        self.assertIn("void t.io.write(pty, `${line}\\r`)", restore)
         self.assertIn("t.restore = undefined;", restore)
-        self.assertIn("rec(id)?.fgAgent) return;", restore)
+        self.assertIn("!rec(id)?.fgAgent;", restore)
+        self.assertIn("const front = await getShellHost().shellInFront(pty).catch(() => false);", restore)
+        self.assertIn("if (!front || !still()) return dropRestore(id, t);", restore)
+        self.assertLess(restore.index("shellInFront("), restore.index("io.write("))
         self.assertEqual(self.ui.count("typeRestore("), 1)
-        self.assertIn("        typeRestore(id, t, run);\n", self.ui.split("const whenReady = () => {", 1)[1].split("\n    };\n", 1)[0] + "\n")
+        self.assertIn("      void typeRestore(id, t, run);\n", self.ui.split("const whenReady = () => {", 1)[1].split("\n    };\n", 1)[0] + "\n")
         self.assertEqual(self.ui.count("t.restore = shell ? fgBack.get(id) : undefined;"), 1)
         self.assertEqual(self.ui.count("fgBack.set("), 1)
         self.assertIn("if (termAuto && line) fgBack.set(s.id, line);", self.ui)
@@ -2643,6 +2656,7 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
                             ("conversation_state", "agent: String, id: String, account: Option<String>"),
                             ("codex_conversation", "shell: State<'_, Shell>, id: u32"),
                             ("claude_conversation", "shell: State<'_, Shell>, id: u32"),
+                            ("session_shell_in_front", "shell: State<'_, Shell>, id: u32"),
                             ("session_reveal", "cwd: String"), ("session_open_terminal", "cwd: String"),
                             ("asks_badge", "window: tauri::WebviewWindow, count: u32")):
             sig = re.search(rf"async fn {cmd}\((.*?)\) -> ", self.lib, re.S)
@@ -2676,14 +2690,20 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
         # a Shell row's Claude Code (rule 11): only a foreground Claude Code and the Claude Code under it, each read in
         # its own `<home>/sessions/<pid>.json`, not through a link, bounded, its own pid and a UUID; Windows: none
         own = fg.split("pub fn claude_conversation(fg: u32, home: &Path)", 1)[1].split("\n}\n", 1)[0]
-        for needle in ('Probe::default().agent(pid) == Some("claude")', "if !is_claude(fg) {", ".filter(|p| is_claude(*p))",
-                       "claude_session_id(home, p)", "tree.len() < TREE_MAX"):
+        # the foreground process's own record first; only a wrapper's descendants after it, nearest first
+        for needle in ('Probe::default().agent(pid) == Some("claude")', "if !is_claude(fg) {",
+                       "if let Some(id) = claude_session_id(home, fg, start_secs(fg)) {", "tree.len() < TREE_MAX",
+                       ".skip(1).filter(|p| is_claude(*p)).find_map(|p| claude_session_id(home, p, start_secs(p)))"):
             self.assertIn(needle, own)
-        rec = fg.split("pub fn claude_session_id(home: &Path, pid: u32)", 1)[1].split("\n}\n", 1)[0]
-        for needle in ('home.join("sessions").join(format!("{pid}.json"))', "meta.file_type().is_symlink()",
+        self.assertNotIn(".min()", own)
+        rec = fg.split("pub fn claude_session_id(home: &Path, pid: u32, started: Option<i64>)", 1)[1].split("\n}\n", 1)[0]
+        for needle in ('open_record(&home.join("sessions").join(format!("{pid}.json")))?',
                        "meta.len() > CLAUDE_RECORD_MAX", ".take(CLAUDE_RECORD_MAX)", '!= u64::from(pid)',
+                       'k.as_str() != Some("interactive")', '"procStart"', "(recorded - started).abs() > 1",
                        "crate::sessions::is_uuid(id)"):
             self.assertIn(needle, rec)
+        opener = fg.split("fn open_record(path: &Path)", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("libc::O_NOFOLLOW | libc::O_NONBLOCK", opener)
         for banned in ("Command::new", "fs::write", "OpenOptions", "remove_file"):
             self.assertNotIn(banned, rec, banned)
         self.assertIn("const CLAUDE_RECORD_MAX: u64 = 64 * 1024;", fg)

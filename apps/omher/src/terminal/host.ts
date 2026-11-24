@@ -59,6 +59,9 @@ export interface ShellHost {
   /** The shells this computer offers for a Shell terminal, the default first. */
   shells(): Promise<ShellInfo[]>;
   write(id: number, data: string): Promise<void>;
+  /** Whether shell `id` is itself in its terminal's foreground now, nothing it started in front: a fresh look by the
+   *  shell (`session_shell_in_front`), not the last `session-fg`. */
+  shellInFront(id: number): Promise<boolean>;
   /** The terminal has drawn `bytes` more of shell `id`'s output (the PTY's output credit). */
   ack(id: number, bytes: number): void;
   resize(id: number, cols: number, rows: number): Promise<void>;
@@ -96,6 +99,10 @@ class TauriShellHost implements ShellHost {
     const { invoke } = await this.core();
     await invoke("session_write", { id, data });
   }
+  async shellInFront(id: number) {
+    const { invoke } = await this.core();
+    return invoke<boolean>("session_shell_in_front", { id });
+  }
   /** Drawn bytes not yet sent, by shell: one `session_ack` per shell for everything drawn in the same task. A failed
    *  call puts its bytes back so they ride on the next one. */
   private drawn = new Map<number, number>();
@@ -130,6 +137,7 @@ export type MockShellCall =
   | { op: "start"; id: number; cwd: string | null; at: string; cols: number; rows: number; shell?: string; link?: string }
   | { op: "gh-login"; id: number; host: string | null }
   | { op: "write"; id: number; data: string }
+  | { op: "front"; id: number }
   | { op: "resize"; id: number; cols: number; rows: number }
   | { op: "close"; id: number };
 
@@ -140,6 +148,9 @@ type MockGlobals = {
   __omherShellHome?: string;
   __omherShellFolders?: string[];
   __omherShellDie?: { error?: string; code?: number };
+  /** `__omherMockShellBusy` (e2e): something the shell started is in each shell's foreground (`shellInFront` is false),
+   *  as a CLI the person's own rc started at the first prompt */
+  __omherMockShellBusy?: boolean;
   /** e2e: the shells this mock computer has (default: zsh, bash, fish) */
   __omherMockShells?: ShellInfo[];
 };
@@ -261,6 +272,10 @@ export class MockShellHost implements ShellHost {
         s.out(ch);
       }
     }
+  }
+  async shellInFront(id: number) {
+    this.log({ op: "front", id });
+    return this.live.has(id) && !this.g.__omherMockShellBusy;
   }
   async resize(id: number, cols: number, rows: number) {
     this.log({ op: "resize", id, cols, rows });

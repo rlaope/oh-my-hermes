@@ -1099,6 +1099,22 @@ impl Sessions {
         crate::fg::claude_conversation(fg, &root)
     }
 
+    /// Whether the shell of session `id` is itself in its terminal's foreground now, nothing it started in front (a
+    /// fresh look, not the last `session-fg`): unix, the pseudo-terminal's foreground process group is led by the
+    /// shell; Windows, no known CLI runs in the session's process tree. False once the session ended or is gone.
+    pub fn shell_in_front(&self, id: u32) -> bool {
+        let (fg, pid) = {
+            let g = self.live.lock().unwrap();
+            let Some(l) = g.get(&id).filter(|l| !l.exited.load(Ordering::SeqCst)) else { return false };
+            (l.foreground(), l.pid)
+        };
+        let (Some(fg), Some(pid)) = (fg, pid) else { return false };
+        #[cfg(unix)]
+        return fg == pid;
+        #[cfg(not(unix))]
+        return crate::fg::Probe::default().agent(fg).is_none() && fg == pid;
+    }
+
     /// Start the terminal panel's shell ([`shell_argv`]: the person's login shell, never a program the page names)
     /// in `cwd` when that is an existing folder, else in `home` ([`shell_cwd`]). It gets no account variable. The
     /// session is an ordinary PTY session: write, ack, resize and close as any other.
@@ -3255,6 +3271,12 @@ mod tests {
             .unwrap();
         s.write(id, b"echo \"link:$OMHER_TERMINAL_LINK:\"\r").unwrap();
         assert!(wait_for(|| String::from_utf8_lossy(&out.lock().unwrap()).contains("link:q2w3e4r5t6:")), "{:?}", String::from_utf8_lossy(&out.lock().unwrap()));
+        // the shell is in front at its prompt; a program it runs in the foreground is not the shell
+        assert!(wait_for(|| s.shell_in_front(id)));
+        s.write(id, b"sleep 5\r").unwrap();
+        assert!(wait_for(|| !s.shell_in_front(id)));
         s.close(id);
+        assert!(!s.shell_in_front(id), "gone");
+        assert!(!s.shell_in_front(9_999));
     }
 }

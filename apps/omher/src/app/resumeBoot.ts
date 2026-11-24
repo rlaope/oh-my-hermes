@@ -67,8 +67,13 @@ function snapshot(): ResumeSnap {
         ...(r.mode ? { mode: r.mode } : {}),
         ...(r.effort ? { effort: r.effort } : {}),
         ...(r.shell ? { shell: r.shell } : {}),
-        // a Shell row's foreground Claude Code, Codex or oh-my-hermes, and its conversation, come back with it
-        ...(isShell(r.agent) && isFgCli(r.fgAgent) ? { fgCli: r.fgAgent, ...(r.fgSession ? { fgSession: r.fgSession } : {}) } : {}),
+        // a Shell row's foreground Claude Code, Codex or oh-my-hermes, and its conversation, come back with it (one put
+        // back by the last restart keeps what it was put back with until that CLI is in front again)
+        ...(isShell(r.agent) && isFgCli(r.fgAgent)
+          ? { fgCli: r.fgAgent, ...(r.fgSession ? { fgSession: r.fgSession } : {}) }
+          : isShell(r.agent) && r.fgBack
+            ? { fgCli: r.fgBack.cli, ...(r.fgBack.session ? { fgSession: r.fgBack.session } : {}) }
+            : {}),
       })),
       messages: (id) => {
         const key = ss.chatKey(id);

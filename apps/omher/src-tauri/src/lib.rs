@@ -875,6 +875,14 @@ async fn codex_conversation(shell: State<'_, Shell>, id: u32) -> Result<Option<S
         .map_err(|e| e.to_string())?
 }
 
+/// Whether the shell of terminal session `id` is itself in its foreground now (a fresh look): a Shell row's restore
+/// line is typed only then (rule 11). The page sends only the session id; only true or false comes back.
+#[tauri::command]
+async fn session_shell_in_front(shell: State<'_, Shell>, id: u32) -> Result<bool, String> {
+    let sessions = shell.sessions.clone();
+    tauri::async_runtime::spawn_blocking(move || sessions.shell_in_front(id)).await.map_err(|e| e.to_string())
+}
+
 /// The conversation the Claude Code in the foreground of TERMINALS Shell session `id` runs, for the row to continue it
 /// after a restart (rule 11): only the id, checked as a UUID, from Claude Code's own record of that running process
 /// (`<claude home>/sessions/<pid>.json`, `fg::claude_session_id`). The page sends only the session id.
@@ -1122,6 +1130,7 @@ pub fn run() {
             conversation_state,
             codex_conversation,
             claude_conversation,
+            session_shell_in_front,
             host_name,
             asks_badge,
             peers_list,
