@@ -90,7 +90,9 @@ test("a new bot without oh-my-hermes' skills waits for Apply template, here or o
   await page.getByTestId("addbot-create").click();
   const waiting = page.getByTestId("addbot-waiting");
   await expect(waiting).toContainText("mail-bot is made, but it does not have oh-my-hermes' skills yet.");
-  await expect(waiting.locator("code").first()).toHaveText("omh update");
+  // the one-profile command for this bot, not `omh update` (which updates OMH and touches every profile)
+  await expect(waiting.locator("code").first()).toHaveText("omh apply --profile mail-bot");
+  await expect(waiting).toContainText("It sets up only this bot, and Hermes needs no restart.");
   await expect(waiting).toContainText("/omh-bot-template Apply the bot template `inbox-triage` to this bot.");
   await expect(page.getByTestId("bot-mail-bot")).toBeVisible();
   await page.getByTestId("addbot-apply").click();
@@ -103,6 +105,7 @@ test("a new bot without oh-my-hermes' skills waits for Apply template, here or o
   await page.getByTestId("row-menu").getByRole("menuitem", { name: "Edit bot" }).click();
   const pending = page.getByTestId("bp-template");
   await expect(pending).toContainText("Bot template inbox-triage waits to be applied.");
+  await expect(pending.locator("code").nth(1)).toHaveText("omh apply --profile mail-bot");
   await page.getByTestId("bp-template-apply").click();
   await expect(pending).toContainText("mail-bot still has no oh-my-hermes skills.");
   expect(await calls("chat.send")).toEqual([]);

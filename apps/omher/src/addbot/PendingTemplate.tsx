@@ -5,8 +5,7 @@ import { useRef, useState } from "react";
 import type { Bot } from "../lib/protocol";
 import { t, tx } from "../i18n";
 import { applyTemplate, clearPendingTemplate, pendingTemplate } from "./pending";
-
-const UPDATE_CMD = "omh update";
+import { skillSyncCmd } from "./templates";
 
 export function PendingTemplate({ bot }: { bot: Bot }) {
   const [template, setTemplate] = useState(() => pendingTemplate(bot.name));
@@ -31,8 +30,8 @@ export function PendingTemplate({ bot }: { bot: Bot }) {
     <div className="st-grp bp-grp bp-tpl" data-testid="bp-template">
       <div className="bp-tpl-line">
         {still
-          ? tx("ab.stillNoSkill", { name: bot.name, cmd: <code>{UPDATE_CMD}</code> })
-          : tx("bp.templateWaits", { id: <code>{template}</code>, cmd: <code>{UPDATE_CMD}</code> })}
+          ? tx("ab.stillNoSkill", { name: bot.name, cmd: <code>{skillSyncCmd(bot.name)}</code> })
+          : tx("bp.templateWaits", { id: <code>{template}</code>, cmd: <code>{skillSyncCmd(bot.name)}</code> })}
       </div>
       <div className="bp-tpl-actions">
         <button

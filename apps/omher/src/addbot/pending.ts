@@ -1,5 +1,5 @@
-// A bot template the person chose for a new bot that could not apply it yet (it had no oh-my-hermes skills before the
-// next `omh update`). Kept in this computer's storage for the app (`omher.pendingTemplates`, bot -> template id) so the
+// A bot template the person chose for a new bot that could not apply it yet (it had no oh-my-hermes skills before
+// `omh apply --profile <name>` or the next `omh update`). Kept in this computer's storage for the app (`omher.pendingTemplates`, bot -> template id) so the
 // bot's page can offer Apply template later; a convenience only, an empty or unreadable store offers nothing.
 import { getStore } from "../state/store";
 import { withBridge } from "./bots";

@@ -2,17 +2,19 @@
 // bridge runs Hermes' own `hermes -p default profile create <name> --no-alias` and reads back the folder Hermes made;
 // omher writes nothing in the profile. With a template, the new bot's main chat gets one message (applyMessage) and the
 // bot applies it with its own tools and approvals, every schedule paused. A bot that cannot see the template skill yet
-// (OMH reaches a new profile on the next `omh update`) waits for the person's Apply template, here or on its page.
+// (OMH reaches a new profile with `omh apply --profile <name>` or the next `omh update`) waits for the person's Apply
+// template, here or on its page.
 import { useEffect, useRef, useState } from "react";
 import type { BotTemplate, BotTemplates } from "../lib/protocol";
 import { getStore, useStore } from "../state/store";
 import { t, tx, type Key } from "../i18n";
 import { Spinner } from "../ui";
 import { addToList, withBridge } from "./bots";
-import { applyMessage, checkName, normalizeName, type NameCheck } from "./templates";
+import { applyMessage, checkName, normalizeName, skillSyncCmd, type NameCheck } from "./templates";
 import { applyTemplate, hasApplySkill, setPendingTemplate } from "./pending";
 
 const CREATE_CMD = "hermes profile create";
+/** OMH's own update, for an OMH too old to give templates at all. */
 const UPDATE_CMD = "omh update";
 /** Hermes' own listing, for the person to check an unconfirmed create (omher never runs it). */
 const LIST_CMD = "hermes profile list";
@@ -158,7 +160,7 @@ export function NewBot({ onBack, onDone }: { onBack: () => void; onDone: () => v
       <div className="ab-new" data-testid="addbot-waiting">
         <div className="ab-h">{t("ab.new")}</div>
         <div className="ab-line">
-          {tx(step.again ? "ab.stillNoSkill" : "ab.needOmh", { name: bot, cmd: <code>{UPDATE_CMD}</code> })}
+          {tx(step.again ? "ab.stillNoSkill" : "ab.needOmh", { name: bot, cmd: <code>{skillSyncCmd(bot)}</code> })}
         </div>
         <div className="ab-hint">{t("ab.later")}</div>
         <div className="ab-hint">{tx("ab.orSend", { msg: <code>{applyMessage(template)}</code> })}</div>

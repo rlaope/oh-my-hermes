@@ -84,6 +84,7 @@ from ..install.skill_registration import (
     managed_command_runtime as _managed_command_runtime,
     managed_skill_dir_candidates,
     migrate_managed_registration,
+    named_hermes_profile,
     registered_managed_entries,
     registered_skill_dir,
     registration_home_label,
@@ -91,7 +92,7 @@ from ..install.skill_registration import (
 from ..doctor import DEFAULT_DOCTOR_NEXT_ACTION, doctor_ok, recommended_next_action, run_doctor
 from ..maintenance.build_identity import probe_build_identity
 from ..maintenance.doctor import run_doctor_advisories
-from ..maintenance.hermes_gateway import gateway_restart_hints, refresh_skill_dir_caches
+from ..maintenance.hermes_gateway import gateway_restart_hint, gateway_restart_hints, refresh_skill_dir_caches
 from ..executors import CODING_EXECUTOR_TARGETS
 from ..hashutil import sha256_file
 from ..installer import (
@@ -819,64 +820,71 @@ def _sync_hermes_profiles(args: argparse.Namespace) -> list[dict[str, object]]:
     directory, not the one this install would write today: see
     `_managed_workflow_dir_candidates`.
     """
-    results: list[dict[str, object]] = []
     primary = _paths(args)
-    for name, profile_dir in _hermes_profile_dirs(primary):
-        entry: dict[str, object] = {"profile": name}
-        try:
-            clone = _profile_clone(args, primary, profile_dir)
-            profile_paths = _paths(clone)
-            config_text = read_config(profile_paths.hermes_config_path)
-            registered = _home_names_managed_dir(config_text, profile_paths)
-            if profile_paths.hermes_plugin_dir.is_dir() and not registered:
-                results.append(
-                    {
-                        "profile": name,
-                        "status": "unregistered_kept",
-                        "registration": "unchanged",
-                        "display_release": _unregistered_display_release(profile_paths, args),
-                    }
-                )
-                continue
-            entry = {
+    return [_sync_hermes_profile(args, primary, name, profile_dir) for name, profile_dir in _hermes_profile_dirs(primary)]
+
+
+def _sync_hermes_profile(
+    args: argparse.Namespace, primary: OmhPaths, name: str, profile_dir: Path
+) -> dict[str, object]:
+    """One bot profile's pass of `_sync_hermes_profiles`, and all of `omh apply --profile <name>`.
+
+    Both commands run this one function, so a profile the narrow command
+    sets up is the profile the next `omh update` would have made, under the
+    same opt-out, manifest and ownership rules. A refusal is the row's
+    `failed` status, never an exception: the update goes on to the next home.
+    """
+    entry: dict[str, object] = {"profile": name}
+    try:
+        clone = _profile_clone(args, primary, profile_dir)
+        profile_paths = _paths(clone)
+        config_text = read_config(profile_paths.hermes_config_path)
+        registered = _home_names_managed_dir(config_text, profile_paths)
+        if profile_paths.hermes_plugin_dir.is_dir() and not registered:
+            return {
                 "profile": name,
-                "status": "refreshed" if profile_paths.hermes_plugin_dir.is_dir() else "bootstrapped",
-                # What the registration pass did to this home's config, so the
-                # update output can say a profile MOVED off the pre-pointer path
-                # (#1857) rather than folding that into "refreshed".
+                "status": "unregistered_kept",
                 "registration": "unchanged",
-                "retired_external_dirs": [],
+                "display_release": _unregistered_display_release(profile_paths, args),
             }
-            plugin = install_plugin_bundle(
-                profile_paths, force=bool(getattr(args, "force", False)), dry_run=bool(args.dry_run)
-            )
-            if plugin.get("status") == "host_managed":
-                # Hermes installed this profile's plugin; OMH wrote nothing to
-                # it, so "refreshed" would claim an update that did not happen.
-                entry["status"] = "host_managed"
-                entry["plugin_update_command"] = HERMES_PLUGIN_UPDATE_COMMAND
-            dangling_link = plugin.get("replaced_dangling_link")
-            if isinstance(dangling_link, str) and dangling_link:
-                entry["replaced_dangling_link"] = dangling_link
-            applied = _apply_result(
-                clone,
-                bind_omh_home=not _profile_env_names_omh_home(profile_dir),
-                theme_home=_profile_theme_home(profile_paths, profile_dir),
-            )
-            entry["registration"] = applied["registration"]
-            entry["retired_external_dirs"] = applied["retired_external_dirs"]
-            entry["registered_dir"] = applied["registered_dir"]
-            entry["display_release"] = applied["display_release"]
-            reclaimed = applied["plugin_omh_home"]["reclaimed"]  # type: ignore[index]
-            if reclaimed:
-                entry["omh_home_reclaimed"] = reclaimed
-        # A refusal is one profile's row, never the end of the update: the
-        # primary home and every other profile still get their refresh.
-        except (OSError, UnicodeError, ValueError, PluginPackError, OmhError) as exc:
-            entry["status"] = "failed"
-            entry["error"] = f"{type(exc).__name__}: {_bounded_command_error(str(exc))}"
-        results.append(entry)
-    return results
+        entry = {
+            "profile": name,
+            "status": "refreshed" if profile_paths.hermes_plugin_dir.is_dir() else "bootstrapped",
+            # What the registration pass did to this home's config, so the
+            # update output can say a profile MOVED off the pre-pointer path
+            # (#1857) rather than folding that into "refreshed".
+            "registration": "unchanged",
+            "retired_external_dirs": [],
+        }
+        plugin = install_plugin_bundle(
+            profile_paths, force=bool(getattr(args, "force", False)), dry_run=bool(args.dry_run)
+        )
+        if plugin.get("status") == "host_managed":
+            # Hermes installed this profile's plugin; OMH wrote nothing to
+            # it, so "refreshed" would claim an update that did not happen.
+            entry["status"] = "host_managed"
+            entry["plugin_update_command"] = HERMES_PLUGIN_UPDATE_COMMAND
+        dangling_link = plugin.get("replaced_dangling_link")
+        if isinstance(dangling_link, str) and dangling_link:
+            entry["replaced_dangling_link"] = dangling_link
+        applied = _apply_result(
+            clone,
+            bind_omh_home=not _profile_env_names_omh_home(profile_dir),
+            theme_home=_profile_theme_home(profile_paths, profile_dir),
+        )
+        entry["registration"] = applied["registration"]
+        entry["retired_external_dirs"] = applied["retired_external_dirs"]
+        entry["registered_dir"] = applied["registered_dir"]
+        entry["display_release"] = applied["display_release"]
+        reclaimed = applied["plugin_omh_home"]["reclaimed"]  # type: ignore[index]
+        if reclaimed:
+            entry["omh_home_reclaimed"] = reclaimed
+    # A refusal is one profile's row, never the end of the update: the
+    # primary home and every other profile still get their refresh.
+    except (OSError, UnicodeError, ValueError, PluginPackError, OmhError) as exc:
+        entry["status"] = "failed"
+        entry["error"] = f"{type(exc).__name__}: {_bounded_command_error(str(exc))}"
+    return entry
 
 
 def _uninstall_tui_runtime(paths: OmhPaths, *, remove_all: bool, dry_run: bool) -> dict[str, object]:
@@ -2574,12 +2582,80 @@ def cmd_convert(args: argparse.Namespace) -> int:
 
 
 def cmd_apply(args: argparse.Namespace) -> int:
+    if getattr(args, "bot_profile", None) is not None:
+        return _cmd_apply_profile(args)
     result = _apply_result(args)
     if _wants_json(args):
         _print_json(result)
     else:
         _print_apply_summary(result)
     return 0
+
+
+_APPLY_PROFILE_DONE = ("bootstrapped", "refreshed", "host_managed")
+
+
+def _cmd_apply_profile(args: argparse.Namespace) -> int:
+    """`omh apply --profile <name>`: register OMH in ONE existing bot profile, as `omh update` does for each.
+
+    For a bot made after OMH was installed, which has no OMH skills until
+    the next update. It runs the update's own per-profile pass
+    (`_sync_hermes_profile`) for that one home and nothing else: no package
+    or skill-pack refresh, no network, no other home read or written, no
+    Hermes command. The name must be a profile `omh update` reaches
+    (`named_hermes_profile`), and the OMH skills it registers must already be
+    installed. Exit 0 when the profile is registered, 1 when the pass left it
+    unregistered (the opt-out) or failed, 2 when nothing was attempted.
+    """
+    primary = _paths(args)
+    name = str(args.bot_profile)
+    dry_run = bool(args.dry_run)
+    profile_dir, refusal = named_hermes_profile(primary.hermes_home, name)
+    skills_dir = _registered_workflow_dir(primary)
+    if profile_dir is not None and not skills_dir.is_dir():
+        refusal = f"no OMH skills are installed at {skills_dir} to register: run `omh setup` first"
+    if refusal:
+        if _wants_json(args):
+            _print_json({"profile": name, "status": "refused", "reason": refusal, "dry_run": dry_run})
+        else:
+            print(f"omh: {refusal}", file=sys.stderr)
+        return 2
+    row = _sync_hermes_profile(args, primary, name, profile_dir)
+    status = row.get("status")
+    hint = None
+    if not dry_run and status in _APPLY_PROFILE_DONE:
+        hint = gateway_restart_hint(
+            profile_dir, label=f"profile {name}", restart_command=f"hermes --profile {name} gateway restart"
+        )
+    payload = {**row, "hermes_home": str(profile_dir), "dry_run": dry_run, "gateway_restart_hint": hint}
+    code = 0 if status in _APPLY_PROFILE_DONE else 1
+    if _wants_json(args):
+        _print_json(payload)
+        return code
+    label = _PROFILE_STATUS_LABELS.get(str(status), str(status))
+    print(f"Bot profile {name}: {'would be ' if dry_run and code == 0 else ''}{label}")
+    if status == "failed":
+        print(f"  {row.get('error')}; repair this profile and run `omh apply --profile {name}` again")
+    elif status == "unregistered_kept":
+        print(
+            "  Its plugins/omh is there but its config names no OMH skills directory: it was unregistered on purpose "
+            "(`omh uninstall --registration-only`), and neither this command nor `omh update` registers it again."
+        )
+    else:
+        print(f"  OMH skills: {row.get('registered_dir')} (registration {row.get('registration')})")
+        if not dry_run:
+            _print_display_release_lines(None, [row])
+            _print_registration_migrations(None, [row])
+            _print_dangling_link_repairs(None, [row])
+            _print_omh_home_reclaims([row])
+            if row.get("registration") != "unchanged":
+                print(
+                    "  Hermes reads the new skills on its next skill lookup, without a restart; "
+                    "a conversation already open keeps the skill list it started with until `/new`."
+                )
+            if hint:
+                print(f"  {hint}")
+    return code
 
 
 def _carry_theme_choice(
@@ -7433,6 +7509,16 @@ def _add_top_level_commands(sub) -> None:
     convert.set_defaults(func=cmd_convert)
 
     apply = sub.add_parser("apply", help="Register the managed OMH skills directory in Hermes config.")
+    apply.add_argument(
+        "--profile",
+        dest="bot_profile",
+        default=None,
+        metavar="NAME",
+        help=(
+            "Register OMH in this one existing Hermes bot profile only, as `omh update` does for each profile: "
+            "no OMH self-update, no other home touched, no Hermes command run."
+        ),
+    )
     apply.add_argument("--dry-run", action="store_true")
     apply.add_argument("--json", action="store_true", help="Print the machine-readable apply payload.")
     apply.set_defaults(func=cmd_apply)

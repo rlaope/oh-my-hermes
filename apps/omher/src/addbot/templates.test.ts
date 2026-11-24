@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyMessage, checkName, normalizeName } from "./templates";
+import { applyMessage, checkName, normalizeName, skillSyncCmd } from "./templates";
 
 describe("new bot name", () => {
   it("reads a typed name as Hermes does: trimmed and lowercased", () => {
@@ -25,5 +25,11 @@ describe("apply message", () => {
 
   it("is built from an id alone and refuses anything else", () => {
     for (const bad of ["", "PR", "a b", "x`; rm", "../x", "-x"]) expect(() => applyMessage(bad), bad).toThrow();
+  });
+});
+
+describe("skill sync command", () => {
+  it("names OMH's one-profile registration for exactly this bot", () => {
+    expect(skillSyncCmd("pr-bot")).toBe("omh apply --profile pr-bot");
   });
 });

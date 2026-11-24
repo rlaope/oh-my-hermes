@@ -4103,6 +4103,25 @@ zero OMH skills while the default chat has the full set.
   install — gets the full bootstrap on the next `omh setup` or `omh update`;
 - a deliberately unregistered profile (see below) is left alone.
 
+A bot made after install does not have to wait for the next update:
+`omh apply --profile <name>` runs the same per-profile pass for that one
+profile and nothing else. It does not update OMH or its skill pack, does not
+read or write the main home or any other profile, makes no network call and
+runs no Hermes command. It refuses a name outside Hermes' profile rule
+(lowercase letters, digits, `_` and `-`, at most 64 characters), `default`
+(the main home: `omh apply` without `--profile`), a name Hermes reserves,
+`omh-tui` (oh-my-hermes' own TUI profile, which never gets a registration of
+its own), and anything that is not a live profile under
+`<Hermes home>/profiles`; it also refuses before `omh setup` has installed
+OMH's skills. A deliberately unregistered profile stays unregistered. A
+second run changes nothing. `--dry-run` previews and `--json` prints the
+profile's row. Hermes re-reads `skills.external_dirs` when `config.yaml`
+changes, so a running gateway finds the new skills on its next skill lookup
+without a restart; a conversation already open keeps the skill list it
+started with until `/new`, and OMH's plugin tools in that profile load at the
+gateway's next start (the command names that restart when the gateway's
+record shows it started before the bundle was installed).
+
 "Registered" means the profile names any OMH-managed skills directory, not
 the exact one this install would write today. A profile registered at
 `~/.omh/skills` before the command install moved to its shared generation

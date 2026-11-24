@@ -32,6 +32,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 import os
 from pathlib import Path
+import re
 import sys
 
 from .config_adapter import (
@@ -47,6 +48,13 @@ from .lifecycle_safety import command_runtime_owned, primary_hermes_home
 from ..plugin_bundle.omh import runtime_paths
 
 AMBIGUOUS_REGISTRATION_NEXT_ACTION = "run `omh update`"
+
+# Hermes' own profile id rule (`hermes_constants.PROFILE_ID_RE`) and the names
+# `hermes_cli/profiles.py` `validate_profile_name` refuses (`_RESERVED_NAMES`).
+HERMES_PROFILE_ID = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
+HERMES_RESERVED_PROFILE_NAMES = ("hermes", "default", "test", "tmp", "root", "sudo")
+# The files Hermes' `named_profile_has_identity` reads as a profile's identity.
+PROFILE_IDENTITY_MARKERS = ("config.yaml", ".env", "SOUL.md", "profile.yaml", "auth.json", "state.db")
 
 
 def external_dir_key(path: str | Path) -> str:
@@ -358,8 +366,41 @@ def hermes_profile_dirs(hermes_home: Path) -> list[tuple[str, Path]]:
     # the existing writer/refusal boundaries still inspect them. The OMH TUI's
     # own runtime profile (`tui/own_runtime.py`) links the root's skills, OMH's
     # registration among them: a registration of its own would double every name.
-    markers = ("config.yaml", ".env", "SOUL.md", "profile.yaml", "auth.json", "state.db")
     return [(entry.name, entry) for entry in entries
             if entry.name != TUI_PROFILE
             and not (root / ".deleted" / entry.name).exists()
-            and any((entry / marker).is_file() or (entry / marker).is_symlink() for marker in markers)]
+            and any((entry / marker).is_file() or (entry / marker).is_symlink() for marker in PROFILE_IDENTITY_MARKERS)]
+
+
+def named_hermes_profile(hermes_home: Path, name: str) -> tuple[Path | None, str]:
+    """The one bot-profile home `name` names under `hermes_home`, or None and the reason it is not one.
+
+    A profile is one `hermes_profile_dirs` lists, so the one-profile sync
+    (`omh apply --profile`) reaches exactly the homes `omh update` reaches and
+    skips the ones it skips. The name is checked first with Hermes' own rule,
+    as given: Hermes lowercases a typed name before it checks it, and this
+    command does not guess which profile a mixed-case name meant.
+    """
+    if not HERMES_PROFILE_ID.fullmatch(name):
+        return None, (
+            f"{name!r} is not a Hermes profile name: Hermes allows lowercase letters, digits, `_` and `-`, "
+            "starting with a letter or digit, at most 64 characters"
+        )
+    if name == "default":
+        return None, "`default` is the main Hermes home, not a bot profile: `omh apply` without --profile registers it"
+    if name in HERMES_RESERVED_PROFILE_NAMES:
+        return None, f"`{name}` is a name Hermes reserves and never creates a profile by; `omh update` syncs every profile"
+    if name == TUI_PROFILE:
+        return None, (
+            f"`{name}` is oh-my-hermes' own TUI profile: it links the main home's skills, OMH's among them, "
+            "so a registration of its own would list every OMH skill twice"
+        )
+    for listed, profile_dir in hermes_profile_dirs(hermes_home):
+        if listed == name:
+            return profile_dir, ""
+    root = hermes_home / "profiles"
+    if not (root / name).is_dir():
+        return None, f"no Hermes profile named `{name}` under {root}"
+    if (root / ".deleted" / name).exists():
+        return None, f"Hermes profile `{name}` is deleted ({root / '.deleted' / name} exists)"
+    return None, f"{root / name} is not a Hermes profile: it holds none of {', '.join(PROFILE_IDENTITY_MARKERS)}"
