@@ -31,6 +31,8 @@ export interface RowMenuKit {
   spot: (e: { clientX: number; clientY: number }, from: Element | null, rows: number) => { x: number; y: number };
   Menu: ComponentType<{ at: { x: number; y: number }; name: string; actions: RowAction[]; onPick: (a: RowAction) => void; onDismiss: () => void }>;
   Name: ComponentType<{ initial: string; auto: boolean; onDone: (title: string | null | undefined) => void }>;
+  /** The Hand to <bot> card for session `rec`, opened at the menu's place by its "hand" item. */
+  Hand: ComponentType<{ at: { x: number; y: number }; rec: SessionRec; onClose: () => void }>;
 }
 
 /** The orbit's three strokes, head aligned: [length % of the edge, width px, opacity]. Drawn 1.25 px in, so the 2.5 px
@@ -51,6 +53,7 @@ const SplitCell = memo(function SplitCell({ rec, x, y, w, h, focused, agents, un
   countRender(`cell:${rec.id}`);
   const [editing, setEditing] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [hand, setHand] = useState<{ x: number; y: number } | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const { act, now } = useTermFace(rec.id, rec.startedAt, ticking);
   const asked = usePendingRequests().some((r) => r.sessionId === rec.id);
@@ -129,7 +132,8 @@ const SplitCell = memo(function SplitCell({ rec, x, y, w, h, focused, agents, un
           {el.text}
         </span>
       )}
-      {menu && <kit.Menu at={menu} name={title.title} actions={actions} onPick={(a) => kit.act(rec, a, () => setEditing(true), onClose)} onDismiss={() => setMenu(null)} />}
+      {menu && <kit.Menu at={menu} name={title.title} actions={actions} onPick={(a) => (a === "hand" ? setHand(menu) : kit.act(rec, a, () => setEditing(true), onClose))} onDismiss={() => setMenu(null)} />}
+      {hand && <kit.Hand at={hand} rec={rec} onClose={() => setHand(null)} />}
     </div>
   );
 });
