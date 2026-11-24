@@ -481,7 +481,7 @@ All notable changes will be documented here.
   link chip share), and a reported working again turns it back to `working`. The split card's grip test no longer
   loses its keys to a pane that takes focus a moment late on a slow runner, and the argv-cache test waits for macOS's
   `/bin/sh` to exec its shell before counting. (`apps/omher/src-tauri/src/term_share.rs`,
-  `apps/omher/src/chat/parts/TermLinkChip.tsx`) (#TBD)
+  `apps/omher/src/chat/parts/TermLinkChip.tsx`) (#3167)
 - **omher: an Apps page connects a bot to Notion, Linear, Jira and the rest of Hermes' MCP catalog.** The plug in
   the sidebar's foot opens one bot's apps: every entry of Hermes' MCP catalog and its integration skills (Google
   Workspace, Obsidian, Apple Notes and Reminders, Microsoft Office and others), grouped as work apps, ops and data,
