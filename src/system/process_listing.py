@@ -66,14 +66,18 @@ def hermes_gateway_processes() -> GatewayListing:
     if argvs is None:
         return GatewayListing(False)
     retitled = tuple(pid for pid, argv in argvs if argv == RETITLED_ARGV)
-    gateways = tuple(gateway_runs(argvs))
-    commands = dict(argvs)
-    idle_exit = tuple(pid for pid, _profile in gateways if IDLE_EXIT_FLAG in commands[pid])
-    return GatewayListing(True, gateways, retitled, idle_exit)
+    runs = _gateway_run_options(argvs)
+    idle_exit = tuple(pid for pid, _profile, options in runs if IDLE_EXIT_FLAG in options)
+    return GatewayListing(True, tuple((pid, profile) for pid, profile, _options in runs), retitled, idle_exit)
 
 
 def gateway_runs(argvs: list[tuple[int, list[str]]]) -> list[tuple[int, str]]:
-    """The `(pid, profile)` of each argv that runs `hermes gateway run`; profile "" when the command line names none.
+    """The `(pid, profile)` of each argv that runs `hermes gateway run`; profile "" when the command line names none."""
+    return [(pid, profile) for pid, profile, _options in _gateway_run_options(argvs)]
+
+
+def _gateway_run_options(argvs: list[tuple[int, list[str]]]) -> list[tuple[int, str, list[str]]]:
+    """`(pid, profile, the arguments after `gateway run`)` of each argv that runs `hermes gateway run`.
 
     Recognized: `python -m hermes_cli.main [--profile N|-p N|--profile=N] gateway run …`
     and `python …/hermes-agent/hermes [profile] gateway run …`, after any interpreter
@@ -83,7 +87,7 @@ def gateway_runs(argvs: list[tuple[int, list[str]]]) -> list[tuple[int, str]]:
     wrapper whose arguments start otherwise (Hermes' `--run-module` stderr
     stamper around the launcher) is not a gateway itself.
     """
-    found: list[tuple[int, str]] = []
+    found: list[tuple[int, str, list[str]]] = []
     for pid, argv in argvs:
         if len(argv) < 2 or not Path(argv[0]).name.startswith("python"):
             continue
@@ -100,7 +104,7 @@ def gateway_runs(argvs: list[tuple[int, list[str]]]) -> list[tuple[int, str]]:
             continue
         split = _profile_and_command(arguments)
         if split is not None and split[1][:2] == ["gateway", "run"]:
-            found.append((pid, split[0]))
+            found.append((pid, split[0], split[1][2:]))
     return found
 
 

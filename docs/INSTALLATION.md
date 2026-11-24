@@ -4321,9 +4321,13 @@ answers three questions for the root Hermes home and every profile under it
   use). A process Hermes retitled to just `hermes` is named as unreadable,
   not counted. An unrecorded `gateway run --idle-exit` is a Hermes client's
   own start for its home (one `hermes chat` in a scratch home, such as the
-  child an OMH dispatch runs, starts one), which Hermes ends itself once it
-  has been idle for `gateway.unmanaged_idle_exit_seconds`: it is listed and
-  counted, but it is no finding and gets no action.
+  child an OMH dispatch runs, starts one). Hermes ends it once it has been
+  idle for `gateway.unmanaged_idle_exit_seconds` (600 s by default), unless
+  that home sets 0, a supervisor launched it, one of its own idle checks
+  fails, or a client, adapter, cron or kanban job keeps it busy. It is
+  listed and counted but raises no finding and no action, until it has run
+  for more than an hour; after that it is reported as a stray. Each gateway
+  in `--json` carries `idle_exit` and `overdue`.
 - **Messaging adapters.** Per profile and platform, the state now: the
   serving gateway's own entry in its `gateway_state.json` when that process
   stamped it (its state, error code and Hermes' "needs attention" flag),

@@ -433,7 +433,7 @@ class Fleet(unittest.TestCase):
 
     def run_health(self, root: Path, records: dict[str, Gateway] | None = None,
                    listed: tuple[bool, list[tuple[int, str]]] = (True, []), starts: dict[int, float] | None = None,
-                   idle_exit: tuple[int, ...] = ()):
+                   idle_exit: tuple[int, ...] = (), now: float = BUILT_EPOCH + 86400):
         records = records or {}
 
         def reader(home: Path) -> Gateway:
@@ -442,7 +442,7 @@ class Fleet(unittest.TestCase):
         return gateway_health(
             root, environ={"HERMES_GATEWAY_LOCK_DIR": str(root / "locks")}, gateway_reader=reader,
             list_processes=lambda: GatewayListing(listed[0], tuple(listed[1]), (), idle_exit),
-            process_start=lambda pid: (starts or {}).get(pid),
+            process_start=lambda pid: (starts or {}).get(pid), now=lambda: now,
         )
 
     def test_a_gateway_started_before_the_build_is_named_with_hermes_restart(self) -> None:
@@ -510,13 +510,13 @@ class Fleet(unittest.TestCase):
             root = self.home(tmp)
             records = {".hermes": Gateway("running", True, 4100, served=("default",), code_sha=COMMIT)}
             report = self.run_health(root, records, (True, [(5100, "default")]), {5100: BUILT_EPOCH + 10},
-                                     idle_exit=(5100,))
+                                     idle_exit=(5100,), now=BUILT_EPOCH + 70)
             self.assertEqual(report.findings, ())
             self.assertTrue(report.gateways[1].idle_exit)
             text = "\n".join(report.lines)
             self.assertIn("PID 5100 runs `hermes gateway run --idle-exit` (`--profile default` on its command line) "
                           "and no record under this Hermes root names it", text)
-            self.assertIn("Hermes ends it itself once it has been idle for `gateway.unmanaged_idle_exit_seconds`", text)
+            self.assertIn("Hermes ends it once it has been idle for `gateway.unmanaged_idle_exit_seconds`", text)
             self.assertNotIn("same profile name as PID 4100", text)
             self.assertIn("2 gateway process(es) running, 1 recorded, serving 1 profile(s); 1 not recorded by this "
                           "Hermes root, 1 of them a client's idle-exit gateway.", report.lines)
@@ -525,11 +525,34 @@ class Fleet(unittest.TestCase):
     def test_an_idle_exit_gateway_beside_a_stray_leaves_only_the_stray_to_find(self) -> None:
         with TemporaryDirectory() as tmp:
             root = self.home(tmp)
-            report = self.run_health(root, {}, (True, [(5100, "default"), (5200, "")]), idle_exit=(5100,))
+            report = self.run_health(root, {}, (True, [(5100, "default"), (5200, "")]), {5100: BUILT_EPOCH},
+                                     idle_exit=(5100,), now=BUILT_EPOCH + 60)
             self.assertEqual(report.findings, (FINDING_UNRECORDED,))
             actions = "\n".join(report.next_actions)
             self.assertIn("find what started PID 5200:", actions)
             self.assertNotIn("5100", actions)
+
+    def test_an_idle_exit_gateway_past_the_threshold_is_a_stray_again(self) -> None:
+        # Hermes keeps such a gateway up when its idle exit is off, a supervisor is detected, or a probe fails
+        # closed; past `IDLE_EXIT_STALE_SECONDS` it is reported as a stray, with what may hold it.
+        with TemporaryDirectory() as tmp:
+            root = self.home(tmp)
+            report = self.run_health(root, {}, (True, [(5100, "default")]), {5100: BUILT_EPOCH},
+                                     idle_exit=(5100,), now=BUILT_EPOCH + 2 * 3600)
+            self.assertEqual(report.findings, (FINDING_UNRECORDED,))
+            self.assertTrue(report.gateways[0].overdue)
+            self.assertIn("find what started PID 5100:", "\n".join(report.next_actions))
+            text = "\n".join(report.lines)
+            self.assertIn("has not exited after more than 3600 s", text)
+            self.assertIn("`gateway.unmanaged_idle_exit_seconds: 0`", text)
+            self.assertNotIn("Hermes ends it once", text)
+
+    def test_an_idle_exit_gateway_of_unknown_start_is_said_as_such_and_is_no_finding(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = self.home(tmp)
+            report = self.run_health(root, {}, (True, [(5100, "default")]), idle_exit=(5100,))
+            self.assertEqual(report.findings, ())
+            self.assertIn("its start time could not be read", "\n".join(report.lines))
 
     def test_honest_absence(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -738,10 +761,13 @@ class GatewayProcessListing(unittest.TestCase):
             (301, [py, "-m", "hermes_cli.main", "--profile", "default", "gateway", "run", "--quiet", "--idle-exit"]),
             (302, [py, "-m", "hermes_cli.main", "--profile", "default", "gateway", "run", "--quiet"]),
             (303, [py, "-m", "hermes_cli.main", "chat", "--idle-exit"]),
+            # The flag counts only after `gateway run`, never as a profile name or before the subcommand.
+            (304, [py, "-m", "hermes_cli.main", "--profile", "--idle-exit", "gateway", "run", "--quiet"]),
         ]
         with mock.patch.object(process_listing, "process_argvs", return_value=argvs):
             self.assertEqual(process_listing.hermes_gateway_processes(),
-                             GatewayListing(True, ((301, "default"), (302, "default")), (), (301,)))
+                             GatewayListing(True, ((301, "default"), (302, "default"), (304, "--idle-exit")), (),
+                                            (301,)))
 
     def test_a_kernel_argument_buffer_yields_its_arguments_and_never_its_environment(self) -> None:
         raw = (struct.pack("i", 3) + b"/opt/py/bin/python3\0\0\0\0" + b"python3\0-m\0hermes_cli.main\0"
