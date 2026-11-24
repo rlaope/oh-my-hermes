@@ -2,8 +2,9 @@
 // (`bots.platforms` -> the bridge's one `omh hermes platforms`, BOUNDARY rule 43): what the sidebar row and the bot
 // page say. Only `failed`, `disconnected` and `reconnecting` are "known not to be connected now"; a row shows nothing
 // for any other state, and `unknown` is never worded as connected or as not connected. The fix is words, a link to
-// the Discord Developer Portal and Hermes' restart command to copy: nothing here changes anything.
-import type { PlatformState, PlatformStatus, PlatformsRead } from "../lib/protocol";
+// the Discord Developer Portal and Hermes' restart command to copy: nothing here changes anything. A bot on another
+// computer (`<peer>:<name>`) reads the same way from what that computer's own bridge read there (rule 45).
+import type { BotPlatforms, PlatformState, PlatformStatus, PlatformsRead } from "../lib/protocol";
 import { listText, locale, t, type Key } from "../i18n";
 
 /** The sidebar asks again this often while omher runs; the bridge answers from one OMH run for 30 s. */
@@ -54,10 +55,39 @@ const RESTART = /^hermes -p ([a-z0-9][a-z0-9_-]{0,63}) gateway restart$/;
 /** A reconnect Hermes runs by itself shows on the sidebar row only after this long (the bot page says it at once). */
 export const ROW_RECONNECT_MS = 10 * 60_000;
 
-/** The bot's platforms known not to be connected now; [] when OMH could not say, or for a bot it has no row for. */
+/** Why a bot's computer could not say: its link is down, it gave no answer that checked out, or no answer of it has
+ *  been read yet (a bridge older than rule 45, or a computer attached since the last read). "" when it said. */
+export type PeerWhy = "" | "offline" | "unread" | "unasked";
+
+/** What was read for one bot: on this computer, or for `<peer>:<name>` on that computer by its own bridge. */
+export interface BotRead {
+  /** The computer could say; when false nothing is known and nothing is shown as connected. */
+  available: boolean;
+  entry: BotPlatforms | undefined;
+  /** The peer id for a bot on another computer, else null. */
+  peer: string | null;
+  /** The profile name on its own computer (Hermes' restart command names this one). */
+  bare: string;
+  why: PeerWhy;
+}
+
+export function botRead(read: PlatformsRead | null, bot: string): BotRead {
+  const at = bot.indexOf(":");
+  if (at < 0) return { available: !!read?.available, entry: read?.available ? read.bots[bot] : undefined, peer: null, bare: bot, why: "" };
+  const peer = bot.slice(0, at);
+  const bare = bot.slice(at + 1);
+  const there = read?.peers?.[peer];
+  if (!there) return { available: false, entry: undefined, peer, bare, why: "unasked" };
+  if (!there.available) return { available: false, entry: undefined, peer, bare, why: there.why === "offline" ? "offline" : "unread" };
+  return { available: true, entry: there.bots[bare], peer, bare, why: "" };
+}
+
+/** The bot's platforms known not to be connected now; [] when its computer could not say, or for a bot it has no row
+ *  for. */
 export function notConnected(read: PlatformsRead | null, bot: string): PlatformState[] {
-  if (!read?.available) return [];
-  return (read.bots[bot]?.platforms ?? []).filter((p) => NOT_CONNECTED.has(p.status));
+  const r = botRead(read, bot);
+  if (!r.available) return [];
+  return (r.entry?.platforms ?? []).filter((p) => NOT_CONNECTED.has(p.status));
 }
 
 /** What the sidebar row names: failed and disconnected at once; reconnecting only when Hermes flags it as needing the

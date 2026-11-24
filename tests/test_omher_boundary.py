@@ -690,10 +690,12 @@ class DocPins(unittest.TestCase):
         # records and log tails read there, never a log line kept; shown, with a restart command to copy, never run);
         # 44: rule 44 (a new bot through Hermes' own `hermes -p default profile create <name> --no-alias` on a press,
         # the name by Hermes' rule, the outcome from the folder Hermes made; one more `OMH_READS` entry for the
-        # gallery's `profile bot-templates --json`; one apply message once the bot has the template skill). The rules
-        # stay numbered 1..n with no gap or repeat.
+        # gallery's `profile bot-templates --json`; one apply message once the bot has the template skill); 45: rule 45
+        # (a bot on another computer: its platforms read there by that computer's own bridge, asked over the link with
+        # the bare op and nothing in it, once per interval, checked again here, kept in memory only). The rules stay
+        # numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 44, len(rules))
+        self.assertTrue(6 <= len(rules) <= 45, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -3514,7 +3516,8 @@ class MessagingPlatformsThroughOmh(unittest.TestCase):
         "is shown as not known, never as connected or as not connected, and with no answer from `omh` nothing is shown"
         " as connected.",
         "shown to copy and never run by omher (rule 29's Restart stays the one way omher restarts a gateway). A bot on"
-        " another computer (rule 31) is not read, and `bots.platforms` is never forwarded to that computer's bridge.",
+        " another computer (rule 31) is not read by this computer's `omh`: that computer's own bridge reads it there,"
+        " under rule 45.",
     )
 
     def setUp(self) -> None:
@@ -3633,6 +3636,119 @@ class MessagingPlatformsThroughOmh(unittest.TestCase):
         hits = [p.relative_to(UI_SRC).as_posix() for p in UI_SRC.rglob("*.ts*")
                 if ".test." not in p.name and '"bots.platforms"' in p.read_text(encoding="utf-8")]
         self.assertEqual(sorted(hits), ["lib/protocol.ts", "state/store.ts"])
+
+
+class PeerPlatformsThroughTheirOwnBridge(unittest.TestCase):
+    """Rule 45: a bot on another computer shows its platforms as that computer's own bridge read them: asked over the
+    link with the bare op and nothing in it, once per interval, never per bot through `PEER_FORWARD`; the answer is
+    checked again on this side by the same field checks as `omh`'s own; nothing of it is kept outside memory."""
+
+    RULE_45 = (
+        "45. For a bot on another computer (rule 31) its sidebar row and its page show its messaging platforms as that"
+        " computer's own omher bridge reads them there under rule 43.",
+        "with the bare op `bots.platforms` and nothing in it: no path, command, Hermes root, argv or `fresh` from the"
+        " page or from this computer reaches it, and the page's Read again never reaches that computer.",
+        "That bridge picks its own Hermes root and runs rule 43's one `omh` read through its own `run_omh_read` and"
+        " `OMH_READS`, under rule 43's limits, and answers from its own rule 43 cache.",
+        "That bridge serves only the one link that started it, so asks over a link run `omh` there no more often than"
+        " that cache allows",
+        "This computer asks each computer at most once every 30 seconds (2 minutes after an answer it could not use), and"
+        " asks that overlap share one; a peer's answer never makes this computer run `omh`. `bots.platforms` stays out"
+        " of `PEER_FORWARD`, so an ask that names one bot there is refused, not sent.",
+        "What comes back is checked again here as if it were `omh`'s own answer (`peer_platform_rows`):",
+        "nothing else kept: no `fix` text, no link (the Discord Developer Portal stays the page's own constant) and none"
+        " of that computer's own peers. It is held in memory with the link and never written to disk, logged or sent"
+        " anywhere else.",
+        "is shown as cannot tell, never as connected or as not connected.",
+        "with the same 10-minute threshold for a reconnect (`ROW_RECONNECT_MS`),",
+        "This follows the owner's request (2026-11-24) to do what was left after rule 43, which named this read as"
+        " needing a rule of its own.",
+    )
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.source = BRIDGE.read_text(encoding="utf-8")
+        cls.tree = ast.parse(cls.source)
+        cls.fns = {n.name: n for n in ast.walk(cls.tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+    def _const(self, name: str):
+        return next(n.value for n in self.tree.body if isinstance(n, ast.Assign)
+                    and any(isinstance(t, ast.Name) and t.id == name for t in n.targets))
+
+    def test_the_doc_states_rule_45(self) -> None:
+        text = _flat(DOC.read_text(encoding="utf-8"))
+        for sentence in self.RULE_45:
+            self.assertIn(_flat(sentence), text)
+
+    def test_peer_forward_is_unchanged_and_never_carries_the_read(self) -> None:
+        forward = ast.literal_eval(self._const("PEER_FORWARD").args[0])
+        self.assertNotIn("bots.platforms", forward)
+        self.assertNotIn("bots.templates", forward)
+        # no op a peer's bot forwards reaches an `omh` read: its handler names none of rule 43's runner or cache
+        ops = next(n.value for n in ast.walk(self.tree) if isinstance(n, ast.Assign)
+                   and ast.unparse(n.targets[0]) == "self.ops")
+        handlers = {k.value: v.attr for k, v in zip(ops.keys, ops.values)}
+        for op in forward:
+            body = ast.unparse(self.fns[handlers[op]])
+            for bad in ("run_omh_read", "omh_path", "self.platforms", "_peer_platforms"):
+                self.assertNotIn(bad, body, f"{op}: {bad}")
+
+    def test_the_one_ask_carries_no_argument_and_shares_one_per_interval(self) -> None:
+        # the only `bots.platforms` sent over a link, its params a literal empty dict: nothing from the page or a caller
+        sends = [c for c in ast.walk(self.tree) if isinstance(c, ast.Call) and ast.unparse(c.func).endswith(".call")
+                 and c.args and isinstance(c.args[0], ast.Constant) and c.args[0].value == "bots.platforms"]
+        self.assertEqual(len(sends), 1)
+        self.assertEqual(ast.unparse(sends[0]), "link.call('bots.platforms', {}, PEER_PLATFORMS_TIMEOUT)")
+        self.assertIn(sends[0], list(ast.walk(self.fns["_ask_peer_platforms"])))
+        ask = ast.unparse(self.fns["_ask_peer_platforms"])
+        self.assertIn("bots = peer_platform_rows(out)", ask)
+        for bad in ("self.platforms", "run_omh_read", "omh_path", "write", "open(", "log.", "json.dump"):
+            self.assertNotIn(bad, ask, bad)
+        cache = ast.unparse(self.fns["_peer_platforms"])
+        self.assertIn("if not link.connected:", cache)
+        self.assertIn("PLATFORMS_TTL if link.platforms['available'] else PLATFORMS_TTL_MISS", cache)
+        self.assertIn("if link.platforms_ask is None or link.platforms_ask.done():", cache)
+        self.assertIn("return await asyncio.shield(link.platforms_ask)", cache)
+        self.assertNotIn("fresh", cache)
+        op = ast.unparse(self.fns["op_bots_platforms"])
+        self.assertIn("asyncio.to_thread(self.platforms.read, p.get('fresh') is True)", op)
+        self.assertIn("self._peer_platforms(link) for link in links", op)
+        self.assertIn("PEER_PLATFORMS_TIMEOUT = OMH_READ_TIMEOUT + PEER_LIST_TIMEOUT", self.source)
+
+    def test_the_receiving_side_checks_the_answer_with_the_local_fields(self) -> None:
+        check = ast.unparse(self.fns["peer_platform_rows"])
+        self.assertIn("out.get('available') is not True", check)
+        self.assertIn("itertools.islice(out['bots'].items(), 256)", check)
+        self.assertIn("PEER_BOT.fullmatch(name)", check)
+        self.assertIn("bots[name] = _platform_entry(bot)", check)
+        # one field check for both sides: `omh`'s answer here and a peer's answer
+        users = sorted(n for n, f in self.fns.items() if n != "_platform_entry"
+                       and any(isinstance(c, ast.Name) and c.id == "_platform_entry" for c in ast.walk(f)))
+        self.assertEqual(users, ["peer_platform_rows", "platform_rows"])
+        entry = ast.unparse(self.fns["_platform_entry"])
+        for pin in ("PLATFORM_STATUSES", "PLATFORM_NAME.fullmatch", "PLATFORM_TIME.fullmatch", "PLATFORM_TOKEN.fullmatch",
+                    "PLATFORM_RESTART.fullmatch", "PLATFORM_INTENTS", "_platform_text(row.get(k), n)", "PLATFORM_LOGS",
+                    "if len(rows) >= 32:"):
+            self.assertIn(pin, entry, pin)
+        self.assertNotIn("'fix'", entry)
+        text = ast.unparse(self.fns["_platform_text"])
+        self.assertIn("PLATFORM_ESCAPES.sub", text)
+        self.assertIn("unicodedata.category(ch) not in ('Cc', 'Cf')", text)
+
+    def test_the_page_reads_a_peer_bot_from_its_own_computers_answer(self) -> None:
+        helpers = (UI_SRC / "platforms" / "platforms.ts").read_text(encoding="utf-8")
+        section = (UI_SRC / "platforms" / "PlatformSection.tsx").read_text(encoding="utf-8")
+        row = (UI_SRC / "sidebar" / "BotRow.tsx").read_text(encoding="utf-8")
+        self.assertIn("const there = read?.peers?.[peer];", helpers)
+        self.assertIn('if (!there) return { available: false, entry: undefined, peer, bare, why: "unasked" };', helpers)
+        self.assertIn("const r = botRead(read, bot);", helpers)  # the row's notConnected
+        self.assertIn("<RowPlatforms bot={bot.name} read={platforms} />", row)
+        self.assertIn('data-testid="pf-peer-cannot-tell"', section)
+        self.assertIn("openExternal(DISCORD_PORTAL)", section)  # the portal link is the page's own constant
+        for text in (helpers, section):
+            for bad in ("bridge.request", "localStorage", "sessionStorage", "console.", "dangerouslySetInnerHTML", "href={p.",
+                        "openExternal(p."):
+                self.assertNotIn(bad, text, bad)
 
 
 class NewBotThroughHermesOwnCreate(unittest.TestCase):

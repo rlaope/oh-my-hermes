@@ -2463,6 +2463,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       ensureRoster();
       // a reconnect whose bots.list failed left chats unread (stale): read them now, so their held rows go out
       const names = new Set(state.bots.map((b) => b.name));
+      // a computer attached since (rule 45): its bots' platforms now, not at the next minute's poll
+      if (state.bots.some((b) => b.host && !before.has(b.name))) void loadPlatforms();
       const stale = Object.entries(state.chats).filter(([n, c]) => c.stale && c.loaded && names.has(n)).map(([n]) => n);
       await Promise.allSettled(stale.map(loadChat));
       // a profile that appeared since: ask it too (only new names, so a bots.update storm asks nobody twice)
