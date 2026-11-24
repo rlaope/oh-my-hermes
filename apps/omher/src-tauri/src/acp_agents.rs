@@ -52,15 +52,18 @@ const fn generic(
     }
 }
 
-/// Gemini CLI 0.68.0, Qwen Code 0.27.2, Kimi Code 2.6.0, Copilot CLI 1.0.110 and Cline 3.0.74, checked up to their
-/// signed-out `session/new` (`tests/fixtures/acp/<agent>-signed-out.jsonl`). Gemini's `--experimental-acp` is
-/// deprecated. Sign-in lines from each agent's own help; install lines from each one's README.
-pub const ACP_LIST: [AcpEntry; 5] = [
+/// Gemini CLI 0.68.0, Qwen Code 0.27.2, Kimi Code 2.6.0, Copilot CLI 1.0.110, Cline 3.0.74 and Antigravity CLI 1.5.16,
+/// checked up to their signed-out `session/new` (`tests/fixtures/acp/<agent>-signed-out.jsonl`). Gemini's
+/// `--experimental-acp` is deprecated. Sign-in lines from each agent's own help; install lines from each one's README
+/// (Antigravity's from antigravity.google/docs/cli: a native binary with no npm package, so its line is the official
+/// installer, which puts `agy` in `~/.local/bin`, `%LOCALAPPDATA%\agy\bin` on Windows).
+pub const ACP_LIST: [AcpEntry; 6] = [
     generic("gemini", "Gemini CLI", &["--acp"], "gemini", "npm install -g @google/gemini-cli", "geminicli-color.svg", true),
     generic("qwen", "Qwen Code", &["--acp"], "qwen", "npm install -g @qwen-code/qwen-code@latest", "qwen-color.svg", true),
     generic("kimi", "Kimi Code", &["acp"], "kimi login", "npm install -g @moonshot-ai/kimi-code", "kimi-code.png", true),
     generic("copilot", "Copilot CLI", &["--acp"], "copilot login", "npm install -g @github/copilot", "githubcopilot.svg", true),
     generic("cline", "Cline", &["--acp"], "cline auth", "npm install -g cline", "cline.svg", true),
+    generic("agy", "Antigravity", &["acp"], "agy acp --login", "curl -fsSL https://antigravity.google/cli/install.sh | bash", "antigravity-color.svg", true),
 ];
 
 /// The row of generic ACP agent `id`, or `None` for anything else (a built-in, a removed agent, any other text).
@@ -120,10 +123,11 @@ mod tests {
             assert_eq!((e.acp.id, e.acp.label), (id, e.agent.label), "{id}");
             assert!(e.acp.skill_tool.is_none() && e.acp.rules.is_none(), "{id}: a generic agent has no rule probe");
             assert!(assets.join(e.mark).is_file(), "{id}: {}", e.mark);
-            assert!(e.install.starts_with("npm install -g "), "{id}");
+            // an npm line, or (Antigravity, a native binary) its vendor's own installer over https
+            assert!(e.install.starts_with("npm install -g ") || e.install == "curl -fsSL https://antigravity.google/cli/install.sh | bash", "{id}");
             assert!(crate::sessions::AGENTS.iter().all(|a| a.id != id), "{id} is also a built-in");
         }
-        assert_eq!(seen, ["gemini", "qwen", "kimi", "copilot", "cline"]);
+        assert_eq!(seen, ["gemini", "qwen", "kimi", "copilot", "cline", "agy"]);
         assert!(entry("kilo").is_none() && entry("opencode").is_none() && entry("claude").is_none() && entry("").is_none());
     }
 
@@ -136,7 +140,7 @@ mod tests {
         assert_eq!(copy, serde_json::to_value(&ACP_LIST).unwrap());
     }
 
-    /// 0.2.8's sign-in and install lines, unchanged.
+    /// 0.2.8's sign-in and install lines, unchanged, then Antigravity's (`agy acp --help`: `--login` signs in and exits).
     #[test]
     fn the_lines_are_0_2_8s() {
         let rows: Vec<(&str, &str, &str, &[&str])> = ACP_LIST.iter().map(|e| (e.agent.id, e.acp.login, e.install, e.args)).collect();
@@ -148,6 +152,7 @@ mod tests {
                 ("kimi", "kimi login", "npm install -g @moonshot-ai/kimi-code", &["acp"][..]),
                 ("copilot", "copilot login", "npm install -g @github/copilot", &["--acp"][..]),
                 ("cline", "cline auth", "npm install -g cline", &["--acp"][..]),
+                ("agy", "agy acp --login", "curl -fsSL https://antigravity.google/cli/install.sh | bash", &["acp"][..]),
             ]
         );
     }

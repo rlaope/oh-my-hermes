@@ -271,6 +271,8 @@ pub fn search_dirs<E: Fn(&str) -> Option<String>>(env: &E, os: Os) -> Vec<PathBu
             }
             if let Some(local) = set("LOCALAPPDATA") {
                 dirs.push(join(&local, &["pnpm"]));
+                // Antigravity's install.ps1 copies `agy.exe` here and adds it to the user PATH only for new shells
+                dirs.push(join(&local, &["agy", "bin"]));
             }
             if let Some(pnpm) = set("PNPM_HOME") {
                 dirs.push(PathBuf::from(pnpm));
@@ -1790,7 +1792,7 @@ mod tests {
         let ids: Vec<&str> = AGENTS.iter().map(|a| a.id).collect();
         assert_eq!(ids, ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode"]);
         let generic: Vec<&str> = crate::acp_agents::ACP_LIST.iter().map(|e| e.agent.id).collect();
-        assert_eq!(generic, ["gemini", "qwen", "kimi", "copilot", "cline"]);
+        assert_eq!(generic, ["gemini", "qwen", "kimi", "copilot", "cline", "agy"]);
         for a in AGENTS.iter().chain(crate::acp_agents::ACP_LIST.iter().map(|e| &e.agent)) {
             assert_eq!(a.id, a.program, "the id is the program name; nothing else is ever run");
             assert_eq!(agent(a.id), Some(a), "{}", a.id);
@@ -1827,7 +1829,7 @@ mod tests {
         assert_eq!(chat_args("opencode").unwrap(), ["acp"]);
         // the generic ACP agents: the list drives both the allow-list row and the one argument that starts its ACP
         // server, as 0.2.8 had them (Gemini's `--experimental-acp` is deprecated)
-        for (id, arg) in [("gemini", "--acp"), ("qwen", "--acp"), ("kimi", "acp"), ("copilot", "--acp"), ("cline", "--acp")] {
+        for (id, arg) in [("gemini", "--acp"), ("qwen", "--acp"), ("kimi", "acp"), ("copilot", "--acp"), ("cline", "--acp"), ("agy", "acp")] {
             let e = crate::acp_agents::entry(id).unwrap();
             assert_eq!(chat_args(id).unwrap(), [arg], "{id}");
             assert_eq!(chat_args(id).unwrap(), e.args, "{id}");
@@ -1879,7 +1881,7 @@ mod tests {
             }
         }
         // OpenCode continues over its protocol (session/resume), never by an argument
-        for agent in ["pi", "omp", "grok", "omh", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline"] {
+        for agent in ["pi", "omp", "grok", "omh", "opencode", "kilo", "gemini", "qwen", "kimi", "copilot", "cline", "agy"] {
             assert!(resume_args(agent, id).is_err(), "{agent}");
         }
         let s = Sessions::default();
@@ -2077,6 +2079,28 @@ mod tests {
         let wdirs = search_dirs(&win, Os::Windows);
         assert!(wdirs.contains(&Path::new(r"C:\Users\k").join(".grok").join("bin")));
         assert!(wdirs.contains(&Path::new(r"C:\Users\k").join(".pi").join("agent").join("bin")));
+    }
+
+    /// Antigravity's official installers: install.sh copies one native `agy` (no link, no package) into
+    /// `~/.local/bin` (seen with 1.5.16), install.ps1 copies `agy.exe` into `%LOCALAPPDATA%\agy\bin` and puts that on
+    /// the user PATH only for shells started later, so a Dock- or Start-menu-started omher finds it in either place
+    /// with a bare PATH.
+    #[test]
+    fn antigravity_is_found_where_its_installers_put_agy() {
+        let agy = crate::acp_agents::entry("agy").unwrap();
+        assert_eq!((agy.agent.program, agy.args), ("agy", &["acp"][..]));
+        let mac = PathBuf::from("/Users/k/.local/bin/agy");
+        let short = env_of(&[("PATH", "/usr/bin:/bin"), ("HOME", "/Users/k")]);
+        let sdirs = search_dirs(&short, Os::Unix);
+        assert_eq!(resolve("agy", &sdirs, fs_of(&[&mac]), Os::Unix), Some(mac.clone()));
+        assert_eq!(find_in_layouts("agy", "agy", &sdirs, &short, fs_of(&[&mac]), |p: &Path| p.to_path_buf(), Os::Unix), Some(mac));
+        let win = env_of(&[("PATH", r"C:\Windows\System32"), ("USERPROFILE", r"C:\Users\k"), ("LOCALAPPDATA", r"C:\Users\k\AppData\Local")]);
+        let wdirs = search_dirs(&win, Os::Windows);
+        let exe = Path::new(r"C:\Users\k\AppData\Local").join("agy").join("bin").join("agy.exe");
+        assert!(wdirs.contains(&Path::new(r"C:\Users\k\AppData\Local").join("agy").join("bin")));
+        assert_eq!(resolve("agy", &wdirs, fs_of(&[&exe]), Os::Windows), Some(exe));
+        // no layout row: nothing else is named agy, so the first `agy` found is it
+        assert!(layout("agy").is_none());
     }
 
     /// H1: a same-named other program earlier on PATH (the QA report's shadow stubs; Homebrew's `grok` regex tool)

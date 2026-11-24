@@ -249,9 +249,9 @@ test("the + menu: installed agents first by tier (the last one used has the focu
   const items = menu.locator("[role=menuitem][data-testid^=session-agent-]");
   await expect(menu.getByTestId("session-agent-claude")).toBeFocused();
   expect(await items.evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")))).toEqual(
-    ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline"].map((a) => `session-agent-${a}`),
+    ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline", "agy"].map((a) => `session-agent-${a}`),
   );
-  expect(await items.locator(".ss-l").allTextContents()).toEqual(["Claude Code", "Codex", "OmO", "DSH", "oh-my-hermes", "pi", "oh-my-pi", "Grok", "OpenCode", "Gemini CLI", "Qwen Code", "Kimi Code", "Copilot CLI", "Cline"]);
+  expect(await items.locator(".ss-l").allTextContents()).toEqual(["Claude Code", "Codex", "OmO", "DSH", "oh-my-hermes", "pi", "oh-my-pi", "Grok", "OpenCode", "Gemini CLI", "Qwen Code", "Kimi Code", "Copilot CLI", "Cline", "Antigravity"]);
   // each with its official mark, never a letter
   for (const a of ["omo", "omp", "omh"]) await expect(menu.getByTestId(`session-agent-${a}`).locator(`img[data-mark="${a}"]`)).toHaveCount(1);
   // DeepSeek Harness's own mark (its whale), drawn in the text colour
@@ -296,7 +296,7 @@ test("the + menu: installed agents first by tier (the last one used has the focu
   await expect(menu.getByTestId("session-past-codex")).toBeFocused();
   await page.keyboard.press("ArrowUp");
   await page.keyboard.press("ArrowUp");
-  await expect(menu.getByTestId("session-agent-cline")).toBeFocused();
+  await expect(menu.getByTestId("session-agent-agy")).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(menu).toHaveCount(0);
   await expect(plus).toBeFocused();

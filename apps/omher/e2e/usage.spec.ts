@@ -196,12 +196,12 @@ test("a record past its reset time says No recent record, with no number and no 
   await expect(page.getByTestId("usage-card")).not.toContainText("%");
 });
 
-test("screenshots: the 22 agent marks and the usage card, dark and light", async ({ page }) => {
+test("screenshots: the agent marks and the usage card, dark and light", async ({ page }) => {
   mkdirSync(SHOTS, { recursive: true });
   for (const theme of ["dark", "light"] as const) {
     await page.setViewportSize({ width: 920, height: 330 });
     await page.goto(`/e2e/agents.html?theme=${theme}`);
-    await expect(page.getByTestId("agent-grid").locator("[data-testid^=agent-cell-]")).toHaveCount(23);
+    await expect(page.getByTestId("agent-grid").locator("[data-testid^=agent-cell-]")).toHaveCount(24);
     await expect(page.locator('[data-agent="letter"]')).toHaveCount(2);
     await page.screenshot({ path: join(SHOTS, `T7-agents-${theme}.png`) });
   }
