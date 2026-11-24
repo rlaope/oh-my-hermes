@@ -148,7 +148,7 @@ test("the + menu lists the agent CLIs with their marks; missing ones are dimmed 
   await menu.getByTestId("session-more").click();
   await expect(rows).toHaveCount(14);
   expect(await rows.evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")))).toEqual(
-    ["claude", "codex", "omh", "omo", "dsh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline"].map((a) => `session-agent-${a}`),
+    ["claude", "codex", "omh", "omo", "dsh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline", "agy"].map((a) => `session-agent-${a}`),
   );
   await expect(menu.getByTestId("session-agent-claude")).toContainText("Claude Code");
   await expect(menu.getByTestId("session-agent-claude").locator('svg[data-mark="claude"]')).toHaveCount(1);
