@@ -508,6 +508,21 @@ class PeerPlatforms(BridgeCase):
             self.assertTrue(far["available"])
             gate.set()
 
+    async def test_a_peer_cannot_raise_this_computers_platforms_update(self):
+        import asyncio
+        from contextlib import AsyncExitStack
+        async with AsyncExitStack() as stack:
+            local, remote, s, _ = await self._two(stack)
+            await self._peer(s)
+            n, asked = self._updates(s), len(self.asked)
+            for bot in ("mini", "x"):
+                await remote.bridge.emit("platforms.update", bot)
+            await remote.bridge.emit("bot.status", "mini", status="online", running=False)  # a later event still comes
+            await s.until(lambda ev: any(e["event"] == "bot.status" and e["bot"] == "far:mini" for e in ev))
+            await asyncio.sleep(0.05)
+            self.assertEqual(self._updates(s), n)
+            self.assertEqual(len(self.asked), asked)
+
     async def test_a_reconnect_keeps_the_interval(self):
         from contextlib import AsyncExitStack
         async with AsyncExitStack() as stack:

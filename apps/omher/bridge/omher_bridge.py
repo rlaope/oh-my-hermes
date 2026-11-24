@@ -9291,6 +9291,8 @@ class Bridge:
         bot, event = f.get("bot"), f.get("event")
         if not isinstance(bot, str) or not PEER_BOT.fullmatch(bot) or f.get("session") is not None:
             return
+        if event == "platforms.update":  # this computer says it itself when its own ask lands (rule 45)
+            return
         if event == "turn.start":
             link.running.add(bot)
         elif event == "turn.end":

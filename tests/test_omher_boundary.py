@@ -3748,6 +3748,8 @@ class PeerPlatformsThroughTheirOwnBridge(unittest.TestCase):
         self.assertIn("link.platforms, link.platforms_at = (old.platforms, old.platforms_at)",
                       ast.unparse(self.fns["op_peers_attach"]))
         self.assertIn("await self.emit('platforms.update', '')", ast.unparse(self.fns["_peer_lost"]))
+        # only this computer raises it: a peer's own `platforms.update` is dropped, never passed on
+        self.assertIn("if event == 'platforms.update':\n        return", ast.unparse(self.fns["_peer_event"]))
         self.assertIn("await self.emit('platforms.update', '')", ask)
         self.assertNotIn("fresh", cache)
         op = ast.unparse(self.fns["op_bots_platforms"])
