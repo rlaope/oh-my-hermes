@@ -64,7 +64,9 @@ for platform in ("cli", "discord", "cron", "subagent"):
         }
 out["identity_catalog"] = identity_catalog_context(home)
 out["identity_catalog/800"] = identity_catalog_context(home, max_chars=800)
-sys.stdout.write(json.dumps(out, ensure_ascii=False, sort_keys=True))
+# Write UTF-8 bytes: on Windows the child's text stdout uses the ANSI code page
+# (cp1252), which turns an em dash into 0x97 and breaks the parent's json.loads.
+sys.stdout.buffer.write(json.dumps(out, ensure_ascii=False, sort_keys=True).encode("utf-8"))
 """
 
 
