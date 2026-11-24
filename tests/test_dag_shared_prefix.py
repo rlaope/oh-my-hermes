@@ -1,7 +1,8 @@
 """Sibling dag tasks of one run start with the same bytes: the run-wide block first, the node's own block after it.
 
 A provider prompt cache serves only an exact byte prefix, so `dag_run.task_for` puts the run goal and the commit,
-shared-machine and scope rules (the same for every writing build node of the run) ahead of the node's prompt.
+the scope rule (the same bytes for every node of the run, whatever its role) ahead of the node's prompt; lines
+only some nodes get (commit and shared-machine rules, review focus) stay in the node block.
 """
 
 from __future__ import annotations
@@ -23,15 +24,16 @@ HEAD = "\n".join([
     f"Run goal (saved):\n{GOAL}\n",
     "The run goal is acceptance context, not permission to widen your SCOPE.",
     "",
-    "Commit only your own SCOPE paths: stage them by name (`git add -- <paths>`), never `git add -A`, "
-    "`git add .` or `git commit -a`, and never `git stash`; the index and stash are shared with the parallel parts.",
-    "Other agents share this machine: run only the builds and tests you need at once, and before you stop, "
-    "stop the background jobs you started and remove the temporary files you created.",
     "Stay inside your SCOPE: other parts of this run work at the same time. If you cannot finish, "
     "say plainly that you are blocked and why; do not report blocked work as done.",
     "",
     "",
 ])
+RULES = (("Commit only your own SCOPE paths: stage them by name (`git add -- <paths>`), never `git add -A`, "
+          "`git add .` or `git commit -a`, and never `git stash`; the index and stash are shared with the parallel "
+          "parts."),
+         ("Other agents share this machine: run only the builds and tests you need at once, and before you stop, "
+          "stop the background jobs you started and remove the temporary files you created."))
 ESCALATE = ("If the task turns on a judgement you cannot settle with confidence (a design choice, a root cause you "
             "cannot pin down), do not guess: before editing, write ESCALATE: <the question> and what you found into "
             "the handoff, and stop.")
@@ -75,8 +77,33 @@ class SharedPrefixTests(unittest.TestCase):
             f"{dag_run.REVIEW_FOCUS_PREFIX}old clients still parse the reply", "",
             f"Handoff: before you stop, write your report to {handoff}: what you did, the files you changed, "
             "what VERIFY showed, and anything still open. The parent reads that file and your final message.",
-            ESCALATE,
+            ESCALATE, *RULES,
         ]))
+
+    def test_every_role_mix_shares_the_same_head_with_or_without_a_goal(self) -> None:
+        mixes = {
+            "writer+writer": ({}, {}),
+            "writer+verify": ({}, {"role": "verify"}),
+            "writer+review": ({}, {"role": "review"}),
+            "writer+baseline": ({}, {"role": "baseline"}),
+            "read_only+writer": ({"read_only": True, "write_scope": []}, {}),
+        }
+        for goal in (GOAL, None):
+            heads = set()
+            for name, (first, second) in mixes.items():
+                with self.subTest(goal=goal, mix=name), homes() as home:
+                    raw = [{**node("a", scope=("src/a.py",)), "prompt": "TASK: a", "review_focus": "a focus", **first},
+                           {**node("b", scope=("src/b.py",)), "prompt": "TASK: b", **second}]
+                    record = dag_run.new_record(PARENT, "mix", "Mix", goal, raw, time.time())
+                    contexts = _contexts(record, home)
+                    head = contexts["a"].split("\n\nTASK: ")[0] + "\n\n"
+                    shared = os.path.commonprefix([contexts["a"], contexts["b"]])
+                    self.assertIn("Stay inside your SCOPE", head)
+                    self.assertGreaterEqual(len(shared), len(head))
+                    self.assertTrue(contexts["b"].startswith(head))
+                    heads.add(head)
+            self.assertEqual(len(heads), 1, heads)
+            self.assertEqual(heads.pop(), HEAD if goal else HEAD.split("\n\n", 2)[-1])
 
     def test_the_goal_keeps_its_marker(self) -> None:
         with homes() as home:

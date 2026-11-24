@@ -1816,11 +1816,6 @@ class VerifyAttributionAndRepairLeftoversTests(unittest.TestCase):
             read_path = dag_run.node_handoff(record, home.omh, "api")
         # The run-wide head first (the same bytes for every sibling), then the node's own block.
         self.assertEqual(context, "\n".join([
-            "Commit only your own SCOPE paths: stage them by name (`git add -- <paths>`), never `git add -A`, "
-            "`git add .` or `git commit -a`, and never `git stash`; the index and stash are shared with the "
-            "parallel parts.",
-            "Other agents share this machine: run only the builds and tests you need at once, and before you stop, "
-            "stop the background jobs you started and remove the temporary files you created.",
             "Stay inside your SCOPE: other parts of this run work at the same time. If you cannot finish, "
             "say plainly that you are blocked and why; do not report blocked work as done.",
             "",
@@ -1832,6 +1827,11 @@ class VerifyAttributionAndRepairLeftoversTests(unittest.TestCase):
             "If the task turns on a judgement you cannot settle with confidence (a design choice, a root cause you "
             "cannot pin down), do not guess: before editing, write ESCALATE: <the question> and what you found into "
             "the handoff, and stop.",
+            "Commit only your own SCOPE paths: stage them by name (`git add -- <paths>`), never `git add -A`, "
+            "`git add .` or `git commit -a`, and never `git stash`; the index and stash are shared with the "
+            "parallel parts.",
+            "Other agents share this machine: run only the builds and tests you need at once, and before you stop, "
+            "stop the background jobs you started and remove the temporary files you created.",
         ]))
 
     def test_a_writing_node_is_told_to_commit_only_its_own_scope_paths(self) -> None:
@@ -1847,7 +1847,8 @@ class VerifyAttributionAndRepairLeftoversTests(unittest.TestCase):
                 "parallel parts.")
         self.assertIn(line, build)
         self.assertLess(len(line), 260)
-        self.assertLess(build.index(line), build.index("Stay inside your SCOPE"))
+        # Only some nodes get the line, so it ends the node block, after the run-wide head that leads with the scope rule.
+        self.assertLess(build.index("Stay inside your SCOPE"), build.index(line))
         self.assertNotIn("Commit only your own SCOPE paths", check)
 
 

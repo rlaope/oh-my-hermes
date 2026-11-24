@@ -1635,8 +1635,9 @@ def task_for(
 ) -> dict[str, str]:
     """One `delegate_task` task: the marked goal, and the node's prompt with where to write and read handoffs.
 
-    The run-wide block (run goal, commit, shared-machine and scope rules) comes first and the node's own block after
-    it, so sibling tasks of one run start with the same bytes and a provider prompt cache can serve that prefix.
+    The run-wide block (the run goal and the scope rule, the same bytes for every node) comes first and the node's own
+    block after it, so sibling tasks of one run start with the same bytes and a provider prompt cache can serve that
+    prefix.
     """
     run = str(record["run"])
     head: list[str] = []
@@ -1647,13 +1648,8 @@ def task_for(
             "The run goal is acceptance context, not permission to widen your SCOPE.",
             "",
         ])
-    if node["write_scope"] and not node.get("read_only"):
-        # Parallel parts share the checkout's index and stash, so a whole-tree add or stash takes their files too.
-        head.append("Commit only your own SCOPE paths: stage them by name (`git add -- <paths>`), never `git add -A`, "
-                    "`git add .` or `git commit -a`, and never `git stash`; the index and stash are shared with the "
-                    "parallel parts.")
-        if node_role(node) == DEFAULT_ROLE:
-            head.append(SHARED_MACHINE_LINE)
+    # Only lines that are the same bytes for every node of the run, whatever its role, scope or attempts; a line
+    # some nodes get and others do not belongs to the node block, or siblings part at that line.
     head.append("Stay inside your SCOPE: other parts of this run work at the same time. If you cannot finish, "
                 "say plainly that you are blocked and why; do not report blocked work as done.")
     lines = [str(node["prompt"]), ""]
@@ -1759,6 +1755,13 @@ def task_for(
         lines.append("If the task turns on a judgement you cannot settle with confidence (a design choice, a root "
                      "cause you cannot pin down), do not guess: before editing, write ESCALATE: <the question> and "
                      "what you found into the handoff, and stop.")
+    if node["write_scope"] and not node.get("read_only"):
+        # Parallel parts share the checkout's index and stash, so a whole-tree add or stash takes their files too.
+        lines.append("Commit only your own SCOPE paths: stage them by name (`git add -- <paths>`), never `git add -A`, "
+                     "`git add .` or `git commit -a`, and never `git stash`; the index and stash are shared with the "
+                     "parallel parts.")
+        if node_role(node) == DEFAULT_ROLE:
+            lines.append(SHARED_MACHINE_LINE)
     # The marker ends the goal: Hermes previews each goal by its first 40 characters, and a person reads the label
     # there. It stays on the label's line, since Hermes prints `goal[:40]` as a one-line completion label.
     return {"goal": f"{node['label']} [dag:{run}/{node['id']}]", "context": "\n".join([*head, "", *lines])}

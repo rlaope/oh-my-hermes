@@ -83,9 +83,9 @@ class EscalationClimbsTheLadderTest(unittest.TestCase):
             self.assertNotIn("resume_handle", fresh)
             # unspecified-low still has a rung above and one escalation left.
             self.assertIn(ESCALATE_LINE, context)
-            # The escalate line ends the node block; the commit and scope rules lead, in the run-wide head.
-            self.assertTrue(context.endswith("\n" + ESCALATE_LINE), context[-300:])
-            self.assertLess(context.index("Commit only your own SCOPE paths"), context.index("Stay inside your SCOPE"))
+            # The scope rule leads, in the run-wide head; the commit rule follows the escalate line in the node block.
+            self.assertEqual(context.index(ESCALATE_LINE) + len(ESCALATE_LINE) + 1,
+                             context.index("Commit only your own SCOPE paths"))
             self.assertLess(context.index("Stay inside your SCOPE"), context.index(dag_tests.PROMPT))
 
             self.assertEqual(_settle(record, "escalated", "Which index wins?", now + 3), "escalated")

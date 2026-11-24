@@ -113,9 +113,10 @@ MAIN_VERIFY_CONTEXT = (
 # previous main pin was fa272bdff1d7b1f0ae032829a98236fa6239cbc0497bdd11885818b345dbb276.
 # Re-pinned after the shared-machine line for writing build nodes (g62-dag); removing that line alone reproduces the
 # previous pin 21c6f77532532a3aef495c180dd84688c362d23564aa9255bd0cada09e3aaef0.
-# Re-pinned after task_for put the run-wide block first (cache-dag-prefix): the same non-blank lines in a new order;
-# the base version of task_for reproduces the previous pin fbc73882476a927a6ebc4f8e69ac91c556a107cc38ee9a14c3b6ce19667b4dc6.
-MAIN_API_CONTEXT_SHA = "69b0989a0b3c6b998f9430f00257d9da51599b583080494e72c65bf9b273bcb4"
+# Re-pinned after task_for put the run-wide block (run goal, scope rule) first (cache-dag-prefix): the same non-blank
+# lines in a new order; the base version of task_for reproduces the previous pin
+# fbc73882476a927a6ebc4f8e69ac91c556a107cc38ee9a14c3b6ce19667b4dc6.
+MAIN_API_CONTEXT_SHA = "ec98f8088e15274c93d7cbc7df10d1324557132826db584bd55811739daf3dad"
 # The two tool-result pins hold the reply as the model reads it: non-ASCII kept as written (#2884), so the `·` of the
 # status line is one character, not `\u00b7`; the ASCII re-encoding of these bytes gives the pins main captured.
 MAIN_RESULT_RUNNING_SHA = "c53744ae5ca1a204693922fbc67dc5eb8b44cc9eb6ae714ac10955ba4fd03d50"

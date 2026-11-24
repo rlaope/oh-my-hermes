@@ -183,7 +183,9 @@ class SharedMachineLineTests(unittest.TestCase):
         api = contexts.pop("api")
         self.assertEqual(api.count(SHARED_MACHINE), 1)
         self.assertLess(api.index("Commit only your own SCOPE paths"), api.index(SHARED_MACHINE))
-        self.assertLess(api.index(SHARED_MACHINE), api.index("Stay inside your SCOPE"))
+        # The scope rule leads, in the run-wide head; the commit and shared-machine lines end the node block.
+        self.assertLess(api.index("Stay inside your SCOPE"), api.index("Commit only your own SCOPE paths"))
+        self.assertTrue(api.endswith("\n" + SHARED_MACHINE), api[-300:])
         for node_id, context in contexts.items():
             with self.subTest(node=node_id):
                 self.assertNotIn(SHARED_MACHINE, context)
