@@ -112,6 +112,12 @@ class StatusTests(_Home):
         self.assertEqual(got["status"], STATUS)
 
     @UNIX_ONLY
+    def test_a_ring_nobody_has_seen_reads_news(self) -> None:
+        # omher writes `news` for a session that rang or reported done while the person was not looking
+        self.session(extra={"state": "news"})
+        self.assertEqual(self.call(action="status", link=LID)["status"]["state"], "news")
+
+    @UNIX_ONLY
     def test_an_unknown_or_malformed_link_reads_nothing(self) -> None:
         self.assertEqual(self.call(action="status", link=LID)["reason"], "not_found")
         self.assertEqual(self.call(action="status", link="../../etc/passwd")["reason"], "bad_link")

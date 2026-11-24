@@ -4,6 +4,36 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: Ctrl+V pastes and Ctrl+C copies in a Windows terminal, as in Windows Terminal.** On Windows, Ctrl+V in a
+  terminal used to reach the program as ^V; only Ctrl+Shift+V and Shift+Insert pasted. Now Ctrl+V pastes through the
+  same path as those keys (the multi-line confirm, and a pasted picture's saved path), and the paste happens once.
+  Ctrl+C copies while text is selected and then clears the selection; with nothing selected it is the program's ^C.
+  Ctrl+Shift+C / Ctrl+Shift+V and Ctrl+Insert / Shift+Insert still work. Linux keeps the GNOME Terminal keys: plain
+  Ctrl+C and Ctrl+V stay the program's there. Three Mac terminal keys that had no Windows or Linux key now have one:
+  Ctrl+Shift+A selects the whole terminal (Cmd+A), Ctrl+Shift+K clears it (Cmd+K), and Ctrl+Up / Ctrl+Down go to the
+  previous or next prompt (Cmd+Up / Cmd+Down). Ctrl+Up and Ctrl+Down still go to the program while a command runs (an
+  inline program such as the OMH TUI or Claude Code), in a full-screen program, when the shell sent no prompt marks,
+  or when the view is already at the bottom with nowhere to go. A Ctrl+C whose copy the clipboard refused keeps the
+  selection. The terminal's right-click menu and Settings › Keyboard show these keys on Windows and Linux, with no ⌘.
+  None of these keys acts while AltGr is held. (#3131; `docs/OMHER-BOUNDARY.md` rule 11)
+- **The OMH TUI's Ctrl+V pastes the clipboard's text when there is no image.** Ctrl+V asked Hermes only for a
+  clipboard image, and with text on the clipboard said "No image found in clipboard" and inserted nothing. That is
+  what a terminal that sends Ctrl+V on as ^V (instead of pasting) got. Now, when Hermes finds no image, the TUI pastes
+  the clipboard's text into the composer as a paste. An image on the clipboard still attaches as an `[Image #N]`
+  token, and `/paste` stays image only. A prompt sent before Hermes answered goes exactly as typed: the clipboard's
+  text is never added to it, waits in the composer instead, and a notice says so. The text is read only when the
+  screen is this machine's (no SSH, and inside tmux not over SSH): through the Win32 clipboard on Windows, `pbpaste`
+  on a Mac, and `wl-paste`, `xclip` or `xsel` on Linux. (#3131; `docs/OMH-TUI-BOUNDARY.md`)
+- **omher: a click on a side-panel tab right after maximise or restore picks that tab.** While the panel slides,
+  a press on a tab that is still moving counts as the tab row's own press (for a double-click on the row), and its
+  click goes nowhere. The check for "still moving" looked at every frame of the last 60 ms. So a tab that had already
+  stopped, two or three frames before the click, still read as moving if an earlier frame in that window had moved
+  it. The click was dropped and the panel stayed on its old tab. Now a tab counts as moving in three cases: while
+  the slide runs, when it moved between the frame the person saw at the press and the moment omher reads the click,
+  or when it had only just arrived in that frame. A tab that held still from the frame before the press is the
+  person's to click.
+  (`apps/omher/src/elsewhere/PanelTabs.tsx`, `apps/omher/src/elsewhere/rowMotion.ts`; e2e `panel-max.spec.ts`, seen
+  on macOS CI)
 - **omher on Windows: "Reply there" no longer draws over the row's time, and the app names Windows' own fonts.** In
   the side panel's "Where your bot is", hovering a Slack or Discord row showed "거기에 답장" on top of the row's time
   ("거기에답장일"): the button floated over the time and its hover fill was see-through. Now the time gives way while
@@ -82,6 +112,20 @@ All notable changes will be documented here.
   worktree in it (`docs/OMHER-BOUNDARY.md` rule 10); a terminal folder outside the bot's worktrees goes with its path
   and a line asking the bot to check `git status` itself. Nothing moves on disk, the session stays open and omher
   types nothing into it: the bot works with its own tools and approvals. (`apps/omher/src/handover/`)
+- **omher: a terminal in a split hands its folder to a bot too.** A TERMINALS session in a split shows as a cell of
+  the split card, and its right-click menu had every item of a row's menu but Hand to <bot>. A cell's menu now offers
+  it under the same conditions (a folder, and a bot of this computer online) and opens the same card, which sends the
+  same first message through the same thread start as from a row. Nothing new is read or sent.
+  (`apps/omher/src/sessions/SplitLayoutCard.tsx`; `docs/OMHER-BOUNDARY.md` rule 10)
+- **omher: closing a TERMINALS menu or the Hand to <bot> card puts the keyboard back on the row or cell.** After
+  Escape in a TERMINALS row's or split card cell's menu, or Escape, Cancel or Open thread on its Hand to <bot> card,
+  the keyboard landed on the page itself: the menu item that opened the card was gone before the card noted where the
+  keyboard was. It now goes back to the row or cell that opened the menu. If that row or cell is gone (its split made
+  or ended meanwhile), it goes to the session's row or cell as drawn now; with the session closed, to the TERMINALS
+  New terminal button. A press outside the
+  card leaves the keyboard where that press put it. UI only: nothing new is read or sent.
+  (`apps/omher/src/handover/HandoverCard.tsx`, `apps/omher/src/sessions/SessionsSection.tsx`,
+  `apps/omher/src/sessions/SplitLayoutCard.tsx`)
 - **omher's reasoning picker offers every level Hermes accepts, ultra included.** The chat model picker's Reasoning
   control showed none, low, medium, high and xhigh only, so minimal, max and ultra could not be picked. The bridge now
   reads the installed Hermes' own levels (`hermes_constants.VALID_REASONING_EFFORTS`, after "none") and offers them in
@@ -111,6 +155,16 @@ All notable changes will be documented here.
   `user_executor_platform_unsupported`.
   (`src/coding/user_executors.py`, `src/coding/executor_presets.py`, `src/coding/fanout_remote_pr.py`,
   `src/commands/coding.py`; `docs/FANOUT.md` "Your own harness", `docs/FANOUT-EXECUTOR-EVIDENCE.md`)
+- **Two `omh coding executors add` or `remove` at once on Windows no longer refuse each other as `path_escape`.**
+  The home check resolved `routing/executors.toml` itself while the other writer was replacing it. On Windows,
+  `realpath` of a file mid-replace can come back with its `\\?\` extended-length prefix, which never sits under the
+  resolved home, so a legitimate add, or a `list` or dispatch reading at that moment, was refused as `path_escape`.
+  The check now resolves only the `routing` directory, which no writer replaces; the file is refused if it is a
+  symlink, without following it, and writers make that check under the registry lock. A `routing` directory linked
+  outside the home is still `path_escape`; a symlinked registry file is `symlink_refused` (a link pointing outside
+  the home used to report `path_escape`); nothing is written through either. A read that races a write can still
+  report `not_regular_file` for that one read, on every platform; that predates this change and is a follow-up.
+  (`src/coding/user_executors.py`)
 - **A Hermes child dispatch that completed is no longer reported as failed because its scratch home was still in
   use.** Hermes' `chat` starts a detached idle-exit gateway for the dispatch's scratch `HERMES_HOME`. The gateway
   can still write into that home, or hold its log open (Windows then refuses the unlink), after the child exits, and
@@ -177,6 +231,18 @@ All notable changes will be documented here.
   missing, never as healthy. The fix is always Hermes' own command; OMH stops and restarts nothing.
   (`src/maintenance/gateway_health.py`, `src/maintenance/hermes_gateway_formats.py`,
   `src/system/process_listing.py`; `docs/INSTALLATION.md` "Bot Profiles")
+- **`omh doctor` no longer calls a client's idle-exit gateway a stray.** Every `hermes chat` reaches Hermes through
+  a gateway, and in a home with none (a scratch home, such as the child an OMH dispatch or a bench run starts) Hermes
+  starts a detached `gateway run --idle-exit`. When its idle exit is armed, Hermes ends it after
+  `gateway.unmanaged_idle_exit_seconds` (600 s by default) with nothing to do. It is not armed when that home sets 0
+  or Hermes detects a supervisor, and it stays up while an idle check fails or work holds it. Doctor read each one as
+  a stray to find and stop.
+  Because Hermes names such a home `--profile default`, doctor also read it as a second gateway of the default
+  profile. Doctor now says what started it and when Hermes does and does not end it, and still counts it in the
+  fleet line. It raises no finding or action for one until it has run for more than an hour; after that it is
+  reported as a stray that has not exited. The
+  `--json` report gains `idle_exit` and `overdue` per gateway. (`src/maintenance/gateway_health.py` `_unrecorded_line`,
+  `IDLE_EXIT_STALE_SECONDS`, `src/system/process_listing.py` `IDLE_EXIT_FLAG`)
 - **omher 1.1.3.** GitHub across your repositories and accounts, a Claude usage meter that shows numbers, and terminals
   and bridges that recover by themselves.
   - **GitHub:** Tasks gains a "나" scope: your review requests, your pull requests, issues assigned to you and mentions,
@@ -499,6 +565,13 @@ All notable changes will be documented here.
   news everywhere (an accent dot on the row and the folder summary, a slowly breathing accent edge on the cell, "rang"
   in the notification), and the amber warning is kept for waits omher knows: a bot's request to type, a chat's approval
   or question. (`apps/omher/src/sessions/SplitLayoutCard.tsx`) (#3138)
+- **A bot reading an omher terminal's status sees `news` for a ring nobody has seen, as the person does.** The
+  status file (`omh_omher_terminal` `status`) said `waiting` for a session that rang its bell or reported its work
+  done while the person was not looking, though omher itself showed news. It now says `news` (a state the file and the
+  link chip share), and a reported working again turns it back to `working`. The split card's grip test no longer
+  loses its keys to a pane that takes focus a moment late on a slow runner, and the argv-cache test waits for macOS's
+  `/bin/sh` to exec its shell before counting. (`apps/omher/src-tauri/src/term_share.rs`,
+  `apps/omher/src/chat/parts/TermLinkChip.tsx`) (#3167)
 - **omher: an Apps page connects a bot to Notion, Linear, Jira and the rest of Hermes' MCP catalog.** The plug in
   the sidebar's foot opens one bot's apps: every entry of Hermes' MCP catalog and its integration skills (Google
   Workspace, Obsidian, Apple Notes and Reminders, Microsoft Office and others), grouped as work apps, ops and data,

@@ -142,27 +142,6 @@ const AWAY_SEED = {
   friren: [{ id: "telegram-reading-list", source: "telegram", title: "Reading list", started: 6 * 3600, last: 4 * 3600, count: 5, running: false }],
   default: [],
 };
-const PEEK_SEED = {
-  "slack-og-dev-502": [
-    ["user", "minji", "502s are back on /v1/responses since 14:10", 9],
-    ["assistant", "", "Reading gateway logs. Upstream resets look like keep-alive expiry.", 8],
-    ["user", "jun", "can we raise the pool idle timeout?", 6],
-    ["assistant", "", "Trying that now, rolling to one replica first.", 4],
-    ["user", "minji", "ok, watching the error rate", 2],
-  ],
-  "discord-cron-openmaus": [
-    ["assistant", "", "Briefing: OpenMausBot ships weekly, 3 open issues, nothing blocking.", 120],
-    ["user", "khope", "good, thanks", 118],
-  ],
-  "discord-omh-2657": [
-    ["user", "rlaope", "PR #2657 is ready for review", 1600],
-    ["assistant", "", "Reviewed. One blocking comment on the retry loop, otherwise fine.", 1590],
-    ["user", "rlaope", "fixed, please re-check", 1570],
-    ["assistant", "", "Approved.", 1560],
-  ],
-  "telegram-reading-list": [["user", "khope", "add the Tauri updater post", 240], ["assistant", "", "Added.", 239]],
-};
-
 const ROUTINE_SEED = {
   kami: [
     { id: "cron-repo-watch", name: "Repo watch", schedule: "Daily 09:00", next: 15 * 3600, last: -9 * 3600, status: "ok", enabled: true },
@@ -329,7 +308,7 @@ const PANEL_TREES = {
   friren: [],
   default: [],
   // a bot over SSH lists folders on its own computer
-  "mac-mini:mini": [{ path: "/home/sionic/build", branch: "main", head: "b1c2d3e4f", repo: "build", dirty: 1, ago: 60 }],
+  "mac-mini:mini": [{ path: "/home/demo/build", branch: "main", head: "b1c2d3e4f", repo: "build", dirty: 1, ago: 60 }],
 };
 // worktrees removed on disk since the list was read: still listed, but panel.diff fails for them with the code
 // mock.treeGone names (`not_found` once the bridge's scan no longer lists it, `unavailable` inside that scan's 10 s)
@@ -1314,7 +1293,7 @@ const OPS = {
     if (typeof p.url !== "string" || !PEER_URL.test(p.url)) throw new OpError("bad_request", "url must be the forwarded loopback address");
     return {
       version: "0.2.8",
-      hermes: { home: "/home/sionic/.hermes", version: "0.23.1" },
+      hermes: { home: "/home/demo/.hermes", version: "0.23.1" },
       bots: (peerBots ?? PEER_BOTS_SEED).map(({ name, display_name, model, provider, status }) => ({ name, display_name, model, provider, status })),
     };
   },
@@ -1579,20 +1558,6 @@ const OPS = {
     return {};
   },
   "elsewhere.list": (p) => ({ sessions: awayFor(needBot(p).name) }),
-  "elsewhere.peek": (p) => {
-    const b = needBot(p);
-    const sid = needStr(p, "session_id");
-    const away = awayFor(b.name).find((a) => a.id === sid);
-    if (!away) throw new OpError("not_found", `no session ${sid} for ${b.name}`);
-    const limit = Number.isInteger(p.limit) && p.limit > 0 ? p.limit : 4;
-    const rows = (PEEK_SEED[sid] ?? []).map(([role, author, text, ago]) => ({
-      role,
-      ...(author ? { author } : {}),
-      text: text.slice(0, 400),
-      ts: now() - ago,
-    }));
-    return { messages: rows.slice(-limit), total: Math.max(away.message_count, rows.length) };
-  },
   "bots.rename": (p) => {
     const b = needBot(p);
     if (typeof p.name !== "string") throw new OpError("bad_request", "name must be text");
@@ -2578,7 +2543,7 @@ function scriptRecorded(bot, text) {
 // to); omher turns it into the Connect over SSH chip. Nothing connects here.
 function scriptPeer(bot, text) {
   const ko = hangul.test(text);
-  const block = '```omher-peer\n{"host": "sionic@10.1.145.204", "label": "Mac mini"}\n```';
+  const block = '```omher-peer\n{"host": "demo@host.example", "label": "Mac mini"}\n```';
   const answer = ko
     ? `맥미니를 SSH로 붙일게요. 아래 버튼을 누르면 omher가 먼저 확인하고, 연결은 직접 눌러야 돼요.\n\n${block}`
     : `I'll connect the Mac mini over SSH. Press the button below: omher checks it first, and nothing connects until you press Connect.\n\n${block}`;

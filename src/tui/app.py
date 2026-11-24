@@ -254,7 +254,7 @@ from .panels import (
 from .dag_pager import DagPager
 from .background import BackgroundProcess, askable, finished_forms, report_prompt, running_forms, tool_call
 from .wait_kinds import Wait, classify, count_words, dag_wait, lane_wait, plain_counts, watching
-from .clipboard import COPY_OSC52, COPY_PBCOPY, COPY_TOO_LARGE, HERDR_TOO_LARGE, SSH_VARIABLES, copy_route, herdr_drops, pbcopy, tmux_client_over_ssh
+from .clipboard import COPY_OSC52, COPY_PBCOPY, COPY_TOO_LARGE, HERDR_TOO_LARGE, SSH_VARIABLES, clipboard_text, copy_route, herdr_drops, pbcopy, tmux_client_over_ssh
 from .prompts import CLOSED_CHOICES, FRAMED_FOOTER_MIN_ROWS, Answer, ImmediateAnswer, PromptSlot, TypeIt, open_request
 from .faults import FaultLog
 from .screen import (
@@ -1268,6 +1268,8 @@ SESSION_ID_SHAPE = re.compile(r"\d{8}_\d{6}_[0-9a-f]+|local-[0-9a-f]{16,}")
 PATH_COMPLETE_DEBOUNCE_SECONDS = 0.12
 # An image Hermes queued for a session the TUI has since left: the gateway holds it there, so no chip shows here.
 ATTACH_LEFT_NOTICE = "Hermes queued {name} in the session you left, so it is not attached here."
+# Ctrl+V found no image while the person had already sent: what they sent goes unchanged, the clipboard's text waits
+CLIPBOARD_TEXT_HELD_NOTICE = "No image on the clipboard: its text is in the composer, not in what you sent."
 # The most bytes of one image the TUI keeps for its token: what the gateway child stages at most (`gateway_attach`).
 IMAGE_KEEP_BYTES = 20 * 1024 * 1024
 # How long the echo of a prompt sent with images waits out of scrollback for their previews (`App._request_preview`)
@@ -2306,6 +2308,7 @@ class App(ModesMixin, AgentViewMixin):
         git: GitWatcher | None = None,
         fetch_latest: Callable[[], str] = fetch_latest,
         contain_faults: bool = False,
+        read_clipboard_text: Callable[[], str | None] | None = None,
     ) -> None:
         self.terminal = terminal
         # The launched TUI's (`main`, `_run`): a part of the frame that raises is one warn row (`_drawn`), and while `run`
@@ -2562,6 +2565,9 @@ class App(ModesMixin, AgentViewMixin):
         self.platform = sys.platform  # where `copy_route` looks for `pbcopy`
         self.pbcopy: Callable[[str], bool] = partial(pbcopy, environ=environ)
         self.tmux_over_ssh: Callable[[Mapping[str, str]], bool] = tmux_client_over_ssh  # `copy_route`'s tmux question
+        # The clipboard's text a Ctrl+V pastes when Hermes found no image there (`clipboard_text`); tests pass their own
+        self.read_clipboard_text: Callable[[], str | None] = read_clipboard_text or (lambda: clipboard_text(
+            self.environ, self.platform, lambda env: self.tmux_over_ssh(env)))
         self.question_view: Pager | None = None  # the pager Ctrl+O opened over the open question, while it is open
         # What reads the bot board (Ctrl+S, `/bots`) off this thread: made when it first opens, kept for the session
         # and paused while the board is closed, so a read stuck on a stalled file system never adds a thread.
@@ -5763,7 +5769,7 @@ class App(ModesMixin, AgentViewMixin):
         if event.name == CHAR and event.ctrl and not event.alt and event.char == "v":
             self.composer._clear_visual()
             self.composer._invalidate_reselection()
-            self._paste("")
+            self._paste("", text_too=True)
             return True
         return False
 
@@ -8792,17 +8798,37 @@ class App(ModesMixin, AgentViewMixin):
                 lambda error: self._attach_failed("/image", error),
             )
 
-    def _paste(self, arg: str) -> None:
+    def _paste(self, arg: str, text_too: bool = False) -> None:
+        """`/paste`, and Ctrl+V (`text_too`): the clipboard's image as a token; for Ctrl+V with no image there, the
+        clipboard's text as a paste, as a terminal that pastes on Ctrl+V itself would have (`clipboard_text`)."""
         if not self.sid:
+            if text_too and self._paste_clipboard_text():
+                return
             self.transcript.add_notice(NO_SESSION_NOTICE, NOTICE_WARN)
             return
         sid = self.sid
         self._intake(
             "clipboard.paste",
             {"session_id": sid},
-            lambda result: self._on_clipboard_pasted(sid, result),
-            lambda error: self._attach_failed("/paste", error),
+            lambda result: self._on_clipboard_pasted(sid, result, text_too),
+            # Hermes could not look for an image (its clipboard helper missing): Ctrl+V still pastes the text
+            lambda error: (text_too and sid == self.sid and self._paste_clipboard_text()) or self._attach_failed("/paste", error),
         )
+
+    def _paste_clipboard_text(self) -> bool:
+        """The clipboard's text into the draft as a paste; False when there is none. A submit the person sent while the
+        Ctrl+V was out goes as it was: text they never saw is not added to it, it waits in the draft, and a notice says
+        so."""
+        text = self.read_clipboard_text()
+        if not text:
+            return False
+        held = self.intake_answering.held if self.intake_answering is not None else None
+        if held is not None and not held.cancelled and held in self.held_submits:
+            self._draft().handle(Paste(text))
+            self.transcript.add_notice(CLIPBOARD_TEXT_HELD_NOTICE)
+            return True
+        self._paste_back(text)
+        return True
 
     def _take_attachment(self, sid: str, attachment: Attachment) -> None:
         """An image Hermes staged for `sid` becomes the TUI's: its bytes are read from the path Hermes named, Hermes
@@ -8915,9 +8941,11 @@ class App(ModesMixin, AgentViewMixin):
         if remainder:  # `/image shot.png what is this?` keeps the question for the person to send
             self._into_intake_draft(remainder)
 
-    def _on_clipboard_pasted(self, sid: str, result: dict[str, Any]) -> None:
+    def _on_clipboard_pasted(self, sid: str, result: dict[str, Any], text_too: bool = False) -> None:
         attachment = attachment_from(result) if result.get("attached") is True else None
         if attachment is None:
+            if text_too and sid == self.sid and self._paste_clipboard_text():
+                return
             self.transcript.add_notice(as_text(result.get("message")) or "No image found in the clipboard.")
         else:
             self._take_attachment(sid, attachment)

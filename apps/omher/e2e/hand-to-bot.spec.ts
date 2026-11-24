@@ -10,8 +10,14 @@
 // 5. no Hand where nothing may be sent: a bot over SSH (its rows are folders on another computer), and no bot of this
 //    computer online (no menu, and no read);
 // 6. one bot of this computer online: the item names it and the card has no picker; with several, Escape in the bot
-//    list closes only the list; the keyboard's context-menu key opens a Worktrees row's menu at the row.
+//    list closes only the list; the keyboard's context-menu key opens a Worktrees row's menu at the row;
+// 7. a terminal in a split (a cell of the split card) hands its folder as a row does: the same item, the same reads,
+//    the same thread and message; reached from the keyboard; no Hand with no bot of this computer online;
+// 8. focus order (WCAG 2.4.3), for a row and a cell alike: the menu opened from the keyboard and closed with Escape,
+//    and the Hand card closed with Escape, Cancel or Open thread, give the keyboard back to the row's or cell's face;
+//    a press outside the card leaves it where that press put it.
 import { expect, test, type Page } from "@playwright/test";
+import { dragRowOnto } from "./split-drag-helpers";
 
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 
@@ -230,7 +236,7 @@ test("no Hand on a Worktrees row of a bot over SSH", async ({ page }) => {
   await page.getByRole("button", { name: "Add a bot" }).click();
   await page.getByTestId("addbot-ssh").click();
   const peer = page.getByTestId("peer-card");
-  await peer.getByTestId("peer-host").fill("sionic@10.1.145.204");
+  await peer.getByTestId("peer-host").fill("demo@host.example");
   await peer.getByTestId("peer-label").fill("Mac mini");
   await peer.getByTestId("peer-check").click();
   await expect(peer.getByTestId("peer-found")).toBeVisible();
@@ -312,3 +318,242 @@ test("the context-menu key opens a Worktrees row's menu at the row, not in the c
   expect(Math.abs(m.y - (r.y + r.height))).toBeLessThan(8);
   expect(m.x).toBeGreaterThan(r.x);
 });
+
+const cell = (page: Page, id: string) => page.locator(`[data-testid="split-cell"][data-session="${id}"]`);
+
+/** Sessions `a` and `b` in one split: `a` opened, `b`'s row dragged onto its right side. */
+async function split(page: Page, a: string, b: string) {
+  await page.getByTestId(`session-${a}`).locator(".ss-open").click();
+  await dragRowOnto(page, b, a, "right");
+  await expect(page.locator(`[data-testid="split-pane"][data-session="${b}"]`)).toHaveAttribute("data-focused", "true");
+  await expect(page.getByTestId("split-cell")).toHaveCount(2);
+}
+
+/** The bridge calls made since `from` of the ops a hand-over can make, `thread.create`'s fresh key and `chat.send`'s
+ *  thread left out (each hand-over makes its own thread). */
+const handCalls = async (from: number) =>
+  (await calls())
+    .slice(from)
+    .filter((c) => c.op.startsWith("panel.") || c.op === "thread.create" || c.op === "chat.send")
+    .map((c) => ({ op: c.op, params: c.op === "chat.send" ? { ...c.params, session: "<thread>" } : c.op === "thread.create" ? { ...c.params, key: "<key>" } : c.params }));
+
+test("a terminal in a split hands its folder from its cell exactly as its row does", async ({ page }) => {
+  await open(page, "/w/gateway-keepalive");
+  const a = await newShell(page);
+  const b = await newShell(page);
+  const c = await newShell(page);
+  await split(page, a, b);
+  const before = await typed(page);
+  // c is a row: hand it over first
+  let from = (await calls()).length;
+  await page.getByTestId(`session-${c}`).click({ button: "right" });
+  await page.getByTestId("session-row-menu").getByTestId("session-hand").click();
+  await expect(page.getByTestId("handover-preview")).toHaveText([...KEEPALIVE, CLOSING].join("\n\n"));
+  await page.getByTestId("handover-goal").fill("finish the keepalive fix");
+  await page.getByTestId("handover-send").click();
+  await expect(page.getByTestId("handover")).toHaveCount(0);
+  await expect.poll(async () => (await calls("chat.send")).length).toBe(1);
+  const fromRow = await handCalls(from);
+  // a's cell: the row's menu, item for item, Hand included
+  from = (await calls()).length;
+  await cell(page, a).click({ button: "right" });
+  const menu = page.getByTestId("session-row-menu");
+  await expect(menu.getByRole("menuitem")).toHaveText(["Rename", /^Show in (Finder|Explorer|file manager)$/, "Open in Terminal", "Copy link", "Hand to a bot…", "New terminal here", "Close session"]);
+  await menu.getByTestId("session-hand").click();
+  const card = page.getByTestId("handover");
+  await expect(card).toBeVisible();
+  await expect(page.getByTestId("handover-goal")).toBeFocused();
+  await expect(card.getByTestId("handover-preview")).toHaveText([...KEEPALIVE, CLOSING].join("\n\n"));
+  // a press or a right click inside the card is the card's: no cell menu, no drag, and no cell takes the focus
+  const focusBefore = await page.getByTestId("split-cell").evaluateAll((cs) => cs.map((c) => c.getAttribute("data-focused")));
+  await card.getByTestId("handover-preview").click({ button: "right" });
+  await card.getByTestId("handover-preview").click();
+  await expect(menu).toHaveCount(0);
+  await expect(page.getByTestId("split-drop")).toHaveCount(0);
+  expect(await page.getByTestId("split-cell").evaluateAll((cs) => cs.map((c) => c.getAttribute("data-focused")))).toEqual(focusBefore);
+  await page.getByTestId("handover-goal").fill("finish the keepalive fix");
+  await page.getByTestId("handover-send").click();
+  await expect(card).toHaveCount(0);
+  await expect.poll(async () => (await calls("chat.send")).length).toBe(2);
+  const fromCell = await handCalls(from);
+  // the same thread and first message; the same diff (the worktree list may come from the 10 s cache)
+  const writes = (l: typeof fromRow) => l.filter((x) => !x.op.startsWith("panel."));
+  expect(writes(fromCell)).toEqual(writes(fromRow));
+  expect(writes(fromCell).map((x) => x.op)).toEqual(["thread.create", "chat.send"]);
+  expect(fromCell.find((x) => x.op === "chat.send")!.params.text).toBe([...KEEPALIVE, "Goal: finish the keepalive fix", CLOSING].join("\n\n"));
+  const reads = (l: typeof fromRow) => l.filter((x) => x.op.startsWith("panel."));
+  expect(reads(fromCell).filter((x) => x.op === "panel.diff")).toEqual(reads(fromRow).filter((x) => x.op === "panel.diff"));
+  for (const x of reads(fromCell)) expect(["panel.worktrees", "panel.diff"]).toContain(x.op);
+  // nothing typed into a terminal; the split and its sessions stay
+  expect(await typed(page)).toBe(before);
+  await expect(page.getByTestId("split-cell")).toHaveCount(2);
+  await expect(cell(page, a)).toBeVisible();
+});
+
+test("each cell of a split of two folders hands its own folder, focused or not", async ({ page }) => {
+  await open(page, "/w/gateway-keepalive");
+  const a = await newShell(page);
+  await page.evaluate(() => ((window as unknown as { __omherPickFolder: string }).__omherPickFolder = "/home/you/code/web-app"));
+  const b = await newShell(page);
+  await split(page, a, b);
+  // a (the first cell) takes the focus: b is now the second cell and not the focused one
+  await cell(page, a).locator(".sc-open").click();
+  await expect(cell(page, a)).toHaveAttribute("data-focused", "true");
+  await expect(cell(page, b)).toHaveAttribute("data-focused", "false");
+  const card = page.getByTestId("handover");
+  const WEB_APP = [
+    "Handover from omher: pick up the work in this folder.",
+    "- Folder: `/home/you/code/web-app`\n- Git: omher did not read this folder's status; check it with `git status` and `git diff --stat` there.",
+  ];
+  // b's cell: its own folder, outside the bot's worktrees, so no git facts and no diff read
+  let from = (await calls()).length;
+  await cell(page, b).click({ button: "right" });
+  await page.getByTestId("session-row-menu").getByTestId("session-hand").click();
+  await expect(card.getByTestId("handover-preview")).toHaveText([...WEB_APP, CLOSING].join("\n\n"));
+  await page.getByTestId("handover-send").click();
+  await expect(card).toHaveCount(0);
+  await expect.poll(async () => (await calls("chat.send")).length).toBe(1);
+  let made = await handCalls(from);
+  expect(made.filter((x) => x.op === "panel.diff")).toEqual([]);
+  expect(made.find((x) => x.op === "chat.send")!.params.text).toBe([...WEB_APP, CLOSING].join("\n\n"));
+  expect(made.find((x) => x.op === "thread.create")!.params.title).not.toContain("gateway-keepalive");
+  // handing b over did not focus b (Open thread opened the new thread instead)
+  await expect(cell(page, b)).toHaveAttribute("data-focused", "false");
+  // a's cell (the first, the one that held the focus): its own folder, with the git facts of the bot's worktree
+  // that holds it
+  from = (await calls()).length;
+  await cell(page, a).click({ button: "right" });
+  await page.getByTestId("session-row-menu").getByTestId("session-hand").click();
+  await expect(card.getByTestId("handover-preview")).toHaveText([...KEEPALIVE, CLOSING].join("\n\n"));
+  await page.getByTestId("handover-send").click();
+  await expect(card).toHaveCount(0);
+  await expect.poll(async () => (await calls("chat.send")).length).toBe(2);
+  made = await handCalls(from);
+  expect(made.find((x) => x.op === "thread.create")!.params.title).toBe("gateway-keepalive (fix/keepalive)");
+  expect(made.find((x) => x.op === "chat.send")!.params.text).toBe([...KEEPALIVE, CLOSING].join("\n\n"));
+  const diffs = made.filter((y) => y.op === "panel.diff");
+  expect(diffs.length).toBeGreaterThan(0);
+  for (const x of diffs) expect(x.params.path).toBe("/w/gateway-keepalive");
+});
+
+test("a cell's Hand item is reached from the keyboard and named for assistive technology", async ({ page }) => {
+  await open(page, "/w/gateway-keepalive");
+  const a = await newShell(page);
+  const b = await newShell(page);
+  await split(page, a, b);
+  // the keyboard's context-menu key on the cell
+  const face = cell(page, a).locator(".sc-open");
+  await face.focus();
+  await face.dispatchEvent("contextmenu", { clientX: 0, clientY: 0, button: 0 });
+  const menu = page.getByRole("menu", { name: /actions/i });
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole("menuitem", { name: "Rename" })).toBeFocused();
+  await page.keyboard.press("End");
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("ArrowUp");
+  const hand = menu.getByRole("menuitem", { name: "Hand to a bot…" });
+  await expect(hand).toBeFocused();
+  await page.keyboard.press("Enter");
+  const card = page.getByRole("dialog", { name: "Hand to Kami" });
+  await expect(card).toBeVisible();
+  await expect(page.getByTestId("handover-goal")).toBeFocused();
+  await expect(card.getByTestId("handover-preview")).toContainText("- Folder: `/w/gateway-keepalive`");
+  await page.keyboard.press("Escape");
+  await expect(card).toHaveCount(0);
+  expect(await calls("thread.create")).toHaveLength(0);
+  expect(await calls("chat.send")).toHaveLength(0);
+});
+
+test("with no bot of this computer online, a cell offers no Hand and nothing is read", async ({ page }) => {
+  await open(page, "/w/gateway-keepalive");
+  const a = await newShell(page);
+  const b = await newShell(page);
+  await split(page, a, b);
+  for (const bot of ["kami", "friren", "default", "omh-tui"]) await mock("mock.botStatus", { bot, status: "offline" });
+  await expect(page.getByTestId("bot-kami").getByTestId("bot-sub")).toHaveText("Not connected");
+  await cell(page, a).click({ button: "right" });
+  const menu = page.getByTestId("session-row-menu");
+  await expect(menu.getByRole("menuitem")).toHaveText(["Rename", /^Show in (Finder|Explorer|file manager)$/, "Open in Terminal", "Copy link", "New terminal here", "Close session"]);
+  await expect(menu.getByTestId("session-hand")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+  expect(await calls("panel.diff")).toHaveLength(0);
+  expect(await calls("panel.worktrees")).toHaveLength(0);
+});
+
+/** Whether `face` holds the keyboard: document.activeElement itself, not a class or an attribute. */
+const holds = (face: ReturnType<Page["locator"]>) => face.evaluate((el) => el === document.activeElement);
+
+/** The TERMINALS row's face, or the split card cell's, of session `id`. */
+const faceOf = (page: Page, kind: "row" | "cell", id: string) => (kind === "row" ? page.getByTestId(`session-${id}`).locator(".ss-open") : cell(page, id).locator(".sc-open"));
+
+/** A shell in /w/gateway-keepalive whose `kind` face is drawn: a row, or a cell of a split with a second shell. */
+async function faceFor(page: Page, kind: "row" | "cell") {
+  await open(page, "/w/gateway-keepalive");
+  const a = await newShell(page);
+  if (kind === "cell") await split(page, a, await newShell(page));
+  return faceOf(page, kind, a);
+}
+
+/** The menu opened from the keyboard on `face` (the context-menu key), its Hand item chosen with the arrows and Enter:
+ *  the card is open with the goal field holding the keyboard. */
+async function handFromKeys(page: Page, face: ReturnType<Page["locator"]>) {
+  await face.focus();
+  await face.dispatchEvent("contextmenu", { clientX: 0, clientY: 0, button: 0 });
+  const menu = page.getByRole("menu", { name: /actions/i });
+  await expect(menu.getByRole("menuitem", { name: "Rename" })).toBeFocused();
+  await page.keyboard.press("End");
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("ArrowUp");
+  await expect(menu.getByRole("menuitem", { name: "Hand to a bot…" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("handover")).toBeVisible();
+  await expect(page.getByTestId("handover-goal")).toBeFocused();
+  await expect(menu).toHaveCount(0);
+}
+
+for (const kind of ["row", "cell"] as const) {
+  test(`a ${kind}'s menu closed with Escape gives the keyboard back to the ${kind}`, async ({ page }) => {
+    const face = await faceFor(page, kind);
+    await face.focus();
+    await face.dispatchEvent("contextmenu", { clientX: 0, clientY: 0, button: 0 });
+    const menu = page.getByRole("menu", { name: /actions/i });
+    await expect(menu.getByRole("menuitem", { name: "Rename" })).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Escape");
+    await expect(menu).toHaveCount(0);
+    await expect.poll(() => holds(face)).toBe(true);
+  });
+
+  test(`a ${kind}'s Hand card gives the keyboard back to the ${kind} on Escape, Cancel and Open thread, not after a press outside`, async ({ page }) => {
+    const face = await faceFor(page, kind);
+    const card = page.getByTestId("handover");
+    // Escape
+    await handFromKeys(page, face);
+    await page.keyboard.press("Escape");
+    await expect(card).toHaveCount(0);
+    await expect.poll(() => holds(face)).toBe(true);
+    // Cancel, reached with the keyboard
+    await handFromKeys(page, face);
+    await page.getByTestId("handover-cancel").focus();
+    await page.keyboard.press("Enter");
+    await expect(card).toHaveCount(0);
+    await expect.poll(() => holds(face)).toBe(true);
+    expect(await calls("thread.create")).toHaveLength(0);
+    // a press outside: on the terminal, which takes the keyboard; the card does not take it back for the face
+    await handFromKeys(page, face);
+    await page.getByTestId("terminal").first().click();
+    await expect(card).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => document.activeElement?.classList.contains("xterm-helper-textarea") ?? false)).toBe(true);
+    await page.waitForTimeout(200);
+    expect(await holds(face)).toBe(false);
+    expect(await page.evaluate(() => document.activeElement?.classList.contains("xterm-helper-textarea") ?? false)).toBe(true);
+    // Open thread (Enter in the goal field): the thread starts and the keyboard is back on the face
+    await handFromKeys(page, face);
+    await expect(card.getByTestId("handover-preview")).toContainText("- Folder: `/w/gateway-keepalive`");
+    await page.keyboard.press("Enter");
+    await expect(card).toHaveCount(0);
+    await expect.poll(async () => (await calls("chat.send")).length).toBe(1);
+    await expect.poll(() => holds(face)).toBe(true);
+  });
+}

@@ -2433,6 +2433,382 @@
    "class": "push_bot_branch",
    "verdict": "allowed",
    "why_allowed": "grant-covered, but a cd into another checkout is not followed (stated residual)"
+  },
+  {
+   "command": "git commit -m 'fix\\n\\nbody' && git push origin HEAD:refs/heads/bot/x",
+   "class": "push_bot_branch",
+   "verdict": "allowed",
+   "why_allowed": "grant-covered: allowed with the grant on, refused while it is off"
+  },
+  {
+   "command": "git log --format='%h\\t%s'",
+   "class": "local",
+   "verdict": "allowed",
+   "why_allowed": "local: a backslash inside an argument is read as Git Bash reads it"
+  },
+  {
+   "command": "grep -E '\\bfoo\\b' notes.txt && git push origin HEAD:refs/heads/bot/x",
+   "class": "push_bot_branch",
+   "verdict": "allowed",
+   "why_allowed": "grant-covered: allowed with the grant on, refused while it is off"
+  },
+  {
+   "command": "C:\\Program Files\\Git\\cmd\\git.exe push -f origin HEAD:main",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "\"C:\\Program Files\\Git\\cmd\\git.exe\" push origin HEAD:refs/heads/bot/x",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "& 'C:\\Git\\cmd\\git.exe' push origin HEAD:refs/heads/bot/x",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "FOO=1 C:\\Git\\cmd\\gh.exe pr merge 42",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "g^it push -f origin HEAD:main",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "%G% push origin HEAD:main",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "cmd /c \"git push -f origin HEAD:main\"",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "git push origin HEAD:refs/heads/bot/%X%",
+   "class": "destination_not_named",
+   "verdict": "refused"
+  },
+  {
+   "command": "powershell.exe -EncodedCommand ZwBoACAAcAByACAAbQBlAHIAZwBlACAANAAyAA==",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "powershell -enc ZwBoACAAcAByACAAbQBlAHIAZwBlACAANAAyAA==",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "pwsh -ec ZwBoACAAcAByACAAbQBlAHIAZwBlACAANAAyAA==",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "cmd /c git push -f origin HEAD:main",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "powershell -NoProfile -File build.ps1",
+   "class": "local",
+   "verdict": "allowed",
+   "why_allowed": "residual: a plain script file, which the gate does not read"
+  },
+  {
+   "command": "cmd /c build.bat",
+   "class": "local",
+   "verdict": "allowed",
+   "why_allowed": "residual: a plain script file, which the gate does not read"
+  },
+  {
+   "command": "ln -s .git g",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "mklink /J g .git",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "cp evil.sh .git/hooks/pre-push",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "timeout 5 C:\\Git\\git.exe push origin HEAD:refs/heads/bot/x",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "sudo -u x C:\\Git\\gh.exe pr merge 1",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env -u A C:\\Git\\git.exe push origin HEAD:refs/heads/bot/x",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "New-Item -ItemType Junction -Path g -Target .git",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "ln -s ../repo/.git/hooks h",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "cat .git/config",
+   "class": "local",
+   "verdict": "allowed",
+   "why_allowed": "local: a plain read of a protected path is not a write"
+  },
+  {
+   "command": "grep -n url .git/config",
+   "class": "local",
+   "verdict": "allowed",
+   "why_allowed": "local: a plain read of a protected path is not a write"
+  },
+  {
+   "command": "head -5 ~/.gitconfig",
+   "class": "local",
+   "verdict": "allowed",
+   "why_allowed": "local: a plain read of a protected path is not a write"
+  },
+  {
+   "command": "cat x > .git/hooks/pre-push",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "tee .git/hooks/pre-push",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "find .git -delete",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "LESSOPEN='|gh pr merge 42 %s' less README.md",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "LESSOPEN=\"|git push -f origin HEAD:main %s\" less README.md",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env LESSOPEN='|gh pr merge 42' less README.md",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "LESSOPEN='|gh pr merge 42 %s' more README.md",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "less '+!gh pr merge 42' README.md",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "tree -o .git/hooks/pre-push",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "rg --pre ./x url .git/config",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "LESSCLOSE='|gh pr merge 42' cat .git/config",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "PAGER='gh pr merge 42' cat .git/config",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "GIT_PAGER=x cat .git/config",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env LESS=x cat .git/config",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "export LESSOPEN='|gh pr merge 42'; cat README.md",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "less .git/config",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "find .git -name config",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "wc -l .git/config",
+   "class": "local",
+   "verdict": "allowed",
+   "why_allowed": "local: a plain read of a protected path is not a write"
+  },
+  {
+   "command": "tail .gitmodules",
+   "class": "local",
+   "verdict": "allowed",
+   "why_allowed": "local: a plain read of a protected path is not a write"
+  },
+  {
+   "command": "stat .git/hooks/pre-push",
+   "class": "local",
+   "verdict": "allowed",
+   "why_allowed": "local: a plain read of a protected path is not a write"
+  },
+  {
+   "command": "EDITOR='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env EDITOR='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "VISUAL='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env VISUAL='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "PAGER='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env PAGER='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "MANPAGER='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env MANPAGER='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "LESS='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env LESS='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "LESSOPEN='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env LESSOPEN='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "LESSCLOSE='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env LESSCLOSE='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "SSH_ASKPASS='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env SSH_ASKPASS='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "BROWSER='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env BROWSER='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "GIT_SEQUENCE_EDITOR='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env GIT_SEQUENCE_EDITOR='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "GIT_ASKPASS='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "env GIT_ASKPASS='gh pr merge 42' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "export EDITOR='gh pr merge 42'; git commit -m x",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "VISUAL='git push -f origin HEAD:main' git commit",
+   "class": "unclassified",
+   "verdict": "refused"
+  },
+  {
+   "command": "EDITOR=x git rebase -i HEAD~2",
+   "class": "unclassified",
+   "verdict": "refused"
   }
  ]
 }

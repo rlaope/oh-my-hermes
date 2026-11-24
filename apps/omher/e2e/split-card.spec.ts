@@ -1,6 +1,6 @@
 // The TERMINALS split card: every split is one card on top of the TERMINALS list (no search typed), its cells at the
 // panes' real places with each pane's CLI mark, title and last line; the members are not rows in their folders again.
-// A cell click focuses that pane, a right-click opens the row menu, output makes the cell's edge orbit (still under
+// A cell click focuses that pane, a right-click opens the row menu (Hand to <bot> included), output makes the cell's edge orbit (still under
 // reduced motion), a bell on a cell not in view is quiet news while a bot's request to type makes it wait, the grip sets the card's height (kept after a restart,
 // double-click goes back), a search draws rows instead, and a 1+3 split's tall cell stacks its text.
 import { expect, test, type Page } from "@playwright/test";
@@ -80,9 +80,9 @@ test("a right-click on a cell opens the row menu and Rename renames that session
   await cell(page, a).click({ button: "right" });
   const menu = page.getByTestId("session-row-menu");
   await expect(menu).toBeVisible();
-  // the TERMINALS row menu, item for item
-  await expect(menu.getByRole("menuitem")).toHaveCount(6);
-  for (const id of ["session-rename", "session-reveal", "session-system-terminal", "session-copy-link", "session-new-here", "session-menu-close"]) await expect(menu.getByTestId(id)).toHaveCount(1);
+  // the TERMINALS row menu, item for item (Hand to <bot> too: a bot of this computer is online; e2e/hand-to-bot.spec.ts)
+  await expect(menu.getByRole("menuitem")).toHaveCount(7);
+  for (const id of ["session-rename", "session-reveal", "session-system-terminal", "session-copy-link", "session-hand", "session-new-here", "session-menu-close"]) await expect(menu.getByTestId(id)).toHaveCount(1);
   await page.getByTestId("session-rename").click();
   const input = cell(page, a).getByTestId("session-rename-input");
   await expect(input).toBeFocused();
@@ -150,6 +150,8 @@ test("the grip sets the card's height, kept after a restart; a double-click goes
   await openApp(page);
   const [a, b] = await sessions(page, ["/w/a", "/w/b"]);
   await splitWith(page, a, b);
+  // keys go through the locator (it focuses the grip before each press): on a slow runner the pane a split just made
+  // takes focus a moment later, and a bare keyboard press after grip.focus() would land in that pane
   const grip = page.getByTestId("split-card-grip");
   const h0 = await mapH(page);
   expect(h0).toBe(62);
@@ -164,7 +166,7 @@ test("the grip sets the card's height, kept after a restart; a double-click goes
   await expect.poll(() => page.evaluate(() => localStorage.getItem("omher.splits"))).toContain('"mapH":102');
   // ArrowUp moves it 16 px
   await grip.focus();
-  await page.keyboard.press("ArrowUp");
+  await grip.press("ArrowUp");
   await expect(grip).toHaveAttribute("aria-valuenow", "86");
   // a restart keeps it
   await page.evaluate(() => sessionStorage.setItem("__kept", "1"));
@@ -223,13 +225,10 @@ test("the grip tells assistive technology its real range, and its value follows 
   await expect(grip).toHaveAttribute("aria-valuemax", "240");
   await grip.focus();
   // 62 + 3 × 16 = 110, above the 0–100 a range-less separator falls back to
-  for (let i = 0; i < 3; i++) await page.keyboard.press("ArrowDown");
+  for (let i = 0; i < 3; i++) await grip.press("ArrowDown");
   await expect(grip).toHaveAttribute("aria-valuenow", "110");
   expect(await gripAx(page)).toEqual({ now: 110, min: 46, max: 240 });
-  // reading the accessibility tree over CDP may take focus off the page on a slow runner: keys go to the grip again
-  await grip.focus();
-  await expect(grip).toBeFocused();
-  for (let i = 0; i < 9; i++) await page.keyboard.press("ArrowDown");
+  for (let i = 0; i < 9; i++) await grip.press("ArrowDown");
   await expect(grip).toHaveAttribute("aria-valuenow", "240");
   expect((await gripAx(page)).now).toBe(240);
 });
@@ -265,8 +264,8 @@ test("a card keeps its height when a pane moves within its split and when a clos
   await splitWith(page, a, b);
   const grip = page.getByTestId("split-card-grip");
   await grip.focus();
-  await page.keyboard.press("ArrowDown");
-  await page.keyboard.press("ArrowDown");
+  await grip.press("ArrowDown");
+  await grip.press("ArrowDown");
   await expect(grip).toHaveAttribute("aria-valuenow", "94");
   // b moved below a: still one split of a and b, still 94
   await dragRowOnto(page, b, a, "down");
@@ -275,7 +274,7 @@ test("a card keeps its height when a pane moves within its split and when a clos
   await expect(grip).toHaveAttribute("aria-valuenow", "94");
   // close b (the split ends while the close can be undone), then Undo: the card is back at its height
   await grip.focus();
-  await page.keyboard.press("ArrowDown");
+  await grip.press("ArrowDown");
   await expect(grip).toHaveAttribute("aria-valuenow", "110");
   await closeFromSidebar(page, b);
   await expect(card(page)).toHaveCount(0);
@@ -345,7 +344,7 @@ test("a tall card in a short TERMINALS gives way so it is never hidden whole: 12
   await oneThree(page, [a!, b!, c!, d!]);
   const grip = page.getByTestId("split-card-grip");
   await grip.focus();
-  for (let i = 0; i < 8; i++) await page.keyboard.press("ArrowDown");
+  for (let i = 0; i < 8; i++) await grip.press("ArrowDown");
   await expect(grip).toHaveAttribute("aria-valuenow", "240");
   /** Every cell's centre, hit-tested: the cell it lands on (null when the clip or another element hides it), and how
    *  much of the card the list's clip leaves showing. */
@@ -381,8 +380,8 @@ test("a tall card in a short TERMINALS gives way so it is never hidden whole: 12
   expect(await page.evaluate(() => localStorage.getItem("omher.splits"))).toContain('"mapH":240');
   // 1280×700 with BOTS | TERMINALS dragged low
   await page.setViewportSize({ width: 1280, height: 700 });
-  await page.getByTestId("side-split").focus();
-  for (let i = 0; i < 16; i++) await page.keyboard.press("ArrowDown");
+  const side = page.getByTestId("side-split");
+  for (let i = 0; i < 16; i++) await side.press("ArrowDown");
   await check();
 });
 

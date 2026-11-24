@@ -44,12 +44,20 @@ omh capability-policy pr-delivery off [--json]
 
 The grant is per Hermes profile. Select the profile with `omh --hermes-home
 <profile home>` (and `--omh-home` when that profile has its own OMH home).
-`on` and `off` refuse to run inside a Hermes session, which they detect from
-the `HERMES_SESSION_ID` that Hermes sets for every command its terminal tool
-runs. `on` also asks for a typed yes on the controlling terminal
-(`/dev/tty`); a gateway- or cron-run child has none. On Windows, which has no
-`/dev/tty`, it asks on stdin only when stdin is a console (untested). `omh
-doctor` lists every profile in the OMH home whose grant is on.
+`on` and `off` refuse to run inside a Hermes session. They detect it from
+`HERMES_SESSION_ID`, which Hermes sets for every command its terminal tool
+runs, and from the other markers Hermes puts in its children's environment
+(every `HERMES_SESSION_*`, `HERMES_UI_SESSION_ID`, `HERMES_CRON_SESSION`,
+`HERMES_AGENT`, `HERMES_EXEC_ASK`, `HERMES_SINGLE_QUERY_SESSION`). `on` also
+asks for a typed yes on a terminal a person can see: `/dev/tty` on POSIX,
+and on Windows the console, only when its window is visible. This stops a
+cooperating agent and an agent without a terminal. It does not stop a bot
+that spells the command past the tool hook, unsets every marker and spawns
+its own pseudo-terminal (the terminal tool's `pty=true` makes the pty the
+child's controlling terminal, and `process submit "y"` answers it) or answers a hidden
+console: that bot can type the yes itself. That is the same class as the
+other residuals below, which the gate does not claim to stop. `omh doctor`
+lists every profile in the OMH home whose grant is on.
 
 ## What it allows
 
@@ -180,8 +188,10 @@ the forge without passing the gate:
   fork, comment, review, close, label or a pull-request write. The gate reads
   only the tool's name, never its arguments, so it cannot judge a comment
   body sent through one;
-- a file write to `~/.ssh/config`: a `ProxyCommand` or `Match exec` there runs
-  a command during an otherwise covered push over ssh;
+- a write to `~/.ssh/config` by a program this gate does not name: a
+  `ProxyCommand` or `Match exec` there runs a command during an otherwise
+  covered push over ssh. A file-tool write to it, and `cp`, `mv`, `ln` or a
+  redirection naming it, are refused in an unattended run;
 - a workflow file under `.github/workflows/` committed on a bot branch: it
   runs on the forge with the repository's token, and whatever secrets the
   repository exposes to such runs, as soon as the branch is pushed or the PR
@@ -199,6 +209,25 @@ the forge without passing the gate:
 - a local-path or `insteadOf` remote set up before the grant applied, and a
   `cd` into another checkout before `git push origin ...` (`git -C`,
   `--git-dir` and `--work-tree` on a push are refused);
+- a symlink or junction made before the grant applied, or by a program this
+  gate does not name. A file-tool write is checked both as written and with
+  every link resolved (`g -> .git` then `g/hooks/pre-push` is refused), and
+  `ln`, `mklink`, `New-Item -ItemType Junction`, `cp`, `mv` and similar
+  naming `.git` or a git config are refused in an unattended run. The
+  command side is lexical: a link made through a glob or a variable
+  (`ln -s .gi? g`, `L=.git; ln -s $L g`), or by any program not named here,
+  and then written through by a shell redirect (`echo x > g/hooks/pre-push`)
+  is not seen. Plain reads of a protected path are allowed by `cat`,
+  `head`, `tail`, `ls`, `stat`, `wc`, `grep`/`egrep`/`fgrep` and the read
+  forms of `git config` (`--get`, `--get-all`, `--get-regexp`, `--list`),
+  and only when their segment assigns no variable and the line names no
+  pager or reader variable (`LESS*`, `PAGER`, `GIT_PAGER`, `MANPAGER`,
+  `MORE`, `GREP_*`, `LS_*`). The allowance is an exception to the
+  protected-path refusal alone: every other check still runs on the
+  reader. Pagers, `find`, `tree`, `rg`, `sed`, `awk`, `xargs` and `sort`
+  keep the refusal (`LESSOPEN='|…' less` runs a command, `tree -o` writes,
+  `rg --pre` runs a program). Writes, links, copies onto a protected path
+  and redirects into it are refused;
 - the grant file and the opened-PR record written by arbitrary code under
   another spelling (the file tools and command lines that name the store are
   refused);
@@ -210,28 +239,51 @@ Nothing of this has run on Windows; the following is what the code does
 there, held by tests that run on every platform through fakes.
 
 - `on` asks for its yes on the console (`CONIN$` and `CONOUT$`), the Windows
-  equivalent of `/dev/tty`. A process without a console cannot open them, and
-  `on` then refuses with "turning the grant on needs a yes typed at your own
-  terminal"; it never crashes.
+  equivalent of `/dev/tty`, and only when that console has a visible window.
+  Hermes spawns every terminal child with `CREATE_NO_WINDOW`, which gives it
+  a hidden console: `CONIN$` would open there with nobody at it, so a hidden
+  or missing console is a refusal ("turning the grant on needs a yes typed at
+  your own terminal"), never a wait and never a crash. A classic console
+  window (conhost: `cmd.exe` or Windows PowerShell started from the Start
+  menu) is expected to work. Under Windows Terminal (ConPTY),
+  `GetConsoleWindow` may return a pseudo-window that reports as invisible,
+  so `on` may refuse there; run it from a classic console window instead.
+  None of this has run on Windows.
 - The grant file's owner and mode are not checked: POSIX mode bits mean
   nothing there, so the grant reads as recorded. On POSIX the check only
-  excludes other users and group or world writes; on Windows protect the OMH
-  home with the folder's own ACL.
+  excludes other users and group or world writes. The threat the grant
+  guards against is the user's own bot, which runs as the same account, so
+  neither mode bits nor an ACL tell the two apart. When the OMH home is under
+  `%USERPROFILE%`, the default profile ACL (the user, SYSTEM, Administrators)
+  already excludes other users. A shared or relocated OMH home (`OMH_HOME`
+  outside the profile, or one home for several accounts) does not: give it
+  an ACL of its own.
 - The file-write guard folds Windows spellings to the file the system opens:
   backslashes, drive letters, letter case, trailing dots and spaces
-  (`.git.`), NTFS stream suffixes (`.git::$INDEX_ALLOCATION`), the 8.3 name
-  `GIT~1`, and gh's `GitHub CLI\config.yml` and `hosts.yml` under AppData.
-- Commands are read with a POSIX shell lexer. `git.exe`, `gh.exe` and
-  PowerShell's `& git ...` are read as git and gh. A command that names git
-  or gh and holds a backslash before a letter or digit (a Windows path such
-  as `C:\Program Files\Git\cmd\git.exe`), a cmd.exe `^` escape or `%VAR%`, a
-  PowerShell backtick, `$env:GH_REPO = ...`, `Set-Item Env:...`, `set` or
-  `setx` of a forge variable, `cmd /c ...`, `powershell -Command ...` or
-  `Start-Process git ...` is refused as unparseable in an unattended run.
-  The cost is that an ordinary command quoting a Windows path next to git is
-  refused too.
-- Not handled: a PowerShell alias or function (`Set-Alias`, `function git`)
-  defined under another name, and `[Environment]::SetEnvironmentVariable`.
+  (`.git.`), NTFS stream suffixes (`.git::$INDEX_ALLOCATION`), the 8.3 short
+  names (`GIT~1`, `GITCON~1`, `GITMOD~1` and their kin), and gh's
+  `GitHub CLI\config.yml` and `hosts.yml` under AppData.
+- Commands are read with a POSIX shell lexer, which is right on Windows
+  too: Hermes runs the terminal through Git Bash there. `git.exe`, `gh.exe`
+  and PowerShell's `& git ...` are read as git and gh. In an unattended run
+  these are refused as unparseable when the command names git or gh:
+  - a command word written as a Windows path (`C:\Program Files\Git\cmd\git.exe`,
+    quoted or not); a backslash inside an argument is read as Git Bash
+    reads it and is not refused, so `git log --format='%h\t%s'` passes;
+  - a command word holding cmd.exe's `^` or `%VAR%`, or a PowerShell
+    backtick; `%` in a branch name, push destination or `--head` is refused
+    too, while `%` elsewhere (a `--format` string) is literal under Git Bash;
+  - any `powershell`, `pwsh` or `cmd` invocation (any path, any `.exe`) that
+    is not a plain script file (`-File x.ps1`, `pwsh x.ps1`, `cmd /c
+    x.bat`): `-EncodedCommand` and every prefix PowerShell accepts for it,
+    `-Command`, stdin, `cmd /c <command>`, `/k`;
+  - `$env:GH_REPO = ...`, `Set-Item Env:...`, `set` or `setx` of a forge
+    variable, `cmd /c ...`, `powershell -Command ...`, `Start-Process git ...`.
+- The gate reads POSIX shell syntax, because Hermes' local backend runs the
+  terminal through Git Bash on Windows. Forms that work only inside a
+  PowerShell shell (`&('g'+'it') push`, `& (gcm gh) pr merge`, `Set-Alias`,
+  `function git`, `[Environment]::SetEnvironmentVariable`) are not read; from
+  Git Bash every way into PowerShell is refused, as above.
 
 ## Residuals, stated
 

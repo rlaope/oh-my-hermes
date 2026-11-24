@@ -1,6 +1,6 @@
 // engine-marks.ts: what is read from OSC 133 marks, OSC 7 folders and OSC 9;4 progress, and where a prompt jump goes.
 import { describe, expect, it } from "vitest";
-import { nextPrompt, parse133, parseOsc7, parseProgress } from "./engine-marks";
+import { nextPrompt, parse133, parseOsc7, parseProgress, promptKey, takesPromptKey } from "./engine-marks";
 
 describe("parse133", () => {
   it("reads the four marks and a finished command's exit code", () => {
@@ -95,5 +95,35 @@ describe("nextPrompt", () => {
     expect(nextPrompt(lines, 3, -1)).toBeNull();
     expect(nextPrompt(lines, 90, 1)).toBeNull();
     expect(nextPrompt([], 10, -1)).toBeNull();
+  });
+});
+
+describe("promptKey", () => {
+  const k = (key: string, o: Partial<{ metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }> = {}) => ({ key, metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...o });
+  it("macOS: Cmd+Up / Cmd+PageUp the previous prompt, Cmd+Down / Cmd+PageDown the next; Ctrl is the program's", () => {
+    expect(promptKey(k("ArrowUp", { metaKey: true }), true)).toBe(-1);
+    expect(promptKey(k("PageUp", { metaKey: true }), true)).toBe(-1);
+    expect(promptKey(k("ArrowDown", { metaKey: true }), true)).toBe(1);
+    expect(promptKey(k("PageDown", { metaKey: true }), true)).toBe(1);
+    expect(promptKey(k("ArrowUp", { ctrlKey: true }), true)).toBe(0);
+    expect(promptKey(k("ArrowUp", { metaKey: true, shiftKey: true }), true)).toBe(0);
+  });
+  it("Windows and Linux: Ctrl+Up / Ctrl+Down (as VS Code); Ctrl+PageUp / PageDown, Shift, Alt and AltGr stay the program's", () => {
+    expect(promptKey(k("ArrowUp", { ctrlKey: true }), false)).toBe(-1);
+    expect(promptKey(k("ArrowDown", { ctrlKey: true }), false)).toBe(1);
+    expect(promptKey(k("PageUp", { ctrlKey: true }), false)).toBe(0);
+    expect(promptKey(k("ArrowUp", { ctrlKey: true, shiftKey: true }), false)).toBe(0);
+    expect(promptKey(k("ArrowUp", { ctrlKey: true, altKey: true }), false)).toBe(0);
+    expect(promptKey(k("ArrowUp", { metaKey: true }), false)).toBe(0);
+    expect(promptKey(k("ArrowUp"), false)).toBe(0);
+  });
+});
+
+describe("takesPromptKey", () => {
+  it("off macOS takes Ctrl+Up / Ctrl+Down only at the prompt or with the view scrolled up; macOS always", () => {
+    expect(takesPromptKey(false, false, false)).toBe(true); // at the prompt
+    expect(takesPromptKey(false, true, false)).toBe(false); // a program runs (C without D): its keys
+    expect(takesPromptKey(false, true, true)).toBe(true); // scrolled up while it runs: the person is reading back
+    expect(takesPromptKey(true, true, false)).toBe(true); // Cmd is never a program's
   });
 });
