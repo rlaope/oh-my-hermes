@@ -315,6 +315,10 @@ All notable changes will be documented here.
   under `profiles/`, and it is idempotent; `--dry-run` previews and `--json` prints the profile's row. Hermes re-reads
   `skills.external_dirs` when `config.yaml` changes, so a running gateway finds the skills without a restart; OMH's
   plugin tools there load at the gateway's next start, which the command names when the gateway's record shows it.
+  `omh update`'s failure path changes with it (its success path is byte-identical): a bot whose config OMH cannot
+  edit used to get the plugin bundle and no registration, which every later update read as the deliberate opt-out;
+  now the registration is tried as a dry run before the first bundle goes in, a write that still fails takes the
+  bundle back, and a rerun after the repair sets the bot up.
 - **automation-blueprint: be told when something happens on a platform that sends no webhook.** Asking Hermes to
   be told when new mail matches a filter, a calendar event is about to start, a Notion page or database changes, a
   Linear or Jira issue is assigned, an Obsidian vault folder changes, or a Sentry issue opens ("tell me when a mail

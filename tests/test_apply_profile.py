@@ -108,9 +108,9 @@ class ApplyProfileTests(unittest.TestCase):
         calls: list[str] = []
         real = _setup_module._sync_hermes_profile
 
-        def spy(args, primary, name, profile_dir):
+        def spy(args, primary, name, profile_dir, **kwargs):
             calls.append(name)
-            return real(args, primary, name, profile_dir)
+            return real(args, primary, name, profile_dir, **kwargs)
 
         with mock.patch.object(_setup_module, "_sync_hermes_profile", side_effect=spy):
             status, _payload, _stderr = self._apply("--profile", "demo-bot")
@@ -174,35 +174,101 @@ class ApplyProfileTests(unittest.TestCase):
         self.assertIn("run `omh setup` first", str(payload["reason"]))
         self.assertEqual(_tree(bot), before)
 
-    def test_a_deliberately_unregistered_profile_stays_unregistered(self) -> None:
-        self._setup()
-        bot = self._profile("demo-bot")
-        (bot / "plugins" / "omh").mkdir(parents=True)
-        before = (bot / "config.yaml").read_bytes()
-
-        status, payload, _stderr = self._apply("--profile", "demo-bot")
-
-        self.assertEqual((status, payload["status"]), (1, "unregistered_kept"))
-        self.assertEqual((bot / "config.yaml").read_bytes(), before)
-
-    def test_a_failed_registration_takes_its_bundle_back_so_a_rerun_after_repair_sets_it_up(self) -> None:
-        self._setup()
-        bot = self._profile("demo-bot")
+    def _break_config(self, bot: Path) -> None:
+        # A shape OMH's config editor refuses: the registration would raise.
         (bot / "config.yaml").write_text("skills:\n  external_dirs: not-a-list\n", encoding="utf-8")
+
+    def _repair_config(self, bot: Path) -> None:
+        (bot / "config.yaml").write_text("model:\n  default: demo-model\n", encoding="utf-8")
+
+    def _update(self) -> dict[str, object]:
+        status, stdout, _stderr = run_cli(self._base() + ["update", "--json", "--no-restart-gateway"], output_json=False)
+        payload = json.loads(stdout)
+        return {"exit": status, **{row["profile"]: row for row in payload["hermes_profiles"]}}
+
+    def test_a_config_omh_cannot_edit_fails_before_anything_is_written_and_a_repair_registers(self) -> None:
+        self._setup()
+        bot = self._profile("demo-bot")
+        self._break_config(bot)
+        before = _tree(bot)
 
         status, payload, _stderr = self._apply("--profile", "demo-bot")
 
         self.assertEqual((status, payload["status"]), (1, "failed"))
         self.assertIn("external_dirs", str(payload["error"]))
-        self.assertTrue(payload["plugin_bundle_rolled_back"])
-        self.assertFalse((bot / "plugins" / "omh").exists())
-        # still failing, not read as the opt-out
-        again, payload, _stderr = self._apply("--profile", "demo-bot")
-        self.assertEqual((again, payload["status"]), (1, "failed"))
-        (bot / "config.yaml").write_text("model:\n  default: demo-model\n", encoding="utf-8")
-        repaired, payload, _stderr = self._apply("--profile", "demo-bot")
-        self.assertEqual((repaired, payload["status"]), (0, "bootstrapped"))
+        self.assertEqual(_tree(bot), before)
+        # a rerun before the repair still fails; it is never read as the opt-out
+        status, payload, _stderr = self._apply("--profile", "demo-bot")
+        self.assertEqual((status, payload["status"]), (1, "failed"))
+        self._repair_config(bot)
+        status, payload, _stderr = self._apply("--profile", "demo-bot")
+        self.assertEqual((status, payload["status"]), (0, "bootstrapped"))
         self.assertIn(self._skills_dir(), (bot / "config.yaml").read_text(encoding="utf-8"))
+
+    def test_omh_update_fails_the_same_profile_without_writing_it_and_registers_it_after_the_repair(self) -> None:
+        self._setup()
+        bot = self._profile("demo-bot")
+        self._break_config(bot)
+        before = _tree(bot)
+
+        rows = self._update()
+
+        self.assertEqual(rows["demo-bot"]["status"], "failed")
+        self.assertEqual(_tree(bot), before)
+        self._repair_config(bot)
+        self.assertEqual(self._update()["demo-bot"]["status"], "bootstrapped")
+        self.assertIn(self._skills_dir(), (bot / "config.yaml").read_text(encoding="utf-8"))
+
+    def test_a_write_that_fails_after_the_bundle_went_in_takes_the_bundle_back(self) -> None:
+        self._setup()
+        bot = self._profile("demo-bot")
+        real = _setup_module._apply_result
+
+        def fail_for_real(args, **kwargs):
+            if not args.dry_run:
+                raise _setup_module.OmhError("config.yaml changed under the write")
+            return real(args, **kwargs)
+
+        with mock.patch.object(_setup_module, "_apply_result", side_effect=fail_for_real):
+            status, payload, _stderr = self._apply("--profile", "demo-bot")
+        self.assertEqual((status, payload["status"], payload["plugin_bundle_rolled_back"]), (1, "failed", True))
+        self.assertFalse((bot / "plugins" / "omh").exists())
+        status, payload, _stderr = self._apply("--profile", "demo-bot")
+        self.assertEqual((status, payload["status"]), (0, "bootstrapped"))
+
+    def test_a_deliberate_opt_out_stays_unregistered_through_both_commands(self) -> None:
+        self._setup()
+        bot = self._profile("demo-bot")
+        (bot / "plugins" / "omh").mkdir(parents=True)
+        before = (bot / "config.yaml").read_bytes()
+        self.assertEqual(self._apply("--profile", "demo-bot")[1]["status"], "unregistered_kept")
+        self.assertEqual(self._update()["demo-bot"]["status"], "unregistered_kept")
+        self.assertEqual((bot / "config.yaml").read_bytes(), before)
+
+    def test_json_shapes(self) -> None:
+        """The keys each outcome prints with --json, as docs/INSTALLATION.md lists them."""
+        self._setup()
+        bot = self._profile("demo-bot")
+        row = {"profile", "status", "hermes_home", "dry_run", "gateway_restart_hint"}
+        registered = row | {"registration", "registered_dir", "retired_external_dirs", "display_release"}
+        _s, dry, _e = self._apply("--profile", "demo-bot", "--dry-run")
+        self.assertLessEqual(registered, set(dry))
+        self.assertEqual((dry["status"], dry["dry_run"]), ("bootstrapped", True))
+        _s, done, _e = self._apply("--profile", "demo-bot")
+        self.assertLessEqual(registered, set(done))
+        _s, refused, _e = self._apply("--profile", "no-such-bot")
+        self.assertEqual(set(refused), {"profile", "status", "reason", "dry_run"})
+        self._profile("broken-bot")
+        self._break_config(self.hermes_home / "profiles" / "broken-bot")
+        _s, failed, _e = self._apply("--profile", "broken-bot")
+        self.assertEqual(failed["status"], "failed")
+        self.assertLessEqual(row | {"error"}, set(failed))
+        (self.hermes_home / "profiles" / "kept-bot" / "plugins" / "omh").mkdir(parents=True)
+        (self.hermes_home / "profiles" / "kept-bot" / "SOUL.md").write_text("x\n", encoding="utf-8")
+        _s, kept, _e = self._apply("--profile", "kept-bot")
+        self.assertEqual(kept["status"], "unregistered_kept")
+        self.assertLessEqual(row | {"registration", "display_release"}, set(kept))
+        self.assertTrue(bot.is_dir())
 
     def test_a_profile_gone_before_the_write_is_not_recreated(self) -> None:
         self._setup()
@@ -216,8 +282,30 @@ class ApplyProfileTests(unittest.TestCase):
 
         with mock.patch.object(_setup_module, "_profile_clone", side_effect=vanish):
             status, payload, _stderr = self._apply("--profile", "demo-bot")
-        self.assertEqual((status, payload["status"]), (1, "failed"))
+        self.assertEqual((status, payload["status"]), (2, "refused"))
+        self.assertIn("is no longer a Hermes profile", str(payload["reason"]))
         self.assertEqual(list(bot.rglob("*")), [])
+
+    def test_a_profile_swapped_for_a_link_before_the_write_is_refused(self) -> None:
+        self._setup()
+        bot = self._profile("demo-bot")
+        real = _setup_module._profile_clone
+        moved = self.hermes_home / "profiles" / "real-bot"
+
+        def swap(args, primary, profile_dir):
+            profile_dir.rename(moved)
+            try:
+                profile_dir.symlink_to(moved, target_is_directory=True)
+            except OSError as exc:
+                self.skipTest(f"symlinks unavailable: {exc}")
+            return real(args, primary, profile_dir)
+
+        with mock.patch.object(_setup_module, "_profile_clone", side_effect=swap):
+            status, payload, _stderr = self._apply("--profile", "demo-bot")
+        self.assertEqual((status, payload["status"]), (2, "refused"))
+        self.assertIn("is a link to", str(payload["reason"]))
+        self.assertFalse((moved / "plugins").exists())
+        self.assertTrue(bot.is_symlink())
 
     @unittest.skipUnless(hasattr(Path, "symlink_to"), "needs symlinks")
     def test_refuses_a_profile_that_is_a_link(self) -> None:

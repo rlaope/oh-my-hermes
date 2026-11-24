@@ -4107,29 +4107,48 @@ A bot made after install does not have to wait for the next update:
 `omh apply --profile <name>` runs the same per-profile pass for that one
 profile and nothing else. It does not update OMH or its skill pack, does not
 read or write the main home or any other profile, makes no network call and
-runs no Hermes command; like the update, it records the config write in OMH's
-own `runtime/state.json`, which uninstall reads. It refuses a name outside Hermes' profile rule
-(lowercase letters, digits, `_` and `-`, at most 64 characters), `default`
-(the main home: `omh apply` without `--profile`), a name Hermes reserves,
-`omh-tui` (oh-my-hermes' own TUI profile, which never gets a registration of
-its own), and anything that is not a live profile under
-`<Hermes home>/profiles`, a link included (it would write the link's target);
-it also refuses before `omh setup` has installed OMH's skills. A deliberately
-unregistered profile stays unregistered. When the registration fails after
-the plugin bundle went in (a config `skills.external_dirs` OMH cannot edit,
-say), the bundle that pass installed is removed again, so the profile is not
-left looking opted out and a rerun after the repair sets it up. A second run
-changes nothing. `--dry-run` previews. Exit 0 means the profile is
-registered, 1 that it was left unregistered or the pass failed (`error` says
-why), 2 that the name was refused and nothing was attempted. `--json` prints
-the profile's row (`profile`, `status`, `registration`, `registered_dir`,
-plus `hermes_home`, `dry_run` and `gateway_restart_hint`), or for a refusal
-`{"profile", "status": "refused", "reason", "dry_run"}`. Hermes re-reads `skills.external_dirs` when `config.yaml`
-changes, so a running gateway finds the new skills on its next skill lookup
-without a restart; a conversation already open keeps the skill list it
-started with until `/new`, and OMH's plugin tools in that profile load at the
-gateway's next start (the command names that restart when the gateway's
-record shows it started before the bundle was installed).
+runs no Hermes command; no other Hermes home or profile is touched. Like the
+update, it records the config write in OMH's own state file
+(`runtime/state.json` in the OMH home), which uninstall reads. It refuses a
+name outside Hermes' profile rule (lowercase letters, digits, `_` and `-`, at
+most 64 characters), `default` (the main home: `omh apply` without
+`--profile`), a name Hermes reserves, `omh-tui` (oh-my-hermes' own TUI
+profile, which never gets a registration of its own), and anything that is
+not a live profile folder of its own under `<Hermes home>/profiles`: a link,
+or on Windows a junction, is refused, since the write would land in its
+target. The folder is checked again right before the first write, so a
+profile deleted or swapped for a link in between is refused too. It also
+refuses before `omh setup` has installed OMH's skills. A deliberately
+unregistered profile stays unregistered. A second run changes nothing.
+
+A failure is never left looking like the opt-out. Before a bot's first
+bundle goes in, the registration runs as a dry run, so a config OMH cannot
+edit (`skills.external_dirs` that is not a list, say) fails the profile
+before anything is written to it; a write that still fails after the bundle
+went in removes that bundle again. Once the config is repaired, `omh apply
+--profile <name>` or `omh update` sets the profile up. `omh update` takes the
+same path for every profile.
+
+Exit codes: 0 the profile is registered, 1 it was left unregistered or the
+pass failed, 2 the name was refused and nothing was attempted. `--json`
+prints one object:
+
+- registered, or a dry run of it: `profile`, `status` (`bootstrapped`,
+  `refreshed` or `host_managed`), `registration` (`added`, `migrated` or
+  `unchanged`), `registered_dir`, `retired_external_dirs`, `display_release`,
+  `hermes_home`, `dry_run`, `gateway_restart_hint` (null on a dry run);
+- left unregistered: `status` `unregistered_kept`, with `registration`,
+  `display_release` and the same last three keys;
+- failed: `status` `failed`, `error`, and `plugin_bundle_rolled_back` when a
+  bundle had to be taken back;
+- refused: `{"profile", "status": "refused", "reason", "dry_run"}`.
+
+Hermes re-reads `skills.external_dirs` when `config.yaml` changes, so a
+running gateway finds the new skills on its next skill lookup without a
+restart; a conversation already open keeps the skill list it started with
+until `/new`, and OMH's plugin tools in that profile load at the gateway's
+next start (the command names that restart when the gateway's record shows
+it started before the bundle was installed).
 
 "Registered" means the profile names any OMH-managed skills directory, not
 the exact one this install would write today. A profile registered at

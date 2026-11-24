@@ -396,11 +396,9 @@ def named_hermes_profile(hermes_home: Path, name: str) -> tuple[Path | None, str
             "so a registration of its own would list every OMH skill twice"
         )
     root = hermes_home / "profiles"
-    entry = root / name
-    if entry.is_symlink() or (entry.is_dir() and entry.resolve().parent != root.resolve()):
-        # Hermes would read and write the link's target, which is another
-        # profile or a folder outside the Hermes home, not this profile.
-        return None, f"{entry} is a link to {entry.resolve()}, not a profile folder of its own"
+    linked = linked_profile_refusal(hermes_home, name)
+    if linked:
+        return None, linked
     for listed, profile_dir in hermes_profile_dirs(hermes_home):
         if listed == name:
             return profile_dir, ""
@@ -409,3 +407,24 @@ def named_hermes_profile(hermes_home: Path, name: str) -> tuple[Path | None, str
     if (root / ".deleted" / name).exists():
         return None, f"Hermes profile `{name}` is deleted ({root / '.deleted' / name} exists)"
     return None, f"{root / name} is not a Hermes profile: it holds none of {', '.join(PROFILE_IDENTITY_MARKERS)}"
+
+
+def linked_profile_refusal(hermes_home: Path, name: str) -> str:
+    """Why `profiles/<name>` is not a folder of its own, or "" when it is.
+
+    A link (a symlink, or a junction where Windows reports one) or a folder
+    that resolves anywhere but `<resolved profiles>/<name>` would have a write
+    land in its target: another profile, or a folder outside the Hermes home.
+    """
+    root = hermes_home / "profiles"
+    entry = root / name
+    is_junction = getattr(entry, "is_junction", None)
+    linked = entry.is_symlink() or bool(is_junction and is_junction())
+    try:
+        resolved = entry.resolve()
+        elsewhere = entry.exists() and resolved != root.resolve() / name
+    except OSError:
+        resolved, elsewhere = entry, True
+    if linked or elsewhere:
+        return f"{entry} is a link to {resolved}, not a profile folder of its own"
+    return ""

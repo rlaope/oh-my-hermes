@@ -85,6 +85,7 @@ from ..install.skill_registration import (
     managed_skill_dir_candidates,
     migrate_managed_registration,
     PROFILE_IDENTITY_MARKERS,
+    linked_profile_refusal,
     named_hermes_profile,
     registered_managed_entries,
     registered_skill_dir,
@@ -825,8 +826,25 @@ def _sync_hermes_profiles(args: argparse.Namespace) -> list[dict[str, object]]:
     return [_sync_hermes_profile(args, primary, name, profile_dir) for name, profile_dir in _hermes_profile_dirs(primary)]
 
 
+def _profile_write_refusal(hermes_home: Path, name: str, profile_dir: Path, *, own_folder_only: bool) -> str:
+    """Why a listed profile must not be written now, or "" when it may.
+
+    A profile deleted since it was listed would come back as a shell of OMH
+    files that Hermes then lists. With `own_folder_only` the folder must also
+    still be `profiles/<name>` itself, not a link or a junction to another
+    profile or a folder outside the Hermes home (`named_hermes_profile`).
+    """
+    if not profile_dir.is_dir() or not any(
+        (profile_dir / marker).is_file() or (profile_dir / marker).is_symlink() for marker in PROFILE_IDENTITY_MARKERS
+    ):
+        return f"{profile_dir} is no longer a Hermes profile"
+    if own_folder_only:
+        return linked_profile_refusal(hermes_home, name)
+    return ""
+
+
 def _sync_hermes_profile(
-    args: argparse.Namespace, primary: OmhPaths, name: str, profile_dir: Path
+    args: argparse.Namespace, primary: OmhPaths, name: str, profile_dir: Path, *, own_folder_only: bool = False
 ) -> dict[str, object]:
     """One bot profile's pass of `_sync_hermes_profiles`, and all of `omh apply --profile <name>`.
 
@@ -834,6 +852,16 @@ def _sync_hermes_profile(
     sets up is the profile the next `omh update` would have made, under the
     same opt-out, manifest and ownership rules. A refusal is the row's
     `failed` status, never an exception: the update goes on to the next home.
+
+    A bootstrap (no plugin bundle yet) first runs the registration as a dry
+    run, so a config OMH cannot edit fails the row before anything is
+    written into the profile; a pass that still fails after the bundle went
+    in takes that bundle back. Either way the profile is never left with a
+    bundle and no registration, which every later pass would read as the
+    deliberate opt-out. Right before the first write the profile is checked
+    again (`_profile_write_refusal`): a profile gone since it was listed is
+    `refused`, as is, with `own_folder_only` (`omh apply --profile`), one that
+    is now a link or resolves outside `profiles/`.
     """
     entry: dict[str, object] = {"profile": name}
     profile_paths: OmhPaths | None = None
@@ -859,11 +887,18 @@ def _sync_hermes_profile(
             "registration": "unchanged",
             "retired_external_dirs": [],
         }
-        # Re-read just before the first write: a profile Hermes deleted since it
-        # was listed must not come back as a shell holding only OMH's files.
-        if not any((profile_dir / m).is_file() or (profile_dir / m).is_symlink() for m in PROFILE_IDENTITY_MARKERS):
-            raise OmhError(f"{profile_dir} is no longer a Hermes profile")
+        refusal = _profile_write_refusal(primary.hermes_home, name, profile_dir, own_folder_only=own_folder_only)
+        if refusal:
+            return {"profile": name, "status": "refused", "reason": refusal}
         bundle_was_there = profile_paths.hermes_plugin_dir.is_dir()
+        if not bundle_was_there and not bool(args.dry_run):
+            # Preflight: the same registration as a dry run raises what the
+            # real one would, before the bundle makes this home look opted out.
+            _apply_result(
+                argparse.Namespace(**{**vars(clone), "dry_run": True}),
+                bind_omh_home=not _profile_env_names_omh_home(profile_dir),
+                theme_home=_profile_theme_home(profile_paths, profile_dir),
+            )
         plugin = install_plugin_bundle(
             profile_paths, force=bool(getattr(args, "force", False)), dry_run=bool(args.dry_run)
         )
@@ -1025,6 +1060,7 @@ _PROFILE_STATUS_LABELS = {
     "partially_cleared": "cleared, some config keys kept",
     "unregistered": "unregistered",
     "absent": "nothing to remove",
+    "refused": "skipped: it changed while this command ran",
 }
 
 
@@ -2643,8 +2679,14 @@ def _cmd_apply_profile(args: argparse.Namespace) -> int:
         else:
             print(f"omh: {refusal}", file=sys.stderr)
         return 2
-    row = _sync_hermes_profile(args, primary, name, profile_dir)
+    row = _sync_hermes_profile(args, primary, name, profile_dir, own_folder_only=True)
     status = row.get("status")
+    if status == "refused":
+        if _wants_json(args):
+            _print_json({**row, "dry_run": dry_run})
+        else:
+            print(f"omh: {row.get('reason')}", file=sys.stderr)
+        return 2
     hint = None
     if not dry_run and status in _APPLY_PROFILE_DONE:
         hint = gateway_restart_hint(
@@ -7540,7 +7582,9 @@ def _add_top_level_commands(sub) -> None:
         help=(
             "Register OMH in this one existing Hermes bot profile only, as `omh update` does for each profile: "
             "no OMH self-update, no other Hermes home touched, no Hermes command run; the write is recorded in "
-            "OMH's own state. Exit 0 registered, 1 left unregistered or failed, 2 refused (nothing attempted)."
+            "OMH's own state. Exit 0 registered, 1 left unregistered or failed, 2 refused (nothing attempted). "
+            "--json prints the profile's row, or {profile, status: refused, reason, dry_run}; "
+            "docs/INSTALLATION.md (Bot Profiles) lists the keys."
         ),
     )
     apply.add_argument("--dry-run", action="store_true")
