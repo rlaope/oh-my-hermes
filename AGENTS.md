@@ -98,8 +98,9 @@ and evidence obvious to a reviewer reading the PR without the chat history.
   old scratch homes it created and marked: before each dispatch, at most 32
   temp-root directories named `omh-hermes-child-*` that this user owns, that
   are not links, whose exact OMH marker is older than a day, and whose
-  recorded deadline (that dispatch's start, timeout and a margin) has passed.
-  Nothing else.
+  recorded deadline (that dispatch's start, timeout and a margin) has passed;
+  an infinite or oversized timeout records the largest deadline, so that
+  home is never swept. Nothing else.
   Two front doors reuse it without adding a process authority:
   - `omh coding paired-run dispatch` for confirmed evaluation cells: one
     digest-matching task file per frozen task, task bytes over child stdin,

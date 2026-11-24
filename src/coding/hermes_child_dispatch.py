@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import hashlib
 import hmac
+import math
 import os
 from pathlib import Path
 import re
@@ -72,6 +73,8 @@ SCRATCH_MARKER_TEXT: Final = "omh-hermes-child-scratch/v1\n"
 # marker written by this PR's first head (the header line alone) has none, so it is never swept (nothing shipped it).
 SCRATCH_DEADLINE_MARGIN_SECONDS: Final = 3600
 _DEADLINE_DIGITS: Final = 20
+# The largest deadline the marker can hold. An infinite or oversized timeout records it, so that home is never swept.
+_UNBOUNDED_DEADLINE: Final = 10 ** _DEADLINE_DIGITS - 1
 # Hermes' `chat` starts a detached `gateway run --idle-exit` for the scratch HERMES_HOME. That gateway is Hermes',
 # not this process's child, so it is never signalled. It may still write into the home, or hold its log open (which
 # refuses the unlink on Windows), right after the child exits. The removal is retried this often, this far apart,
@@ -328,6 +331,8 @@ def dispatch_hermes_child(
     )
     if not request.prompt or not request.model or request.timeout_seconds <= 0:
         raise ValueError("prompt, model, and a positive timeout are required")
+    if math.isnan(request.timeout_seconds):
+        raise ValueError("prompt, model, and a positive timeout are required")
     verdict = _spawn_preflight(request)
     if not verdict["ready"]:
         raise SpawnPreflightError(verdict)
@@ -401,12 +406,20 @@ def _dispatch_guarded(
     _sweep_scratch_homes()
     scratch_created = _clock()
     marker_text = _marker_text(scratch_created + request.timeout_seconds + SCRATCH_DEADLINE_MARGIN_SECONDS)
-    scratch_path = Path(tempfile.mkdtemp(prefix=SCRATCH_PREFIX))
+    try:
+        scratch_path = Path(tempfile.mkdtemp(prefix=SCRATCH_PREFIX))
+    except OSError as exc:
+        emit("failed")
+        diagnostic = f"Hermes child scratch home could not be created ({type(exc).__name__})"
+        return _result(request, depth, "failed", None, "", diagnostic, {}, True, ())
     try:
         (scratch_path / SCRATCH_MARKER).write_text(marker_text, encoding="utf-8")
-    except OSError:
+    except OSError as exc:
+        # Without its marker a left home could never be swept: no child starts on an unmarked home.
         shutil.rmtree(scratch_path, ignore_errors=True)
-        raise
+        emit("failed")
+        diagnostic = f"Hermes child scratch home could not be marked ({type(exc).__name__})"
+        return _result(request, depth, "failed", None, "", diagnostic, {}, not scratch_path.exists(), ())
     hermes_home = scratch_path / "hermes"
     home = scratch_path / "home"
     hermes_home.mkdir(mode=0o700)
@@ -563,7 +576,9 @@ def _dispatch_guarded(
 
 
 def _marker_text(deadline: float) -> str:
-    return f"{SCRATCH_MARKER_TEXT}{int(deadline) + 1}\n"
+    """The marker with its deadline line; an infinite or oversized deadline records `_UNBOUNDED_DEADLINE`."""
+    value = int(deadline) + 1 if math.isfinite(deadline) and deadline < _UNBOUNDED_DEADLINE else _UNBOUNDED_DEADLINE
+    return f"{SCRATCH_MARKER_TEXT}{value}\n"
 
 
 def _marker_deadline(raw: bytes) -> int | None:
@@ -607,6 +622,8 @@ def _remove_scratch(path: Path, created: float, marker_text: str) -> str:
         reason = "a file was written into it again after removal"
     sweep = (f"A later dispatch removes it once it is older than {SCRATCH_SWEEP_AGE_SECONDS} s and past this "
              "dispatch's deadline.")
+    if marker_text == _marker_text(math.inf):
+        sweep = "Its timeout has no bound, so its deadline never passes and no sweep removes it."
     if path.is_dir() and not marker.exists():
         try:
             marker.write_text(marker_text, encoding="utf-8")

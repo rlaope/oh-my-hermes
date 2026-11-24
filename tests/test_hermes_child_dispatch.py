@@ -867,6 +867,47 @@ class ScratchHomeCleanupTests(unittest.TestCase):
         self.assertEqual(result.status, "completed")
         self.assertEqual(seen[0], f"omh-hermes-child-scratch/v1\n{1_600_000_000 + 5 * 86400 + 3600 + 1}\n")
 
+    def test_an_infinite_or_huge_timeout_still_runs_and_records_the_largest_deadline(self) -> None:
+        for timeout in (float("inf"), 1e30):
+            with self.subTest(timeout=timeout):
+                seen: list[str] = []
+
+                def read_marker(path, *args, **kwargs):
+                    seen.append((Path(path).parent / ".omh-hermes-child-scratch").read_text(encoding="utf-8"))
+                    _REAL_RMTREE(path, *args, **kwargs)
+
+                with patch("shutil.rmtree", side_effect=read_marker):
+                    result = self.dispatch(timeout=timeout)
+                self.assertEqual(result.status, "completed")
+                self.assertEqual(seen[0], "omh-hermes-child-scratch/v1\n" + "9" * 20 + "\n")
+
+    def test_a_nan_timeout_is_refused_before_anything_is_emitted_or_created(self) -> None:
+        observed: list[object] = []
+        request = HermesChildRequest(
+            prompt="p", model="fake/model", provider="fake-provider", reasoning="low", parent_run_id="parent-123",
+            run_id="child-456", timeout_seconds=float("nan"), hermes=str(self.hermes), cwd=self.root, env=self.env,
+        )
+        with self.assertRaisesRegex(ValueError, "positive timeout"):
+            dispatch_hermes_child(request, dispatch_policy="ask_before_dispatch", confirmed=True,
+                                  observe=observed.append)
+        self.assertEqual(observed, [])
+        self.assertEqual(list(self.tmp.iterdir()), [])
+
+    def test_a_marker_that_cannot_be_written_is_a_typed_failure_before_the_child_starts(self) -> None:
+        real_write = Path.write_text
+
+        def refuse_marker(self_path, *args, **kwargs):
+            if self_path.name == ".omh-hermes-child-scratch":
+                raise OSError(28, "No space left on device")
+            return real_write(self_path, *args, **kwargs)
+
+        with patch.object(Path, "write_text", refuse_marker):
+            result = self.dispatch()
+        self.assertEqual((result.status, result.exit_code), ("failed", None))
+        self.assertIn("could not be marked (OSError)", result.stderr)
+        self.assertFalse((self.root / "argv.json").exists(), "the child never started")
+        self.assertEqual(list(self.tmp.iterdir()), [])
+
     def test_a_forged_far_deadline_garbage_or_an_old_header_only_marker_keeps_the_home(self) -> None:
         kept = [
             self.home("omh-hermes-child-far", age=2 * 86400, deadline=time.time() + 10 ** 12),
