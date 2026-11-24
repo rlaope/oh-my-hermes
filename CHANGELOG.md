@@ -236,6 +236,11 @@ All notable changes will be documented here.
   reported as a stray that has not exited. The
   `--json` report gains `idle_exit` and `overdue` per gateway. (`src/maintenance/gateway_health.py` `_unrecorded_line`,
   `IDLE_EXIT_STALE_SECONDS`, `src/system/process_listing.py` `IDLE_EXIT_FLAG`)
+- **omher: TERMINALS folders say where they are, and a split stays in its folder.** A folder header showed only the
+  folder's last name, so `~`, `~/Desktop/khope` and `~/work/khope` read alike; it now shows the path from home under
+  the name, with the git branch after it. A split's card sat above every folder; it now sits at the top of its first
+  pane's folder, and that folder's count and live state include the split's sessions. The `+` menu starts in the open
+  terminal's folder, and each folder header has its own `+` that opens the menu in that folder.
 - **omher 1.2.0.** Hand a terminal to a bot, a page per bot with its apps, Google's Antigravity CLI in TERMINALS, and
   a Windows pass.
   - **Agents:** Google's Antigravity CLI (`agy`) starts from the TERMINALS `+` menu with its official mark, shows its
@@ -245,7 +250,8 @@ All notable changes will be documented here.
   - **Bots:** a bot's page shows its persona, memory and work (#3148), an Apps page connects it to Hermes' MCP catalog
     (#3152), a bot whose Discord or Slack stopped connecting says so (#3157), a chat that stopped after a crash says
     why and recovers (#3127, #3129), and the reasoning picker offers every level Hermes accepts (#3134).
-  - **Terminals:** drag a header to merge two terminals of one folder (#3145), each split shows as one layout card
+  - **Terminals:** folder headers show their path and branch, a split's card sits in its folder, and each folder
+    has its own `+` (#3176); drag a header to merge two terminals of one folder (#3145), each split shows as one layout card
     (#3138, #3167), make a folder from the right-click menu with sharp pictures in terminals (#3073), and a panel tab
     click right after maximise picks that tab (#3146).
   - **Threads and links:** a thread lists the pull requests its bot linked with their checks (#3149), and links to

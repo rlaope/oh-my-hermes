@@ -1676,6 +1676,7 @@ export const en = {
   "term.shellTip": "Your login shell in the folder below",
   "term.st.busy": "Printing output",
   "term.here": "New terminal here",
+  "term.newIn": "New terminal in {name}",
   "term.shellPick": "Choose a shell",
   "term.shellDefault": "default",
   "term.shellDefaultOf": "{shell} (default)",
