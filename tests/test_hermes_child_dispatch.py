@@ -9,7 +9,10 @@ from pathlib import Path
 import signal
 import socket
 from tempfile import TemporaryDirectory
+import shutil
+import tempfile
 import textwrap
+import time
 from threading import Event, Thread
 import threading
 import tracemalloc
@@ -743,6 +746,131 @@ class HermesChildDispatchTests(unittest.TestCase):
                     observe=events.append,
                 )
         self.assertEqual(events[-1].status, "cancelled")
+
+
+
+_REAL_RMTREE = shutil.rmtree
+
+
+class ScratchHomeCleanupTests(unittest.TestCase):
+    """A dispatch's result is its child's outcome; removing the scratch home is a bounded step reported beside it.
+
+    Hermes' `chat` starts a detached `gateway run --idle-exit` for the scratch `HERMES_HOME` (a launchd job on macOS)
+    that outlives the child and may still write into that home, or hold a log open, when the dispatch removes it.
+    The removal is faked here, so nothing depends on the host or on timing: a writer that recreates a file right
+    after the tree is gone, and Windows' refusal to unlink a file another process holds open.
+    """
+
+    def setUp(self) -> None:
+        self.temp = TemporaryDirectory(prefix="omh-scratch-test-")
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.hermes = self.root / "hermes.py"
+        self.hermes.write_text(textwrap.dedent(_FAKE_HERMES).lstrip(), encoding="utf-8")
+        self.hermes.chmod(0o755)
+        self.tmp = self.root / "tmp"
+        self.tmp.mkdir()
+        tempdir = patch.object(tempfile, "tempdir", str(self.tmp))
+        tempdir.start()
+        self.addCleanup(tempdir.stop)
+        self.env = {**os.environ, "OMH_HOME": str(self.root / ".omh")}
+
+    def dispatch(self, prompt: str = "do focused work"):
+        request = HermesChildRequest(
+            prompt=prompt, model="fake/model", provider="fake-provider", reasoning="low",
+            parent_run_id="parent-123", run_id="child-456", timeout_seconds=5.0,
+            termination_grace_seconds=0.2, hermes=str(self.hermes), cwd=self.root, env=self.env,
+        )
+        return dispatch_hermes_child(request, dispatch_policy="ask_before_dispatch", confirmed=True)
+
+    def scratch_root(self) -> Path:
+        isolated = json.loads((self.root / "isolated-paths.json").read_text(encoding="utf-8"))
+        return Path(isolated["HERMES_HOME"]).parent
+
+    def test_a_writer_recreating_a_file_after_removal_leaves_a_completed_dispatch_completed(self) -> None:
+        seen: list[bool] = []
+
+        def removal_then_a_gateway_write(path, *args, **kwargs):
+            seen.append((Path(path) / ".omh-hermes-child-scratch").is_file())
+            _REAL_RMTREE(path, *args, **kwargs)
+            (Path(path) / "hermes" / "logs").mkdir(parents=True)
+            (Path(path) / "hermes" / "logs" / "gateway-stdio.log").write_text("late line\n", encoding="utf-8")
+
+        with patch("shutil.rmtree", side_effect=removal_then_a_gateway_write):
+            result = self.dispatch()
+        scratch = self.scratch_root()
+        self.addCleanup(_REAL_RMTREE, scratch, True)
+        self.assertEqual((result.status, result.exit_code), ("completed", 0))
+        self.assertFalse(result.cleanup_verified)
+        self.assertEqual(getattr(result, "scratch_left", None), str(scratch))
+        self.assertIn(f"scratch home left at {scratch}", getattr(result, "cleanup_note", ""))
+        self.assertTrue(seen and seen[0], "the scratch root carries OMH's marker while it exists")
+
+    def test_a_file_another_process_holds_open_on_windows_is_a_note_not_a_failure(self) -> None:
+        refusal = PermissionError(13, "The process cannot access the file because it is being used by another process")
+        with patch("shutil.rmtree", side_effect=refusal) as removal:
+            result = self.dispatch()
+        scratch = self.scratch_root()
+        self.addCleanup(_REAL_RMTREE, scratch, True)
+        self.assertEqual(result.status, "completed")
+        self.assertGreater(removal.call_count, 1, "the removal is retried before it is given up")
+        self.assertIn("PermissionError", getattr(result, "cleanup_note", ""))
+        self.assertTrue(scratch.exists())
+
+    def test_a_removal_that_succeeds_on_retry_is_clean(self) -> None:
+        calls: list[str] = []
+
+        def busy_once(path, *args, **kwargs):
+            calls.append(str(path))
+            if len(calls) == 1:
+                raise OSError(66, "Directory not empty")
+            _REAL_RMTREE(path, *args, **kwargs)
+
+        with patch("shutil.rmtree", side_effect=busy_once):
+            result = self.dispatch()
+        self.assertEqual((result.status, result.cleanup_verified), ("completed", True))
+        self.assertEqual(getattr(result, "cleanup_note", None), "")
+        self.assertFalse(self.scratch_root().exists())
+
+    def test_a_failed_child_stays_failed_and_an_unreaped_child_group_still_fails(self) -> None:
+        self.assertEqual(self.dispatch("fail").status, "failed")
+        with patch("omh.coding.hermes_child_dispatch._terminate_process_group", return_value=((), False)):
+            self.assertEqual(self.dispatch().status, "failed")
+
+    def test_the_next_dispatch_sweeps_only_old_scratch_homes_that_carry_omhs_marker(self) -> None:
+        day_and_more = time.time() - 2 * 86400
+        old = self.tmp / "omh-hermes-child-old"
+        young = self.tmp / "omh-hermes-child-young"
+        unmarked = self.tmp / "omh-hermes-child-unmarked"
+        foreign = self.tmp / "someone-else-old"
+        for directory in (old, young, unmarked, foreign):
+            (directory / "hermes").mkdir(parents=True)
+        for directory in (old, young, foreign):
+            (directory / ".omh-hermes-child-scratch").write_text("omh-hermes-child-scratch/v1\n", encoding="utf-8")
+        for directory in (old, unmarked, foreign):
+            os.utime(directory / ".omh-hermes-child-scratch" if directory != unmarked else directory,
+                     (day_and_more, day_and_more))
+        result = self.dispatch()
+        self.assertEqual(result.status, "completed")
+        self.assertFalse(old.exists())
+        self.assertTrue(young.exists())
+        self.assertTrue(unmarked.exists())
+        self.assertTrue(foreign.exists())
+
+
+    def test_the_fanout_record_carries_the_note_beside_a_completed_status(self) -> None:
+        from omh.coding import dispatch_failure_recovery
+
+        with patch("shutil.rmtree", side_effect=PermissionError(13, "in use")):
+            result = self.dispatch()
+        self.addCleanup(_REAL_RMTREE, self.scratch_root(), True)
+        with patch("omh.coding.hermes_child_dispatch.dispatch_hermes_child", return_value=result):
+            record = dispatch_failure_recovery.dispatch_unit_via_hermes_child(
+                prompt="p", routing={"model": "fake/model", "provider": "fake-provider", "reasoning": "low"},
+                parent_run_id="parent-123", run_id="child-456", cwd=self.root, timeout_seconds=5.0,
+            )
+        self.assertEqual(record["status"], "completed")
+        self.assertIn("scratch home left at", record["cleanup_note"])
 
 
 if __name__ == "__main__":

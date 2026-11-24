@@ -17,7 +17,9 @@ import os
 from pathlib import Path
 import re
 import secrets
+import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -60,6 +62,21 @@ _PARENT_MARKER_ENV: Final = "OMH_ISOLATED_HERMES_PARENT"
 _DEPTH_ENV: Final = "OMH_ISOLATED_HERMES_DEPTH"
 _MARKER_KEY: Final = secrets.token_bytes(32)
 _DISPATCH_GUARD = Lock()
+# A dispatch's scratch home: the directory name's prefix and, inside it, OMH's own marker file, the only proof a
+# later sweep accepts that OMH made a directory.
+SCRATCH_PREFIX: Final = "omh-hermes-child-"
+SCRATCH_MARKER: Final = ".omh-hermes-child-scratch"
+SCRATCH_MARKER_TEXT: Final = "omh-hermes-child-scratch/v1\n"
+# Hermes' `chat` starts a detached `gateway run --idle-exit` for the scratch HERMES_HOME. That gateway is Hermes',
+# not this process's child, so it is never signalled. It may still write into the home, or hold its log open (which
+# refuses the unlink on Windows), right after the child exits. The removal is retried this often, this far apart,
+# then the home is left and said.
+SCRATCH_REMOVE_ATTEMPTS: Final = 3
+SCRATCH_REMOVE_RETRY_SECONDS: Final = 0.2
+# A later dispatch removes a scratch home left behind once its marker is older than this. That is far past Hermes'
+# 600 s default idle window for the gateway that held it. The sweep checks at most this many candidates per dispatch.
+SCRATCH_SWEEP_AGE_SECONDS: Final = 86400
+SCRATCH_SWEEP_LIMIT: Final = 32
 _DISPATCH_ACTIVE = False
 _DISPATCH_OBSERVATION_AUTHORITY: Final = object()
 _SAFE_ENV_NAMES: Final = frozenset(
@@ -209,6 +226,9 @@ class HermesChildResult:
     # copies this mapping into its session record
     # (`omh coding hermes-child dispatch`).
     usage: Mapping[str, object]
+    # The child's process group ended, its pipes drained, and its scratch home
+    # is gone. Only the first two can turn a `completed` child into `failed`:
+    # a scratch home that could not be removed is said in `cleanup_note`.
     cleanup_verified: bool
     termination_signals: tuple[int, ...]
     stdout_truncated: bool
@@ -219,6 +239,11 @@ class HermesChildResult:
     # capture happened.
     stdout_truncation: Mapping[str, object] = field(default_factory=dict)
     stderr_truncation: Mapping[str, object] = field(default_factory=dict)
+    # The scratch home this dispatch had to leave ("" when it was removed),
+    # and the note that says so; a later dispatch sweeps it
+    # (`SCRATCH_SWEEP_AGE_SECONDS`). Never a reason for `status`.
+    scratch_left: str = ""
+    cleanup_note: str = ""
 
 
 class CancellationToken:
@@ -364,8 +389,13 @@ def _dispatch_guarded(
         emit("cancelled")
         return _result(request, depth, "cancelled", None, "", "", {}, True, ())
 
-    scratch = tempfile.TemporaryDirectory(prefix="omh-hermes-child-")
-    scratch_path = Path(scratch.name)
+    _sweep_scratch_homes()
+    scratch_path = Path(tempfile.mkdtemp(prefix=SCRATCH_PREFIX))
+    try:
+        (scratch_path / SCRATCH_MARKER).write_text(SCRATCH_MARKER_TEXT, encoding="utf-8")
+    except OSError:
+        shutil.rmtree(scratch_path, ignore_errors=True)
+        raise
     hermes_home = scratch_path / "hermes"
     home = scratch_path / "home"
     hermes_home.mkdir(mode=0o700)
@@ -501,25 +531,84 @@ def _dispatch_guarded(
                 # The arm home outlives this child, so its rows are still
                 # there; only names and counts leave the read.
                 cell_trace = read_hermes_child_trace(hermes_home, exclude=prior_sessions)
-        try:
-            scratch.cleanup()
-        except OSError:
-            cleanup = False
-        cleanup = cleanup and not scratch_path.exists()
+        cleanup_note = _remove_scratch(scratch_path)
     if interrupted is not None:
         emit(status)
         raise interrupted
     if observer_error is not None:
         raise observer_error
     if not cleanup and status == "completed":
+        # The child's own process group or pipes did not finish: that is this
+        # dispatch's own cleanup, unlike the scratch home Hermes' gateway may hold.
         status = "failed"
     emit(status)
     return _result(
         request, depth, status, process.returncode if process is not None else None,
-        stdout, stderr, usage, cleanup, signals,
+        stdout, stderr, usage, cleanup and not cleanup_note, signals,
         stdout_capture.truncated, stderr_capture.truncated,
         stdout_truncation, stderr_truncation,
+        scratch_left=str(scratch_path) if cleanup_note else "", cleanup_note=cleanup_note,
     )
+
+
+def _remove_scratch(path: Path) -> str:
+    """Remove a dispatch's scratch home with a few brief retries; "" once it is gone, else the note that says it was left.
+
+    The note is reported beside the result and never decides its status: what
+    still writes into the home, or holds a file in it open, is Hermes' gateway
+    for that home, which outlives the child by design and is not OMH's to stop.
+    """
+    reason = ""
+    for attempt in range(SCRATCH_REMOVE_ATTEMPTS):
+        if attempt:
+            time.sleep(SCRATCH_REMOVE_RETRY_SECONDS)
+        try:
+            shutil.rmtree(path)
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            reason = type(exc).__name__
+            continue
+        if not path.exists():
+            return ""
+        reason = "a file was written into it again after removal"
+    return (
+        f"scratch home left at {path}: something still used it after the child exited ({reason}); Hermes' idle-exit "
+        f"gateway for that home does until it exits. A later dispatch removes it once it is older than "
+        f"{SCRATCH_SWEEP_AGE_SECONDS} s."
+    )
+
+
+def _sweep_scratch_homes() -> None:
+    """Remove scratch homes that earlier dispatches had to leave; best effort, bounded, never raises.
+
+    A candidate must be a directory (not a link) directly under the temp root, named with `SCRATCH_PREFIX`, owned
+    by this user where the platform has user ids. It must hold `SCRATCH_MARKER` as a regular file with exactly
+    `SCRATCH_MARKER_TEXT`, and that marker must be older than `SCRATCH_SWEEP_AGE_SECONDS`. Each one gets one removal
+    attempt, at most `SCRATCH_SWEEP_LIMIT` of them; one that fails waits for the next dispatch.
+    """
+    cutoff = time.time() - SCRATCH_SWEEP_AGE_SECONDS
+    try:
+        with os.scandir(tempfile.gettempdir()) as listing:
+            candidates = [
+                Path(entry.path) for entry in listing
+                if entry.name.startswith(SCRATCH_PREFIX) and entry.is_dir(follow_symlinks=False)
+            ]
+    except OSError:
+        return
+    for path in sorted(candidates)[:SCRATCH_SWEEP_LIMIT]:
+        marker = path / SCRATCH_MARKER
+        try:
+            info = marker.lstat()
+            if not stat.S_ISREG(info.st_mode) or info.st_mtime > cutoff:
+                continue
+            if hasattr(os, "getuid") and path.lstat().st_uid != os.getuid():
+                continue
+            if marker.read_text(encoding="utf-8") != SCRATCH_MARKER_TEXT:
+                continue
+            shutil.rmtree(path)
+        except (OSError, UnicodeDecodeError):
+            continue
 
 
 def _spawn_preflight(request: HermesChildRequest) -> dict[str, object]:
@@ -729,6 +818,9 @@ def _result(
     stderr_truncated: bool = False,
     stdout_truncation: Mapping[str, object] | None = None,
     stderr_truncation: Mapping[str, object] | None = None,
+    *,
+    scratch_left: str = "",
+    cleanup_note: str = "",
 ) -> HermesChildResult:
     return HermesChildResult(
         status, request.parent_run_id, request.run_id, depth, request.model, exit_code,
@@ -736,4 +828,5 @@ def _result(
         stdout_truncated, stderr_truncated,
         dict(stdout_truncation or {}),
         dict(stderr_truncation or {}),
+        scratch_left, cleanup_note,
     )

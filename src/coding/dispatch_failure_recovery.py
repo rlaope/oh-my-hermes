@@ -831,6 +831,8 @@ def dispatch_unit_via_hermes_child(
             for key, value in (result.usage or {}).items()
             if value is None or isinstance(value, (str, int, float, bool))
         },
+        # A scratch home the dispatch had to leave; reported, never a status.
+        **({"cleanup_note": result.cleanup_note[:_MAX_CARD_TEXT]} if result.cleanup_note else {}),
     }
 
 
