@@ -13,11 +13,14 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import hashlib
 import hmac
+import math
 import os
 from pathlib import Path
 import re
 import secrets
+import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -60,6 +63,32 @@ _PARENT_MARKER_ENV: Final = "OMH_ISOLATED_HERMES_PARENT"
 _DEPTH_ENV: Final = "OMH_ISOLATED_HERMES_DEPTH"
 _MARKER_KEY: Final = secrets.token_bytes(32)
 _DISPATCH_GUARD = Lock()
+# A dispatch's scratch home: the directory name's prefix and, inside it, OMH's own marker file, the only proof a
+# later sweep accepts that OMH made a directory.
+SCRATCH_PREFIX: Final = "omh-hermes-child-"
+SCRATCH_MARKER: Final = ".omh-hermes-child-scratch"
+SCRATCH_MARKER_TEXT: Final = "omh-hermes-child-scratch/v1\n"
+# The marker's second and last line: the dispatch's own deadline (start + timeout + this margin) as decimal epoch
+# seconds. A sweep never takes a home before it; a missing or malformed line means "never swept". A
+# marker written by this PR's first head (the header line alone) has none, so it is never swept (nothing shipped it).
+SCRATCH_DEADLINE_MARGIN_SECONDS: Final = 3600
+_DEADLINE_DIGITS: Final = 20
+# The largest deadline the marker can hold. An infinite or oversized timeout records it, so that home is never swept.
+_UNBOUNDED_DEADLINE: Final = 10 ** _DEADLINE_DIGITS - 1
+# Hermes' `chat` starts a detached `gateway run --idle-exit` for the scratch HERMES_HOME. That gateway is Hermes',
+# not this process's child, so it is never signalled. It may still write into the home, or hold its log open (which
+# refuses the unlink on Windows), right after the child exits. The removal is retried this often, this far apart,
+# then the home is left and said.
+SCRATCH_REMOVE_ATTEMPTS: Final = 3
+SCRATCH_REMOVE_RETRY_SECONDS: Final = 0.2
+# A later dispatch removes a scratch home left behind once its marker is older than this. That is far past Hermes'
+# 600 s default idle window for the gateway that held it. The sweep checks at most this many candidates per dispatch.
+SCRATCH_SWEEP_AGE_SECONDS: Final = 86400
+SCRATCH_SWEEP_LIMIT: Final = 32  # removal attempts per dispatch, oldest marker first
+SCRATCH_SWEEP_SCAN_LIMIT: Final = 1024  # candidates examined per dispatch
+# The clock and the wait of the scratch step, module-level so tests hold them still.
+_clock: Callable[[], float] = time.time
+_sleep: Callable[[float], None] = time.sleep
 _DISPATCH_ACTIVE = False
 _DISPATCH_OBSERVATION_AUTHORITY: Final = object()
 _SAFE_ENV_NAMES: Final = frozenset(
@@ -209,6 +238,9 @@ class HermesChildResult:
     # copies this mapping into its session record
     # (`omh coding hermes-child dispatch`).
     usage: Mapping[str, object]
+    # The child's process group ended, its pipes drained, and its scratch home
+    # is gone. Only the first two can turn a `completed` child into `failed`:
+    # a scratch home that could not be removed is said in `cleanup_note`.
     cleanup_verified: bool
     termination_signals: tuple[int, ...]
     stdout_truncated: bool
@@ -219,6 +251,11 @@ class HermesChildResult:
     # capture happened.
     stdout_truncation: Mapping[str, object] = field(default_factory=dict)
     stderr_truncation: Mapping[str, object] = field(default_factory=dict)
+    # The scratch home this dispatch had to leave ("" when it was removed),
+    # and the note that says so; a later dispatch sweeps it
+    # (`SCRATCH_SWEEP_AGE_SECONDS`). Never a reason for `status`.
+    scratch_left: str = ""
+    cleanup_note: str = ""
 
 
 class CancellationToken:
@@ -294,6 +331,8 @@ def dispatch_hermes_child(
     )
     if not request.prompt or not request.model or request.timeout_seconds <= 0:
         raise ValueError("prompt, model, and a positive timeout are required")
+    if math.isnan(request.timeout_seconds):
+        raise ValueError("prompt, model, and a positive timeout are required")
     verdict = _spawn_preflight(request)
     if not verdict["ready"]:
         raise SpawnPreflightError(verdict)
@@ -364,8 +403,24 @@ def _dispatch_guarded(
         emit("cancelled")
         return _result(request, depth, "cancelled", None, "", "", {}, True, ())
 
-    scratch = tempfile.TemporaryDirectory(prefix="omh-hermes-child-")
-    scratch_path = Path(scratch.name)
+    _sweep_scratch_homes()
+    scratch_created = _clock()
+    marker_text = _marker_text(scratch_created + request.timeout_seconds + SCRATCH_DEADLINE_MARGIN_SECONDS)
+    try:
+        scratch_path = Path(tempfile.mkdtemp(prefix=SCRATCH_PREFIX))
+        scratch_identity = os.lstat(scratch_path)
+    except OSError as exc:
+        emit("failed")
+        diagnostic = f"Hermes child scratch home could not be created ({type(exc).__name__})"
+        return _result(request, depth, "failed", None, "", diagnostic, {}, True, ())
+    try:
+        (scratch_path / SCRATCH_MARKER).write_text(marker_text, encoding="utf-8")
+    except OSError as exc:
+        # Without its marker a left home could never be swept: no child starts on an unmarked home.
+        shutil.rmtree(scratch_path, ignore_errors=True)
+        emit("failed")
+        diagnostic = f"Hermes child scratch home could not be marked ({type(exc).__name__})"
+        return _result(request, depth, "failed", None, "", diagnostic, {}, not scratch_path.exists(), ())
     hermes_home = scratch_path / "hermes"
     home = scratch_path / "home"
     hermes_home.mkdir(mode=0o700)
@@ -501,25 +556,222 @@ def _dispatch_guarded(
                 # The arm home outlives this child, so its rows are still
                 # there; only names and counts leave the read.
                 cell_trace = read_hermes_child_trace(hermes_home, exclude=prior_sessions)
-        try:
-            scratch.cleanup()
-        except OSError:
-            cleanup = False
-        cleanup = cleanup and not scratch_path.exists()
+        cleanup_note = _remove_scratch(scratch_path, scratch_created, marker_text, scratch_identity)
     if interrupted is not None:
         emit(status)
         raise interrupted
     if observer_error is not None:
         raise observer_error
     if not cleanup and status == "completed":
+        # The child's own process group or pipes did not finish: that is this
+        # dispatch's own cleanup, unlike the scratch home Hermes' gateway may hold.
         status = "failed"
     emit(status)
     return _result(
         request, depth, status, process.returncode if process is not None else None,
-        stdout, stderr, usage, cleanup, signals,
+        stdout, stderr, usage, cleanup and not cleanup_note, signals,
         stdout_capture.truncated, stderr_capture.truncated,
         stdout_truncation, stderr_truncation,
+        scratch_left=str(scratch_path) if cleanup_note else "", cleanup_note=cleanup_note,
     )
+
+
+def _marker_text(deadline: float) -> str:
+    """The marker with its deadline line; an infinite or oversized deadline records `_UNBOUNDED_DEADLINE`."""
+    value = int(deadline) + 1 if math.isfinite(deadline) and deadline < _UNBOUNDED_DEADLINE else _UNBOUNDED_DEADLINE
+    return f"{SCRATCH_MARKER_TEXT}{value}\n"
+
+
+def _marker_deadline(raw: bytes) -> int | None:
+    """The deadline of an exact marker, or None: the header line, then 1-20 ASCII digits and a newline, nothing else."""
+    header = SCRATCH_MARKER_TEXT.encode("ascii")
+    if not raw.startswith(header):
+        return None
+    line = raw[len(header):]
+    digits = line[:-1]
+    if not line.endswith(b"\n") or not 0 < len(digits) <= _DEADLINE_DIGITS or not digits.isdigit():
+        return None
+    return int(digits)
+
+
+def _remove_scratch(path: Path, created: float, marker_text: str, identity: os.stat_result | None = None) -> str:
+    """Remove a dispatch's scratch home with a few brief retries; "" once it is gone, else the note that says it was left.
+
+    Everything but OMH's marker goes first, then the marker, then the root, so a home
+    that is left still carries its marker; one that lost it gets it back, dated
+    `created`, for a later sweep. The note never decides the result's status: what
+    still writes into the home, or holds a file in it open, is Hermes' gateway for
+    that home, which outlives the child by design and is not OMH's to stop.
+    """
+    reason = ""
+    marker = path / SCRATCH_MARKER
+    for attempt in range(SCRATCH_REMOVE_ATTEMPTS):
+        if attempt:
+            _sleep(SCRATCH_REMOVE_RETRY_SECONDS)
+        try:
+            _remove_marker_last(path, identity)
+        except FileNotFoundError:
+            if not path.exists():
+                return ""
+            reason = "FileNotFoundError"
+            continue
+        except OSError as exc:
+            reason = str(exc) if isinstance(exc, _ScratchRefused) else type(exc).__name__
+            continue
+        if not path.exists():
+            return ""
+        reason = "a file was written into it again after removal"
+    sweep = (f"A later dispatch removes it once it is older than {SCRATCH_SWEEP_AGE_SECONDS} s and past this "
+             "dispatch's deadline.")
+    if marker_text == _marker_text(math.inf):
+        sweep = "Its timeout has no bound, so its deadline never passes and no sweep removes it."
+    if path.is_dir() and not marker.exists():
+        try:
+            marker.write_text(marker_text, encoding="utf-8")
+            os.utime(marker, (created, created))
+        except OSError:
+            sweep = "Its marker could not be restored, so no sweep removes it."
+    return (
+        f"scratch home left at {path}: something still used it after the child exited ({reason}); Hermes' idle-exit "
+        f"gateway for that home does until it exits. {sweep}"
+    )
+
+
+class _ScratchRefused(OSError):
+    """A scratch home this process will not remove: not a plain directory, or not the one its caller checked."""
+
+
+def _link_like(info: os.stat_result) -> bool:
+    attributes = getattr(info, "st_file_attributes", 0)
+    return stat.S_ISLNK(info.st_mode) or bool(attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT)
+
+
+def _same(info: os.stat_result, other: os.stat_result) -> bool:
+    return (info.st_dev, info.st_ino) == (other.st_dev, other.st_ino)
+
+
+def _descriptor_removal() -> bool:
+    return (
+        getattr(os, "O_NOFOLLOW", 0) != 0 and getattr(os, "O_DIRECTORY", 0) != 0
+        and shutil.rmtree.avoids_symlink_attacks
+        and {os.unlink, os.rmdir, os.stat} <= os.supports_dir_fd and os.scandir in os.supports_fd
+    )
+
+
+def _remove_marker_last(path: Path, expected: os.stat_result | None = None) -> None:
+    """One removal attempt of a scratch home: every entry but OMH's marker, then the marker, then the root.
+
+    It never follows a link at any level. The root must be a plain directory, not a link or reparse point, and
+    the same one (`st_dev`/`st_ino`) as `expected`, the caller's own check. Where the platform allows it, the root is
+    opened with `O_NOFOLLOW` and emptied only through that descriptor, and the root's own `rmdir` goes through its
+    parent after the name is checked once more. Without that (Windows), the root and each entry are `lstat`ed
+    just before use, and a link or reparse point is refused; a check-then-use window remains there, under the
+    per-user temp root. A failure part way leaves the marker in place. Raises `OSError` (`_ScratchRefused` for a
+    refusal).
+    """
+    before = os.lstat(path)
+    if _link_like(before) or not stat.S_ISDIR(before.st_mode):
+        raise _ScratchRefused(f"{path.name} is not a plain directory")
+    if expected is not None and not _same(before, expected):
+        raise _ScratchRefused(f"{path.name} changed after it was checked")
+    if _descriptor_removal():
+        flags = os.O_RDONLY | getattr(os, "O_DIRECTORY") | getattr(os, "O_NOFOLLOW")
+        fd = os.open(path, flags)
+        try:
+            if not _same(os.fstat(fd), before):
+                raise _ScratchRefused(f"{path.name} changed after it was checked")
+            with os.scandir(fd) as listing:
+                entries = [(entry.name, entry.is_dir(follow_symlinks=False))
+                           for entry in listing if entry.name != SCRATCH_MARKER]
+            for name, is_directory in entries:
+                if is_directory:
+                    shutil.rmtree(name, dir_fd=fd)
+                else:
+                    os.unlink(name, dir_fd=fd)
+            try:
+                os.unlink(SCRATCH_MARKER, dir_fd=fd)
+            except FileNotFoundError:
+                pass
+        finally:
+            os.close(fd)
+        parent = os.open(path.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY"))
+        try:
+            if not _same(os.stat(path.name, dir_fd=parent, follow_symlinks=False), before):
+                raise _ScratchRefused(f"{path.name} changed after it was checked")
+            os.rmdir(path.name, dir_fd=parent)
+        finally:
+            os.close(parent)
+        return
+    with os.scandir(path) as listing:
+        entries = [Path(entry.path) for entry in listing if entry.name != SCRATCH_MARKER]
+    for entry in entries:
+        info = os.lstat(entry)
+        if _link_like(info):
+            raise _ScratchRefused(f"{entry.name} in {path.name} is a link or reparse point")
+        if stat.S_ISDIR(info.st_mode):
+            shutil.rmtree(entry)
+        else:
+            os.unlink(entry)
+    (path / SCRATCH_MARKER).unlink(missing_ok=True)
+    after = os.lstat(path)
+    if _link_like(after) or not _same(after, before):
+        raise _ScratchRefused(f"{path.name} changed after it was checked")
+    path.rmdir()
+
+
+def _sweep_scratch_homes() -> None:
+    """Remove scratch homes that earlier dispatches had to leave; best effort, bounded, never raises.
+
+    A candidate must be a directory (not a link) directly under the temp root, named with `SCRATCH_PREFIX`, owned
+    by this user where the platform has user ids. It must hold `SCRATCH_MARKER` as a regular file with exactly
+    `SCRATCH_MARKER_TEXT` and a deadline line (`_marker_deadline`); that marker must be older than
+    `SCRATCH_SWEEP_AGE_SECONDS` and the clock past its deadline. At most
+    `SCRATCH_SWEEP_SCAN_LIMIT` candidates are examined; at most `SCRATCH_SWEEP_LIMIT` of the eligible ones, oldest
+    marker first, get one removal attempt each, and one that fails waits for the next dispatch.
+    """
+    now = _clock()
+    cutoff = now - SCRATCH_SWEEP_AGE_SECONDS
+    candidates: list[Path] = []
+    try:
+        with os.scandir(tempfile.gettempdir()) as listing:
+            for entry in listing:
+                if entry.name.startswith(SCRATCH_PREFIX) and entry.is_dir(follow_symlinks=False):
+                    candidates.append(Path(entry.path))
+                    if len(candidates) >= SCRATCH_SWEEP_SCAN_LIMIT:
+                        break
+    except OSError:
+        return
+    eligible: list[tuple[float, Path]] = []
+    for path in candidates:
+        marker = path / SCRATCH_MARKER
+        try:
+            info = marker.lstat()
+            if not stat.S_ISREG(info.st_mode) or info.st_mtime > cutoff:
+                continue
+            root = path.lstat()
+            if hasattr(os, "getuid") and root.st_uid != os.getuid():
+                continue
+            with marker.open("rb") as handle:
+                raw = handle.read(len(SCRATCH_MARKER_TEXT) + _DEADLINE_DIGITS + 2)
+            deadline = _marker_deadline(raw)
+            if deadline is None or now <= deadline:
+                continue
+        except OSError:
+            continue
+        eligible.append((info.st_mtime, path, raw, root))
+    for mtime, path, raw, root in sorted(eligible, key=lambda item: (item[0], item[1]))[:SCRATCH_SWEEP_LIMIT]:
+        try:
+            _remove_marker_last(path, root)
+        except OSError:
+            # Failed after the marker went (the root could not be removed): put the same marker back, with its old
+            # time, so the next dispatch can still take the home.
+            marker = path / SCRATCH_MARKER
+            try:
+                if path.is_dir() and not marker.exists():
+                    marker.write_bytes(raw)
+                    os.utime(marker, (mtime, mtime))
+            except OSError:
+                pass
 
 
 def _spawn_preflight(request: HermesChildRequest) -> dict[str, object]:
@@ -729,6 +981,9 @@ def _result(
     stderr_truncated: bool = False,
     stdout_truncation: Mapping[str, object] | None = None,
     stderr_truncation: Mapping[str, object] | None = None,
+    *,
+    scratch_left: str = "",
+    cleanup_note: str = "",
 ) -> HermesChildResult:
     return HermesChildResult(
         status, request.parent_run_id, request.run_id, depth, request.model, exit_code,
@@ -736,4 +991,5 @@ def _result(
         stdout_truncated, stderr_truncated,
         dict(stdout_truncation or {}),
         dict(stderr_truncation or {}),
+        scratch_left, cleanup_note,
     )

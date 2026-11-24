@@ -165,6 +165,17 @@ All notable changes will be documented here.
   the home used to report `path_escape`); nothing is written through either. A read that races a write can still
   report `not_regular_file` for that one read, on every platform; that predates this change and is a follow-up.
   (`src/coding/user_executors.py`)
+- **A Hermes child dispatch that completed is no longer reported as failed because its scratch home was still in
+  use.** Hermes' `chat` starts a detached idle-exit gateway for the dispatch's scratch `HERMES_HOME`. The gateway
+  can still write into that home, or hold its log open (Windows then refuses the unlink), after the child exits, and
+  the failed removal turned a `completed` child into `failed`. The status is now the child's own. The removal is
+  retried briefly. A home that cannot be removed is left with a `cleanup_note` ("scratch home left at <path>: …") on
+  the result, on the fanout recovery record and on the CLI's stderr. Its OMH marker lets a later dispatch remove it
+  once it is older than a day and past that dispatch's own recorded deadline (start, timeout and an hour; an infinite
+  or oversized timeout records the largest deadline, so that home is never swept). A NaN timeout is now refused. The
+  marker goes last and is restored if a removal took it. OMH still never signals that gateway. A child whose own process group or pipes did not
+  finish still fails. (`src/coding/hermes_child_dispatch.py` `_remove_scratch`, `_sweep_scratch_homes`; `AGENTS.md`
+  Hermes-native child boundary)
 - **`omh setup` connects to a Hermes config whose root keys hold column-0 lists, or whose section keys carry a
   comment.** Step 2 stopped with "non-mapping or unsupported root YAML is user-owned" on a `config.yaml` that writes a
   root key's list items at the left edge (`toolsets:` then `- hermes-cli`), the spelling older Hermes releases, hand
