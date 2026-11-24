@@ -50,6 +50,9 @@
 // mock.ready {bot, ok, signIn?} (what `bots.ready` answers for a bot: ok false = Hermes says it cannot answer; with
 // signIn: the strict check for that provider passes, as after `hermes auth add <id>`, and its models show in
 // models.options),
+// mock.botPageFail {bot, on} (the bot page's bots.page read fails for that bot until turned off),
+// mock.platforms {available?, bots?} (what bots.platforms answers: OMH's `omh hermes platforms`, rule 43; by default
+// every listed platform is connected),
 // mock.move {on} (the bridge died and came back on a new port: answers `{port}` once a second listener is up, then drops
 // every connection to the first port, which refuses WebSockets until `mock.move {on: false}` or mock.reset).
 import http from "node:http";
@@ -653,6 +656,24 @@ let lostTurns = new Map();
 let lostQueue = new Map();
 // Bots whose skills.list is empty (mock.noSkills).
 let noSkills;
+// Bots whose bots.page read fails (mock.botPageFail {bot, on}), as a peer whose link dropped answers.
+let botPageFail;
+// Each bot's messaging platforms as the bridge's PlatformStates answers (mock.platforms {available?, bots?}).
+let platformsRead;
+// As OMH reports them: every profile of the Hermes home, most with no messaging platform.
+const PLATFORMS_NONE = () => Object.fromEntries(BOT_SEED.map((b) => [b.name, { log: "read", platforms: [] }]));
+const PLATFORMS_SEED = () => ({
+  available: true,
+  bots: {
+    ...PLATFORMS_NONE(),
+    default: {
+      log: "read",
+      platforms: [
+        { platform: "discord", status: "connected", attention: false, since: "", logged: "2020-01-02T03:04:05Z", reason_kind: "", unknown_why: "", reason: "", guidance: "", restart: "hermes -p default gateway restart", intents: [] },
+      ],
+    },
+  },
+});
 // Tasks › Linear: the bots whose config names a Linear MCP server (mock.linear {bot, server|null})
 let linearMcp;
 // Apps (apps.*, BOUNDARY rule 41): Hermes' MCP catalog (APP_CATALOG) and each bot's state per entry (`<bot>:<name>` ->
@@ -680,6 +701,51 @@ const APP_SKILL_SEED = {
   ],
 };
 let notReady = new Map();
+
+// The bot page's persona and memory (bots.page), as the bridge's read_bot_page answers: one bot with everything,
+// one with no SOUL.md, a memory file too big to read and a switched-off target, one whose SOUL.md is a link (never
+// followed) and whose memory could not be read. A bot on another computer reads like its own profile there.
+const DELIM = "\n§\n";
+const pageFile = (file, state, text = "", extra = {}) => ({
+  file,
+  state,
+  size: state === "ok" ? new TextEncoder().encode(text).length : null,
+  text: state === "ok" ? text : "",
+  lossy: false,
+  ...extra,
+});
+const memTarget = (target, file, state, entries, limit, enabled = true, extra = {}) => ({
+  ...pageFile(`memories/${file}`, state, entries.join(DELIM), extra),
+  target,
+  entries: state === "ok" ? entries : [],
+  chars: state === "ok" ? entries.join(DELIM).length : 0,
+  limit,
+  enabled,
+});
+const BOT_PAGE_SEED = {
+  kami: () => ({
+    soul: pageFile("SOUL.md", "ok", "# Kami\n\nA calm, direct helper. Short answers first, details when asked.\n<b>not markup</b>\n"),
+    memory: [
+      memTarget("memory", "MEMORY.md", "ok", ["The web app deploys from main after CI passes.", "Release notes go in CHANGELOG.md."], 2200),
+      memTarget("user", "USER.md", "ok", ["Prefers short answers.\nAsks for the command first."], 1375),
+    ],
+  }),
+  friren: () => ({
+    soul: pageFile("SOUL.md", "missing"),
+    memory: [
+      { ...memTarget("memory", "MEMORY.md", "too_big", [], 2200), size: 3 * 1024 * 1024 },
+      memTarget("user", "USER.md", "missing", [], 1375, false),
+    ],
+  }),
+  default: () => ({
+    soul: pageFile("SOUL.md", "link"),
+    memory: [memTarget("memory", "MEMORY.md", "unreadable", [], 2200), memTarget("user", "USER.md", "missing", [], 1375)],
+  }),
+};
+const remotePage = () => ({
+  soul: pageFile("SOUL.md", "ok", "The persona kept on the other computer.\n"),
+  memory: [memTarget("memory", "MEMORY.md", "ok", ["Builds run on this machine overnight."], 2200), memTarget("user", "USER.md", "missing", [], 1375)],
+});
 
 // What each bot has done (bots.info): sessions per place, skills, routines.
 const INFO_SEED = {
@@ -867,6 +933,8 @@ function reset() {
   lostTurns = new Map();
   lostQueue = new Map();
   noSkills = new Set();
+  botPageFail = new Set();
+  platformsRead = PLATFORMS_SEED();
   linearMcp = new Map();
   appState = new Map([["kami:linear", "installed"], ["kami:figma", "needs_signin"], ["kami:datadog", "disabled"]]);
   appsNext = {};
@@ -1562,6 +1630,13 @@ const OPS = {
       routines: (ROUTINE_SEED[b.name] ?? []).length,
     };
   },
+  "bots.platforms": () => structuredClone(platformsRead),
+  "bots.page": (p) => {
+    const b = needBotAny(p);
+    if (botPageFail.has(b.name)) throw new OpError("bot_offline", `${b.name} is offline`);
+    const seed = b.host ? remotePage : (BOT_PAGE_SEED[b.name] ?? (() => ({ soul: pageFile("SOUL.md", "missing"), memory: [memTarget("memory", "MEMORY.md", "missing", [], 2200), memTarget("user", "USER.md", "missing", [], 1375)] })));
+    return seed();
+  },
   "skills.list": (p) => {
     needBot(p);
     if (noSkills.has(p.bot)) return { skills: [] };
@@ -2167,6 +2242,16 @@ const OPS = {
     const b = needBot(p);
     if (p.server) linearMcp.set(b.name, String(p.server));
     else linearMcp.delete(b.name);
+    return {};
+  },
+  "mock.platforms": (p) => {
+    platformsRead = { available: p.available !== false, bots: { ...PLATFORMS_NONE(), ...(p.bots ?? {}) } };
+    return {};
+  },
+  "mock.botPageFail": (p) => {
+    const b = needBotAny(p);
+    if (p.on) botPageFail.add(b.name);
+    else botPageFail.delete(b.name);
     return {};
   },
   "mock.reset": () => {

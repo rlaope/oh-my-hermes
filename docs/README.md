@@ -43,6 +43,7 @@ references rather than normal user steps.
 | Move a configured profile to another machine or teammate | [Setup Profile Pack](SETUP-PROFILE-PACK.md) |
 | Block a Hermes tool call with a rule you wrote | [Toolcall Rules](TOOLCALL-RULES.md) |
 | See which of an unattended batch's calls the rules refuse, before it starts | [Toolcall Rules: Rehearsing a planned batch](TOOLCALL-RULES.md#rehearsing-a-planned-batch) |
+| Let one profile's bot push its branch and open its own PR when nobody can answer (operator) | [PR Delivery Grant](PR-DELIVERY-GRANT.md) |
 | See which coding work is running, in which session | [Coding Observability](CODING-OBSERVABILITY.md) |
 | Understand measured and unproven impact claims | [Capability Impact](CAPABILITY_IMPACT.md) |
 | Browse all generated skills and harness metadata | [Workflow Reference](WORKFLOWS.md) |

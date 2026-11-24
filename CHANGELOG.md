@@ -24,6 +24,16 @@ All notable changes will be documented here.
   text is never added to it, waits in the composer instead, and a notice says so. The text is read only when the
   screen is this machine's (no SSH, and inside tmux not over SSH): through the Win32 clipboard on Windows, `pbpaste`
   on a Mac, and `wl-paste`, `xclip` or `xsel` on Linux. (#3131; `docs/OMH-TUI-BOUNDARY.md`)
+- **omher: a click on a side-panel tab right after maximise or restore picks that tab.** While the panel slides,
+  a press on a tab that is still moving counts as the tab row's own press (for a double-click on the row), and its
+  click goes nowhere. The check for "still moving" looked at every frame of the last 60 ms. So a tab that had already
+  stopped, two or three frames before the click, still read as moving if an earlier frame in that window had moved
+  it. The click was dropped and the panel stayed on its old tab. Now a tab counts as moving in three cases: while
+  the slide runs, when it moved between the frame the person saw at the press and the moment omher reads the click,
+  or when it had only just arrived in that frame. A tab that held still from the frame before the press is the
+  person's to click.
+  (`apps/omher/src/elsewhere/PanelTabs.tsx`, `apps/omher/src/elsewhere/rowMotion.ts`; e2e `panel-max.spec.ts`, seen
+  on macOS CI)
 - **omher on Windows: "Reply there" no longer draws over the row's time, and the app names Windows' own fonts.** In
   the side panel's "Where your bot is", hovering a Slack or Discord row showed "거기에 답장" on top of the row's time
   ("거기에답장일"): the button floated over the time and its hover fill was see-through. Now the time gives way while
@@ -313,6 +323,31 @@ All notable changes will be documented here.
   `--script`, drops events the bot's own runs caused and more than 5 events per 15 minutes. Both scripts are inert
   package data the person's Hermes runs (owner-approved scoped integration, 2026-11-23); OMH never runs them.
   (`src/skills/pr_watch_toolkit/`, `src/skills/catalog_feature_surfaces.py`, `src/routing/policy.py`)
+- **automation-blueprint: be told when something happens on a platform that sends no webhook.** Asking Hermes to
+  be told when new mail matches a filter, a calendar event is about to start, a Notion page or database changes, a
+  Linear or Jira issue is assigned, an Obsidian vault folder changes, or a Sentry issue opens ("tell me when a mail
+  from my boss arrives", "노션 데이터베이스 바뀌면 알려줘") now reaches `automation-blueprint`, whose monitor recipes
+  (`references/monitor-recipes.md`) prepare one paused Hermes cron monitor job per trigger. Its script, from
+  `toolkit/monitors/`, prints only ids and the platform's own timestamps, so the agent wakes only when they change:
+  `api_watch.py` reads Notion, Linear, Jira and Sentry with a key from one environment name, sent only to that
+  platform's fixed host; `google_watch.py` runs Hermes' own google-workspace skill CLI; `vault_watch.py` lists an
+  Obsidian folder's file metadata. A missing or rejected credential is reported once; a network failure is a failed
+  monitor tick, never a change. The scripts write nothing and are inert package data the person's Hermes runs, the
+  same scoped-integration class as the PR watch scripts; OMH never runs them.
+  (`src/skills/monitor_recipes.py`, `src/skills/monitor_watch_toolkit/`, `src/routing/policy.py`)
+- **Work that starts in another app: a spec, a mail, an alert, a meeting, a vault, a Figma frame.** A new skill,
+  `app-work-intake`, reads the item through the bot's own Hermes tool and takes one of three paths: a Notion or
+  Confluence page or a Linear or Jira issue becomes a plan, a fanout run and a PR, with the PR link written back to
+  the source ("turn Linear issue ENG-42 into a PR and link the PR back"); a mail message becomes a work thread or a
+  Needs item instead of a reply; a Sentry or Datadog alert becomes a triage and a fix hand-off, bounded by the PR
+  watch guards in `github-event-ops`. Three existing skills gain the other three: `operating-rhythm` turns a meeting's
+  notes or transcript into tracker issues through Hermes' `meeting-action-items`, `wiki` uses an Obsidian vault for
+  recall, the bot's daily journal and copies of approved `.omh/memory` records (never Hermes' `MEMORY.md`), and
+  `frontend` reads a Figma frame into `DESIGN.md` tokens and a handoff. Each names the Hermes MCP server or bundled
+  skill it needs and stops with `hermes mcp install <name>` when it is missing; every write to an app stays the bot's
+  own approved action, reported only after reading it back. Replies, summaries, one-ticket actions, calendar
+  questions and Figma exports keep their routes. OMH itself calls no app.
+  (`src/skills/catalog_feature_surfaces.py`, `src/skills/render.py`, `src/routing/policy.py`)
 - **OMH TUI: kitty previews inside omher, and a quiet Ctrl+Enter.** Under `TERM_PROGRAM=omher` the OMH TUI asks for
   kitty previews (tmux and screen keep half-blocks). Ctrl+Enter on a prompt with images during a turn now stops the
   turn and sends the prompt without an `Interrupted.` notice, like Claude Code's send-now; Hermes' "Operation
@@ -337,6 +372,14 @@ All notable changes will be documented here.
   channel or thread, what happened and whether they need to do anything. The automation-blueprint reference quotes
   the same prompt, and a bridge test keeps the two identical. Applies to briefings omher sets up from now on; an
   existing `omher-brief` job keeps its prompt until it is edited.
+- **A bot can push its own branch and open its own PR unattended, once you grant it.** Off by default for every
+  profile, and only you change it, at your own terminal: `omh capability-policy pr-delivery on` (`show`, `off`,
+  `--json`). With it on, a webhook, one-shot or scheduled run may push a branch under the grant's prefix (`bot/`
+  by default), open a PR from it, and push fixes to and comment on a PR it opened, nothing else. It never merges,
+  force-pushes, pushes to the default branch, or touches a PR it did not open. In a run nobody can answer (a
+  webhook or `api_server` run, a cron turn, `hermes chat -q`, a delegated child), OMH's tool hook refuses those
+  whatever the grant says, and refuses the allowed ones while the grant is off. It holds a bot that follows the
+  skill, not one that sets out to evade it. `omh doctor` lists the profiles whose grant is on. See [PR Delivery Grant](docs/PR-DELIVERY-GRANT.md).
 - **omher keeps every TERMINALS row over a restart, types European Option signs, and gives the keyboard back.**
   - **Restart:** every TERMINALS row comes back, however many there are. Before, only the newest 20 were saved and the
     next start deleted the older rows' history and files, even for a running Claude. Only the newest 20 keep their
@@ -487,6 +530,45 @@ All notable changes will be documented here.
   catalog files, the bot's `mcp_servers` names and switches and whether a sign-in token file exists, and never sees a
   key or a token (`docs/OMHER-BOUNDARY.md` rule 41). (`apps/omher/src/apps/`)
 
+- **omher: a bot's page shows who the bot is: its persona, what it remembers, and its work.** A bot's page in Settings
+  (the row menu's Edit bot, or Edit in the Details panel) showed only its picture, name and a few counts. It now shows
+  the profile's `SOUL.md` as plain text with its size; Hermes' built-in memory (`memories/MEMORY.md`, what the bot
+  remembers, and `memories/USER.md`, what it knows about you) as entries split on Hermes' delimiter, each with its
+  characters against the limit `config.yaml` sets (Hermes' 2,200 and 1,375 when unset) and an Off mark when the profile
+  switches it off; the bot's automations, each opening the Automations page on that job, with Open in Automations
+  filtered to the bot; its Slack, Discord, Telegram and cron sessions, read-only; and its open threads with their
+  status, each opening the thread. Nothing on the page writes: Edit opens the bot's main chat with a request such as
+  "Update your SOUL.md: " in the composer after anything you had typed there, and nothing is sent until you send it. The
+  files are read when the page opens and on Read again, at most 1 MB each (a larger file is sized and not read), only
+  the fixed paths and never through a link, with CRLF and non-UTF-8 bytes tolerated. A bot on another computer is read
+  there by its own bridge, over the same SSH link. Picture and name editing stay where they were.
+  (`apps/omher/bridge/omher_bridge.py` `read_bot_page`, `apps/omher/src/settings/BotSections.tsx`;
+  `docs/OMHER-BOUNDARY.md` rule 42)
+- **A bot whose Discord or Slack stopped connecting now says so in omher and on the OMH TUI bot board.** A Discord
+  bot whose profile gained a role allowlist can be refused at its next reconnect (Discord's Server Members privileged
+  intent) and stay offline, with only Hermes' gateway log saying why; `omh doctor` now reads it, but nothing showed
+  it where the person looks. omher's sidebar row now names a platform known not to be connected ("Discord
+  disconnected", "Slack failed to connect"; in words and a mark, never colour alone), and a reconnect Hermes runs by
+  itself only once Hermes flags it or it has gone on for 10 minutes. The bot's page gains a Messaging section with
+  each platform's state, since when, why in plain words, Hermes' own reason and guidance, and the fix: for a
+  privileged-intents refusal which intents to turn on and where (the Discord Developer Portal's Bot page, Privileged
+  Gateway Intents, with a link), or removing the role allowlist; then Hermes' `hermes -p <gateway> gateway restart` to
+  copy, naming the gateway that serves the bot. omher runs none of it, and says it cannot tell when OMH could not
+  read a bot's logs. The OMH TUI bot board (`/bots`, Ctrl+S) shows the same: the card's bottom edge says
+  `discord ✗ disconnected` before any other chip (a routine reconnect after the same 10 minutes), and the profile's
+  box gives the state, since when, Hermes' reason, the fix and the restart command. All three read one producer,
+  `omh doctor`'s gateway health reader, through a new per-bot view (`omh hermes platforms`, JSON
+  `omh_bot_platforms/v1`, which omher's bridge runs): the serving gateway's own record entry first, else the newest
+  line of that gateway's run in the bounded log tails, so a refusal followed by a later connect reads connected, a
+  connect followed by a fatal error reads disconnected, and a line from an earlier run or for a bot no gateway serves
+  reads as not known, never as connected. A platform Hermes stopped judging when it served the bot again after a
+  config or `.env` change (Discord removed, say) shows nothing. A bot with no messaging platform shows nothing. The
+  reader now also takes escape and control characters, bearer and labelled secrets, a Discord or Slack webhook's
+  credential path and long opaque keys out of Hermes' text, names a log as `~/…` rather than with the home folder
+  spelled out, reads only lines that can be an adapter's (the board keeps unchanged logs from its last read), and
+  names the gateway's profile in every restart command (`hermes -p default gateway restart`; a bare `hermes gateway
+  restart` follows Hermes' sticky active profile). (`src/maintenance/gateway_health.py` `bot_platforms`,
+  `src/tui/bot_board.py`, `apps/omher/src/platforms/`; `docs/OMHER-BOUNDARY.md` rule 43)
 - The OMH TUI no longer asks for kitty image previews in an omher terminal that cannot paint them. omher 1.1.3
   and earlier set `TERM_PROGRAM=omher` but draw no kitty Unicode placeholders, so pasting an image showed a block of
   tofu boxes in the transcript and the picture itself over the composer. omher now also sets

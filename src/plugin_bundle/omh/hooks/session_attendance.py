@@ -58,8 +58,8 @@ process environment on both of its entry paths (`cli.py`,
 `hermes_cli/oneshot.py` both assign `HERMES_SINGLE_QUERY_SESSION`), and
 a `-q` run is a process dedicated to one turn.
 
-**Cron is not visible from a plugin at all, and this file does not
-pretend otherwise.** `HERMES_CRON_SESSION` is a ContextVar name, never a
+**Cron is not visible from the process environment, and this predicate
+does not read it.** `HERMES_CRON_SESSION` is a ContextVar name, never a
 process variable: the in-process ticker binds it through
 `gateway.session_context` (`cron/scheduler.py`), the detached worker's
 environment is built without it, and the host's own regression test
@@ -80,6 +80,15 @@ loop still stops, with the host's wording instead of OMH's advice; at
 failure this module calls its binding reason. It is not a regression --
 before this module existed every lane escalated -- and closing it needs
 a signal the host does not give a plugin.
+
+Correction: cron IS visible through the platform. Hermes builds every cron
+agent with `platform="cron"` (`cron/scheduler.py`, `_construct_cron_agent`)
+and `pre_llm_call` passes it, so `session_platform` answers `cron` there; a
+delegated child's agent likewise carries `platform="subagent"`
+(`tools/delegate_tool.py`). This predicate still answers True for both: its
+question is whether to escalate, and changing that answer belongs with the
+ask rules. The PR delivery gate (`pr_delivery_gate.nobody_can_answer`) reads
+both and holds them as unattended.
 
 **Delegation.** A delegated child runs under its own session id
 (`subagent_start`'s `child_session_id`, recorded by `nudge_budget`).

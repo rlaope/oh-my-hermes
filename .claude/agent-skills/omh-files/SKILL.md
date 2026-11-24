@@ -42,7 +42,7 @@ Bad example:
 
 - The path root, allowed file operations, excluded paths, destructive-operation policy, and stop condition are explicit.
 - Delete, overwrite, move, rename, permission change, archive mutation, upload, and download are gated, or marked missing and not run.
-- With nobody to answer the confirmation (a scheduled job, a one-shot run, a webhook run), an irreversible or externally visible action is not run: it is handed to a person's turn and its confirmation is recorded as missing.
+- With nobody to answer the confirmation (a scheduled job, a one-shot run, a webhook run), an irreversible or externally visible action is not run: it is handed to a person's turn and its confirmation is recorded as missing. The one exception is a bot whose person turned on its PR delivery grant (`omh capability-policy pr-delivery on`, which only the person runs; the bot only tells them the command): it may push a new branch under the grant's branch prefix, open a pull request from that branch, and push fix commits to and comment on a pull request it opened, and nothing else. Merging, force-pushing, pushing to the default branch, and anything on a pull request it did not open stay a person's, grant or no grant.
 - Before a bulk change, list the exact paths and the destination names that already exist; never overwrite a name the confirmation did not name, and compare the listing after the run with the plan.
 - Checkpoint availability is recorded before any destructive step, and the confirmation gate holds either way; without an observed checkpoint covering the target, a reversible copy or a move to trash comes first.
 - Directory listings, file contents, hashes, diffs, and operation results are reported only from observed file evidence.

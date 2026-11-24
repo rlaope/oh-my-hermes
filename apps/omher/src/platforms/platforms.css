@@ -1,0 +1,110 @@
+/* A bot's messaging platforms: the sidebar row's state and the bot page's section (Platforms.tsx). The state is
+   always words and a mark; the colour only adds to them. */
+.bot-pf {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 62%;
+  margin-left: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 5px;
+  height: 16px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font-size: 10.5px;
+  line-height: 14px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.bot-pf.bad {
+  color: var(--danger);
+}
+.bot-pf-m {
+  flex: none;
+  font-weight: 700;
+}
+.bot-pf-t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pf-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 12px;
+}
+.pf-h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  font-size: 12.5px;
+}
+.pf-st {
+  font-size: 12px;
+  color: var(--muted);
+}
+.pf-st.st-connected,
+.pf-st.st-degraded {
+  color: var(--ok);
+}
+.pf-st.down.bad,
+.pf-st.st-failed,
+.pf-st.st-disconnected {
+  color: var(--danger);
+  font-weight: 600;
+}
+.pf-m {
+  margin-right: 3px;
+  font-weight: 700;
+}
+.pf-since {
+  font-size: 11.5px;
+  color: var(--quiet);
+}
+.pf-why,
+.pf-quote {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--body);
+  overflow-wrap: anywhere;
+}
+.pf-quote {
+  color: var(--muted);
+}
+.pf-ql {
+  color: var(--quiet);
+}
+.pf-fix {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--body);
+}
+.pf-cmd {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 4px;
+  max-width: 100%;
+}
+.pf-cmd code {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+}
+/* the copy control is always shown here: the command is the thing to take away */
+.pf-cmd .pf-copy {
+  opacity: 1;
+}
+.pf-host {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--quiet);
+}

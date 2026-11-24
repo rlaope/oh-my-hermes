@@ -12,6 +12,7 @@ import { getDraft } from "../app/drafts";
 import { moveInSidebar } from "./order";
 import { LANG_KEY, readLang, setLang, t as tr, type Key, type Lang } from "../i18n";
 import type {
+  PlatformsRead,
   Away,
   LinkPlaces,
   ApprovalChoice,
@@ -31,6 +32,7 @@ import type {
   ReplyRef,
   Routine,
   BotInfo,
+  BotPage,
   TerminalRun,
   Worktree,
   UsageProvider,
@@ -397,6 +399,8 @@ export interface Ui {
   back: "chat" | "session";
   /** Automations: the job the detail panel shows (`<bot>:<id>`); Plugins: the bot whose plugins the page shows. */
   automation: string | null;
+  /** Automations: the bot the list is filtered to when the page opens (a bot page's "Open in Automations"). */
+  automationsBot: string | null;
   pluginsBot: string | null;
   /** Apps: the bot whose apps the page shows. */
   appsBot: string | null;
@@ -434,6 +438,8 @@ export interface AppState {
   routines: Record<string, Routine[]>;
   /** Every bot's automations (`automations.list`, read from each profile's cron/jobs.json); null until read. */
   automations: Automation[] | null;
+  /** Every local bot's messaging platforms (`bots.platforms`, OMH's read-only reader); null until read. */
+  platforms: PlatformsRead | null;
   models: Record<string, ModelOptions>;
   /** Per bot: the composer's "Reply there" chip, if any. */
   replyTo: Record<string, ReplyChip | null>;
@@ -619,6 +625,7 @@ export function initialState(): AppState {
     peeks: {},
     routines: {},
     automations: null,
+    platforms: null,
     models: {},
     replyTo: {},
     threads: {},
@@ -639,6 +646,7 @@ export function initialState(): AppState {
       session: null,
       thread: null,
       automation: null,
+      automationsBot: null,
       pluginsBot: null,
       appsBot: null,
       lang: readLang(),
@@ -961,7 +969,8 @@ export type Action =
   | { type: "peek.failed"; id: string; error: string }
   | { type: "routines"; bot: string; routines: Routine[] }
   | { type: "automations"; automations: Automation[] }
-  | { type: "ui.automations"; job?: string | null }
+  | { type: "platforms"; platforms: PlatformsRead }
+  | { type: "ui.automations"; job?: string | null; bot?: string | null }
   | { type: "ui.plugins"; bot?: string | null }
   | { type: "ui.apps"; bot?: string | null }
   | { type: "ui.tasks" }
@@ -1528,8 +1537,13 @@ export function reduce(state: AppState, a: Action): AppState {
       return { ...state, routines: { ...state.routines, [a.bot]: a.routines } };
     case "automations":
       return { ...state, automations: a.automations };
+    case "platforms":
+      return { ...state, platforms: a.platforms };
     case "ui.automations":
-      return { ...state, ui: { ...state.ui, view: "automations", back: backOf(state.ui), ...(a.job !== undefined ? { automation: a.job } : {}) } };
+      return {
+        ...state,
+        ui: { ...state.ui, view: "automations", back: backOf(state.ui), automationsBot: a.bot ?? null, ...(a.job !== undefined ? { automation: a.job } : {}) },
+      };
     case "ui.plugins":
       return { ...state, ui: { ...state.ui, view: "plugins", back: backOf(state.ui), ...(a.bot ? { pluginsBot: a.bot } : {}) } };
     case "ui.apps":
@@ -1951,8 +1965,10 @@ export interface Actions {
   loadRoutines(bot?: string): Promise<void>;
   /** Re-read every bot's automations (files only; no gateway). */
   loadAutomations(): Promise<void>;
-  /** Open the Automations page, on one job (`<bot>:<id>`) when given. */
-  openAutomations(job?: string | null): void;
+  /** Re-read every bot's messaging platforms (OMH's read-only reader; `fresh`: the bot page's Read again). */
+  loadPlatforms(fresh?: boolean): Promise<void>;
+  /** Open the Automations page, on one job (`<bot>:<id>`) when given, its list filtered to `bot` when given. */
+  openAutomations(job?: string | null, bot?: string | null): void;
   /** Open the Plugins page, scoped to `bot` when given (else the last one, else the selected bot). */
   openPlugins(bot?: string | null): void;
   /** Open the Apps page, scoped to `bot` when given (else the last one, else the selected bot). */
@@ -1999,6 +2015,9 @@ export interface Actions {
   setPanelMax(open: boolean, tab?: PanelTabId): void;
   /** Put text in the selected bot's composer and focus it. Never sends. */
   prefill(text: string): void;
+  /** Open `bot`'s main chat (not a thread) with `text` in its composer after what the person already typed there,
+   *  for them to finish and send. Never sends (the bot page's Edit). */
+  draftTo(bot: string, text: string): Promise<void>;
   setTheme(theme: Theme): void;
   setLook(look: Partial<Look>): void;
   openSettings(page?: string): void;
@@ -2032,6 +2051,8 @@ export interface Actions {
   renameBot(bot: string, name: string): Promise<void>;
   setAvatar(bot: string, data: string | null): Promise<void>;
   botInfo(bot: string): Promise<BotInfo>;
+  /** The bot page's persona and memory (bridge `bots.page`, read-only files; never kept in the store). */
+  botPage(bot: string): Promise<BotPage>;
   /** The bot's skills for the composer's `$` picker, read once per bot (`fresh`: read again, e.g. right after an
    *  install); [] when the bridge cannot list them. */
   skills(bot: string, fresh?: boolean): Promise<Skill[]>;
@@ -2365,6 +2386,15 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       fail(e);
     }
   };
+  const loadPlatforms = async (fresh?: boolean) => {
+    try {
+      const platforms = await bridge.request("bots.platforms", fresh ? { fresh: true } : {});
+      // the minute's poll and each page open usually read the same answer: no re-render of the app for it
+      if (JSON.stringify(platforms) !== JSON.stringify(state.platforms)) dispatch({ type: "platforms", platforms });
+    } catch {
+      /* an older bridge without the op, or a failed ask: what was last read stays */
+    }
+  };
   const loadAutomations = async () => {
     try {
       dispatch({ type: "automations", automations: (await bridge.request("automations.list", {})).automations });
@@ -2464,6 +2494,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       loadElsewhere(),
       loadRoutines(),
       loadAutomations(),
+      loadPlatforms(),
     ]);
   };
   /** `bot`'s threads whose chat was read (opened in this run). */
@@ -2617,6 +2648,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
               ? back.bot
               : listed[0];
         void loadAutomations();
+        void loadPlatforms();
         // the panel and view come back as the bot is selected, before its chat and lists load: put back only once
         // those reads ended, a click on the panel in the meantime (the places chip, ⌘.) was undone by it
         const loading = first ? selectBot(first) : Promise.resolve();
@@ -2813,9 +2845,10 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     loadElsewhere,
     loadRoutines,
     loadAutomations,
+    loadPlatforms,
     loadModels,
-    openAutomations: (job) => {
-      dispatch({ type: "ui.automations", job });
+    openAutomations: (job, bot) => {
+      dispatch({ type: "ui.automations", job, bot });
       void loadAutomations();
     },
     openTasks: () => dispatch({ type: "ui.tasks" }),
@@ -2905,6 +2938,15 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     setPanelTab: (tab) => dispatch({ type: "ui.panelTab", tab }),
     openRun: (run) => dispatch({ type: "ui.run", run }),
     setPanelMax: (open, tab) => dispatch({ type: "ui.panelMax", open, tab }),
+    async draftTo(bot, text) {
+      if (state.selectedBot !== bot || state.ui.view !== "chat" || state.ui.thread) await selectBot(bot);
+      // the person's unsent text stays, first, with the request after it (the caret lands after the request); a
+      // request already in the box is not added again
+      const raw = getDraft(bot);
+      const typed = raw.trim();
+      const next = !typed ? text : typed.includes(text.trim()) ? raw : `${typed}\n${text}`;
+      dispatch({ type: "ui.draft", bot, text: next });
+    },
     prefill(text) {
       const bot = state.selectedBot;
       if (!bot) return;
@@ -2982,6 +3024,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       dispatch({ type: "bots", bots: state.bots.map((b) => (b.name === bot ? { ...b, avatar_rev: r.avatar_rev } : b)) });
     },
     botInfo: (bot) => bridge.request("bots.info", { bot }),
+    botPage: (bot) => bridge.request("bots.page", { bot }),
     skills(bot, fresh) {
       if (fresh) skillLists.delete(bot);
       let list = skillLists.get(bot);

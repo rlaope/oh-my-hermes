@@ -46,6 +46,7 @@ EVIDENCE_STORES: Final[Mapping[str, str]] = {
     "runs/": "runtime run records",
     "todos/": "session plan todos",
     "todo.json": "the home-wide plan todo",
+    "pr_delivery/": "the PR delivery grant and the record of the PRs it opened",
 }
 
 _HANDOFF_SUFFIX: Final = ".md"

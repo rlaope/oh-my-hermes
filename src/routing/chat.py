@@ -103,13 +103,14 @@ from .policy import (
     meets_confidence_threshold,
     point_in_time_web_guard_applies,
 )
-from .policy import _doctor_health_guard_applies
+from .policy import _doctor_health_guard_applies, monitor_trigger_guard_applies
 from .policy import asks_to_produce_materials, command_request_is_failure_or_agent_question, guard_label_dispatch_trust
 from .policy import _explicit_skill_candidate_is_negated, employer_hiring_intent
 from .policy import EXPLICIT_INVOCATION_PREFIXES, bare_name_reports_or_asks
 from .policy import _greenfield_project_bootstrap_requested
 from .policy import _hermes_setup_guide_requested
 from .policy import _github_event_ops_guard_applies
+from .policy import app_work_intake_guard_applies, meeting_to_issues_guard_applies
 from .policy import _github_issue_intake_guard_applies
 from .policy import _invocation_token
 from .recommend import (
@@ -2575,9 +2576,13 @@ def _route_chat_message_cached(
         normalized_phrase(routing_message),
         routing_tokens(routing_message),
     )
+    # A spec or issue in another app turned into a PR is app-work-intake: it reads the source and writes the
+    # PR link back, which the plan-to-PR delivery cycle does not.
+    app_work_context = app_work_intake_guard_applies(normalized_phrase(prepare_routing_text(routing_message).scoring_text))
     if (
         not is_missed_route_feedback(routing_message)
         and not github_event_context
+        and not app_work_context
         and classify_workflow_intent(message).intent_class
         not in {"meta_discussion", "feedback_signal"}
     ):
@@ -5335,6 +5340,15 @@ def _operator_surface_fast_path_decision(
         return None
     if selected_skill == "connector-operator" and _is_connector_operator_setup_or_gateway_request(routing_message):
         return None
+    # "turn Linear issue ENG-42 into a PR" and "turn the meeting transcript into Linear issues" name a
+    # tracker phrase this fast path holds; the work they ask for is app-work-intake's and operating-rhythm's,
+    # which scoring reaches through their guards. "ping me when a Linear issue is assigned to me" holds it too,
+    # but it asks for a monitor recipe, not a connector action.
+    if selected_skill == "connector-operator" and (
+        _app_work_or_meeting_issues_applies(routing_message)
+        or monitor_trigger_guard_applies(normalized_phrase(prepare_routing_text(routing_message).scoring_text))
+    ):
+        return None
     if selected_skill == "live-info-operator" and _is_live_info_operator_setup_or_research_request(routing_message):
         return None
     if selected_skill == "content-operator" and _is_content_operator_research_connector_or_materials_request(routing_message):
@@ -5775,6 +5789,11 @@ def _is_command_operator_failure_or_coding_request(message: str) -> bool:
             "원인 찾아",
         )
     )
+
+
+def _app_work_or_meeting_issues_applies(message: str) -> bool:
+    normalized_query = normalized_phrase(prepare_routing_text(message).scoring_text)
+    return app_work_intake_guard_applies(normalized_query) or meeting_to_issues_guard_applies(normalized_query)
 
 
 def _is_connector_operator_setup_or_gateway_request(message: str) -> bool:

@@ -15,8 +15,8 @@ deterministic skill catalog, router, and prepared-handoff generator installed
 next to Hermes Agent. Pure Python 3.11+, zero runtime dependencies. Core `omh`
 makes no LLM, API, or network call and never patches Hermes. Every scoped
 exception (fanout dispatch, `omh_jev_ask`, the TUI update notice and gateway
-child, the local proofreader, the show-reel, channel-watch and PR-watch
-scripts, omher)
+child, the local proofreader, the show-reel, channel-watch, PR-watch and
+monitor-recipe scripts, omher)
 is stated in `docs/IMPLEMENTATION-BOUNDARIES.md`, summarized in `AGENTS.md`,
 and held by the invariants in `tests/test_handoff_safety_contract_enforcement.py`.
 omher (`apps/omher/`) has its own toolchain, CI and rules: `apps/omher/README.md`

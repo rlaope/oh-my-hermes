@@ -162,8 +162,11 @@ test("⌘⇧G toggles (opening Plans when the panel is closed), Esc restores, do
   await page.keyboard.press(`${m}+Shift+G`);
   await expect(page.getByTestId("window")).not.toHaveClass(/\bpanel-max\b/);
   await expect(page.getByTestId("window")).toHaveClass(/\bpanel-open\b/);
-  // the panel open on another tab: ⌘⇧G maximises that tab
+  // the panel open on another tab: ⌘⇧G maximises that tab. The restore slides the tab row, and a press on a tab
+  // still moving belongs to the row (PanelTabs.tsx onSweptPress): the person picks the tab once the row stopped
+  await motionDone(page);
   await page.getByTestId("panel-tab-terminal").click();
+  await expect(page.getByTestId("details-panel")).toHaveAttribute("data-tab", "terminal");
   await page.keyboard.press(`${m}+Shift+G`);
   await expect(page.getByTestId("details-panel")).toHaveAttribute("data-tab", "terminal");
   await expectMaxed(page);
@@ -181,7 +184,8 @@ test("⌘⇧G toggles (opening Plans when the panel is closed), Esc restores, do
   await settled(page);
   await page.mouse.dblclick(tabsRight + 12, b.y + b.height / 2);
   await expect(page.getByTestId("window")).not.toHaveClass(/\bpanel-max\b/);
-  // a double click on a tab only picks the tab
+  // a double click on a tab, once the restore stopped moving the row, only picks the tab
+  await motionDone(page);
   await page.getByTestId("panel-tab-details").dblclick();
   await expect(page.getByTestId("window")).not.toHaveClass(/\bpanel-max\b/);
   // closing the panel restores: it opens again at its own width

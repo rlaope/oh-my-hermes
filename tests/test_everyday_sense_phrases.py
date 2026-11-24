@@ -47,6 +47,12 @@ class EverydaySensePhraseTableTests(unittest.TestCase):
             ("cancel", "cancel the running loop", False),
             ("doctor", "how long does it take to become a doctor", True),
             ("doctor", "run doctor", False),
+            ("frontend", "export this figma frame as png", True),
+            ("frontend", "view this figma frame", True),
+            ("frontend", "take screenshots of these screens from the figma frame", True),
+            ("frontend", "open the admin interface of this figma frame", True),
+            ("frontend", "turn this figma frame into a react component", False),
+            ("frontend", "build the settings screen from this figma frame", False),
         )
         for skill, message, withdrawn in cases:
             with self.subTest(message=message):

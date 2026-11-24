@@ -166,10 +166,11 @@ test("settings opens and closes; theme Light sets data-theme; bot and provider p
   await theme.getByRole("radio", { name: "Dark" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 
-  // Bot page: Profile, Model, Work
+  // Bot page: its messaging platforms (e2e/platforms.spec.ts), who it is (persona, memory, automations, elsewhere,
+  // open threads; e2e/bot-page.spec.ts), then Profile, Model, Work
   await page.getByTestId("settings-nav-bot-friren").click();
   const body = page.getByTestId("settings-page-bot-friren");
-  await expect(body.locator(".st-gh")).toHaveText(["Profile", "Model", "Work"]);
+  await expect(body.locator(".st-gh")).toHaveText(["Messaging", /^Persona/, "Memory", /^Automations/, "Elsewhere", "Open threads", "Profile", "Model", "Work"]);
   await expect(body).toContainText("Sonnet 5.5");
   await expect(body).toContainText("medium");
   await expect(body).toContainText("friren");
