@@ -408,6 +408,7 @@ def _dispatch_guarded(
     marker_text = _marker_text(scratch_created + request.timeout_seconds + SCRATCH_DEADLINE_MARGIN_SECONDS)
     try:
         scratch_path = Path(tempfile.mkdtemp(prefix=SCRATCH_PREFIX))
+        scratch_identity = os.lstat(scratch_path)
     except OSError as exc:
         emit("failed")
         diagnostic = f"Hermes child scratch home could not be created ({type(exc).__name__})"
@@ -555,7 +556,7 @@ def _dispatch_guarded(
                 # The arm home outlives this child, so its rows are still
                 # there; only names and counts leave the read.
                 cell_trace = read_hermes_child_trace(hermes_home, exclude=prior_sessions)
-        cleanup_note = _remove_scratch(scratch_path, scratch_created, marker_text)
+        cleanup_note = _remove_scratch(scratch_path, scratch_created, marker_text, scratch_identity)
     if interrupted is not None:
         emit(status)
         raise interrupted
@@ -593,7 +594,7 @@ def _marker_deadline(raw: bytes) -> int | None:
     return int(digits)
 
 
-def _remove_scratch(path: Path, created: float, marker_text: str) -> str:
+def _remove_scratch(path: Path, created: float, marker_text: str, identity: os.stat_result | None = None) -> str:
     """Remove a dispatch's scratch home with a few brief retries; "" once it is gone, else the note that says it was left.
 
     Everything but OMH's marker goes first, then the marker, then the root, so a home
@@ -608,7 +609,7 @@ def _remove_scratch(path: Path, created: float, marker_text: str) -> str:
         if attempt:
             _sleep(SCRATCH_REMOVE_RETRY_SECONDS)
         try:
-            _remove_marker_last(path)
+            _remove_marker_last(path, identity)
         except FileNotFoundError:
             if not path.exists():
                 return ""

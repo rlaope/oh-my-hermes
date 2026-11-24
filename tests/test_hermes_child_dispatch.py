@@ -995,6 +995,19 @@ class ScratchHomeCleanupTests(unittest.TestCase):
         self.assert_untouched(outside)
         self.assertTrue((outside / ".omh-hermes-child-scratch").is_file())
 
+    def test_the_dispatchs_own_home_swapped_after_creation_is_refused(self) -> None:
+        # The dispatch removes only the directory its own mkdtemp made (same st_dev/st_ino).
+        made = self.home("omh-hermes-child-made", age=0)
+        identity = os.lstat(made)
+        _REAL_RMTREE(made)
+        other = self.home("omh-hermes-child-made", age=0)
+        (other / "home").mkdir()
+        note = hermes_child_dispatch._remove_scratch(other, time.time(), "omh-hermes-child-scratch/v1\n1\n", identity)
+        if (os.lstat(other).st_dev, os.lstat(other).st_ino) == (identity.st_dev, identity.st_ino):
+            self.skipTest("the file system reused the inode, so the swap cannot be told apart here")
+        self.assertIn("changed after it was checked", note)
+        self.assertTrue((other / "home").is_dir())
+
     def test_a_root_swapped_for_a_link_after_the_sweeps_checks_is_refused(self) -> None:
         outside = self.populated_outside()
         old = self.home("omh-hermes-child-swapped", age=2 * 86400, deadline=time.time() - 86400)
