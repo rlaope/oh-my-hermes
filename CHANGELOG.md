@@ -236,6 +236,23 @@ All notable changes will be documented here.
   reported as a stray that has not exited. The
   `--json` report gains `idle_exit` and `overdue` per gateway. (`src/maintenance/gateway_health.py` `_unrecorded_line`,
   `IDLE_EXIT_STALE_SECONDS`, `src/system/process_listing.py` `IDLE_EXIT_FLAG`)
+- **omher 1.2.0.** Hand a terminal to a bot, a page per bot with its apps, Google's Antigravity CLI in TERMINALS, and
+  a Windows pass.
+  - **Agents:** Google's Antigravity CLI (`agy`) starts from the TERMINALS `+` menu with its official mark, shows its
+    mark on a running row, in Settings › Agents and on a Hermes child that runs `agy acp` (#3176).
+  - **Hand to a bot:** right-click a TERMINALS row, a split cell or a worktree to hand its folder to a bot, with the
+    keyboard back on the row after the card closes (#3143, #3163, #3171).
+  - **Bots:** a bot's page shows its persona, memory and work (#3148), an Apps page connects it to Hermes' MCP catalog
+    (#3152), a bot whose Discord or Slack stopped connecting says so (#3157), a chat that stopped after a crash says
+    why and recovers (#3127, #3129), and the reasoning picker offers every level Hermes accepts (#3134).
+  - **Terminals:** drag a header to merge two terminals of one folder (#3145), each split shows as one layout card
+    (#3138, #3167), make a folder from the right-click menu with sharp pictures in terminals (#3073), and a panel tab
+    click right after maximise picks that tab (#3146).
+  - **Threads and links:** a thread lists the pull requests its bot linked with their checks (#3149), and links to
+    Jira, Confluence, Sentry, Asana, Todoist, ClickUp, GitLab and Obsidian become chips (#3151).
+  - **Windows:** Ctrl+V pastes and Ctrl+C copies as in Windows Terminal (#3132), "Reply there" and fonts fixed
+    (#3142), an oh-my-hermes terminal reads oh-my-hermes (#3135), and SSH to a Windows Hermes with only `hermes.cmd`
+    works (#3118). Settings › Accounts › GitHub keeps Add and Remove on one line (#3174).
 - **omher 1.1.3.** GitHub across your repositories and accounts, a Claude usage meter that shows numbers, and terminals
   and bridges that recover by themselves.
   - **GitHub:** Tasks gains a "나" scope: your review requests, your pull requests, issues assigned to you and mentions,
