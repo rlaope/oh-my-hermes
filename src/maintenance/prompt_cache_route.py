@@ -18,6 +18,7 @@ findings are Hermes user-config observations: OMH prints the exact
 
 from __future__ import annotations
 
+import ipaddress
 import re
 from collections import Counter
 from datetime import datetime, timedelta
@@ -27,7 +28,9 @@ from urllib.parse import urlsplit
 PROMPT_CACHE_ROUTE_SCHEMA_VERSION = "omh_prompt_cache_route/v1"
 
 # Providers known to keep a 1h cache entry whatever tier the client sends.
-# Data, not code: a new proxy that does the same is one line here.
+# Data, not code: a new proxy that does the same is one line here. The route's
+# base_url decides; this table is consulted only when no base_url is configured,
+# because a provider name can be reused for a direct first-party endpoint.
 KNOWN_1H_PROXY_PROVIDERS: dict[str, str] = {
     "claude-proxy": "CLIProxyAPI (local Claude subscription proxy)",
     "cliproxyapi": "CLIProxyAPI (local Claude subscription proxy)",
@@ -154,12 +157,47 @@ def _read_tail(path: Path, limit: int = _LOG_TAIL_BYTES) -> str | None:
     return text.split("\n", 1)[1] if size > limit and "\n" in text else text
 
 
-def _is_loopback(base_url: str) -> bool:
+def _host(base_url: str) -> str:
     try:
-        host = (urlsplit(base_url).hostname or "").lower()
+        return (urlsplit(base_url).hostname or "").lower()
+    except ValueError:
+        return ""
+
+
+def _is_loopback(base_url: str) -> bool:
+    host = _host(base_url)
+    return host in _LOOPBACK_HOSTS or host.startswith("127.")
+
+
+def _is_local_host(base_url: str) -> bool:
+    """Loopback, localhost or a private-network address: where a local proxy lives."""
+    host = _host(base_url)
+    if not host:
+        return False
+    if host in _LOOPBACK_HOSTS or host.endswith(".localhost"):
+        return True
+    try:
+        address = ipaddress.ip_address(host)
     except ValueError:
         return False
-    return host in _LOOPBACK_HOSTS or host.startswith("127.")
+    return address.is_loopback or address.is_private or address.is_unspecified
+
+
+def one_hour_proxy_label(provider: str, model: str, base_url: str) -> str:
+    """Why this route keeps 1h cache entries whatever tier is sent, or "" when it does not.
+
+    The base_url decides: a local host (loopback, localhost, private address)
+    serving a Claude model is a CLIProxyAPI-style proxy; any other host, such as
+    the first-party api.anthropic.com, is not, whatever the provider is named.
+    The provider-name table is the fallback only when no base_url is configured.
+    """
+    if base_url:
+        if _is_local_host(base_url) and "claude" in model.lower():
+            return KNOWN_1H_PROXY_PROVIDERS.get(
+                provider.lower(), "local proxy serving Claude (CLIProxyAPI-style, keeps 1h cache entries)"
+            )
+        return ""
+    return KNOWN_1H_PROXY_PROVIDERS.get(provider.lower(), "")
 
 
 def warmer_stop_reasons(hermes_home: Path, *, now: datetime | None = None) -> dict[str, object]:
@@ -220,9 +258,7 @@ def prompt_cache_route_report(hermes_home: Path, *, now: datetime | None = None)
         cache_ttl = raw_ttl if isinstance(raw_ttl, str) else ""
         ceilings = _get(section, "route_ttl_ceilings")
         ceiling = str(ceilings.get(provider, "")) if isinstance(ceilings, dict) and provider else ""
-        proxy_label = KNOWN_1H_PROXY_PROVIDERS.get(provider.lower(), "")
-        if not proxy_label and base_url and _is_loopback(base_url) and "claude" in model.lower():
-            proxy_label = "local proxy serving Claude (CLIProxyAPI-style, keeps 1h cache entries)"
+        proxy_label = one_hour_proxy_label(provider, model, base_url)
         disabled = cache_ttl.lower() in _DISABLED_TTLS
         report.update(
             provider=provider,
@@ -239,13 +275,25 @@ def prompt_cache_route_report(hermes_home: Path, *, now: datetime | None = None)
                 "full input price and nothing is kept warm"
             )
             fixes.append("hermes config set prompt_caching.cache_ttl auto")
-        elif cache_ttl == "5m" and proxy_label and ceiling != "1h":
-            findings.append(
-                f"prompt_caching.cache_ttl is pinned to 5m but the main route `{provider}` is a {proxy_label} that "
-                "keeps 1h cache entries; Hermes treats a still-warm cache as cold after 5 minutes on human-paced turns"
-            )
-            fixes.append("hermes config set prompt_caching.cache_ttl auto")
-            fixes.append(f"hermes config set prompt_caching.route_ttl_ceilings.{provider} 1h")
+        elif proxy_label:
+            # Hermes `effective_cache_ttl` returns any non-1h request unchanged
+            # before it consults the route ceiling, so a 1h ceiling never
+            # upgrades a 5m pin: the pin itself is the mismatch.
+            if cache_ttl.lower() == "5m":
+                findings.append(
+                    f"prompt_caching.cache_ttl is pinned to 5m but the main route `{provider}` is a {proxy_label} "
+                    "that keeps 1h cache entries; Hermes treats a still-warm cache as cold after 5 minutes "
+                    "(a 1h route ceiling does not raise a 5m pin)"
+                )
+                fixes.append("hermes config set prompt_caching.cache_ttl auto")
+            if ceiling.lower() != "1h":
+                if not findings:
+                    findings.append(
+                        f"the main route `{provider}` is a {proxy_label} that keeps 1h cache entries but "
+                        f"prompt_caching.route_ttl_ceilings.{provider} is {ceiling or 'unset'}; Hermes' cache clock "
+                        "still assumes the route's default TTL"
+                    )
+                fixes.append(f"hermes config set prompt_caching.route_ttl_ceilings.{provider} 1h")
     report["findings"] = findings
     report["fixes"] = fixes
     report["warmer"] = warmer_stop_reasons(hermes_home, now=now)

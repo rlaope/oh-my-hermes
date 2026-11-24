@@ -75,10 +75,78 @@ class PromptCacheRouteReportTests(unittest.TestCase):
             self.assertEqual(report["route_ttl_ceiling"], "1h")
             self.assertIn("cache TTL matches what the route keeps", report["lines"])
 
-    def test_5m_with_1h_ceiling_is_not_flagged(self) -> None:
+    def test_5m_with_1h_ceiling_still_warns_with_only_the_ttl_fix(self) -> None:
+        # Hermes returns a 5m request before consulting the ceiling, so the ceiling never lifts the pin.
         with TemporaryDirectory() as tmp:
             config = _PROXY_ROUTE + "prompt_caching:\n  cache_ttl: '5m'\n  route_ttl_ceilings: {claude-proxy: 1h}\n"
+            report = prompt_cache_route_report(_home(Path(tmp), config), now=NOW)
+            self.assertEqual(len(report["findings"]), 1)
+            self.assertIn("pinned to 5m", report["findings"][0])
+            self.assertEqual(report["fixes"], ["hermes config set prompt_caching.cache_ttl auto"])
+            self.assertNotIn("cache TTL matches what the route keeps", report["lines"])
+
+    def test_auto_or_1h_without_ceiling_warns_with_only_the_ceiling_fix(self) -> None:
+        for ttl_block in ("prompt_caching:\n  cache_ttl: auto\n", "prompt_caching:\n  cache_ttl: 1h\n", ""):
+            with self.subTest(ttl_block=ttl_block), TemporaryDirectory() as tmp:
+                report = prompt_cache_route_report(_home(Path(tmp), _PROXY_ROUTE + ttl_block), now=NOW)
+                self.assertEqual(len(report["findings"]), 1)
+                self.assertNotIn("pinned to 5m", report["findings"][0])
+                self.assertEqual(
+                    report["fixes"], ["hermes config set prompt_caching.route_ttl_ceilings.claude-proxy 1h"]
+                )
+
+    def test_1h_with_1h_ceiling_is_ok(self) -> None:
+        with TemporaryDirectory() as tmp:
+            config = _PROXY_ROUTE + "prompt_caching:\n  cache_ttl: 1h\n  route_ttl_ceilings:\n    claude-proxy: 1h\n"
             self.assertEqual(prompt_cache_route_report(_home(Path(tmp), config), now=NOW)["findings"], [])
+
+    def test_proxy_alias_on_a_direct_first_party_endpoint_is_not_a_proxy(self) -> None:
+        # The base_url decides: a reused `claude-proxy` name pointing at api.anthropic.com is a direct route.
+        for where in ("providers", "model"):
+            with self.subTest(where=where), TemporaryDirectory() as tmp:
+                if where == "providers":
+                    route = (
+                        "model:\n  provider: claude-proxy\n  default: claude-sonnet-4-6\nproviders:\n"
+                        "  claude-proxy:\n    base_url: https://api.anthropic.com\n"
+                    )
+                else:
+                    route = (
+                        "model:\n  provider: claude-proxy\n  default: claude-sonnet-4-6\n"
+                        "  base_url: https://api.anthropic.com\n"
+                    )
+                report = prompt_cache_route_report(_home(Path(tmp), route + "prompt_caching:\n  cache_ttl: 5m\n"), now=NOW)
+                self.assertEqual(report["findings"], [])
+                self.assertEqual(report["fixes"], [])
+                self.assertEqual(report["one_hour_proxy"], "")
+
+    def test_local_host_without_claude_or_remote_host_is_not_a_proxy(self) -> None:
+        cases = (
+            ("http://127.0.0.1:8317/v1", "gpt-5"),
+            ("https://proxy.example.com/v1", "claude-sonnet-4-6"),
+        )
+        for base_url, model in cases:
+            with self.subTest(base_url=base_url, model=model), TemporaryDirectory() as tmp:
+                config = (
+                    f"model:\n  provider: claude-proxy\n  default: {model}\n  base_url: {base_url}\n"
+                    "prompt_caching:\n  cache_ttl: 5m\n"
+                )
+                self.assertEqual(prompt_cache_route_report(_home(Path(tmp), config), now=NOW)["findings"], [])
+
+    def test_private_address_serving_claude_is_a_1h_proxy(self) -> None:
+        with TemporaryDirectory() as tmp:
+            config = (
+                "model:\n  provider: lan-cpa\n  default: claude-opus-5-5\n  base_url: http://192.168.0.12:8317/v1\n"
+                "prompt_caching:\n  cache_ttl: 5m\n"
+            )
+            report = prompt_cache_route_report(_home(Path(tmp), config), now=NOW)
+            self.assertEqual(len(report["findings"]), 1)
+
+    def test_known_proxy_name_without_base_url_falls_back_to_the_table(self) -> None:
+        with TemporaryDirectory() as tmp:
+            config = "model:\n  provider: claude-proxy\n  default: claude-opus-5-5\nprompt_caching:\n  cache_ttl: 5m\n"
+            report = prompt_cache_route_report(_home(Path(tmp), config), now=NOW)
+            self.assertIn("CLIProxyAPI", report["one_hour_proxy"])
+            self.assertEqual(len(report["fixes"]), 2)
 
     def test_unlisted_loopback_provider_serving_claude_is_a_1h_proxy(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -107,7 +175,8 @@ class PromptCacheRouteReportTests(unittest.TestCase):
 
     def test_missing_prompt_caching_section_means_auto(self) -> None:
         with TemporaryDirectory() as tmp:
-            report = prompt_cache_route_report(_home(Path(tmp), _PROXY_ROUTE), now=NOW)
+            config = _PROXY_ROUTE + "prompt_caching:\n  route_ttl_ceilings:\n    claude-proxy: 1h\n"
+            report = prompt_cache_route_report(_home(Path(tmp), config), now=NOW)
             self.assertEqual(report["findings"], [])
             self.assertEqual(report["cache_ttl"], "auto (default)")
 
@@ -138,7 +207,7 @@ class PromptCacheRouteReportTests(unittest.TestCase):
     def test_model_hint_carries_only_the_warning_and_fixes(self) -> None:
         with TemporaryDirectory() as tmp:
             bad = _home(Path(tmp) / "a", _PROXY_ROUTE + "prompt_caching:\n  cache_ttl: 5m\n", _LOG)
-            good = _home(Path(tmp) / "b", _PROXY_ROUTE, _LOG)
+            good = _home(Path(tmp) / "b", _PROXY_ROUTE + "prompt_caching:\n  route_ttl_ceilings: {claude-proxy: 1h}\n", _LOG)
             hint = prompt_cache_hint_lines(bad)
             self.assertEqual(len(hint), 3)
             self.assertTrue(hint[0].startswith("warning:"))
