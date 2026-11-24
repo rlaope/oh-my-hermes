@@ -16,7 +16,7 @@ A home outside `profiles/` (profile kind `custom`): `config.yaml` carrying the r
 `gateway.unmanaged_idle_exit_seconds: 30`; `.env` = the root's minus messaging token names (the root
 `.env` holds none; kami's Slack and Discord tokens live in kami's own `.env` and were never read);
 `auth.json` copied; `SOUL.md` symlinked; `skills/` = per-skill symlinks, root ∪ kami, root wins on
-the 20 shared names (kami-only `sionic-onprem-gpu` added; 25 names); `plugins/omh` symlinked to the
+the 20 shared names (kami-only `example-onprem-gpu` added; 25 names); `plugins/omh` symlinked to the
 root's; a fresh `git init` cwd.
 
 ## What was measured

@@ -1678,7 +1678,7 @@ on the prose.
   reads the owner's own CLI config — `~/.claude.json` `oauthAccount`, falling
   back to the single `claudeAiOauth` slot in `~/.claude/.credentials.json`; or
   `~/.codex/auth.json` `tokens.account_id`, falling back to whether an API key
-  is configured — and records a redacted tag (`claude:kh...@gmail.com`,
+  is configured — and records a redacted tag (`claude:de...@example.org`,
   `codex:<8 hex>`) on the unit envelope and in the limit signal, where the
   readiness advisory already surfaces every stored key. **No token, key, or
   secret value is read**: the only inputs are an email address, an account

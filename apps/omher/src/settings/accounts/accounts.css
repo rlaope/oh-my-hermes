@@ -79,6 +79,15 @@
 .acc-signin {
   grid-template-columns: 26px minmax(0, 1fr) auto;
 }
+/* A GitHub account row ends in a text button (Add / Remove), not the 26px menu: its column is as wide as the label in
+   any language and font (Windows' Korean font is wider than macOS's, and Korean breaks between any two syllables). */
+.acc-row[data-testid="gh-account-row"] {
+  grid-template-columns: 26px minmax(0, 1fr) auto auto;
+}
+.acc-row[data-testid="gh-account-row"] .st-btn {
+  white-space: nowrap;
+  word-break: keep-all;
+}
 .st-grp > * + * {
   border-top: 1px solid var(--line);
 }

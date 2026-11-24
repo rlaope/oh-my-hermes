@@ -1,5 +1,5 @@
 {
- "sandbox": "/private/tmp/claude-501/-Users-khope-sionic-ai-Desktop-khope-oh-my-hermes/392b215b-1dd4-4d99-9d21-7b89cbaa7534/scratchpad/own-runtime-sandbox",
+ "sandbox": "/private/tmp/claude-501/-Users-demo-Desktop-demo-oh-my-hermes/00000000-0000-0000-0000-000000000000/scratchpad/own-runtime-sandbox",
  "steps": [
   {
    "step": "root recorded",
@@ -83,7 +83,7 @@
   "gateway_state": "running",
   "served_profiles": [],
   "code_version": "0.23.0",
-  "hermes_home": "/private/tmp/claude-501/-Users-khope-sionic-ai-Desktop-khope-oh-my-hermes/392b215b-1dd4-4d99-9d21-7b89cbaa7534/scratchpad/own-runtime-sandbox/hermes"
+  "hermes_home": "/private/tmp/claude-501/-Users-demo-Desktop-demo-oh-my-hermes/00000000-0000-0000-0000-000000000000/scratchpad/own-runtime-sandbox/hermes"
  },
  "sandbox_platforms": {},
  "session_create": {
@@ -107,11 +107,11 @@
   "kami:discord": "connected"
  },
  "root_writes_during": [
-  "/Users/khope@sionic.ai/.hermes/cache/model_catalog.json",
-  "/Users/khope@sionic.ai/.hermes/cache/openrouter_curated_catalog.json",
-  "/Users/khope@sionic.ai/.hermes/cache/reasoning_caps.json",
-  "/Users/khope@sionic.ai/.hermes/profiles/kami/skills/.usage.json",
-  "/Users/khope@sionic.ai/.hermes/state/gateway.heartbeat"
+  "/Users/demo/.hermes/cache/model_catalog.json",
+  "/Users/demo/.hermes/cache/openrouter_curated_catalog.json",
+  "/Users/demo/.hermes/cache/reasoning_caps.json",
+  "/Users/demo/.hermes/profiles/kami/skills/.usage.json",
+  "/Users/demo/.hermes/state/gateway.heartbeat"
  ],
  "launchd_during": [
   "ai.hermes.gateway",
@@ -119,7 +119,7 @@
  ],
  "attach_child_exit": 0,
  "attach_stderr_tail": [
-  "hermes: preparing dependencies for this data root (the checkout's updates belong to /Users/khope@sionic.ai/.hermes)...",
+  "hermes: preparing dependencies for this data root (the checkout's updates belong to /Users/demo/.hermes)...",
   "Preparing the isolated Hermes runtime…",
   "  → Installing Python dependencies…",
   "  ✓ Installing Python dependencies",
@@ -174,30 +174,30 @@
   "updated_at": "2026-11-08T13:24:07.434035+00:00"
  },
  "root_writes_total": [
-  "/Users/khope@sionic.ai/.hermes/cache/model_catalog.json",
-  "/Users/khope@sionic.ai/.hermes/cache/openrouter_curated_catalog.json",
-  "/Users/khope@sionic.ai/.hermes/cache/reasoning_caps.json",
-  "/Users/khope@sionic.ai/.hermes/channel_directory.json",
-  "/Users/khope@sionic.ai/.hermes/cron/.tick.lock",
-  "/Users/khope@sionic.ai/.hermes/cron/ticker_heartbeat",
-  "/Users/khope@sionic.ai/.hermes/cron/ticker_last_success",
-  "/Users/khope@sionic.ai/.hermes/profiles/kami/.curator_backups/blobs/13d69405941e573fb4a9d54163b7da5a86fbabd5c74cf3b51db72b5478dad67d",
-  "/Users/khope@sionic.ai/.hermes/profiles/kami/.curator_backups/blobs/48b4481089c8163dc5f14b2dd4550699a0ee44d8d703dae557b73337cfe29993",
-  "/Users/khope@sionic.ai/.hermes/profiles/kami/.curator_backups/blobs/70fc534debe8b1939f0363ca1e655a1e52cc2db34782873192f08f73f432088f",
-  "/Users/khope@sionic.ai/.hermes/profiles/kami/.curator_backups/blobs/7fe2cadaddfc1e2b7b90db6a591d3ba5551965997fe4cef1fc4f9cf8441cd678",
-  "/Users/khope@sionic.ai/.hermes/profiles/kami/.curator_backups/blobs/af733dd0f94a74e037611cfd45eaf15baf252cab29a746fb26e74c644e94f7cb",
-  "/Users/khope@sionic.ai/.hermes/profiles/kami/cron/.tick.lock",
-  "/Users/khope@sionic.ai/.hermes/profiles/kami/cron/ticker_heartbeat",
-  "/Users/khope@sionic.ai/.hermes/profiles/kami/cron/ticker_last_success",
-  "/Users/khope@sionic.ai/.hermes/profiles/kami/skills/.curator_ledger.jsonl",
-  "/Users/khope@sionic.ai/.hermes/profiles/kami/skills/.usage.json",
-  "/Users/khope@sionic.ai/.hermes/profiles/kami/skills/media/vg-code-reel/SKILL.md",
-  "/Users/khope@sionic.ai/.hermes/profiles/kami/skills/media/vg-code-reel/references/3d-world-billboard-film.md",
-  "/Users/khope@sionic.ai/.hermes/profiles/kami/skills/media/vg-code-reel/scripts/camtry.sh",
-  "/Users/khope@sionic.ai/.hermes/state/gateway.heartbeat"
+  "/Users/demo/.hermes/cache/model_catalog.json",
+  "/Users/demo/.hermes/cache/openrouter_curated_catalog.json",
+  "/Users/demo/.hermes/cache/reasoning_caps.json",
+  "/Users/demo/.hermes/channel_directory.json",
+  "/Users/demo/.hermes/cron/.tick.lock",
+  "/Users/demo/.hermes/cron/ticker_heartbeat",
+  "/Users/demo/.hermes/cron/ticker_last_success",
+  "/Users/demo/.hermes/profiles/kami/.curator_backups/blobs/13d69405941e573fb4a9d54163b7da5a86fbabd5c74cf3b51db72b5478dad67d",
+  "/Users/demo/.hermes/profiles/kami/.curator_backups/blobs/48b4481089c8163dc5f14b2dd4550699a0ee44d8d703dae557b73337cfe29993",
+  "/Users/demo/.hermes/profiles/kami/.curator_backups/blobs/70fc534debe8b1939f0363ca1e655a1e52cc2db34782873192f08f73f432088f",
+  "/Users/demo/.hermes/profiles/kami/.curator_backups/blobs/7fe2cadaddfc1e2b7b90db6a591d3ba5551965997fe4cef1fc4f9cf8441cd678",
+  "/Users/demo/.hermes/profiles/kami/.curator_backups/blobs/af733dd0f94a74e037611cfd45eaf15baf252cab29a746fb26e74c644e94f7cb",
+  "/Users/demo/.hermes/profiles/kami/cron/.tick.lock",
+  "/Users/demo/.hermes/profiles/kami/cron/ticker_heartbeat",
+  "/Users/demo/.hermes/profiles/kami/cron/ticker_last_success",
+  "/Users/demo/.hermes/profiles/kami/skills/.curator_ledger.jsonl",
+  "/Users/demo/.hermes/profiles/kami/skills/.usage.json",
+  "/Users/demo/.hermes/profiles/kami/skills/media/vg-code-reel/SKILL.md",
+  "/Users/demo/.hermes/profiles/kami/skills/media/vg-code-reel/references/3d-world-billboard-film.md",
+  "/Users/demo/.hermes/profiles/kami/skills/media/vg-code-reel/scripts/camtry.sh",
+  "/Users/demo/.hermes/state/gateway.heartbeat"
  ],
  "sandbox_gateway_log_tail": [
-  "2026-11-08 22:23:26,376 INFO gateway.run: Session storage: /private/tmp/claude-501/-Users-khope-sionic-ai-Desktop-khope-oh-my-hermes/392b215b-1dd4-4d99-9d21-7b89cbaa7534/scratchpad/own-runtime-sandbox/hermes/sessions",
+  "2026-11-08 22:23:26,376 INFO gateway.run: Session storage: /private/tmp/claude-501/-Users-demo-Desktop-demo-oh-my-hermes/00000000-0000-0000-0000-000000000000/scratchpad/own-runtime-sandbox/hermes/sessions",
   "2026-11-08 22:23:26,380 INFO gateway.run: Agent budget: max_iterations=500 (agent.max_turns from config.yaml, else the HERMES_MAX_ITERATIONS bridge)",
   "2026-11-08 22:23:26,380 INFO gateway.run: Secret redaction: ENABLED (tool output, logs, and chat responses are scrubbed before delivery)",
   "2026-11-08 22:23:26,397 WARNING gateway.run: No messaging platforms enabled.",
@@ -206,7 +206,7 @@
   "2026-11-08 22:23:26,776 INFO gateway.run: Model context warmed: claude-opus-5-5 -> 1000000 tokens (config)",
   "2026-11-08 22:23:26,776 INFO gateway.run: Turn machinery warmed in 0.4s (21 tool schema(s) materialized)",
   "2026-11-08 22:23:26,787 INFO gateway.run: Press Ctrl+C to stop",
-  "2026-11-08 22:23:26,789 INFO gateway.run: kanban dispatcher: holding singleton dispatcher lock (/private/tmp/claude-501/-Users-khope-sionic-ai-Desktop-khope-oh-my-hermes/392b215b-1dd4-4d99-9d21-7b89cbaa7534/scratchpad/own-runtime-sandbox/hermes/kanban/.dispatcher.lock)",
+  "2026-11-08 22:23:26,789 INFO gateway.run: kanban dispatcher: holding singleton dispatcher lock (/private/tmp/claude-501/-Users-demo-Desktop-demo-oh-my-hermes/00000000-0000-0000-0000-000000000000/scratchpad/own-runtime-sandbox/hermes/kanban/.dispatcher.lock)",
   "2026-11-08 22:23:26,790 INFO gateway.run: Cron scheduler will tick 1 profile(s): ['default']",
   "2026-11-08 22:23:26,793 INFO gateway.run: Auto-started gateway: exits after 30s with no clients, adapters, cron/kanban work or admissions (gateway.unmanaged_idle_exit_seconds)",
   "2026-11-08 22:23:26,795 INFO gateway.run: Gateway housekeeping started (interval=60s)",

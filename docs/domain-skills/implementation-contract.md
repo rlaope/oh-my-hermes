@@ -12,8 +12,8 @@ verification must still prove every completion gate below.
 shared execution brief apply. No core dependency, live profile installation,
 publication, paid endpoint, credentials, patient data, push, PR or release.
 Every probe/test process must inherit
-`TMPDIR=/Users/rlaope/.hermes/cache/scratch`. Evidence environments belong under
-`/Users/rlaope/.hermes/cache/scratch/omh-domain-dag-evidence-20261022/<gis|bio|docking>/`.
+`TMPDIR=$HOME/.hermes/cache/scratch`. Evidence environments belong under
+`$HOME/.hermes/cache/scratch/omh-domain-dag-evidence-20261022/<gis|bio|docking>/`.
 This machine-local execution boundary is not a path to embed in shipped skill prose.
 The contract node has no upstream DAG dependency; the existing shortlist and
 `specialist.md` research handoffs were read. They explicitly say execution was
@@ -331,7 +331,7 @@ lock/freeze receipts outside the repo or in reviewed toolkit JSON if useful.
 Agent/operator recipe (new shell environments, not instructions for normal users):
 
 ```sh
-export TMPDIR=/Users/rlaope/.hermes/cache/scratch
+export TMPDIR=$HOME/.hermes/cache/scratch
 # EVIDENCE is the task-owned evidence root named above.
 uv venv --python 3.12 "$EVIDENCE/gis/venv"
 uv pip install --python "$EVIDENCE/gis/venv/bin/python" geopandas shapely pyproj
@@ -444,9 +444,9 @@ Executed from the scoped checkout, each with exit **0**:
 ```sh
 git status --short
 # Empty at initial inspection; branch was hermes/domain-science-skills.
-TMPDIR=/Users/rlaope/.hermes/cache/scratch PYTHONPATH=tests uv run python -m unittest tests/test_render_skill_pack.py tests/test_show_reel_support_files.py -q
+TMPDIR=$HOME/.hermes/cache/scratch PYTHONPATH=tests uv run python -m unittest tests/test_render_skill_pack.py tests/test_show_reel_support_files.py -q
 # Ran 7 tests; OK.
-TMPDIR=/Users/rlaope/.hermes/cache/scratch PYTHONPATH=tests uv run python -m unittest tests.test_show_reel_distribution.DistributionParityTests.test_record_native_and_portable_return_same_support_without_execution tests.test_show_reel_distribution.WheelSupportTests.test_built_wheel_contains_actual_companion_resources -q
+TMPDIR=$HOME/.hermes/cache/scratch PYTHONPATH=tests uv run python -m unittest tests.test_show_reel_distribution.DistributionParityTests.test_record_native_and_portable_return_same_support_without_execution tests.test_show_reel_distribution.WheelSupportTests.test_built_wheel_contains_actual_companion_resources -q
 # Ran 2 tests; OK, including actual built-wheel source-hidden support proof for existing show-reel.
 ```
 

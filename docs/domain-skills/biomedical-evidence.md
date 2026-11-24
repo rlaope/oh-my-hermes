@@ -69,15 +69,15 @@ No patient data, clinical eligibility or treatment recommendation is supported.
 ## Observed isolated environment and public smoke
 
 Evidence root (outside the repository):
-`/Users/rlaope/.hermes/cache/scratch/omh-domain-dag-evidence-20261022/bio/`.
+`$HOME/.hermes/cache/scratch/omh-domain-dag-evidence-20261022/bio/`.
 Every probe/test process used
-`TMPDIR=/Users/rlaope/.hermes/cache/scratch`.
+`TMPDIR=$HOME/.hermes/cache/scratch`.
 
 Observed installation commands, both exit 0:
 
 ```sh
-uv venv --python 3.12 /Users/rlaope/.hermes/cache/scratch/omh-domain-dag-evidence-20261022/bio/venv
-uv pip install --python /Users/rlaope/.hermes/cache/scratch/omh-domain-dag-evidence-20261022/bio/venv/bin/python biomcp-cli
+uv venv --python 3.12 $HOME/.hermes/cache/scratch/omh-domain-dag-evidence-20261022/bio/venv
+uv pip install --python $HOME/.hermes/cache/scratch/omh-domain-dag-evidence-20261022/bio/venv/bin/python biomcp-cli
 ```
 
 Resolved: **biomcp-cli 0.9.3**, binary `biomcp 0.9.3`, CPython 3.12.13,
@@ -126,10 +126,10 @@ source behavior was exercised separately with original synthetic schema fixtures
 From the scoped checkout, exact commands (all exit 0):
 
 ```sh
-TMPDIR=/Users/rlaope/.hermes/cache/scratch PYTHONPATH=tests uv run python -m unittest tests.test_biomedical_evidence_skill -v
-TMPDIR=/Users/rlaope/.hermes/cache/scratch PYTHONPATH=tests uv run python -m unittest tests.test_handoff_safety_contract_enforcement -q
-TMPDIR=/Users/rlaope/.hermes/cache/scratch uv run --group lint ruff check src/skills/biomedical_evidence_skill.py src/skills/biomedical_evidence_toolkit tests/test_biomedical_evidence_skill.py
-TMPDIR=/Users/rlaope/.hermes/cache/scratch uv run python -m py_compile src/skills/biomedical_evidence_skill.py src/skills/biomedical_evidence_toolkit/scripts/reconcile.py tests/test_biomedical_evidence_skill.py
+TMPDIR=$HOME/.hermes/cache/scratch PYTHONPATH=tests uv run python -m unittest tests.test_biomedical_evidence_skill -v
+TMPDIR=$HOME/.hermes/cache/scratch PYTHONPATH=tests uv run python -m unittest tests.test_handoff_safety_contract_enforcement -q
+TMPDIR=$HOME/.hermes/cache/scratch uv run --group lint ruff check src/skills/biomedical_evidence_skill.py src/skills/biomedical_evidence_toolkit tests/test_biomedical_evidence_skill.py
+TMPDIR=$HOME/.hermes/cache/scratch uv run python -m py_compile src/skills/biomedical_evidence_skill.py src/skills/biomedical_evidence_toolkit/scripts/reconcile.py tests/test_biomedical_evidence_skill.py
 ```
 
 Observed: 12 focused tests passed, with loader/test-ID count independently
@@ -165,8 +165,8 @@ contexts remain separate. The local helper and toolkit README hashes were
 refreshed in `upstream-manifest.json`; upstream audit identities are unchanged.
 
 Evidence is separate from the historical producer evidence, under:
-`/Users/rlaope/.hermes/cache/scratch/omh-domain-dag-evidence-20261022/repair-verify/bio-schema-fix/`.
-From the checkout, with `TMPDIR=/Users/rlaope/.hermes/cache/scratch` and
+`$HOME/.hermes/cache/scratch/omh-domain-dag-evidence-20261022/repair-verify/bio-schema-fix/`.
+From the checkout, with `TMPDIR=$HOME/.hermes/cache/scratch` and
 `PYTHONPATH=tests`:
 
 - Test-first regression command:

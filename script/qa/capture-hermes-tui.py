@@ -37,7 +37,7 @@ def main() -> int:
         if omh_home is not None:
             env["OMH_HOME"] = str(omh_home)
         os.execve(
-            "/Users/khope@sionic.ai/.local/bin/hermes",
+            str(Path.home() / ".local" / "bin" / "hermes"),
             ["hermes", "--tui", "--ignore-user-config", "--ignore-rules", "--safe-mode"],
             env,
         )

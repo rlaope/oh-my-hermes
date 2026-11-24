@@ -4560,7 +4560,7 @@ class Peers(BridgeCase):
         return local, remote, url
 
     async def _attach(self, s, url, peer="mac"):
-        r = await s.req("peers.attach", peer=peer, label="Mac mini", host="sionic@10.1.145.204", url=url)
+        r = await s.req("peers.attach", peer=peer, label="Mac mini", host="demo@host.example", url=url)
         self.assertTrue(r["ok"], r)
         return r["result"]
 
@@ -4580,7 +4580,7 @@ class Peers(BridgeCase):
             by = {b["name"]: b for b in bots}
             self.assertIn("kami", by)
             self.assertNotIn("host", by["kami"])  # a local bot has no host field
-            self.assertEqual(by["mac:mini"]["host"], {"kind": "ssh", "peer": "mac", "label": "Mac mini", "host": "sionic@10.1.145.204"})
+            self.assertEqual(by["mac:mini"]["host"], {"kind": "ssh", "peer": "mac", "label": "Mac mini", "host": "demo@host.example"})
             self.assertEqual(remote.connects, [])  # listing never starts a remote gateway
 
     async def test_bot_ops_are_forwarded_with_the_bare_name_and_events_come_back_namespaced(self):

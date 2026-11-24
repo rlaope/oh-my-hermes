@@ -1,6 +1,6 @@
 {
  "built": {
-  "path": "/Users/khope@sionic.ai/.hermes/profiles/omh-tui",
+  "path": "/Users/demo/.hermes/profiles/omh-tui",
   "served": [
    "kami"
   ],
@@ -34,7 +34,7 @@
   "ready_seconds": 3.97,
   "pid": 19145,
   "platforms": [],
-  "hermes_home": "/Users/khope@sionic.ai/.hermes/profiles/omh-tui"
+  "hermes_home": "/Users/demo/.hermes/profiles/omh-tui"
  },
  "session": {
   "profile": "omh-tui",
