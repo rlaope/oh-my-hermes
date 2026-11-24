@@ -3,7 +3,9 @@
 // conversation (`--resume <same id>`) in the same folder, once (one nobody typed in: e2e/term-resume-fail.spec.ts);
 // a Codex terminal asks the shell which conversation its own Codex holds open (5 s after it starts, then every 15 s)
 // and continues it (`codex resume <id>`) the same way; no other terminal's conversation ever comes to it, whatever order Codex writes in or rows close or exit; an agent without its own conversation comes back
-// paused as before. Each terminal's scrollback is kept by the shell (`history.*` calls; the mock keeps it in this
+// paused as before. A Shell row where the person ran Claude Code (or Codex, or omh) keeps that CLI and the conversation
+// the shell names for it, and after a restart its fresh shell types `claude --resume <id>` once; a plain Shell row
+// types nothing. Each terminal's scrollback is kept by the shell (`history.*` calls; the mock keeps it in this
 // page's storage) and written back, dimmed, under a "--- restored <time> ---" line before the new output; closing
 // removes it; Settings > Terminal turns it off. The bottom panel's tabs come back with their folders and scrollback.
 import { expect, test, type Page } from "@playwright/test";
@@ -196,15 +198,17 @@ test("a Codex that exits to the shell gives its conversation to no other termina
   }, codexPty);
   await expect.poll(async () => (await saved(page))?.sessions?.find((s: { id: string }) => s.id === b)?.agent).toBe("shell");
   await expect.poll(() => ptyOf(page, b)).not.toBe(codexPty);
-  // the person types codex in that shell: the row shows Codex, but it is a shell row and asks nothing
+  // the person types codex in that shell: the row shows Codex, and as a Shell row asks only about its own new Codex
   const shellPty = await ptyOf(page, b);
   await page.evaluate((p) => (window as unknown as { __omherEmitSessionFg(x: { id: number; agent: string }): void }).__omherEmitSessionFg({ id: p!, agent: "codex" }), shellPty);
   await expect(page.getByTestId(`session-${b}`).getByTestId("term-row-mark")).toHaveAttribute("data-agent", "codex");
   // the first one asks after 5 s: its Codex holds nothing yet, so it learns nothing, and never the other's
-  await expect.poll(async () => (await asks(page)).length, { timeout: 15_000 }).toBeGreaterThanOrEqual(1);
+  await expect.poll(async () => (await asks(page)).length, { timeout: 15_000 }).toBeGreaterThanOrEqual(2);
   await flush(page);
   expect([await conv(page, a), await conv(page, b)]).toEqual([undefined, undefined]);
-  expect((await asks(page)).map((r) => r.pty)).toEqual([await ptyOf(page, a)]);
+  expect((await saved(page))?.sessions?.find((s: { id: string }) => s.id === b)).toMatchObject({ agent: "shell", fgCli: "codex" });
+  expect((await saved(page))?.sessions?.find((s: { id: string }) => s.id === b)?.fgSession).toBeUndefined();
+  expect(new Set((await asks(page)).map((r) => r.pty))).toEqual(new Set([await ptyOf(page, a), shellPty]));
   // after a restart neither continues anything: both come back paused
   await page.reload();
   await expect(page.getByTestId(`session-${a}`)).toBeVisible();
@@ -446,4 +450,67 @@ test("the bottom panel's tabs come back after a restart in their folders, with t
   // closing a tab removes its kept text
   await page.getByTestId("termpanel-tab-close").first().click();
   await expect.poll(async () => (await history(page)).filter((c) => c.op === "history.remove").map((c) => c.key)).toEqual(["panel-1"]);
+});
+
+/** What the page typed into the mock shell of pty `pty`. */
+const shellWrites = (page: Page, pty: number) =>
+  page.evaluate((p) => ((window as unknown as { __omherShellCalls?: { op: string; id?: number; data?: string }[] }).__omherShellCalls ?? []).filter((c) => c.op === "write" && c.id === p).map((c) => c.data), pty);
+const shellStarts = (page: Page) =>
+  page.evaluate(() => ((window as unknown as { __omherShellCalls?: { op: string; id: number; link?: string }[] }).__omherShellCalls ?? []).filter((c) => c.op === "start"));
+const row = async (page: Page, id: string) => (await saved(page))?.sessions?.find((s: { id: string }) => s.id === id);
+
+test("a Shell row with Claude Code in front puts it back after a restart, once; a plain Shell row types nothing", async ({ page }) => {
+  test.setTimeout(60_000);
+  await open(page);
+  const withClaude = await newTerm(page, "shell");
+  const plain = await newTerm(page, "shell");
+  // each Shell row's shell is told its row's link (an `omh` typed there reopens what it dropped)
+  await expect.poll(async () => (await saved(page))?.sessions?.length).toBe(2);
+  const links = (await saved(page)).sessions.map((s: { linkId: string }) => s.linkId);
+  expect((await shellStarts(page)).map((c) => c.link).sort()).toEqual([...links].sort());
+  // the person runs `claude` in the first one; the shell names the conversation that Claude Code runs
+  const pty = (await ptyOf(page, withClaude))!;
+  await page.evaluate(([p, c]) => void (((window as unknown as { __omherMockFgOwn?: Record<number, string> }).__omherMockFgOwn ??= {})[p as number] = c as string), [pty, C] as const);
+  await page.evaluate((p) => (window as unknown as { __omherEmitSessionFg(x: { id: number; agent: string }): void }).__omherEmitSessionFg({ id: p, agent: "claude" }), pty);
+  await expect.poll(() => row(page, withClaude), { timeout: 15_000 }).toMatchObject({ agent: "shell", running: true, fgCli: "claude", fgSession: C });
+  // only that terminal's pty was asked about, and asking stopped once it was answered
+  await page.waitForTimeout(300);
+  expect((await asks(page)).filter((r) => r.pty === pty)).toEqual([{ op: "own", agent: "claude", pty }]);
+  expect(await row(page, plain)).not.toHaveProperty("fgCli");
+
+  await page.reload();
+  await expect(page.getByTestId(`session-${withClaude}`)).toBeVisible();
+  // it starts a fresh shell by itself, which types the line once it is ready
+  await expect.poll(async () => (await shellStarts(page)).length).toBe(1);
+  const again = (await shellStarts(page))[0].id;
+  await expect.poll(() => shellWrites(page, again), { timeout: 10_000 }).toEqual([`claude --resume ${C}\r`]);
+  await page.waitForTimeout(2_500);
+  expect(await shellWrites(page, again)).toEqual([`claude --resume ${C}\r`]);
+  // the plain one comes back paused, and Resume starts a shell that is typed nothing
+  await page.getByTestId(`session-${plain}`).locator(".ss-open").click();
+  await page.getByTestId("session-resume").click();
+  await expect.poll(async () => (await shellStarts(page)).length).toBe(2);
+  const plainPty = (await shellStarts(page))[1].id;
+  await page.waitForTimeout(2_500);
+  expect(await shellWrites(page, plainPty)).toEqual([]);
+  expect(await shellWrites(page, again)).toEqual([`claude --resume ${C}\r`]);
+});
+
+test("a Claude Code that leaves a Shell row's foreground takes its conversation with it", async ({ page }) => {
+  test.setTimeout(60_000);
+  await open(page);
+  const id = await newTerm(page, "shell");
+  const pty = (await ptyOf(page, id))!;
+  const emit = (agent: string | null) => page.evaluate(([p, a]) => (window as unknown as { __omherEmitSessionFg(x: { id: number; agent: string | null }): void }).__omherEmitSessionFg({ id: p as number, agent: a as string | null }), [pty, agent] as const);
+  await page.evaluate(([p, c]) => void (((window as unknown as { __omherMockFgOwn?: Record<number, string> }).__omherMockFgOwn ??= {})[p as number] = c as string), [pty, C] as const);
+  await emit("claude");
+  await expect.poll(() => row(page, id), { timeout: 15_000 }).toMatchObject({ fgCli: "claude", fgSession: C });
+  // back at the shell's prompt: nothing of it is kept, and after a restart the row is a plain shell, paused
+  await emit(null);
+  await expect.poll(async () => [(await row(page, id))?.fgCli, (await row(page, id))?.fgSession]).toEqual([undefined, undefined]);
+  await flush(page);
+  await page.reload();
+  await expect(page.getByTestId(`session-${id}`)).toBeVisible();
+  await page.waitForTimeout(1_500);
+  expect(await shellStarts(page)).toEqual([]);
 });

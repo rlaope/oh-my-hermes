@@ -378,14 +378,16 @@ async fn session_start(
 }
 
 /// The bottom terminal panel's shell: the person's own login shell (`sessions::shell_argv`, decided by the shell,
-/// never by the page) in `cwd` when that is an existing folder, else home. The page sends a folder and a size only;
-/// the session is then written, acknowledged, resized and closed with the `session_*` commands like any other.
+/// never by the page) in `cwd` when that is an existing folder, else home. The page sends a folder and a size only,
+/// and for a TERMINALS Shell row its shell id and its link id (`OMHER_TERMINAL_LINK`, `sessions::terminal_env`); the
+/// session is then written, acknowledged, resized and closed with the `session_*` commands like any other.
 #[tauri::command]
 async fn shell_start(
     app: AppHandle,
     shell: State<'_, Shell>,
     cwd: Option<String>,
     shell_id: Option<String>,
+    link: Option<String>,
     cols: u16,
     rows: u16,
     on_data: Channel<InvokeResponseBody>,
@@ -394,7 +396,7 @@ async fn shell_start(
     let sessions = shell.sessions.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let home = user_home()?;
-        let (id, at, missing) = sessions.start_shell(cwd.as_deref(), shell_id.as_deref(), &home, cols, rows, move |ev| match ev {
+        let (id, at, missing) = sessions.start_shell(cwd.as_deref(), shell_id.as_deref(), link.as_deref(), &home, cols, rows, move |ev| match ev {
             Output::Data(b) => {
                 let _ = on_data.send(InvokeResponseBody::Raw(b));
             }
@@ -873,6 +875,17 @@ async fn codex_conversation(shell: State<'_, Shell>, id: u32) -> Result<Option<S
         .map_err(|e| e.to_string())?
 }
 
+/// The conversation the Claude Code in the foreground of TERMINALS Shell session `id` runs, for the row to continue it
+/// after a restart (rule 11): only the id, checked as a UUID, from Claude Code's own record of that running process
+/// (`<claude home>/sessions/<pid>.json`, `fg::claude_session_id`). The page sends only the session id.
+#[tauri::command]
+async fn claude_conversation(shell: State<'_, Shell>, id: u32) -> Result<Option<String>, String> {
+    let sessions = shell.sessions.clone();
+    tauri::async_runtime::spawn_blocking(move || Ok(sessions.claude_conversation(id, &user_home()?).filter(|c| sessions::is_uuid(c))))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// The last messages of one of those conversations, shown before the agent continues it (rule 30).
 #[tauri::command]
 async fn past_chat_messages(agent: String, id: String, cwd: String) -> Result<Vec<past_chats::PastMsg>, String> {
@@ -1108,6 +1121,7 @@ pub fn run() {
             past_chat_messages,
             conversation_state,
             codex_conversation,
+            claude_conversation,
             host_name,
             asks_badge,
             peers_list,

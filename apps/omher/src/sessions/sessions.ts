@@ -27,7 +27,7 @@ import type { ITerminalInitOnlyOptions, ITerminalOptions, Terminal } from "@xter
 import type { FitAddon } from "@xterm/addon-fit";
 import { afterOpen, bracketedPaste, CELLS_EVENT, feed, gpuComing, isParked, live, onVisible, PARKING_EVENT, type Remake } from "./term/engine";
 import { TERM_INPUT_EVENT } from "./term/paste-guard";
-import { onCwd, onProgress } from "./term/engine-marks";
+import { onCwd, onProgress, onPrompt } from "./term/engine-marks";
 import { applyLook, termOptions } from "./term/look";
 import { termFontsReady } from "./term/fonts";
 import { onTermSettings, readTermSettings } from "./term/settings";
@@ -36,6 +36,7 @@ import { savedPanelKeys } from "../terminal/state";
 import { termTheme } from "./term/themes";
 import { getShellHost, learnThisHost } from "../terminal/host";
 import { onSessionFg } from "./fg";
+import { fgHasId, isFgCli, isUuid, restoreLine } from "./fgResume";
 import { nextBusySince, termActs } from "./termActivity";
 import { isLinkId, LINK_COPIED_EVENT, newLinkId, termLinkUrl } from "./termLink";
 import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, idInUse, installLine, isBuiltin, isGone, isShell, isTerminalRec, LAST_LINE_MAX, refusedResume, SHELL, termEnd, termMarkAgent, lastPrintedLine, OPEN_KEY, setsUpScreen, UI_BYTES, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, termGroups, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
@@ -156,6 +157,9 @@ interface Term {
   /** Its row was closed and waits out the undo window (closeGrace.ts): its program runs on, hidden, and takes no
    *  input (keys, bot prompts, dropped files) until Undo puts the row back. */
   held?: boolean;
+  /** A Shell row put back after a restart: the line its fresh shell types once ready (fgResume.ts `restoreLine`), until
+   *  it is typed or dropped (`typeRestore`). */
+  restore?: string;
 }
 
 /** The PTY calls a terminal makes once its program runs. */
@@ -194,9 +198,13 @@ const TERM_REOPENS: readonly AgentId[] = ["omh"];
 /** Whether a TERMINALS session that was running when omher closed starts again by itself after the restart. */
 const termComesBack = (s: Pick<SavedSession, "agent" | "agentSession">): boolean =>
   TERM_REOPENS.includes(s.agent) || (!!s.agentSession && TERM_CONTINUES.includes(s.agent));
-/** When a TERMINALS Codex session first asks for its conversation id, and how often after that until it has one. */
+/** When a TERMINALS Codex session first asks for its conversation id, and how often after that until it has one (a
+ *  Shell row's foreground Claude Code or Codex asks the same way). */
 const CODEX_ID_FIRST_MS = 5_000;
 const CODEX_ID_EVERY_MS = 15_000;
+/** A Shell row's fresh shell that sends no prompt mark (OSC 133) counts as ready once its output has stopped for this
+ *  long after it began: its rc files ran and it drew its prompt. */
+const RESTORE_QUIET_MS = 1_000;
 
 type Xterm = [typeof import("@xterm/xterm"), typeof import("@xterm/addon-fit")];
 let xtermLoad: Promise<Xterm> | null = null;
@@ -305,6 +313,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   /** TERMINALS sessions put back after a restart whose agent continues its own conversation: their next start (once)
    *  continues it (`--resume`, `codex resume`) instead of starting a new one. */
   const termAgain = new Set<string>();
+  /** TERMINALS Shell rows put back after a restart with Claude Code, Codex or oh-my-hermes in front: the line their
+   *  next start types once its shell is ready (once; fgResume.ts `restoreLine`). */
+  const fgBack = new Map<string, string>();
   /** TERMINALS sessions put back after a restart whose kept history goes into their terminal before their program's
    *  first output (once). */
   const histBack = new Set<string>();
@@ -1144,7 +1155,12 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   const setSessionFg = (id: string, agent: string | null) => {
     const r = rec(id);
     if (!r || (r.fgAgent ?? null) === agent) return;
-    patchRec(id, { fgAgent: agent });
+    // a CLI that left a Shell row's foreground takes its conversation id with it: a restart then gives a plain shell
+    patchRec(id, { fgAgent: agent, ...(r.fgSession ? { fgSession: undefined } : {}) });
+    clearTimeout(fgIdTimer.get(id));
+    fgIdTimer.delete(id);
+    const t = terms.get(id);
+    if (isShell(r.agent) && isFgCli(agent) && fgHasId(agent) && t && t.hostId !== null && !t.closed) findFgId(id, t, t.run, t.hostId, agent, CODEX_ID_FIRST_MS);
   };
 
   /**
@@ -1367,6 +1383,35 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     );
   };
 
+  /** TERMINALS Shell rows whose foreground Claude Code or Codex has not named its conversation yet: the next ask. As
+   *  for a Codex row (findCodexId), while that CLI stays in front the shell is asked 5 s after it came there and every
+   *  15 s after which conversation it runs (rule 11: only the pty id goes out, only a UUID comes back): Claude Code's
+   *  from its own record of its running process (`claudeConversation`), Codex's from the rollout it holds open
+   *  (`codexConversation`). The answer is kept as the row's `fgSession`, so a restart types the line that continues it
+   *  (fgResume.ts), and the asking stops; a CLI that leaves the front stops it and takes the id with it. */
+  const fgIdTimer = new Map<string, ReturnType<typeof setTimeout>>();
+  const findFgId = (id: string, t: Term, run: number, pty: number, cli: "claude" | "codex", wait: number) => {
+    if (!(cli === "claude" ? host.claudeConversation : host.codexConversation)) return;
+    clearTimeout(fgIdTimer.get(id));
+    fgIdTimer.set(
+      id,
+      setTimeout(async () => {
+        fgIdTimer.delete(id);
+        const live = () => {
+          const r = rec(id);
+          return terms.get(id) === t && t.run === run && !t.closed && t.hostId === pty && !!r && isShell(r.agent) && r.fgAgent === cli && !r.fgSession;
+        };
+        if (!live()) return;
+        const asked = cli === "claude" ? host.claudeConversation?.(pty) : host.codexConversation?.(pty);
+        const got = asked ? await asked.catch(() => null) : null;
+        // gone, or another CLI came to the front meanwhile (its own ask runs)
+        if (!live() || fgIdTimer.has(id)) return;
+        if (isUuid(got)) patchRec(id, { fgSession: got.toLowerCase() });
+        else findFgId(id, t, run, pty, cli, CODEX_ID_EVERY_MS);
+      }, wait),
+    );
+  };
+
   /** Whether the file of TERMINALS session `r`'s own conversation is where its CLI looks for it (rule 30, names
    *  only, in the home of the account it runs with); `unknown` when that could not be told. */
   const convState = async (r: SessionRec): Promise<ConvState> => {
@@ -1402,8 +1447,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     if (!ofChat) termAgain.delete(id);
     const again = !ofChat && !!r.agentSession && TERM_CONTINUES.includes(r.agent);
     // a TERMINALS oh-my-hermes terminal is told its row's link (OMHER_TERMINAL_LINK): `omh` reopens by itself the
-    // session it dropped in this terminal (after omher restarted, or on Restart), and no other program is told it
-    const link = !ofChat && r.agent === "omh" && isLinkId(r.linkId) ? r.linkId : undefined;
+    // session it dropped in this terminal (after omher restarted, or on Restart); a Shell row's shell is told it too, so
+    // an `omh` the person types there does the same, and no other program is told it
+    const link = !ofChat && (r.agent === "omh" || shell) && isLinkId(r.linkId) ? r.linkId : undefined;
     let resume = again ? r.agentSession : r.agentSession && ofChat && r.agent === "claude" ? r.agentSession : undefined;
     // any other Claude Code terminal starts a new conversation under an id omher makes, kept (once it started) so a
     // restart continues it
@@ -1444,6 +1490,23 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       tellEnd(id, "ended", { code: null });
       return;
     }
+    // put back after a restart with Claude Code, Codex or oh-my-hermes in front: the fresh shell types the line that
+    // brings it back (typeRestore) once it is ready, at its first prompt mark (OSC 133 `A`), or else once its output
+    // has stopped for RESTORE_QUIET_MS after it began
+    t.restore = shell ? fgBack.get(id) : undefined;
+    fgBack.delete(id);
+    let quiet: ReturnType<typeof setTimeout> | null = null;
+    const whenReady = () => {
+      if (quiet !== null) clearTimeout(quiet);
+      quiet = null;
+      // its pty id comes with the start's answer, which can follow its first output
+      if (t.restore && t.run === run && t.hostId === null && !t.closed) quiet = setTimeout(whenReady, RESTORE_QUIET_MS);
+      else {
+        stopPrompt?.();
+        typeRestore(id, t, run);
+      }
+    };
+    const stopPrompt = t.restore ? onPrompt(t.el, whenReady) : null;
     const { cols, rows } = t.term;
     let marked = 0;
     // this program's pty id once known, and what was drawn of its output before that
@@ -1481,6 +1544,10 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       // no further ahead of the page than its credit allows (to this program only: a replaced one is gone)
       const bytes = typeof d === "string" ? utf8.encode(d).length : d.byteLength;
       if (t.run === run) t.heard = true;
+      if (t.restore && t.run === run) {
+        if (quiet !== null) clearTimeout(quiet);
+        quiet = setTimeout(whenReady, RESTORE_QUIET_MS);
+      }
       if (again) {
         // only the end of a large message can be the end of the output
         const text = typeof d === "string" ? d.slice(-SAID_MAX) : sayText.decode(d.byteLength > SAID_MAX ? d.subarray(d.byteLength - SAID_MAX) : d, { stream: true });
@@ -1512,6 +1579,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         // a program omher stopped (the row closed, Restart) or one already replaced says nothing more
         if (terms.get(id) !== t || t.run !== run) return;
         t.closed = true;
+        if (quiet !== null) clearTimeout(quiet);
+        stopPrompt?.();
+        t.restore = undefined;
         termActs.patch(id, { progress: undefined, busySince: undefined });
         if (lineTimer !== null) clearTimeout(lineTimer);
         lineTimer = null;
@@ -1556,7 +1626,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       await learnThisHost();
       let hostId: number;
       if (shell) {
-        const got = await getShellHost().start(r.cwd || null, cols, rows, onData, onExit, rec(id)?.shell);
+        const got = await getShellHost().start(r.cwd || null, cols, rows, onData, onExit, rec(id)?.shell, link);
         hostId = got.id;
         if (got.missing && t.run === run) {
           // the shell it was made with is gone from this computer: the default one runs, and the row says so once
@@ -1617,6 +1687,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
    *  Claude Code or Codex row's conversation counts as used (kept with the row). */
   const pressed = (id: string, t: Term) => {
     t.keyed = true;
+    // the person typed first: the restore line is not typed over them (typeRestore)
+    t.restore = undefined;
     if (!t.heard || t.keyedHeard) return;
     t.keyedHeard = true;
     const r = rec(id);
@@ -1656,6 +1728,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     histOf.delete(id);
     clearTimeout(codexIdTimer.get(id));
     codexIdTimer.delete(id);
+    clearTimeout(fgIdTimer.get(id));
+    fgIdTimer.delete(id);
     fgOff.get(id)?.();
     fgOff.delete(id);
     if (t.hostId !== null && !t.closed) void t.io.close(t.hostId).catch(() => undefined);
@@ -1894,8 +1968,24 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const text = prompt.replace(/\r\n/g, "\n").replace(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/g, "");
     if (!text.trim()) return false;
     const bracketed = bracketedPaste(t.raw);
+    // a prompt typed first: the restore line is not typed after it (typeRestore)
+    t.restore = undefined;
     await t.io.write(t.hostId, bracketed ? `\x1b[200~${text}\x1b[201~\r` : `${text.replace(/\n/g, "\r")}\r`);
     return true;
+  };
+
+  /** After omher restarted, a Shell row that had Claude Code, Codex or oh-my-hermes in front types the one line that
+   *  puts it back and Enter, once, when its fresh shell is ready (startTerm): `claude --resume <id>`, `codex resume
+   *  <id>` or `omh`, built only from a fixed program name and a checked UUID (fgResume.ts `restoreLine`). The line is
+   *  dropped, never typed late, when the person typed, pasted or dropped a file first (`pressed`), a bot's prompt was
+   *  typed first, a CLI is in front already, or its program ended or was replaced. Nothing else calls this. */
+  const typeRestore = (id: string, t: Term, run: number) => {
+    // a program that was replaced leaves the next one's line alone
+    if (terms.get(id) !== t || t.run !== run) return;
+    const line = t.restore;
+    t.restore = undefined;
+    if (!line || t.closed || t.held || t.hostId === null || rec(id)?.fgAgent) return;
+    void t.io.write(t.hostId, `${line}\r`).catch(() => undefined);
   };
 
   /** Files dropped or pasted on session `id`'s terminal: each saved under the session's own folder (the page
@@ -2099,7 +2189,11 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       const auto = !terminalOnly && s.running && mode === "chat" && continuesItself(s);
       // a TERMINALS Claude Code or Codex session that was running continues its own conversation in a fresh terminal;
       // an oh-my-hermes one starts again, and `omh` reopens what it dropped there
-      const termAuto = !terminalOnly && s.running && mode === "terminal" && termComesBack(s);
+      // a Shell row that had Claude Code or Codex (each with its conversation id) or oh-my-hermes in front starts a fresh
+      // shell by itself, which types the line that puts that CLI back once it is ready (typeRestore); without the id,
+      // and as a plain shell, it comes back paused as before
+      const line = !terminalOnly && mode === "terminal" ? restoreLine(s) : null;
+      const termAuto = !terminalOnly && s.running && mode === "terminal" && (termComesBack(s) || line !== null);
       // an oh-my-hermes folder chat that was running is attached again (rule 3: only one the bridge made)
       const folderAuto = s.running && mode === "hermes" && !!s.agentSession && !!s.bot && !folderTaken.has(`${s.bot}\0${s.agentSession}`);
       if (folderAuto) folderTaken.add(`${s.bot}\0${s.agentSession}`);
@@ -2140,6 +2234,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       }
       if (auto) again.push({ id: s.id, resume: s.agentSession! });
       if (termAuto) termAgain.add(s.id);
+      if (termAuto && line) fgBack.set(s.id, line);
       if (termAuto && TERM_REOPENS.includes(s.agent)) omhLater.push(s.id);
       if (folderAuto) folderAgain.push(s.id);
       if (!terminalOnly && mode === "terminal") histBack.add(s.id);
@@ -2315,6 +2410,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     histOf.delete(id);
     histBack.delete(id);
     termAgain.delete(id);
+    fgBack.delete(id);
     if (r && isTerminalRec(state.agents, { ...r, status: "exited" })) forgetHistory(host, id);
     disposeTerm(id);
     void stopChat(id).then(() => host.removeFiles(id).catch(() => undefined));

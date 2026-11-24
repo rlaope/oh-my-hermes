@@ -715,7 +715,9 @@ terminal's key while this terminal has a key of its own.
 
 omher starts each `omh` terminal with `OMHER_TERMINAL_LINK=<linkId>` and
 `TERM_PROGRAM=omher` and no arguments, so a bare `omh` there reopens by that
-link alone and never by the folder another omher terminal shares.
+link alone and never by the folder another omher terminal shares. Its Shell
+terminals get the same variable, so an `omh` the person types in one does the
+same.
 
 ## Job control, and what OMH does not do
 

@@ -4,6 +4,17 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: a TERMINALS Shell row where you ran Claude Code, Codex or `omh` puts it back after omher restarts.** Such a
+  row used to come back as a plain shell (paused), with the CLI and its conversation gone; only rows started directly
+  as Claude Code, Codex or oh-my-hermes came back. A Shell row now keeps which of those three CLIs is in its
+  foreground and, for Claude Code and Codex, that CLI's conversation id once the shell can name it (Codex from the
+  rollout it holds open, as a Codex row already did; Claude Code from its own `~/.claude/sessions/<pid>.json` record of
+  that running process). After a restart the row starts a fresh shell by itself and, once the shell is ready (its
+  first OSC 133 prompt mark, or its output going quiet for a second), types one line, once: `claude --resume <id>`,
+  `codex resume <id>` or `omh`. A key you press first cancels it. A CLI that went back to the shell before the restart
+  is forgotten, and a Claude Code or Codex whose id was not known yet comes back paused, as before. Shell rows also get
+  their row's `OMHER_TERMINAL_LINK` now, so an `omh` typed in one reopens the session it dropped there. Windows keeps
+  `omh` but learns no Claude Code or Codex id. (`docs/OMHER-BOUNDARY.md` rule 11)
 - **omher: Settings › Accounts › GitHub keeps Add and Remove on one line.** A GitHub account row reused the
   accounts grid, whose last column is the 26px ⋯ menu. 추가 just fit there in macOS's font; on Windows, whose Korean
   font is wider, it broke into 추 / 가 and was clipped. That row's button column now takes the label's width in any

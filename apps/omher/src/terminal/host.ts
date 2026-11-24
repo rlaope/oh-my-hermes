@@ -50,7 +50,9 @@ export interface ShellHost {
   readonly kind: "tauri" | "mock";
   /** Start a shell in `cwd` (null: home): `shell`, an id from `shells()`, else the login shell. Only a folder, a size
    *  and that id go to the shell: never a program. */
-  start(cwd: string | null, cols: number, rows: number, onData: (d: Uint8Array | string) => void, onExit: (code: number | null) => void, shell?: string): Promise<ShellStarted>;
+  /** `link`: a TERMINALS Shell row's link id, which its shell gets as `OMHER_TERMINAL_LINK` (rule 11); none for the
+   *  bottom panel's shells. */
+  start(cwd: string | null, cols: number, rows: number, onData: (d: Uint8Array | string) => void, onExit: (code: number | null) => void, shell?: string, link?: string): Promise<ShellStarted>;
   /** gh's own sign-in for one more GitHub account (`gh auth login`, `--hostname <host>` when set) in a pseudo-terminal
    *  in the home folder: Settings › Accounts › GitHub. Only the host and a size go to the shell. */
   startGhLogin(host: string | null, cols: number, rows: number, onData: (d: Uint8Array | string) => void, onExit: (code: number | null) => void): Promise<ShellStarted>;
@@ -69,14 +71,14 @@ export interface ShellHost {
 class TauriShellHost implements ShellHost {
   readonly kind = "tauri" as const;
   private core = () => import("@tauri-apps/api/core");
-  async start(cwd: string | null, cols: number, rows: number, onData: (d: Uint8Array) => void, onExit: (c: number | null) => void, shell?: string) {
+  async start(cwd: string | null, cols: number, rows: number, onData: (d: Uint8Array) => void, onExit: (c: number | null) => void, shell?: string, link?: string) {
     const { invoke, Channel } = await this.core();
     const data = new Channel<ArrayBuffer>();
     data.onmessage = (b) => onData(new Uint8Array(b));
     const exit = new Channel<number | null>();
     exit.onmessage = (c) => onExit(c);
     await learnThisHost();
-    return invoke<ShellStarted>("shell_start", { cwd, shellId: shell || null, cols, rows, onData: data, onExit: exit });
+    return invoke<ShellStarted>("shell_start", { cwd, shellId: shell || null, link: link || null, cols, rows, onData: data, onExit: exit });
   }
   async startGhLogin(host: string | null, cols: number, rows: number, onData: (d: Uint8Array) => void, onExit: (c: number | null) => void) {
     const { invoke, Channel } = await this.core();
@@ -125,7 +127,7 @@ class TauriShellHost implements ShellHost {
 // ---- Mock -----------------------------------------------------------------------------------
 
 export type MockShellCall =
-  | { op: "start"; id: number; cwd: string | null; at: string; cols: number; rows: number; shell?: string }
+  | { op: "start"; id: number; cwd: string | null; at: string; cols: number; rows: number; shell?: string; link?: string }
   | { op: "gh-login"; id: number; host: string | null }
   | { op: "write"; id: number; data: string }
   | { op: "resize"; id: number; cols: number; rows: number }
@@ -190,7 +192,7 @@ export class MockShellHost implements ShellHost {
     setTimeout(() => onData(`\x1b[2m(mock) gh auth login${host ? ` --hostname ${host}` : ""}\x1b[0m\r\n? Where do you use GitHub? `), 20);
     return { id, cwd: home };
   }
-  async start(cwd: string | null, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void, shell?: string) {
+  async start(cwd: string | null, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void, shell?: string, link?: string) {
     await learnThisHost();
     // as the shell does: the id is looked up in this computer's list again; one that is not there starts the default
     const list = await this.shells();
@@ -205,7 +207,7 @@ export class MockShellHost implements ShellHost {
     const at = ok ? cwd! : home;
     const die = this.g.__omherShellDie;
     if (die?.error) throw new Error(die.error);
-    this.log({ op: "start", id, cwd, at, cols, rows, ...(shell ? { shell } : {}) });
+    this.log({ op: "start", id, cwd, at, cols, rows, ...(shell ? { shell } : {}), ...(link ? { link } : {}) });
     this.live.set(id, { line: "", cwd: at, out: onData, exit: onExit });
     mockPtyOut(id, onData);
     if (typeof die?.code === "number") {

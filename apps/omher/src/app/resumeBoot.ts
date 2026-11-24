@@ -5,6 +5,8 @@
 // overwrites it with an empty one.
 import { getStore, heldDrafts, type AppState } from "../state/store";
 import { getSessions } from "../sessions/sessions";
+import { isShell } from "../sessions/agents";
+import { isFgCli } from "../sessions/fgResume";
 import { allDrafts, loadDrafts, onDraftChange } from "./drafts";
 import { buildResume, parseResume, RESUME_KEY, type ResumeSnap, type SavedMsg } from "./resume";
 
@@ -65,6 +67,8 @@ function snapshot(): ResumeSnap {
         ...(r.mode ? { mode: r.mode } : {}),
         ...(r.effort ? { effort: r.effort } : {}),
         ...(r.shell ? { shell: r.shell } : {}),
+        // a Shell row's foreground Claude Code, Codex or oh-my-hermes, and its conversation, come back with it
+        ...(isShell(r.agent) && isFgCli(r.fgAgent) ? { fgCli: r.fgAgent, ...(r.fgSession ? { fgSession: r.fgSession } : {}) } : {}),
       })),
       messages: (id) => {
         const key = ss.chatKey(id);

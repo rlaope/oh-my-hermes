@@ -177,12 +177,12 @@ pub fn terminal_args(id: &str, new_session: Option<&str>, resume: Option<&str>) 
 }
 
 /// The one variable a TERMINALS session gets besides the terminal's own and the account's: an oh-my-hermes (`omh`)
-/// terminal is told its omher row's link id as `OMHER_TERMINAL_LINK=<link id>`, so the OMH TUI it runs can name this
-/// terminal and reopen the session it dropped here after omher restarts. No other agent gets it, and an id that is
-/// not 10 lowercase base32 characters is refused.
+/// terminal, and a TERMINALS Shell row (`shell`: the person may type `omh` there), is told its omher row's link id as
+/// `OMHER_TERMINAL_LINK=<link id>`, so the OMH TUI it runs can name this terminal and reopen the session it dropped here
+/// after omher restarts. No other agent gets it, and an id that is not 10 lowercase base32 characters is refused.
 pub fn terminal_env(id: &str, link: Option<&str>) -> Result<Vec<(String, String)>, String> {
     let Some(link) = link else { return Ok(Vec::new()) };
-    if id != "omh" {
+    if id != "omh" && id != "shell" {
         return Err(format!("{id} sessions are not given a terminal link"));
     }
     if !crate::term_link::is_link_id(link) {
@@ -1085,20 +1085,36 @@ impl Sessions {
         crate::fg::codex_conversation(fg, &root)
     }
 
+    /// The conversation the Claude Code in the foreground of session `id` (a Shell row where the person typed `claude`)
+    /// runs ([`crate::fg::claude_conversation`]), in the Claude Code home the session started with (its account's,
+    /// else the CLI's own: rule 30's [`crate::past_chats::cli_home`]); `None` while none is known, or once the session
+    /// ended. Only the id comes back.
+    pub fn claude_conversation(&self, id: u32, user_home: &Path) -> Option<String> {
+        let (fg, env) = {
+            let g = self.live.lock().unwrap();
+            let l = g.get(&id).filter(|l| !l.exited.load(Ordering::SeqCst))?;
+            (l.foreground()?, l.account_env.clone())
+        };
+        let root = crate::past_chats::cli_home(user_home, "claude", &env, &|k| std::env::var(k).ok())?;
+        crate::fg::claude_conversation(fg, &root)
+    }
+
     /// Start the terminal panel's shell ([`shell_argv`]: the person's login shell, never a program the page names)
-    /// in `cwd` when that is an existing folder, else in `home` ([`shell_cwd`]). Nothing is typed into it, and it
-    /// gets no account variable. The session is an ordinary PTY session: write, ack, resize and close as any other.
+    /// in `cwd` when that is an existing folder, else in `home` ([`shell_cwd`]). It gets no account variable. The
+    /// session is an ordinary PTY session: write, ack, resize and close as any other.
     /// Returns the session id and the folder it started in (the tab names it).
     /// `shell`: an id from [`shells_available`] (none: the default); one that is not on the list starts the default
-    /// and its name comes back third, for the row's note.
-    pub fn start_shell<F>(&self, cwd: Option<&str>, shell: Option<&str>, home: &Path, cols: u16, rows: u16, sink: F) -> Result<(u32, PathBuf, Option<String>), String>
+    /// and its name comes back third, for the row's note. `link` (a TERMINALS Shell row only) is the row's link id,
+    /// passed as `OMHER_TERMINAL_LINK` ([`terminal_env`]) so an `omh` typed there can reopen what it dropped.
+    pub fn start_shell<F>(&self, cwd: Option<&str>, shell: Option<&str>, link: Option<&str>, home: &Path, cols: u16, rows: u16, sink: F) -> Result<(u32, PathBuf, Option<String>), String>
     where
         F: FnMut(Output) + Send + 'static,
     {
+        let env = terminal_env("shell", link)?;
         let etc_shells = std::fs::read_to_string("/etc/shells").unwrap_or_default();
         let (argv, missing) = shell_argv_for(shell, &host_env, &etc_shells, is_program_file, Os::current())?;
         let at = shell_cwd(cwd, home);
-        Ok((self.spawn(argv, &at, None, &[], cols, rows, sink)?, at, missing))
+        Ok((self.spawn(argv, &at, None, &env, cols, rows, sink)?, at, missing))
     }
 
     /// Settings › Accounts › GitHub "Sign in to another account": gh's own sign-in (`gh auth login`, or with
@@ -1982,18 +1998,23 @@ mod tests {
         assert_eq!(s.count(), 0);
     }
 
-    /// An oh-my-hermes terminal gets its row's link id as `OMHER_TERMINAL_LINK` (OMH reopens the session it dropped in
-    /// this terminal); no other agent gets it, and a link that is not 10 lowercase base32 characters is refused.
+    /// An oh-my-hermes terminal and a TERMINALS Shell row get their row's link id as `OMHER_TERMINAL_LINK` (OMH reopens
+    /// the session it dropped in this terminal); no other agent gets it, and a link that is not 10 lowercase base32
+    /// characters is refused.
     #[test]
-    fn terminal_env_gives_only_omh_its_checked_link_id() {
+    fn terminal_env_gives_only_omh_and_a_shell_row_their_checked_link_id() {
         assert_eq!(terminal_env("omh", None).unwrap(), Vec::<(String, String)>::new());
         assert_eq!(terminal_env("claude", None).unwrap(), Vec::<(String, String)>::new());
         assert_eq!(terminal_env("omh", Some("abcdefgh23")).unwrap(), vec![("OMHER_TERMINAL_LINK".to_string(), "abcdefgh23".to_string())]);
-        for agent in ["claude", "codex", "omo", "dsh", "pi", "omp", "grok", "opencode", "gemini", "shell"] {
+        // a TERMINALS Shell row too: the person may type `omh` in it
+        assert_eq!(terminal_env("shell", Some("abcdefgh23")).unwrap(), vec![("OMHER_TERMINAL_LINK".to_string(), "abcdefgh23".to_string())]);
+        assert_eq!(terminal_env("shell", None).unwrap(), Vec::<(String, String)>::new());
+        for agent in ["claude", "codex", "omo", "dsh", "pi", "omp", "grok", "opencode", "gemini", "Shell", "bash"] {
             assert!(terminal_env(agent, Some("abcdefgh23")).is_err(), "{agent}");
         }
         for bad in ["", "abcdefgh2", "abcdefgh234", "ABCDEFGH23", "abcdefgh18", "abcdefgh2 ", "abc/efgh23", "abcdefgh2\n", "abcdéfgh23"] {
             assert!(terminal_env("omh", Some(bad)).is_err(), "{bad:?}");
+            assert!(terminal_env("shell", Some(bad)).is_err(), "{bad:?}");
         }
         // refused before a program is looked up or a process exists
         let s = Sessions::default();
@@ -3196,7 +3217,7 @@ mod tests {
             let out = Arc::new(Mutex::new(Vec::<u8>::new()));
             let o = out.clone();
             let (id, at, missing) = s
-                .start_shell(Some(&wanted), None, &home, 120, 24, move |ev| {
+                .start_shell(Some(&wanted), None, None, &home, 120, 24, move |ev| {
                     if let Output::Data(b) = ev {
                         o.lock().unwrap().extend(b);
                     }
@@ -3212,5 +3233,28 @@ mod tests {
             assert_eq!(s.count(), 0);
         }
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// A TERMINALS Shell row's shell is told its row's link (an `omh` typed there reopens what it dropped); a link that
+    /// is not one is refused before a process exists.
+    #[cfg(unix)]
+    #[test]
+    fn a_shell_row_is_told_its_checked_link() {
+        let home = std::env::temp_dir();
+        let s = Sessions::default();
+        assert_eq!(s.start_shell(None, None, Some("NOT-A-LINK"), &home, 80, 24, |_| {}).unwrap_err(), "not a terminal link id");
+        assert_eq!(s.count(), 0);
+        let out = Arc::new(Mutex::new(Vec::<u8>::new()));
+        let o = out.clone();
+        let (id, _, _) = s
+            .start_shell(None, None, Some("q2w3e4r5t6"), &home, 120, 24, move |ev| {
+                if let Output::Data(b) = ev {
+                    o.lock().unwrap().extend(b);
+                }
+            })
+            .unwrap();
+        s.write(id, b"echo \"link:$OMHER_TERMINAL_LINK:\"\r").unwrap();
+        assert!(wait_for(|| String::from_utf8_lossy(&out.lock().unwrap()).contains("link:q2w3e4r5t6:")), "{:?}", String::from_utf8_lossy(&out.lock().unwrap()));
+        s.close(id);
     }
 }

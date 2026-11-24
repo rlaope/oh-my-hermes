@@ -348,6 +348,9 @@ export interface SessionRec {
   /** The CLI running in the foreground of this terminal (a harness id or program name, e.g. `claude` started from a
    *  Shell), as the shell reports it; null = none known (the session's own agent, or the shell itself). */
   fgAgent?: string | null;
+  /** A Shell row: the conversation id of the Claude Code or Codex in its foreground (`fgAgent`), once the shell named
+   *  it; gone when that CLI leaves the foreground. Kept with the row so a restart continues it (fgResume.ts). */
+  fgSession?: string;
   /** ms since epoch of the terminal's last output (throttled), for the row's spinner and age. */
   lastOut?: number;
   /** The last line the terminal shows with text on it (read from its own screen, throttled): the card's second line. */

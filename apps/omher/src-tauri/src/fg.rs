@@ -496,6 +496,65 @@ pub fn codex_conversation(_fg: u32, _home: &Path) -> Option<String> {
     None
 }
 
+// ---------------------------------------------------------------------------------------------
+// The conversation a Shell terminal's Claude Code runs (rule 11)
+// ---------------------------------------------------------------------------------------------
+
+/// Largest `sessions/<pid>.json` read: Claude Code's own record is a few hundred bytes.
+const CLAUDE_RECORD_MAX: u64 = 64 * 1024;
+
+/// The Claude Code conversation the Claude Code in the foreground of a terminal runs (a Shell row where the person
+/// typed `claude`). `fg` (the terminal's foreground process) must be Claude Code by the allow-list match above; it and
+/// the Claude Code processes under it (at most [`TREE_MAX`]: a wrapper script runs the CLI as its child) are looked up
+/// in Claude Code's own record of its running sessions, `<home>/sessions/<pid>.json` ([`claude_session_id`]). Only the
+/// id comes back; when several processes name one, the earliest. Windows does not do this (its foreground is a search
+/// of the session's process tree, `outermost_agent`, and the pid Claude Code records there is not checked against
+/// it): `None` there.
+#[cfg(unix)]
+pub fn claude_conversation(fg: u32, home: &Path) -> Option<String> {
+    let is_claude = |pid: u32| Probe::default().agent(pid) == Some("claude");
+    if !is_claude(fg) {
+        return None;
+    }
+    let mut tree = vec![fg];
+    let mut i = 0;
+    while i < tree.len() && tree.len() < TREE_MAX {
+        for c in children(tree[i]) {
+            if tree.len() < TREE_MAX && !tree.contains(&c) {
+                tree.push(c);
+            }
+        }
+        i += 1;
+    }
+    tree.into_iter().filter(|p| is_claude(*p)).filter_map(|p| claude_session_id(home, p)).min()
+}
+
+#[cfg(windows)]
+pub fn claude_conversation(_fg: u32, _home: &Path) -> Option<String> {
+    None
+}
+
+/// The `sessionId` Claude Code wrote for its running process `pid` in `<home>/sessions/<pid>.json`, lowercased: only
+/// when that is a plain file (not a link) of at most [`CLAUDE_RECORD_MAX`] bytes holding a JSON object whose `pid` is
+/// `pid` and whose `sessionId` is a UUID. A missing, unreadable or malformed file, another pid, or any other id gives
+/// `None`; nothing else of the file is kept.
+pub fn claude_session_id(home: &Path, pid: u32) -> Option<String> {
+    use std::io::Read;
+    let path = home.join("sessions").join(format!("{pid}.json"));
+    let meta = std::fs::symlink_metadata(&path).ok()?;
+    if meta.file_type().is_symlink() || !meta.is_file() || meta.len() > CLAUDE_RECORD_MAX {
+        return None;
+    }
+    let mut text = String::new();
+    std::fs::File::open(&path).ok()?.take(CLAUDE_RECORD_MAX).read_to_string(&mut text).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&text).ok()?;
+    if v.get("pid")?.as_u64()? != u64::from(pid) {
+        return None;
+    }
+    let id = v.get("sessionId")?.as_str()?;
+    crate::sessions::is_uuid(id).then(|| id.to_ascii_lowercase())
+}
+
 /// The processes whose parent is `pid`.
 #[cfg(target_os = "macos")]
 fn children(pid: u32) -> Vec<u32> {
@@ -937,5 +996,81 @@ mod tests {
         let _ = parent.kill();
         let _ = parent.wait();
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// Claude Code's record of a running session gives its id only when the file is that process's own and the id is a
+    /// UUID; anything else gives nothing.
+    #[test]
+    fn a_claude_record_names_its_session_only_for_its_own_pid_and_a_uuid() {
+        let home = std::env::temp_dir().join(format!("omher-fg-claude-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let dir = home.join("sessions");
+        std::fs::create_dir_all(&dir).unwrap();
+        let id = "5d0f3c2a-9b1e-4c7d-8a6f-0e1d2c3b4a59";
+        let put = |pid: u32, body: &str| std::fs::write(dir.join(format!("{pid}.json")), body).unwrap();
+        put(4101, &format!(r#"{{"pid":4101,"sessionId":"{id}","cwd":"/x","kind":"interactive"}}"#));
+        assert_eq!(claude_session_id(&home, 4101).as_deref(), Some(id));
+        // an upper-case UUID comes back lowercased
+        put(4102, &format!(r#"{{"pid":4102,"sessionId":"{}"}}"#, id.to_ascii_uppercase()));
+        assert_eq!(claude_session_id(&home, 4102).as_deref(), Some(id));
+        // not a UUID: a name, a path, a UUID with more after it, a number
+        for (pid, bad) in [(4103, r#""my-session""#), (4104, r#""../../etc/passwd""#), (4105, &format!(r#""{id} x""#)), (4106, "12")] {
+            put(pid, &format!(r#"{{"pid":{pid},"sessionId":{bad}}}"#));
+            assert_eq!(claude_session_id(&home, pid), None, "{bad}");
+        }
+        // the file names another process, or none
+        put(4107, &format!(r#"{{"pid":4999,"sessionId":"{id}"}}"#));
+        assert_eq!(claude_session_id(&home, 4107), None);
+        put(4108, &format!(r#"{{"pid":"4108","sessionId":"{id}"}}"#));
+        assert_eq!(claude_session_id(&home, 4108), None);
+        put(4109, &format!(r#"{{"sessionId":"{id}"}}"#));
+        assert_eq!(claude_session_id(&home, 4109), None);
+        // missing
+        assert_eq!(claude_session_id(&home, 4110), None);
+        // malformed: not JSON, cut short, not an object
+        for (pid, body) in [(4111, "not json"), (4112, &format!(r#"{{"pid":4112,"sessionId":"{id}""#)), (4113, "[4113]")] {
+            put(pid, body);
+            assert_eq!(claude_session_id(&home, pid), None, "{body}");
+        }
+        // a folder in the file's place, an oversized file
+        std::fs::create_dir_all(dir.join("4114.json")).unwrap();
+        assert_eq!(claude_session_id(&home, 4114), None);
+        put(4115, &format!(r#"{{"pid":4115,"sessionId":"{id}","pad":"{}"}}"#, "x".repeat(70 * 1024)));
+        assert_eq!(claude_session_id(&home, 4115), None);
+        // a link in the file's place is not followed
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(dir.join("4101.json"), dir.join("4116.json")).unwrap();
+            assert_eq!(claude_session_id(&home, 4116), None);
+        }
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// A process that is not Claude Code names no conversation, even with a record of its own (this test's process).
+    #[cfg(unix)]
+    #[test]
+    fn only_a_foreground_claude_code_is_looked_up() {
+        let home = std::env::temp_dir().join(format!("omher-fg-claude-fg-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(home.join("sessions")).unwrap();
+        let me = std::process::id();
+        let id = "5d0f3c2a-9b1e-4c7d-8a6f-0e1d2c3b4a59";
+        std::fs::write(home.join("sessions").join(format!("{me}.json")), format!(r#"{{"pid":{me},"sessionId":"{id}"}}"#)).unwrap();
+        assert_eq!(claude_session_id(&home, me).as_deref(), Some(id));
+        assert_eq!(claude_conversation(me, &home), None);
+        // a Claude Code stand-in (`sh <dir>/claude`) whose record names it
+        let bin = home.join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        std::fs::write(bin.join("claude"), "sleep 30\nexit 0\n").unwrap();
+        let mut claude = std::process::Command::new("/bin/sh").arg(bin.join("claude")).stdin(std::process::Stdio::null()).spawn().unwrap();
+        let pid = claude.id();
+        assert_eq!(wait_for(|| Probe::default().agent(pid).map(String::from)).as_deref(), Some("claude"));
+        assert_eq!(claude_conversation(pid, &home), None, "no record yet");
+        std::fs::write(home.join("sessions").join(format!("{pid}.json")), format!(r#"{{"pid":{pid},"sessionId":"{id}"}}"#)).unwrap();
+        assert_eq!(claude_conversation(pid, &home).as_deref(), Some(id));
+        assert_eq!(claude_conversation(pid, &home.join("other-home")), None);
+        let _ = claude.kill();
+        let _ = claude.wait();
+        let _ = std::fs::remove_dir_all(&home);
     }
 }
