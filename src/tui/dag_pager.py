@@ -16,7 +16,8 @@ here reaches the gateway, a child or a chat.
 
 Keys: Tab / n the next box, Shift-Tab / p the one before, in reading order
 (frontier by frontier, left to right); Space / Enter fold or unfold the
-highlighted box; d Node details on or off; ↑↓ (j / k) a line, PageUp /
+highlighted box; d Node details on or off; e opens or closes selected-node
+evidence, r rereads it; ↑↓ (j / k) a line, PageUp /
 PageDown (b) a page, g / G either end; q / Esc leave. It opens on the first
 running node, else the first box. A payload holds one conversation's graph,
 so there is no other run to switch to and ↔ is not offered.
@@ -29,6 +30,7 @@ from dataclasses import dataclass, field
 import time
 from typing import Any, ClassVar
 
+from .dag_evidence import evidence, evidence_lines, selected_node
 from .keys import CHAR, END, ENTER, ESCAPE, HOME, PAGE_DOWN, PAGE_UP, TAB, Key, Paste, list_nav_step
 from .pager import Pager
 from .panels import dag_page_lines
@@ -51,6 +53,14 @@ def _no_aura() -> int | None:
     return None
 
 
+def _no_handoff(_node: str) -> str:
+    return ""
+
+
+def _same_session() -> bool:
+    return True
+
+
 @dataclass
 class DagPager(Pager):
     FOOTER_ROWS: ClassVar[int] = 2
@@ -64,6 +74,13 @@ class DagPager(Pager):
     node: str = ""  # the highlighted box's node id; "" until the first frame picks one
     folded: frozenset[str] = frozenset()
     details: bool = True
+    read_handoff: Callable[[str], str] = _no_handoff
+    same_session: Callable[[], bool] = _same_session
+    _evidence: bool = field(default=False, init=False)
+    _evidence_key: tuple[str, float | None] | None = field(default=None, init=False)
+    _handoff: str = field(default="", init=False)
+    _evidence_frame: tuple[Any, ...] | None = field(default=None, init=False)
+    _graph_top: int = field(default=0, init=False)
     # The boxes of the last drawing, (node id, first line, last line) in reading order, and what it was drawn for.
     _boxes: tuple[tuple[str, int, int], ...] = field(default=(), init=False, repr=False, compare=False)
     _drawn: tuple[Any, ...] | None = field(default=None, init=False, repr=False, compare=False)
@@ -80,15 +97,19 @@ class DagPager(Pager):
         char = event.char if event.name == CHAR and not event.ctrl and not event.alt else ""
         if event.name == ESCAPE or char == "q":
             return False
-        if (event.name == TAB and not event.shift) or char == "n":
+        if char == "e":
+            self._toggle_evidence()
+        elif self._evidence and char == "r":
+            self._evidence_key = None
+        elif not self._evidence and ((event.name == TAB and not event.shift) or char == "n"):
             self._step(1)
-        elif (event.name == TAB and event.shift) or char == "p":
+        elif not self._evidence and ((event.name == TAB and event.shift) or char == "p"):
             self._step(-1)
-        elif event.name == ENTER or char == " ":
+        elif not self._evidence and (event.name == ENTER or char == " "):
             if self.node:
                 self.folded = self.folded ^ {self.node}
                 self._follow = True
-        elif char == "d":
+        elif not self._evidence and char == "d":
             self.details = not self.details
         elif list_nav_step(event) == 1 or char == "j":
             self._scroll(1, rows)
@@ -104,6 +125,18 @@ class DagPager(Pager):
             self._scroll_to_end(True, rows)
         return True
 
+    def _toggle_evidence(self) -> None:
+        if self._evidence:
+            self._evidence = False
+            self.top = self._graph_top
+            self._drawn = None
+            self._handoff, self._evidence_key, self._evidence_frame = "", None, None
+        elif self.same_session() and selected_node(self.payload(), self.node) is not None:
+            self._graph_top = self.top
+            self._evidence = True
+            self.top = 0
+        self.clear_selection()
+
     def _step(self, step: int) -> None:
         order = [node_id for node_id, _top, _bottom in self._boxes]
         if not order:
@@ -113,6 +146,9 @@ class DagPager(Pager):
         self._follow = True
 
     def _page(self, cols: int, rows: int, theme: Theme) -> tuple[list[Line], str]:
+        if self._evidence:
+            self._draw_evidence(cols, theme)
+            return super()._page(cols, rows, theme)
         self._draw(cols, theme)
         if self._follow:
             self._follow = False
@@ -124,6 +160,20 @@ class DagPager(Pager):
                 elif box[1] >= self.top + body:
                     self.top = min(box[0], box[1] - body + 1)
         return super()._page(cols, rows, theme)
+
+    def _draw_evidence(self, cols: int, theme: Theme) -> None:
+        node = selected_node(self.payload(), self.node) if self.same_session() else None
+        if node is None:
+            self._handoff, self._evidence_key, self._evidence_frame = "", None, None
+            self.lines = [(Span("Evidence unavailable · node is no longer in the current session graph", theme.muted),)]
+            return
+        key = (self.node, self.read_at())
+        if self._evidence_key != key:
+            self._handoff, self._evidence_key = self.read_handoff(self.node), key
+        frame = (node, self._handoff, cols, theme)
+        if self._evidence_frame != frame:
+            self.lines = evidence_lines(*evidence(node, self._handoff), cols, theme)
+            self._evidence_frame = frame
 
     def _draw(self, cols: int, theme: Theme) -> None:
         """Draw the newest payload at this width and focus, unless the last frame already drew exactly that.
@@ -178,7 +228,13 @@ class DagPager(Pager):
 
     def footer(self, position: str, theme: Theme) -> list[Line]:
         """The keys, then the title and the rows the page shows."""
-        return [(Span(f" {DAG_KEYS} ", theme.status),), (Span(f" {self.title} · rows {position} ", theme.status),)]
+        if self._evidence:
+            keys, title = "e Graph  r Refresh  ↑↓ Scroll  q Close", "node evidence"
+        else:
+            keys, title = DAG_KEYS, self.title
+            if self.same_session() and selected_node(self.payload(), self.node) is not None:
+                keys = "e Evidence  " + keys
+        return [(Span(f" {keys} ", theme.status),), (Span(f" {title} · rows {position} ", theme.status),)]
 
 
 def _running(payload: Any) -> bool:
