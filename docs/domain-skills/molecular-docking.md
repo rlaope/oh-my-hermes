@@ -41,8 +41,8 @@ service, new provider or different installation strategy was used.
 Operator reproduction of that observed correction (existing environment only):
 
 ```sh
-export TMPDIR=/Users/rlaope/.hermes/cache/scratch
-export EVIDENCE=/Users/rlaope/.hermes/cache/scratch/omh-domain-dag-evidence-20261022/docking
+export TMPDIR=$HOME/.hermes/cache/scratch
+export EVIDENCE=$HOME/.hermes/cache/scratch/omh-domain-dag-evidence-20261022/docking
 CONDA_DEFAULT_ENV="$EVIDENCE/build-env" CONDA_PREFIX="$EVIDENCE/build-env" \
   PATH="$EVIDENCE/build-env/bin:$PATH" UV_CACHE_DIR="$EVIDENCE/repair-uv-cache" \
   uv pip install --python "$EVIDENCE/build-env/bin/python" vina==1.2.7

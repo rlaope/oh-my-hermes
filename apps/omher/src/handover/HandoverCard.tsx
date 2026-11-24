@@ -36,7 +36,9 @@ const W = 380;
  *  any other way still goes, with no git facts, as one outside every worktree does. */
 type Facts = { key: string; worktree: Worktree | null; diff: WorktreeDiff | null; blocked: "gone" | "unreadable" | null };
 
-export function HandoverCard({ at, from, onClose }: { at: { x: number; y: number }; from: HandoverFrom; onClose: () => void }) {
+/** `back`: where the keyboard goes when the card closes (the menu's invoker, looked up then: the item that opened the
+ *  card is gone by the time it mounts). Unset, it goes back to where it was when the card opened. */
+export function HandoverCard({ at, from, back, onClose }: { at: { x: number; y: number }; from: HandoverFrom; back?: () => HTMLElement | null; onClose: () => void }) {
   const s = useStore();
   const local = handBots(s.bots);
   // a Worktrees row goes to its own bot unless another is picked (when that bot is of this computer and online)
@@ -77,19 +79,35 @@ export function HandoverCard({ at, from, onClose }: { at: { x: number; y: number
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   // once, when the card opens: the goal field takes the keyboard, a press outside closes it, and closing gives the
-  // keyboard back to where it was
+  // keyboard back to the invoker. "own": Escape, Cancel or Open thread closed it, so the keyboard goes back whatever
+  // holds it now; "outside": the press chose another target, so it stays there. Neither (the row or cell that holds
+  // the card went away): it goes back only if it was lost with the card.
   const close = useRef(onClose);
   close.current = onClose;
+  const how = useRef<"own" | "outside" | null>(null);
+  const backTo = useRef(back);
+  backTo.current = back;
+  const done = () => {
+    how.current = "own";
+    onClose();
+  };
   useEffect(() => {
-    const back = document.activeElement as HTMLElement | null;
+    const was = document.activeElement as HTMLElement | null;
+    how.current = null;
     ref.current?.querySelector<HTMLInputElement>("input")?.focus();
     const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) close.current();
+      if (!ref.current || ref.current.contains(e.target as Node)) return;
+      how.current = "outside";
+      close.current();
     };
     document.addEventListener("mousedown", onDown);
     return () => {
       document.removeEventListener("mousedown", onDown);
-      if (back && document.contains(back)) back.focus();
+      if (how.current === "outside") return;
+      const now = document.activeElement;
+      if (how.current !== "own" && now && now !== document.body && now.isConnected) return;
+      const to = backTo.current ? backTo.current() : was;
+      if (to?.isConnected) to.focus();
     };
   }, []);
   const ready = facts?.key === key ? facts : null;
@@ -103,7 +121,7 @@ export function HandoverCard({ at, from, onClose }: { at: { x: number; y: number
     setBusy(true);
     const made = await s.startTaskThread(to.name, handoverTitle({ folder, worktree: ready.worktree }), text);
     setBusy(false);
-    if (made) onClose();
+    if (made) done();
   };
   const left = Math.max(6, Math.min(at.x, window.innerWidth - W - 6));
   return createPortal(
@@ -125,7 +143,7 @@ export function HandoverCard({ at, from, onClose }: { at: { x: number; y: number
         if (e.key === "Escape" && !ref.current?.querySelector('[aria-expanded="true"]')) {
           e.preventDefault();
           e.stopPropagation();
-          onClose();
+          done();
         }
       }}
     >
@@ -174,7 +192,7 @@ export function HandoverCard({ at, from, onClose }: { at: { x: number; y: number
       )}
       <p className="ho-note">{t("hand.note")}</p>
       <div className="ho-b">
-        <button type="button" onClick={onClose} data-testid="handover-cancel">
+        <button type="button" onClick={done} data-testid="handover-cancel">
           {t("hand.cancel")}
         </button>
         <button type="button" className="primary" disabled={!to || !ready || !!ready.blocked || busy} onClick={() => void send()} data-testid="handover-send">

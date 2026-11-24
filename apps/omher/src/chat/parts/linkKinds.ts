@@ -215,7 +215,7 @@ function slack(u: URL, p: string[]): LinkInfo {
     }
     return { service: "slack", kind: "channel", label: k("Slack", "lk.k.channel"), meta };
   }
-  // <team>.slack.com/archives/C…[/p1794195216893139][?thread_ts=…]
+  // <team>.slack.com/archives/C…[/p1700000000000001][?thread_ts=…]
   if (p[0] === "archives" && p[1]) {
     meta.channel = p[1];
     const ts = p[2] && /^p(\d{10})(\d{6})$/.exec(p[2]);

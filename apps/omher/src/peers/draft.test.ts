@@ -8,8 +8,8 @@ const fence = (body: string) => "```omher-peer\n" + body + "\n```";
 
 describe("omher-peer drafts", () => {
   it("reads one fenced block with host and label", () => {
-    const text = `Sure.\n\n${fence('{"host": "sionic@10.1.145.204", "label": "Mac mini"}')}\n\nPress Connect.`;
-    expect(parsePeerDrafts(text)).toEqual([{ draft: { host: "sionic@10.1.145.204", label: "Mac mini" }, why: null }]);
+    const text = `Sure.\n\n${fence('{"host": "demo@host.example", "label": "Mac mini"}')}\n\nPress Connect.`;
+    expect(parsePeerDrafts(text)).toEqual([{ draft: { host: "demo@host.example", label: "Mac mini" }, why: null }]);
   });
 
   it("reads an inline one-line block, a ~~~ fence, a port, and ignores unknown keys", () => {
@@ -21,8 +21,8 @@ describe("omher-peer drafts", () => {
   });
 
   it("fills a missing label from the host", () => {
-    expect(labelFor("sionic@mac-mini.local")).toBe("mac-mini");
-    expect(labelFor("10.1.145.204")).toBe("10.1.145.204");
+    expect(labelFor("demo@mac-mini.local")).toBe("mac-mini");
+    expect(labelFor("192.0.2.10")).toBe("192.0.2.10");
     expect(parsePeerDrafts(fence('{"host": "u@studio.lan"}'))[0]).toEqual({ draft: { host: "u@studio.lan", label: "studio" }, why: null });
   });
 
@@ -50,7 +50,7 @@ describe("omher-peer drafts", () => {
   });
 
   it("checks hosts and labels the way the shell does", () => {
-    for (const ok of ["mini", "sionic@10.1.145.204", "build-box.local", "_svc@h"]) expect(validHost(ok)).toBe(true);
+    for (const ok of ["mini", "demo@host.example", "build-box.local", "_svc@h"]) expect(validHost(ok)).toBe(true);
     for (const bad of ["", "-x", "a b", "a@", "@a", "u@-h", "a/b", "a'b", "h:1", "u@h@x"]) expect(validHost(bad)).toBe(false);
     expect(validLabel("맥미니")).toBe(true);
     expect(validLabel(" ")).toBe(false);
@@ -58,28 +58,28 @@ describe("omher-peer drafts", () => {
   });
 
   it("leaves the blocks out of the shown text: fenced, ~~~, inline, and an unclosed one while streaming", () => {
-    const text = `I'll connect it.\n\n${fence('{"host": "sionic@10.1.145.204", "label": "Mac mini"}')}\n\nPress Connect.`;
+    const text = `I'll connect it.\n\n${fence('{"host": "demo@host.example", "label": "Mac mini"}')}\n\nPress Connect.`;
     expect(stripPeerDrafts(text)).toBe("I'll connect it.\n\nPress Connect.");
     expect(stripPeerDrafts('Use ```omher-peer {"host": "mini"}``` now.\n~~~omher-peer\n{"host": "box"}\n~~~')).toBe("Use  now.");
-    expect(stripPeerDrafts('On it.\n\n```omher-peer\n{"host": "sionic@10.1', true)).toBe("On it.");
+    expect(stripPeerDrafts('On it.\n\n```omher-peer\n{"host": "demo@host.ex', true)).toBe("On it.");
     expect(stripPeerDrafts("```sh\nssh mini\n```")).toBe("```sh\nssh mini\n```");
   });
 
   it("the bubble shows the chip, not the raw block with its user@host; a folder chat (no chip) keeps the block", () => {
-    const text = `I'll connect it.\n\n${fence('{"host": "sionic@10.1.145.204", "label": "Mac mini"}')}`;
+    const text = `I'll connect it.\n\n${fence('{"host": "demo@host.example", "label": "Mac mini"}')}`;
     const main = renderToStaticMarkup(createElement(Bubble, { item: { kind: "assistant", text }, bot: "kami" }));
     expect(main).toContain('data-testid="peer-chip"');
     expect(main).not.toContain("<pre>");
     // the bubble's own text holds no user@host (the chip keeps it in its tooltip, as the card shows it)
-    expect(main.split('data-testid="peer-chips"')[0]).not.toContain("10.1.145.204");
+    expect(main.split('data-testid="peer-chips"')[0]).not.toContain("host.example");
     const live = renderToStaticMarkup(createElement(Bubble, { item: { kind: "assistant", text: text.slice(0, -10) }, bot: "kami", streaming: true }));
-    expect(live).not.toContain("10.1.145");
+    expect(live).not.toContain("host.ex");
     expect(renderToStaticMarkup(createElement(Bubble, { item: { kind: "assistant", text }, bot: "fold:kami:f1" }))).toContain("<pre>");
   });
 
   it("is read only in a bot's main chat", () => {
     expect(peerDraftsAllowed("kami")).toBe(true);
-    expect(peerDraftsAllowed("mini:sionic-kami")).toBe(true);
+    expect(peerDraftsAllowed("mini:demo-kami")).toBe(true);
     expect(peerDraftsAllowed("fold:kami:f1")).toBe(false);
     expect(peerDraftsAllowed("agent:s3")).toBe(false);
   });

@@ -215,7 +215,7 @@ test("a bot on another computer: its thread's PR shows the number with no state,
   await page.getByRole("button", { name: "Add a bot" }).click();
   await page.getByTestId("addbot-ssh").click();
   const peerCard = page.getByTestId("peer-card");
-  await peerCard.getByTestId("peer-host").fill("me@10.0.0.2");
+  await peerCard.getByTestId("peer-host").fill("demo@host.example");
   await peerCard.getByTestId("peer-label").fill("Mac mini");
   await peerCard.getByTestId("peer-check").click();
   await expect(peerCard.getByTestId("peer-found")).toBeVisible();

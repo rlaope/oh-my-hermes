@@ -9,6 +9,10 @@ All notable changes will be documented here.
   slash command's text as its arguments, so `/usage` answered `Unknown /usage subcommand: [omher] Open threads:
   none. ...`. A message that starts with `/` now goes with no note, and a slash command with a reply target is
   refused instead of sent with the target block. (`apps/omher/bridge/omher_bridge.py`)
+- **omher: Settings › Accounts › GitHub keeps Add and Remove on one line.** A GitHub account row reused the
+  accounts grid, whose last column is the 26px ⋯ menu. 추가 just fit there in macOS's font; on Windows, whose Korean
+  font is wider, it broke into 추 / 가 and was clipped. That row's button column now takes the label's width in any
+  language and font. (`apps/omher/src/settings/accounts/accounts.css`)
 - **omher: Ctrl+V pastes and Ctrl+C copies in a Windows terminal, as in Windows Terminal.** On Windows, Ctrl+V in a
   terminal used to reach the program as ^V; only Ctrl+Shift+V and Shift+Insert pasted. Now Ctrl+V pastes through the
   same path as those keys (the multi-line confirm, and a pasted picture's saved path), and the paste happens once.
@@ -117,6 +121,20 @@ All notable changes will be documented here.
   worktree in it (`docs/OMHER-BOUNDARY.md` rule 10); a terminal folder outside the bot's worktrees goes with its path
   and a line asking the bot to check `git status` itself. Nothing moves on disk, the session stays open and omher
   types nothing into it: the bot works with its own tools and approvals. (`apps/omher/src/handover/`)
+- **omher: a terminal in a split hands its folder to a bot too.** A TERMINALS session in a split shows as a cell of
+  the split card, and its right-click menu had every item of a row's menu but Hand to <bot>. A cell's menu now offers
+  it under the same conditions (a folder, and a bot of this computer online) and opens the same card, which sends the
+  same first message through the same thread start as from a row. Nothing new is read or sent.
+  (`apps/omher/src/sessions/SplitLayoutCard.tsx`; `docs/OMHER-BOUNDARY.md` rule 10)
+- **omher: closing a TERMINALS menu or the Hand to <bot> card puts the keyboard back on the row or cell.** After
+  Escape in a TERMINALS row's or split card cell's menu, or Escape, Cancel or Open thread on its Hand to <bot> card,
+  the keyboard landed on the page itself: the menu item that opened the card was gone before the card noted where the
+  keyboard was. It now goes back to the row or cell that opened the menu. If that row or cell is gone (its split made
+  or ended meanwhile), it goes to the session's row or cell as drawn now; with the session closed, to the TERMINALS
+  New terminal button. A press outside the
+  card leaves the keyboard where that press put it. UI only: nothing new is read or sent.
+  (`apps/omher/src/handover/HandoverCard.tsx`, `apps/omher/src/sessions/SessionsSection.tsx`,
+  `apps/omher/src/sessions/SplitLayoutCard.tsx`)
 - **omher's reasoning picker offers every level Hermes accepts, ultra included.** The chat model picker's Reasoning
   control showed none, low, medium, high and xhigh only, so minimal, max and ultra could not be picked. The bridge now
   reads the installed Hermes' own levels (`hermes_constants.VALID_REASONING_EFFORTS`, after "none") and offers them in
@@ -146,6 +164,16 @@ All notable changes will be documented here.
   `user_executor_platform_unsupported`.
   (`src/coding/user_executors.py`, `src/coding/executor_presets.py`, `src/coding/fanout_remote_pr.py`,
   `src/commands/coding.py`; `docs/FANOUT.md` "Your own harness", `docs/FANOUT-EXECUTOR-EVIDENCE.md`)
+- **Two `omh coding executors add` or `remove` at once on Windows no longer refuse each other as `path_escape`.**
+  The home check resolved `routing/executors.toml` itself while the other writer was replacing it. On Windows,
+  `realpath` of a file mid-replace can come back with its `\\?\` extended-length prefix, which never sits under the
+  resolved home, so a legitimate add, or a `list` or dispatch reading at that moment, was refused as `path_escape`.
+  The check now resolves only the `routing` directory, which no writer replaces; the file is refused if it is a
+  symlink, without following it, and writers make that check under the registry lock. A `routing` directory linked
+  outside the home is still `path_escape`; a symlinked registry file is `symlink_refused` (a link pointing outside
+  the home used to report `path_escape`); nothing is written through either. A read that races a write can still
+  report `not_regular_file` for that one read, on every platform; that predates this change and is a follow-up.
+  (`src/coding/user_executors.py`)
 - **`omh setup` connects to a Hermes config whose root keys hold column-0 lists, or whose section keys carry a
   comment.** Step 2 stopped with "non-mapping or unsupported root YAML is user-owned" on a `config.yaml` that writes a
   root key's list items at the left edge (`toolsets:` then `- hermes-cli`), the spelling older Hermes releases, hand
@@ -13480,7 +13508,7 @@ Highlights of this major release (details in the entries below):
   skill name that resolves to two different files across
   `skills.external_dirs`, and every generation refresh made the two copies
   differ, so after each update every OMH skill present in both failed to
-  load by name in that bot (#1857; on the owner machine `profiles/miku`
+  load by name in that bot (#1857; on the owner machine `profiles/mbot`
   recorded `Ambiguous skill name 'omh-model-setup'`). `_apply_result` run
   from the installer-managed command now retires every other OMH-managed
   entry in the same config write that registers the pointer, so the home

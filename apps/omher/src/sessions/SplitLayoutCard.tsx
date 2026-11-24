@@ -29,8 +29,11 @@ export interface RowMenuKit {
   items: (rec: SessionRec) => RowAction[];
   act: (rec: SessionRec, a: RowAction, rename: () => void, close: (rec: SessionRec) => void) => void;
   spot: (e: { clientX: number; clientY: number }, from: Element | null, rows: number) => { x: number; y: number };
-  Menu: ComponentType<{ at: { x: number; y: number }; name: string; actions: RowAction[]; onPick: (a: RowAction) => void; onDismiss: () => void }>;
+  Menu: ComponentType<{ at: { x: number; y: number }; name: string; actions: RowAction[]; onPick: (a: RowAction) => void; onDismiss: () => void; back?: () => HTMLElement | null }>;
   Name: ComponentType<{ initial: string; auto: boolean; onDone: (title: string | null | undefined) => void }>;
+  /** The Hand to <bot> card for session `rec`, opened at the menu's place by its "hand" item; `back` is the cell's
+   *  face, where the keyboard goes when the card closes. */
+  Hand: ComponentType<{ at: { x: number; y: number }; rec: SessionRec; back: () => HTMLElement | null; onClose: () => void }>;
 }
 
 /** The orbit's three strokes, head aligned: [length % of the edge, width px, opacity]. Drawn 1.25 px in, so the 2.5 px
@@ -51,6 +54,7 @@ const SplitCell = memo(function SplitCell({ rec, x, y, w, h, focused, agents, un
   countRender(`cell:${rec.id}`);
   const [editing, setEditing] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [hand, setHand] = useState<{ x: number; y: number } | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const { act, now } = useTermFace(rec.id, rec.startedAt, ticking);
   const asked = usePendingRequests().some((r) => r.sessionId === rec.id);
@@ -76,6 +80,8 @@ const SplitCell = memo(function SplitCell({ rec, x, y, w, h, focused, agents, un
     if (v !== undefined) getSessions().rename(rec.id, v);
     requestAnimationFrame(() => wrap.current?.querySelector<HTMLElement>(".sc-open")?.focus());
   };
+  // the cell's face: the keyboard goes back to it when its menu or Hand card closes
+  const opener = () => wrap.current?.querySelector<HTMLElement>(".sc-open") ?? null;
   const markSize = text === "stack" ? 20 : text === "line" ? 12 : 13;
   const body = (
     <span className="sc-body">
@@ -104,7 +110,8 @@ const SplitCell = memo(function SplitCell({ rec, x, y, w, h, focused, agents, un
       onContextMenu={(e) => {
         if (editing) return;
         e.preventDefault();
-        setMenu(kit.spot(e, wrap.current, actions.length));
+        // counted now, not at the last render: a bot that came online since adds the Hand row
+        setMenu(kit.spot(e, wrap.current, kit.items(rec).length));
       }}
     >
       <svg className="sc-svg" width={w} height={h} aria-hidden="true">
@@ -129,7 +136,8 @@ const SplitCell = memo(function SplitCell({ rec, x, y, w, h, focused, agents, un
           {el.text}
         </span>
       )}
-      {menu && <kit.Menu at={menu} name={title.title} actions={actions} onPick={(a) => kit.act(rec, a, () => setEditing(true), onClose)} onDismiss={() => setMenu(null)} />}
+      {menu && <kit.Menu at={menu} name={title.title} actions={actions} onPick={(a) => (a === "hand" ? setHand(menu) : kit.act(rec, a, () => setEditing(true), onClose))} onDismiss={() => setMenu(null)} back={opener} />}
+      {hand && <kit.Hand at={hand} rec={rec} back={opener} onClose={() => setHand(null)} />}
     </div>
   );
 });
