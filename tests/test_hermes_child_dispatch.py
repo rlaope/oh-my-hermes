@@ -878,6 +878,43 @@ class ScratchHomeCleanupTests(unittest.TestCase):
         hermes_child_dispatch._sweep_scratch_homes()
         self.assertTrue(all(directory.exists() for directory in kept))
 
+    def test_a_sweep_that_fails_after_the_first_entry_keeps_the_marker_for_the_next_one(self) -> None:
+        old = self.home("omh-hermes-child-held", age=2 * 86400)
+        (old / "home").mkdir()
+        calls: list[str] = []
+
+        def first_entry_then_refused(path, *args, **kwargs):
+            calls.append(str(path))
+            if len(calls) > 1:
+                raise PermissionError(13, "in use")
+            _REAL_RMTREE(path, *args, **kwargs)
+
+        with patch("shutil.rmtree", side_effect=first_entry_then_refused):
+            hermes_child_dispatch._sweep_scratch_homes()
+        self.assertEqual(len(calls), 2)
+        self.assertTrue((old / ".omh-hermes-child-scratch").is_file())
+        hermes_child_dispatch._sweep_scratch_homes()
+        self.assertFalse(old.exists())
+
+    def test_a_sweep_whose_root_comes_back_restores_the_same_marker(self) -> None:
+        old = self.home("omh-hermes-child-rewritten", age=2 * 86400)
+        before = (old / ".omh-hermes-child-scratch").read_bytes()
+        stamp = (old / ".omh-hermes-child-scratch").stat().st_mtime
+        real_rmdir = Path.rmdir
+
+        def refused(self_path):
+            if self_path == old:
+                raise OSError(66, "Directory not empty")
+            real_rmdir(self_path)
+
+        with patch.object(Path, "rmdir", refused):
+            hermes_child_dispatch._sweep_scratch_homes()
+        marker = old / ".omh-hermes-child-scratch"
+        self.assertEqual(marker.read_bytes(), before)
+        self.assertEqual(int(marker.stat().st_mtime), int(stamp))
+        hermes_child_dispatch._sweep_scratch_homes()
+        self.assertFalse(old.exists())
+
     def test_young_homes_named_first_do_not_starve_an_old_one(self) -> None:
         for index in range(40):
             (self.tmp / f"aaa-other-{index:02d}").mkdir()

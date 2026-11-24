@@ -593,15 +593,7 @@ def _remove_scratch(path: Path, created: float, marker_text: str) -> str:
         if attempt:
             _sleep(SCRATCH_REMOVE_RETRY_SECONDS)
         try:
-            with os.scandir(path) as listing:
-                entries = [entry for entry in listing if entry.name != SCRATCH_MARKER]
-            for entry in entries:
-                if entry.is_dir(follow_symlinks=False):
-                    shutil.rmtree(entry.path)
-                else:
-                    os.unlink(entry.path)
-            marker.unlink(missing_ok=True)
-            path.rmdir()
+            _remove_marker_last(path)
         except FileNotFoundError:
             if not path.exists():
                 return ""
@@ -625,6 +617,22 @@ def _remove_scratch(path: Path, created: float, marker_text: str) -> str:
         f"scratch home left at {path}: something still used it after the child exited ({reason}); Hermes' idle-exit "
         f"gateway for that home does until it exits. {sweep}"
     )
+
+
+def _remove_marker_last(path: Path) -> None:
+    """One removal attempt of a scratch home: every entry but OMH's marker, then the marker, then the root.
+
+    A failure part way leaves the marker in place, so the home can still be found and swept; raises `OSError`.
+    """
+    with os.scandir(path) as listing:
+        entries = [entry for entry in listing if entry.name != SCRATCH_MARKER]
+    for entry in entries:
+        if entry.is_dir(follow_symlinks=False):
+            shutil.rmtree(entry.path)
+        else:
+            os.unlink(entry.path)
+    (path / SCRATCH_MARKER).unlink(missing_ok=True)
+    path.rmdir()
 
 
 def _sweep_scratch_homes() -> None:
@@ -659,17 +667,26 @@ def _sweep_scratch_homes() -> None:
             if hasattr(os, "getuid") and path.lstat().st_uid != os.getuid():
                 continue
             with marker.open("rb") as handle:
-                deadline = _marker_deadline(handle.read(len(SCRATCH_MARKER_TEXT) + _DEADLINE_DIGITS + 2))
+                raw = handle.read(len(SCRATCH_MARKER_TEXT) + _DEADLINE_DIGITS + 2)
+            deadline = _marker_deadline(raw)
             if deadline is None or now <= deadline:
                 continue
         except OSError:
             continue
-        eligible.append((info.st_mtime, path))
-    for _mtime, path in sorted(eligible)[:SCRATCH_SWEEP_LIMIT]:
+        eligible.append((info.st_mtime, path, raw))
+    for mtime, path, raw in sorted(eligible)[:SCRATCH_SWEEP_LIMIT]:
         try:
-            shutil.rmtree(path)
+            _remove_marker_last(path)
         except OSError:
-            continue
+            # Failed after the marker went (the root could not be removed): put the same marker back, with its old
+            # time, so the next dispatch can still take the home.
+            marker = path / SCRATCH_MARKER
+            try:
+                if path.is_dir() and not marker.exists():
+                    marker.write_bytes(raw)
+                    os.utime(marker, (mtime, mtime))
+            except OSError:
+                pass
 
 
 def _spawn_preflight(request: HermesChildRequest) -> dict[str, object]:
