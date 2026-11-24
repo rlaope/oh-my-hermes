@@ -25,6 +25,13 @@ describe("harnessOf", () => {
     [{ acpCommand: "copilot --acp" }, "copilot", "acp"],
     [{ acpCommand: "goose acp" }, "goose", "acp"],
     [{ acpCommand: "cline-acp" }, "cline", "acp"],
+    // Antigravity's ACP server is `agy acp`; the installers' own paths on macOS/Linux and Windows
+    [{ acpCommand: "agy acp" }, "antigravity", "acp"],
+    [{ acpCommand: "/Users/me/.local/bin/agy acp" }, "antigravity", "acp"],
+    [{ acpCommand: "C:\\Users\\me\\AppData\\Local\\agy\\bin\\agy.exe acp" }, "antigravity", "acp"],
+    [{ executor: "antigravity" }, "antigravity", "executor"],
+    [{ executor: "antigravity-cli", model: "gemini-3.5-pro" }, "antigravity", "executor"],
+    [{ kind: "agy" }, "antigravity", "executor"],
     // an ACP command no row knows: neutral, never a company's logo
     [{ acpCommand: "mystery-agent --acp", model: "claude-opus-5-5" }, "generic", "acp"],
     // an executor no row knows: neutral by its executor, never Hermes because it reported a model

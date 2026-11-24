@@ -50,6 +50,7 @@ const SVG: [string, string, string][] = (
   ["cursor", "Cursor", "cursor.svg"],
   ["amp", "Amp", "amp-color.svg"],
   ["cline", "Cline", "cline.svg"],
+  ["antigravity", "Antigravity", "antigravity-color.svg"],
   ["copilot", "GitHub Copilot", "githubcopilot.svg"],
   ["goose", "Goose", "goose.svg"],
   ["kilo", "Kilo Code", "kilocode.svg"],
@@ -66,7 +67,7 @@ const MARKS: Record<string, AgentMark> = Object.fromEntries([
   ["omh", { kind: "img", id: "omh", title: "OMH", src: assetUrl("omh.png") ?? "" } as AgentMark] as const,
 ]);
 
-/** Every agent id with a mark, in the order the grid shows them (22). */
+/** Every agent id with a mark, in the order the grid shows them (23). */
 export const AGENT_IDS: string[] = ["omh", ...SVG.map(([id]) => id)];
 
 /** Other spellings people and files use for the same agent. */
@@ -84,6 +85,8 @@ const ALIASES: Record<string, string> = {
   roocode: "roo",
   "roo-code": "roo",
   "qwen-code": "qwen",
+  agy: "antigravity",
+  "antigravity-cli": "antigravity",
   "oh-my-hermes": "omh",
   kami: "omh",
 };
