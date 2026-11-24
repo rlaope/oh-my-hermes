@@ -141,10 +141,13 @@ DEFINITION = SkillDefinition(
         f"If `{NATIVE_CRON_TOOL}` refuses a create, quote Hermes' reason for that job and continue with the next.",
     ),
     situations=(
-        "set this bot up as a pr reviewer",
-        "apply a template to my new bot",
-        "what can a new bot start as",
-        "make this bot an inbox triager",
+        "set up my new bot from the pr-review template",
+        "apply the inbox-triage template to this bot",
+        "show me the pr-review template for this bot",
+        "the alert-triage template wants an app this bot does not have",
+        "apply the research-vault template to my new bot before its omh skills are installed",
+        "apply the pr-review template to this bot again",
+        "add the release-notes template to this bot too",
     ),
 )
 

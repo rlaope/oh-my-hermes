@@ -1852,16 +1852,16 @@
 }
 },
 {
-"anchors":"bot inbox reviewer templat triager",
+"anchors":"alert bot inbox templat vault",
 "hangul":"템플 플릿",
 "hangul_anchors":"템플 플릿",
 "label":"omh-bot-template",
 "name":"bot-template",
 "situation":"New bot to set up from a template",
 "terms":{
-"1":"add after app approval ask asked chat connect exist gallery id md omher paus person persona right schedul seed send soul webhook",
-"2":"creat inbox pr reviewer start triager",
-"3":"new set",
+"1":"after approval ask asked chat connect exist gallery id md omher paus person persona right schedul seed send soul webhook",
+"2":"alert befor creat inbox install note pr releas research review triag vault want",
+"3":"add app new set",
 "6":"apply",
 "9":"bot templat"
 }
