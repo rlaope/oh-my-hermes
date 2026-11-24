@@ -125,6 +125,12 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
 - **While it answers** (Settings › General): a message sent while a bot is answering waits in the steer queue until
   the turn ends (the default), or, set to Steer, is steered into the running answer at once, as its Steer button
   would; a message behind another held one still waits its turn (`e2e/steer-queue.spec.ts`).
+- **New bot** (`src/addbot/NewBot.tsx`, BOUNDARY rule 44): the sidebar `+` › New bot lists oh-my-hermes' bot
+  templates (`omh --hermes-home <root> profile bot-templates --json`, through rule 43's `omh` runner) beside No
+  template; Create checks the name against Hermes' own profile rule and runs Hermes' `hermes -p default profile create
+  <name> --no-alias`, and with a template sends the new bot's main chat one `/omh-bot-template` line that the bot
+  applies with its own approvals, every schedule paused. A new profile sees oh-my-hermes' skills after the next
+  `omh update`; until then the gallery, and later the bot's page, wait for Apply template (`e2e/new-bot.spec.ts`).
 - **Link chips** (`src/chat/parts/linkKinds.ts`, `e2e/links.spec.ts`): a link in a message shows as the service's mark
   and what it points at, read from the address alone (nothing is fetched): GitHub, Slack, Discord, Google (Docs,
   Sheets, Slides, Forms, Drive, Calendar events and booking pages, Meet, Gmail, Maps, Search), X, LinkedIn, YouTube,

@@ -81,7 +81,9 @@ class Answer(unittest.TestCase):
 class FindAndRun(unittest.TestCase):
     def test_the_one_argv(self):
         home = Path("/h") / ".hermes"
-        self.assertEqual(ob.OMH_READS, {"platforms": ("hermes", "platforms")})
+        # rule 43's entry and rule 44's (the Add bot gallery's templates, test_bot_create)
+        self.assertEqual(ob.OMH_READS, {"platforms": ("hermes", "platforms"),
+                                        "bot_templates": ("profile", "bot-templates", "--json")})
         self.assertEqual(ob.omh_read_argv("/x/omh", home, "platforms"),
                          ["/x/omh", "--hermes-home", str(home), "hermes", "platforms"])
         with self.assertRaises(KeyError):

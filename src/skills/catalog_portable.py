@@ -318,6 +318,8 @@ _PORTABILITY: dict[str, str] = {
     'omh-skill-health': PORTABILITY_REQUIRES_OMH_CLI,
     # opening_steps run `omh skill-eval`, the offline host-fit checker; the reference is plain method text.
     'omh-skill-eval': PORTABILITY_REQUIRES_OMH_CLI,
+    # quality_bar writes the bot's own SOUL.md and creates Hermes cron jobs paused with `cronjob_manage`.
+    'omh-bot-template': PORTABILITY_HERMES_ONLY,
     # artifact_expectations require browser promotion approval and native managed-skill visibility.
     'omh-workflow-learning': PORTABILITY_HERMES_ONLY,
     # expected_outputs query reviewed rejected-decision records; final_checklist excludes expired candidates.

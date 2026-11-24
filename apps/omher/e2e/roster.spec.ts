@@ -120,14 +120,15 @@ test("resume saved Kami: Kami alone; Remove from list puts a bot back under +; t
   for (const op of ["chat.send", "chat.set_model", "bots.rename", "bots.set_avatar"]) expect(ops.has(op)).toBe(false);
 });
 
-test("+ with every bot already listed says so in one line, with how Hermes makes another", async ({ page }) => {
+test("+ with every bot already listed says so in one line, with where to make another", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("omher.roster", JSON.stringify(["kami", "friren", "default", "omh-tui"])));
   await page.goto("/");
   await expect(page.getByTestId("bot-kami")).toBeVisible();
   await page.getByRole("button", { name: "Add a bot" }).click();
   const empty = page.getByTestId("addbot-empty");
   await expect(empty).toContainText("Every bot on this computer is already here.");
-  await expect(empty.locator("code")).toHaveText("hermes profile create <name>");
+  await expect(empty).toContainText("Make another with New bot below");
+  await expect(page.getByTestId("addbot-new-open")).toBeVisible();
   await expect(page.getByTestId("addbot").locator(".ab-row")).toHaveCount(0);
 });
 

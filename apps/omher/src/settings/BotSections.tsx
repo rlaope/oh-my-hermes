@@ -19,6 +19,7 @@ import { rowStatus } from "../threads/ThreadTree";
 import { StatusGlyph } from "../threads/StatusGlyph";
 import { botAutomations, botElsewhere, editDraft, fileProblem, memoryUse, type DraftKind } from "./botPage";
 import { PlatformsSection } from "../platforms/PlatformSection";
+import { PendingTemplate } from "../addbot/PendingTemplate";
 
 const AUTO_STATUS = { ok: "bp.autoOk", failed: "bp.autoFailed", never: "bp.autoNever", paused: "bp.autoPaused" } as const;
 
@@ -62,6 +63,8 @@ export function BotSections({ bot }: { bot: Bot }) {
           {t("bp.refresh")}
         </button>
       </div>
+
+      <PendingTemplate bot={bot} />
 
       <PlatformsSection bot={bot} />
 

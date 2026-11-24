@@ -3410,6 +3410,7 @@ _PRIMARY_HARNESSES = {
     "model-finetuning": "research",
     "model-compression": "research",
     "skill-eval": "verification-gate",
+    "bot-template": "hermes-setup",
     "mobile-release": "app-delivery-loop",
     "internal-audit": "critic",
     "data-share-review": "critic",
