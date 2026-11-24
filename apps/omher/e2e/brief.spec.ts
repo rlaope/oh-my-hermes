@@ -54,11 +54,11 @@ test("one notice after the briefing is set up; Turn off pauses that job", async 
   const paused = await calls("automations.pause");
   expect(paused.map((c) => c.params)).toEqual([expect.objectContaining({ bot: "kami", job: id })]);
   // a second brief.ready for the same bot (a later bridge run) draws nothing new, also after a reload
-  await mock("mock.emit", { events: [{ event: "brief.ready", bot: "kami", owner_name: "Hope" }] });
+  await mock("mock.emit", { events: [{ event: "brief.ready", bot: "kami", owner_name: "Demo" }] });
   await expect(notice).toHaveCount(1);
   await page.reload();
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
-  await mock("mock.emit", { events: [{ event: "brief.ready", bot: "kami", owner_name: "Hope" }] });
+  await mock("mock.emit", { events: [{ event: "brief.ready", bot: "kami", owner_name: "Demo" }] });
   await page.waitForTimeout(300);
   await expect(page.getByTestId("brief-notice")).toHaveCount(0);
   expect(await calls("automations.add")).toEqual([]);

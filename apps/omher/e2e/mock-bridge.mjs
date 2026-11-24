@@ -2310,7 +2310,7 @@ const OPS = {
     automations = automations.filter((x) => x.id !== j.id);
     automations.push(j);
     broadcast({ event: "routines.update", bot: b.name });
-    broadcast({ event: "brief.ready", bot: b.name, owner_name: "Hope" });
+    broadcast({ event: "brief.ready", bot: b.name, owner_name: "Demo" });
     return { id: j.id };
   },
   "mock.watches": () => {
