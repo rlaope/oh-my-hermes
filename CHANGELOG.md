@@ -4,6 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: a slash command reaches the bot as typed.** omher appended its own notes (the open-threads note, the
+  terminal-link blocks, the peer note) to every main-chat message, slash commands included. Hermes reads all of a
+  slash command's text as its arguments, so `/usage` answered `Unknown /usage subcommand: [omher] Open threads:
+  none. ...`. A message that starts with `/` now goes with no note, and a slash command with a reply target is
+  refused instead of sent with the target block. (`apps/omher/bridge/omher_bridge.py`)
 - **omher: a bot on another computer has threads, like a local one** (#3172). A bot connected over SSH
   (`<peer>:<name>`) had only its main chat: no New thread on its row, no `./thread`, and its page said threads ran on
   this computer only, because the peer link refused `thread.*` and every `session=` op. Its threads are sessions of
