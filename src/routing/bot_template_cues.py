@@ -15,10 +15,16 @@ A template id is also a file name: "update the release-notes template in
 markdown template, and "apply the release-notes template" alone does not say
 which. So "<id> template" counts only in the bot sense, beside the word bot (봇),
 and never beside a file, repository, code or document word.
+
+One forge word is excused: "apply the pr-review template to this bot for our
+github prs" names where the bot reviews. GitHub and GitLab (깃허브, 깃랩) stand
+nothing down beside the id of a template whose Hermes skills read GitHub, an
+apply or set-up verb and the word bot, together (`_sense_tokens`). The app lanes
+that would take such a sentence stand down through `bot_template_id_applied`.
 """
 from __future__ import annotations
 
-from ..catalogs.bot_templates import bot_template_ids
+from ..catalogs.bot_templates import bot_template, bot_template_ids
 from .localization import normalized_phrase, phrase_is_spoken, routing_tokens
 
 # Each one is also a trigger of the skill (`EVERYDAY_SENSE_PHRASES` withdraws a skill only on a phrase it claims).
@@ -104,6 +110,22 @@ _LANGUAGE_TOKENS = _CODE_TOKENS - frozenset({"discord", "telegram", "slack", "wh
 _JOB_ANCHORS = frozenset({"bot", "bots"})
 _KOREAN_JOB_STEMS = tuple(normalized_phrase(p) for p in ("봇",))
 
+# The forge a template's own work reads: "apply the pr-review template to this bot for our github prs" names where the
+# bot reviews, not a repository being coded. Only the ids of templates whose Hermes skills read GitHub excuse it, and
+# only beside an apply or set-up verb and the word bot (`_forge_excused`); a repository, file, code or language word
+# still keeps the route off.
+_FORGE_TOKENS = frozenset({"github", "gitlab"})
+_KOREAN_FORGE_STEMS = tuple(normalized_phrase(p) for p in ("깃허브", "깃랩"))
+_FORGE_ID_TOKENS = frozenset(
+    token
+    for template_id in bot_template_ids()
+    if "github" in bot_template(template_id).hermes_skills
+    for token in routing_tokens(template_id)
+    if "-" in token
+)
+_APPLY_VERBS = frozenset({"apply", "applying", "applied", "set"})
+_KOREAN_APPLY_STEMS = tuple(normalized_phrase(p) for p in ("적용", "설정"))
+
 _KOREAN_PHRASES = tuple(normalized_phrase(p) for p in ("봇 템플릿",))
 # Korean words are matched as stems: "적용해줘" and "적용하기" both start with "적용".
 # `normalized_phrase` writes Hangul as decomposed jamo, so the stems are normalized the same way.
@@ -113,9 +135,24 @@ _KOREAN_ANCHOR_STEMS = tuple(
 _KOREAN_FILLER = frozenset(routing_tokens(normalized_phrase("좀 해줘 해주세요 부탁해 부탁해요 이 봇 봇에 이 봇에")))
 
 
+def _applied_to_a_bot(tokens: set[str] | frozenset[str]) -> bool:
+    """An apply or set-up verb and the word bot (봇), in English or Korean."""
+    applied = bool(tokens & _APPLY_VERBS) or any(token.startswith(_KOREAN_APPLY_STEMS) for token in tokens)
+    return applied and (bool(tokens & _JOB_ANCHORS) or any(token.startswith(_KOREAN_JOB_STEMS) for token in tokens))
+
+
+def _sense_tokens(normalized_query: str) -> set[str]:
+    """The message's tokens, less the forge word when a GitHub template is applied to a bot: its id, an apply or set-up
+    verb and the word bot (봇) together (`_FORGE_TOKENS`)."""
+    tokens = set(routing_tokens(normalized_query))
+    if not (tokens & _FORGE_ID_TOKENS and _applied_to_a_bot(tokens)):
+        return tokens
+    return {token for token in tokens if token not in _FORGE_TOKENS and not token.startswith(_KOREAN_FORGE_STEMS)}
+
+
 def bot_template_file_sense(normalized_query: str) -> bool:
     """The message edits a repository's own template file: a file word, in English or Korean."""
-    tokens = routing_tokens(normalized_query)
+    tokens = _sense_tokens(normalized_query)
     return bool(tokens & _FILE_TOKENS) or any(token.startswith(_KOREAN_FILE_STEMS) for token in tokens)
 
 
@@ -130,7 +167,7 @@ def bot_template_code_sense(normalized_query: str) -> bool:
     a template removed or exported."""
     if bot_template_file_sense(normalized_query) or bot_template_other_action(normalized_query):
         return True
-    tokens = routing_tokens(normalized_query)
+    tokens = _sense_tokens(normalized_query)
     # a language or code word is a starter project even beside a template id ("write a pr-review bot template in
     # python"); only a messenger word is excused by an id ("the channel-watch bot template for slack")
     if tokens & _LANGUAGE_TOKENS:
@@ -145,7 +182,7 @@ def bot_template_names_the_job(normalized_query: str) -> bool:
         return False
     if bot_template_file_sense(normalized_query) or bot_template_other_action(normalized_query):
         return False
-    tokens = routing_tokens(normalized_query)
+    tokens = _sense_tokens(normalized_query)
     if tokens & _LANGUAGE_TOKENS:
         return False
     return bool(tokens & _JOB_ANCHORS) or any(token.startswith(_KOREAN_JOB_STEMS) for token in tokens)
@@ -171,6 +208,25 @@ def bot_template_korean_match(normalized_query: str) -> bool:
     words = routing_tokens(" ".join(_KOREAN_PHRASES))
     leftover = {token for token in tokens if token not in words and token not in _KOREAN_FILLER}
     return not leftover or any(token.startswith(_KOREAN_ANCHOR_STEMS) for token in leftover)
+
+
+def bot_template_id_applied(normalized_query: str) -> bool:
+    """A template applied to a bot by id: a job phrase, or "bot template" (봇 템플릿) beside a template id, with an
+    apply or set-up verb, the word bot (봇), and no code, language, file, removal or export word.
+
+    "apply the pr-review template to this bot for our github prs" and "apply the alert-triage template to this bot for
+    our sentry alerts" set a bot up; the forge or app is where it will work, so the lanes that react to that app's own
+    events or items stand down for it.
+    """
+    tokens = routing_tokens(normalized_query)
+    if not (tokens & _ID_TOKENS and _applied_to_a_bot(tokens)):
+        return False
+    if bot_template_names_the_job(normalized_query):
+        return True
+    spoken = bot_template_phrase_spoken(normalized_query) or any(
+        phrase_is_spoken(normalized_query, phrase) for phrase in _KOREAN_PHRASES
+    )
+    return spoken and not bot_template_code_sense(normalized_query)
 
 
 def bot_template_korean_unanchored(normalized_query: str) -> bool:

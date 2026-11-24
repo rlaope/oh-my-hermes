@@ -10834,6 +10834,38 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "release-notes-template-for-changelog-is-not-bot-template", "A release-notes template for a changelog generator is a file",
         "the release-notes template for the changelog generator", "answer_clarification", "", "bot-template",
     ),
+    # A forge name is excused only beside a GitHub template's id, an apply verb and
+    # the word bot; a GitHub bot coded or set up from no named template is not one.
+    RoutingPrecisionCase(
+        "github-bot-template-create-is-not-bot-template", "Creating a GitHub bot template is a starter project",
+        "create a github bot template", "answer_clarification", "", "bot-template",
+    ),
+    RoutingPrecisionCase(
+        "github-bot-template-apply-no-id-is-not-bot-template", "Applying a GitHub bot template with no id names no OMH template",
+        "apply a github bot template", "answer_clarification", "", "bot-template",
+    ),
+    RoutingPrecisionCase(
+        "github-bot-from-a-template-is-not-bot-template", "Setting up a GitHub bot from a template names no OMH template",
+        "set up a github bot from a template", "answer_clarification", "", "bot-template",
+    ),
+    # app-work-intake: latency or a monitor read as a status, a setup or a "tell me
+    # when" stays off the alert-to-fix card.
+    RoutingPrecisionCase(
+        "datadog-latency-status-is-not-app-work-intake", "A Datadog latency status is a status read, not an alert to fix",
+        "show datadog latency status", "answer_clarification", "", "app-work-intake",
+    ),
+    RoutingPrecisionCase(
+        "datadog-monitor-status-is-not-app-work-intake", "High latency with a monitor status ask is a status read",
+        "Datadog latency is high, show me the monitor status", "answer_clarification", "", "app-work-intake",
+    ),
+    RoutingPrecisionCase(
+        "datadog-tell-me-when-fix-is-not-app-work-intake", "Being told when a Datadog monitor fires is a monitor recipe",
+        "tell me when a Datadog monitor fires for high latency and fix it", "answer_clarification", "", "app-work-intake",
+    ),
+    RoutingPrecisionCase(
+        "latency-fix-no-app-is-not-app-work-intake", "High latency to fix with no alert app names no app item",
+        "investigate high latency and fix it", "answer_clarification", "", "app-work-intake",
+    ),
 )
 
 
@@ -12200,6 +12232,13 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     RoutingInterventionCase("alert-to-fix-sentry-alert", "A Sentry alert to triage and hand off reaches app work intake", "this Sentry alert fired, triage it and hand off a fix", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
     RoutingInterventionCase("alert-to-fix-datadog-monitor", "A Datadog monitor alert to investigate and fix reaches app work intake", "the Datadog monitor alert for checkout errors fired, investigate and fix it", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
     RoutingInterventionCase("alert-to-fix-korean-sentry", "A Korean Sentry error alert to fix reaches app work intake", "센트리 에러 알림 왔어 고쳐줘", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
+    # Latency is what these alerts are about; before, it lit the ops-observability guard, which outscored this one.
+    RoutingInterventionCase("alert-to-fix-datadog-latency", "A Datadog monitor fired for high latency to fix reaches app work intake", "Datadog monitor fired for high latency, investigate and fix it", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
+    RoutingInterventionCase("alert-to-fix-datadog-p99", "A Datadog monitor fired on p99 latency to fix reaches app work intake", "a Datadog monitor fired on p99 latency, fix it", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
+    RoutingInterventionCase("alert-to-fix-sentry-checkout", "A Sentry alert on checkout errors to triage and fix reaches app work intake", "Sentry alert fired on checkout errors, triage and fix it", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
+    RoutingInterventionCase("alert-to-fix-sentry-latency", "A Sentry alert for high latency to triage and fix reaches app work intake", "Sentry alert fired for high latency, triage and fix it", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
+    RoutingInterventionCase("alert-to-fix-korean-datadog-latency", "A Korean Datadog latency alert to fix reaches app work intake", "Datadog 모니터 latency 알림 떴어 고쳐줘", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
+    RoutingInterventionCase("alert-to-fix-korean-datadog-delay", "A Korean Datadog delay alert to fix reaches app work intake", "데이터독 지연 알림 떴어 원인 찾아서 고쳐줘", "dispatch", "app-work-intake", "prepare_app_work_intake_card", "app_work_intake"),
     # Meeting to issues is operating-rhythm's recipe over Hermes' meeting-action-items;
     # before its guard the tracker sentences dispatched connector-operator's one-ticket card.
     RoutingInterventionCase("meeting-to-issues-transcript-to-linear", "A meeting transcript turned into Linear issues reaches operating rhythm", "turn the meeting transcript into Linear issues", "dispatch", "operating-rhythm", "prepare_operating_record", "operating_rhythm"),
@@ -22077,6 +22116,25 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     RoutingInterventionCase("ko-bot-template-delete-keeps-code-review", "A Korean ask to delete a bot template keeps its earlier route, not the apply skill", "pr-review 봇 템플릿 삭제해줘", "dispatch", "code-review", "prepare_review_or_followup_handoff", "review_check"),
     RoutingInterventionCase("ko-bot-template-python-code-keeps-code-review", "Korean Python code for a pr-review bot template keeps its earlier route", "pr-review 봇 템플릿 파이썬 코드 짜줘", "dispatch", "code-review", "prepare_review_or_followup_handoff", "review_check"),
     RoutingInterventionCase("ko-bot-template-recommend", "A Korean ask to recommend a bot template reaches it", "봇 템플릿 추천해줘", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
+    # A template applied to a bot "for our github prs" or "for our sentry alerts": the forge or app is where the bot
+    # works. Before, GitHub stood the cue down as a code word and the app lanes' guards took the sentence.
+    RoutingInterventionCase("bot-template-pr-review-for-github-prs", "Applying the pr-review template to this bot for GitHub PRs reaches it", "apply the pr-review template to this bot for our github prs", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
+    RoutingInterventionCase("bot-template-pr-review-bot-template-for-github", "Applying the pr-review bot template for GitHub PRs reaches it", "apply the pr-review bot template for our github prs", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
+    RoutingInterventionCase("bot-template-set-up-for-github-pull-requests", "Setting this bot up with the pr-review template for GitHub reaches it", "set this bot up with the pr-review template for github pull requests", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
+    RoutingInterventionCase("bot-template-pr-review-for-gitlab", "Applying the pr-review template to this bot for GitLab reaches it", "apply the pr-review template to this bot for our gitlab merge requests", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
+    RoutingInterventionCase("bot-template-release-notes-for-github", "Applying the release-notes template to this bot for GitHub releases reaches it", "apply the release-notes template to this bot for our github releases", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
+    RoutingInterventionCase("ko-bot-template-pr-review-for-github", "A Korean ask to apply the pr-review template for GitHub PRs reaches it", "이 봇에 깃허브 PR용 pr-review 템플릿 적용해줘", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
+    RoutingInterventionCase("bot-template-alert-triage-for-sentry", "Applying the alert-triage template for Sentry alerts reaches it, not an alert fix", "apply the alert-triage template to this bot for our sentry alerts", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
+    RoutingInterventionCase("bot-template-meeting-to-issues-for-linear", "Applying the meeting-to-issues template for Linear reaches it, not a Linear action", "apply the meeting-to-issues template to this bot for our linear issues", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
+    RoutingInterventionCase("bot-template-research-vault-with-obsidian", "Applying the research-vault template with Obsidian reaches it, not a research department", "apply the research-vault template to this bot with obsidian", "dispatch", "bot-template", "prepare_bot_template", "bot_template", "bot-template"),
+    # The forge stays a blocker without all three of a GitHub template id, an apply verb and the bot sense, or beside a
+    # repository, file or language word.
+    RoutingInterventionCase("pr-review-template-to-github-repo-keeps-github-event-ops", "The pr-review template applied to a GitHub repo, no bot, keeps GitHub event ops", "apply the pr-review template to our github repo", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
+    RoutingInterventionCase("pr-review-template-bot-github-repo-keeps-github-event-ops", "The pr-review template in a GitHub repo keeps GitHub event ops", "apply the pr-review template to this bot in the github repo", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
+    RoutingInterventionCase("pr-review-template-edit-on-github-keeps-github-event-ops", "Editing the pr-review template on GitHub keeps GitHub event ops", "edit the pr-review template on github for this bot", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
+    RoutingInterventionCase("inbox-triage-template-github-keeps-github-event-ops", "A template that reads no forge does not excuse GitHub", "apply the inbox-triage template to this bot for our github issues", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
+    RoutingInterventionCase("pr-review-template-github-python-keeps-github-event-ops", "The pr-review template for GitHub in Python keeps GitHub event ops", "apply the pr-review template to this bot for our github prs in python", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
+    RoutingInterventionCase("ko-pr-review-template-github-repo-keeps-github-event-ops", "A Korean pr-review bot template put in a GitHub repo keeps GitHub event ops", "pr-review 봇 템플릿 깃허브 레포에 올려줘", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
     RoutingInterventionCase("github-issue-template-keeps-github-event-ops", "A GitHub issue template stays with GitHub event ops", "github issue template for feature requests", "dispatch", "github-event-ops", "prepare_github_event_ops_card", "github_event_ops"),
 )
 

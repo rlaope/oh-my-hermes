@@ -41,6 +41,7 @@ from .bot_template_cues import (
     BOT_TEMPLATE_ANCHORS,
     BOT_TEMPLATE_SHARED_PHRASES,
     bot_template_code_sense,
+    bot_template_id_applied,
     bot_template_phrase_spoken,
 )
 from ..plugin_bundle.omh.dag_ulw_cues import DAG_ULW, asks_about_dag_ulw, dag_ulw_control, declines_dag_ulw, invokes_dag_ulw
@@ -8316,6 +8317,10 @@ def _ops_observability_guard_applies(normalized_query: str, query_tokens: set[st
     )
     if ops_observability_external_blocked(normalized_query):
         return False
+    # "Datadog monitor fired for high latency, investigate and fix it": latency is what the alert is about, and the
+    # alert should become a fix, not a status card.
+    if app_work_intake_guard_applies(normalized_query):
+        return False
     if _contains_phrase(normalized_query, _OPS_OBSERVABILITY_PHRASES):
         return True
     if _korean_usage_request(normalized_query):
@@ -8886,6 +8891,9 @@ def _explicit_material_export_requested(normalized_query: str, query_tokens: set
 
 def _research_department_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if is_explicit_one_off_request(normalized_query, query_tokens):
+        return False
+    # "apply the research-vault template to this bot with obsidian" sets a bot up; the id is not a research request.
+    if bot_template_id_applied(normalized_query):
         return False
     if _wiki_capture_destination_request(normalized_query, query_tokens):
         return False
@@ -9667,6 +9675,9 @@ def _github_event_ops_guard_applies(normalized_query: str, query_tokens: set[str
     if {"plan", "spec", "roadmap"} & query_tokens and _contains_phrase(normalized_query, ("into a", "into the")):
         return False
     if _github_issue_intake_guard_applies(normalized_query, query_tokens):
+        return False
+    # "apply the pr-review template to this bot for our github prs" sets a bot up; GitHub is where it will work.
+    if bot_template_id_applied(normalized_query):
         return False
     if _contains_phrase(normalized_query, _SECURITY_EVENT_OVER_GITHUB_EVENT_PHRASES):
         return False
@@ -10891,6 +10902,9 @@ def _command_operator_guard_applies(normalized_query: str, query_tokens: set[str
 def _connector_operator_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if _contains_phrase(normalized_query, _CONNECTOR_OPERATOR_BLOCKERS):
         return False
+    # "apply the meeting-to-issues template to this bot for our linear issues" sets a bot up, not one Linear action.
+    if bot_template_id_applied(normalized_query):
+        return False
     # Work started from an app item is app-work-intake, and a meeting's issues are operating-rhythm's;
     # this lane is one action in the app.
     if app_work_intake_guard_applies(normalized_query) or meeting_to_issues_guard_applies(normalized_query):
@@ -11357,6 +11371,9 @@ def app_work_intake_guard_applies(normalized_query: str) -> bool:
     if _contains_phrase(normalized_query, _APP_WORK_BLOCKERS):
         return False
     if _app_work_trigger_or_cadence(normalized_query):
+        return False
+    # "apply the alert-triage template to this bot for our sentry alerts" sets a bot up; no alert is to be fixed.
+    if bot_template_id_applied(normalized_query):
         return False
     terms = routing_terms(normalized_query)
     words = _app_work_words(normalized_query)

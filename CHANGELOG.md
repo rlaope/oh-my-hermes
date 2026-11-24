@@ -306,6 +306,15 @@ All notable changes will be documented here.
   lists webhooks and apps without creating or connecting any, and on a second run says what is already there. A
   Discord, Slack or Telegram bot template in code, a repository's own release-notes or PR-review template file, a PR
   template, an email, Jinja or prompt template keep their old routes. (`src/catalogs/bot_templates.py`, `src/skills/bot_template_skill.py`, `src/routing/bot_template_cues.py`)
+- **Routing: a template applied to a bot for its forge or app, and an alert about latency, reach their skills.**
+  "apply the pr-review template to this bot for our github prs" (and the GitLab, Korean and release-notes forms)
+  now reaches `bot-template`: GitHub no longer counts as a code word beside a GitHub template's id, an apply verb
+  and the word bot, and the GitHub event, app-work, connector and research lanes stand down for such a sentence
+  ("apply the alert-triage template to this bot for our sentry alerts"). A GitHub repository, file or language word,
+  or a template that reads no forge, keeps the old route. "Datadog monitor fired for high latency, investigate and
+  fix it" now reaches `app-work-intake`: latency lit the ops-observability guard, which outscored the alert's own;
+  that guard now stands down when an alert should become a fix, and a latency status read keeps it.
+  (`src/routing/bot_template_cues.py`, `src/routing/policy.py`, `src/routing/chat.py`)
 - **automation-blueprint: be told when something happens on a platform that sends no webhook.** Asking Hermes to
   be told when new mail matches a filter, a calendar event is about to start, a Notion page or database changes, a
   Linear or Jira issue is assigned, an Obsidian vault folder changes, or a Sentry issue opens ("tell me when a mail

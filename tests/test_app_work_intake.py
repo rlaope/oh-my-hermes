@@ -145,6 +145,10 @@ GUARD_TABLE = {
         (True, "the Datadog monitor alert for checkout errors fired, investigate and fix it"),
         (True, "센트리 에러 알림 왔어 고쳐줘"),
         (True, "as soon as possible turn Linear issue ENG-3 into a PR"),
+        (True, "Datadog monitor fired for high latency, investigate and fix it"),
+        (True, "Sentry alert fired on checkout errors, triage and fix it"),
+        (True, "Sentry alert fired for high latency, triage and fix it"),
+        (True, "데이터독 지연 알림 떴어 원인 찾아서 고쳐줘"),
         (False, "open the PR linked in Jira ticket PAY-2"),
         (False, "create a private Notion page for the offsite"),
         (False, "create a pricing page in Notion"),
@@ -173,6 +177,9 @@ GUARD_TABLE = {
         (False, "매일 아침 받은편지함 메일을 작업으로 만들어줘"),
         (False, "every weekday at 9 turn new Linear issues assigned to me into PRs"),
         (False, "tell me when a Linear issue is assigned and turn it into a PR"),
+        (False, "apply the alert-triage template to this bot for our sentry alerts"),
+        (False, "tell me when a Datadog monitor fires for high latency and fix it"),
+        (False, "investigate high latency and fix it"),
     ),
     "meeting_to_issues_guard_applies": (
         (True, "turn the meeting transcript into Linear issues"),
@@ -224,6 +231,19 @@ class GuardTableTests(unittest.TestCase):
             query = normalized_phrase(message)
             with self.subTest(message=message):
                 self.assertIs(policy._connector_operator_guard_applies(query, routing_tokens(query)), connector)
+
+    def test_an_alert_about_latency_stands_the_status_card_down(self) -> None:
+        # Latency in an alert to fix lit ops-observability's guard, which outscored app-work-intake's; a status read
+        # of the same words keeps the status card.
+        for message, status_card in (
+            ("Datadog monitor fired for high latency, investigate and fix it", False),
+            ("a Datadog monitor fired on p99 latency, fix it", False),
+            ("show datadog latency status", True),
+            ("Datadog latency is high, show me the monitor status", True),
+        ):
+            query = normalized_phrase(message)
+            with self.subTest(message=message):
+                self.assertIs(policy._ops_observability_guard_applies(query, routing_tokens(query)), status_card)
 
 
 if __name__ == "__main__":
