@@ -58,5 +58,17 @@
     "install": "npm install -g cline",
     "mark": "cline.svg",
     "continues": true
+  },
+  {
+    "id": "agy",
+    "label": "Antigravity",
+    "program": "agy",
+    "args": [
+      "acp"
+    ],
+    "login": "agy acp --login",
+    "install": "curl -fsSL https://antigravity.google/cli/install.sh | bash",
+    "mark": "antigravity-color.svg",
+    "continues": true
   }
 ]

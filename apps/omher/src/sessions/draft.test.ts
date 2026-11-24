@@ -38,10 +38,10 @@ describe("draft defaults", () => {
   it("the + menu: installed agents first by tier (the last one used leads its own tier), then the missing ones", () => {
     const ids = (l: AgentInfo[]) => l.map((a) => a.id);
     const all = info(["claude", "codex", "omo", "dsh"]);
-    expect(ids(menuOrder(all, []))).toEqual(["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline"]);
-    expect(ids(menuOrder(all, [rec("claude", "/a", 1), rec("omo", "/b", 3)]))).toEqual(["omo", "claude", "codex", "dsh", "omh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline"]);
+    expect(ids(menuOrder(all, []))).toEqual(["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline", "agy"]);
+    expect(ids(menuOrder(all, [rec("claude", "/a", 1), rec("omo", "/b", 3)]))).toEqual(["omo", "claude", "codex", "dsh", "omh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline", "agy"]);
     // the last one used is no longer installed: it stays with the missing ones
-    expect(ids(menuOrder(info(["codex", "grok"]), [rec("pi", "/a", 1)]))).toEqual(["codex", "grok", "claude", "omo", "dsh", "omh", "pi", "omp", "opencode", "gemini", "qwen", "kimi", "copilot", "cline"]);
+    expect(ids(menuOrder(info(["codex", "grok"]), [rec("pi", "/a", 1)]))).toEqual(["codex", "grok", "claude", "omo", "dsh", "omh", "pi", "omp", "opencode", "gemini", "qwen", "kimi", "copilot", "cline", "agy"]);
     // the install lines of the two new harnesses
     expect(INSTALL.omo).toBe("npm i -g omo-ai");
     expect(missingNote("omo")).toBe("omo was not found on this computer · install: npm i -g omo-ai");
@@ -53,24 +53,26 @@ describe("draft defaults", () => {
 
   it("the + menu folds the agents that are not installed behind one row, and shows every agent when none is", () => {
     const ids = (l: AgentInfo[]) => l.map((a) => a.id);
-    // four installed, ten folded: the menu shows the four by tier (the last one used stays in its tier), the rest behind "More"
+    // four installed, eleven folded: the menu shows the four by tier (the last one used stays in its tier), the rest behind "More"
     const p = menuParts(info(["claude", "codex", "omh", "gemini"]), [rec("gemini", "/a", 2)]);
     expect(ids(p.shown)).toEqual(["claude", "codex", "omh", "gemini"]);
-    expect(ids(p.more)).toEqual(["omo", "dsh", "pi", "omp", "grok", "opencode", "qwen", "kimi", "copilot", "cline"]);
+    expect(ids(p.more)).toEqual(["omo", "dsh", "pi", "omp", "grok", "opencode", "qwen", "kimi", "copilot", "cline", "agy"]);
     // a new agent that gets installed moves up out of the fold
     expect(ids(menuParts(info(["claude", "gemini"]), []).shown)).toEqual(["claude", "gemini"]);
     // nothing installed: nothing to fold behind, every agent shows with its install line
     const none = menuParts(info([]), []);
-    expect(none.shown).toHaveLength(14);
+    expect(none.shown).toHaveLength(15);
     expect(none.more).toEqual([]);
-    // the five generic ACP agents' install lines come from the shell's rows and are 0.2.8's, word for word
-    expect(["gemini", "qwen", "kimi", "copilot", "cline"].map(installLine)).toEqual([
+    // the six generic ACP agents' install lines come from the shell's rows (0.2.8's, word for word, then Antigravity's installer)
+    expect(["gemini", "qwen", "kimi", "copilot", "cline", "agy"].map(installLine)).toEqual([
       "npm install -g @google/gemini-cli",
       "npm install -g @qwen-code/qwen-code@latest",
       "npm install -g @moonshot-ai/kimi-code",
       "npm install -g @github/copilot",
       "npm install -g cline",
+      "curl -fsSL https://antigravity.google/cli/install.sh | bash",
     ]);
+    expect(missingNote("agy")).toBe("agy was not found on this computer · install: curl -fsSL https://antigravity.google/cli/install.sh | bash");
     expect(missingNote("gemini")).toBe("gemini was not found on this computer · install: npm install -g @google/gemini-cli");
   });
 

@@ -51,7 +51,7 @@ describe("session agents", () => {
   });
 
   it("accepts ids, never a path or a command line (whether one may run is the shell's)", () => {
-    for (const id of ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline", "kilo"]) expect(isAgentId(id)).toBe(true);
+    for (const id of ["claude", "codex", "omo", "dsh", "omh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline", "agy", "kilo"]) expect(isAgentId(id)).toBe(true);
     for (const bad of ["", "sh x", "/bin/sh", "claude --yolo", "Claude", " claude", "../claude", "a".repeat(40), null, 1, {}]) expect(isAgentId(bad)).toBe(false);
   });
 
@@ -222,13 +222,13 @@ describe("mock session host", () => {
     expect(ops.filter((o) => o === "start")).toHaveLength(0); // a chat never starts a terminal
   });
 
-  it("reports claude, codex and omh installed and the eleven others missing", async () => {
+  it("reports claude, codex and omh installed and the twelve others missing", async () => {
     const list = await new MockHost({}).agents();
     expect(list.filter((a) => a.path).map((a) => a.id)).toEqual(["claude", "codex", "omh"]);
-    expect(list.filter((a) => !a.path).map((a) => a.id)).toEqual(["omo", "dsh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline"]);
+    expect(list.filter((a) => !a.path).map((a) => a.id)).toEqual(["omo", "dsh", "pi", "omp", "grok", "opencode", "gemini", "qwen", "kimi", "copilot", "cline", "agy"]);
     // the generic ACP agents come as the shell's rows, with nothing of theirs kept in this app
-    expect(list.filter((a) => a.acp).map((a) => a.acp!.id)).toEqual(["gemini", "qwen", "kimi", "copilot", "cline"]);
-    expect(list.map((a) => a.mode)).toEqual(["chat", "chat", "chat", "chat", "hermes", "chat", "chat", "terminal", "chat", "chat", "chat", "chat", "chat", "chat"]);
+    expect(list.filter((a) => a.acp).map((a) => a.acp!.id)).toEqual(["gemini", "qwen", "kimi", "copilot", "cline", "agy"]);
+    expect(list.map((a) => a.mode)).toEqual(["chat", "chat", "chat", "chat", "hermes", "chat", "chat", "terminal", "chat", "chat", "chat", "chat", "chat", "chat", "chat"]);
   });
 });
 
