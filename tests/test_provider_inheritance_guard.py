@@ -224,19 +224,55 @@ class ProviderInheritanceGuardTests(unittest.TestCase):
                 self._claude_beside_plugin(setup, excluded=before)
                 self.assertEqual(self._pinned(), DIRECTSDK)
 
-    def test_the_tie_break_only_sets_a_plugin_aside(self) -> None:
-        # Two providers neither of which is plugin-only stay a refusal, as
-        # before; so does a plugin the operator recorded by hand.
+    def test_a_tie_of_providers_neither_recorded_nor_plugin_only_still_refuses(self) -> None:
+        # Two linked Claude providers: nothing says which one the operator
+        # prefers, so the guard refuses as it always did.
         self._session_on("openai-codex")
         self._directsdk_plugin()
         (self.home / "auth.json").write_text(
             json.dumps({"version": 1, "providers": {"anthropic": {"access_token": "t"}}}), encoding="utf-8"
         )
-        self._entitlements({"ccapi": "ccapi"})
+        self.config.write_text(
+            "model:\n  provider: openai-codex\nproviders:\n  my-anthropic:\n    base_url: https://api.anthropic.com/v1\n",
+            encoding="utf-8",
+        )
         result = self._call(action="set", model="claude-opus-5-5")
         self.assertEqual(result["status"], "error", result)
-        self.assertEqual(result["providers_serving_alias"], ["anthropic", "ccapi", DIRECTSDK])
+        self.assertEqual(result["providers_serving_alias"], ["anthropic", DIRECTSDK, "my-anthropic"])
+
+    def test_the_plugin_recorded_by_hand_wins_the_tie_with_a_login(self) -> None:
+        # `omh model-chains provider set <plugin> anthropic` is the one-line
+        # way to prefer the subscription over a Hermes Anthropic login.
+        self._session_on("openai-codex")
+        self._directsdk_plugin()
+        (self.home / "auth.json").write_text(
+            json.dumps({"version": 1, "providers": {"anthropic": {"access_token": "t"}}}), encoding="utf-8"
+        )
         self._entitlements({DIRECTSDK: "anthropic"})
+        self.assertEqual(self._pinned(), DIRECTSDK)
+
+    def test_a_recorded_provider_wins_the_tie_and_two_recorded_still_refuse(self) -> None:
+        # Family-agnostic, and only ever a tie-break: a GLM alias with a
+        # config `zai` block and a recorded `my-zai` pins the recorded one;
+        # with both recorded there is no preference and the guard refuses.
+        head = "model:\n  provider: openai-codex\nproviders:\n  zai:\n    base_url: https://api.z.ai/api/paas/v4\n"
+        self.config.write_text(head, encoding="utf-8")
+        self._entitlements({"my-zai": "zai"})
+        self.assertEqual(self._pinned("glm-5.3"), "my-zai")
+        self.config.write_text(head, encoding="utf-8")
+        self._entitlements({"my-zai": "zai", "zai": "zai"})
+        result = self._call(action="set", model="glm-5.3")
+        self.assertEqual(result["status"], "error", result)
+        self.assertEqual(result["providers_serving_alias"], ["my-zai", "zai"])
+        # One pinnable provider is never touched by the tie-break.
+        self.config.write_text("model:\n  provider: openai-codex\n", encoding="utf-8")
+        self._entitlements({"zai": "zai"})
+        self.assertEqual(self._pinned("glm-5.3"), "zai")
+
+    def test_two_recorded_claude_providers_still_refuse_beside_the_plugin(self) -> None:
+        self._session_on("openai-codex")
+        self._directsdk_plugin()
+        self._entitlements({DIRECTSDK: "anthropic", "anthropic": "anthropic"})
         result = self._call(action="set", model="claude-opus-5-5")
         self.assertEqual(result["status"], "error", result)
         self.assertEqual(result["providers_serving_alias"], ["anthropic", DIRECTSDK])

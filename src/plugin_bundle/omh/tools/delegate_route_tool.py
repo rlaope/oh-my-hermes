@@ -31,6 +31,7 @@ from ..delegation_routing import (
 from .. import delegation_fallback_chain as _fallback_chain
 from ..hermes_delegation import (
     HERMES_MIXTURE_CATEGORY_CHAINS,
+    PROVIDER_ENTITLEMENT_SOURCE_RECORDED,
     append_delegation_route_provenance,
     chain_alias_for,
     load_mixture_chain_overrides,
@@ -512,14 +513,26 @@ def _inherited_provider_view(
     "model not found" before a single model call.
 
     ``provider_rows`` are the rows `effective_provider_entitlements` returned
-    with ``entitlements``. When more than one provider is pinnable and only
-    one of them was found some way other than an installed provider plugin
-    (`source` `plugin`), that one alone is pinnable: installing the plugin
-    must not turn the pin a machine already had (a Hermes Anthropic login, a
-    key, a recorded `ccapi`) into a refusal, and OMH never picks between two
-    billing paths for one model on its own. The plugin stays counted,
-    served and configured, so a route or an explicit provider naming it
-    still wins, and excluding the other provider makes it the pin.
+    with ``entitlements``. They settle a tie, and only a tie: when more than
+    one provider is pinnable, in this order --
+
+    1. exactly one of them is `recorded` (the operator named it in
+       `routing/providers.json`, e.g. `omh model-chains provider set`): that
+       one is the pin. The record is the operator's word, so it is their
+       preference between two providers of the same models; two or more
+       recorded ones are no preference and fall through.
+    2. exactly one of them was found some way other than an installed
+       provider plugin (`source` `plugin`): that one is the pin. Installing
+       the plugin must not turn the pin a machine already had (a Hermes
+       Anthropic login, a key, a recorded `ccapi`) into a refusal.
+    3. otherwise nothing is pinnable and the caller refuses, as before.
+
+    OMH never picks between two billing paths for one model on its own, so
+    neither step guesses: each turns a refusal into the one pin the
+    operator's own setup already implies, and a single pinnable provider is
+    never changed. The plugin stays counted, served and configured, so a
+    route or an explicit provider naming it still wins, and excluding the
+    other provider makes it the pin.
     """
     serves = provider_serves_alias(alias, serving, entitlements)
     if serves is None and not on_endpoint:
@@ -534,15 +547,27 @@ def _inherited_provider_view(
         item for item in providers_known_to_serve_alias(alias, entitlements) if item.casefold() in configured
     )
     if len(pinnable) > 1:
-        plugin_only = {
-            str(row.get("id", "")).casefold()
-            for row in provider_rows
-            if isinstance(row, Mapping) and row.get("source") == LINKED_SOURCE_PLUGIN
-        }
-        held_before = tuple(item for item in pinnable if item.casefold() not in plugin_only)
-        if len(held_before) == 1:
-            pinnable = held_before
+        pinnable = _settle_pin_tie(pinnable, provider_rows)
     return serves, candidates, pinnable
+
+
+def _settle_pin_tie(pinnable: tuple[str, ...], provider_rows: Any) -> tuple[str, ...]:
+    """The one provider a tie of pinnable providers resolves to, else the tie.
+
+    See `_inherited_provider_view`: the single recorded provider first, then
+    the single provider not found only as a plugin.
+    """
+    sources: dict[str, str] = {}
+    for row in provider_rows:
+        if isinstance(row, Mapping):
+            sources[str(row.get("id", "")).casefold()] = str(row.get("source", ""))
+    recorded = tuple(item for item in pinnable if sources.get(item.casefold()) == PROVIDER_ENTITLEMENT_SOURCE_RECORDED)
+    if len(recorded) == 1:
+        return recorded
+    held_before = tuple(item for item in pinnable if sources.get(item.casefold()) != LINKED_SOURCE_PLUGIN)
+    if len(held_before) == 1:
+        return held_before
+    return pinnable
 
 
 def _configured_providers(hermes_home: Any, omh_home: Any) -> frozenset[str]:

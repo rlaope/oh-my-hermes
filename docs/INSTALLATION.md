@@ -3456,7 +3456,12 @@ login, an `ANTHROPIC_API_KEY`, a recorded `ccapi` — the automatic pin keeps
 choosing that provider, as it did before the plugin was installed: OMH does
 not pick between two billing paths on its own. To prefer the subscription:
 
-- route the alias to it in `~/.omh/routing/model-providers.json`, for
+- record it: `omh model-chains provider set
+  claude-subscription-directsdk-experimental anthropic`. When several
+  providers could be pinned, the one you recorded wins; recording both it
+  and the other provider is no preference, and the pin is refused as
+  before;
+- or route the alias to it in `~/.omh/routing/model-providers.json`, for
   example `"claude-opus-5-5": {"provider":
   "claude-subscription-directsdk-experimental", "model": "claude-opus-5-5"}`;
 - or clear the other provider: untick it in `omh setup` (a linked one is
