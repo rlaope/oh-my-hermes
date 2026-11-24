@@ -126,7 +126,7 @@ jobs:
       - name: Unit tests (shard ${{ matrix.shard }})
         run: >-
           python tools/test_sharding/run.py --plan shard-plan/plan.json
-          --lane linux-${{ matrix.python-version }} --shard ${{ matrix.shard }} --workers 2
+          --lane linux-${{ matrix.python-version }} --shard ${{ matrix.shard }} --workers 4
           --attempt ${{ github.run_attempt }}
           --out results/result-linux-${{ matrix.python-version }}-${{ matrix.shard }}-attempt-${{ github.run_attempt }}.json
       - name: Upload shard result
@@ -286,7 +286,7 @@ jobs:
           PYTHONPATH: tests
         run: >-
           python tools/test_sharding/run.py --plan shard-plan/plan-windows.json
-          --lane windows-3.12 --shard ${{ matrix.shard }} --workers 2
+          --lane windows-3.12 --shard ${{ matrix.shard }} --workers 4
           --attempt ${{ github.run_attempt }}
           --out results/result-windows-3.12-${{ matrix.shard }}-attempt-${{ github.run_attempt }}.json
       - name: Upload shard result
