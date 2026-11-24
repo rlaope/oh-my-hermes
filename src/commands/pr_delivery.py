@@ -107,9 +107,14 @@ def write_pr_delivery_grant(paths, *, state: str, branch_prefix: str, previous: 
     return document
 
 
+def on_windows() -> bool:
+    """Whether the console rules apply. A seam, so tests decide it on every host."""
+    return os.name == "nt"
+
+
 def terminal_devices() -> tuple[str, str]:
     """(read, write) devices of the controlling terminal: the console on Windows, `/dev/tty` elsewhere."""
-    return ("CONIN$", "CONOUT$") if os.name == "nt" else ("/dev/tty", "/dev/tty")
+    return ("CONIN$", "CONOUT$") if on_windows() else ("/dev/tty", "/dev/tty")
 
 
 def console_is_visible() -> bool:
@@ -143,7 +148,7 @@ def confirm_on_terminal(prompt: str) -> bool:
     the console window must also be visible. A missing or hidden terminal is
     a no, never a wait and never a crash.
     """
-    if os.name == "nt" and not console_is_visible():
+    if on_windows() and not console_is_visible():
         return False  # a hidden console (Hermes spawns its children with CREATE_NO_WINDOW) has nobody at it
     reader, writer = terminal_devices()
     try:

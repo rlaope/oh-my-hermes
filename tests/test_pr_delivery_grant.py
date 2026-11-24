@@ -213,23 +213,41 @@ class CliTests(_Home):
             opened.append(name)
             return io.StringIO("yes\n")
 
-        windows = ("CONIN$", "CONOUT$")
-        with mock.patch.object(pr_delivery_cli, "terminal_devices", return_value=windows), \
+        # Host-independent: Windows and the visible console are faked, so a real Windows runner
+        # (whose own console may be hidden) gives the same answer as macOS and Linux.
+        with mock.patch.object(pr_delivery_cli, "on_windows", return_value=True), \
+                mock.patch.object(pr_delivery_cli, "console_is_visible", return_value=True), \
                 mock.patch("builtins.open", fake_open):
             self.assertTrue(pr_delivery_cli.confirm_on_terminal("yes? "))
         self.assertEqual(opened, ["CONOUT$", "CONIN$"])
-        with mock.patch.object(pr_delivery_cli, "terminal_devices", return_value=windows), \
+        with mock.patch.object(pr_delivery_cli, "on_windows", return_value=True), \
+                mock.patch.object(pr_delivery_cli, "console_is_visible", return_value=True), \
                 mock.patch("builtins.open", side_effect=OSError("no console")):
             self.assertFalse(pr_delivery_cli.confirm_on_terminal("yes? "))
 
     def test_a_hidden_windows_console_is_a_no_without_waiting(self):
         # Hermes spawns terminal children with CREATE_NO_WINDOW: CONIN$ would open on a console nobody sees.
-        with mock.patch.object(pr_delivery_cli.os, "name", "nt"), \
+        with mock.patch.object(pr_delivery_cli, "on_windows", return_value=True), \
                 mock.patch.object(pr_delivery_cli, "console_is_visible", return_value=False), \
                 mock.patch("builtins.open", side_effect=AssertionError("must not open the console")):
             self.assertFalse(pr_delivery_cli.confirm_on_terminal("yes? "))
-        if os.name != "nt":
-            self.assertFalse(pr_delivery_cli.console_is_visible())  # no ctypes.windll: a no, never a raise
+
+    def test_console_visibility_reads_the_window_and_fails_closed(self):
+        import ctypes
+
+        def windll(window: int, visible: int, *, raises: bool = False):
+            def get_window():
+                if raises:
+                    raise OSError("no console API")
+                return window
+            return SimpleNamespace(kernel32=SimpleNamespace(GetConsoleWindow=get_window),
+                                   user32=SimpleNamespace(IsWindowVisible=lambda handle: visible))
+
+        cases = ((windll(42, 1), True), (windll(42, 0), False), (windll(0, 1), False),
+                 (windll(42, 1, raises=True), False))
+        for fake, expected in cases:
+            with self.subTest(expected=expected), mock.patch.object(ctypes, "windll", fake, create=True):
+                self.assertIs(pr_delivery_cli.console_is_visible(), expected)
 
     def test_on_windows_the_grant_file_mode_is_not_checked(self):
         # POSIX mode bits mean nothing there: the grant reads as recorded (documented residual).
