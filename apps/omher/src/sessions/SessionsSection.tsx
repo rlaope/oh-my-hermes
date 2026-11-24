@@ -1313,8 +1313,20 @@ function NameInput({ initial, auto, onDone }: { initial: string; auto: boolean; 
   );
 }
 
-/** The row menu as a split card's cells use it: the same items, actions, placement, menu and name field as a row. */
-const ROW_MENU: RowMenuKit = { items: termMenuItems, act: termRowAct, spot: menuSpot, Menu: SessionMenu, Name: NameInput };
+/** A TERMINALS session's menu items, a row's and a split card cell's alike: Hand to <bot> while a bot of this computer
+ *  is online. Read, not subscribed: the row or cell re-renders when its menu opens, which is when the bots are looked
+ *  at. */
+export const termItems = (rec: SessionRec) => termMenuItems(rec, handBots(getStore().getSnapshot().bots).length > 0);
+
+/** Hand to <bot> of TERMINALS session `rec`, from a row or a split card cell: the folder the session started in
+ *  (never one its shell reported later through OSC 7, which stays in the page). */
+function TermHand({ at, rec, onClose }: { at: { x: number; y: number }; rec: SessionRec; onClose: () => void }) {
+  return <HandoverCard at={at} from={{ kind: "terminal", folder: rec.cwd }} onClose={onClose} />;
+}
+
+/** The row menu as a split card's cells use it: the same items, actions, placement, menu, name field and Hand card as
+ *  a row. */
+export const ROW_MENU: RowMenuKit = { items: termItems, act: termRowAct, spot: menuSpot, Menu: SessionMenu, Name: NameInput, Hand: TermHand };
 
 /** The sign before a row's state word: a warning triangle (it waits for you), an exclamation mark (it stopped on an
  *  error), a small dot (it rang unseen: news, not a warning), a check (it finished). Four shapes, so the state reads
@@ -1392,10 +1404,9 @@ const TermRow = memo(function TermRow({ rec, agents, unseen, active, ticking, on
   // a CLI runs in it: the card's thin amber lane on its left edge (the folder summary's "running" counts the same)
   const running = live && markAgent !== null;
   const [hand, setHand] = useState<{ x: number; y: number } | null>(null);
-  // read, not subscribed: the row re-renders when its menu opens, which is when the bots are looked at
-  const actions = termMenuItems(rec, handBots(getStore().getSnapshot().bots).length > 0);
-  // Hand to <bot> opens its card at the menu's place; every other item is the shared row action (a split card's
-  // cells list no Hand item: termMenuItems without canHand)
+  const actions = termItems(rec);
+  // Hand to <bot> opens its card at the menu's place (a split card's cells do the same); every other item is the
+  // shared row action
   const pick = (a: RowAction) => (a === "hand" ? setHand(menu) : termRowAct(rec, a, () => setEditing(true), onClose));
   const endEdit = (name: string | null | undefined) => {
     setEditing(false);
@@ -1481,7 +1492,8 @@ const TermRow = memo(function TermRow({ rec, agents, unseen, active, ticking, on
       onContextMenu={(e) => {
         if (editing) return;
         e.preventDefault();
-        setMenu(menuSpot(e, wrap.current, actions.length));
+        // counted now, not at the last render: a bot that came online since adds the Hand row
+        setMenu(menuSpot(e, wrap.current, termItems(rec).length));
       }}
     >
       {editing ? (
@@ -1499,8 +1511,7 @@ const TermRow = memo(function TermRow({ rec, agents, unseen, active, ticking, on
         </button>
       )}
       {menu && <SessionMenu at={menu} name={title.title} actions={actions} onPick={pick} onDismiss={() => setMenu(null)} />}
-      {/* the folder the session started in (never one its shell reported later through OSC 7, which stays in the page) */}
-      {hand && <HandoverCard at={hand} from={{ kind: "terminal", folder: rec.cwd }} onClose={() => setHand(null)} />}
+      {hand && <TermHand at={hand} rec={rec} onClose={() => setHand(null)} />}
     </div>
   );
 });

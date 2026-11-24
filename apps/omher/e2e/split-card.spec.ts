@@ -1,6 +1,6 @@
 // The TERMINALS split card: every split is one card on top of the TERMINALS list (no search typed), its cells at the
 // panes' real places with each pane's CLI mark, title and last line; the members are not rows in their folders again.
-// A cell click focuses that pane, a right-click opens the row menu, output makes the cell's edge orbit (still under
+// A cell click focuses that pane, a right-click opens the row menu (Hand to <bot> included), output makes the cell's edge orbit (still under
 // reduced motion), a bell on a cell not in view is quiet news while a bot's request to type makes it wait, the grip sets the card's height (kept after a restart,
 // double-click goes back), a search draws rows instead, and a 1+3 split's tall cell stacks its text.
 import { expect, test, type Page } from "@playwright/test";
@@ -80,9 +80,9 @@ test("a right-click on a cell opens the row menu and Rename renames that session
   await cell(page, a).click({ button: "right" });
   const menu = page.getByTestId("session-row-menu");
   await expect(menu).toBeVisible();
-  // the TERMINALS row menu, item for item
-  await expect(menu.getByRole("menuitem")).toHaveCount(6);
-  for (const id of ["session-rename", "session-reveal", "session-system-terminal", "session-copy-link", "session-new-here", "session-menu-close"]) await expect(menu.getByTestId(id)).toHaveCount(1);
+  // the TERMINALS row menu, item for item (Hand to <bot> too: a bot of this computer is online; e2e/hand-to-bot.spec.ts)
+  await expect(menu.getByRole("menuitem")).toHaveCount(7);
+  for (const id of ["session-rename", "session-reveal", "session-system-terminal", "session-copy-link", "session-hand", "session-new-here", "session-menu-close"]) await expect(menu.getByTestId(id)).toHaveCount(1);
   await page.getByTestId("session-rename").click();
   const input = cell(page, a).getByTestId("session-rename-input");
   await expect(input).toBeFocused();

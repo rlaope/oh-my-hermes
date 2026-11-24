@@ -112,6 +112,11 @@ All notable changes will be documented here.
   worktree in it (`docs/OMHER-BOUNDARY.md` rule 10); a terminal folder outside the bot's worktrees goes with its path
   and a line asking the bot to check `git status` itself. Nothing moves on disk, the session stays open and omher
   types nothing into it: the bot works with its own tools and approvals. (`apps/omher/src/handover/`)
+- **omher: a terminal in a split hands its folder to a bot too.** A TERMINALS session in a split shows as a cell of
+  the split card, and its right-click menu had every item of a row's menu but Hand to <bot>. A cell's menu now offers
+  it under the same conditions (a folder, and a bot of this computer online) and opens the same card, which sends the
+  same first message through the same thread start as from a row. Nothing new is read or sent.
+  (`apps/omher/src/sessions/SplitLayoutCard.tsx`; `docs/OMHER-BOUNDARY.md` rule 10)
 - **omher's reasoning picker offers every level Hermes accepts, ultra included.** The chat model picker's Reasoning
   control showed none, low, medium, high and xhigh only, so minimal, max and ultra could not be picked. The bridge now
   reads the installed Hermes' own levels (`hermes_constants.VALID_REASONING_EFFORTS`, after "none") and offers them in

@@ -179,8 +179,8 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   refuses anything else and never takes a command line or arguments. Closing a session or quitting the app stops
   the program. In a plain browser (dev, e2e) a mock host echoes what you type instead. A row's first line is the
   session's name: the one you gave it (double-click or right-click › Rename), else the title the agent gave the
-  conversation, else the CLI's name. Right-click › Hand to <bot> on a row (and on a row of the right panel's
-  Worktrees tab) opens a small card (`src/handover/`): pick the bot, add an optional goal line, and Open thread
+  conversation, else the CLI's name. Right-click › Hand to <bot> on a row (on a split card's cell, and on a row of the
+  right panel's Worktrees tab) opens a small card (`src/handover/`): pick the bot, add an optional goal line, and Open thread
   starts a thread under that bot whose first message names the folder, its branch, a short git status and diff stat
   (when the folder is in one of that bot's worktrees; otherwise the bot is asked to read them itself) and the goal.
   Nothing moves on disk, the session stays open and omher types nothing into it (`BOUNDARY.md` rule 10). Above the
