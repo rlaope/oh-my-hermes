@@ -685,7 +685,7 @@ export const en = {
   "pf.title": "Messaging",
   "pf.peerOffline": "{label} is not connected now, so omher cannot tell whether this bot's platforms are connected.",
   "pf.peerUnread": "{label} gave no answer omher could use (oh-my-hermes may not be installed there), so omher cannot tell whether this bot's platforms are connected.",
-  "pf.peerUnasked": "{label} has not been asked yet, so omher cannot tell whether this bot's platforms are connected.",
+  "pf.peerUnasked": "{label} has not answered yet, so omher cannot tell whether this bot's platforms are connected.",
   "pf.sourcePeer": "Read on {label} by its own oh-my-hermes from Hermes' gateway records and logs there. omher changes nothing on either computer and runs nothing.",
   "pf.unavailable": "oh-my-hermes is not on this computer, or its answer could not be read, so omher cannot tell whether this bot's platforms are connected.",
   "pf.none": "Hermes' gateway records and logs name no messaging platform for this bot.",

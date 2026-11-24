@@ -291,7 +291,7 @@ class PeerAnswer(unittest.TestCase):
         self.assertEqual(set(slack), {"platform", "status", "attention", "since", "logged", "reason_kind", "unknown_why",
                                       "reason", "guidance", "restart", "intents"})
         self.assertEqual((slack["restart"], slack["since"], slack["attention"]), ("", "", False))
-        self.assertEqual(slack["intents"], ["Message Content"] * 8)
+        self.assertEqual(slack["intents"], ["Message Content"])  # once, however often it is named
         self.assertEqual(len(slack["reason"]), ob.PLATFORM_TEXT_MAX["reason"])
         self.assertTrue(slack["reason"].startswith("red evil nul x"))
         kept = json.dumps(bots)
@@ -453,6 +453,54 @@ class PeerPlatforms(BridgeCase):
             self.assertNotIn("fix", got)
             self.assertNotIn("peers", far)
             self.assertEqual(len(self.local_runs), 1, "a peer's answer never makes this computer run omh")
+
+    async def test_a_slow_peer_never_holds_back_this_computers_rows(self):
+        import asyncio
+        import time
+        from contextlib import AsyncExitStack
+        async with AsyncExitStack() as stack:
+            local, remote, s, _ = await self._two(stack)
+            serve = remote.bridge.ops["bots.platforms"]
+            gate = asyncio.Event()
+
+            async def slow(p):
+                await gate.wait()
+                return await serve(p)
+            remote.bridge.ops["bots.platforms"] = slow
+            t0 = time.monotonic()
+            r = await s.req("bots.platforms", fresh=True)
+            self.assertLess(time.monotonic() - t0, ob.PEER_PLATFORMS_WAIT + 1.0)
+            self.assertEqual(set(r["result"]["bots"]), {"kami", "default"})  # this computer's rows, at once
+            far = r["result"]["peers"]["far"]
+            self.assertEqual((far["available"], far["why"]), (False, "unasked"))
+            gate.set()  # the ask lands: the app is told, and the next read has the peer's rows
+            await s.until(lambda ev: any(e["event"] == "platforms.update" for e in ev))
+            far = (await s.req("bots.platforms"))["result"]["peers"]["far"]
+            self.assertTrue(far["available"])
+            self.assertEqual(far["bots"]["mini"]["platforms"][0]["status"], "failed")
+            self.assertEqual(len(self.remote_runs), 1)
+            # stale again and slow again: the last checked answer stands meanwhile, not "cannot tell"
+            gate.clear()
+            local.bridge.peers["far"].platforms_at -= ob.PLATFORMS_TTL
+            far = (await s.req("bots.platforms"))["result"]["peers"]["far"]
+            self.assertTrue(far["available"])
+            gate.set()
+
+    async def test_a_reconnect_keeps_the_interval(self):
+        from contextlib import AsyncExitStack
+        async with AsyncExitStack() as stack:
+            local, remote, s, url = await self._two(stack)
+            await s.req("bots.platforms")
+            r = await s.req("peers.attach", peer="far", label="Other computer", host="user@host.example", url=url)
+            self.assertTrue(r["ok"], r)
+            self.assertTrue((await s.req("bots.platforms"))["result"]["peers"]["far"]["available"])
+            self.assertEqual(len(self.asked), 1, "the same computer again is not asked again inside the interval")
+
+    def test_a_platform_named_twice_keeps_its_first_row_and_intents_once(self):
+        bots = ob.peer_platform_rows(served(row(intents=["Presence"] * 3), row(status="connected"), row(platform="slack")))
+        rows = bots["mini"]["platforms"]
+        self.assertEqual([(r["platform"], r["status"]) for r in rows], [("discord", "failed"), ("slack", "failed")])
+        self.assertEqual(rows[0]["intents"], ["Presence"])
 
     async def test_a_peer_bot_never_forwards_the_op_itself(self):
         from contextlib import AsyncExitStack

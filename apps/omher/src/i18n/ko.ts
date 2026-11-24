@@ -682,7 +682,7 @@ export const ko: Record<Key, string> = {
   "pf.title": "메신저",
   "pf.peerOffline": "지금 {label}에 연결되어 있지 않아서, 이 봇의 플랫폼이 연결됐는지 알 수 없어요.",
   "pf.peerUnread": "{label}에서 쓸 수 있는 답이 오지 않아서(그곳에 oh-my-hermes가 없을 수 있어요), 이 봇의 플랫폼이 연결됐는지 알 수 없어요.",
-  "pf.peerUnasked": "{label}에 아직 물어보지 않아서, 이 봇의 플랫폼이 연결됐는지 알 수 없어요.",
+  "pf.peerUnasked": "{label}에서 아직 답이 오지 않아서, 이 봇의 플랫폼이 연결됐는지 알 수 없어요.",
   "pf.sourcePeer": "{label}에서 그곳의 oh-my-hermes가 그곳 Hermes 게이트웨이 기록과 로그에서 읽은 내용이에요. omher는 어느 컴퓨터에서도 아무것도 바꾸거나 실행하지 않아요.",
   "pf.unavailable": "이 컴퓨터에 oh-my-hermes가 없거나 답을 읽지 못해서, 이 봇의 플랫폼이 연결되어 있는지 알 수 없어요.",
   "pf.none": "Hermes 게이트웨이 기록과 로그에 이 봇의 메신저 플랫폼이 없어요.",

@@ -682,7 +682,7 @@ export const zh: Record<Key, string> = {
   "pf.title": "消息平台",
   "pf.peerOffline": "现在没有连接到 {label}，所以 omher 无法判断这个机器人的平台是否已连接。",
   "pf.peerUnread": "{label} 没有给出可用的答复（那里可能没有安装 oh-my-hermes），所以 omher 无法判断这个机器人的平台是否已连接。",
-  "pf.peerUnasked": "还没有询问 {label}，所以 omher 无法判断这个机器人的平台是否已连接。",
+  "pf.peerUnasked": "{label} 还没有答复，所以 omher 无法判断这个机器人的平台是否已连接。",
   "pf.sourcePeer": "由 {label} 上的 oh-my-hermes 从那里的 Hermes 网关记录和日志读取。omher 不在任何一台电脑上更改或运行任何东西。",
   "pf.unavailable": "这台电脑上没有 oh-my-hermes，或无法读取它的答复，所以 omher 无法判断这个机器人的平台是否已连接。",
   "pf.none": "Hermes 的网关记录和日志中没有这个机器人的消息平台。",

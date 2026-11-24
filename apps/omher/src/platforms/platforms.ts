@@ -56,7 +56,8 @@ const RESTART = /^hermes -p ([a-z0-9][a-z0-9_-]{0,63}) gateway restart$/;
 export const ROW_RECONNECT_MS = 10 * 60_000;
 
 /** Why a bot's computer could not say: its link is down, it gave no answer that checked out, or no answer of it has
- *  been read yet (a bridge older than rule 45, or a computer attached since the last read). "" when it said. */
+ *  come yet (a bridge older than rule 45, a computer attached since the last read, an ask still under way). "" when
+ *  it said. */
 export type PeerWhy = "" | "offline" | "unread" | "unasked";
 
 /** What was read for one bot: on this computer, or for `<peer>:<name>` on that computer by its own bridge. */

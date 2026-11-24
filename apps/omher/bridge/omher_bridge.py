@@ -1114,12 +1114,13 @@ def platform_rows(out: str | None) -> dict[str, dict] | None:
 
 def _platform_entry(bot: dict) -> dict:
     """One bot's {log, platforms}, every field checked and clipped: at most 32 rows, each of the fields below only."""
-    rows = []
+    rows, seen = [], set()
     for row in bot.get("platforms") if isinstance(bot.get("platforms"), list) else []:
         if not isinstance(row, dict) or not isinstance(row.get("platform"), str) \
                 or not PLATFORM_NAME.fullmatch(row["platform"]) or not isinstance(row.get("status"), str) \
-                or row["status"] not in PLATFORM_STATUSES:
-            continue
+                or row["status"] not in PLATFORM_STATUSES or row["platform"] in seen:
+            continue  # a platform named twice keeps its first row
+        seen.add(row["platform"])
         kind, why = row.get("reason_kind"), row.get("unknown_why")
         restart = row.get("restart")
         intents = row.get("intents") if isinstance(row.get("intents"), list) else []
@@ -1131,7 +1132,7 @@ def _platform_entry(bot: dict) -> dict:
             "unknown_why": why if isinstance(why, str) and PLATFORM_TOKEN.fullmatch(why) else "",
             **{k: _platform_text(row.get(k), n) for k, n in PLATFORM_TEXT_MAX.items()},
             "restart": restart if isinstance(restart, str) and PLATFORM_RESTART.fullmatch(restart) else "",
-            "intents": [i for i in intents[:8] if isinstance(i, str) and i in PLATFORM_INTENTS],
+            "intents": list(dict.fromkeys(i for i in intents[:8] if isinstance(i, str) and i in PLATFORM_INTENTS)),
         })
         if len(rows) >= 32:
             break
@@ -6147,6 +6148,8 @@ PEER_LIST_TIMEOUT = 5.0
 PEER_OPEN_TIMEOUT = 15.0
 # A peer's `bots.platforms` (rule 45): its bridge may run its own `omh` read first (OMH_READ_TIMEOUT), then answer.
 PEER_PLATFORMS_TIMEOUT = OMH_READ_TIMEOUT + PEER_LIST_TIMEOUT
+# How long `bots.platforms` waits for a peer's ask: a slower one finishes on its own, and `platforms.update` says so.
+PEER_PLATFORMS_WAIT = 1.5
 # Bot-scoped ops a peer's bot takes: sent to the peer with the bare name, its answer passed back as it came.
 PEER_FORWARD = frozenset({
     "chat.open", "chat.send", "chat.interrupt", "chat.discard", "chat.steer", "approval.respond", "clarify.respond", "chat.attach", "chat.set_model",
@@ -6185,6 +6188,7 @@ class PeerLink:
         self.platforms: dict | None = None
         self.platforms_at = 0.0
         self.platforms_ask: asyncio.Task | None = None
+        self.platforms_late = False  # an ask outlived PEER_PLATFORMS_WAIT: say `platforms.update` when it lands
         self.on_event = None
         self.on_lost = None
 
@@ -9185,6 +9189,8 @@ class Bridge:
             raise
         link.running = {r["name"] for r in link.rows if r["running"]}
         if old is not None:
+            # the same computer again: its platforms keep their interval across the reconnect (rule 45)
+            link.platforms, link.platforms_at = old.platforms, old.platforms_at
             await self._peer_turns_end(old, f"lost the link to {old.label}")
         self.peers[peer] = link
         back = peer in self._peers_seen
@@ -9255,7 +9261,9 @@ class Bridge:
         per PLATFORMS_TTL (PLATFORMS_TTL_MISS after an answer it could not use) that overlapping asks share. The ask
         is the bare op with nothing in it: that bridge picks its own Hermes root and runs its own rule 43 read. Its
         answer is checked again here (`peer_platform_rows`). An offline link, an error, an older bridge or a peer
-        without `omh` is `available: false`, so the page says it cannot tell."""
+        without `omh` is `available: false`, so the page says it cannot tell. It waits at most PEER_PLATFORMS_WAIT,
+        so a slow computer never holds back this computer's rows: the last answer stands meanwhile (`unasked` when
+        there is none), and `platforms.update` tells the app once the ask lands."""
         if not link.connected:
             return {"available": False, "why": "offline", "bots": {}}
         if link.platforms is not None and time.monotonic() - link.platforms_at < (
@@ -9263,7 +9271,11 @@ class Bridge:
             return link.platforms
         if link.platforms_ask is None or link.platforms_ask.done():
             link.platforms_ask = self._spawn(self._ask_peer_platforms(link))
-        return await asyncio.shield(link.platforms_ask)
+        done, _ = await asyncio.wait({link.platforms_ask}, timeout=PEER_PLATFORMS_WAIT)
+        if done:
+            return link.platforms_ask.result()
+        link.platforms_late = True
+        return link.platforms or {"available": False, "why": "unasked", "bots": {}}
 
     async def _ask_peer_platforms(self, link: PeerLink) -> dict:
         try:
@@ -9273,6 +9285,9 @@ class Bridge:
         bots = peer_platform_rows(out)
         link.platforms = {"available": bots is not None, "why": "" if bots is not None else "unread", "bots": bots or {}}
         link.platforms_at = time.monotonic()
+        if link.platforms_late:
+            link.platforms_late = False
+            await self.emit("platforms.update", "")
         return link.platforms
 
     async def _peer_event(self, link: PeerLink, f: dict) -> None:

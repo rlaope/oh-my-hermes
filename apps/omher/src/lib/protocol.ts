@@ -888,6 +888,8 @@ export type BridgeEvent =
   | (EventBase & { event: "bot.status"; status: BotStatus; running: boolean })
   | (EventBase & { event: "elsewhere.update" })
   | (EventBase & { event: "bots.update" })
+  /** A peer's platforms (rule 45) landed after `bots.platforms` stopped waiting for them: read them again. */
+  | (EventBase & { event: "platforms.update" })
   /** After `bots.restart` said ok: the bot is attached again (`ok`), or did not come back in time. Also `ok` when a
    *  bot whose gateway went away without omher restarting it (an update, a relaunch) is attached again. */
   | (EventBase & { event: "bot.restarted"; ok: boolean })

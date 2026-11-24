@@ -3661,6 +3661,10 @@ class PeerPlatformsThroughTheirOwnBridge(unittest.TestCase):
         " anywhere else.",
         "is shown as cannot tell, never as connected or as not connected.",
         "with the same 10-minute threshold for a reconnect (`ROW_RECONNECT_MS`),",
+        "Each new link starts that bridge with an empty cache; this computer keeps its own interval for that computer"
+        " across a reconnect.",
+        "This computer waits at most 1.5 seconds for that computer's answer (`PEER_PLATFORMS_WAIT`), so a slow or hung"
+        " computer never holds back the rows of the bots here:",
         "This follows the owner's request (2026-11-24) to do what was left after rule 43, which named this read as"
         " needing a rule of its own.",
     )
@@ -3684,7 +3688,8 @@ class PeerPlatformsThroughTheirOwnBridge(unittest.TestCase):
         forward = ast.literal_eval(self._const("PEER_FORWARD").args[0])
         self.assertNotIn("bots.platforms", forward)
         self.assertNotIn("bots.templates", forward)
-        # no op a peer's bot forwards reaches an `omh` read: its handler names none of rule 43's runner or cache
+        # no op a peer's bot forwards reaches an `omh` read: its handler names none of rule 43's runner or cache (its
+        # own body only; a helper it calls is not walked)
         ops = next(n.value for n in ast.walk(self.tree) if isinstance(n, ast.Assign)
                    and ast.unparse(n.targets[0]) == "self.ops")
         handlers = {k.value: v.attr for k, v in zip(ops.keys, ops.values)}
@@ -3708,7 +3713,10 @@ class PeerPlatformsThroughTheirOwnBridge(unittest.TestCase):
         self.assertIn("if not link.connected:", cache)
         self.assertIn("PLATFORMS_TTL if link.platforms['available'] else PLATFORMS_TTL_MISS", cache)
         self.assertIn("if link.platforms_ask is None or link.platforms_ask.done():", cache)
-        self.assertIn("return await asyncio.shield(link.platforms_ask)", cache)
+        self.assertIn("done, _ = await asyncio.wait({link.platforms_ask}, timeout=PEER_PLATFORMS_WAIT)", cache)
+        self.assertIn("return link.platforms or {'available': False, 'why': 'unasked', 'bots': {}}", cache)
+        self.assertIn("PEER_PLATFORMS_WAIT = 1.5", self.source)
+        self.assertIn("await self.emit('platforms.update', '')", ask)
         self.assertNotIn("fresh", cache)
         op = ast.unparse(self.fns["op_bots_platforms"])
         self.assertIn("asyncio.to_thread(self.platforms.read, p.get('fresh') is True)", op)
