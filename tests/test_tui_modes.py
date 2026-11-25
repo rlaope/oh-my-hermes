@@ -1331,7 +1331,7 @@ class BusyQueueTests(unittest.TestCase):
         self.assertEqual(RUNS_DURING_TURN, frozenset({
             "stop", "steer", "queue", "btw", "bg", "help", "keys", "whats-new", "redraw", "history", "todos",
             "details", "logs", "dag", "bots", "copy", "theme", "wallpaper", "image", "paste", "gateway", "quit",
-            "yolo", "effort",
+            "yolo", "effort", "timestamps",
         }))
         # The TUI's aliases and the commands that only say where they run or that they mean nothing here run too.
         for name in (*sorted(RUNS_DURING_TURN), "q", "s", "exit", "whatsnew", "voice", "agents", "mouse", "worktree",
