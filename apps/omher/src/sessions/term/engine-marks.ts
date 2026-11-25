@@ -8,7 +8,8 @@
 //   Cmd+PageDown) move the view to the previous / next prompt; Ctrl+Up / Ctrl+Down on Windows and Linux (as VS Code),
 //   there only at the shell's prompt or with the view scrolled up (`takesPromptKey`: a program running on the normal
 //   screen keeps them). A terminal that sent no marks, a full-screen program (the alternate screen), and a key with
-//   nowhere to go (the view already at the bottom) keep those keys as they were.
+//   nowhere to go (the view already at the bottom) keep those keys as they were. A prompt's `A` also tells the
+//   terminal's owner that the shell waits for a command (`onPrompt`).
 // - OSC 7 (`file://host/path`): the folder the shell is in now, only from a `file://` address on this computer (an
 //   empty host, `localhost` or this computer's name) with an absolute path. Only the path is read.
 // - OSC 9;4 (ConEmu progress `4;state;percent`): working (states 1, 2, 3) or done (0). No text is read.
@@ -192,6 +193,9 @@ export function promptKey(e: { key: string; metaKey: boolean; ctrlKey: boolean; 
 export const CWD_EVENT = "omher-term-cwd";
 /** Sent (bubbling) on a terminal's element when its program reports progress (OSC 9;4): `detail` is busy or done. */
 export const PROGRESS_EVENT = "omher-term-progress";
+/** Sent (bubbling) on a terminal's element when its shell marks the start of a prompt (OSC 133 `A`): it waits for a
+ *  command (sessions.ts types a Shell row's restore line then). */
+export const PROMPT_EVENT = "omher-term-prompt";
 
 /** The three escapes for one terminal (called once it is open, again for one made again after parking; `el` holds
  *  it and outlives a remake, so its owner listens there). Returns what undoes it. */
@@ -202,6 +206,7 @@ export function attachMarks(term: Terminal, el: HTMLElement): () => void {
   const handlers = [
     term.parser.registerOscHandler(133, (d) => {
       onMark(term, s, d);
+      if (parse133(d)?.kind === "A") tell(PROMPT_EVENT, "");
       return true;
     }),
     term.parser.registerOscHandler(7, (d) => {
@@ -240,6 +245,12 @@ export function onCwd(el: HTMLElement, fn: (path: string) => void): () => void {
   const on = (e: Event) => fn((e as CustomEvent<string>).detail);
   el.addEventListener(CWD_EVENT, on);
   return () => el.removeEventListener(CWD_EVENT, on);
+}
+
+/** `fn` hears each prompt the shell of the terminal in `el` marks (OSC 133 `A`). Returns what stops it. */
+export function onPrompt(el: HTMLElement, fn: () => void): () => void {
+  el.addEventListener(PROMPT_EVENT, fn);
+  return () => el.removeEventListener(PROMPT_EVENT, fn);
 }
 
 /** `fn` hears the program in the terminal in `el` report progress (OSC 9;4) as working or done. */
