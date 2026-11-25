@@ -1,16 +1,15 @@
 /*!
  * omher.app top block, the live parts around the app window (our own code; ideas only from other sites).
- *  1. The live app: on a desktop-sized screen, once the page has loaded and gone idle, the real omher UI (site/app-preview,
- *     staged data, nothing leaves the page) loads into the window and crossfades in over the film (240 ms) when it
- *     says it is ready. Phones keep the still. The window never traps the page's scroll: the preview hands wheel
- *     movement back unless the visitor has clicked into it and the pane under the cursor can scroll.
+ *  1. The window plays the omher film (assets/omher-app.webm|mp4) and keeps playing it. Nothing replaces it: the live,
+ *     clickable preview that used to crossfade in over the film after load is no longer mounted (owner request,
+ *     2026-11-25). site/app-preview stays built for other pages but the home page never loads it.
  *  2. A light orbiting the window's edge: a short comet (white core, pink tail, faint bloom) travelling the rounded
  *     frame at constant speed (stroke dash along the path, ~7 s a lap). Hovering the window or a Download button
  *     speeds it up and brightens it, eased; the same hover draws a soft pink rim on the window and the pill.
  *  3. A border spotlight that follows the cursor along the window's edge, smoothed.
  * One rAF loop; it writes a few CSS variables and SVG attributes and never reads layout (the window's box is read on
  * scroll, resize and pointer moves). It idles while the tab is hidden or the block is off-screen. Under reduced
- * motion: a static faint rim and the still picture (no live app).
+ * motion: a static faint rim.
  */
 (() => {
   const q = (s, r = document) => r.querySelector(s);
@@ -20,8 +19,7 @@
   const DESK = matchMedia('(min-width: 761px)');
   const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
   const ez = (dt, rate) => 1 - Math.exp(-dt / 1000 * rate);
-  const stats = window.__hero = {frames: 0, cpu: [], ready: false};
-  let frameEl = null, live = null;   // the live app, once mounted (below)
+  const stats = window.__hero = {frames: 0, cpu: []};
   const NS = 'http://www.w3.org/2000/svg';
 
   /* ---------- light source: the header pill and the hero's main download button ---------- */
@@ -61,7 +59,7 @@
     for (const el of rects) { el.setAttribute('x', '.5'); el.setAttribute('y', '.5'); el.setAttribute('width', RW - 1); el.setAttribute('height', RH - 1); el.setAttribute('rx', r); }
   }
 
-  function measure() { sizeRim(); fit(); }
+  function measure() { sizeRim(); }
 
   /* ---------- the frame loop ---------- */
   let raf = 0, last = 0, seen = true, head = Math.random() * 1000, speed = 1, bright = 1, hotW = -1, brightW = -1, sOnW = 1;
@@ -111,54 +109,9 @@
   addEventListener('load', measure);
   if (document.fonts) document.fonts.ready.then(measure);
   if (window.ResizeObserver) new ResizeObserver(measure).observe(win);
-  document.addEventListener('visibilitychange', () => { kick(); tellPreview(); });
-  new IntersectionObserver(es => { seen = es[0].isIntersecting; kick(); tellPreview(); }).observe(sec);
+  document.addEventListener('visibilitychange', kick);
+  new IntersectionObserver(es => { seen = es[0].isIntersecting; kick(); }).observe(sec);
   kick();
 
-  /* ---------- the live app in the window ---------- */
-  function tellPreview() {
-    if (!frameEl || !frameEl.contentWindow) return;
-    try { frameEl.contentWindow.postMessage({type: 'omher-preview:visible', visible: seen && !document.hidden}, location.origin); } catch (e) { /* not loaded yet */ }
-  }
-  const LW = 1200, LH = 720;   // the preview lays out 1200 wide (Plans panel open, chat still roomy) and is scaled to the window
-  function fit() {
-    if (!live || !frameEl) return;
-    const body = live.querySelector('.omher__lbody'), k = body.clientWidth / LW;
-    if (!k) return;
-    frameEl.style.height = Math.round(body.clientHeight / k) + 'px';
-    frameEl.style.transform = `scale(${k.toFixed(5)})`;
-  }
-  function mountLive() {
-    if (live || !DESK.matches || RM) return;   // phones and reduced motion keep the still picture
-    live = document.createElement('div');
-    live.className = 'omher__live'; live.dataset.live = 'loading';
-    live.innerHTML = '<div class="omher__bar" aria-hidden="true"><i></i><i></i><i></i><span>omher</span><b class="omher__try">Live preview · click around</b></div><div class="omher__lbody"></div>';
-    frameEl = document.createElement('iframe');
-    frameEl.title = 'Interactive omher preview';
-    frameEl.loading = 'lazy';
-    frameEl.width = LW; frameEl.height = LH;
-    frameEl.setAttribute('tabindex', '0');
-    frameEl.src = 'app-preview/';
-    live.querySelector('.omher__lbody').appendChild(frameEl);
-    win.appendChild(live);
-    fit();
-    if (window.ResizeObserver) new ResizeObserver(fit).observe(live);
-  }
-  addEventListener('message', e => {
-    if (e.origin !== location.origin || !frameEl || e.source !== frameEl.contentWindow) return;
-    const d = e.data || {};
-    if (d.type === 'omher-preview:ready' && live) {
-      live.dataset.live = 'ready'; stats.ready = true; tellPreview();
-      // the film under it stops once the live window covers it
-      setTimeout(() => { const v = q('[data-app-film]'); if (v) v.pause(); }, 400);
-    } else if (d.type === 'omher-preview:touched' && live) {
-      live.dataset.touched = '1';   // the visitor found it: the cue in the title bar fades
-    } else if (d.type === 'omher-preview:wheel') {
-      scrollBy({left: 0, top: +d.dy || 0, behavior: 'instant'});
-    }
-  });
-  // after the page's own load and an idle moment, so the first paint and the poster come first
-  const later = () => (window.requestIdleCallback ? requestIdleCallback(mountLive, {timeout: 1500}) : setTimeout(mountLive, 300));
-  if (document.readyState === 'complete') later(); else addEventListener('load', later);
-  DESK.addEventListener('change', () => { if (DESK.matches) { mountLive(); kick(); } });
+  DESK.addEventListener('change', () => { if (DESK.matches) kick(); });
 })();
