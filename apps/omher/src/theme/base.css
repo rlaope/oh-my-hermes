@@ -28,7 +28,8 @@ body {
    window App.tsx marks with the UI language, so it reaches every page, popover and hint in one place.
    break-word, not anywhere: anywhere also lowers every element's min-content to one glyph, so a label in a tight flex
    row shrank to one syllable wide and split mid-word (a bot card's status read "연결 / 됨"). A rule that needs a long
-   token to shrink its flex item sets anywhere locally. */
+   token to shrink its flex item sets anywhere locally. This is the app's only keep-all: Japanese and Chinese break
+   between characters as they normally do, and a local keep-all would make a whole ja/zh sentence one word. */
 [lang="ko"] {
   word-break: keep-all;
   overflow-wrap: break-word;

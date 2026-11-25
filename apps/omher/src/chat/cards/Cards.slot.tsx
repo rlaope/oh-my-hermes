@@ -15,6 +15,7 @@ import { choiceIndexForKey, parseChoice } from "./choices";
 import { riskOf } from "./risk";
 import { t, type Key } from "../../i18n";
 import { Markdown } from "../parts/Markdown";
+import { koText } from "../parts/textLang";
 import { composing, holdImeEnter } from "../../lib/ime";
 
 export const slot = "cards";
@@ -131,7 +132,9 @@ function Approval({ bot, item }: { bot: string; item: ApprovalItem }) {
       onKeyDown={onKey}
     >
       <AskedBy who={item.subagent} />
-      <div className="card-title">{title}</div>
+      <div className="card-title" lang={koText(title)}>
+        {title}
+      </div>
       {risks.length > 0 && (
         <div className="card-risk" data-testid="card-risk" role="note">
           <span className="card-risk-ic" aria-hidden="true">!</span>
@@ -435,7 +438,9 @@ function Clarify({ bot, item }: { bot: string; item: ClarifyItem }) {
       onKeyDown={choices.length ? (e) => keys.current?.key(e) : undefined}
     >
       <AskedBy who={item.subagent} />
-      <div className="card-title">{item.question}</div>
+      <div className="card-title" lang={koText(item.question)}>
+        {item.question}
+      </div>
       {choices.length > 0 && (
         <QuestionInput
           q={q}

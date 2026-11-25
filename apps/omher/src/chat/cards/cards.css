@@ -15,7 +15,6 @@
   font-weight: 600;
   font-size: 12.5px;
   line-height: 1.45;
-  word-break: keep-all;
   overflow-wrap: anywhere;
 }
 /* A risky command gets a red rail and one warning line; the buttons stay exactly as they are. */

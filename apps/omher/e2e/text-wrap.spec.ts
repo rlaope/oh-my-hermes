@@ -3,7 +3,10 @@
 // shrink to one syllable wide, and ja/zh break between any two characters. At every card width the grid gives, from
 // the 900px minimum window up: each card's status word, profile chip and "In list" / "Add to list" label sit on one
 // line, the corner label clears the name and the status line, and no short label on the bots page, a bot's page, the
-// agents, plugins or apps pages reads on two lines (the bot page's stat captions included).
+// agents, plugins or apps pages reads on two lines (the bot page's stat captions included). Only Korean keeps words
+// whole (keep-all): a Japanese or Chinese reply breaks between characters as those languages do, so a Latin word in
+// it moves to the next line whole instead of being cut where a sentence-long "word" hit the edge, and a long URL in it
+// still wraps inside the bubble. A Korean reply keeps its words whole in any UI language (the bubble says lang="ko").
 // Shots with OMHER_SHOTS=<dir> (OMHER_SHOT_TAG=after by default).
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
@@ -14,6 +17,11 @@ const SHOTS = process.env.OMHER_SHOTS || "";
 const TAG = process.env.OMHER_SHOT_TAG || "after";
 const LANGS = ["en", "ko", "ja", "zh"] as const;
 const BOTS = ["kami", "friren", "default", "omh-tui"];
+
+const CJK_REPLY = {
+  ja: "今日はKubernetesの設定をGrafanaで確認してからPrometheusのアラートをTerraformで直し、そのあとElasticsearchとPostgreSQLのバックアップをKubernetesのCronJobで毎晩回すようにして、最後にCloudflareとDatadogのダッシュボードもまとめて更新しました。詳しくは https://example.com/runbooks/kubernetes/cronjob-backup-and-restore-0123456789abcdef0123456789abcdef を見てください。",
+  zh: "今天先在Grafana里检查了Kubernetes的配置，再用Terraform修好了Prometheus的告警，然后让Kubernetes的CronJob每晚备份Elasticsearch和PostgreSQL，最后把Cloudflare和Datadog的仪表盘也一起更新了。详情请看 https://example.com/runbooks/kubernetes/cronjob-backup-and-restore-0123456789abcdef0123456789abcdef 。",
+} as const;
 
 async function mock(op: string, params: Record<string, unknown> = {}): Promise<void> {
   const ws = new WebSocket(`ws://127.0.0.1:${MOCK}/?token=e2e`);
@@ -162,5 +170,109 @@ for (const lang of LANGS) {
       }
       await page.setViewportSize({ width: 900, height: 820 });
     }
+  });
+}
+
+for (const lang of ["ja", "zh"] as const) {
+  test(`${lang}: a reply breaks between characters, so a Latin word in it is never cut and a long URL still wraps`, async ({ page }) => {
+    await open(page, lang);
+    await mock("mock.emit", { events: [{ event: "message", bot: "kami", id: `tw-${lang}`, text: CJK_REPLY[lang] }] });
+    const bubble = page.getByTestId("bubble-bot").last().locator(".b");
+    await expect(bubble).toContainText("Kubernetes");
+    for (const width of [900, 1000, 1100, 1280]) {
+      await page.setViewportSize({ width, height: 820 });
+      await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))));
+      const got = await bubble.evaluate((b) => {
+        const textRight = (root: Element) => {
+          let right = -Infinity;
+          const rg = document.createRange();
+          const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+          for (let t = w.nextNode(); t; t = w.nextNode()) {
+            rg.selectNodeContents(t);
+            for (const r of rg.getClientRects()) if (r.width > 0) right = Math.max(right, r.right);
+          }
+          return right;
+        };
+        const range = document.createRange();
+        const lineTops = new Set<number>();
+        const cut: string[] = [];
+        const walker = document.createTreeWalker(b, NodeFilter.SHOW_TEXT);
+        for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+          const text = n.textContent ?? "";
+          const top = (i: number) => {
+            range.setStart(n!, i);
+            range.setEnd(n!, i + 1);
+            const r = [...range.getClientRects()].find((x) => x.width > 0);
+            return r ? Math.round((r.top + r.height / 2) / 4) : null;
+          };
+          for (let i = 0; i < text.length; i++) {
+            const t = top(i);
+            if (t !== null) lineTops.add(t);
+          }
+          // every Latin word that is not part of the URL sits on one line
+          for (const m of text.matchAll(/(?<![\/.\w-])[A-Za-z]{4,}(?![\/.\w-])/g)) {
+            const tops = new Set([...m[0]].map((_, k) => top(m.index! + k)).filter((x) => x !== null));
+            if (tops.size > 1) cut.push(m[0]);
+          }
+        }
+        // the text's right edge against the bubble's content edge (the hover copy button sits outside on purpose)
+        const cs = getComputedStyle(b);
+        const inner = b.getBoundingClientRect().right - parseFloat(cs.paddingRight);
+        const over = textRight(b) - inner;
+        return { wordBreak: cs.wordBreak, lines: lineTops.size, cut, over };
+      });
+      if (width === 900) await shot(page, `reply-${lang}-900`);
+      expect(got.lines, `${lang} at ${width}px: the reply wraps`).toBeGreaterThan(2);
+      expect(got.cut, `${lang} at ${width}px: Latin words cut across lines`).toEqual([]);
+      expect(got.over, `${lang} at ${width}px: text past the bubble`).toBeLessThanOrEqual(1);
+      expect(got.wordBreak, `${lang} at ${width}px`).toBe("normal");
+    }
+  });
+}
+
+for (const ui of ["ko", "en", "ja"] as const) {
+  test(`${ui} UI: a Korean reply keeps its words whole (keep-all) and a long URL still wraps`, async ({ page }) => {
+    await open(page, ui);
+    const text = "오늘은 Grafana에서 Kubernetes 설정을 확인하고 Terraform으로 Prometheus 알림을 고친 다음, 매일 밤 CronJob이 Elasticsearch와 PostgreSQL을 백업하도록 바꿨습니다. 자세한 내용은 https://example.com/runbooks/kubernetes/cronjob-backup-and-restore-0123456789abcdef0123456789abcdef 를 보세요.";
+    await mock("mock.emit", { events: [{ event: "message", bot: "kami", id: "tw-ko", text }] });
+    const bubble = page.getByTestId("bubble-bot").last().locator(".b");
+    await expect(bubble).toContainText("백업하도록");
+    const got = await bubble.evaluate((b) => {
+      const textRight = (root: Element) => {
+        let right = -Infinity;
+        const rg = document.createRange();
+        const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        for (let t = w.nextNode(); t; t = w.nextNode()) {
+          rg.selectNodeContents(t);
+          for (const r of rg.getClientRects()) if (r.width > 0) right = Math.max(right, r.right);
+        }
+        return right;
+      };
+      const range = document.createRange();
+      const cut: string[] = [];
+      const walker = document.createTreeWalker(b, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        const text = n.textContent ?? "";
+        for (const m of text.matchAll(/[\uac00-\ud7a3A-Za-z]+/g)) {
+          const tops = new Set(
+            [...m[0]].map((_, k) => {
+              range.setStart(n!, m.index! + k);
+              range.setEnd(n!, m.index! + k + 1);
+              const r = [...range.getClientRects()].find((x) => x.width > 0);
+              return r ? Math.round((r.top + r.height / 2) / 4) : null;
+            }).filter((x) => x !== null),
+          );
+          if (tops.size > 1 && !/^(https|example|com|runbooks|kubernetes|cronjob|backup|and|restore)$/.test(m[0])) cut.push(m[0]);
+        }
+      }
+      const cs = getComputedStyle(b);
+      const inner = b.getBoundingClientRect().right - parseFloat(cs.paddingRight);
+      const over = textRight(b) - inner;
+      return { wordBreak: cs.wordBreak, cut, over };
+    });
+    expect(got.cut).toEqual([]);
+    expect(got.over).toBeLessThanOrEqual(1);
+    expect(got.wordBreak).toBe("keep-all");
+    if (ui !== "ko") await shot(page, `reply-ko-in-${ui}-900`);
   });
 }

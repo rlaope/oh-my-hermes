@@ -86,7 +86,6 @@
 }
 .acc-row[data-testid="gh-account-row"] .st-btn {
   white-space: nowrap;
-  word-break: keep-all;
 }
 .st-grp > * + * {
   border-top: 1px solid var(--line);
