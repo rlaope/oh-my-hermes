@@ -5,6 +5,9 @@ const port = Number(process.env.OMHER_PORT || 5307);
 const mock = Number(process.env.OMHER_MOCK_PORT || 5308);
 export default defineConfig({
   testDir: "e2e",
+  // OMHER_E2E_SKIP: spec files this run leaves out, space-separated (CI's Linux runners leave out the specs that
+  // measure text against the macOS and Windows UI fonts; the macOS job runs those).
+  testIgnore: (process.env.OMHER_E2E_SKIP ?? "").split(/\s+/).filter(Boolean).map((f) => `**/${f.replace(/^e2e\//, "")}`),
   timeout: 30_000,
   // One mock bridge holds shared state (calls log, running turn): spec files must not run against it at once.
   workers: 1,
