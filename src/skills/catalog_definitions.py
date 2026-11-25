@@ -92,6 +92,7 @@ from .catalog_types import (
     EXECUTION_WAIT_DISCIPLINE_RULE,
     HERMES_PENDING_APPROVAL_CLAUSE,
     HERMES_USAGE_SURFACES_CLAUSE,
+    HermesOptionalSkillLine,
     HermesSkillLine,
     LLM_APP_DEV_EVAL_DELIVERABLES,
     LLM_APP_DEV_PUBLIC_BOARD_ACTIONS,
@@ -1686,10 +1687,15 @@ _DEFINITIONS = [
             "The request is lane-splitting or a full delivery cycle rather than one lane's handoff -- use "
             "`ultrawork`, which enters this engine for lanes with an external owner.",
             HermesSkillLine(
-                "The user wants a coding task handed straight to the Claude Code, Codex, or opencode CLI in the "
+                "The user wants a coding task handed straight to the Claude Code or Codex CLI in the "
                 "terminal, with no prompt composed from that CLI's own installed skills -- load Hermes' bundled "
-                "`claude-code`, `codex`, or `opencode` skill instead of this one.",
-                ("claude-code", "codex", "opencode"),
+                "`claude-code` or `codex` skill instead of this one.",
+                ("claude-code", "codex"),
+            ),
+            HermesOptionalSkillLine(
+                "The user wants a coding task handed straight to the opencode CLI with no prompt composed from "
+                "its installed skills -- load Hermes' optional `opencode` skill instead when it is installed.",
+                ("opencode",),
             ),
         ),
         good_example=SkillExample(
@@ -2016,6 +2022,10 @@ _DEFINITIONS = [
             HermesSkillLine(
                 "The answer is an arXiv paper list or one paper's entry - a search by topic, author, category, or paper id - and Hermes' bundled `arxiv` skill is available; load that skill.",
                 ("arxiv",),
+            ),
+            HermesSkillLine(
+                "The task is solely recovering one blocked URL (HTTP 403, HTTP 429, paywall, or WAF wall) with no broader multi-source research question; load Hermes' bundled `blocked-page-recovery` skill instead of this one.",
+                ("blocked-page-recovery",),
             ),
         ),
         good_example=SkillExample(
@@ -3843,6 +3853,10 @@ _DEFINITIONS = [
         do_not_use_when=(
             "The review is over sales stages, forecast categories, deal aging, or seller forecast rather than generic operating status; use `sales-pipeline-review`.",
             "The primary output is durable cadence history, minutes, a decision log, or action history; use `operating-rhythm`.",
+            HermesSkillLine(
+                "The user wants a recurring personal or calendar weekly reset across tasks and inbox rather than a team operating-status brief; load Hermes' bundled `weekly-review-planning` skill instead of this one.",
+                ("weekly-review-planning",),
+            ),
         ),
         situations=(
             "what is blocked across the team",
@@ -4278,6 +4292,10 @@ _DEFINITIONS = [
             "The user wants a text-only report, leadership brief, or PPT-ready outline; use `report-package`.",
             "The user asks OMH to directly generate, inspect, upload, or post an image without a wrapper-supplied observed evidence path.",
             "A standalone picture with no source material to summarize; call the host image tool with the user's own prompt, no card format.",
+            HermesSkillLine(
+                "The user wants a general-purpose stylized infographic generated directly from a layout-by-style preset rather than an OMH evidence-bounded PR/meeting card brief; load Hermes' bundled `baoyu-infographic` skill instead of this one.",
+                ("baoyu-infographic",),
+            ),
         ),
         final_checklist=(
             "The source kind, format, ratio and language mode are named.",
@@ -4911,6 +4929,10 @@ _DEFINITIONS = [
             "The user only needs a file, deck, PDF, spreadsheet, HWP, or attachment package; use `materials-package` or `deliverable-package`.",
             "The user only needs an image card or infographic prompt; use `img-summary`.",
             "The user asks to mark a UI as visually passed without fresh rendered evidence; use `visual-qa` and keep PASS blocked until observed.",
+            HermesSkillLine(
+                "The user wants a standalone one-off HTML artifact or a page styled after a well-known public design system with no repo design-system contract or visual-QA handoff; load Hermes' bundled `claude-design` or `popular-web-designs` skill instead of this one.",
+                ("claude-design", "popular-web-designs"),
+            ),
         ),
         good_example=SkillExample(
             prompt="frontend 이 대시보드가 AI 티 안 나게 레이아웃과 디자인 시스템을 잡아줘.",
@@ -6193,6 +6215,10 @@ _DEFINITIONS = [
             "The user asks for visual render QA; use `visual-qa`.",
             "The user asks for production release readiness beyond verification commands; use `production-audit`.",
             "The user wants a bug-first code review of a diff; use `code-review`.",
+            HermesSkillLine(
+                "The task is solely writing unit tests first in a single RED-GREEN-REFACTOR coding loop with no pre-merge verification-gate verdict or failure-origin split; load Hermes' bundled `test-driven-development` skill instead of this one.",
+                ("test-driven-development",),
+            ),
         ),
         good_example=SkillExample(
             prompt="verification-gate 이 PR 머지 전에 build/lint/test/docs/CI 증거를 정리해서 PASS 가능한지 봐줘.",
@@ -6498,6 +6524,10 @@ _DEFINITIONS = [
             "The user needs a whole-workspace capability inventory; use `workspace-audit`.",
             "The user wants a code diff review; use `code-review`.",
             "The user wants a picture of the structure; use `codebase-uml`. The user wants the code index refreshed or a task-scoped handoff pack; use `codegraph-refresh`.",
+            HermesSkillLine(
+                "The user only wants lines-of-code counts, language percentages, or code-to-comment ratios via pygount rather than a reading path and starter-task runway; load Hermes' bundled `codebase-inspection` skill instead of this one.",
+                ("codebase-inspection",),
+            ),
         ),
         good_example=SkillExample(
             prompt="codebase-onboarding 처음 보는 레포라서 구조, 주요 모듈, 테스트, 첫 작업 후보를 잡아줘.",
@@ -7050,6 +7080,7 @@ _DEFINITIONS = [
                 f"Suggested Cron Job, a `{NATIVE_CRON_TOOL}` create the user asked for in this conversation, or a "
                 "`hermes cron create` the user runs), and a job Hermes lists is observed status, not proof that a run delivered."
             ),
+            "Never schedule a job that moves money because an agent run on a schedule never spends; use `spend-gate`.",
         ),
         quality_tier="ops-blueprint-gated",
         quality_bar=(
@@ -8943,7 +8974,7 @@ _DEFINITIONS = [
             "If the fact may be stale, record the staleness warning and next refresh action.",
         ),
         do_not_use_when=(
-            HermesSkillLine(
+            HermesOptionalSkillLine(
                 "The user wants the agent to ingest sources into, query, or lint an interlinked markdown knowledge base it maintains itself in the Karpathy LLM Wiki pattern; load Hermes' `llm-wiki` skill instead of this one when it is installed (bundled through Hermes v0.22.5 and the floor v2026.9.7, optional from v0.22.6; hermes skills browse --source official finds it); when it is not installed, say so and offer to install it rather than imitating it.",
                 ("llm-wiki",),
             ),
@@ -9153,8 +9184,8 @@ _DEFINITIONS = [
             "The user wants a public skill found and vetted before installing it; use `skill-scout`.",
             "The user wants skill health checked: stale surfaces, failure patterns, or pending amendments; use "
             "`skill-health`.",
-            HermesSkillLine(
-                "The user is writing or editing a skill that ships in the hermes-agent repository itself rather than a local one; load Hermes' `hermes-agent-skill-authoring` skill instead of this one (if skill_view cannot find it: hermes skills install official/software-development/hermes-agent-skill-authoring).",
+            HermesOptionalSkillLine(
+                "The user is writing or editing a skill that ships in the hermes-agent repository itself rather than a local one; load Hermes' optional `hermes-agent-skill-authoring` skill instead of this one when installed (if skill_view cannot find it: hermes skills install official/software-development/hermes-agent-skill-authoring).",
                 ("hermes-agent-skill-authoring",),
             ),
         ),
@@ -9207,6 +9238,10 @@ _DEFINITIONS = [
             "The user is asking for a general product explanation rather than local health diagnostics.",
             "The requested change is a repository bug fix, not an installed-environment check.",
             "The wrapper wants to claim Hermes reload, skill execution, or plugin behavior that was not observed.",
+            HermesSkillLine(
+                "The user is asking how Hermes Agent itself works, its built-in config keys, or upstream Hermes features with no OMH install/plugin health issue; load Hermes' bundled `hermes-agent` skill instead of this one.",
+                ("hermes-agent",),
+            ),
         ),
         good_example=SkillExample(
             prompt="doctor after omh update says setup is next but Hermes skills still look stale.",
@@ -10257,6 +10292,10 @@ _DEFINITIONS.append(
             "The input is an image, screenshot, receipt, audio, or video rather than a document; use `media-input-operator`.",
             "The user is still looking for the document or its download link; use `source-finder`.",
             "The document fits one read (under about " + str(DEFAULT_PAGES_PER_RANGE) + " pages of prose); read it directly and answer.",
+            HermesSkillLine(
+                "The task is solely extracting cited obligations, deadlines, and action items from a supplied document rather than a multi-pass chunked reading ledger; load Hermes' bundled `document-to-action-items` skill instead of this one.",
+                ("document-to-action-items",),
+            ),
         ),
         good_example=SkillExample(
             prompt="summarize this 300-page vendor contract pdf and list every obligation with a deadline",

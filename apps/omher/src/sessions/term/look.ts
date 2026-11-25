@@ -69,6 +69,35 @@ export function termOptions(theme: ITheme, s: TermSettings): ITerminalOptions {
  *  fill their cell exactly (no gaps between rows at any line height), not taken from the font. */
 export const GPU_OPTIONS = { customGlyphs: true } as const;
 
+const SNAPPED = Symbol("omher.snappedBlocks");
+type SnapCtx = Pick<CanvasRenderingContext2D, "fillRect"> & { [SNAPPED]?: true };
+type GpuInside = { _renderer?: { _charAtlas?: { _tmpCtx?: SnapCtx } } };
+
+/** The GPU renderer draws a block element (U+2580-259F: halves, quadrants, eighths; and the legacy-computing octants)
+ *  as rectangles at eighths of its cell, on a scratch canvas it then copies into its glyph atlas. A cell an odd number
+ *  of device px wide (the default 13 px font: 7 px at 1x, 15 at 2x) puts a half on half a pixel, where the two
+ *  rectangles that meet each cover it by half: a solid run of blocks (Claude Code's mascot) shows a darker column
+ *  there. Every rectangle filled on that scratch canvas is snapped to whole device pixels instead (never thinner than
+ *  one), so the parts of a cell, and the cells beside it, tile exactly at any font size and pixel ratio. Text is drawn
+ *  with `fillText` and keeps its own shapes. The add-on has no hook for this: its own fields are read, and when they
+ *  are not there (another xterm version) nothing changes. Called again whenever its atlas changes (one per font, size
+ *  and theme, shared by terminals alike); a canvas snapped once is left as it is. True when it snapped one now (glyphs
+ *  the atlas already holds were drawn before: its owner clears them). */
+export function snapBlockGlyphs(addon: object): boolean {
+  const ctx = (addon as GpuInside)._renderer?._charAtlas?._tmpCtx;
+  if (!ctx || typeof ctx.fillRect !== "function" || ctx[SNAPPED]) return false;
+  const fill = ctx.fillRect.bind(ctx);
+  ctx.fillRect = (x: number, y: number, w: number, h: number) => {
+    const x0 = Math.round(x);
+    const y0 = Math.round(y);
+    const x1 = w > 0 ? Math.max(x0 + 1, Math.round(x + w)) : x0;
+    const y1 = h > 0 ? Math.max(y0 + 1, Math.round(y + h)) : y0;
+    fill(x0, y0, x1 - x0, y1 - y0);
+  };
+  ctx[SNAPPED] = true;
+  return true;
+}
+
 /** The space around a terminal for a padding setting: the setting is the left side; the top, the bottom and the
  *  right (where the scrollbar already stands off the text) keep the proportions omher's terminal always had. */
 const TERM_PAD_VAR = "--term-pad";

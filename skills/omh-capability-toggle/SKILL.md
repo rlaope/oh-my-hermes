@@ -14,44 +14,13 @@ metadata:
 
 # Capability Toggle
 
-This is a Hermes-native `capability-toggle` workflow skill.
+Required: capability family, requested state. Output: policy change summary, what was withheld versus retained, the exact command that reverses it.
 
 ## Why This Exists
 
 `capability-toggle` exists because OMH shipped one binary install lever -- the small core set or all installable skills -- so a user who wanted the coding surface but not the memory surface had to take both. It turns that into a per-family choice without uninstalling OMH.
 
-## Do Not Use When
-
-- The user wants to run the workflow a family owns rather than change whether that family is offered.
-- The user is asking to build an on/off switch inside their own product.
-- The user wants OMH removed entirely, which is the uninstall path rather than a capability policy change.
-- The user wants one skill hidden on one messaging platform or everywhere; that is Hermes' own hermes skills config, an interactive command the person runs in a terminal, and OMH writes no Hermes config.
-
-## Examples
-
-Good example:
-
-- Prompt: turn off memory, I already run my own memory system
-- Expected behavior: Run `omh capability-policy disable retain_knowledge`; report the four memory workflows withheld, memory off, the five core skills retained, and the enable command.
-- Why: The request is about which OMH surfaces are offered locally, not about capturing a memory.
-
-Bad example:
-
-- Prompt: add a dark mode toggle to my settings page
-- Expected behavior: Route to `omh-frontend` or coding delegation instead of capability policy.
-- Why: That is a feature in the user's own product, not an OMH capability family.
-
-## Completion Checklist
-
-- The affected family is named by its canonical id, not guessed from a partial word.
-- Withheld workflows and retained core skills are listed separately.
-- The report says what the disable does: `retain_knowledge` turns memory off; any other family is only withheld from the offered list (`omh capability-policy status`), routing is unchanged.
-- The change uses `omh capability-policy disable|enable <family>` (`--dry-run` previews, `status` lists), never a hand edit, and the printed reversing command is stated.
-
-## Recovery Notes
-
-- If the family id is ambiguous, list all six and ask rather than picking the closest match.
-- The policy never deletes skill files.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -82,25 +51,22 @@ Handoff policy:
 
 Change the local capability policy with `omh capability-policy`; propose executor work only when a repository fix is required.
 
-Required inputs:
-
-- capability family
-- requested state
-
-Expected outputs:
-
-- policy change summary
-- what was withheld versus retained
-- the exact command that reverses it
-
-Artifact expectations:
-
-- capability policy recorded in the local setup profile
-
 Safety rules:
 
 - Do not imply hidden Hermes runtime behavior.
 - Use the smallest verification that can prove the claim.
+
+## Completion Checklist
+
+- The affected family is named by its canonical id, not guessed from a partial word.
+- Withheld workflows and retained core skills are listed separately.
+- The report says what the disable does: `retain_knowledge` turns memory off; any other family is only withheld from the offered list (`omh capability-policy status`), routing is unchanged.
+- The change uses `omh capability-policy disable|enable <family>` (`--dry-run` previews, `status` lists), never a hand edit, and the printed reversing command is stated.
+
+## Recovery Notes
+
+- If the family id is ambiguous, list all six and ask rather than picking the closest match.
+- The policy never deletes skill files.
 
 ## Runtime Evidence
 

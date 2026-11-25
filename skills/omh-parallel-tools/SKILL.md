@@ -14,44 +14,13 @@ metadata:
 
 # Parallel Tools
 
-This is a Hermes-native `parallel-tools` workflow skill.
+Required: installed Hermes version, current parallel-tool capability status. Output: read-only diagnosis of the installed version and each MCP server's `supports_parallel_tool_calls` value (absent is false), one diff-approved `mcp_servers.<name>.supports_parallel_tool_calls: true` per named MCP server; an update command only when the user asks to update, a capability status report naming which parallel-tool features are active.
 
 ## Why This Exists
 
 `parallel-tools` exists to give a read-first answer to whether tools run in parallel and to name the one setting a user controls: built-in read-only tools already run concurrently, and an MCP server's tools do only when its `supports_parallel_tool_calls` is true.
 
-## Do Not Use When
-
-- The user wants a general Hermes update unrelated to parallel-tool capability.
-- No version or capability question has been asked yet.
-- The request needs a repository code change rather than a local version check.
-
-## Examples
-
-Good example:
-
-- Prompt: update hermes for parallel tools — can you check if I'm on a current enough version?
-- Expected behavior: Report the installed version and each MCP server's `supports_parallel_tool_calls` value, say that built-in read-only tools already run concurrently, and offer the per-server flag as one diff only for a server whose calls cannot interfere with one another.
-- Why: Whether tools run in parallel turns on each MCP server's flag, not on the version, so the version is read and reported and the flag is what is offered.
-
-Bad example:
-
-- Prompt: parallel-tools: update your memory with what we discussed.
-- Expected behavior: Route to a memory workflow instead of a parallel-tool capability check.
-- Why: Memory update is unrelated to parallel-tool capability or Hermes version.
-
-## Completion Checklist
-
-- If a prerequisite is unmet, mark that item "not applicable" and continue with the rest of the guide instead of blocking or guessing.
-- Success is applicable-only: verification passes when every applicable item is confirmed complete, not when every possible item exists.
-- The reported capability status matches an observed read, not an assumed default.
-- Each proposed `supports_parallel_tool_calls` diff names one server and carries the read/write race caution for that server's tools.
-- The diff names the profile whose config holds `mcp_servers.<name>`; the flag applies only to the profile that set it.
-
-## Recovery Notes
-
-- If the installed version cannot be read, report the read failure and continue with the per-server diagnosis; recommend no update on a version you could not read.
-- If the update command is unavailable for the user's install path, name the blocker instead of guessing a fix.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -87,26 +56,24 @@ Handoff policy:
 
 Run diagnosis and reporting directly in Hermes for parallel-tool capability. Diagnosis reads non-secret metadata only; no writes. Show redacted placeholders in the config or `.env` diff; apply only after the user explicitly approves. Never ask the user to paste secrets into chat. Use Hermes-native secure entry or user-side OAuth/token setup; if unavailable, stop credential application and guide user-side setup. Use only a user-authorized credential store or local configuration; disclose destination and scope first. Keep secrets out of chat, previews, logs and evidence. Do not promise chat or platform non-retention. Delegate to a selected coding executor only if the user needs a change outside a local version/config check.
 
-Required inputs:
-
-- installed Hermes version
-- current parallel-tool capability status
-
-Expected outputs:
-
-- read-only diagnosis of the installed version and each MCP server's `supports_parallel_tool_calls` value (absent is false)
-- one diff-approved `mcp_servers.<name>.supports_parallel_tool_calls: true` per named MCP server; an update command only when the user asks to update
-- a capability status report naming which parallel-tool features are active
-
-Artifact expectations:
-
-- capability status note when the wrapper captures it
-
 Safety rules:
 
 - Do not name a specific version number, release date, or product tier; read and report the installed version instead of assuming one.
 - Report the update command for the user to run themselves rather than claiming Hermes restarted or reloaded on its own.
 - Propose the flag only for a server whose calls cannot interfere with one another; when two of its calls could touch the same file, record, database, or remote resource, name that race first and leave the choice to the user.
+
+## Completion Checklist
+
+- If a prerequisite is unmet, mark that item "not applicable" and continue with the rest of the guide instead of blocking or guessing.
+- Success is applicable-only: verification passes when every applicable item is confirmed complete, not when every possible item exists.
+- The reported capability status matches an observed read, not an assumed default.
+- Each proposed `supports_parallel_tool_calls` diff names one server and carries the read/write race caution for that server's tools.
+- The diff names the profile whose config holds `mcp_servers.<name>`; the flag applies only to the profile that set it.
+
+## Recovery Notes
+
+- If the installed version cannot be read, report the read failure and continue with the per-server diagnosis; recommend no update on a version you could not read.
+- If the update command is unavailable for the user's install path, name the blocker instead of guessing a fix.
 
 ## Runtime Evidence
 

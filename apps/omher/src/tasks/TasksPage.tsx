@@ -17,7 +17,7 @@ import { openExternal } from "../lib/openExternal";
 import { addTerminalTab, getTermPanel, setTerminalCwd } from "../terminal/state";
 import { taskHost } from "./host";
 import { setFilter, setKind, setPage, setRepo, setRepoAccount, setScope, setSource, useTasks } from "./state";
-import { accountsOnHost, pickRepoAccount } from "./me";
+import { accountsOnHost, detectAccounts, pickRepoAccount, useMeData } from "./me";
 import { MeView, AccountDot } from "./MeView";
 import { SourceMark, IssueMark } from "./marks";
 import { firstMessage, threadTitle } from "./message";
@@ -47,7 +47,7 @@ function LabelChip({ name, color }: { name: string; color: string }) {
   return (
     <span className="tk-label" title={name}>
       <i style={{ background: c }} />
-      {name}
+      <span>{name}</span>
     </span>
   );
 }
@@ -134,6 +134,13 @@ function RepoPicker({ source, repo, recent, onPick }: { source: CliSource; repo:
 function RepoAccountChip({ accounts, using, picked }: { accounts: ChosenAccount[]; using: string | null; picked: string | null }) {
   const [open, setOpen] = useState(false);
   const cur = accounts.find((a) => accountId(a) === using);
+  // read as gh's own active account: name it (the same `gh auth status` read the Me view and Settings › Accounts use)
+  const det = useMeData().detected;
+  useEffect(() => {
+    if (!cur && !det) void detectAccounts();
+  }, [cur, det]);
+  const active = cur ? null : (det?.accounts.find((g) => g.active && g.host === "github.com") ?? null);
+  const activeChosen = active ? accounts.find((a) => a.login.toLowerCase() === active.login.toLowerCase()) : undefined;
   const pick = (id: string | null) => {
     setRepoAccount(id);
     setOpen(false);
@@ -141,8 +148,8 @@ function RepoAccountChip({ accounts, using, picked }: { accounts: ChosenAccount[
   return (
     <span className="pg-chipwrap">
       <button type="button" className="tk-repo tk-acct" aria-haspopup="listbox" aria-expanded={open} title={t("tasks.me.readAs")} onClick={() => setOpen((o) => !o)} data-testid="tasks-repo-account">
-        {cur ? <AccountDot color={cur.color} /> : null}
-        <span>{cur ? cur.login : t("tasks.me.ghActive")}</span>
+        {cur ? <AccountDot color={cur.color} /> : activeChosen ? <AccountDot color={activeChosen.color} /> : null}
+        <span>{cur ? cur.login : active ? active.login : t("tasks.me.ghActive")}</span>
       </button>
       <Popover open={open} onClose={() => setOpen(false)} align="left" width={240} label={t("tasks.me.readAs")}>
         <div className="tk-repo-list" role="listbox">
@@ -248,6 +255,13 @@ export function TasksPage() {
           ))}
         </nav>}
         <div className="head-right">
+          {/* in the header's empty right side, so the list's own toolbar never wraps it alone onto a row */}
+          {tk.scope === "repo" && cli && (
+            <label className="tk-search">
+              <SearchIcon />
+              <input type="search" value={q} placeholder={t("tasks.search")} aria-label={t("tasks.search")} onChange={(e) => setQ(e.target.value)} data-testid="tasks-search" />
+            </label>
+          )}
           <IconButton label={t("tasks.close")} onClick={() => s.closeSettings()}>
             <CloseIcon />
           </IconButton>
@@ -275,10 +289,6 @@ export function TasksPage() {
                   </button>
                 ))}
               </div>
-              <label className="tk-search">
-                <SearchIcon />
-                <input type="search" value={q} placeholder={t("tasks.search")} aria-label={t("tasks.search")} onChange={(e) => setQ(e.target.value)} data-testid="tasks-search" />
-              </label>
             </div>
             <div className="tk-list" data-testid="tasks-list">
               {!st ? (
@@ -509,15 +519,18 @@ function LinearPane() {
       {!bot ? null : !res ? (
         <Spinner />
       ) : res.configured ? (
-        <div className="tk-empty" data-testid="tasks-linear-on">
+        <div className="tk-empty tk-empty-c" data-testid="tasks-linear-on">
           <p>{t("tasks.linearOn", { bot: bot.display_name, server: res.server })}</p>
         </div>
       ) : (
-        <div className="tk-empty" data-testid="tasks-linear-connect">
+        <div className="tk-empty tk-empty-c" data-testid="tasks-linear-connect">
+          <span className="tk-empty-mark">
+            <SourceMark source="linear" size={28} />
+          </span>
           <p className="tk-big">{t("tasks.linearConnect", { bot: bot.display_name })}</p>
           <p>{t("tasks.linearHow")}</p>
           <div className="tk-acts">
-            <button type="button" className="tk-btn" onClick={() => s.openApps(bot.name)} data-testid="tasks-linear-apps">
+            <button type="button" className="tk-btn primary" onClick={() => s.openApps(bot.name)} data-testid="tasks-linear-apps">
               {t("tasks.openApps")}
             </button>
           </div>

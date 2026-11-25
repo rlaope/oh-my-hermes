@@ -127,14 +127,12 @@ class DuplicateContentSuppressionTests(unittest.TestCase):
             0,
             f"unallowlisted cross-surface duplicates found: {profile['duplicates']}",
         )
-        # The one known, deliberate duplicate (delegation transparency rules,
-        # commit ad62b9a1) stays allowlisted and accounted for. Its size moved
-        # 2466 -> 2470 when #2018 reworded the permission preflight rule's
-        # settings path so the Hermes install scanner stops reading it as a
-        # shell redirect.
-        self.assertEqual(profile["duplicate_count"], 1)
-        # 2470 -> 2306 when the delegation prompt rule dropped its rationale tail (-82 per copy, two copies).
-        self.assertEqual(profile["allowlisted_bytes"], 2306)
+        # Known deliberate duplicates stay allowlisted and accounted for: delegation
+        # transparency rules (2,306 bytes) plus the two default feature-surface blocks
+        # shared between bespoke feature-surface bodies and progressive-disclosure
+        # `references/full-contract.md` files (32 occurrences, 3,490 bytes).
+        self.assertEqual(profile["duplicate_count"], 33)
+        self.assertEqual(profile["allowlisted_bytes"], 5796)
         self.assertEqual(profile["bytes_saved"], 0)
         self.assertEqual(
             profile["surface_kinds"],

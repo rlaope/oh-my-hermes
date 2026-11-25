@@ -15,48 +15,13 @@ metadata:
 
 # Refactor Plan
 
-This is a Hermes-native `refactor-plan` workflow skill.
+Required: the decided target shape (what moves where), or a pointer to the accepted plan that decided it; for a chosen deepening candidate whose interface is still open, shape it first per `omh-refactor-plan/references/interface-shaping.md`, the affected-file evidence: import graph, codegraph handoff, or an observed file inventory, the regression gates that exist today (test suite, typecheck, generated-artifact checks). Output: reconnaissance: affected files, ownership boundaries, hidden coupling, blast radius — and for an upgrade, the advisory, licence, migration-guide, and lockfile intake, phase plan in the fixed order - types/interfaces, implementations, callers, tests, cleanup - each with verification and rollback, files table: path, action, phase, blocks/blocked-by, for an upgrade, the call-site readiness gate: every breaking change between the two versions against this repository's call sites or an observed empty search, and every stage's rollback, the approval gate: the plan stops and waits for the user's go.
 
 ## Why This Exists
 
 `refactor-plan` exists because boundary-changing refactors bounced between goal planning and behavior-preserving cleanup with neither owning the execution shape: the phase order, the per-phase rollback, and the files table that make a large refactor reviewable and abortable.
 
-## Do Not Use When
-
-- The refactor's direction is still contested or the goal itself needs consensus planning; use `ulw-plan`.
-- The work is deletion-first cleanup with no boundary changes; use `omh-ai-slop-cleaner`.
-- The plan is done and the claim is that work is complete; use `omh-verification-gate` for the evidence close.
-- The version bump carries a security advisory, a CVE, or a leaked secret; use `omh-security-event-response`, which owns containment and closure.
-
-## Examples
-
-Good example:
-
-- Prompt: We decided to split the billing module out of orders - plan the refactor so each step is shippable.
-- Expected behavior: Map affected files and consumers from the import graph, name hidden coupling and blast radius, order the five phases with per-phase verification and rollback, ship the files table, and stop at the approval gate.
-- Why: The direction is decided and the need is a phased, abortable execution shape - exactly this workflow's territory.
-
-Bad example:
-
-- Prompt: Should we even split billing out of orders?
-- Expected behavior: Route to `ulw-plan`: the direction is not decided, so consensus planning comes before phase planning.
-- Why: A phase plan for a contested direction launders a decision through logistics.
-
-## Completion Checklist
-
-- Reconnaissance names affected files, boundaries, coupling, and blast radius from observed evidence.
-- Every phase carries its verification command and its rollback point, and ends at a shippable commit.
-- The files table covers every touched file with action, phase, and dependencies.
-- For an upgrade, every breaking change row names its call sites or an observed empty search, and every stage names its rollback.
-- The plan stopped at the approval gate; no implementation began without the user's go.
-
-## Recovery Notes
-
-- If the import graph is unavailable, build the codegraph first or reduce the plan's confidence and say which files are unverified.
-- If a phase cannot be made independently green, split it further; two half-phases beat one unabortable one.
-- If no regression gate covers the affected files, open the plan with a Phase 0 of characterization tests, or say each phase is unverified and stop at the approval gate.
-- If reconnaissance finds the direction itself is unsettled, route back to `ulw-plan` before ordering phases.
-- If the module to deepen is chosen but its interface is not, shape it under contrasting constraints and recommend one design before phase 1; that is not a contested direction.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -91,24 +56,6 @@ Handoff policy:
 
 Hermes owns reconnaissance and the phased plan; implementation of any approved phase is coding work for the selected executor lane under its own evidence rules. An approved plan is approval of the order, not evidence any phase ran.
 
-Required inputs:
-
-- the decided target shape (what moves where), or a pointer to the accepted plan that decided it; for a chosen deepening candidate whose interface is still open, shape it first per `omh-refactor-plan/references/interface-shaping.md`
-- the affected-file evidence: import graph, codegraph handoff, or an observed file inventory
-- the regression gates that exist today (test suite, typecheck, generated-artifact checks)
-
-Expected outputs:
-
-- reconnaissance: affected files, ownership boundaries, hidden coupling, blast radius — and for an upgrade, the advisory, licence, migration-guide, and lockfile intake
-- phase plan in the fixed order - types/interfaces, implementations, callers, tests, cleanup - each with verification and rollback
-- files table: path, action, phase, blocks/blocked-by
-- for an upgrade, the call-site readiness gate: every breaking change between the two versions against this repository's call sites or an observed empty search, and every stage's rollback
-- the approval gate: the plan stops and waits for the user's go
-
-Artifact expectations:
-
-- metadata-only runtime record when a wrapper or shell is available
-
 Safety rules:
 
 - The plan comes from observed repo evidence, never from memory of the tree.
@@ -116,6 +63,22 @@ Safety rules:
 - Every phase ends at a commit that could ship; a phase that cannot end green is split further.
 - No production code is deleted before the cleanup phase (phase 4 may delete a test only when an interface-level test covers the same behavior, named in the plan), and cleanup starts from a tagged rollback point.
 - Do not begin implementing any phase without the user's explicit approval of the plan.
+
+## Completion Checklist
+
+- Reconnaissance names affected files, boundaries, coupling, and blast radius from observed evidence.
+- Every phase carries its verification command and its rollback point, and ends at a shippable commit.
+- The files table covers every touched file with action, phase, and dependencies.
+- For an upgrade, every breaking change row names its call sites or an observed empty search, and every stage names its rollback.
+- The plan stopped at the approval gate; no implementation began without the user's go.
+
+## Recovery Notes
+
+- If the import graph is unavailable, build the codegraph first or reduce the plan's confidence and say which files are unverified.
+- If a phase cannot be made independently green, split it further; two half-phases beat one unabortable one.
+- If no regression gate covers the affected files, open the plan with a Phase 0 of characterization tests, or say each phase is unverified and stop at the approval gate.
+- If reconnaissance finds the direction itself is unsettled, route back to `ulw-plan` before ordering phases.
+- If the module to deepen is chosen but its interface is not, shape it under contrasting constraints and recommend one design before phase 1; that is not a contested direction.
 
 ## Runtime Evidence
 

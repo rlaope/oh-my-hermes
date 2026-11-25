@@ -15,49 +15,13 @@ metadata:
 
 # Paper Learning
 
-This is a Hermes-native `paper-learning` workflow skill.
+Required: paper identity or attachment reference, observed text scope or extraction evidence, explanation level: very_easy, moderate, expert, or choose, coverage scope: full paper, selected sections, or supplied excerpt, output language when different from the source. Output: paper_learning_card/v1, explanation level metadata, source_state boundary, coverage ledger, section-by-section explanation outline, missing-section and not-observed list.
 
 ## Why This Exists
 
 `paper-learning` exists so Hermes can act like a strong human tutor for papers: choose the right explanation level, walk through the full paper section by section, and keep PDF extraction and validation evidence honest.
 
-## Do Not Use When
-
-- The request asks to export, convert, render, or package a file; use `omh-materials-package`.
-- The request asks for daily/weekly paper monitoring, digest, source inbox, or Scout/Analyst/Briefer operations; use `omh-research-department`.
-- The request asks to find current papers or sources when no supplied paper exists; use `ulw-research`.
-- The request asks for a visual/image card; use `omh-image-cards`.
-- The request asks to implement or reproduce the paper's code; prepare a coding handoff only after a paper learning or reproduction plan is accepted.
-
-## Examples
-
-Good example:
-
-- Prompt: paper-learning 이 논문 PDF를 아주 쉽게 설명해줘. 내용은 줄이지 말고 섹션별로.
-- Expected behavior: Prepare paper_learning_card/v1, ask or record level=very_easy, mark PDF extraction/source_state evidence, then explain section-by-section with a coverage ledger.
-- Why: The user supplied a paper/PDF explanation intent with an explicit level and coverage-preserving constraint.
-
-Bad example:
-
-- Prompt: paper-learning 이 PDF를 PPT로 변환해서 공유용 파일 만들어줘.
-- Expected behavior: Route to `omh-materials-package` because the user wants file conversion/export, not conceptual paper explanation.
-- Why: PDF file output and render QA are material packaging work, not paper learning evidence.
-
-## Completion Checklist
-
-- The explanation level is very_easy, moderate or expert, asked or stated before the first chunk; `choose` is only the unanswered state.
-- The source_state is recorded and scoped to observed text or extraction evidence.
-- The coverage ledger lists observed, missing, or prepared sections before claiming completion.
-- The explanation is section-aware and does not compress away claims, equations, figures, limitations, or reproducibility notes.
-- Not-observed boundaries remain visible: full_pdf_extraction, figure_ocr, external_citation_check, math_proof_validation, code_or_benchmark_reproduction, peer_review_or_claim_correctness.
-
-## Recovery Notes
-
-- If no paper text is observed, prepare the learning card from metadata only and ask for an attachment, excerpt, or extraction evidence.
-- If only an abstract or excerpt is supplied, label the result as excerpt explanation and list missing sections.
-- If context is too long or the session ends mid-paper, continue section-by-section: record each chunk with `omh paper progress` and, in a new session, run `omh paper list` then `omh paper show <paper_id>` to resume from the recorded next section instead of re-reading from the abstract.
-- If the paper is longer than one `read_file` window, call `omh_document_plan` (action=plan with the pages, lines, and outline the first read showed) and walk its numbered ranges, marking each covered.
-- If the user asks for validation, citation checking, math proof review, or reproduction, create a separate observed-evidence or coding handoff path.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -93,34 +57,28 @@ Handoff policy:
 
 Keep paper explanation in Hermes. Route file export to `omh-materials-package`, current-source discovery to `ulw-research`, recurring monitoring to `omh-research-department`, and reproduction or implementation to an accepted coding handoff only after the explanation plan is accepted.
 
-Required inputs:
-
-- paper identity or attachment reference
-- observed text scope or extraction evidence
-- explanation level: very_easy, moderate, expert, or choose
-- coverage scope: full paper, selected sections, or supplied excerpt
-- output language when different from the source
-
-Expected outputs:
-
-- paper_learning_card/v1
-- explanation level metadata
-- source_state boundary
-- coverage ledger
-- section-by-section explanation outline
-- missing-section and not-observed list
-
-Artifact expectations:
-
-- record the card with `omh paper plan --title <title> --source <path or url> --level <level> --source-state <state>` (add `--section` once per section, in reading order, when the paper is not shaped like the ten default sections - a proof-based, systems or survey paper), which writes paper_learning_card/v1 to `$OMH_HOME/paper-learning/<paper_id>/card.json` and hashes a local source file without parsing it
-- record each explained chunk with `omh paper progress <paper_id> --covered <section> --next <section> [--missing <section>] [--note <text>]`, which updates the coverage ledger and appends one line to `ledger.jsonl`; `omh paper validate` checks the store
-
 Safety rules:
 
 - Do not claim full PDF extraction, figure OCR, external citation checking, math validation, code reproduction, peer review, or full-paper coverage without observed evidence.
 - A pasted abstract or excerpt supports only excerpt explanation until the remaining sections are observed.
 - Level changes may change scaffolding, vocabulary, analogies, and critique depth, but must not drop substantive content.
 - End each chunk with covered / next / missing rather than done unless the coverage ledger is complete.
+
+## Completion Checklist
+
+- The explanation level is very_easy, moderate or expert, asked or stated before the first chunk; `choose` is only the unanswered state.
+- The source_state is recorded and scoped to observed text or extraction evidence.
+- The coverage ledger lists observed, missing, or prepared sections before claiming completion.
+- The explanation is section-aware and does not compress away claims, equations, figures, limitations, or reproducibility notes.
+- Not-observed boundaries remain visible: full_pdf_extraction, figure_ocr, external_citation_check, math_proof_validation, code_or_benchmark_reproduction, peer_review_or_claim_correctness.
+
+## Recovery Notes
+
+- If no paper text is observed, prepare the learning card from metadata only and ask for an attachment, excerpt, or extraction evidence.
+- If only an abstract or excerpt is supplied, label the result as excerpt explanation and list missing sections.
+- If context is too long or the session ends mid-paper, continue section-by-section: record each chunk with `omh paper progress` and, in a new session, run `omh paper list` then `omh paper show <paper_id>` to resume from the recorded next section instead of re-reading from the abstract.
+- If the paper is longer than one `read_file` window, call `omh_document_plan` (action=plan with the pages, lines, and outline the first read showed) and walk its numbered ranges, marking each covered.
+- If the user asks for validation, citation checking, math proof review, or reproduction, create a separate observed-evidence or coding handoff path.
 
 ## Runtime Evidence
 

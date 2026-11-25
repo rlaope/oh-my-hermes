@@ -15,47 +15,13 @@ metadata:
 
 # Award Bar Score
 
-This is a Hermes-native `award-bar-score` workflow skill.
+Required: the target URL, route, or rendered capture being judged, the award body (CSSDA or Awwwards) and its published axes, weights, and threshold, the surface's own accessibility and performance budgets, audience and primary user task. Output: award_bar_score/v1, per-axis scores with named evidence for each axis the chosen body publishes (UI, UX and innovation for CSSDA), the weighted total and its distance from the published threshold, the binding constraint: the axis whose gain moves the total most, tradeoff_ledger/v1 when an innovation move costs accessibility or performance budget, downstream route: `omh-frontend`, `omh-accessibility-audit`, `omh-visual-qa`, or `omh-design-quality-gate`.
 
 ## Why This Exists
 
 `award-bar-score` gives "make it award-winning" a measurable meaning: published axes, published weights, a published threshold, and the one axis holding the surface below it — instead of a taste argument nobody can settle.
 
-## Do Not Use When
-
-- The request is broad premium quality across decks, PDFs, or posters; use `omh-design-quality-gate`.
-- The request is frontend implementation, layout, or design-system work; use `omh-frontend`.
-- The request is WCAG, keyboard, or screen-reader conformance; use `omh-accessibility-audit`.
-- The request is a rendered capture or a pixel verdict; use `omh-visual-qa`.
-- The award is a business, sales, or team award with no judged web surface.
-
-## Examples
-
-Good example:
-
-- Prompt: score our landing page against the css design awards bar and tell me what is holding it back
-- Expected behavior: Prepare award_bar_score/v1 with per-axis UI/UX/innovation scores from rendered evidence, the weighted total against the 8.0 threshold, the binding constraint, and the accessibility/performance tradeoff ledger.
-- Why: The request asks for a measured comparison against a published external bar, not a general polish pass.
-
-Bad example:
-
-- Prompt: award-bar-score confirm this site will win website of the day
-- Expected behavior: Score the axes against the published model and refuse the outcome claim; a jury scores submissions and OMH does not.
-- Why: A rubric self-assessment cannot predict a jury result.
-
-## Completion Checklist
-
-- Each axis the chosen body publishes carries its own score and the rendered evidence it was read from.
-- The weighted total is computed from the stated weights and compared against the published threshold.
-- The binding constraint names one axis and what moving it requires.
-- Any innovation move that costs accessibility or performance budget is recorded as a tradeoff the user chooses.
-- No award, jury, placement, or selection outcome is claimed.
-
-## Recovery Notes
-
-- If no rendered evidence exists, keep every axis not_observed and route the capture to `omh-visual-qa` before scoring.
-- If the body is neither CSSDA nor Awwwards, ask for its published rules URL and score only the axes it publishes.
-- If the award body publishes no weights, score the axes separately and report the total as unweighted rather than inventing a ratio.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -88,29 +54,6 @@ Handoff policy:
 
 Keep axis scoring, the weighted total, the binding-constraint call, and the tradeoff ledger in Hermes. Route implementation to `omh-frontend`, WCAG evidence to `omh-accessibility-audit`, and rendered captures to `omh-visual-qa`; never score an axis from a description of a page instead of the page.
 
-Required inputs:
-
-- the target URL, route, or rendered capture being judged
-- the award body (CSSDA or Awwwards) and its published axes, weights, and threshold
-- the surface's own accessibility and performance budgets
-- audience and primary user task
-
-Expected outputs:
-
-- award_bar_score/v1
-- per-axis scores with named evidence for each axis the chosen body publishes (UI, UX and innovation for CSSDA)
-- the weighted total and its distance from the published threshold
-- the binding constraint: the axis whose gain moves the total most
-- tradeoff_ledger/v1 when an innovation move costs accessibility or performance budget
-- downstream route: `omh-frontend`, `omh-accessibility-audit`, `omh-visual-qa`, or `omh-design-quality-gate`
-
-Artifact expectations:
-
-- award_bar_score/v1 with prepared_not_observed status
-- every axis score cites the rendered evidence it was read from, or stays not_observed
-- the weighted total is arithmetic over the stated weights, never an impression
-- no claim that a submission would win, place, or be selected
-
 Safety rules:
 
 - A self-assessment against a published rubric is never an award, a jury outcome, or a prediction of one; juries score submissions, and OMH does not.
@@ -118,6 +61,20 @@ Safety rules:
 - Quote axis weights and thresholds only from the award body's published rules, and name the body and the date they were read.
 - Accessibility and performance budgets outrank the innovation axis; when a move breaks one, record the tradeoff and let the user choose rather than defaulting to the score.
 - Do not call a browser, network service, screenshot tool, or executor from OMH core.
+
+## Completion Checklist
+
+- Each axis the chosen body publishes carries its own score and the rendered evidence it was read from.
+- The weighted total is computed from the stated weights and compared against the published threshold.
+- The binding constraint names one axis and what moving it requires.
+- Any innovation move that costs accessibility or performance budget is recorded as a tradeoff the user chooses.
+- No award, jury, placement, or selection outcome is claimed.
+
+## Recovery Notes
+
+- If no rendered evidence exists, keep every axis not_observed and route the capture to `omh-visual-qa` before scoring.
+- If the body is neither CSSDA nor Awwwards, ask for its published rules URL and score only the axes it publishes.
+- If the award body publishes no weights, score the axes separately and report the total as unweighted rather than inventing a ratio.
 
 ## Runtime Evidence
 

@@ -15,41 +15,13 @@ metadata:
 
 # Cto Loop
 
-This is a Hermes-native `cto-loop` workflow skill.
+Required: operating signals, roadmap or release scope, known risks, decision owner. Output: priority frame, architecture tradeoffs, delivery risks, decision note, follow-up handoff candidates.
 
 ## Why This Exists
 
 `cto-loop` exists because roadmap, architecture and release decisions made in chat lose their owners and evidence; it keeps priority, tradeoff, risk and owner separate.
 
-## Do Not Use When
-
-- The request is a settings-only change, one bounded edit that is explicitly low-risk and has a direct owner and verification path, or a direct answer/diagnosis; handle it directly or use `omh-decide` for a decision brief instead of starting a leadership operating loop.
-- A launch-readiness audit of one named service or release with deploy, security, observability and rollback evidence; use `omh-production-audit`. Prioritisation and risk ranking across workstreams stays here.
-- An accepted plan is ready for build; use `ulw-work` or `omh-idea-to-deploy`.
-
-## Examples
-
-Good example:
-
-- Prompt: cto-loop: run the PM, dev, QA, security, and ops loop for this risky billing launch.
-- Expected behavior: Prepare the CTO operating model with role responsibilities, gates, blockers, and status boundaries.
-- Why: The request needs a leadership operating loop, not just a generic plan.
-
-Bad example:
-
-- Prompt: Tell me whether we should rewrite the billing service in Rust.
-- Expected behavior: Route to `omh-decide`, not `cto-loop`: one decision between options is a decision brief.
-- Why: A single decision with options does not need a multi-function leadership operating loop.
-
-## Completion Checklist
-
-- Priority, tradeoff, delivery and release risk are separate rows.
-- Each risk has an owner and source or is marked assumption; accepted decisions and drafts are separate lists.
-
-## Recovery Notes
-
-- If operating signals do not support an architecture tradeoff, retain the cited signals, mark that tradeoff tentative, and hand back the decision note with assumptions and delivery risks.
-- If the decision owner has not accepted implementation follow-ups, retain the priority frame and risk ranking, mark follow-up authority unresolved, and hand back the decision note and handoff candidates for acceptance.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -83,30 +55,21 @@ Handoff policy:
 
 Keep CTO/PM-style synthesis, tradeoffs, risk ranking, decision notes, and status in Hermes; convert accepted implementation follow-ups into executor-neutral handoffs.
 
-Required inputs:
-
-- operating signals
-- roadmap or release scope
-- known risks
-- decision owner
-
-Expected outputs:
-
-- priority frame
-- architecture tradeoffs
-- delivery risks
-- decision note
-- follow-up handoff candidates
-
-Artifact expectations:
-
-- leadership loop record or status summary when a wrapper captures decisions and follow-ups
-
 Safety rules:
 
 - Do not treat a CTO loop recommendation as an accepted roadmap decision.
 - Do not imply CTO, PM, QA, Security, or Ops runtime agents exist without observed wrapper evidence.
 - Separate strategy decisions from implementation handoffs and release evidence.
+
+## Completion Checklist
+
+- Priority, tradeoff, delivery and release risk are separate rows.
+- Each risk has an owner and source or is marked assumption; accepted decisions and drafts are separate lists.
+
+## Recovery Notes
+
+- If operating signals do not support an architecture tradeoff, retain the cited signals, mark that tradeoff tentative, and hand back the decision note with assumptions and delivery risks.
+- If the decision owner has not accepted implementation follow-ups, retain the priority frame and risk ranking, mark follow-up authority unresolved, and hand back the decision note and handoff candidates for acceptance.
 
 ## Runtime Evidence
 

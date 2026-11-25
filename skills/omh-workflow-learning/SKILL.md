@@ -15,45 +15,13 @@ metadata:
 
 # Workflow Learning
 
-This is a Hermes-native `workflow-learning` workflow skill.
+Required: user request, target context, delivery or status expectation, known missing evidence. Output: workflow-learning/v1 card or guidance, next action, prepared-vs-observed boundary.
 
 ## Why This Exists
 
 `workflow-learning` exists because a lesson from a run can land in the wrong store or in none, and Hermes' own background review can write skills and memory after a turn with no OMH review: it routes each lesson to memory, skill, wiki, failure-retrospective, or automation review as metadata-only records, and checks what Hermes wrote on its own against what was reviewed.
 
-## Do Not Use When
-
-- A lasting fact the user wants kept; capture it with `omh-memory-new`.
-- Lessons seen across runs or projects to score and promote; use `omh-instinct-ledger`.
-- A run that is stuck or looping right now; use `omh-agent-debug`.
-
-## Examples
-
-Good example:
-
-- Prompt: workflow-learning route this self-improvement note before deciding whether it is memory, skill, wiki, failure-retrospective, or automation material.
-- Expected behavior: Produce `record_workflow_learning_trace` with required context, wrapper actions, and not-evidence boundaries.
-- Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
-
-Bad example:
-
-- Prompt: workflow-learning silently patch the skill and claim future behavior is fixed.
-- Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
-- Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
-
-## Completion Checklist
-
-- Classify a lesson before any write: `omh learning route-signal "<one-line lesson>"` names the destination (memory, skill, wiki, failure-retrospective, automation review, `manual_review_candidate` for an ambiguous signal, or `discard_transient` for private or transient content); add `--record` only after the user agrees to keep the route. Show the destination and why, list pending routes with `omh learning store-routes`, and leave `omh learning review-route` to the person. A fact goes to `omh-memory-new` and a skill change stays a `skill_update_candidate`; this skill writes none of those stores.
-- Read Hermes' skill audit ledger read-only (`skills/.curator_ledger.jsonl` under the active profile's Hermes home, or `hermes curator ledger --limit <n>`, which lists only the 20 newest entries by default) and report each entry whose `actor` is `agent` or `curator` (Hermes' curator or its background review) that no store-route record (`omh learning store-routes`) or approved `skill_update_candidate` accounts for as `unreviewed_native_write`, which means OMH holds no record of that write, not that nobody reviewed it. An empty ledger is unknown, not clean, because `skills.ledger: false` turns it off. A trimmed ledger is incomplete too: from Hermes v2026.9.24 the oldest entries are dropped past `skills.ledger_max_bytes`, so report the window you read (entry count, oldest timestamp) and treat an older write as not_observed, not clean.
-- Mark an approved `skill_update_candidate` landed only from a `skill_manage` result for that skill that succeeded without `staged: true`, or from a ledger entry that is dated after the approval, has `actor` `agent` or `user` and `action` `create`, `edit`, `patch`, or `write_file`, and lists the approved target file in its `after` manifest. An entry by `curator`, or one that deletes, archives, rolls back, or purges, never marks it landed, and a staged result waits in `/skills pending` for the person and has not landed.
-- The ledger records skill writes only: a memory write by Hermes' background review is visible only when Hermes staged it under `pending/memory/` with `origin: background_review`, and is `not_observed` otherwise.
-- Point the user to `/journey` in the Hermes CLI for Hermes' own view of what it learned; reading the ledger or the journey changes nothing, and undoing an entry (`hermes curator rollback <id>`) is the person's own step, never OMH's.
-
-## Recovery Notes
-
-- If required context is missing, ask one blocking question or route back to the narrower workflow.
-- If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
-- Native write policy `required` stops promotion as unsupported and `not_required` is not an approval; drift unlinks only the managed SKILL.md and keeps generations and receipts, and an incomplete promotion resumes only via explicit `retry --receipt-id`.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -85,28 +53,24 @@ Handoff policy:
 
 Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 
-Required inputs:
-
-- user request
-- target context
-- delivery or status expectation
-- known missing evidence
-
-Expected outputs:
-
-- workflow-learning/v1 card or guidance
-- next action
-- prepared-vs-observed boundary
-
-Artifact expectations:
-
-- workflow-learning/v1 metadata-only runtime or wrapper card when recorded
-- browser_skill_promotion_approval_receipt/v1 per operation: `promotion diff` then `approve --reviewed-diff-digest --reviewer`; source `learning promotion --source-id sd-<id>` (reviewed draft) or `web-qa promotion --trace-id bwt-<id>`
-
 Safety rules:
 
 - A workflow learning trace, self-improvement store route, patch proposal, or export is process evidence for review. It is not automatic model training, memory mutation, skill mutation, wiki write, automation creation, execution, verification, CI, or merge evidence.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
+## Completion Checklist
+
+- Classify a lesson before any write: `omh learning route-signal "<one-line lesson>"` names the destination (memory, skill, wiki, failure-retrospective, automation review, `manual_review_candidate` for an ambiguous signal, or `discard_transient` for private or transient content); add `--record` only after the user agrees to keep the route. Show the destination and why, list pending routes with `omh learning store-routes`, and leave `omh learning review-route` to the person. A fact goes to `omh-memory-new` and a skill change stays a `skill_update_candidate`; this skill writes none of those stores.
+- Read Hermes' skill audit ledger read-only (`skills/.curator_ledger.jsonl` under the active profile's Hermes home, or `hermes curator ledger --limit <n>`, which lists only the 20 newest entries by default) and report each entry whose `actor` is `agent` or `curator` (Hermes' curator or its background review) that no store-route record (`omh learning store-routes`) or approved `skill_update_candidate` accounts for as `unreviewed_native_write`, which means OMH holds no record of that write, not that nobody reviewed it. An empty ledger is unknown, not clean, because `skills.ledger: false` turns it off. A trimmed ledger is incomplete too: from Hermes v2026.9.24 the oldest entries are dropped past `skills.ledger_max_bytes`, so report the window you read (entry count, oldest timestamp) and treat an older write as not_observed, not clean.
+- Mark an approved `skill_update_candidate` landed only from a `skill_manage` result for that skill that succeeded without `staged: true`, or from a ledger entry that is dated after the approval, has `actor` `agent` or `user` and `action` `create`, `edit`, `patch`, or `write_file`, and lists the approved target file in its `after` manifest. An entry by `curator`, or one that deletes, archives, rolls back, or purges, never marks it landed, and a staged result waits in `/skills pending` for the person and has not landed.
+- The ledger records skill writes only: a memory write by Hermes' background review is visible only when Hermes staged it under `pending/memory/` with `origin: background_review`, and is `not_observed` otherwise.
+- Point the user to `/journey` in the Hermes CLI for Hermes' own view of what it learned; reading the ledger or the journey changes nothing, and undoing an entry (`hermes curator rollback <id>`) is the person's own step, never OMH's.
+
+## Recovery Notes
+
+- If required context is missing, ask one blocking question or route back to the narrower workflow.
+- If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+- Native write policy `required` stops promotion as unsupported and `not_required` is not an approval; drift unlinks only the managed SKILL.md and keeps generations and receipts, and an incomplete promotion resumes only via explicit `retry --receipt-id`.
 
 ## Runtime Evidence
 

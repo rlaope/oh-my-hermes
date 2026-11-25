@@ -15,50 +15,13 @@ metadata:
 
 # Backend
 
-This is a Hermes-native `backend` workflow skill.
+Required: the service, endpoint, or data surface being changed, callers and their trust level (public, partner, internal, machine), language, framework, and datastore when known, authentication and authorization model in force, existing schema and migration tooling, backward-compatibility and rollout constraints, observed integration or load evidence for completion claims. Output: backend_service_contract/v1, auth_boundary_map/v1, error_path_table/v1, response_shape_contract/v1, schema_migration_plan/v1 when the change touches storage, consumer_impact_and_sunset/v1 when an existing contract changes, backend_implementation_handoff/v1, observed_integration_evidence/v1 when observed.
 
 ## Why This Exists
 
 `backend` gives OMH a first-class server-side workflow so Hermes can prepare auth boundaries, error paths, response shapes, and migration order without becoming the hidden runtime that executes them.
 
-## Do Not Use When
-
-- The work is the database itself -- a slow query and the index that fixes it, DDL that locks a live table, N+1 queries, or when to partition or shard; use `omh-relational-db`, which owns the lock behaviour and rollback of each statement.
-- The request is about web UI, layout, or a design system; use `omh-frontend`.
-- The request is a security posture or threat review rather than a service design; use `omh-security-safety-review`.
-- The request is to run or judge the verification of an already-built service; use `omh-verification-gate`.
-- The request is a Rust-language change whose risk is compiler, ownership, or `unsafe` discipline; use `omh-rust`.
-- The work is a batch or streaming job's rerun, backfill, duplicate rows, or a warehouse table's downstream readers; use `omh-data-pipelines`.
-
-## Examples
-
-Good example:
-
-- Prompt: Design a REST API with a Postgres schema and migrations for the billing service.
-- Expected behavior: Prepare backend_service_contract/v1, auth_boundary_map/v1, error_path_table/v1, response_shape_contract/v1, and schema_migration_plan/v1, then hand off with the per-stack reference named.
-- Why: The request is server-side design across an endpoint surface and its storage, before any code exists.
-
-Bad example:
-
-- Prompt: The migration is written, so mark the schema as migrated and the API as live.
-- Expected behavior: Mark migration application, integration runs, and deployment as not_observed and name the smallest observed proof for each.
-- Why: A prepared migration plan is not an applied migration, and a contract is not a running service.
-
-## Completion Checklist
-
-- The surface, its callers, and each caller's trust level are named.
-- The auth_boundary_map/v1 states where trust changes and which check enforces it on every path.
-- The error_path_table/v1 covers each failure mode with status, body shape, retryability, and redaction rule.
-- The response_shape_contract/v1 is consistent across endpoints rather than per-endpoint improvisation.
-- Storage changes carry an expand/backfill/switch/contract order with a rollback point per step.
-- A change to an existing contract carries its consumer list or an explicit `consumers_not_enumerable`, plus the compatibility window, migration path, and sunset date.
-- The handoff names the executor, the stack, and the per-stack reference to load first.
-- Implementation, migrations, integration runs, and deployment stay observed-only.
-
-## Recovery Notes
-
-- If the stack or datastore is unknown, prepare the contract stack-neutral and name the stack as the one blocking input.
-- If the auth model cannot be established, stop at the auth boundary gap instead of designing endpoints that assume a trust level.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -97,37 +60,6 @@ Handoff policy:
 
 Keep the service contract, auth boundary, error-path table, and migration plan in Hermes. Record code changes, running servers, applied migrations, integration runs, and load results only from executor or wrapper observed evidence.
 
-Required inputs:
-
-- the service, endpoint, or data surface being changed
-- callers and their trust level (public, partner, internal, machine)
-- language, framework, and datastore when known
-- authentication and authorization model in force
-- existing schema and migration tooling
-- backward-compatibility and rollout constraints
-- observed integration or load evidence for completion claims
-
-Expected outputs:
-
-- backend_service_contract/v1
-- auth_boundary_map/v1
-- error_path_table/v1
-- response_shape_contract/v1
-- schema_migration_plan/v1 when the change touches storage
-- consumer_impact_and_sunset/v1 when an existing contract changes
-- backend_implementation_handoff/v1
-- observed_integration_evidence/v1 when observed
-
-Artifact expectations:
-
-- backend_service_contract/v1 names each endpoint or job, its caller class, request and response shapes, its idempotency and pagination rules, and its expected rate, latency target, and payload bound (or `unknown`)
-- auth_boundary_map/v1 states where an untrusted caller becomes a trusted one, and which check runs on each path
-- error_path_table/v1 pairs every failure mode with its status/code, body shape, retryability, and log/redaction rule
-- response_shape_contract/v1 keeps success and error envelopes consistent across the surface instead of per-endpoint improvisation
-- schema_migration_plan/v1 orders expand, backfill, switch, and contract steps with the rollback point for each
-- consumer_impact_and_sunset/v1 lists each identified consumer with what breaks for it, then the compatibility window, the migration path, and the sunset date; a consumer set that could not be enumerated is reported as `consumers_not_enumerable` with the reason, never as zero breakage
-- integration runs, applied migrations, load numbers, and deployment only when observed
-
 Safety rules:
 
 - Do not claim implementation, a running service, an applied migration, a passing integration suite, or a deployment from a prepared backend contract.
@@ -138,6 +70,22 @@ Safety rules:
 - Report an unenumerable consumer set as `consumers_not_enumerable` with what was searched; consumers outside the repository are unknowable from it, and an empty list is a claim that nothing breaks.
 - Never place secrets, tokens, or connection strings in the contract, examples, or handoff text.
 - Do not call databases, HTTP services, LLM, or network endpoints from OMH core.
+
+## Completion Checklist
+
+- The surface, its callers, and each caller's trust level are named.
+- The auth_boundary_map/v1 states where trust changes and which check enforces it on every path.
+- The error_path_table/v1 covers each failure mode with status, body shape, retryability, and redaction rule.
+- The response_shape_contract/v1 is consistent across endpoints rather than per-endpoint improvisation.
+- Storage changes carry an expand/backfill/switch/contract order with a rollback point per step.
+- A change to an existing contract carries its consumer list or an explicit `consumers_not_enumerable`, plus the compatibility window, migration path, and sunset date.
+- The handoff names the executor, the stack, and the per-stack reference to load first.
+- Implementation, migrations, integration runs, and deployment stay observed-only.
+
+## Recovery Notes
+
+- If the stack or datastore is unknown, prepare the contract stack-neutral and name the stack as the one blocking input.
+- If the auth model cannot be established, stop at the auth boundary gap instead of designing endpoints that assume a trust level.
 
 ## Runtime Evidence
 

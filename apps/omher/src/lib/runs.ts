@@ -292,30 +292,40 @@ export function sortRuns<T extends { state: RunState; updated: number; stale?: b
  *  under a day "2h 5m", from a day "1d 10h". A zero second part is left out ("3h", "2d"). */
 export function span(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds));
-  if (s < 60) return `${s}s`;
+  if (s < 60) return tr("unit.s", { n: s });
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m`;
+  if (m < 60) return tr("unit.m", { n: m });
   const h = Math.floor(m / 60);
-  if (h < 24) return m % 60 ? `${h}h ${m % 60}m` : `${h}h`;
-  return h % 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : `${Math.floor(h / 24)}d`;
+  if (h < 24) return m % 60 ? tr("unit.hm", { h, m: m % 60 }) : tr("unit.h", { n: h });
+  return h % 24 ? tr("unit.dh", { d: Math.floor(h / 24), h: h % 24 }) : tr("unit.d", { n: Math.floor(h / 24) });
 }
 
 /** A length that is still growing (a running run or node), to the second so it visibly ticks: "38s", "14m 05s",
  *  "2h 05m 09s"; from a day on, `span`'s "1d 10h" (seconds there would only be noise). */
 export function liveSpan(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds));
-  if (s < 60) return `${s}s`;
+  if (s < 60) return tr("unit.s", { n: s });
   const two = (n: number) => String(n).padStart(2, "0");
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ${two(s % 60)}s`;
+  if (m < 60) return tr("unit.ms", { m, s: two(s % 60) });
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ${two(m % 60)}m ${two(s % 60)}s`;
+  if (h < 24) return `${tr("unit.hm", { h, m: two(m % 60) })} ${tr("unit.s", { n: two(s % 60) })}`;
   return span(s);
 }
 
 /** A run's or node's length: ticking to the second while it runs (`ended` unset), coarse once it is over. */
 export const lengthOf = (started: number, ended: number | undefined, nowS: number) =>
   ended === undefined ? liveSpan(nowS - started) : span(ended - started);
+
+/** `lengthOf`'s first unit alone ("1h" for "1h 5m"), for a box with no room for the whole: words, not a split at a
+ *  space (zh writes "1 小时 5 分"). */
+export function firstUnitOf(started: number, ended: number | undefined, nowS: number): string {
+  const s = Math.max(0, Math.floor((ended ?? nowS) - started));
+  if (s < 60) return tr("unit.s", { n: s });
+  if (s < 3600) return tr("unit.m", { n: Math.floor(s / 60) });
+  if (s < 86400) return tr("unit.h", { n: Math.floor(s / 3600) });
+  return tr("unit.d", { n: Math.floor(s / 86400) });
+}
 
 // ---- delegate adapter: Hermes `delegate_task` fan-outs (the bridge's `delegation_to_run` / `attach_delegations`) ----
 

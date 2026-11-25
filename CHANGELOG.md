@@ -15,6 +15,53 @@ All notable changes will be documented here.
   are gone. A Hermes without the per-route function keeps the old ladder. The OMH TUI's info line and `/effort` reply
   name the level the route sends when Hermes reports it clamps one. (`apps/omher/bridge/omher_bridge.py`,
   `apps/omher/src/chat/model/`, `src/tui/modes.py`)
+- **omher: short labels no longer break inside a word, in every UI language.** In Settings › Bots a card's status
+  read "연결" on one line and "됨" on the next, beside the `default` chip. The Korean rule (`overflow-wrap: anywhere`)
+  let any label in a tight row shrink to one syllable wide, and Japanese and Chinese break between any two
+  characters, so "接続中" and "已连接" split the same way. The Korean rule now uses `break-word`: Korean still breaks
+  only between words and long paths or URLs still wrap, but a label is never narrower than its longest word. A card's
+  status word sits on one line and its profile chip ends in "…" first when the row is tight. The "In list" / "Add to
+  list" corner label clears the name, and the status line under it gets the card's full width. The bot page's stat
+  captions ("ほかの場所のセッション") stay on one line. Status, tier and state chips, badges and counts on the agents,
+  plugins, apps, platforms, accounts and bot pages, and the sidebar's row times, keep one line too. Only Korean keeps
+  words whole now (`word-break: keep-all`). Chat bubbles, card titles, the Automations and Plugins pages, the plugin
+  sheet, a bot-made card and a new thread's empty line used to set it in every language. In Japanese and Chinese a
+  sentence there broke only at its punctuation, leaving ragged short lines; now it fills each line as those
+  languages do. A Korean reply or card question keeps its words whole in any UI language: its element is marked
+  `lang="ko"`. Long URLs and paths still wrap. A new e2e spec (`e2e/text-wrap.spec.ts`) checks all four languages
+  from the 900px minimum width up. `e2e/site-preview-header.spec.ts` now checks the film-only hero (d17fb8dfb): the
+  hero's film keeps playing and no live preview is mounted. It also checks the preview page on its own, which had
+  failed every omher PR's e2e since that change.
+- **omher: a UI review pass across the sidebar, chat, Plans, Settings, Tasks, Automations, Plugins and TERMINALS.**
+  A review of every screen at 1280x820 and the 900x600 minimum, dark and light, English and Korean, found cards left
+  alone on a row, mixed alignments, cut text, empty bands, states that looked stuck and Korean particle fallbacks.
+  - Grids never leave a card alone beside empty slots (All bots, Plugins › Browse, Apps): an odd count's last card
+    spans the row. Card actions sit on one line per row; the bot page's places sit on the stats' columns.
+  - TERMINALS split cards lay every cell out one way, on the rows' icon column, with "Claude Code" whole at the default
+    height. A working cell shows a faint ring with one bright head going round it, never a half-filled bar. A shell's
+    own prompt is never a cell's last line. Folder headers show the parent folder, then the branch.
+  - A terminal idle at its prompt reads Ready with a still dot, as its sidebar row shows it. While an approval or a
+    question waits, the chat stops its spinner and the bot's ring and shows the amber needs dot.
+  - No empty band above the sidebar's "more" chevron, and the chevron never sits on text. An empty chat greets in the
+    middle of the column.
+  - The Claude Code block mascot draws without seams on the GPU terminal renderer.
+  - Plans rows and subagent cards name a plan by its title; times follow the UI language ("15분 09초"); the needs strip
+    names who waits.
+  - Contrast: dark secondary text 5.1:1, light waiting amber 5.3:1, the light waiting triangle on TERMINALS rows.
+  - Korean: polite endings throughout (a test fails on 습니다), no 이(가)/을(를)/(으)로 after a name, "셸" for shell,
+    the approval card's title translated.
+  - Every inline confirm puts its action first and Cancel second.
+  Each fix is pinned by an e2e or vitest check that fails on the old layout (`apps/omher/e2e/settings-pages-fit.spec.ts`,
+  `apps/omher/e2e/tasks-fit.spec.ts`, `apps/omher/e2e/term-blocks.spec.ts` and the screens' own specs).
+
+- **Fanout command fields are bounded in UTF-8 bytes, so a legal non-ASCII command can no longer push a unit prompt
+  over its 8,000-byte ceiling.** `verification_commands`, `verification_checks[].command` and `reproduction_command`
+  are capped at 240 UTF-8 bytes and `task_linked_test_runner` at 200, matching `review_focus`. Before, a 240-character
+  command in 4-byte characters (945 B) froze legally and rendered up to 8,505 B on 10 of 20 worst-case routes; the
+  largest command the contract now accepts renders at most 7,980 B. ASCII commands keep the same limits. A unit file
+  that spells a lone surrogate (`"\ud800"`) in any of these fields, or in `review_focus`, now gets a contract error
+  instead of a `UnicodeEncodeError` traceback from `omh coding fanout prepare`. (#3036, #3210)
+
 - **The OMH TUI follows Hermes' `display.timestamps` and `display.show_cost`.** OMH TUI 5.0.0 dropped `/timestamps`
   and `/statusbar`, so people who had set either key in Hermes lost what it showed. Now `display.timestamps: true`
   adds a turn's local start and end minutes to its done line (`✻ 1m 20s · 10:42→10:44 · 3 tools`, a single

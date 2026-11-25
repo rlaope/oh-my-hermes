@@ -15,46 +15,13 @@ metadata:
 
 # Inference Serving
 
-This is a Hermes-native `inference-serving` workflow skill.
+Required: the model id(s) and where the weights live (HF id, local path, gated or not), the hardware truth: GPUs and VRAM, or CPU/Apple Silicon, and single- vs multi-user load, the delivery surface: docker, Kubernetes, or bare process, and the port/ingress constraints, for benchmarks: the SLO (TTFT/TPOT bounds) and the load shape the number must represent. Output: engine and quantization verdict from the decision tables, with the rejected options named, deployment runbook with its gates (secret, existing-deployment), verification commands, and the four-places port invariant, benchmark plan naming metrics, load shape, dataset, and metadata to save, observed-only status: what ran, what was verified, what stays prepared.
 
 ## Why This Exists
 
 `inference-serving` exists so serving an LLM runs as one decided, gated, measured process instead of scattered flag folklore: the engine choice is a table, the deployment is an idempotent runbook whose only completion evidence is the observed verification, and the benchmark speaks the standard metric vocabulary.
 
-## Do Not Use When
-
-- A new model generation needs recognition, calibration, routing, and pricing onboarding; use `omh-model-optimization`.
-- The user wants their own machine's model routing or providers configured; use `omh-model-setup`.
-- The question is whether a coding runtime/executor can run at all; use `omh-executor-runtime-readiness`.
-- The goal is application or system performance rather than the serving endpoint itself; use `ulw-perf`.
-- The ask is producing the smaller weights -- GPTQ or AWQ calibration, pruning, or a distilled student -- and proving they still do the task; use `omh-model-compression`.
-
-## Examples
-
-Good example:
-
-- Prompt: Serve Qwen on our two A100s for the team and tell me if prefix caching is worth turning on.
-- Expected behavior: Engine verdict (vLLM, TP dividing the head counts), quantization check, the k8s or docker runbook with its gates and verification, then the prefix-cache A/B protocol with hit-rate assumptions recorded - numbers only from observed runs.
-- Why: Serving plus a measured tuning question is exactly the decide-deploy-measure process this workflow owns.
-
-Bad example:
-
-- Prompt: Just tell me the endpoint is fast enough, we already know it works.
-- Expected behavior: Refuse the unmeasured claim; run the benchmark protocol against the stated SLO or report the capacity question as unanswered.
-- Why: A fast-enough claim without a load shape and observed results is the folklore this skill replaces.
-
-## Completion Checklist
-
-- The engine/quantization verdict names the situation-table row it came from and the rejected options.
-- Every runbook step's status is prepared or observed, never assumed, and the port invariant was honored.
-- Benchmark numbers carry metrics, load shape, dataset, SLO, and saved metadata, or are not reported.
-- Anything the workflow started for measurement was stopped, and credentials never appear in artifacts.
-
-## Recovery Notes
-
-- If the hardware truth is unknown, probe it first (GPU inventory, VRAM) instead of assuming the engine.
-- If deployment verification fails, walk the failure ladder (toolkit, shared memory, permissions, token) before editing manifests.
-- If a benchmark misses the verify targets, go to the symptom->flag table and re-measure one change at a time.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -88,32 +55,25 @@ Handoff policy:
 
 Keep engine/quantization decisions, runbook preparation, and benchmark design in Hermes; the commands run through the operator's terminal with observed evidence, and repository changes (deploy manifests, benchmark harnesses) are coding work for the selected executor lane. A runbook or benchmark plan is prepared_not_observed until its commands' results are seen.
 
-Required inputs:
-
-- the model id(s) and where the weights live (HF id, local path, gated or not)
-- the hardware truth: GPUs and VRAM, or CPU/Apple Silicon, and single- vs multi-user load
-- the delivery surface: docker, Kubernetes, or bare process, and the port/ingress constraints
-- for benchmarks: the SLO (TTFT/TPOT bounds) and the load shape the number must represent
-
-Expected outputs:
-
-- engine and quantization verdict from the decision tables, with the rejected options named
-- deployment runbook with its gates (secret, existing-deployment), verification commands, and the four-places port invariant
-- benchmark plan naming metrics, load shape, dataset, and metadata to save
-- observed-only status: what ran, what was verified, what stays prepared
-
-Artifact expectations:
-
-- serving decision and runbook per `omh-inference-serving/references/serving-runbooks.md`
-- benchmark protocol per `omh-inference-serving/references/serving-bench.md`
-- result files with metadata only after observed runs
-
 Safety rules:
 
 - Never claim the server is up without the observed rollout/readiness or smoke-request evidence.
 - Never write credentials into runbooks or results; tokens are referenced (`HF_TOKEN`, a named secret), never inlined.
 - A healthy probe is not a benchmark; a benchmark number without its load shape and metadata is not reported.
 - If the workflow started a server for a benchmark, the workflow stops it.
+
+## Completion Checklist
+
+- The engine/quantization verdict names the situation-table row it came from and the rejected options.
+- Every runbook step's status is prepared or observed, never assumed, and the port invariant was honored.
+- Benchmark numbers carry metrics, load shape, dataset, SLO, and saved metadata, or are not reported.
+- Anything the workflow started for measurement was stopped, and credentials never appear in artifacts.
+
+## Recovery Notes
+
+- If the hardware truth is unknown, probe it first (GPU inventory, VRAM) instead of assuming the engine.
+- If deployment verification fails, walk the failure ladder (toolkit, shared memory, permissions, token) before editing manifests.
+- If a benchmark misses the verify targets, go to the symptom->flag table and re-measure one change at a time.
 
 ## Runtime Evidence
 

@@ -32,9 +32,11 @@ export function dayLabel(ts: number, nowMs = Date.now()): string {
 
 export const sameDay = (a: number, b: number) => startOfDay(new Date(a * 1000)) === startOfDay(new Date(b * 1000));
 
-/** "38s", "2m 41s", "1h 4m". */
-export function elapsed(ms: number): string {
+/** "38s", "2m 41s", "1h 4m"; a finished stretch under a second is "<1s" (a "0s" read as nothing done). `ticking`:
+ *  a clock still running counts up from "0s". */
+export function elapsed(ms: number, ticking = false): string {
   const s = Math.max(0, Math.floor(ms / 1000));
+  if (s === 0 && !ticking) return t("unit.lt1s");
   if (s < 60) return t("unit.s", { n: s });
   const m = Math.floor(s / 60);
   if (m < 60) return t("unit.ms", { m, s: s % 60 });

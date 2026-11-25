@@ -15,44 +15,13 @@ metadata:
 
 # Voice Operator
 
-This is a Hermes-native `voice-operator` workflow skill.
+Required: user request, target context, delivery or status expectation, known missing evidence. Output: voice-operator/v1 card or guidance, next action, prepared-vs-observed boundary.
 
 ## Why This Exists
 
 `voice-operator` exists so Hermes users can ask for this workflow in chat and get a structured, checkable answer instead of an improvised one.
 
-## Do Not Use When
-
-- The request is already handled by a narrower explicit skill with stronger evidence.
-- The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
-- The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
-- The speech is material to transcribe or summarize; use `omh-media-input`.
-
-## Examples
-
-Good example:
-
-- Prompt: voice-operator 'release before lunch, check risky parts' from mobile.
-- Expected behavior: Produce `prepare_voice_operator_card` with required context, wrapper actions, and not-evidence boundaries.
-- Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
-
-Bad example:
-
-- Prompt: voice-operator assume the user approved a destructive action from a vague voice note.
-- Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
-- Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
-
-## Completion Checklist
-
-- The short-input or voice-like request is clarified enough to avoid accidental action.
-- Before a delete, send, deploy or spend, state the transcript's names, numbers, paths and negations and wait for a yes.
-- The next action is readable, reversible when possible, and confirmation-gated when risky.
-- Delivery, notification, or platform behavior is not claimed without wrapper evidence.
-
-## Recovery Notes
-
-- If a dictated request names no target context, nothing is actionable yet; mark the next action unresolved and hand back one target question before preparing voice-operator/v1.
-- If a clarified voice request still lacks confirmation for a risky action, retain the voice-operator/v1 guidance, mark execution not_observed, and hand back the proposed next action for explicit approval.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -84,28 +53,23 @@ Handoff policy:
 
 Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 
-Required inputs:
-
-- user request
-- target context
-- delivery or status expectation
-- known missing evidence
-
-Expected outputs:
-
-- voice-operator/v1 card or guidance
-- next action
-- prepared-vs-observed boundary
-
-Artifact expectations:
-
-- voice-operator/v1 metadata-only runtime or wrapper card when recorded
-
 Safety rules:
 
 - A voice operator card is not speech recognition, mobile notification delivery, platform action, or accepted execution evidence.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 - This card is not realtime voice connector readiness. It may read the tool-safety verdict of a supplied realtime_voice_trial_receipt/v1 when one exists, and it never creates, infers, or upgrades one; route realtime voice adoption to `omh-external-connector-readiness`.
+
+## Completion Checklist
+
+- The short-input or voice-like request is clarified enough to avoid accidental action.
+- Before a delete, send, deploy or spend, state the transcript's names, numbers, paths and negations and wait for a yes.
+- The next action is readable, reversible when possible, and confirmation-gated when risky.
+- Delivery, notification, or platform behavior is not claimed without wrapper evidence.
+
+## Recovery Notes
+
+- If a dictated request names no target context, nothing is actionable yet; mark the next action unresolved and hand back one target question before preparing voice-operator/v1.
+- If a clarified voice request still lacks confirmation for a risky action, retain the voice-operator/v1 guidance, mark execution not_observed, and hand back the proposed next action for explicit approval.
 
 ## Runtime Evidence
 

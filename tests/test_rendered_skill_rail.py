@@ -51,6 +51,7 @@ _ONE_WORD_NON_HANDOFFS = frozenset(
         ("show-reel", "references/craft-audio.md", "plan"),
         ("ultrawork", "references/team-lane.md", "context"),
         ("websearch-setup", "SKILL.md", "backend"),
+        ("websearch-setup", "references/full-contract.md", "backend"),
     }
 )
 # A path qualified by its owner (`ulw-work`'s `references/tdd-red-green.md`) is a pointer into a sibling.
@@ -346,7 +347,8 @@ class CrossLaneHandOffTests(unittest.TestCase):
         self.refs = {(r.skill_name, r.relative_path): r.content for r in builtin_skill_reference_templates()}
 
     def test_an_accepted_plan_leaves_the_leadership_loop_for_execution(self) -> None:
-        do_not_use = self.bodies["cto-loop"].split("## Do Not Use When", 1)[1].split("\n## ", 1)[0]
+        cto_text = self.bodies["cto-loop"] + "\n" + self.refs.get(("cto-loop", "references/full-contract.md"), "")
+        do_not_use = cto_text.split("## Do Not Use When", 1)[1].split("\n## ", 1)[0]
         line = next(row for row in do_not_use.split("\n") if "accepted plan" in row)
         self.assertIn("`ulw-work`", line)
         self.assertNotIn("`ulw-plan`", line)
@@ -371,7 +373,8 @@ class CrossLaneHandOffTests(unittest.TestCase):
         self.assertIn("memory_new_candidate/v1", self.bodies["memory-new"])
 
     def test_durable_facts_go_to_the_memory_skills(self) -> None:
-        self.assertIn("use `omh-memory-new`, or `omh-memory-sync` to curate", self.bodies["rules-distill"])
+        rules_text = self.bodies["rules-distill"] + "\n" + self.refs.get(("rules-distill", "references/full-contract.md"), "")
+        self.assertIn("use `omh-memory-new`, or `omh-memory-sync` to curate", rules_text)
 
     def test_route_signal_destinations_the_store_can_return_are_listed(self) -> None:
         line = next(row for row in self.bodies["workflow-learning"].split("\n") if "omh learning route-signal" in row)

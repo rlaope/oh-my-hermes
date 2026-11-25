@@ -18,7 +18,7 @@ load_local_package()
 import _verification_python  # noqa: E402
 from _verification_python import SHORT_INTERPRETER_CHARS, verification_python_path  # noqa: E402
 
-from omh.coding.fanout_contracts import MAX_UNIT_VERIFICATION_COMMAND_CHARS  # noqa: E402
+from omh.coding.fanout_contracts import MAX_UNIT_VERIFICATION_COMMAND_BYTES  # noqa: E402
 
 _TESTS = Path(__file__).resolve().parent
 _LONG_EXECUTABLE = "/" + "a-very-long-checkout-directory/" * 8 + ".venv/bin/python3"
@@ -37,7 +37,7 @@ def _can_symlink(directory: str) -> bool:
 
 class VerificationPythonTests(unittest.TestCase):
     def test_long_checkout_path_gets_a_short_interpreter_where_one_can_exist(self) -> None:
-        self.assertGreater(len(_LONG_EXECUTABLE), MAX_UNIT_VERIFICATION_COMMAND_CHARS)
+        self.assertGreater(len(_LONG_EXECUTABLE), MAX_UNIT_VERIFICATION_COMMAND_BYTES)
         parent = "/tmp" if os.name == "posix" and os.path.isdir("/tmp") else None
         with TemporaryDirectory(dir=parent) as root:
             can_link = parent is not None and _can_symlink(root)
@@ -62,7 +62,7 @@ class VerificationPythonTests(unittest.TestCase):
 
     def test_widest_fixture_body_fits_the_cap_with_the_short_interpreter(self) -> None:
         widest_body = " -c 'import os,sys; sys.exit(0 if os.environ.get(\"VERIFY_TOKEN\") and not os.environ.get(\"CODEX_TOKEN\") else 1)'"
-        self.assertLess(SHORT_INTERPRETER_CHARS + 2 + len(widest_body), MAX_UNIT_VERIFICATION_COMMAND_CHARS)
+        self.assertLess(SHORT_INTERPRETER_CHARS + 2 + len(widest_body), MAX_UNIT_VERIFICATION_COMMAND_BYTES)
 
 
 class CappedFieldFixtureGateTests(unittest.TestCase):

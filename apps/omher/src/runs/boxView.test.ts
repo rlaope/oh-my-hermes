@@ -24,6 +24,7 @@ import {
   type Measure,
   type Rect,
   waitRows,
+  twoLineTitle,
 } from "./boxView";
 import { modelName } from "./format";
 
@@ -219,6 +220,21 @@ describe("text", () => {
     expect(titleLines(n, false, 103, M)).toBe(2);
     expect(titleLines(n, true, 104 + G.icon + G.iconGap, M)).toBe(1);
     expect(titleLines(n, true, 104 + G.icon + G.iconGap - 1, M)).toBe(2);
+  });
+
+  it("keeps a long title's trailing (…) whole, cutting the middle, so two steps of one task read apart", () => {
+    const a = "Codex skill discovery reads .agents/skills (Hermes)";
+    const b = "Codex skill discovery reads .agents/skills (복구)";
+    for (const inner of [120, 140, 170]) {
+      const [x, y] = [twoLineTitle(a, inner, M), twoLineTitle(b, inner, M)];
+      expect(x, `${inner}`).toMatch(/… \(Hermes\)$/);
+      expect(y, `${inner}`).toMatch(/… \(복구\)$/);
+      expect(x).not.toBe(y);
+      expect(x.startsWith("Codex")).toBe(true);
+    }
+    // a title that fits two lines, or has no trailing (…), is left to the box as it is
+    expect(twoLineTitle("Export API (v2)", 200, M)).toBe("Export API (v2)");
+    expect(twoLineTitle("Codex skill discovery reads the agents skill folders first", 120, M)).toBe("Codex skill discovery reads the agents skill folders first");
   });
 
   it("lets a title break after a / or a _ inside a long word, and nowhere else it would not already", () => {

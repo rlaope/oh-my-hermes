@@ -47,11 +47,15 @@ from ..profiles.team import TEAM_PROFILE_SCHEMA_VERSION
 from ..skills.catalog import omh_skill_display_name, omh_skill_install_path
 from ..skill_pack import (
     CORE_PROFILE_SKILLS,
+    SKILL_PACKS,
+    SKILL_PACK_NAMES,
     SkillReferenceTemplate,
     SkillTemplate,
     builtin_skill_reference_templates,
     builtin_skill_templates,
     builtin_skill_support_templates,
+    core_with_packs_skill_names,
+    resolve_skill_pack_names,
 )
 from .support_materialization import legacy_support_paths, preflight_support, write_support
 from ..system.approval_tier import TIER_AUTO_ALLOWED, resolve_approval_tier
@@ -488,25 +492,36 @@ def _ledger_copies(skill_dir: Path, writes: list[LedgerWrite]) -> list[str]:
     return copies
 
 
-def profile_skill_names(skills_dir: Path, profile: str, catalog_names: list[str]) -> set[str]:
+def profile_skill_names(
+    skills_dir: Path,
+    profile: str,
+    catalog_names: list[str],
+    *,
+    packs: Iterable[str] = (),
+) -> set[str]:
     """Canonical names an install of the packaged catalog renders into `skills_dir` under `profile`.
 
-    `full` renders the whole catalog. Otherwise the profile decides what gets
-    ADDED, never what gets REFRESHED. A skill already on disk is refreshed
-    whichever profile is recorded, because `omh update` promising "updated"
-    while leaving installed skills on an older render is the same as lying:
-    that is how an install ended up serving `name: ultrawork` long after the
-    catalog had moved to `ulw-ultrawork`. Shedding full-only skills stays an
-    explicit act - `omh skill-profile reconcile --to core`. `omh doctor` asks
-    the same question to say what the next install does with a missing skill.
+    `full` renders the whole catalog. Otherwise the profile (plus any requested
+    layered packs) decides what gets ADDED, never what gets REFRESHED. A skill
+    already on disk is refreshed whichever profile is recorded, because
+    `omh update` promising "updated" while leaving installed skills on an older
+    render is the same as lying: that is how an install ended up serving
+    `name: ultrawork` long after the catalog had moved to `ulw-ultrawork`.
+    Shedding full-only skills stays an explicit act -
+    `omh skill-profile reconcile --to core`. `omh doctor` asks the same question
+    to say what the next install does with a missing skill.
     """
     if profile == "full":
         return set(catalog_names)
+    try:
+        selected = set(core_with_packs_skill_names(tuple(packs)))
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
     installed = _installed_skill_names(skills_dir) | _active_generation_skill_names(skills_dir)
     return {
         name
         for name in catalog_names
-        if name in CORE_PROFILE_SKILLS
+        if name in selected
         or skill_directory_name(name) in installed
         # A pre-relabel install has the CANONICAL directory on disk and the
         # labelled one absent, so matching only the label dropped the skill
@@ -591,9 +606,14 @@ def install_skill_pack(
     force: bool = False,
     dry_run: bool = False,
     profile: str = DEFAULT_SKILL_PROFILE,
+    packs: Iterable[str] = (),
 ) -> dict:
     if profile not in SKILL_PROFILES:
         raise OmhError(f"unknown skill profile {profile!r}; choose one of {', '.join(SKILL_PROFILES)}")
+    try:
+        normalized_packs = resolve_skill_pack_names(tuple(packs))
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
     paths = legacy_support_paths(paths)
     all_templates = convert_from_dir(source_dir) if source_dir else builtin_skill_templates()
     reference_templates = convert_references_from_dir(source_dir) if source_dir else builtin_skill_reference_templates()
@@ -618,7 +638,12 @@ def install_skill_pack(
     if source_dir or profile == "full":
         templates = all_templates
     else:
-        refreshable = profile_skill_names(paths.skills_dir, profile, [template.name for template in all_templates])
+        refreshable = profile_skill_names(
+            paths.skills_dir,
+            profile,
+            [template.name for template in all_templates],
+            packs=normalized_packs,
+        )
         templates = [template for template in all_templates if template.name in refreshable]
         reference_templates = [
             template for template in reference_templates if template.skill_name in refreshable
@@ -729,6 +754,8 @@ def install_skill_pack(
             "source": source,
             "skill_profile": profile,
         }
+        if normalized_packs:
+            result["skill_packs"] = list(normalized_packs)
         if context_cost_warning is not None:
             result["context_cost_warning"] = context_cost_warning
         if hermes_edited:
@@ -848,6 +875,8 @@ def install_skill_pack(
     if removed_directories:
         manifest_data["removed_skill_directories"] = removed_directories
     manifest_data["skill_profile"] = profile
+    if normalized_packs:
+        manifest_data["skill_packs"] = list(normalized_packs)
     if context_cost_warning is not None:
         manifest_data["context_cost_warning"] = context_cost_warning
     manifest_data["pruned_skills"] = [item["name"] for item in orphans_removed]
@@ -1557,9 +1586,15 @@ def skill_profile_state(skills_dir: Path, manifest: dict | None) -> dict:
     """
     catalog_names = {template.name for template in builtin_skill_templates()}
     core_names = set(CORE_PROFILE_SKILLS)
+    raw_packs = (manifest or {}).get("skill_packs", [])
+    requested_packs = tuple(
+        str(pack) for pack in raw_packs if isinstance(pack, str) and pack in SKILL_PACKS
+    ) if isinstance(raw_packs, list) else ()
+    target_names = set(core_with_packs_skill_names(requested_packs)) if requested_packs else core_names
     installed = installed_skill_names(skills_dir)
     installed_catalog = [name for name in installed if name in catalog_names]
     full_only_installed = sorted(name for name in installed_catalog if name not in core_names)
+    outside_target = sorted(name for name in installed_catalog if name not in target_names)
     requested = str((manifest or {}).get("skill_profile") or "")
     if not installed_catalog:
         effective = "none"
@@ -1567,19 +1602,30 @@ def skill_profile_state(skills_dir: Path, manifest: dict | None) -> dict:
         effective = "full"
     elif not full_only_installed:
         effective = "core"
+    elif requested == "core" and requested_packs and not outside_target and target_names.issubset(installed_catalog):
+        effective = "core+packs"
     else:
         effective = "mixed"
-    retained_exception = bool(requested == "core" and full_only_installed)
+    retained_exception = bool(requested == "core" and outside_target)
     prompt_cost = _skill_prompt_cost(
         skills_dir,
         core_names,
         catalog_names - core_names,
     )
+    matches_requested = (
+        bool(requested)
+        and (
+            effective == requested
+            or (requested == "core" and bool(requested_packs) and effective == "core+packs")
+        )
+    )
     return {
         "schema_version": SKILL_PROFILE_STATE_SCHEMA_VERSION,
         "requested_profile": requested,
+        "requested_packs": list(requested_packs),
+        "available_packs": list(SKILL_PACK_NAMES),
         "effective_profile": effective,
-        "matches_requested_profile": bool(requested) and effective == requested,
+        "matches_requested_profile": matches_requested,
         "core_profile_skill_count": len(core_names),
         "full_profile_skill_count": len(catalog_names),
         "installed_skill_count": len(installed),
@@ -1642,7 +1688,7 @@ def _installed_skill_files(skill_dir: Path) -> dict[str, str] | None:
     return files
 
 
-def _reconcile_plan(skills_dir: Path, manifest: dict) -> dict:
+def _reconcile_plan(skills_dir: Path, manifest: dict, *, packs: Iterable[str] = ()) -> dict:
     """Split installed full-only skills into safely removable and retained-with-reason sets.
 
     A skill is removable only when it is OMH-managed (recorded in the install manifest) AND
@@ -1650,7 +1696,10 @@ def _reconcile_plan(skills_dir: Path, manifest: dict) -> dict:
     templates, with no extra or missing files). Anything else is retained and reported.
     """
     catalog_files = _catalog_skill_files()
-    core_names = set(CORE_PROFILE_SKILLS)
+    try:
+        keep_names = set(core_with_packs_skill_names(tuple(packs)))
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
     managed_names = {
         str(record.get("name"))
         for record in manifest.get("skills", [])
@@ -1659,7 +1708,7 @@ def _reconcile_plan(skills_dir: Path, manifest: dict) -> dict:
     removable: list[str] = []
     retained: list[dict[str, str]] = []
     for name in installed_skill_names(skills_dir):
-        if name in core_names:
+        if name in keep_names:
             continue
         expected = catalog_files.get(name)
         if expected is None:
@@ -1684,7 +1733,7 @@ def skill_profile_report(paths: OmhPaths) -> dict:
     """Read-only requested/effective profile report plus the reconcile plan; mutates nothing."""
     manifest = read_manifest(paths.manifest_path)
     state = skill_profile_state(paths.skills_dir, manifest)
-    plan = _reconcile_plan(paths.skills_dir, manifest or {})
+    plan = _reconcile_plan(paths.skills_dir, manifest or {}, packs=state.get("requested_packs", ()))
     return {
         "schema_version": SKILL_PROFILE_STATE_SCHEMA_VERSION,
         "skills_dir": str(paths.skills_dir),
@@ -1700,9 +1749,10 @@ def reconcile_skill_profile(
     paths: OmhPaths,
     *,
     target_profile: str = CORE_SKILL_PROFILE,
+    packs: Iterable[str] = (),
     dry_run: bool = False,
 ) -> dict:
-    """Explicitly shrink an existing install down to the core profile.
+    """Explicitly shrink an existing install down to the core profile (plus any requested packs).
 
     This is the only OMH path that deletes managed skill directories, and it never runs as part of
     setup/install/update. It removes only unmodified managed full-only skills; locally modified and
@@ -1713,10 +1763,14 @@ def reconcile_skill_profile(
             f"skill profile reconcile only shrinks to {CORE_SKILL_PROFILE!r}; "
             "install the wider catalog with `omh install --full` instead"
         )
+    try:
+        normalized_packs = resolve_skill_pack_names(tuple(packs))
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
     manifest = read_manifest(paths.manifest_path)
     if manifest is None:
         raise OmhError(f"no OMH skill manifest at {paths.manifest_path}; run `omh setup` first")
-    plan = _reconcile_plan(paths.skills_dir, manifest)
+    plan = _reconcile_plan(paths.skills_dir, manifest, packs=normalized_packs)
     result = {
         "schema_version": SKILL_PROFILE_RECONCILE_SCHEMA_VERSION,
         "target_profile": target_profile,
@@ -1727,6 +1781,8 @@ def reconcile_skill_profile(
         "context_cost_note": RECONCILE_CONTEXT_COST_NOTE,
         "non_destructive_default": NON_DESTRUCTIVE_DEFAULT_NOTE,
     }
+    if normalized_packs:
+        result["target_packs"] = list(normalized_packs)
     if dry_run:
         result["would_remove_skills"] = plan["removable_skills"]
         result["removed_skills"] = []
@@ -1751,6 +1807,8 @@ def reconcile_skill_profile(
     # writes is one the manifest it replaces already held.
     _carry_record_provenance(manifest_data, manifest)
     manifest_data["skill_profile"] = target_profile
+    if normalized_packs:
+        manifest_data["skill_packs"] = list(normalized_packs)
     manifest_data["reconciled_skills"] = removed
     manifest_data["skill_profile_state"] = skill_profile_state(paths.skills_dir, manifest_data)
     write_manifest(paths.manifest_path, manifest_data)

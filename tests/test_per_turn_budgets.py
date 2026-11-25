@@ -172,7 +172,7 @@ class PerRequestBudgetRegistryTests(unittest.TestCase):
             for definition in builtin_definitions()
             if definition.name in names
             and not definition.artifact_contracts
-            and not definition.progressive_disclosure
+            and definition.progressive_disclosure
         ]
         self.assertGreater(len(members), 50)
         metrics = {metric.name: metric for metric in budget_metrics()}

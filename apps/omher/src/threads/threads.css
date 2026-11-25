@@ -374,7 +374,6 @@
 .thread > .th-empty {
   margin: 10px auto 2px;
   padding: 0 24px;
-  word-break: keep-all;
 }
 
 /* ---- a thread's pull request (rule 40): the row's mark and the transcript's card ----------------------------- */

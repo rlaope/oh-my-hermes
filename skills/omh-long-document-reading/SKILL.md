@@ -10,7 +10,7 @@ metadata:
     phase: long-document-reading
     role: researcher
     quality_tier: long-document-gated
-    related_skills: [omh-paper-learning, omh-materials-package, omh-media-input, omh-source-finder]
+    related_skills: [omh-paper-learning, omh-materials-package, omh-media-input, omh-source-finder, document-to-action-items]
 ---
 
 # Long Document Reading
@@ -28,6 +28,7 @@ This is a Hermes-native `long-document-reading` workflow skill.
 - The input is an image, screenshot, receipt, audio, or video rather than a document; use `omh-media-input`.
 - The user is still looking for the document or its download link; use `omh-source-finder`.
 - The document fits one read (under about 60 pages of prose); read it directly and answer.
+- The task is solely extracting cited obligations, deadlines, and action items from a supplied document rather than a multi-pass chunked reading ledger; load Hermes' bundled `document-to-action-items` skill instead of this one.
 
 ## Examples
 

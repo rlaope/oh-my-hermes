@@ -260,7 +260,7 @@ export function AppCard({
         </div>
         <p className="pl-ds">{desc}</p>
         <div className="pl-adds">
-          <span className={`ap-state ${state}${warn ? " need" : ""}`} data-testid={`app-state-${name}`}>
+          <span className={`ap-state ${state}${warn ? " need" : ""}`} title={stateWord} data-testid={`app-state-${name}`}>
             {stateWord}
           </span>
           {card.kind === "mcp" && card.app.asks.length > 0 && state === "available" && (

@@ -187,8 +187,10 @@ test("settings opens and closes; theme Light sets data-theme; bot and provider p
   const view = page.getByTestId("settings-view");
   await expect(view).toBeVisible();
   await expect(page.getByTestId("composer")).toHaveCount(0);
-  for (const label of ["Kami", "Friren", "Hermes", "General", "Providers", "Computer"])
+  for (const label of ["Kami", "Friren", "Hermes", "General", "Providers"])
     await expect(view.locator(".st-nav").getByRole("button", { name: label, exact: true })).toBeVisible();
+  // Computer is not built yet, and its nav entry says so
+  await expect(view.locator(".st-nav").getByRole("button", { name: "Computer Soon", exact: true })).toBeVisible();
 
   // General: theme
   await expect(page.getByTestId("settings-nav-general")).toHaveAttribute("aria-current", "page");

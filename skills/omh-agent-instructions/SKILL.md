@@ -15,7 +15,7 @@ metadata:
 
 # Agent Instructions
 
-This is a Hermes-native `agent-instructions` workflow skill.
+Required: which instruction files exist, where they sit, and which agents read them, the build, test, lint, and regenerate commands the repository uses, which files are generated, from what source, and which gate checks them, the pitfalls that have cost time, each with what it cost, observed output for every command written into the file. Output: instruction_file_inventory/v1, command_verification_record/v1, instruction_region_update/v1, drift_refusal_note/v1 when a requested line would record a count or a line number.
 
 ## Why This Exists
 
@@ -26,39 +26,7 @@ This is a Hermes-native `agent-instructions` workflow skill.
 - List every instruction file and which agent reads it before proposing a section.
 - Run or ask for the observed run of each command before marking it verified.
 
-## Do Not Use When
-
-- The ask is distilling repeated lessons into reviewed rule candidates; use `omh-rules-distill`.
-- The ask is a reading path through the codebase for a new engineer; use `omh-codebase-onboarding`.
-- The ask is project terminology alignment -- reviewing the terms this project uses and correcting inconsistent vocabulary; use `ulw-context`.
-- The ask is user-facing product documentation; use `omh-docs`.
-
-## Examples
-
-Good example:
-
-- Prompt: update our CLAUDE.md
-- Expected behavior: Inventory the instruction files, run or collect each build and test command, mark each verified or unverified, and replace only the marked region with the commands, the generated-file map, the gates, and the costed pitfalls, refusing any count or line number.
-- Why: An instruction file that states an unrun command or a stale count sends every later agent the wrong way.
-
-Bad example:
-
-- Prompt: add that the suite has 4,100 tests and the router is at line 212 of chat.py
-- Expected behavior: Refuse both values, and write the command that counts the tests and the symbol that locates the router instead.
-- Why: Both numbers were already wrong by the next merge.
-
-## Completion Checklist
-
-- Every instruction file and its reader are listed.
-- Every command is marked verified with an observed run, or unverified.
-- Only the marked region changed, and hand-written text is byte-for-byte.
-- No count, line number, or value the code already states was written.
-- Every generated file names its source, its regenerate command, and its gate.
-
-## Recovery Notes
-
-- If a command cannot be run here, write it marked unverified with what would verify it.
-- If the file has no markers, insert them once around the new section and leave everything else untouched.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -93,28 +61,6 @@ Handoff policy:
 
 Keep the section plan, the command verification record, and the region update in Hermes. Every command's outcome is recorded only from executor, operator, or wrapper observed output; the file is written by the executor, and only inside its marked region.
 
-Required inputs:
-
-- which instruction files exist, where they sit, and which agents read them
-- the build, test, lint, and regenerate commands the repository uses
-- which files are generated, from what source, and which gate checks them
-- the pitfalls that have cost time, each with what it cost
-- observed output for every command written into the file
-
-Expected outputs:
-
-- instruction_file_inventory/v1
-- command_verification_record/v1
-- instruction_region_update/v1
-- drift_refusal_note/v1 when a requested line would record a count or a line number
-
-Artifact expectations:
-
-- instruction_file_inventory/v1 lists every instruction file, its path, the agents that read it, and which one is closest to each directory, since the closest file wins
-- command_verification_record/v1 marks every command verified, with the observed exit status and when, or unverified, and nothing is written as verified without an observed run
-- instruction_region_update/v1 replaces only the text between `<!-- omh:agent-instructions:begin -->` and `<!-- omh:agent-instructions:end -->`, and inserts the markers once when absent, so every hand-written section outside them is left byte-for-byte
-- drift_refusal_note/v1 names each requested count, line number, or other value the code already states, and writes the command or the file that derives it instead
-
 Safety rules:
 
 - Never write outside the marker-delimited region: the text before `<!-- omh:agent-instructions:begin -->` and after `<!-- omh:agent-instructions:end -->` is hand-written and stays byte-for-byte.
@@ -122,6 +68,19 @@ Safety rules:
 - Refuse to record counts, line numbers, test totals, or file sizes; they drift, so point at the command or file that derives them.
 - Write only what an agent cannot derive from the code; restating the code is drift waiting to happen.
 - Never copy secrets, tokens, or private hostnames into an instruction file.
+
+## Completion Checklist
+
+- Every instruction file and its reader are listed.
+- Every command is marked verified with an observed run, or unverified.
+- Only the marked region changed, and hand-written text is byte-for-byte.
+- No count, line number, or value the code already states was written.
+- Every generated file names its source, its regenerate command, and its gate.
+
+## Recovery Notes
+
+- If a command cannot be run here, write it marked unverified with what would verify it.
+- If the file has no markers, insert them once around the new section and leave everything else untouched.
 
 ## Runtime Evidence
 

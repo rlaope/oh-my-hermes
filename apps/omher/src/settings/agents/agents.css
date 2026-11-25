@@ -11,6 +11,10 @@
   font-size: 11.5px;
 }
 .ag-tier {
+  white-space: nowrap;
+  /* one width for 메인 / 기본 제공 / ACP, so the state column starts on one x */
+  min-width: 64px;
+  text-align: center;
   padding: 1px 7px;
   border-radius: 999px;
   border: 1px solid var(--line);
@@ -22,6 +26,7 @@
   border-color: var(--line-strong);
 }
 .ag-state {
+  white-space: nowrap;
   color: var(--quiet);
   min-width: 82px;
   text-align: right;
@@ -155,4 +160,23 @@
 .ag-card .ag-acts {
   justify-content: flex-end;
   margin-top: 6px;
+}
+
+/* Add agent in a narrow page (the 900px window): label and hint over a full-width input, so no hint is squeezed into
+   a sliver and every row keeps the same shape */
+.ag-form {
+  container: agform / inline-size;
+}
+@container agform (max-width: 560px) {
+  .ag-form .st-row:not(.ag-formfoot) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .ag-form .st-row:not(.ag-formfoot) .st-v {
+    max-width: none;
+  }
+  .ag-form .ag-in {
+    width: 100%;
+  }
 }

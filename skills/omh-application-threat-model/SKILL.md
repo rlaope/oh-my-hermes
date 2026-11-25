@@ -15,48 +15,13 @@ metadata:
 
 # Application Threat Model
 
-This is a Hermes-native `application-threat-model` workflow skill.
+Required: the system under review: components, which component calls which, and where each is deployed, data flows and data classes: what every store, queue, and message carries, known trust boundaries: authentication points, network edges, tenant separation, third parties, controls already deployed, and who owns each, scope exclusions and the threat actors in scope. Output: application_threat_model/v1, asset register: data class plus the loss that makes each asset worth defending, trust boundaries: what crosses, what authenticates the crossing, what the receiver assumes unchecked, attack scenarios: entry point, path, precondition, impact, one decision per scenario (mitigate, transfer, accept, eliminate) with an owner, per-control security test naming the observable that fails without it, plus residual risk.
 
 ## Why This Exists
 
 `application-threat-model` exists because the nearest neighbour does not merely miss this request. `omh-security-safety-review` maps the agent's own prompt, tool, credential, and dependency surface, so an application threat-model request came back as an agent tool inventory under a near-identical name — a confident wrong artifact rather than a miss, in the one domain where that costs most.
 
-## Do Not Use When
-
-- The subject is the agent's own prompts, tools, files, credentials, dependencies, or destructive actions; use `omh-security-safety-review`, which maps that runtime surface.
-- The user wants defects found in a diff or a file; use `omh-code-review`.
-- The user asks whether a release is ready across rollout, rollback, and observability; use `omh-production-audit`.
-- The user asks which commands prove a merge is safe; use `omh-verification-gate`.
-- The user asks for a contractual or regulatory obligation rather than an attacker; use `omh-legal-compliance-review`.
-
-## Examples
-
-Good example:
-
-- Prompt: build a threat model for our payment service architecture
-- Expected behavior: Prepare application_threat_model/v1: ask for the component map and data flows, register card data and settlement records as assets, mark the merchant API edge and the PSP callback as trust boundaries, derive scenarios per boundary, decide a control for each, and name the test that fails when the control is removed.
-- Why: The subject is an application the user operates, and the goal needs assets, boundaries, scenarios, controls, and tests.
-
-Bad example:
-
-- Prompt: application-threat-model check whether this agent can be prompt-injected through its file tool
-- Expected behavior: Route to `omh-security-safety-review`: prompts, tools, and credentials are the agent's runtime surface, not an application this workflow models.
-- Why: The two surfaces share vocabulary and nothing else; modeling the agent's runtime here is how the artifacts get confused.
-
-## Completion Checklist
-
-- Every asset carries a data class and one named loss; every boundary names what crosses it and what authenticates the crossing.
-- Every scenario resolves to mitigate, transfer, accept, or eliminate, with an owner.
-- Every mitigating control carries a security test and the observable that fails without it.
-- Controls read deployed, planned, or `unverified`; none is inferred from the architecture description.
-- Residual risk is listed, and the model is not offered as a scan, a penetration test, or an attestation.
-
-## Recovery Notes
-
-- If the architecture is not described, ask for the component map and the data flows before modeling; never substitute a generic checklist for the real system.
-- If a scenario has no boundary and no asset, drop it with the reason rather than carrying an unreachable threat.
-- If the user asks for exploit code, give the precondition and the detection signal instead, then hand remediation to an executor.
-- If the request turns out to be about the agent's own prompts, tools, or credentials, stop and hand it to `omh-security-safety-review`.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -91,14 +56,6 @@ Handoff policy:
 
 Keep the model in Hermes: assets, boundaries, scenarios, control decisions, and test definitions are analysis over architecture the user supplies. Writing the tests, running a scanner, changing an IAM policy, or patching a component is executor work and needs observed evidence before a control counts as deployed.
 
-Required inputs:
-
-- the system under review: components, which component calls which, and where each is deployed
-- data flows and data classes: what every store, queue, and message carries
-- known trust boundaries: authentication points, network edges, tenant separation, third parties
-- controls already deployed, and who owns each
-- scope exclusions and the threat actors in scope
-
 Expert clarification questions:
 - `the system under review: components, which component calls which, and where each is deployed`
   - English: Which components make up the system, which of them call each other, and where does each one run?
@@ -107,20 +64,6 @@ Expert clarification questions:
   - English: Which attackers are in scope — external, authenticated tenant, insider, compromised dependency — and what is out of scope?
   - Korean: 어떤 공격자를 범위에 포함하나요 — 외부, 인증된 테넌트, 내부자, 침해된 의존성 — 그리고 제외 범위는 무엇인가요?
 
-Expected outputs:
-
-- application_threat_model/v1
-- asset register: data class plus the loss that makes each asset worth defending
-- trust boundaries: what crosses, what authenticates the crossing, what the receiver assumes unchecked
-- attack scenarios: entry point, path, precondition, impact
-- one decision per scenario (mitigate, transfer, accept, eliminate) with an owner
-- per-control security test naming the observable that fails without it, plus residual risk
-
-Artifact expectations:
-
-- application_threat_model/v1 with asset register, trust boundaries, attack scenarios, control decisions, and per-control tests
-- every control marked deployed, planned, or unverified; a scenario with no boundary and no asset is dropped, never carried
-
 Safety rules:
 
 - Never write working exploit code, a payload, or a runnable attack script; a scenario names the entry point, the path, and the precondition, not the weapon.
@@ -128,6 +71,21 @@ Safety rules:
 - Do not model the agent's own prompts, tools, credentials, or dependencies here; that surface belongs to `omh-security-safety-review`.
 - Never print secrets, tokens, keys, connection strings, or live customer records pulled in as examples.
 - A model is not a penetration test, a scan, or a compliance attestation; name which of the three the user still needs.
+
+## Completion Checklist
+
+- Every asset carries a data class and one named loss; every boundary names what crosses it and what authenticates the crossing.
+- Every scenario resolves to mitigate, transfer, accept, or eliminate, with an owner.
+- Every mitigating control carries a security test and the observable that fails without it.
+- Controls read deployed, planned, or `unverified`; none is inferred from the architecture description.
+- Residual risk is listed, and the model is not offered as a scan, a penetration test, or an attestation.
+
+## Recovery Notes
+
+- If the architecture is not described, ask for the component map and the data flows before modeling; never substitute a generic checklist for the real system.
+- If a scenario has no boundary and no asset, drop it with the reason rather than carrying an unreachable threat.
+- If the user asks for exploit code, give the precondition and the detection signal instead, then hand remediation to an executor.
+- If the request turns out to be about the agent's own prompts, tools, or credentials, stop and hand it to `omh-security-safety-review`.
 
 ## Runtime Evidence
 

@@ -85,6 +85,10 @@
   margin: 0 auto;
   flex: none;
 }
+/* the empty chat's hello fills the column and centres in it */
+.thread > .chat-empty {
+  flex: 1;
+}
 .thread > .day {
   margin: 10px auto 2px;
   text-align: center;
@@ -275,8 +279,8 @@
   padding: 9px 13px;
   line-height: var(--lh-msg);
   font-size: var(--fs-msg);
-  /* Korean/CJK wraps at spaces, long tokens still break */
-  word-break: keep-all;
+  /* long tokens still break; Korean wraps at spaces through the [lang="ko"] rule (theme/base.css), Japanese and
+     Chinese between characters as they normally do */
   overflow-wrap: anywhere;
   min-width: 0;
 }
@@ -927,7 +931,6 @@
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
-  word-break: keep-all;
   cursor: pointer;
 }
 .msg-quote:hover {

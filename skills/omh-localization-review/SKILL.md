@@ -15,44 +15,13 @@ metadata:
 
 # Localization Review
 
-This is a Hermes-native `localization-review` workflow skill.
+Required: locale, audience, source version, product or content context. Output: locale/audience/context and source-version brief, approved-term glossary and transcreation/localization choices, string/content issue matrix with context, severity, and review owner, locale QA acceptance criteria and handoff/observed-evidence gaps.
 
 ## Why This Exists
 
 `localization-review` makes terminology, context, cultural fit, and locale QA reviewable without treating a drafted translation as a published or visually validated release.
 
-## Do Not Use When
-
-- The request is a short sentence or word translation or rewrite with no product or locale QA context; answer directly or use `omh-content-operator`.
-- The user needs fresh rendered UI evidence, clipping checks, or a visual PASS/REVISE/BLOCK verdict; use `omh-visual-qa`.
-- The user asks to edit locale files, push a translation-management-system job, publish strings, or configure localization settings; use `omh-files` or `omh-apps` with explicit target and authority.
-- The request asks for a regulatory or contractual conclusion about translated legal text; use `omh-legal-compliance-review`.
-
-## Examples
-
-Good example:
-
-- Prompt: Review our Korean checkout strings for terminology consistency, cultural fit, and context gaps before launch.
-- Expected behavior: Prepare the locale and source-version brief, glossary choices, issue matrix, and locale QA criteria.
-- Why: The product-release context needs localization review beyond a one-off translation.
-
-Bad example:
-
-- Prompt: Translate 'Your trial ends tomorrow' into Korean.
-- Expected behavior: Answer directly or route to `omh-content-operator`, not `localization-review`.
-- Why: A one-off sentence has no product locale QA or release-review objective.
-
-## Completion Checklist
-
-- Findings or no-issue results are grounded in concrete file, artifact, command, or source evidence.
-- Open questions, residual risk, and missing verification are named.
-- Fixes or follow-up work are separate handoffs unless the user explicitly asked to implement them.
-- Per string: placeholders intact, target-locale plural categories, expansion and truncation, date/number/currency formats, register, literal brand and command tokens. Blocker: wrong meaning, broken placeholder, legal or safety text; major: glossary or register miss; minor: style.
-
-## Recovery Notes
-
-- If the source version cannot be established, retain supplied strings and the locale/audience brief, mark terminology and cultural-fit choices tentative, and hand back the source-version question before treating the glossary as approved.
-- If rendered UI evidence is missing, retain glossary choices and the string issue matrix, mark rendered validation not_observed, and hand back locale QA criteria and review owners for an accepted `omh-visual-qa` handoff.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -83,33 +52,27 @@ Handoff policy:
 
 Keep domain framing, clarification, source/evidence synthesis, draft outputs, and next-work routing in Hermes. A prepared brief, review, reply, or plan is not an external action, approval, filing, send, publish, data mutation, implementation, review, CI, or merge claim. Prepare a connector, file, coding, or human-review handoff only when the user explicitly accepts that next step; report it only from observed evidence. Hermes may draft and review language guidance; it does not alter locale files, upload strings, publish translations, validate a rendered build, or claim market approval.
 
-Required inputs:
-
-- locale
-- audience
-- source version
-- product or content context
-
 Expert clarification questions:
 - `locale`
   - English: Which target locale should this localization review cover?
   - Korean: 이 현지화 검토의 대상 로캘은 무엇인가요?
 
-Expected outputs:
-
-- locale/audience/context and source-version brief
-- approved-term glossary and transcreation/localization choices
-- string/content issue matrix with context, severity, and review owner
-- locale QA acceptance criteria and handoff/observed-evidence gaps
-
-Artifact expectations:
-
-- prepared localization review when a wrapper captures it
-
 Safety rules:
 
 - Separate language guidance from rendered UI evidence and market approval.
 - Do not claim locale-file changes, translation upload, publication, or rendered validation.
+
+## Completion Checklist
+
+- Findings or no-issue results are grounded in concrete file, artifact, command, or source evidence.
+- Open questions, residual risk, and missing verification are named.
+- Fixes or follow-up work are separate handoffs unless the user explicitly asked to implement them.
+- Per string: placeholders intact, target-locale plural categories, expansion and truncation, date/number/currency formats, register, literal brand and command tokens. Blocker: wrong meaning, broken placeholder, legal or safety text; major: glossary or register miss; minor: style.
+
+## Recovery Notes
+
+- If the source version cannot be established, retain supplied strings and the locale/audience brief, mark terminology and cultural-fit choices tentative, and hand back the source-version question before treating the glossary as approved.
+- If rendered UI evidence is missing, retain glossary choices and the string issue matrix, mark rendered validation not_observed, and hand back locale QA criteria and review owners for an accepted `omh-visual-qa` handoff.
 
 ## Runtime Evidence
 

@@ -107,6 +107,22 @@ ALLOWLISTED_DUPLICATE_BLOCKS: dict[str, str] = {
         "on purpose: a handoff-gated skill must state its own transparency obligations "
         "without depending on the agent choosing to fetch the on-demand reference first."
     ),
+    normalize_block(
+        "- The request is already handled by a narrower explicit skill with stronger evidence.\n"
+        "- The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.\n"
+        "- The only safe answer is to ask for missing authority, credentials, target, or observed evidence first."
+    ): (
+        "Default feature-surface Do-Not-Use boundary bullets appear in bespoke feature-surface "
+        "skill bodies (such as `memory-new`) and in progressive-disclosure `references/full-contract.md` "
+        "files for feature-surface workflow skills; each skill's full contract stays self-contained."
+    ),
+    normalize_block(
+        "- user request\n- target context\n- delivery or status expectation\n- known missing evidence"
+    ): (
+        "Default feature-surface required-input bullets appear in bespoke feature-surface skill "
+        "bodies (such as `memory-new`) and in progressive-disclosure `references/full-contract.md` "
+        "files so each skill's on-demand contract remains self-contained."
+    ),
 }
 
 

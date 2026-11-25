@@ -1607,6 +1607,11 @@ class RouterContentTests(unittest.TestCase):
 
         definitions = {definition.name: definition for definition in installable_skill_definitions()}
         templates = {template.name: template for template in builtin_skill_templates()}
+        full_contracts = {
+            template.skill_name: template.content
+            for template in builtin_skill_reference_templates()
+            if template.relative_path == "references/full-contract.md"
+        }
         handoff_shaped = {
             name
             for name, definition in definitions.items()
@@ -1616,13 +1621,13 @@ class RouterContentTests(unittest.TestCase):
         self.assertLessEqual({"ultrawork", "ai-slop-cleaner"}, handoff_shaped)
         for name in sorted(handoff_shaped):
             with self.subTest(skill=name):
-                content = templates[name].content
+                content = templates[name].content + "\n" + full_contracts.get(name, "")
                 self.assertIn("Delegation transparency:", content)
                 for rule in DELEGATION_TRANSPARENCY_RULES:
                     self.assertIn(rule, content)
         # Non-delegating lanes must not pay the note's bytes.
         for name in ("ralplan", "research", "deep-interview"):
-            self.assertNotIn("Delegation transparency:", templates[name].content, name)
+            self.assertNotIn("Delegation transparency:", templates[name].content + "\n" + full_contracts.get(name, ""), name)
         # The harness contract and the rendered rules stay one maintained copy.
         contract = harness_quality_contract("coding-handling")
         quality_bar = tuple(contract["quality_bar"])
@@ -1776,11 +1781,16 @@ class RouterContentTests(unittest.TestCase):
             ),
         }
         templates = {template.name: template.content for template in builtin_skill_templates()}
+        full_contracts = {
+            template.skill_name: template.content
+            for template in builtin_skill_reference_templates()
+            if template.relative_path == "references/full-contract.md"
+        }
 
         for name in hermes_setup_skill_names:
             with self.subTest(skill=name):
                 self.assertIn(name, templates, f"{name} should be a rendered Hermes setup skill")
-                content = templates[name]
+                content = templates[name] + "\n" + full_contracts.get(name, "")
 
                 position = -1
                 for step in _HERMES_SETUP_FIVE_STEP_BAR:
@@ -3339,13 +3349,18 @@ class RouterContentTests(unittest.TestCase):
 
     def test_flagship_skills_render_quality_rubric_examples(self) -> None:
         templates = {template.name: template.content for template in builtin_skill_templates()}
+        full_contracts = {
+            template.skill_name: template.content
+            for template in builtin_skill_reference_templates()
+            if template.relative_path == "references/full-contract.md"
+        }
         definitions = {definition.name: definition for definition in builtin_definitions()}
 
         for name in FLAGSHIP_SKILLS:
             with self.subTest(name=name):
                 self.assertIn(name, templates)
                 definition = definitions[name]
-                content = templates[name]
+                content = templates[name] + "\n" + full_contracts.get(name, "")
 
                 self.assertIn("## Why This Exists", content)
                 self.assertIn("## Do Not Use When", content)
@@ -3692,9 +3707,14 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("one delivery cycle", skills["ultraprocess"].content)
         self.assertIn("lane owner, next action, and missing evidence", skills["ultraprocess"].content)
         self.assertIn("PR readiness", skills["ultraprocess"].content)
-        self.assertIn("Findings come first", skills["code-review"].content)
-        self.assertIn("independent review evidence", skills["code-review"].content)
-        self.assertIn("hermes_coding_harness/v1", skills["code-review"].content)
+        full_contracts = {
+            template.skill_name: template.content
+            for template in builtin_skill_reference_templates()
+            if template.relative_path == "references/full-contract.md"
+        }
+        self.assertIn("Findings come first", skills["code-review"].content + "\n" + full_contracts.get("code-review", ""))
+        self.assertIn("independent review evidence", skills["code-review"].content + "\n" + full_contracts.get("code-review", ""))
+        self.assertIn("hermes_coding_harness/v1", skills["code-review"].content + "\n" + full_contracts.get("code-review", ""))
         self.assertIn("non-disjoint", skills["ultrawork"].content)
         self.assertIn("Worker ACK", skills["ultrawork"].content)
         self.assertIn("hermes_coding_harness/v1", skills["ultrawork"].content)
@@ -5230,6 +5250,11 @@ class ExpertQuestionCatalogTests(unittest.TestCase):
         payload = workflow_reference_payload()
         skills = {skill["name"]: skill for skill in payload["skills"]}
         templates = {template.name: template.content for template in builtin_skill_templates()}
+        full_contracts = {
+            template.skill_name: template.content
+            for template in builtin_skill_reference_templates()
+            if template.relative_path == "references/full-contract.md"
+        }
         reference = workflow_reference_markdown()
 
         definitions = {definition.name: definition for definition in builtin_definitions()}
@@ -5243,7 +5268,10 @@ class ExpertQuestionCatalogTests(unittest.TestCase):
             ]
             with self.subTest(name=name):
                 self.assertEqual(skills[name]["expert_questions"], expected_payload)
-                self.assert_expert_question_block_rendered(definitions[name], templates[name])
+                self.assert_expert_question_block_rendered(
+                    definitions[name],
+                    templates[name] + "\n" + full_contracts.get(name, ""),
+                )
                 section = reference.split(f"### {name}\n", 1)[1].split("\n### ", 1)[0]
                 self.assertIn(
                     "\n".join(expert_question_reference_lines(definitions[name])),
@@ -5251,6 +5279,7 @@ class ExpertQuestionCatalogTests(unittest.TestCase):
                 )
 
         from omh.skills import packaging
+        from omh.skills.render import workflow_full_contract_reference
 
         definition = definitions["finance-analysis"]
         packaging._builtin_skill_templates_cached.cache_clear()
@@ -5259,10 +5288,11 @@ class ExpertQuestionCatalogTests(unittest.TestCase):
                 mutated_templates = {
                     template.name: template.content for template in builtin_skill_templates()
                 }
+                mutated_contract = workflow_full_contract_reference(definition, definition.name)
             with self.assertRaisesRegex(AssertionError, "missing its expert question block"):
                 self.assert_expert_question_block_rendered(
                     definition,
-                    mutated_templates[definition.name],
+                    mutated_templates[definition.name] + "\n" + mutated_contract,
                 )
         finally:
             packaging._builtin_skill_templates_cached.cache_clear()

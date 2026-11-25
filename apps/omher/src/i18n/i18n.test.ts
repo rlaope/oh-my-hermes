@@ -30,6 +30,15 @@ describe("i18n", () => {
     for (const l of LANGS) for (const [k, v] of Object.entries(DICT[l])) expect(v, `${l} ${k}`).not.toMatch(banned);
   });
 
+  it("writes Korean in the polite 해요 style, never the formal 습니다 ending", () => {
+    for (const [k, v] of Object.entries(DICT.ko)) expect(v, k).not.toMatch(/니다[.\s,)"]|니다$/);
+  });
+
+  it("names the bot in the lost-turn note without a 이(가) fallback particle", () => {
+    for (const k of ["lost.paused", "lost.after", "lost.failed"] as const) expect(DICT.ko[k], k).not.toMatch(/\([이을은과]\)|\((가|를|는|와)\)/);
+    expect(t("lost.paused", { bot: "OMH TUI" }, "ko")).toMatch(/^OMH TUI의 턴이 /);
+  });
+
   it("names the run list Plans: 계획, 計画, 计划", () => {
     expect(LANGS.map((l) => t("plans.tab", undefined, l))).toEqual(["Plans", "계획", "計画", "计划"]);
   });
@@ -116,6 +125,18 @@ describe("i18n", () => {
       expect(DICT[l]["term.contrastThemeHint"], l).not.toMatch(/dim|4\.5/i);
     }
     expect(DICT.en["term.contrastHighHint"]).toBe("Text colours are lifted to 4.5:1 on every background. Dim text can stay below that.");
+  });
+
+  it("ko never prints a particle fallback such as 을(를) or (으)로 after a name, and says 셸 in a sentence", () => {
+    // a name's particle cannot be picked from a slot, so the sentence is phrased to need none after it
+    const fallback = /을\(를\)|를\(을\)|이\(가\)|가\(이\)|은\(는\)|는\(은\)|와\(과\)|과\(와\)|\(으\)로|\(이\)라/;
+    // lost.paused is the chat lane's sentence; it is rewritten there
+    for (const k of keys.filter((k) => k !== "lost.paused")) expect(DICT.ko[k], k).not.toMatch(fallback);
+    for (const k of keys) expect(DICT.ko[k].replace(/\{\w+\}/g, ""), k).not.toMatch(/\bshell\b/);
+    setLang("ko");
+    expect(t("ag.cardTitle", { name: "Cursor Agent" })).toBe("Cursor Agent 추가할까요?");
+    expect(t("apps.confirmRemove", { name: "Linear", bot: "Kami" })).toMatch(/^Kami에서 Linear 앱을 제거할까요\?/);
+    expect(t("acc.switched", { cli: "Codex", to: "Work", from: "This computer", reset: "" })).toBe("새 세션의 Codex 계정을 바꿨어요: Work (This computer 한도 도달)");
   });
 
   it("writes Simplified, not Traditional, Chinese", () => {

@@ -15,45 +15,15 @@ metadata:
 
 # Github Issue Intake
 
-This is a Hermes-native `github-issue-intake` workflow skill.
+Required: public report or summary, source boundary, explicit target repository, desired outcome, scope boundary, missing evidence. Output: github_issue_intake/v1, direction check, duplicate status, issue package or connector handoff, read-back verification or explicit blocker.
+
+**Do Not Use When:** The issue is already decided and the user only wants it filed or edited with the gh CLI, with no chat report to classify, question, or de-duplicate; load Hermes' bundled `github` skill instead of this one.
 
 ## Why This Exists
 
 `github-issue-intake` exists so a public support-chat report can become a verified GitHub issue through one bounded, confirmation-gated lane instead of ad hoc chat narration or an unscoped bot write.
 
-## Do Not Use When
-
-- The report only wants classification or signal clustering; use `omh-feedback-triage` instead.
-- The event concerns an already-existing issue, PR, review, or CI run; use `omh-github-event-ops` instead.
-- The user wants implementation; coding stays a separate follow-up lane with its own maintainer authority.
-- The report describes a security vulnerability; redirect to the private SECURITY.md path.
-- The issue is already decided and the user only wants it filed or edited with the gh CLI, with no chat report to classify, question, or de-duplicate; load Hermes' bundled `github` skill instead of this one.
-
-## Examples
-
-Good example:
-
-- Prompt: please file this as an issue: omh setup fails on Windows
-- Expected behavior: Classify the report, run the bounded interview, search duplicates, present the direction check, and prepare github_issue_intake/v1 for confirmation-gated connector handoff.
-- Why: The request is an explicit pre-creation filing ask with a classifiable report and an explicit target.
-
-Bad example:
-
-- Prompt: github-issue-intake prove the issue was filed and labelled.
-- Expected behavior: Report that creation, labeling, and any GitHub mutation stay unobserved until an authorized connector returns read-back evidence.
-- Why: A prepared package is not issue creation, label application, or any GitHub mutation evidence.
-
-## Completion Checklist
-
-- github_issue_intake/v1 carries the report type, smallest outcome, scope, evidence versus inference, and the duplicate query with its result.
-- Confirmation was taken on the complete direction check before any connector handoff.
-- Creation is reported only with the connector's read-back URL; otherwise it is stated as prepared, not created.
-
-## Recovery Notes
-
-- If reproduction evidence is still missing after three questions, retain the report classification and observed facts, mark the direction unresolved, and hand back the missing steps, versions, or logs without filing.
-- If duplicate search cannot finish, retain the scoped report summary, mark duplicate status unresolved, and hand back the explicit repository and pending search; do not confirm or dispatch creation.
-- If connector read-back lacks request binding or issue fields, retain the confirmed direction and duplicate status, mark creation not_observed, and hand back the idempotency key and missing read-back fields without redispatching.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -86,15 +56,6 @@ Handoff policy:
 
 Keep intake, direction check, and confirmation in Hermes; hand the confirmed package to an authorized Hermes-native/wrapper connector for the single scoped create_issue write, and hand implementation to a coding workflow only after separate maintainer authorization.
 
-Required inputs:
-
-- public report or summary
-- source boundary
-- explicit target repository
-- desired outcome
-- scope boundary
-- missing evidence
-
 Expert clarification questions:
 - `desired outcome`
   - English: What is the smallest user-visible outcome this issue should ask for?
@@ -105,18 +66,6 @@ Expert clarification questions:
 - `missing evidence`
   - English: Which reproduction steps, versions, or logs are still missing and would change the issue direction?
   - Korean: 이슈 방향을 바꿀 수 있는 재현 단계, 버전, 로그 중 아직 없는 증거는 무엇인가요?
-
-Expected outputs:
-
-- github_issue_intake/v1
-- direction check
-- duplicate status
-- issue package or connector handoff
-- read-back verification or explicit blocker
-
-Artifact expectations:
-
-- github_issue_intake/v1 metadata-only wrapper card when recorded
 
 Safety rules:
 
@@ -129,6 +78,18 @@ Safety rules:
 - A prepared issue package is not creation evidence; only connector read-back of repository, author, title, body, labels, and URL is observed evidence.
 - The target repository must be explicit or safely configured; never infer a cross-repository target from context.
 - github_issue_intake/v1 persists bounded metadata, digests, and refs only: no raw title, body, transcript, platform event, credential, prompt, private log, or private content; the complete request remains transient for the connector.
+
+## Completion Checklist
+
+- github_issue_intake/v1 carries the report type, smallest outcome, scope, evidence versus inference, and the duplicate query with its result.
+- Confirmation was taken on the complete direction check before any connector handoff.
+- Creation is reported only with the connector's read-back URL; otherwise it is stated as prepared, not created.
+
+## Recovery Notes
+
+- If reproduction evidence is still missing after three questions, retain the report classification and observed facts, mark the direction unresolved, and hand back the missing steps, versions, or logs without filing.
+- If duplicate search cannot finish, retain the scoped report summary, mark duplicate status unresolved, and hand back the explicit repository and pending search; do not confirm or dispatch creation.
+- If connector read-back lacks request binding or issue fields, retain the confirmed direction and duplicate status, mark creation not_observed, and hand back the idempotency key and missing read-back fields without redispatching.
 
 ## Runtime Evidence
 

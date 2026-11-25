@@ -317,3 +317,49 @@ test("screenshots: Accounts in dark and light (T11b)", async ({ page }) => {
     await page.screenshot({ path: join(SHOTS, `T11b-signin-${theme}.png`), animations: "disabled" });
   }
 });
+
+test("the two switches share one text column; the meta line wraps at 900 instead of cutting the reset time", async ({ page }) => {
+  await openAccounts(page);
+  const col = async (id: string) =>
+    page.getByTestId(id).evaluate((r) => ({ b: Math.round(r.querySelector("b")!.getBoundingClientRect().left), line: Math.round(r.querySelector(".acc-auto-t > span")!.getBoundingClientRect().left) }));
+  const a = await col("autoswitch-row-codex");
+  const b = await col("resetfirst-row-codex");
+  // label over its description, and both switches' text on the same x
+  expect(a.line, JSON.stringify(a)).toBe(a.b);
+  expect(b, JSON.stringify({ a, b })).toEqual(a);
+  for (const w of [1280, 900]) {
+    await page.setViewportSize({ width: w, height: w === 900 ? 600 : 820 });
+    const sub = row(page, "codex", "default").locator(".acc-sub");
+    await expect(sub).toContainText("resets");
+    expect(await sub.evaluate((el) => el.scrollWidth <= el.clientWidth + 1 && getComputedStyle(el).textOverflow !== "ellipsis"), `${w}px`).toBe(true);
+  }
+});
+
+test("the GitHub group keeps the CLI groups' two edges: mark in the mark column, heading and lead on the text column", async ({ page }) => {
+  await openAccounts(page);
+  const x = await page.getByTestId("accounts-page").evaluate((p) => {
+    const l = (el: Element | null) => Math.round(el!.getBoundingClientRect().left * 2) / 2;
+    const c = (el: Element | null) => { const r = el!.getBoundingClientRect(); return r.left + r.width / 2; };
+    const cli = p.querySelector("[data-testid=accounts-claude]")!;
+    const gh = p.querySelector("[data-testid=accounts-github]")!;
+    return { cliName: l(cli.querySelector(".acc-gh b")), cliMark: c(cli.querySelector(".acc-gh-i")), ghName: l(gh.querySelector(".acc-gh b")), ghMark: c(gh.querySelector(".acc-gh-i")), ghLead: l(gh.querySelector(".acc-lead")) };
+  });
+  expect(x.ghName, JSON.stringify(x)).toBe(x.cliName);
+  expect(x.ghLead, JSON.stringify(x)).toBe(x.cliName);
+  expect(Math.abs(x.ghMark - x.cliMark), JSON.stringify(x)).toBeLessThanOrEqual(0.5);
+});
+
+test("the switch notice starts on the rows' text column", async ({ page }) => {
+  await openAccounts(page);
+  await mock("mock.accounts", { limit: "default" });
+  const g = page.getByTestId("accounts-codex");
+  const toast = g.getByTestId("accounts-toast");
+  await expect(toast).toBeVisible();
+  const x = await g.evaluate((el) => {
+    const t = el.querySelector<HTMLElement>("[data-testid=accounts-toast]")!;
+    const range = document.createRange();
+    range.selectNodeContents(t);
+    return { text: Math.round(range.getBoundingClientRect().left), name: Math.round(el.querySelector(".acc-n")!.getBoundingClientRect().left) };
+  });
+  expect(Math.abs(x.text - x.name), JSON.stringify(x)).toBeLessThanOrEqual(1);
+});

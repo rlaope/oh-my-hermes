@@ -15,47 +15,17 @@ metadata:
 
 # Research Department
 
-This is a Hermes-native `research-department` workflow skill.
+Required: topic or watch area, source boundaries, cadence, delivery target, knowledge-store preference, synthesis-tool preference. Output: research_department_plan/v1, source_inbox/v1, briefing_status/v1, not-evidence boundary.
+
+**Do Not Use When:** The request is one news watch over named companies, or a scheduled run of a watch that already exists, with no knowledge store, synthesis tool, or briefing lanes to set up, and Hermes' bundled `competitor-news-monitor` skill is available; load that skill.
+
+**Do Not Use When:** The user wants a one-off paper search by topic, author, category, or paper id rather than a recurring paper review, and Hermes' bundled `arxiv` skill is available; load that skill.
 
 ## Why This Exists
 
 `research-department` exists so Hermes users can start complex research-ops patterns without manually designing profiles, cron, knowledge storage, synthesis tooling, and delivery glue, while OMH keeps every runtime claim observed-only.
 
-## Do Not Use When
-
-- The user only needs a one-off current-source lookup; use `omh-web-research` for one cited round, or `ulw-research` for a reference-implementation study with a depth budget.
-- The user only needs a one-off business synthesis; use `omh-research-brief`.
-- The request is pure scheduling with no source collection or synthesis; use `omh-automation-blueprint`.
-- The user asks for coding implementation; prepare a selected executor/runtime handoff after the research plan is accepted.
-- The request is one news watch over named companies, or a scheduled run of a watch that already exists, with no knowledge store, synthesis tool, or briefing lanes to set up, and Hermes' bundled `competitor-news-monitor` skill is available; load that skill.
-- The user wants a one-off paper search by topic, author, category, or paper id rather than a recurring paper review, and Hermes' bundled `arxiv` skill is available; load that skill.
-
-## Examples
-
-Good example:
-
-- Prompt: Set up a Scout, Analyst, and Briefer research flow for daily competitor and market changes.
-- Expected behavior: Prepare research_department_plan/v1 with Scout/Analyst/Briefer lanes, source inbox buckets, briefing status, knowledge-store and synthesis-tool readiness, and observed-only evidence requirements.
-- Why: The request is recurring, source-backed, and operational; a single research brief would miss the ongoing workflow/status boundary.
-
-Bad example:
-
-- Prompt: research-department prove the synthesis tool queried the knowledge base and posted the Slack brief.
-- Expected behavior: Ask for observed synthesis-tool and gateway delivery evidence or mark those states as not_observed.
-- Why: The workflow pack can prepare the operating pattern, but it cannot prove external tool execution or delivery.
-
-## Completion Checklist
-
-- research_department_plan/v1 names topic, cadence, delivery target, knowledge store and synthesis-tool readiness, each as supplied or missing.
-- Scout, Analyst and Briefer each map to a loadable skill; source_inbox/v1 has separate raw, processed, brief, conflict and verification buckets.
-- The watchlist, the materiality threshold and one cutoff per source are written down before the first run.
-- Any schedule is `not_observed` unless a `cronjob_manage` result or a cron listing was read.
-
-## Recovery Notes
-
-- If one watch source cannot be read, retain covered sources' findings and the failed source's previous cutoff, mark its coverage unresolved, and hand back that source and uncovered window rather than reporting a quiet period.
-- If the synthesis tool cannot process collected findings, retain raw findings in source_inbox/v1, mark synthesis not_observed, and hand back research_department_plan/v1 with the synthesis-tool readiness gap.
-- If schedule creation has no cronjob_manage result or cron listing, retain the cadence and Scout, Analyst, and Briefer plan, mark job creation not_observed, and hand back the prepared job description for separately approved scheduling.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -98,31 +68,24 @@ Handoff policy:
 
 Keep the research operating model in Hermes. Map Scout to `ulw-research`/`omh-web-research`, Analyst to `omh-research-brief`/`omh-web-research`, and Briefer to `omh-report-package` or meeting/report workflows. Record retrieval, synthesis-tool output, knowledge-store writes, delivery, and verification only from observed evidence.
 
-Required inputs:
-
-- topic or watch area
-- source boundaries
-- cadence
-- delivery target
-- knowledge-store preference
-- synthesis-tool preference
-
-Expected outputs:
-
-- research_department_plan/v1
-- source_inbox/v1
-- briefing_status/v1
-- not-evidence boundary
-
-Artifact expectations:
-
-- research_department_plan/v1 under .omh/research-department/plans when a wrapper or CLI records it
-
 Safety rules:
 
 - Do not claim web retrieval, synthesis-tool query, knowledge-store write, cron creation, gateway delivery, or verification from a prepared plan.
 - Keep raw findings, processed notes, briefs, conflicts, and verification needs in separate source inbox buckets.
 - Treat vendor-specific tool names as optional aliases for synthesis-tool and knowledge-store readiness unless observed evidence exists.
+
+## Completion Checklist
+
+- research_department_plan/v1 names topic, cadence, delivery target, knowledge store and synthesis-tool readiness, each as supplied or missing.
+- Scout, Analyst and Briefer each map to a loadable skill; source_inbox/v1 has separate raw, processed, brief, conflict and verification buckets.
+- The watchlist, the materiality threshold and one cutoff per source are written down before the first run.
+- Any schedule is `not_observed` unless a `cronjob_manage` result or a cron listing was read.
+
+## Recovery Notes
+
+- If one watch source cannot be read, retain covered sources' findings and the failed source's previous cutoff, mark its coverage unresolved, and hand back that source and uncovered window rather than reporting a quiet period.
+- If the synthesis tool cannot process collected findings, retain raw findings in source_inbox/v1, mark synthesis not_observed, and hand back research_department_plan/v1 with the synthesis-tool readiness gap.
+- If schedule creation has no cronjob_manage result or cron listing, retain the cadence and Scout, Analyst, and Briefer plan, mark job creation not_observed, and hand back the prepared job description for separately approved scheduling.
 
 ## Runtime Evidence
 

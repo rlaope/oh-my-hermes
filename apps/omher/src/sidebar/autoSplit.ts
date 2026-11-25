@@ -4,8 +4,11 @@
 //   expanded folder header or a bot whose threads are open with none of them showing. The smaller region is shown
 //   whole when it needs at most AUTO_WHOLE of the room; else the two heights leave as little room unused as they can,
 //   near an even split. A plain flex layout split evenly and left a blank band where edgeFade hid a cut row.
+// - room the whole-row ends leave unused (more than BAND_MAX: the next whole row would end on an open folder's header,
+//   which a region never does) goes to a region that hides rows, so no empty band stands above the footer while rows
+//   wait behind the chevron; edgeFade shows its cut row under the fade there.
 import { useEffect, type RefObject } from "react";
-import { cardGive, CUE_PX, CUT_ROWS, isHead } from "./edgeFade";
+import { BAND_MAX, cardGive, CUE_PX, CUT_ROWS, isHead } from "./edgeFade";
 
 /** A region as the planner sees it: its height with every row shown, and the heights at which its list ends on a
  *  whole row (each below `need`). */
@@ -19,8 +22,19 @@ export const AUTO_WHOLE = 0.6;
 /** Neither region is made shorter than this (or its need, when that is less). */
 export const AUTO_MIN = 96;
 
-/** BOTS' and TERMINALS' heights for `room` px. */
+/** BOTS' and TERMINALS' heights for `room` px: `wholeRows` (each ends on a whole row), then the room it left unused, past
+ *  BAND_MAX, handed to a region that still hides rows (TERMINALS first, the region above the footer), never past what
+ *  it needs. */
 export function planSplit(room: number, b: Region, t: Region, min = AUTO_MIN): [number, number] {
+  const [hb, ht] = wholeRows(room, b, t, min);
+  const left = room - hb - ht;
+  if (room <= 0 || left <= BAND_MAX) return [hb, ht];
+  if (ht < t.need) return [hb, Math.min(t.need, ht + left)];
+  if (hb < b.need) return [Math.min(b.need, hb + left), ht];
+  return [hb, ht];
+}
+
+function wholeRows(room: number, b: Region, t: Region, min: number): [number, number] {
   if (room <= 0) return [b.need, t.need];
   if (b.need + t.need <= room) return [b.need, t.need];
   const minB = Math.min(b.need, min);

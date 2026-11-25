@@ -354,6 +354,7 @@ class SkillRecord:
     next_action_label: str
     body: Callable[[], SkillTemplate]
     references: Callable[[], tuple[SkillReferenceTemplate, ...]]
+    value_mechanisms: tuple[str, ...] = ()
 
     def support(self):
         """Optional closed support resources; reading is never runtime execution."""
@@ -437,6 +438,7 @@ def _build_record(definition: SkillDefinition) -> SkillRecord:
     from ..routing.action_copy import next_action_label
     from ..routing.recommend import policy_with_source
     from .catalog_portable import skill_portability
+    from .value_mechanisms import value_mechanisms_for_skill
 
     name = definition.name
     harness_name = declared_primary_harness(name)
@@ -453,6 +455,7 @@ def _build_record(definition: SkillDefinition) -> SkillRecord:
         next_action_label=next_action_label(policy.next_action),
         body=skill_body_renderer(name),
         references=partial(_skill_references, name),
+        value_mechanisms=value_mechanisms_for_skill(name),
     )
 
 
