@@ -1614,6 +1614,23 @@ class FanoutVerificationCommandTests(unittest.TestCase):
         units[0]["verification_commands"] = commands
         return units
 
+    def test_a_lone_surrogate_in_a_byte_bounded_field_is_a_contract_error(self) -> None:
+        # #3210 carry: a JSON unit file may spell "\ud800"; json.loads accepts it, but it has no UTF-8 form.
+        # Measuring a byte bound on it raised a bare UnicodeEncodeError (a traceback from `fanout prepare`).
+        lone = json.loads('"echo \\ud800"')
+        repro = {"unit_id": "repro", "title": "Reproduce", "file_scope": ["src/core/"], "kind": "reproduction"}
+        cases = {
+            "verification_commands": self._with_commands([lone]),
+            "verification_checks": [{**_UNITS[0], "verification_checks": [{"command": lone}]}, *_UNITS[1:]],
+            "reproduction_command": [{**repro, "reproduction_command": lone}],
+            "task_linked_test_runner": [{**_UNITS[0], "task_linked_test_runner": lone}, *_UNITS[1:]],
+            "review_focus": [{**_UNITS[0], "review_focus": lone}, *_UNITS[1:]],
+        }
+        for field, units in cases.items():
+            with self.subTest(field=field), self.assertRaises(FanoutContractError) as raised:
+                build_fanout_contract("split work", units)
+            self.assertIn("valid UTF-8", str(raised.exception))
+
     def test_absent_field_leaves_the_contract_byte_identical(self) -> None:
         without = build_fanout_contract("split work", _UNITS)
         declared_empty = build_fanout_contract("split work", self._with_commands([]))

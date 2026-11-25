@@ -29,7 +29,12 @@ from typing import Any, Mapping, Sequence
 
 from ..codegraph import CODEGRAPH_TEST_SELECTION_SCHEMA_VERSION, select_tests_for_changes
 
-from .fanout_contracts import FanoutContractError, require_shell_free_command, verification_command_argv
+from .fanout_contracts import (
+    FanoutContractError,
+    contract_text_utf8_bytes,
+    require_shell_free_command,
+    verification_command_argv,
+)
 
 TASK_LINKED_POSTCONDITION_SCHEMA_VERSION = "task_linked_postcondition/v1"
 TASK_LINKED_TEST_RULE = "direct_importer_tests"
@@ -62,7 +67,7 @@ def normalized_task_linked_test_runner(value: object, index: int) -> str:
             f"unit at index {index} task_linked_test_runner must be a non-empty command prefix string"
         )
     runner = " ".join(value.split())
-    if len(runner.encode("utf-8")) > MAX_TASK_LINKED_TEST_RUNNER_BYTES:
+    if contract_text_utf8_bytes(runner, what=f"unit at index {index} task_linked_test_runner") > MAX_TASK_LINKED_TEST_RUNNER_BYTES:
         raise FanoutContractError(
             f"unit at index {index} task_linked_test_runner must be at most "
             f"{MAX_TASK_LINKED_TEST_RUNNER_BYTES} UTF-8 bytes"

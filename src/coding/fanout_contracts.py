@@ -180,6 +180,20 @@ class FanoutContractError(ValueError):
     """Raised when a proposed fanout unit list cannot be frozen into a contract."""
 
 
+def contract_text_utf8_bytes(text: str, *, what: str) -> int:
+    """UTF-8 size of a byte-bounded contract string, refusing text with no UTF-8 form.
+
+    A JSON unit file may spell a lone surrogate (`"\\ud800"`); `json.loads`
+    accepts it, but it has no UTF-8 encoding, so measuring it raised a bare
+    UnicodeEncodeError (a traceback from `omh coding fanout prepare`) instead
+    of the contract error every other bad field gets.
+    """
+    try:
+        return len(text.encode("utf-8"))
+    except UnicodeEncodeError as exc:
+        raise FanoutContractError(f"{what} must be valid UTF-8 text (no lone surrogates)") from exc
+
+
 # Unquoted shell syntax in a command that no shell will ever read. Ordered so
 # a two-character operator is named before its one-character prefix.
 _UNQUOTED_SHELL_OPERATORS = ("&&", "||", "$(", "|", ";", "&", ">", "<", "`")

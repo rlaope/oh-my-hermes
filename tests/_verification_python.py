@@ -1,6 +1,6 @@
 """A short interpreter path for fanout verification-command fixtures.
 
-The dispatcher caps a verification command at 240 characters
+The dispatcher caps a verification command at 240 UTF-8 bytes
 (`MAX_UNIT_VERIFICATION_COMMAND_BYTES`), a task-linked runner at 200 and a
 reproduction command at 240. A fixture that spells the interpreter as
 `sys.executable` carries the checkout path (`<checkout>/.venv/bin/python3`)
