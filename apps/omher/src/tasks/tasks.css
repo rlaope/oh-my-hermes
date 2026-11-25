@@ -101,6 +101,25 @@
   flex-direction: column;
   min-height: 0;
   min-width: 0;
+  container: tkmain / inline-size;
+}
+/* a list too narrow for the toolbar on one line (the 900px window, or the drawer open): the switches grow to fill their
+   row, so a row that wraps ends on the list's right edge instead of leaving one switch alone beside empty space */
+@container tkmain (max-width: 760px) {
+  .tk-chrome > .tk-seg,
+  .tk-chrome > .pg-chipwrap {
+    flex: 1 1 auto;
+  }
+  .tk-chrome > .pg-chipwrap > .tk-repo {
+    width: 100%;
+  }
+  /* a switch wider than the list (the drawer open) puts its segments on two lines rather than run past the edge */
+  .tk-chrome > .tk-seg {
+    flex-wrap: wrap;
+  }
+  .tk-chrome > .tk-seg button {
+    flex: 1 1 auto;
+  }
 }
 .tk-chrome {
   display: flex;
@@ -190,8 +209,8 @@
   background: var(--raise2);
   color: var(--ink);
 }
+/* in the header's right side beside ×: shrinks before anything in the header wraps */
 .tk-search {
-  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -200,7 +219,16 @@
   border-radius: var(--r);
   background: var(--search-bg);
   color: var(--quiet);
-  min-width: 160px;
+  flex: 0 1 180px;
+  min-width: 110px;
+}
+.tk-head .head-right {
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: flex-end;
+}
+.tk-search input {
+  min-width: 0;
 }
 .tk-search svg {
   width: 14px;
@@ -266,21 +294,28 @@
   overflow: hidden;
 }
 .tk-row-title {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--ink);
 }
+/* a narrow row gives way in the labels first (down to their dots), then in the title: the title is what the row is */
 .tk-label {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  flex: none;
+  flex: 0 100 auto;
+  min-width: 6px;
   max-width: 140px;
   font-size: 11px;
   color: var(--body);
   white-space: nowrap;
+  overflow: hidden;
+}
+.tk-label > span {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -289,6 +324,10 @@
   height: 6px;
   border-radius: 50%;
   flex: none;
+}
+/* a pale label colour (GitHub's a2eeef) still shows on the light page */
+[data-theme="light"] .tk-label i {
+  box-shadow: 0 0 0 1px var(--line-strong);
 }
 .tk-checks {
   flex: none;
@@ -345,6 +384,17 @@
   margin: 0;
   max-width: 460px;
   line-height: 1.55;
+  text-wrap: balance;
+}
+/* a state that is the whole pane (Linear): centred in it, its mark above */
+.tk-empty-c {
+  flex: 1;
+  justify-content: center;
+  padding-bottom: 64px;
+}
+.tk-empty-mark {
+  color: var(--muted);
+  margin-bottom: 4px;
 }
 .tk-big {
   color: var(--ink);
@@ -583,6 +633,7 @@
 
 /* ---- Linear ---- */
 .tk-linear {
+  flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -610,6 +661,9 @@
   margin-left: 6px;
   font-size: 10.5px;
   color: var(--danger);
+}
+.tk-repo.tk-acct {
+  font-family: inherit;
 }
 .tk-acct .tk-dot {
   margin-right: 2px;
