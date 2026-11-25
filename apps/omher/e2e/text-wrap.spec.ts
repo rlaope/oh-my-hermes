@@ -16,7 +16,8 @@ const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 const SHOTS = process.env.OMHER_SHOTS || "";
 const TAG = process.env.OMHER_SHOT_TAG || "after";
 const LANGS = ["en", "ko", "ja", "zh"] as const;
-const BOTS = ["kami", "friren", "default", "omh-tui"];
+// "build-box:mini" is a bot on another computer (SSH), its card's status beside the SSH marker instead of a chip
+const BOTS = ["kami", "friren", "default", "omh-tui", "build-box:mini"];
 
 const CJK_REPLY = {
   ja: "今日はKubernetesの設定をGrafanaで確認してからPrometheusのアラートをTerraformで直し、そのあとElasticsearchとPostgreSQLのバックアップをKubernetesのCronJobで毎晩回すようにして、最後にCloudflareとDatadogのダッシュボードもまとめて更新しました。詳しくは https://example.com/runbooks/kubernetes/cronjob-backup-and-restore-0123456789abcdef0123456789abcdef を見てください。",
@@ -109,6 +110,7 @@ async function cardProblems(page: Page): Promise<string[]> {
       const corner = w.querySelector(".bc-list");
       oneLine(`${name} status`, status);
       oneLine(`${name} chip`, card.querySelector(".bc-id code"));
+      oneLine(`${name} SSH marker`, card.querySelector(".bc-id .ssh-mark"));
       oneLine(`${name} corner`, corner);
       if (status && status.scrollWidth > status.clientWidth + 1) out.push(`${name} status cut: "${status.textContent}"`);
       if (corner) {
@@ -128,13 +130,16 @@ for (const lang of LANGS) {
     await open(page, lang);
     // the longest status in every language ("Not connected", "연결 안 됨") on the card with a profile chip
     await mock("mock.botStatus", { bot: "omh-tui", status: "offline" });
+    // a remote bot whose SSH marker has a long label, offline too: the marker gives way, never the status word
+    await mock("peers.attach", { peer: "build-box", label: "Build server in the hall closet", host: "you@build-box.local", url: `ws://127.0.0.1:5999/?token=${"0".repeat(32)}` });
+    await mock("mock.botStatus", { bot: "build-box:mini", status: "offline" });
     await page.getByTestId("nav-settings").click();
     await page.getByTestId("settings-nav-bots").click();
     await expect(page.getByTestId("bot-card-default")).toBeVisible();
     await expect(page.getByTestId("bot-addlist-friren")).toBeVisible();
-    await expect(page.getByTestId("bot-status-omh-tui")).toHaveText(
-      { en: "Not connected", ko: "연결 안 됨", ja: "未接続", zh: "未连接" }[lang],
-    );
+    for (const b of ["omh-tui", "build-box:mini"])
+      await expect(page.getByTestId(`bot-status-${b}`)).toHaveText({ en: "Not connected", ko: "연결 안 됨", ja: "未接続", zh: "未连接" }[lang]);
+    await expect(page.getByTestId("card-ssh-build-box:mini")).toBeVisible();
     // 900..1400 walks the grid through 1, 2 and 3 columns, each from its narrowest card (220px) up
     for (let width = 900; width <= 1400; width += 25) {
       await page.setViewportSize({ width, height: 820 });

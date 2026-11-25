@@ -4,7 +4,8 @@
 // A session that cannot take input now (paused, ended) shows the card on its idle view with Deny and "Resume and
 // send" only; a prompt that could not be typed keeps its card with a line saying so.
 import { useEffect, useRef } from "react";
-import { t } from "../i18n";
+import { t, tx } from "../i18n";
+import { koText } from "../chat/parts/textLang";
 import { getSessions, useSessions } from "./sessions";
 import { getTermShare, usePendingRequests } from "./termShare";
 import "../chat/cards/cards.css";
@@ -24,7 +25,7 @@ export function TermShareCards({ sessionId, title }: { sessionId: string; title:
     <div className="tshare-cards" data-testid="term-share-cards">
       {mine.map((r, i) => (
         <div key={r.key} ref={i === 0 ? first : undefined} className="card tshare-card" role="alertdialog" aria-label={t("tshare.wants", { bot: r.from || "?", title })} data-testid="term-share-card" data-request={r.id}>
-          <div className="card-title">{t("tshare.wants", { bot: r.from || "?", title })}</div>
+          <div className="card-title">{tx("tshare.wants", { bot: r.from || "?", title: <span lang={koText(title)}>{title}</span> })}</div>
           <pre className="card-cmd" data-testid="term-share-prompt">
             {r.prompt}
           </pre>

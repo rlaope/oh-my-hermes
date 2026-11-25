@@ -196,7 +196,6 @@ test("the preview page's Plans panel starts narrow and resizes by drag and arrow
     .toBe(true);
   const start = await cols();
   expect(start.chat, "the bot chat is the widest column").toBeGreaterThan(Math.max(start.side, start.panel));
-  const scrollY = await page.evaluate(() => scrollY);
 
   const drag = async (dx: number) => {
     const b = (await handle.boundingBox())!;
@@ -226,8 +225,9 @@ test("the preview page's Plans panel starts narrow and resizes by drag and arrow
   await expect.poll(async () => (await cols()).panel).toBe(260);
   await expect(frame.locator('[data-testid="window"]')).toHaveAttribute("style", /--panel-w: 260px/);
 
-  // the drag neither scrolled the page nor counted as an inert action
-  expect(await page.evaluate(() => scrollY)).toBe(scrollY);
+  // the drag did not count as an inert action. (On the home page this also checked the drag left the site page's
+  // scroll alone; the preview page on its own cannot scroll at all: body is overflow: hidden at the window's height.)
   expect((await cols()).notes).toBe(0);
+  expect(await page.evaluate(() => document.scrollingElement!.scrollHeight - innerHeight), "the preview page has no scroll range").toBeLessThanOrEqual(0);
   await page.close();
 });

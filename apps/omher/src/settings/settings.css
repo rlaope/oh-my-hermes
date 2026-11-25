@@ -576,9 +576,11 @@
   font-size: 11px;
   color: var(--muted);
 }
-/* the status is one word ("연결됨", "接続中"): one line, and "…" before it ever breaks */
+/* the status is one word ("연결됨", "接続中"): one line, at its full width (the SSH marker or the profile chip beside it
+   gives way first), and "…" only if the row is narrower than the word itself */
 .bc-st {
-  min-width: 0;
+  flex: none;
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

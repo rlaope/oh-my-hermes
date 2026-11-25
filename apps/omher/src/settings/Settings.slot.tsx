@@ -307,6 +307,7 @@ function BotCard({ bot }: { bot: Bot }) {
   const places = info ? Object.entries(info.places).slice(0, 3) : [];
   const live = bot.running || !!s.chats[bot.name]?.turn;
   const listed = (s.ui.roster ?? []).includes(bot.name);
+  const stWord = live ? t("bot.working") : statusText(bot.status);
   return (
     <div className="bot-card-w">
     <button
@@ -321,10 +322,14 @@ function BotCard({ bot }: { bot: Bot }) {
           <b>{bot.display_name}</b>
           <span>
             <i className={`st-dot ${live ? "working" : bot.status}`} aria-hidden="true" />
-            <span className="bc-st" data-testid={`bot-status-${bot.name}`}>
-              {live ? t("bot.working") : statusText(bot.status)}
+            <span className="bc-st" title={stWord} data-testid={`bot-status-${bot.name}`}>
+              {stWord}
             </span>
-            {bot.host ? <SshMarker bot={bot} testId={`card-ssh-${bot.name}`} /> : bot.name !== bot.display_name.toLowerCase() && <code>{bot.name}</code>}
+            {bot.host ? (
+              <SshMarker bot={bot} testId={`card-ssh-${bot.name}`} />
+            ) : (
+              bot.name !== bot.display_name.toLowerCase() && <code title={bot.name}>{bot.name}</code>
+            )}
           </span>
         </span>
       </span>

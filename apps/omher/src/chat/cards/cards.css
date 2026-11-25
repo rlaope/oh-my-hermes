@@ -10,7 +10,9 @@
   max-width: 76%;
   font-size: 12px;
 }
-.card-title {
+/* .card .card-title, not .card-title: a Korean title carries lang="ko", and [lang="ko"] (theme/base.css, same
+   specificity as a lone class) would otherwise win or lose on stylesheet order for overflow-wrap */
+.card .card-title {
   color: var(--ink);
   font-weight: 600;
   font-size: 12.5px;
