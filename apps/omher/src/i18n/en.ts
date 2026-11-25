@@ -758,6 +758,7 @@ export const en = {
   "unit.ms": "{m}m {s}s",
   "unit.hm": "{h}h {m}m",
   "unit.dh": "{d}d {h}h",
+  "unit.lt1s": "<1s",
   "unit.lt1m": "<1m",
   "time.nowShort": "now",
   "time.todayDay": "Today",

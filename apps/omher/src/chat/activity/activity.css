@@ -48,6 +48,14 @@
   color: var(--danger);
   font-weight: 700;
 }
+/* the turn waits on the person: the sidebar row's amber dot in the spinner's place, still */
+.act-ic.waiting {
+  width: 7px;
+  height: 7px;
+  margin: 0 2px;
+  border-radius: 50%;
+  background: var(--needs);
+}
 
 /* skill chip: the one brand-gradient element in the line */
 .act-skill {
@@ -237,8 +245,9 @@
 /* fan-out card: one per delegate_task, one row per subagent. No fill, a 1px line, 6px corners. */
 .sa-card {
   margin: 4px 0 2px;
-  /* the approval card's width (cards.css .card): a subagent's ask under its card ends at the same right edge */
-  max-width: 76%;
+  /* the approval card's width (cards.css .card): a subagent's ask under its card ends at the same right edge. In a
+     narrow column (the side panel open) it may take the whole column, up to 520px, rather than cut its goals */
+  max-width: max(76%, min(100%, 520px));
   border: 1px solid var(--line-soft);
   border-radius: 6px;
   padding: 6px 10px 7px;
@@ -269,14 +278,19 @@
   color: var(--needs-text);
 }
 .sa-sum {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* the plan's name gives way first (the summary and its time stay whole), cut with "…"; the tooltip names it */
 .sa-open {
-  flex: none;
+  flex: 0 1000 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--muted);
   font-family: var(--mono);
   font-size: 11px;

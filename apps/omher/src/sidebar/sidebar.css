@@ -874,10 +874,11 @@ button.upd:hover {
 /* ---- Needs you: approvals and questions waiting on the person ------------------------------------
    Amber, so it never reads as an unread count (the accent badge). Selected rows stay gray. A subagent row in the
    chat that waits on the person (.sa-row) says "waiting" in the same amber, and so does its card's head when every
-   row still out waits (.sa-head). */
+   row still out waits (.sa-head), and the chat's activity line shows its dot while the turn waits (.act-h). */
 .side,
 .sa-row,
-.sa-head {
+.sa-head,
+.act-h {
   --needs: #e9a23b;
   --needs-ink: #1b1204;
   --needs-soft: rgba(233, 162, 59, 0.12);

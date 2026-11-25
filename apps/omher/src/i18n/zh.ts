@@ -755,6 +755,7 @@ export const zh: Record<Key, string> = {
   "unit.ms": "{m} 分 {s} 秒",
   "unit.hm": "{h} 小时 {m} 分",
   "unit.dh": "{d} 天 {h} 小时",
+  "unit.lt1s": "不到 1 秒",
   "unit.lt1m": "不到 1 分钟",
   "time.nowShort": "刚刚",
   "time.todayDay": "今天",

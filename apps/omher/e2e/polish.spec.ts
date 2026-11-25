@@ -84,6 +84,21 @@ test("no bots: the empty pane says, in one line, that Hermes has no bot and wher
   expect(hint).not.toBe(faint);
 });
 
+test("a chat with no messages says hi in the middle of the column, with the bot's face, not as a date line at the top", async ({ page }) => {
+  await mock("mock.clearHistory", { bot: "omh-tui" });
+  await open(page);
+  await page.getByTestId("bot-omh-tui").click();
+  const hello = page.getByTestId("chat-hello");
+  await expect(hello).toHaveText("Say hi to OMH TUI");
+  await expect(hello.locator(".ui-av")).toBeVisible();
+  // centred in the timeline's height: the gaps above and below it differ by little, no 600px band under a top line
+  const [tl, box] = await Promise.all([page.getByTestId("timeline").boundingBox(), hello.boundingBox()]);
+  const above = box!.y - tl!.y;
+  const below = tl!.y + tl!.height - (box!.y + box!.height);
+  expect(Math.abs(above - below)).toBeLessThan(60);
+  await expect(page.getByTestId("timeline").locator(".day", { hasText: "Say hi" })).toHaveCount(0);
+});
+
 test("the bridge goes away: the composer says so and waits, then comes back by itself", async ({ page }) => {
   let drop: (() => void) | null = null;
   let away = false;

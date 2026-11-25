@@ -755,6 +755,7 @@ export const ja: Record<Key, string> = {
   "unit.ms": "{m}分{s}秒",
   "unit.hm": "{h}時間{m}分",
   "unit.dh": "{d}日{h}時間",
+  "unit.lt1s": "1秒未満",
   "unit.lt1m": "1分未満",
   "time.nowShort": "今",
   "time.todayDay": "今日",
