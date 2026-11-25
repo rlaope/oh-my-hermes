@@ -25,7 +25,7 @@ from .fanout_contracts import (
     MAX_SPAWN_PLAN_FIELD_CHARS,
     MAX_UNIT_VERIFICATION_CHECK_ID_CHARS,
     MAX_UNIT_VERIFICATION_CHECK_TIMEOUT,
-    MAX_UNIT_VERIFICATION_COMMAND_CHARS,
+    MAX_UNIT_VERIFICATION_COMMAND_BYTES,
     MAX_UNIT_INPUT_BUDGET_CHARS,
     MAX_UNIT_SOURCE_RANGE_DIGEST_CHARS,
     MAX_UNIT_SOURCE_RANGE_SOURCE_CHARS,
@@ -742,10 +742,10 @@ def _normalized_verification_commands(value: object, index: int) -> list[str]:
                 f"got {entry!r}"
             )
         command = " ".join(entry.split())
-        if len(command) > MAX_UNIT_VERIFICATION_COMMAND_CHARS:
+        if len(command.encode("utf-8")) > MAX_UNIT_VERIFICATION_COMMAND_BYTES:
             raise FanoutContractError(
                 f"unit at index {index} verification_commands entries must be at most "
-                f"{MAX_UNIT_VERIFICATION_COMMAND_CHARS} chars"
+                f"{MAX_UNIT_VERIFICATION_COMMAND_BYTES} UTF-8 bytes"
             )
         # Parsed at freeze time so a command no dispatcher could run fails here,
         # where the operator is still holding it, rather than mid-dispatch.
@@ -784,10 +784,10 @@ def _normalized_unit_kind(unit: Mapping[str, object], index: int) -> tuple[str, 
             f"unit at index {index} is a reproduction unit and requires a non-empty reproduction_command"
         )
     command = " ".join(raw_command.split())
-    if len(command) > MAX_UNIT_VERIFICATION_COMMAND_CHARS:
+    if len(command.encode("utf-8")) > MAX_UNIT_VERIFICATION_COMMAND_BYTES:
         raise FanoutContractError(
             f"unit at index {index} reproduction_command must be at most "
-            f"{MAX_UNIT_VERIFICATION_COMMAND_CHARS} chars"
+            f"{MAX_UNIT_VERIFICATION_COMMAND_BYTES} UTF-8 bytes"
         )
     # Parsed at freeze for the reason verification commands are: the
     # dispatcher runs it through the same argv split with `shell=False`.

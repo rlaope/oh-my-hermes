@@ -36,7 +36,7 @@ TASK_LINKED_TEST_RULE = "direct_importer_tests"
 # Distance 0 is a changed test module itself; 1 is a test importing a changed
 # file. The codegraph selection records both in the same field.
 TASK_LINKED_MAX_DISTANCE = 1
-MAX_TASK_LINKED_TEST_RUNNER_CHARS = 200
+MAX_TASK_LINKED_TEST_RUNNER_BYTES = 200
 
 TASK_LINKED_STATUSES = ("tests_selected", "no_reachable_tests", "not_resolved")
 TASK_LINKED_POSTCONDITION_CLAIM_BOUNDARY = (
@@ -62,10 +62,10 @@ def normalized_task_linked_test_runner(value: object, index: int) -> str:
             f"unit at index {index} task_linked_test_runner must be a non-empty command prefix string"
         )
     runner = " ".join(value.split())
-    if len(runner) > MAX_TASK_LINKED_TEST_RUNNER_CHARS:
+    if len(runner.encode("utf-8")) > MAX_TASK_LINKED_TEST_RUNNER_BYTES:
         raise FanoutContractError(
             f"unit at index {index} task_linked_test_runner must be at most "
-            f"{MAX_TASK_LINKED_TEST_RUNNER_CHARS} chars"
+            f"{MAX_TASK_LINKED_TEST_RUNNER_BYTES} UTF-8 bytes"
         )
     try:
         require_shell_free_command(runner, field="task_linked_test_runner")
