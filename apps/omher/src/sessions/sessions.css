@@ -1125,6 +1125,14 @@ body.split-dragging .xterm {
 .ss-head-st.needs::before {
   background: var(--needs);
 }
+/* a running terminal (TermHeadState): its row's state. Idle at its prompt is Ready with a still dot, as a chat's Ready;
+   a bot asking to type into it is Needs you; only flowing output pulses */
+.ss-head-st.term.idle::before {
+  background: var(--ok);
+}
+.ss-head-st.term.needs::before {
+  background: var(--needs);
+}
 /* a session's face outside its row (Needs-you list, typing bubble): the agent mark in the row's box */
 .ss-face {
   display: grid;
@@ -1824,8 +1832,9 @@ body.split-dragging .xterm {
 .tst.err {
   color: var(--danger);
 }
+/* a wait omher knows: the app's "needs attention" colour, darker on light so the triangle reads on the sidebar */
 .tst.bell {
-  color: #e8a33c;
+  color: var(--needs);
 }
 /* news: a 6 px accent dot, the folder summary dots' size, centred in the glyph's 12 px box */
 .tst.news {

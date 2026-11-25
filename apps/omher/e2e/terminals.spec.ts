@@ -204,6 +204,10 @@ test("rows: grouped by folder with the branch; two-line cards (status, mark, tit
   await expect(groups.nth(0).getByTestId("term-group-head")).toContainText("omher");
   await expect(groups.nth(0).getByTestId("term-group-branch")).toHaveText("feat/terminal-sessions");
   await expect(groups.nth(1).getByTestId("term-group-branch")).toHaveText("feature/checkout-flow");
+  // the header's second line is the folder it sits in, then the branch: the name above is not said twice, and the
+  // branch is not cut by it
+  await expect(groups.nth(0).getByTestId("term-group-path")).toHaveText("~/code · feat/terminal-sessions");
+  await expect(groups.nth(1).getByTestId("term-group-path")).toHaveText("~/code · feature/checkout-flow");
   const row = page.getByTestId(`session-${ids.claude}`);
   await expect(row.getByTestId("term-row-mark")).toHaveAttribute("data-agent", "claude");
   // a two-line card (spacing, 2026-11-16): the age on line 1, the CLI (then what it last said) on line 2
@@ -224,9 +228,19 @@ test("rows: grouped by folder with the branch; two-line cards (status, mark, tit
   // could not start = x
   await expect(page.getByTestId(`session-${ids.done}`)).toHaveAttribute("data-term-status", "idle");
   await page.getByTestId(`session-${ids.codex}`).locator(".ss-open").click();
+  // the header says what the row says: Ready (a still dot) while it sits at its prompt, Working (the pulse) while it prints
+  const head = page.getByTestId("session-status");
+  const pulse = () => head.evaluate((e) => getComputedStyle(e, "::before").animationName);
+  await expect(page.getByTestId(`session-${ids.codex}`)).toHaveAttribute("data-term-status", "idle", { timeout: 6000 });
+  await expect(head).toHaveText("Ready");
+  expect(await pulse()).toBe("none");
   await typeIn(page, "hello");
   await expect(page.getByTestId(`session-${ids.codex}`)).toHaveAttribute("data-term-status", "busy");
+  await expect(head).toHaveText("Working");
+  expect(await pulse()).not.toBe("none");
   await expect(page.getByTestId(`session-${ids.codex}`)).toHaveAttribute("data-term-status", "idle", { timeout: 6000 });
+  await expect(head).toHaveText("Ready");
+  expect(await pulse()).toBe("none");
   await page.evaluate(() => ((window as unknown as Record<string, unknown>).__omherShellDie = { code: 1 }));
   await typeIn(page, "after 10 exit 3");
   await expect(page.getByTestId(`session-${ids.codex}`)).toHaveAttribute("data-term-status", "err");
