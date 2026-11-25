@@ -185,17 +185,20 @@ test("the list: running first with a live dot, then newest; dots differ by state
   await expect(rows.nth(2).locator("i").first()).toHaveAttribute("aria-label", "cancelled");
 });
 
-test("the list is plans: \"Kami's plans\"; a row is plain text: the goal, then 3/6 · 14m, and a small state dot", async ({ page }) => {
+test("the list is plans: \"Kami's plans\"; a row is plain text: the plan's title, then 3/6 · 14m, and a small state dot", async ({ page }) => {
   await openRuns(page);
   await expect(page.getByTestId("panel-tab-runs")).toHaveText("Plans");
   await expect(page.getByTestId("panel-runs").locator(".pn-sec").first()).toContainText("Kami's plans");
   await expect(page.getByTestId("run-list-toggle")).toHaveText("All 7 plans");
   await showList(page);
   const rows = page.getByTestId("run-row");
-  // the goal is the row's text; a plan without one shows its title
-  await expect(rows.nth(0).getByTestId("run-row-text")).toHaveText(/^OMH suggests its own skills to Codex fanouts/);
+  // the plan's title is the row's text, the name its header uses (two plans of one goal read apart); the goal is in
+  // the tooltip
+  await expect(rows.nth(0).getByTestId("run-row-text")).toHaveText("Codex coexistence (live)");
   await expect(rowOf(page, "omh-dap").getByTestId("run-row-text")).not.toHaveText("");
   await expect(rows.nth(0)).toHaveAttribute("title", /^Codex coexistence \(live\) · OMH suggests/);
+  const texts = await rows.getByTestId("run-row-text").allTextContents();
+  expect(new Set(texts).size, texts.join(" | ")).toBe(texts.length);
   // a dot, the text, the numbers: nothing else, and nothing drawn as a pill
   const parts = await rows.evaluateAll((els) =>
     els.map((e) => ({
@@ -312,6 +315,31 @@ test("a bot with no runs says so", async ({ page }) => {
   await openRuns(page);
   await page.getByTestId("bot-friren").click();
   await expect(page.getByTestId("panel-runs")).toContainText("No plans yet.");
+});
+
+test("in Korean the panel says its times in Korean, and the bot's name as written", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("omher.lang", "ko"));
+  await openRuns(page);
+  const head = page.getByTestId("run-plan");
+  // the run's time in the chat's units ("15분 09초"), never "15m 09s" beside a chat that says "2초"
+  await expect(head.getByTestId("run-plan-time")).toHaveText(/^ · (\d+초|\d+분 \d\d초|\d+시간 \d\d분 \d\d초)$/);
+  await settled(page);
+  const status = await panel(page).getByTestId("run-node").locator("[data-testid=node-status]").allTextContents();
+  expect(status.join(" | ")).not.toMatch(/\d+[smhd]\b/);
+  // the section label keeps the name as the person wrote it: "Kami의 계획", never "KAMI의 계획"
+  const sec = page.getByTestId("panel-runs").locator(".pn-sec").first();
+  await expect(sec).toContainText("Kami의 계획");
+  await expect(sec.locator(".pn-name")).toHaveText("Kami");
+  await expect(sec.locator(".pn-name")).toHaveCSS("text-transform", "none");
+  // one run of text: the name sits inline in its sentence, no gap from the label's flex layout
+  const [name, rest] = await sec.evaluate((e) => {
+    const n = e.querySelector(".pn-name")!.getBoundingClientRect();
+    const r = document.createRange();
+    r.setStartAfter(e.querySelector(".pn-name")!);
+    r.setEnd(e.querySelector(".pn-name")!.nextSibling!, 1);
+    return [n.right, r.getBoundingClientRect().left];
+  });
+  expect(Math.abs(rest - name)).toBeLessThan(1.5);
 });
 
 // ---- the header: plain text ----
@@ -510,9 +538,17 @@ test("a node is its title, one mark with what ran it, and a status icon with a w
       }),
     ),
   );
-  // line 1: the title, on one line or two of 18px; one longer than that ends in "…" at the end of the second
+  // line 1: the title, on one line or two of 18px. One longer than that ends in "…" at the end of the second, except
+  // a trailing "(…)": that stays whole and the middle gives way, so two steps of one task never read the same
   expect(by["t3-doctor"]).toMatchObject({ title: "Doctor check for the Codex pack", lines: 2, clamp: "2", tall: 36, cut: false });
-  expect(by["t1-hermes"]).toMatchObject({ title: "Codex skill discovery reads .agents/skills (Hermes)", lines: 2, clamp: "2", tall: 36, cut: true });
+  expect(by["t1-hermes"]).toMatchObject({ title: expect.stringMatching(/^Codex skill .*… \(Hermes\)$/), lines: 2, clamp: "2", tall: 36, cut: false });
+  await expect(box.locator('[data-testid="run-node"][data-node="t1-hermes"]')).toHaveAttribute("title", "Codex skill discovery reads .agents/skills (Hermes)");
+  const shown = await nodes.evaluateAll((els) => els.map((e) => {
+    const t = e.querySelector<HTMLElement>("[data-testid=node-title]")!;
+    // what the clamp leaves on screen: the text up to where the box cuts it
+    return t.scrollHeight > t.clientHeight + 1 ? `${(t.textContent ?? "").slice(0, 24)}…` : (t.textContent ?? "").trim();
+  }));
+  expect(new Set(shown).size, shown.join(" | ")).toBe(shown.length);
   for (const n of Object.values(by)) {
     expect([1, 2]).toContain(n.lines);
     expect(n.tall).toBe(n.lines * 18);
