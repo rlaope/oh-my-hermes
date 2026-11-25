@@ -927,6 +927,7 @@ export const ko: Record<Key, string> = {
   "tl.offline": "{bot}가 연결되어 있지 않아요.",
   "needs.one": "1개 확인 필요",
   "needs.many": "{n}개 확인 필요",
+  "needs.sep": ", ",
   "needs.list": "답을 기다리는 중",
   "needs.approve": "승인",
   "needs.question": "질문",

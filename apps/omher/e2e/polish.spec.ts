@@ -215,6 +215,28 @@ function contrast(a: string, b: string): number {
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
 }
 
+test("the faintest text gray reads at 4.5:1 on the sidebar and the chat in both themes; light's waiting amber too", async ({ page }) => {
+  for (const theme of ["dark", "light"] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await open(page);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    const quiet = await token(page, "--quiet");
+    for (const bg of ["--side", "--bg"]) expect(contrast(quiet, await token(page, bg)), `${theme} --quiet on ${bg}`).toBeGreaterThanOrEqual(4.5);
+    // a bot's time in the sidebar is drawn in it
+    const [time, side] = await Promise.all([
+      page.getByTestId("bot-friren").getByTestId("bot-time").evaluate((e) => getComputedStyle(e).color),
+      page.locator(".side").evaluate((e) => getComputedStyle(e).backgroundColor),
+    ]);
+    expect(contrast(time, side), `${theme} row time`).toBeGreaterThanOrEqual(4.5);
+  }
+  // the waiting label's amber on the light sidebar
+  await mock("mock.ask", { bot: "friren", kind: "approval" });
+  const wait = page.getByTestId("bot-friren").getByTestId("bot-time");
+  await expect(wait).toHaveText("waiting");
+  const [amber, side] = await Promise.all([wait.evaluate((e) => getComputedStyle(e).color), page.locator(".side").evaluate((e) => getComputedStyle(e).backgroundColor)]);
+  expect(contrast(amber, side)).toBeGreaterThanOrEqual(4.5);
+});
+
 test("five asks: the Needs list ends on the third, whole, and a '+2 more' row opens the rest", async ({ page }) => {
   // one open ask per bot: five more bots (copies of Friren the mock does not know, so nothing re-reads their asks
   // away) ask at once

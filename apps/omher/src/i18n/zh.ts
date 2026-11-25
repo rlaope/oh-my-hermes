@@ -927,6 +927,7 @@ export const zh: Record<Key, string> = {
   "tl.offline": "{bot} 未连接。",
   "needs.one": "1 项待你处理",
   "needs.many": "{n} 项待你处理",
+  "needs.sep": "、",
   "needs.list": "等待你的回复",
   "needs.approve": "审批",
   "needs.question": "提问",

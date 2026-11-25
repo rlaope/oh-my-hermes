@@ -1,5 +1,6 @@
 // "Needs you": approvals and questions waiting on the person in any bot or SESSIONS chat, pinned above the BOTS list. One line
-// ("2 need you · Friren: Allow rm -rf build/?", naming the newest ask); clicking it expands the list in place, pushing BOTS down (never over it, so the open bot stays in
+// ("2 need you · Friren and Hermes": the count, then who waits, in the list's order; the asks themselves are in the list and
+// would never fit the sidebar's width, ⌘J is in the tooltip); clicking it expands the list in place, pushing BOTS down (never over it, so the open bot stays in
 // view): each ask with the bot's face, a type tag (Approve / Question), the ask on up to two lines, and its age. An
 // item opens that bot's chat with the card scrolled into view and focused. ⌘J does the same for the next ask. Esc
 // or a click outside closes the list. Past three asks the list ends on the third, whole, and a "+2 more" row shows
@@ -31,13 +32,13 @@ export function age(ts: number, nowMs: number): string {
   return t("unit.h", { n: Math.floor(s / 3600) });
 }
 
-/** The collapsed strip's line: the count, then who asked last and the first words of that ask, so the person
- *  knows what waits without opening the list ("2 need you · Friren: Allow rm -rf build/?"). The ask is cut at
- *  `max` characters with an ellipsis; CSS cuts again when the sidebar is narrower. */
-export function stripText(n: number, who: string, ask: string, max = 32): { count: string; rest: string } {
-  const flat = ask.replace(/`/g, "").replace(/\s+/g, " ").trim();
-  const words = flat.length > max ? `${flat.slice(0, max - 1).trimEnd()}…` : flat;
-  return { count: n === 1 ? t("needs.one") : t("needs.many", { n }), rest: ` · ${who}: ${words}` };
+/** The collapsed strip's line: the count, then who waits, each name once and in the order the list shows them
+ *  ("2 need you · Friren, Hermes"); past two names the rest is a count ("Friren, Hermes +2"), so the line fits the
+ *  sidebar. The asks' own words stay in the list: in the strip's width they never showed. */
+export function stripText(n: number, who: string[]): { count: string; rest: string } {
+  const names = [...new Set(who.filter(Boolean))];
+  const shown = names.slice(0, 2).join(t("needs.sep")) + (names.length > 2 ? ` +${names.length - 2}` : "");
+  return { count: n === 1 ? t("needs.one") : t("needs.many", { n }), rest: names.length ? ` · ${shown}` : "" };
 }
 
 /** The strip's words with each " · " held to the word after it in one unbreakable box: where the sidebar cuts the
@@ -91,10 +92,9 @@ export function NeedsStrip({ asks, prs = [] }: { asks: Ask[]; prs?: FailingThrea
   const n = total;
   const shown = all || asks.length <= SHOW ? asks : asks.slice(0, SHOW);
   const shownPrs = all || asks.length + prs.length <= SHOW ? prs : prs.slice(0, Math.max(0, SHOW - shown.length));
-  // asks are oldest first: the strip names the newest; with no ask, the newest failing pull request
-  const newest = asks[asks.length - 1];
-  const lastPr = prs[prs.length - 1];
-  const line = newest ? stripText(n, name(newest.bot), askText(newest.item)) : stripText(n, prWho(s, lastPr, name(lastPr.bot)), prReason(lastPr));
+  // who waits, in the list's order (asks oldest first, then the failing pull requests)
+  const line = stripText(n, [...asks.map((a) => name(a.bot)), ...prs.map((f) => prWho(s, f, name(f.bot)))]);
+  const key = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘J" : "Ctrl+J";
   return (
     <div
       className={`needs-w${open ? " open" : ""}`}
@@ -113,14 +113,13 @@ export function NeedsStrip({ asks, prs = [] }: { asks: Ask[]; prs?: FailingThrea
         aria-expanded={open}
         aria-haspopup="true"
         onClick={() => setOpen((v) => !v)}
+        title={`${line.count}${line.rest} (${key})`}
+        aria-keyshortcuts={key === "⌘J" ? "Meta+J" : "Control+J"}
       >
         <span className="needs-ic" aria-hidden="true" />
-        <span className="needs-t" title={line.count + line.rest} data-testid="needs-line">
+        <span className="needs-t" data-testid="needs-line">
           {line.count}
           <span className="needs-who">{glued(line.rest)}</span>
-        </span>
-        <span className="needs-k" aria-hidden="true">
-          {/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘J" : "Ctrl+J"}
         </span>
         <span className="needs-chev" aria-hidden="true">
           <ChevronDown size={10} />

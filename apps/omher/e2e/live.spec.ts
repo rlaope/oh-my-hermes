@@ -226,7 +226,7 @@ test("light: the ring keeps its 2.5px band and deeper stops with no glow; waitin
   expect(g).toEqual({ band: "2.5px", arc: "140deg", filter: "none" });
   await emit(ev("friren", "approval.request", { request_id: "ap-l", title: "Run shell command", command: "ls", choices: ["once", "deny"] }));
   await expect(row.getByTestId("bot-time")).toHaveText("waiting");
-  await expect(row.getByTestId("bot-time")).toHaveCSS("color", "rgb(168, 100, 10)");
+  await expect(row.getByTestId("bot-time")).toHaveCSS("color", "rgb(148, 87, 10)");
   await emit(ev("friren", "prompt.expired", { request_id: "ap-l", reason: "timeout" }), ev("friren", "turn.end", { outcome: "done" }));
 });
 

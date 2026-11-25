@@ -927,6 +927,7 @@ export const ja: Record<Key, string> = {
   "tl.offline": "{bot} は接続されていません。",
   "needs.one": "1 件の確認待ち",
   "needs.many": "{n} 件の確認待ち",
+  "needs.sep": "、",
   "needs.list": "回答待ち",
   "needs.approve": "承認",
   "needs.question": "質問",

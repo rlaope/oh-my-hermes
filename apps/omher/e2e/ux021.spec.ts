@@ -71,22 +71,28 @@ test.skip("U10: the Terminal toggle is a 24px icon button named Open in Terminal
   await expect(page.getByTestId("session-chat")).toBeVisible();
 });
 
-test("U11: the collapsed strip names the newest ask's bot and its first words; expanding and ⌘J are unchanged", async ({ page }) => {
+test("U11: the collapsed strip names who waits in the list's order, whole; expanding and ⌘J are unchanged", async ({ page }) => {
   await open(page);
   await expect(page.getByTestId("bot-friren").getByTestId("bot-sub")).toContainText("updater");
   const strip = page.getByTestId("needs-strip");
   await mock("mock.ask", { bot: "friren", kind: "approval" });
-  await expect(page.getByTestId("needs-line")).toHaveText("1 needs you · Friren: Allow rm -rf build/?");
+  await expect(page.getByTestId("needs-line")).toHaveText("1 needs you · Friren");
   await mock("mock.ask", { bot: "default", kind: "clarify" });
-  // the newest ask, cut at 32 characters
-  await expect(page.getByTestId("needs-line")).toHaveText("2 need you · Hermes: Which environment should I depl…");
-  await expect(page.getByTestId("needs-line")).toHaveAttribute("title", "2 need you · Hermes: Which environment should I depl…");
-  // one line: the sidebar cuts it again rather than wrapping
+  // the names in the list's order (oldest ask first), never the ask's words, which the strip's width always cut
+  await expect(page.getByTestId("needs-line")).toHaveText("2 need you · Friren, Hermes");
+  // the shortcut is in the tooltip, not in the line
+  await expect(strip).toHaveAttribute("title", /^2 need you · Friren, Hermes \((⌘|Ctrl\+)J\)$/);
+  await expect(strip.locator(".needs-k")).toHaveCount(0);
+  // one line, shown whole at the default and at the smallest window
   const line = page.getByTestId("needs-line");
   expect(await line.evaluate((el) => getComputedStyle(el).whiteSpace)).toBe("nowrap");
   expect((await strip.boundingBox())!.height).toBe(28);
+  for (const size of [{ width: 1280, height: 820 }, { width: 900, height: 600 }]) {
+    await page.setViewportSize(size);
+    expect(await line.evaluate((el) => el.scrollWidth - el.clientWidth), `${size.width}px`).toBeLessThanOrEqual(0);
+  }
   await strip.click();
-  await expect(page.getByTestId("needs-item")).toHaveCount(2);
+  await expect(page.getByTestId("needs-item").locator(".needs-b")).toHaveText(["Friren", "Hermes"]);
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("needs-list")).toHaveCount(0);
   const key = (await page.evaluate(() => /Mac/.test(navigator.platform))) ? "Meta" : "Control";

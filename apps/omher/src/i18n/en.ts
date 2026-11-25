@@ -930,6 +930,7 @@ export const en = {
   "tl.offline": "{bot} is not connected.",
   "needs.one": "1 needs you",
   "needs.many": "{n} need you",
+  "needs.sep": ", ",
   "needs.list": "Waiting for your answer",
   "needs.approve": "Approve",
   "needs.question": "Question",

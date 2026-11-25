@@ -299,8 +299,13 @@ test("footer: Automations, Plugins, Apps and Settings in one row of icon buttons
     await expect(row.getByRole("button", { name: new RegExp(`^${name}`) })).toHaveCount(1);
     await expect(row.getByTestId(id)).toHaveAttribute("title", new RegExp(`^${name}`));
   }
-  // the Automations count stays on its icon
-  await expect(row.getByTestId("nav-automations").locator(".nav-count")).toHaveText("6");
+  // the Automations count stays on its icon, as a filled pill that stands off the glyph (not a bare superscript digit)
+  const count = row.getByTestId("nav-automations").locator(".nav-count");
+  await expect(count).toHaveText("6");
+  expect(await count.evaluate((e) => getComputedStyle(e).backgroundColor)).not.toBe(await page.evaluate(() => getComputedStyle(document.querySelector(".side")!).backgroundColor));
+  const [pill, glyph] = await Promise.all([count.boundingBox(), row.getByTestId("nav-automations").locator("svg").boundingBox()]);
+  expect(pill!.width).toBeGreaterThanOrEqual(14);
+  expect(pill!.x + pill!.width).toBeGreaterThan(glyph!.x + glyph!.width);
   await expect(row.getByTestId("nav-automations")).toHaveAttribute("title", "Automations · 6");
   // one row: the four share a line, and the usage marks sit on it too
   const ys = await page.evaluate(() => ["nav-automations", "nav-plugins", "nav-apps", "nav-settings"].map((id) => Math.round(document.querySelector(`[data-testid="${id}"]`)!.getBoundingClientRect().top)));
