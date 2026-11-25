@@ -467,10 +467,16 @@
   outline: none;
   border-color: var(--line-strong);
 }
+/* Two columns at most in the 760px page (one under 610px), every row as tall as the tallest card, and an odd count's
+   last card takes the whole row: no count leaves a card alone beside empty slots. */
 .bots-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-auto-rows: 1fr;
   gap: 10px;
+}
+.bots-grid > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
 }
 .bots-empty {
   font-size: 12px;

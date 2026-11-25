@@ -652,10 +652,15 @@
   margin-left: 5px;
   font-size: 12px;
 }
+/* Two columns; an odd count's last card takes the whole row, so no card sits alone beside an empty slot (Plugins'
+   three tabs and every Apps section share this grid). */
 .pl-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+.pl-grid > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
 }
 .pl-card {
   border: 1px solid var(--line-soft);
@@ -663,8 +668,10 @@
   border-radius: 10px;
   padding: 12px 12px 12px 14px;
   display: grid;
-  /* the actions get their own row so a long plugin name keeps the full width */
+  /* the actions get their own row so a long plugin name keeps the full width; the text row takes the card's spare
+     height, so the actions sit on the bottom padding and line up with the neighbouring card's */
   grid-template-columns: 34px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: 10px 12px;
   align-items: start;
 }
@@ -740,6 +747,7 @@
 }
 .pl-ctl {
   grid-column: 2;
+  align-self: end;
   display: flex;
   align-items: center;
   justify-content: flex-end;
