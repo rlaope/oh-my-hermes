@@ -149,6 +149,9 @@ packages = [
   "monitor_watch_toolkit/README.md", "monitor_watch_toolkit/scripts/api_watch.py",
   "monitor_watch_toolkit/scripts/google_watch.py", "monitor_watch_toolkit/scripts/vault_watch.py",
   "monitor_watch_toolkit/examples/*.json",
+  "data_share_review_toolkit/README.md", "data_share_review_toolkit/scripts/residual_scan.py",
+  "commit_pr_authoring_toolkit/README.md", "commit_pr_authoring_toolkit/scripts/merge_danger_scan.py",
+  "inference_serving_toolkit/README.md", "inference_serving_toolkit/scripts/vram_kv_calc.py",
 ]
 "omh.skins" = ["*.yaml"]
 "omh.tui" = ["frontend/dist/*.js"]

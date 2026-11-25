@@ -54,6 +54,7 @@ Quality bar:
 - Load `references/data-share-method.md` for the field classes, the minimization order, the pseudonymization method, the per-class scan patterns, and the quasi-identifier group check instead of recalling them.
 - Count each class with `search_files` in its `count` output mode, or with a detector script run through `execute_code` when `execute_code` is in your tool list or tool_search finds it; its stdout returns, and so do stderr and any traceback, so it prints counts only and catches its own errors without echoing a value. With neither, hand the user the scan to run and keep the verdict not_observed until the counts come back.
 - Hermes' `privacy.redact_pii` hashes user and chat identifiers in the gateway's session prompt on the platforms that allow it, and `security.redact_secrets` masks secret-shaped strings in tool output; neither changes a file that leaves, so neither is this scan.
+- Run `toolkit/scripts/residual_scan.py` (see `skill_view(name='omh-data-share-review', file_path='toolkit/README.md')`, counts-only, never prints matched values) on the exact file that leaves to produce the observed `residual_scan/v1` record.
 - Keep inventoried, minimized, masked, scanned, and shipped as separate states for the file.
 
 Handoff policy:

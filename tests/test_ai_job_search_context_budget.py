@@ -593,7 +593,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # Universal progressive disclosure for non-bespoke `omh-*` skills and upstream Hermes
         # bundled/optional deferrals update the legacy Hermes bodies (lowering total body size
         # from 1,549,057 -> 1,348,078 and repeated bytes from 93,533 -> 92,654); re-derived from producer.
-        self.assertEqual(_digest(legacy_hashes), '53162d403db6e3bdba6f3c121549a0d5324386fb635df228cd7b9d5cd927291f')
+        # Companion toolkit pointers in quality_bar for data-share-review, commit-pr-authoring, and
+        # inference-serving update those three legacy bodies; re-derived from the producer.
+        self.assertEqual(_digest(legacy_hashes), '47bcd46de3af3d550cdccb59a94ded8718ae2eb0c0ced6e98d373f7ad114a50a')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
