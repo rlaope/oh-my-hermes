@@ -320,7 +320,8 @@ node e2e/mock-bridge.mjs --port 5308   # the mock bridge for that
 pnpm tauri dev            # the app: starts the real bridge from ./bridge
 pnpm typecheck && pnpm test            # tsc, vitest
 pnpm e2e                  # Playwright (chromium) against the mock bridge
-bash scripts/e2e-shards.sh 3           # the same as 3 shards at once, each with its own ports (what CI runs)
+bash scripts/e2e-shards.sh 3           # the same as 3 shards at once, each with its own ports
+OMHER_E2E_PART=2/4 bash scripts/e2e-shards.sh 2   # one of CI's four Linux runners: shards 3-4 of 8
 (cd src-tauri && cargo test)           # the shell's Rust tests
 (cd src-tauri && cargo test real_agents_print_their_version -- --ignored --nocapture)  # `claude/codex --version` through the PTY
 python -m unittest discover -s bridge/tests -v   # bridge tests with a FakeGateway; needs no Hermes
@@ -341,7 +342,8 @@ or Windows signing certificate is involved: macOS builds use an ad-hoc signature
 Moved verbatim from the repository's `CLAUDE.md`.
 
 omher has its own toolchain (Node + pnpm, Rust, Tauri 2) and its own CI
-(`.github/workflows/omher.yml` for macOS and Windows plus the bridge tests,
+(`.github/workflows/omher.yml`: the whole e2e suite on Linux runners, the per-platform specs and builds on macOS
+and Windows, plus the bridge tests;
 `omher-ci.yml` for Linux), which run only when `apps/omher/**`, the boundary
 doc or its test changes. The dev and test commands are in
 `apps/omher/README.md` (Develop); the release steps are in its Release section
