@@ -311,8 +311,9 @@ function CliGroup({ g, status, version, note }: { g: AccountGroup; status: Recor
           >
             <span />
           </button>
-          <span>
-            <b>{t("acc.autoSwitch")}</b> {t("acc.autoSwitchLine")}
+          <span className="acc-auto-t">
+            <b>{t("acc.autoSwitch")}</b>
+            <span>{t("acc.autoSwitchLine")}</span>
           </span>
         </div>
       )}
@@ -334,8 +335,9 @@ function CliGroup({ g, status, version, note }: { g: AccountGroup; status: Recor
           >
             <span />
           </button>
-          <span>
-            <b>{t("acc.resetFirst")}</b> {t("acc.resetFirstLine")}
+          <span className="acc-auto-t">
+            <b>{t("acc.resetFirst")}</b>
+            <span>{t("acc.resetFirstLine")}</span>
           </span>
         </div>
       )}

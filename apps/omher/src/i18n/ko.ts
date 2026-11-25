@@ -1838,7 +1838,7 @@ export const ko: Record<Key, string> = {
   "tasks.chip.conflict": "⚠ 충돌",
   "tasks.chip.waiting": "{age} 대기",
   "acc.gh.title": "GitHub",
-  "acc.gh.lead": "Tasks › 나가 읽는 GitHub 계정이에요. 로그인은 gh가 갖고, omher는 계정마다 호스트, 로그인 이름, 색만 저장해요.",
+  "acc.gh.lead": "작업 › 나 화면이 쓰는 GitHub 계정이에요. 로그인은 gh가 갖고, omher는 계정마다 호스트, 로그인 이름, 색만 저장해요.",
   "acc.gh.add": "추가",
   "acc.gh.remove": "빼기",
   "acc.gh.active": "gh 활성 계정",
