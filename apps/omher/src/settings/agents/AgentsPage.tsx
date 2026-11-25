@@ -183,11 +183,11 @@ export function AgentsPage() {
       {removing && (
         <div className="ag-confirm" role="alertdialog" aria-label={t("ag.removeTitle")} data-testid="agents-remove-confirm">
           <span>{tx("ag.removeConfirm", { name: <b>{removing.label}</b> })}</span>
-          <button type="button" className="st-btn" onClick={() => setRemoving(null)} data-testid="agents-remove-cancel">
-            {t("ag.cancel")}
-          </button>
           <button type="button" className="st-btn ag-danger" disabled={busy} onClick={() => void remove(removing.id)} data-testid="agents-remove-yes">
             {t("ag.remove")}
+          </button>
+          <button type="button" className="st-btn" onClick={() => setRemoving(null)} data-testid="agents-remove-cancel">
+            {t("ag.cancel")}
           </button>
         </div>
       )}
@@ -196,7 +196,7 @@ export function AgentsPage() {
         <>
           <div className="st-gh">{t("ag.addTitle")}</div>
           <form
-            className="st-grp"
+            className="st-grp ag-form"
             data-testid="agent-form"
             onKeyDown={holdImeEnter}
             onSubmit={(e) => {
@@ -213,11 +213,11 @@ export function AgentsPage() {
                 {t("ag.noKeys")}
               </span>
               <span className="ag-acts">
-                <button type="button" className="st-btn" onClick={() => (setForm(null), setErr(""))} data-testid="agent-form-cancel">
-                  {t("ag.cancel")}
-                </button>
                 <button type="submit" className="st-btn ag-primary" disabled={busy || !form.label.trim() || !form.program.trim()} data-testid="agent-form-save">
                   {t("ag.save")}
+                </button>
+                <button type="button" className="st-btn" onClick={() => (setForm(null), setErr(""))} data-testid="agent-form-cancel">
+                  {t("ag.cancel")}
                 </button>
               </span>
             </div>
@@ -235,7 +235,8 @@ export function AgentsPage() {
   );
 }
 
-/** The confirm card: the exact command omher will run, Cancel first and Add second. The same card opens from the Add
+/** The confirm card: the exact command omher will run, Add first and Cancel second (every confirm on omher's pages puts
+ *  its action first; Cancel keeps the focus, so Enter never adds by accident). The same card opens from the Add
  *  agent form and from a bot's draft in the chat (chat/parts/AgentChip.tsx); a draft's card names the bot that
  *  proposed it. The card writes nothing itself: its Add is the caller's one call to `customConfirm`. */
 export function AgentConfirmCard({ card, busy, onCancel, onAdd }: { card: CustomPreview; busy: boolean; onCancel: () => void; onAdd: () => void }) {
@@ -268,11 +269,11 @@ export function AgentConfirmCard({ card, busy, onCancel, onAdd }: { card: Custom
         <p className="ag-quiet">{t("ag.cardFolder")}</p>
         <p className="ag-quiet">{t("ag.cardApprovals")}</p>
         <div className="ag-acts">
-          <button type="button" className="st-btn" autoFocus onClick={onCancel} data-testid="agent-confirm-cancel">
-            {t("ag.cancel")}
-          </button>
           <button type="button" className="st-btn ag-primary" disabled={busy} onClick={onAdd} data-testid="agent-confirm-add">
             {t("ag.addBtn")}
+          </button>
+          <button type="button" className="st-btn" autoFocus onClick={onCancel} data-testid="agent-confirm-cancel">
+            {t("ag.cancel")}
           </button>
         </div>
       </div>

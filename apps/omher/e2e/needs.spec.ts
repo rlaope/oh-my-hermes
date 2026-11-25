@@ -369,3 +369,35 @@ test("light theme: dot, strip and interview stay readable", async ({ page }) => 
   await expect(page.getByTestId("row-menu")).toBeVisible();
   await page.screenshot({ path: join(SHOTS, "T12-menu-light.png"), animations: "disabled" });
 });
+
+test("at the smallest window the BOTS list never shows a row cut under its header without a cue", async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 600 });
+  // five threads under Kami: BOTS scrolls at this size
+  await mock("mock.threads", { bot: "kami", threads: ["Release notes", "Gateway 502", "Docs dark mode", "Nightly build", "Notes draft"].map((title, i) => ({ title, ago: (i + 1) * 600 })) });
+  await open(page);
+  await expect(page.locator(".th-row")).toHaveCount(5);
+  await mock("mock.ask", { bot: "friren", kind: "approval" });
+  await mock("mock.ask", { bot: "default", kind: "clarify" });
+  const list = page.locator(".bot-list").first();
+  // a row the list's top edge cuts (only its lower part under the header), and whether the edge carries the cue
+  const top = () =>
+    list.evaluate((el) => {
+      const edge = el.getBoundingClientRect().top;
+      const cut = [...el.querySelectorAll(".bot-w > .bot, .th-row")].some((r) => {
+        const b = r.getBoundingClientRect();
+        return b.top < edge - 0.5 && b.bottom > edge + 0.5;
+      });
+      return { cut, cue: el.hasAttribute("data-cut-top") };
+    });
+  // a jump to an ask lands the edge between two rows
+  for (const i of [0, 1]) {
+    await page.getByTestId("needs-strip").click();
+    await page.getByTestId("needs-item").nth(i).click();
+    await expect.poll(top, { message: `jump ${i}` }).toEqual({ cut: false, cue: false });
+  }
+  // a bot at the list's end cannot rise to the top of a list this short: the cut row then has the cue
+  for (const bot of ["omh-tui", "kami", "omh-tui", "default"]) {
+    await page.getByTestId(`bot-${bot}`).click();
+    await expect.poll(async () => { const t = await top(); return t.cut === t.cue; }, { message: bot }).toBe(true);
+  }
+});

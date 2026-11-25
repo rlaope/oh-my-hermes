@@ -15,7 +15,7 @@ metadata:
 
 # Data Pipelines
 
-This is a Hermes-native `data-pipelines` workflow skill.
+Required: the pipeline: its orchestrator, its sources, its sinks, and its schedule or trigger, the unit of the problem: the table, topic, or model, and the time window affected, what makes a row unique at the sink: the natural key, the event id, or the partition, the downstream readers already known: models, dashboards, exports, services, observed counts, job logs, or check results for any claim about what was loaded. Output: lineage_map/v1, schema_change_impact/v1, idempotency_contract/v1, replay_backfill_plan/v1, data_quality_gate/v1.
 
 ## Why This Exists
 
@@ -26,39 +26,7 @@ This is a Hermes-native `data-pipelines` workflow skill.
 - Ask what makes a row unique at the sink before planning any rerun.
 - Bound the window and the targets before ordering any replay or backfill step.
 
-## Do Not Use When
-
-- The ask is a service's own database migration, API, or queue design; use `omh-backend`.
-- The ask is analyzing, charting, or summarizing a dataset that was handed over; use `omh-data-analysis`.
-- The ask is a slow query, an index, or DDL locking a live table; use `omh-relational-db`.
-- The ask is remembering or syncing what the assistant knows about the user; use `omh-memory-sync`.
-
-## Examples
-
-Good example:
-
-- Prompt: our airflow etl backfill is producing duplicate events
-- Expected behavior: Find the sink's unique key, name the append that duplicated rows, write the idempotency contract (event-id dedupe or partition overwrite), then bound the backfill window and gate it on key uniqueness and row count against the prior window.
-- Why: Rerunning an appending backfill doubles the duplicates it was meant to fix.
-
-Bad example:
-
-- Prompt: just delete the duplicates and rerun the whole history
-- Expected behavior: Refuse the unbounded rerun: fix the write to be idempotent first, then backfill a bounded window behind a quality gate.
-- Why: Deleting duplicates without fixing the write guarantees the next rerun duplicates again.
-
-## Completion Checklist
-
-- The sink's unique key and the idempotency contract are stated.
-- Every replay or backfill is bounded by window and target.
-- Every downstream reader of a schema change is named with its impact.
-- Every load names its data-quality gate and the value that stops it.
-- OMH ran nothing, and every count cites observed output or is marked unverified.
-
-## Recovery Notes
-
-- If no unique key exists at the sink, the first step is defining one; say so before any rerun.
-- If lineage is unavailable, list readers found by search and mark the map incomplete.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -92,30 +60,6 @@ Handoff policy:
 
 Keep the lineage map, schema impact, idempotency contract, replay or backfill plan, and quality gates in Hermes. Row counts, job runs, query results and check outcomes are recorded only from executor, operator, or wrapper observed output; OMH never runs a pipeline, triggers a backfill, or queries a warehouse.
 
-Required inputs:
-
-- the pipeline: its orchestrator, its sources, its sinks, and its schedule or trigger
-- the unit of the problem: the table, topic, or model, and the time window affected
-- what makes a row unique at the sink: the natural key, the event id, or the partition
-- the downstream readers already known: models, dashboards, exports, services
-- observed counts, job logs, or check results for any claim about what was loaded
-
-Expected outputs:
-
-- lineage_map/v1
-- schema_change_impact/v1
-- idempotency_contract/v1
-- replay_backfill_plan/v1
-- data_quality_gate/v1
-
-Artifact expectations:
-
-- lineage_map/v1 names each upstream source and each downstream reader of the affected table, topic, or model, from the orchestrator's graph or a lineage record, and marks readers found by search rather than by the graph
-- schema_change_impact/v1 classifies the change as additive, widening, or breaking for each downstream reader, and names the reader that breaks and the order that avoids it
-- idempotency_contract/v1 names the key that makes a rerun safe -- a natural key upsert, an event-id dedupe window, or a partition overwrite -- and what happens to a row written twice
-- replay_backfill_plan/v1 bounds the window, names the target partitions or offsets, pauses or isolates downstream readers, and writes through the idempotency contract so a second run changes nothing
-- data_quality_gate/v1 names the observed checks each load must pass before readers see it -- row count against the prior window, key uniqueness, null rate, freshness -- and the value that stops the load
-
 Safety rules:
 
 - Never plan a replay or backfill without an idempotency contract; a rerun that appends is how the duplicates got there.
@@ -123,6 +67,19 @@ Safety rules:
 - A breaking schema change waits until every downstream reader in the lineage map is adapted or named as accepting the break.
 - Do not publish a load to readers before its data-quality gate is observed; a prepared check is not a passed one.
 - OMH never runs a job, triggers a backfill, or queries a warehouse; every count and check comes from observed output or is marked unverified.
+
+## Completion Checklist
+
+- The sink's unique key and the idempotency contract are stated.
+- Every replay or backfill is bounded by window and target.
+- Every downstream reader of a schema change is named with its impact.
+- Every load names its data-quality gate and the value that stops it.
+- OMH ran nothing, and every count cites observed output or is marked unverified.
+
+## Recovery Notes
+
+- If no unique key exists at the sink, the first step is defining one; say so before any rerun.
+- If lineage is unavailable, list readers found by search and mark the map incomplete.
 
 ## Runtime Evidence
 

@@ -16,7 +16,13 @@ import unittest
 
 from omh.skills.catalog import builtin_definitions, installable_skill_definitions, omh_skill_display_name
 from omh.skills.catalog_portable import portable_skill_names
-from omh.skills.catalog_types import HERMES_BUNDLED_SKILL_NAMES, HermesSkillLine, PortableLine
+from omh.skills.catalog_types import (
+    HERMES_BUNDLED_SKILL_NAMES,
+    HERMES_OPTIONAL_SKILL_NAMES,
+    HermesOptionalSkillLine,
+    HermesSkillLine,
+    PortableLine,
+)
 from omh.skills.packaging import builtin_skill_reference_templates
 from omh.skills.render import (
     agent_skill_detail_templates,
@@ -38,21 +44,34 @@ EXPECTED_BUNDLED_DEFERRALS = {
     "app-debugging": ("systematic-debugging",),
     "app-work-intake": ("email-inbox-triage",),
     "biomedical-evidence": ("grounded-citations",),
+    "browser-operator": ("computer-use",),
     "code-review": ("sdlc-review", "requesting-code-review"),
+    "codebase-onboarding": ("codebase-inspection",),
     "codebase-uml": ("architecture-diagram",),
+    "connector-operator": ("email-inbox-triage",),
     "content-operator": ("humanizer",),
     "decision-prototype": ("spike",),
+    "doctor": ("hermes-agent",),
+    "frontend": ("claude-design", "popular-web-designs"),
     "github-event-ops": ("github",),
     "github-issue-intake": ("github",),
-    "maestro": ("claude-code", "codex", "opencode"),
+    "img-summary": ("baoyu-infographic",),
+    "long-document-reading": ("document-to-action-items",),
+    "maestro": ("claude-code", "codex"),
     "materials-package": ("pdf", "docx", "powerpoint", "xlsx", "microsoft-office"),
     "meeting-brief": ("meeting-action-items",),
+    "ops-review": ("weekly-review-planning",),
     "research-department": ("competitor-news-monitor", "arxiv"),
     "show-reel": ("manim-video", "ascii-video"),
-    "skill": ("hermes-agent-skill-authoring",),
     "ultraqa": ("dogfood",),
+    "verification-gate": ("test-driven-development",),
     "visual-qa": ("dogfood",),
-    "web-research": ("grounded-citations", "arxiv"),
+    "web-research": ("grounded-citations", "arxiv", "blocked-page-recovery"),
+}
+
+EXPECTED_OPTIONAL_DEFERRALS = {
+    "maestro": ("opencode",),
+    "skill": ("hermes-agent-skill-authoring",),
     "wiki": ("llm-wiki",),
 }
 
@@ -243,7 +262,12 @@ class LoadableSiblingNameTests(unittest.TestCase):
             self.assertNotIn(omh_skill_display_name(name), related, name)
             labels = {omh_skill_display_name(skill) for skill in self.installed}
             for skill in related:
-                self.assertTrue(skill in labels or skill in HERMES_BUNDLED_SKILL_NAMES, f"{name}: {skill}")
+                self.assertTrue(
+                    skill in labels
+                    or skill in HERMES_BUNDLED_SKILL_NAMES
+                    or skill in HERMES_OPTIONAL_SKILL_NAMES,
+                    f"{name}: {skill}",
+                )
         self.assertGreater(emitted, 0)
 
     def test_related_skills_lists_labels_then_bundled_names(self) -> None:
@@ -259,24 +283,38 @@ class LoadableSiblingNameTests(unittest.TestCase):
                 "omh-codebase-onboarding",
                 "grounded-citations",
                 "arxiv",
+                "blocked-page-recovery",
             ),
         )
         self.assertIn(
             "    related_skills: [ulw-research, omh-source-finder, omh-research-brief, omh-market-research, omh-research-department, "
-            "omh-websearch-setup, omh-codebase-onboarding, grounded-citations, arxiv]\n",
+            "omh-websearch-setup, omh-codebase-onboarding, grounded-citations, arxiv, blocked-page-recovery]\n",
             self.hermes["web-research"],
         )
 
 
 class BundledHermesDeferralTests(unittest.TestCase):
     def test_each_owner_names_each_bundled_counterpart_in_one_line(self) -> None:
-        actual: dict[str, tuple[str, ...]] = {}
+        actual_bundled: dict[str, tuple[str, ...]] = {}
+        actual_optional: dict[str, tuple[str, ...]] = {}
         for definition in builtin_definitions():
-            lines = [line for line in definition.do_not_use_when if isinstance(line, HermesSkillLine)]
-            if lines:
-                actual[definition.name] = tuple(skill for line in lines for skill in line.skills)
-        self.assertEqual(actual, EXPECTED_BUNDLED_DEFERRALS)
-        for owner, skills in actual.items():
+            bundled_lines = [
+                line
+                for line in definition.do_not_use_when
+                if isinstance(line, HermesSkillLine) and not isinstance(line, HermesOptionalSkillLine)
+            ]
+            optional_lines = [
+                line
+                for line in definition.do_not_use_when
+                if isinstance(line, HermesOptionalSkillLine)
+            ]
+            if bundled_lines:
+                actual_bundled[definition.name] = tuple(skill for line in bundled_lines for skill in line.skills)
+            if optional_lines:
+                actual_optional[definition.name] = tuple(skill for line in optional_lines for skill in line.skills)
+        self.assertEqual(actual_bundled, EXPECTED_BUNDLED_DEFERRALS)
+        self.assertEqual(actual_optional, EXPECTED_OPTIONAL_DEFERRALS)
+        for owner, skills in (*actual_bundled.items(), *actual_optional.items()):
             self.assertEqual(len(skills), len(set(skills)), owner)
 
     def test_a_compact_body_carries_its_bundled_boundary(self) -> None:
@@ -303,10 +341,21 @@ class BundledHermesDeferralTests(unittest.TestCase):
     def test_a_bundled_line_must_name_a_known_skill_in_backticks(self) -> None:
         with self.assertRaisesRegex(ValueError, r"must name bundled Hermes skills, got \['llm-wikis'\]"):
             HermesSkillLine("load Hermes' bundled `llm-wikis` skill instead.", ("llm-wikis",))
-        with self.assertRaisesRegex(ValueError, r"must name \['llm-wiki'\] in backticks"):
-            HermesSkillLine("load Hermes' bundled llm-wiki skill instead.", ("llm-wiki",))
+        with self.assertRaisesRegex(ValueError, r"must name bundled Hermes skills, got \['llm-wiki'\]"):
+            HermesSkillLine("load Hermes' bundled `llm-wiki` skill instead.", ("llm-wiki",))
+        with self.assertRaisesRegex(ValueError, r"must name \['github'\] in backticks"):
+            HermesSkillLine("load Hermes' bundled github skill instead.", ("github",))
         with self.assertRaisesRegex(ValueError, "got none"):
             HermesSkillLine("load nothing.", ())
+
+    def test_an_optional_line_must_name_a_known_optional_skill_conditionally(self) -> None:
+        line = HermesOptionalSkillLine("Load Hermes' optional `llm-wiki` skill when installed.", ("llm-wiki",))
+        self.assertIsInstance(line, HermesSkillLine)
+        self.assertTrue(line.optional)
+        with self.assertRaisesRegex(ValueError, r"must name optional Hermes skills"):
+            HermesOptionalSkillLine("Load `github` when installed.", ("github",))
+        with self.assertRaisesRegex(ValueError, r"must state installation conditionality"):
+            HermesOptionalSkillLine("Load Hermes' `llm-wiki` skill instead.", ("llm-wiki",))
 
     def test_a_bundled_line_outside_do_not_use_when_is_refused(self) -> None:
         definition = next(d for d in installable_skill_definitions() if d.name == "code-review")

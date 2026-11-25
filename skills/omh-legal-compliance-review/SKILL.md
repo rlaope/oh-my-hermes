@@ -15,45 +15,13 @@ metadata:
 
 # Legal Compliance Review
 
-This is a Hermes-native `legal-compliance-review` workflow skill.
+Required: jurisdiction, document or process version, supplied authority, review objective. Output: legal_scope_authority_record/v1, legal_issue_traceability_matrix/v1, legal_risk_counsel_hold_register/v1, legal_negotiation_preparation/v1 when the objective is a redline rather than an assessment, legal_review_disposition/v1.
 
 ## Why This Exists
 
 `legal-compliance-review` prepares scoped issues for human legal review without claiming counsel or filing authority.
 
-## Do Not Use When
-
-- The user needs a final jurisdiction-specific legal opinion, legal representation, or authoritative filing decision; prepare the issue and counsel brief instead.
-- The review is about code, secrets, permissions, prompt injection, dependencies, or unsafe tool behavior; use `omh-security-safety-review`.
-- The request is a plain-language rewrite without a legal-risk review objective; use `omh-content-operator`.
-- The user asks to sign, accept, submit, file, publish, or change a policy or contract in an external system; use `omh-apps` only after explicit authority.
-- Redact the PII in the file itself and scan it before sending it, once sharing it is cleared; use `omh-data-share-review`.
-
-## Examples
-
-Good example:
-
-- Prompt: Review this vendor DPA for data-processing obligations, risky clauses, and questions for counsel.
-- Expected behavior: Prepare an authority-bound issue matrix, ranked risks, and counsel questions.
-- Why: The request needs a prepared review and escalation aid before a legal decision.
-
-Bad example:
-
-- Prompt: Audit this OAuth integration for secret and permission risks.
-- Expected behavior: Route to `omh-security-safety-review`, not `legal-compliance-review`.
-- Why: The target is technical security risk rather than contract or compliance analysis.
-
-## Completion Checklist
-
-- Every authority-dependent statement has an exact locator and effective status or is marked unverified.
-- Every mandatory hold trigger is evaluated and each open one has a counsel owner and a question; the disposition is PASS, REVISE or HOLD.
-- The documents and versions that were not supplied are listed; no sign-off, filing or advice is claimed.
-
-## Recovery Notes
-
-- If an authority's pinpoint or effective status cannot be verified, retain the established document scope, mark authority-dependent issues unresolved, and hand back legal_scope_authority_record/v1 with the missing citations for counsel.
-- If a contested clause has an open counsel hold or no cited playbook position, retain its issue row, mark that redline row unresolved, and hand back the counsel question rather than proposed language.
-- If mandatory counsel triggers remain open at final review, retain the issue matrix and hold register, mark legal_review_disposition/v1 unresolved with HOLD, and hand back the exact triggers and counsel owner without a final determination.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details). Procedure: `references/procedure.md`.
 
 ## Workflow Lane
 
@@ -85,30 +53,10 @@ Handoff policy:
 
 Keep domain framing, clarification, source/evidence synthesis, draft outputs, and next-work routing in Hermes. A prepared brief, review, reply, or plan is not an external action, approval, filing, send, publish, data mutation, implementation, review, CI, or merge claim. Prepare a connector, file, coding, or human-review handoff only when the user explicitly accepts that next step; report it only from observed evidence. The result is a prepared review and escalation aid, not legal advice, counsel sign-off, compliance certification, contract execution, filing, or regulator communication.
 
-Required inputs:
-
-- jurisdiction
-- document or process version
-- supplied authority
-- review objective
-
 Expert clarification questions:
 - `jurisdiction`
   - English: Which parties, actor or data roles, operative facts, governing law and forum, and separately applicable regulatory jurisdictions are supplied?
   - Korean: 어떤 당사자, 행위자 또는 데이터 역할, 주요 사실, 준거법과 관할, 별도 적용 규제 관할권이 제공되었나요?
-
-Expected outputs:
-
-- legal_scope_authority_record/v1
-- legal_issue_traceability_matrix/v1
-- legal_risk_counsel_hold_register/v1
-- legal_negotiation_preparation/v1 when the objective is a redline rather than an assessment
-- legal_review_disposition/v1
-
-Artifact expectations:
-
-- prepared legal and compliance issue matrix when a wrapper captures it
-- legal_negotiation_preparation/v1 with one row per contested clause: the playbook position it came from, the proposed language, the fallback, and the walk-away, plus the concession order across rows
 
 Safety rules:
 
@@ -117,6 +65,18 @@ Safety rules:
 - Proposed clause language is preparation material for the person who will negotiate, never advice about whether to accept it; a row whose playbook position cannot be cited is a counsel question, not a proposal.
 
 Procedure: load `references/procedure.md`.
+
+## Completion Checklist
+
+- Every authority-dependent statement has an exact locator and effective status or is marked unverified.
+- Every mandatory hold trigger is evaluated and each open one has a counsel owner and a question; the disposition is PASS, REVISE or HOLD.
+- The documents and versions that were not supplied are listed; no sign-off, filing or advice is claimed.
+
+## Recovery Notes
+
+- If an authority's pinpoint or effective status cannot be verified, retain the established document scope, mark authority-dependent issues unresolved, and hand back legal_scope_authority_record/v1 with the missing citations for counsel.
+- If a contested clause has an open counsel hold or no cited playbook position, retain its issue row, mark that redline row unresolved, and hand back the counsel question rather than proposed language.
+- If mandatory counsel triggers remain open at final review, retain the issue matrix and hold register, mark legal_review_disposition/v1 unresolved with HOLD, and hand back the exact triggers and counsel owner without a final determination.
 
 ## Runtime Evidence
 

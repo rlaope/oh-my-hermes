@@ -109,3 +109,12 @@
   font-size: 11.5px;
   color: var(--quiet);
 }
+
+/* the platforms card: what was found reads first, where it was read from is the quiet footnote under it */
+[data-testid="bp-platforms"] > .bp-empty:not(.bad) {
+  color: var(--muted);
+}
+.pf-source {
+  color: var(--quiet);
+  text-wrap: balance;
+}

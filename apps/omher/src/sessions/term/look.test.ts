@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Terminal } from "@xterm/xterm";
-import { applyLook, DARK_BG_MIN_CONTRAST, GPU_OPTIONS, LIGHT_BG_MIN_CONTRAST, termContrast, termFont, termOptions } from "./look";
+import { applyLook, DARK_BG_MIN_CONTRAST, GPU_OPTIONS, LIGHT_BG_MIN_CONTRAST, snapBlockGlyphs, termContrast, termFont, termOptions } from "./look";
 import { SAMPLE_COLS, SAMPLE_ROWS, SAMPLE_SELECT, SAMPLE_WIDE_COLS, termSample } from "./look-sample";
 import { TERM_DEFAULTS, type TermSettings } from "./settings";
 import { TERM_THEMES, termThemeById } from "./themes";
@@ -34,6 +34,29 @@ describe("a terminal's look", () => {
     // both whatever Option sends
     expect(termOptions(dark, { ...TERM_DEFAULTS, optionIsMeta: false })).toMatchObject({ macOptionClickForcesSelection: true, macOptionIsMeta: false });
     expect(GPU_OPTIONS).toEqual({ customGlyphs: true });
+  });
+
+  it("the GPU renderer's block elements are filled on whole device pixels: a 7 px cell's halves tile with no half-covered column", () => {
+    const calls: number[][] = [];
+    const ctx = { fillRect: (...a: number[]) => void calls.push(a) };
+    const addon = { _renderer: { _charAtlas: { _tmpCtx: ctx } } };
+    expect(snapBlockGlyphs(addon)).toBe(true);
+    // ▐ then ▌ in a 7 px cell (the add-on fills x at eighths: 3.5 px)
+    ctx.fillRect(2 + 4 * (7 / 8), 2, 4 * (7 / 8), 20);
+    ctx.fillRect(2, 2, 4 * (7 / 8), 20);
+    expect(calls).toEqual([
+      [6, 2, 3, 20],
+      [2, 2, 4, 20],
+    ]);
+    // the two halves meet on one whole pixel edge and together fill the cell
+    expect(calls[1]![0]! + calls[1]![2]!).toBe(calls[0]![0]);
+    // an eighth of a narrow cell is never drawn away
+    calls.length = 0;
+    ctx.fillRect(2, 2, 7 / 8, 20);
+    expect(calls[0]![2]).toBe(1);
+    // once per canvas; another xterm (no such fields) is left alone
+    expect(snapBlockGlyphs(addon)).toBe(false);
+    expect(snapBlockGlyphs({})).toBe(false);
   });
 
   it("the Kitty keyboard protocol follows its setting, on a new terminal and on an open one", () => {

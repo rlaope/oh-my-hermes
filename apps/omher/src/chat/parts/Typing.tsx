@@ -22,10 +22,11 @@ export function awaitingFirstToken(chat: Chat | undefined): boolean {
 
 /** The bot's 28px face in the live ring (`face`: a SESSIONS chat's agent mark instead of the picture). One of
  *  these sits in the live run while the bot works: beside the typing bubble, then the activity line, then the
- *  streaming answer (liveFaceRow). */
-export function LiveFace({ bot, face, testId = "face-ring" }: { bot: string; face?: ReactNode; testId?: string }) {
+ *  streaming answer (liveFaceRow). `on` false while the turn waits on the person: the face stays, the ring stops
+ *  (as the bot's sidebar row does). */
+export function LiveFace({ bot, face, testId = "face-ring", on = true }: { bot: string; face?: ReactNode; testId?: string; on?: boolean }) {
   return (
-    <LiveRing on size={28} gap={3} testId={testId} seed={bot}>
+    <LiveRing on={on} size={28} gap={3} testId={testId} seed={bot}>
       {face ?? <Avatar bot={bot} size={28} className="msg-face" />}
     </LiveRing>
   );

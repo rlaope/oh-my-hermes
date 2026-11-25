@@ -15,48 +15,13 @@ metadata:
 
 # Plan
 
-This is a Hermes-native `plan` workflow skill.
+Required: requirements, constraints, known facts, non-goals. Output: plan, acceptance criteria, verification strategy.
 
 ## Why This Exists
 
 `plan` exists so a feature or a fix gets its goals, non-goals, risks, acceptance criteria, and verification shape written down and accepted by the user before any code moves, with every step small enough to check and no implementation hidden inside the plan text.
 
-## Do Not Use When
-
-- The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
-- The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
-- The change is risky or architectural and the user wants alternatives compared, a risk review and a recorded decision; use `ulw-plan`, and keep this skill for the ordinary plan.
-- Requirements are too vague to list non-goals or acceptance criteria; use `ulw-interview`.
-- The direction is decided and what is missing is the phase-by-phase refactor shape; use `omh-refactor-plan`.
-
-## Examples
-
-Good example:
-
-- Prompt: plan: add CSV export to the reports page; admins only, and it must stream 100k rows.
-- Expected behavior: Write goals, non-goals, risks, tasks with ids, dependencies and done checks, a closing gate, and the acceptance criteria; hand back for acceptance before any handoff.
-- Why: A feature with real acceptance questions needs a plan the user accepts before any code moves.
-
-Bad example:
-
-- Prompt: plan: fix the null check in parse_user (one line, the test already exists)
-- Expected behavior: Make the edit directly and run the test; a plan adds a round trip with nothing to decide.
-- Why: One bounded edit with a known check has no goals or tradeoffs to write down.
-
-## Completion Checklist
-
-- The plan names goals, non-goals, assumptions, acceptance criteria, and verification shape.
-- Draft recommendations, accepted decisions, and executor handoffs are separate states.
-- Rejected options or unresolved tradeoffs are recorded before handoff.
-- When the plan describes code changes, it has a `Review Focus` section with at most 5 uncovered inputs and their owning task ids, or one stating the check found none.
-- When the plan describes code changes, every task has an id, its dependencies, the files it may write, and a done check, and the last task is the closing gate.
-- When the plan describes code changes, each code task is a vertical slice whose done check exercises its behavior end to end, or a prefactor ordered before the slices, or a wide change handed to `omh-refactor-plan`, or the one task that writes a file every slice only appends to; the closing gate and fix tasks aside.
-- When the plan describes code changes, it names the goal beyond the request, the raw material, and an outside judge for each verification step, or records the missing judge as an evidence gap.
-
-## Recovery Notes
-
-- If no acceptance answer comes, keep the draft unaccepted, hand back the question, prepare no handoff.
-- If a verification step has no outside judge, mark it unresolved and hand back the missing judge.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -102,27 +67,25 @@ Handoff policy:
 
 Keep planning in Hermes; if the accepted plan requires code edits, prepare a selected executor/runtime handoff after acceptance, and start a follow-on workflow engine only after the user explicitly confirms the recommended path.
 
-Required inputs:
-
-- requirements
-- constraints
-- known facts
-- non-goals
-
-Expected outputs:
-
-- plan
-- acceptance criteria
-- verification strategy
-
-Artifact expectations:
-
-- plan artifact when durable execution will follow, via `omh hermes plan --record --plan-file <file> "<task>"`
-
 Safety rules:
 
 - Do not imply hidden Hermes runtime behavior.
 - Use the smallest verification that can prove the claim.
+
+## Completion Checklist
+
+- The plan names goals, non-goals, assumptions, acceptance criteria, and verification shape.
+- Draft recommendations, accepted decisions, and executor handoffs are separate states.
+- Rejected options or unresolved tradeoffs are recorded before handoff.
+- When the plan describes code changes, it has a `Review Focus` section with at most 5 uncovered inputs and their owning task ids, or one stating the check found none.
+- When the plan describes code changes, every task has an id, its dependencies, the files it may write, and a done check, and the last task is the closing gate.
+- When the plan describes code changes, each code task is a vertical slice whose done check exercises its behavior end to end, or a prefactor ordered before the slices, or a wide change handed to `omh-refactor-plan`, or the one task that writes a file every slice only appends to; the closing gate and fix tasks aside.
+- When the plan describes code changes, it names the goal beyond the request, the raw material, and an outside judge for each verification step, or records the missing judge as an evidence gap.
+
+## Recovery Notes
+
+- If no acceptance answer comes, keep the draft unaccepted, hand back the question, prepare no handoff.
+- If a verification step has no outside judge, mark it unresolved and hand back the missing judge.
 
 ## Runtime Evidence
 

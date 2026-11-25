@@ -15,44 +15,13 @@ metadata:
 
 # Skill Scout
 
-This is a Hermes-native `skill-scout` workflow skill.
+Required: user request, target context, delivery or status expectation, known missing evidence. Output: skill_scout_query/v1, local_skill_candidate_inventory/v1 when observed, external_skill_candidate_risk_review/v1 when observed, awesome_hermes_agent_coverage/v1 for upstream ecosystem comparison when requested, skill_adoption_decision_matrix/v1, skill_scout_recommendation/v1.
 
 ## Why This Exists
 
 `skill-scout` exists because writing a skill that already exists, or adopting a public one on its popularity, both cost more than a search: it compares installed, bundled, and public candidates first, keeps each source's trust level and any scan verdict beside it, and recommends using, extending, or creating one without installing, copying, or trusting anything.
 
-## Do Not Use When
-
-- Repairing an OMH install or a skill that does not load; use `omh-doctor`.
-- A health overview of the skills already installed; use `omh-skill-health`.
-- Writing or changing a skill once the scout decision is made; use `omh-skill`.
-
-## Examples
-
-Good example:
-
-- Prompt: skill-scout find existing skill candidates before we create a release-note workflow skill.
-- Expected behavior: Produce `prepare_skill_scout` with required context, wrapper actions, and not-evidence boundaries.
-- Why: Reuse is judged by candidate and source trust; the scout installs nothing.
-
-Bad example:
-
-- Prompt: skill-scout install the best GitHub skill and copy it into the marketplace without review.
-- Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
-- Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
-
-## Completion Checklist
-
-- Intent, keywords, source scope, and stop condition are explicit.
-- Local and external search evidence is separated from planned search.
-- No install, copy, write, credential, or trust claim is made without observed review or implementation.
-- On Hermes, fill the external candidates from `hermes skills search <query>` and `hermes skills inspect <identifier>`, whose hub requests are Hermes' own, not OMH's. Keep the trust each shows (`official` for an official-source row, otherwise `builtin`, `trusted`, or `community`, highest first) beside the candidate as its source's standing, never as a review of its content, and record a scan verdict (`safe`, `caution`, or `dangerous`) only from install or `hermes skills audit` output that was seen, so a candidate nobody installed has none.
-
-## Recovery Notes
-
-- If the request is about setup or installed skill repair, route to `omh-doctor`.
-- If the request is a portfolio health dashboard, route to `omh-skill-health`.
-- If the request is an approved skill mutation or creation task, route to `omh-skill` or implementation after the scout decision.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -84,33 +53,23 @@ Handoff policy:
 
 Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 
-Required inputs:
-
-- user request
-- target context
-- delivery or status expectation
-- known missing evidence
-
-Expected outputs:
-
-- skill_scout_query/v1
-- local_skill_candidate_inventory/v1 when observed
-- external_skill_candidate_risk_review/v1 when observed
-- awesome_hermes_agent_coverage/v1 for upstream ecosystem comparison when requested
-- skill_adoption_decision_matrix/v1
-- skill_scout_recommendation/v1
-
-Artifact expectations:
-
-- skill_scout_query/v1 with intended workflow, triggers, domains/tools, and search keywords
-- local_skill_candidate_inventory/v1 separating installed, bundled, marketplace, and repo-local matches when observed
-- awesome_hermes_agent_coverage/v1 mapping upstream ecosystem entries to OMH covered, partial, or missing_candidate coverage statuses, matched OMH surfaces, rule_set_version, and matched_rule_id
-- skill_adoption_decision_matrix/v1 ranking use existing, fork or extend, and create fresh options with trust gaps
-
 Safety rules:
 
 - A skill scout report is not skill installation, external source trust, marketplace mutation, file copy, network retrieval, credential use, implementation, review, CI, or proof that a candidate is safe to adopt.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
+## Completion Checklist
+
+- Intent, keywords, source scope, and stop condition are explicit.
+- Local and external search evidence is separated from planned search.
+- No install, copy, write, credential, or trust claim is made without observed review or implementation.
+- On Hermes, fill the external candidates from `hermes skills search <query>` and `hermes skills inspect <identifier>`, whose hub requests are Hermes' own, not OMH's. Keep the trust each shows (`official` for an official-source row, otherwise `builtin`, `trusted`, or `community`, highest first) beside the candidate as its source's standing, never as a review of its content, and record a scan verdict (`safe`, `caution`, or `dangerous`) only from install or `hermes skills audit` output that was seen, so a candidate nobody installed has none.
+
+## Recovery Notes
+
+- If the request is about setup or installed skill repair, route to `omh-doctor`.
+- If the request is a portfolio health dashboard, route to `omh-skill-health`.
+- If the request is an approved skill mutation or creation task, route to `omh-skill` or implementation after the scout decision.
 
 ## Runtime Evidence
 

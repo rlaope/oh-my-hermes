@@ -15,43 +15,13 @@ metadata:
 
 # Strategy Brief
 
-This is a Hermes-native `strategy-brief` workflow skill.
+Required: goal, known evidence, constraints, decision owner. Output: options, tradeoffs, recommended direction, decision note.
 
 ## Why This Exists
 
 `strategy-brief` exists so a team decision ends as a recommendation whose options are priced in one unit with their lag (and, when hard to reverse, a proposed ADR), not a discussion where each option is argued in different terms.
 
-## Do Not Use When
-
-- A technical choice one cheap experiment can settle; use `omh-decision-prototype`. A technical choice inside a plan being written; use `omh-plan`. A technical choice the user wants attacked; use `omh-adversarial-consensus`. Use this skill for the decision note and ADR once the options are known.
-- The strategic question is whether an early idea's customer problem and segment are real, and no validated discovery receipt exists yet; use `omh-product-discovery-validation`.
-- The question is how to run a hiring process — scorecards, interview loops, candidate comparison — rather than whether to hire at all; use `omh-people-ops`.
-- The user wants Jev's typed probabilities for a yes/no, pick-one, or scored question over supplied text rather than tradeoffs and a recommendation; use `omh-jev-ask`.
-
-## Examples
-
-Good example:
-
-- Prompt: strategy-brief: decide whether our onboarding should prioritize solo founders or enterprise buyers.
-- Expected behavior: Frame options, tradeoffs, assumptions, rejected paths, and the decision evidence needed.
-- Why: The request is strategy-shaped and should not jump directly into implementation.
-
-Bad example:
-
-- Prompt: strategy-brief: treat casual chat or unaccepted work as if this workflow already produced verified results.
-- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `strategy-brief`.
-- Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
-
-## Completion Checklist
-
-- The decision, options, tradeoffs, assumptions, and rejected alternatives are named.
-- Observed signals are separated from strategic inference.
-- Accepted decisions and implementation follow-ups are not conflated.
-
-## Recovery Notes
-
-- If demand and capacity cannot be compared in one unit or hiring ramp lag is unknown, retain the stated constraints and options, mark the recommendation tentative, and hand back the missing capacity and timing inputs.
-- If a drafted decision record lacks write approval, retain the options, tradeoffs, and proposed decision note, mark persistence not_observed, and hand back the draft for approval without writing docs/adr/.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -87,30 +57,23 @@ Handoff policy:
 
 Keep strategy synthesis in Hermes; do not create implementation handoff until a decision is accepted and code work is explicit.
 
-Required inputs:
-
-- goal
-- known evidence
-- constraints
-- decision owner
-
-Expected outputs:
-
-- options
-- tradeoffs
-- recommended direction
-- decision note
-
-Artifact expectations:
-
-- strategy brief or decision note when a wrapper captures it
-
 Safety rules:
 
 - Do not treat a draft recommendation as an accepted decision.
 - Keep unresolved assumptions visible.
 - Separate strategy from implementation planning unless the user asks for execution.
 - A drafted decision record stays a proposal: nothing is written under `docs/adr/` until the user approves the write.
+
+## Completion Checklist
+
+- The decision, options, tradeoffs, assumptions, and rejected alternatives are named.
+- Observed signals are separated from strategic inference.
+- Accepted decisions and implementation follow-ups are not conflated.
+
+## Recovery Notes
+
+- If demand and capacity cannot be compared in one unit or hiring ramp lag is unknown, retain the stated constraints and options, mark the recommendation tentative, and hand back the missing capacity and timing inputs.
+- If a drafted decision record lacks write approval, retain the options, tradeoffs, and proposed decision note, mark persistence not_observed, and hand back the draft for approval without writing docs/adr/.
 
 ## Runtime Evidence
 

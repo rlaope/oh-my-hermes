@@ -1061,9 +1061,11 @@ function FolderHead({ cwd, home, shut, index, all, added, summary: base, flowIds
             {summary.failed && <span className="tg-dot err" title={t("ss.mark.error")} />}
           </span>
         )}
-        {/* where the folder is: its path from home (the name alone does not say which "khope"), then its branch */}
+        {/* where the folder is: the folder it sits in, from home (the name above does not say which "khope", and its
+            full path would only say that name again and cut the branch), then its branch; the full path is the
+            header's tooltip */}
         <span className="tg-b" data-testid="term-group-path">
-          {tildePath(cwd, home)}
+          {parentPath(tildePath(cwd, home)) || tildePath(cwd, home)}
           {branch && (
             <>
               {" · "}

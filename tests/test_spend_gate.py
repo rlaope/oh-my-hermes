@@ -56,9 +56,18 @@ def _route(message: str) -> dict[str, object]:
 
 
 def _bodies() -> dict[str, str]:
-    """The Hermes body and the portable Agent Skills body."""
+    """The Hermes body (+ full-contract when progressive) and the portable Agent Skills body."""
+    full_contract = next(
+        (
+            template.content
+            for template in builtin_skill_reference_templates()
+            if template.skill_name == SKILL and template.relative_path == "references/full-contract.md"
+        ),
+        "",
+    )
     return {
-        "hermes": next(template.content for template in builtin_skill_templates() if template.name == SKILL),
+        "hermes": next(template.content for template in builtin_skill_templates() if template.name == SKILL)
+        + ("\n" + full_contract if full_contract else ""),
         "portable": next(template.content for template in agent_skill_templates() if template.name == PORTABLE),
     }
 
@@ -502,10 +511,18 @@ class SpendGateSiblingTextTests(unittest.TestCase):
             ),
         }
         hermes = self._hermes()
+        full_contracts = {
+            template.skill_name: template.content
+            for template in builtin_skill_reference_templates()
+            if template.relative_path == "references/full-contract.md"
+        }
         for owner, line in lines.items():
             with self.subTest(owner=owner):
                 self.assertIn(line, _definition(owner).do_not_use_when)
-                self.assertIn(f"- {line.replace('`spend-gate`', '`omh-spend-gate`')}\n", hermes[owner])
+                self.assertIn(
+                    f"- {line.replace('`spend-gate`', '`omh-spend-gate`')}\n",
+                    hermes[owner] + "\n" + full_contracts.get(owner, ""),
+                )
                 self.assertIn("omh-spend-gate", hermes[owner].split("---", 2)[1])
 
     def test_an_unattended_schedule_goes_through_the_blueprint_first(self) -> None:

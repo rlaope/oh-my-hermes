@@ -15,7 +15,7 @@ metadata:
 
 # Source Finder
 
-This is a Hermes-native `source-finder` workflow skill.
+Required: source target or topic, desired source kinds, source boundaries or exclusion criteria, downstream intent when known. Output: source_finder_plan/v1, source_candidate/v1, source_candidate_set/v1, source_acquisition_status/v1, downstream workflow recommendation, not-evidence boundary.
 
 ## Why This Exists
 
@@ -25,43 +25,7 @@ This is a Hermes-native `source-finder` workflow skill.
 
 - Discover the current search/read tools and authorized scope, then follow `references/search-method.md`: plan -> actual host search/read -> merge -> assess -> bounded retry. Use `omh_search` only when available; otherwise report the skill-only fallback. Keep direct file lookups direct.
 
-## Do Not Use When
-
-- The requested output is factual findings, comparison, or a summary rather than a typed candidate inventory and acquisition status; use `ulw-research`.
-- The user needs a business decision brief with evidence-versus-inference treatment; use `omh-research-brief`.
-- The user asks for a cited answer to a current-facts question; use `omh-web-research`, and for a reference-implementation study with a depth budget use `ulw-research`.
-- The user supplies a paper/PDF/arXiv/DOI/excerpt and wants explanation; use `omh-paper-learning`.
-- The user asks for recurring monitoring, source inbox, or Scout/Analyst/Briefer operations; use `omh-research-department`.
-- The user asks to export, convert, render, package, or attach a file; use `omh-materials-package` or `omh-deliverable-package`.
-- The user asks for an image card or visual summary; use `omh-image-cards`.
-
-## Examples
-
-Good example:
-
-- Prompt: source-finder find papers, datasets, and GitHub repos for evaluating browser agent benchmarks.
-- Expected behavior: Prepare source_finder_plan/v1 with typed candidates, acquisition states, missing observed evidence, and downstream choices.
-- Why: The user needs source candidates before deciding whether to learn, research, package, or implement.
-
-Bad example:
-
-- Prompt: source-finder find current citations and summarize what the sources say.
-- Expected behavior: Route to `ulw-research` because the user asks for current evidence and synthesis, not candidate acquisition status.
-- Why: Source-finder prepares acquisition lifecycle metadata; research owns current evidence synthesis.
-
-## Completion Checklist
-
-- Source kinds, source boundaries, and downstream intent are named.
-- Each candidate has a source_candidate/v1 shape and acquisition state.
-- Observed states include provenance before being treated as evidence.
-- The next downstream workflow is recommended without claiming it ran.
-- Search, download, clone, extraction, hash, license, verification, and downstream processing gaps are explicit.
-
-## Recovery Notes
-
-- If the user asks for facts or citations, route to `ulw-research`.
-- If a candidate lacks a link or file reference, keep it candidate_prepared and ask for the next observable source step.
-- If the user wants to process a selected source, route to the downstream workflow instead of continuing source acquisition.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -98,31 +62,25 @@ Handoff policy:
 
 Keep source acquisition planning in Hermes. Do not claim search, download, clone, extraction, license check, verification, or downstream processing unless a wrapper or user records observed evidence.
 
-Required inputs:
-
-- source target or topic
-- desired source kinds
-- source boundaries or exclusion criteria
-- downstream intent when known
-
-Expected outputs:
-
-- source_finder_plan/v1
-- source_candidate/v1
-- source_candidate_set/v1
-- source_acquisition_status/v1
-- downstream workflow recommendation
-- not-evidence boundary
-
-Artifact expectations:
-
-- source_finder_plan/v1 under .omh/source-finder when a wrapper or CLI records it
-
 Safety rules:
 
 - Do not claim web search, download, repository clone, file extraction, file hash verification, license verification, or source correctness from a prepared candidate.
 - Do not redefine `omh-research-department`'s source_inbox/v1; source-finder owns source_candidate_set/v1 and source_acquisition_status/v1 only.
 - Route current citations and source-backed synthesis to `ulw-research`, supplied-paper explanation to `omh-paper-learning`, recurring monitoring to `omh-research-department`, file export to `omh-materials-package`, and image cards to `omh-image-cards`.
+
+## Completion Checklist
+
+- Source kinds, source boundaries, and downstream intent are named.
+- Each candidate has a source_candidate/v1 shape and acquisition state.
+- Observed states include provenance before being treated as evidence.
+- The next downstream workflow is recommended without claiming it ran.
+- Search, download, clone, extraction, hash, license, verification, and downstream processing gaps are explicit.
+
+## Recovery Notes
+
+- If the user asks for facts or citations, route to `ulw-research`.
+- If a candidate lacks a link or file reference, keep it candidate_prepared and ask for the next observable source step.
+- If the user wants to process a selected source, route to the downstream workflow instead of continuing source acquisition.
 
 ## Runtime Evidence
 

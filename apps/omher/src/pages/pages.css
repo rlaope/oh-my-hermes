@@ -133,13 +133,22 @@
 }
 
 /* suggestion chips, filter chips */
+/* one row: in a narrow list it scrolls sideways instead of leaving one suggestion alone on a second row */
 .pg-sug {
   display: flex;
-  flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 18px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* the row's right end fades, so a chip that runs past it reads as "more this way", not as a cut */
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+.pg-sug::-webkit-scrollbar {
+  display: none;
 }
 .pg-sug button {
+  flex: none;
+  white-space: nowrap;
   font-size: 12px;
   color: var(--muted);
   border: 1px solid var(--line);
@@ -178,12 +187,27 @@
 .pg-chip.on .pg-n {
   color: var(--muted);
 }
-.pg-summary {
-  white-space: nowrap;
+/* the summary and both New buttons wrap together, as one unit at the row's end */
+.pg-filters-end {
   margin-left: auto;
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+}
+/* the two New buttons never part */
+.pg-new {
+  display: inline-flex;
+  gap: 4px;
+  flex: none;
+}
+.pg-summary {
   color: var(--quiet);
   font-size: 12px;
   padding: 0 6px;
+  white-space: nowrap;
 }
 
 /* buttons */
@@ -621,10 +645,19 @@
 .au-f .mseg {
   justify-self: start;
 }
+/* the hint under its field and the form's buttons sit on the fields' column (96px labels + 10px gap) */
 .au-f-hint {
   color: var(--quiet);
   font-size: 11.5px;
   padding-left: 106px;
+  margin: -4px 0 0;
+}
+.au-f-btns,
+.au-f-err {
+  padding-left: 106px;
+}
+.au-f-err {
+  margin: 0;
 }
 
 /* ---- Plugins ---- */
@@ -652,10 +685,15 @@
   margin-left: 5px;
   font-size: 12px;
 }
+/* Two columns; an odd count's last card takes the whole row, so no card sits alone beside an empty slot (Plugins'
+   three tabs and every Apps section share this grid). */
 .pl-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+.pl-grid > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
 }
 .pl-card {
   border: 1px solid var(--line-soft);
@@ -663,8 +701,10 @@
   border-radius: 10px;
   padding: 12px 12px 12px 14px;
   display: grid;
-  /* the actions get their own row so a long plugin name keeps the full width */
+  /* the actions get their own row so a long plugin name keeps the full width; the text row takes the card's spare
+     height, so the actions sit on the bottom padding and line up with the neighbouring card's */
   grid-template-columns: 34px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: 10px 12px;
   align-items: start;
 }
@@ -751,6 +791,7 @@
 }
 .pl-ctl {
   grid-column: 2;
+  align-self: end;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -1102,6 +1143,16 @@
     flex-direction: row;
     gap: 6px;
   }
+  /* the cadence is what the job is: it keeps its words and the countdown beside it gives way */
+  .au-row .au-sched {
+    flex: none;
+    max-width: 100%;
+  }
+  .au-row .au-when small {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .au-row .au-st {
     grid-column: 2;
     grid-row: 3;
@@ -1159,4 +1210,9 @@
 .ap-card-term {
   margin-top: 8px;
   font-size: 12px;
+}
+
+/* light theme: the same --raise2 track as Settings, so the white selected segment shows (the automation form) */
+[data-theme="light"] .pg .mseg {
+  background: var(--raise2);
 }

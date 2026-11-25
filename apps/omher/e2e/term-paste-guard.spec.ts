@@ -105,13 +105,19 @@ test("a single line goes straight through; with the setting off several lines do
   await expect(confirm(page)).toHaveCount(0);
 });
 
-test("a long paste shows its first three lines and how many more there are", async ({ page }) => {
+test("a long paste shows its first six lines and how many more there are; a four-line paste shows whole", async ({ page }) => {
   await openApp(page);
   await newTerminal(page);
   await pasteInto(page, Array.from({ length: 12 }, (_, i) => `line ${i + 1}`).join("\n"));
   await expect(confirm(page)).toContainText("Paste 12 lines?");
-  await expect(page.getByTestId("term-paste-preview")).toHaveText("line 1\nline 2\nline 3");
-  await expect(confirm(page)).toContainText("and 9 more");
+  await expect(page.getByTestId("term-paste-preview")).toHaveText("line 1\nline 2\nline 3\nline 4\nline 5\nline 6");
+  await expect(confirm(page)).toContainText("and 6 more");
+  await page.keyboard.press("Escape");
+  await expect(confirm(page)).toHaveCount(0);
+  // a command the person approves is one they can see whole
+  await pasteInto(page, "git fetch origin\ngit rebase origin/main\npnpm install\npnpm test");
+  await expect(page.getByTestId("term-paste-preview")).toHaveText("git fetch origin\ngit rebase origin/main\npnpm install\npnpm test");
+  await expect(confirm(page)).not.toContainText("more");
 });
 
 test("the right-click paste asks too", async ({ page }) => {

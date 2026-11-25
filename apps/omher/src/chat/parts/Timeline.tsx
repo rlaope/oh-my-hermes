@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { RestartAction, RestartLine } from "../../sidebar/RestartLine";
 import type { Bot } from "../../lib/protocol";
-import { answerSlot, answerSoFar, selectTimeline, turnHasActivity, useStore, type TimelineItem } from "../../state/store";
+import { answerSlot, answerSoFar, askOpen, selectTimeline, turnHasActivity, useStore, type TimelineItem } from "../../state/store";
 import { slots } from "../../features";
 import { dayLabel, hhmm, sameDay } from "../../app/time";
 import { Bubble } from "./Bubble";
@@ -22,6 +22,7 @@ import { PluginAddedCard, RoutineAddedCard } from "../../pages/ChatCards";
 import { ThreadLinkLine, ThreadRouteCard } from "../cards/ThreadNotes";
 import { BriefNotice, WatchLine } from "../../routines/WatchLine";
 import { t } from "../../i18n";
+import { Avatar } from "../../ui";
 import { useBotReady } from "../connect/ready";
 import { isMac } from "../../app/shortcuts";
 import { JumpPill, PinnedOwn, useTimelineNav } from "./TimelineJump";
@@ -68,6 +69,8 @@ export function Timeline({
   const typing = awaitingFirstToken(chat);
   // the one row of the live run that carries the bot's ringed face
   const faceRow = liveFaceRow(items, chat?.turn, typing);
+  // an approval or a question waits on the person: the turn is blocked, not busy, so the face's ring stops
+  const asking = !!chat?.turn && items.some((i) => (i.kind === "approval" || i.kind === "clarify") && askOpen(chat.items, i));
   const ref = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
   const lastTop = useRef(0);
@@ -201,7 +204,7 @@ export function Timeline({
         bot={bot.name}
         face={!botSpoke(slotId ? items[items.findIndex((i) => i.id === slotId) - 1] : items[items.length - 1])}
         faceEl={face}
-        live={faceRow === "streaming"}
+        live={faceRow === "streaming" && !asking}
         quote={quoteFor(items, slotId ? items.findIndex((i) => i.id === slotId) : items.length)}
         onQuote={showMessage}
       />
@@ -266,7 +269,15 @@ export function Timeline({
           {t("tl.noModel", { bot: bot.display_name })}
         </div>
       )}
-      {chat?.loaded && !chat.openError && items.length === 0 && (emptyHint ?? <div className="day">{t("tl.sayHi", { bot: bot.display_name })}</div>)}
+      {chat?.loaded && !chat.openError && items.length === 0 &&
+        (emptyHint ?? (
+          // a chat with nothing in it yet: the bot's face and one line, in the middle of the empty column (as a date
+          // divider at the top it left the rest of the column blank)
+          <div className="chat-empty" data-testid="chat-hello">
+            {face ?? <Avatar bot={bot.name} size={40} />}
+            <span>{t("tl.sayHi", { bot: bot.display_name })}</span>
+          </div>
+        ))}
       {items.map((it, i) => {
         // the live activity line with nothing to say yet: the typing bubble below stands in for it
         if (it.kind === "activity" && chat?.turn?.id === it.turn.id && !turnHasActivity(it.turn)) return null;
@@ -282,7 +293,7 @@ export function Timeline({
             {label && <div className="day">{label}</div>}
             {aboveLine && it.id === liveId && typingRow}
             <div className={`row row-${it.kind}${liveLine ? " live-line" : ""}`} data-kind={it.kind} {...(it.kind === "user" ? { "data-item": it.id } : {})}>
-              {liveFace && <LiveFace bot={bot.name} face={face} />}
+              {liveFace && <LiveFace bot={bot.name} face={face} on={!asking} />}
               {render(it, label ? undefined : items[i - 1], i)}
             </div>
           </Fragment>

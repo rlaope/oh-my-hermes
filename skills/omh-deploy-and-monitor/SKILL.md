@@ -15,43 +15,13 @@ metadata:
 
 # Deploy And Monitor
 
-This is a Hermes-native `deploy-and-monitor` workflow skill.
+Required: release scope, environment, health signals, rollback owner. Output: pre-deploy checklist, deploy decision gate, monitoring watchlist, rollback criteria, post-deploy status boundary.
 
 ## Why This Exists
 
 `deploy-and-monitor` exists because a deploy is judged healthy by whoever last looked at a dashboard: it fixes the baseline before the change and names the thresholds that mean roll back.
 
-## Do Not Use When
-
-- An incident has already been declared and the work is commanding it -- severity, commander, running timeline, recovery verification -- rather than watching a release; use `omh-live-incident-response`.
-- The ask is deciding a release before it ships -- what goes in, its version and tag, the canary stages, or which command rolls it back; use `omh-release-cut`, which writes the rollback trigger down before it is needed.
-- The change is to declared infrastructure itself -- a Terraform plan, a Kubernetes manifest, a Helm chart -- and needs its drift, blast radius, and cost delta read before it is applied; use `omh-iac-change`.
-
-## Examples
-
-Good example:
-
-- Prompt: deploy-and-monitor: prepare the release monitor, rollback signals, health checks, and post-deploy status card.
-- Expected behavior: Create release monitoring guidance with deployment, metric, rollback, and observation boundaries.
-- Why: The request is about deploy readiness and monitoring rather than code review alone.
-
-Bad example:
-
-- Prompt: deploy-and-monitor: ship it and tell me when it is healthy.
-- Expected behavior: Refuse a health claim; name the missing baseline, signals, window, and rollback owner.
-- Why: Healthy with no baseline is whatever the dashboard shows after the fact.
-
-## Completion Checklist
-
-- Each health signal has a pre-deploy baseline, a threshold, a window, and an action.
-- The rollback owner and trigger are named, with a bake time and schema compatibility.
-- Post-deploy status cites observed values or reads not_observed.
-
-## Recovery Notes
-
-- If a monitor has only its first baseline tick or a silent tick, retain the checklist and watchlist, mark release health not_observed, and hand back the recorded cron runs and open incidents needed to assess health.
-- If the rollback owner is missing, retain the release scope and health signals, mark the deploy decision gate unresolved, and hand back the rollback criteria with the owner question before advancing.
-- If a canary lacks host_deployment_observation/v1 or a pre-deploy production baseline, retain the checklist, mark the comparison unresolved and BLOCK, and hand back the missing observation or baseline without authorizing rollback.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -87,26 +57,6 @@ Handoff policy:
 
 Keep release checklist, health criteria, rollback gates, and status narration in Hermes; record deploy, monitor, incident, or rollback evidence only when the wrapper or operator observes it.
 
-Required inputs:
-
-- release scope
-- environment
-- health signals
-- rollback owner
-
-Expected outputs:
-
-- pre-deploy checklist
-- deploy decision gate
-- monitoring watchlist
-- rollback criteria
-- post-deploy status boundary
-
-Artifact expectations:
-
-- release operation status record when the wrapper captures deploy or monitor observations
-- web_qa_comparison/v1 for a canary only with a trusted host_deployment_observation/v1 and a production baseline captured before it
-
 Artifact contracts:
 
 This label denotes the machine-enforcement level, not a skill quality score and not an observed evidence state.
@@ -119,6 +69,18 @@ Safety rules:
 - Keep release readiness, deploy decision, monitor signals, and rollback as separate evidence steps.
 - Route code fixes discovered during monitoring as later executor handoffs.
 - A canary web-QA comparison never authorizes rollback; a missing deployment observation is BLOCK and a field regression beyond tolerance is REVISE.
+
+## Completion Checklist
+
+- Each health signal has a pre-deploy baseline, a threshold, a window, and an action.
+- The rollback owner and trigger are named, with a bake time and schema compatibility.
+- Post-deploy status cites observed values or reads not_observed.
+
+## Recovery Notes
+
+- If a monitor has only its first baseline tick or a silent tick, retain the checklist and watchlist, mark release health not_observed, and hand back the recorded cron runs and open incidents needed to assess health.
+- If the rollback owner is missing, retain the release scope and health signals, mark the deploy decision gate unresolved, and hand back the rollback criteria with the owner question before advancing.
+- If a canary lacks host_deployment_observation/v1 or a pre-deploy production baseline, retain the checklist, mark the comparison unresolved and BLOCK, and hand back the missing observation or baseline without authorizing rollback.
 
 ## Runtime Evidence
 

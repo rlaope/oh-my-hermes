@@ -29,12 +29,12 @@ import { BotSections } from "./BotSections";
 
 export const slot = "settings";
 
-const APP_PAGES: { id: string; label: Key }[] = [
+const APP_PAGES: { id: string; label: Key; soon?: boolean }[] = [
   { id: "general", label: "set.general" },
   { id: "terminal", label: "set.terminal" },
   { id: "agents", label: "set.agents" },
   { id: "providers", label: "set.providers" },
-  { id: "computer", label: "set.computer" },
+  { id: "computer", label: "set.computer", soon: true },
 ];
 
 const STATUS: Record<string, Key> = { online: "bot.online", offline: "bot.offline", starting: "bot.starting" };
@@ -75,6 +75,7 @@ export default function Settings({ page }: SlotProps["settings"]) {
         {APP_PAGES.map((p) => (
           <NavItem key={p.id} id={p.id} current={current} onPick={s.openSettings}>
             {t(p.label)}
+            {p.soon && <span className="nav-soon">{t("set.soon")}</span>}
           </NavItem>
         ))}
       </nav>
@@ -214,7 +215,7 @@ function BotPage({ bot }: { bot: Bot }) {
 
       <div className="st-gh">{t("set.model")}</div>
       <div className="st-grp">
-        <Row title={t("set.model")} hint={t("set.modelHint")}>
+        <Row title={t("set.modelMain")}>
           <Value>
             {model || "—"}
             {provider && <small>{providerName(opts, provider)}</small>}
@@ -533,6 +534,7 @@ function GeneralPage() {
       <div className="st-grp st-grp-lang">
         <Row title={t("lang.title")} hint={t("lang.hint")}>
           <Seg
+            small
             label={t("lang.title")}
             value={s.ui.lang}
             onChange={(v) => s.setLanguage(v as Lang)}
@@ -556,6 +558,7 @@ function GeneralPage() {
           <DiskWarnSeg />
         </Row>
       </div>
+      <div className="st-gh">{t("set.sidebar")}</div>
       <div className="st-grp">
         <Row title={t("tasks.barSetting")} hint={t("tasks.barSettingHint")}>
           <TasksBarToggle />

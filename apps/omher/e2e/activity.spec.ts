@@ -130,7 +130,8 @@ test("Stop ends the line as 'Stopped after Xs'", async ({ page }) => {
   await page.getByTestId("stop").click();
   const act = page.getByTestId("activity").last();
   await expect(act).toHaveAttribute("data-state", "interrupted");
-  await expect(act.getByTestId("activity-text")).toHaveText(/^Stopped after \d+s$/);
+  // a stop within the first second reads "<1s", never "0s"
+  await expect(act.getByTestId("activity-text")).toHaveText(/^Stopped after (<1s|[1-9]\d*s)$/);
 });
 
 test("a failed step shows red in the details; elapsed ticks each second", async ({ page }) => {

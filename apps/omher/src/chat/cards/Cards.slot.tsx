@@ -9,7 +9,7 @@ import "./cards.css";
 import { useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent, type Ref, type RefObject } from "react";
 import type { SlotProps } from "../../features";
 import type { ApprovalChoice, AskSubagent, ClarifyAnswers, ClarifyQuestion } from "../../lib/protocol";
-import { askOpen, getStore, useStore, type ApprovalItem, type AskExpiry, type ClarifyItem } from "../../state/store";
+import { approvalTitle, askOpen, getStore, useStore, type ApprovalItem, type AskExpiry, type ClarifyItem } from "../../state/store";
 import { answerOf, EMPTY, type Pick } from "./answers";
 import { choiceIndexForKey, parseChoice } from "./choices";
 import { riskOf } from "./risk";
@@ -119,7 +119,8 @@ function Approval({ bot, item }: { bot: string; item: ApprovalItem }) {
 
   const risks = riskOf(item.command || "");
   // plan mode's end asks one thing in plain words: start on the plan below
-  const title = item.plan ? t("card.startPlan") : item.title || t("card.approvalNeeded");
+  // Hermes' own words in English: in another language the card says "Approval needed" (they stay in the tooltip)
+  const title = item.plan ? t("card.startPlan") : approvalTitle(item.title);
   return (
     <div
       ref={ref}
@@ -132,7 +133,7 @@ function Approval({ bot, item }: { bot: string; item: ApprovalItem }) {
       onKeyDown={onKey}
     >
       <AskedBy who={item.subagent} />
-      <div className="card-title" lang={koText(title)}>
+      <div className="card-title" lang={koText(title)} title={item.title && item.title !== title ? item.title : undefined}>
         {title}
       </div>
       {risks.length > 0 && (

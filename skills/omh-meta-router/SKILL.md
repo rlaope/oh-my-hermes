@@ -15,42 +15,13 @@ metadata:
 
 # Meta Router
 
-This is a Hermes-native `meta-router` workflow skill.
+Required: leading /omh or ./omh command with an imperative remainder, live OMH catalog via bounded `omh recommend --json` queries, available shell/CLI or plugin tool surface. Output: selected workflow or chain with rationale, consulted catalog evidence from the bounded recommend output, observed-vs-prepared evidence boundary for the routing decision.
 
 ## Why This Exists
 
 `meta-router` exists to turn a leading /omh command into a live catalog lookup: it reasons over the imperative task, selects or chains concrete workflows, and keeps the decision inside the observed/prepared evidence boundary instead of guessing from memory.
 
-## Do Not Use When
-
-- The /omh token is not the leading command token.
-- The message is a bare picker alias or an OMH catalog/entrypoint question — those belong to `omh-routing`.
-
-## Examples
-
-Good example:
-
-- Prompt: /omh migrate this service off the deprecated API and add tests
-- Expected behavior: Consult `omh recommend` on the remainder, then name the recommended chain and start only its first stage; each later engine waits for the user's go-ahead, with explicit observed-vs-prepared evidence boundaries.
-- Why: A leading /omh command with an imperative remainder is a meta-routing request that reasons over the live catalog rather than a memorized list.
-
-Bad example:
-
-- Prompt: omh add dark mode
-- Expected behavior: Do not meta-route; a bare `omh` alias without a leading slash command is a picker/other-lane signal.
-- Why: Meta-routing triggers only on a leading /omh or ./omh command token, not on a bare alias.
-
-## Completion Checklist
-
-- The selected workflow, confidence reason, evidence boundary, and user-facing next action are named.
-- Low-confidence or conflicting signals return a picker or clarification instead of forced routing.
-- Catalog answers are rendered without shell approval when wrapper metadata is sufficient.
-
-## Recovery Notes
-
-- If bounded recommend queries cannot run through CLI, plugin, or wrapper, retain only the imperative task, mark catalog selection not_observed, and hand back the workflow picker instead of a memorized recommendation.
-- If recommendation output contains only `omh-meta-router`, retain the consulted catalog evidence, mark workflow selection unresolved, and hand back the task remainder for a bounded re-query rather than selecting this skill.
-- If stage re-queries still leave a multi-stage task low-confidence, retain the consulted catalog evidence, mark the proposed chain tentative, and hand back a clarification question about the unresolved stage.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -83,22 +54,6 @@ Handoff policy:
 
 Reason over the /omh remainder, select or chain concrete workflows from the live catalog, and prepare a selected executor/runtime handoff only when the chosen chain requires code edits; do not execute code.
 
-Required inputs:
-
-- leading /omh or ./omh command with an imperative remainder
-- live OMH catalog via bounded `omh recommend --json` queries
-- available shell/CLI or plugin tool surface
-
-Expected outputs:
-
-- selected workflow or chain with rationale
-- consulted catalog evidence from the bounded recommend output
-- observed-vs-prepared evidence boundary for the routing decision
-
-Artifact expectations:
-
-- runtime run record when a wrapper can observe the meta-routing decision
-
 Safety rules:
 
 - Trigger only on a leading `/omh` or `./omh` command token with a task remainder; bare `/omh`, `./omh`, or `omh` without a slash is a picker/other-lane signal, not meta-routing.
@@ -106,6 +61,18 @@ Safety rules:
 - Never select `meta-router` itself from the recommendation output; exclude it and route to the next best concrete workflow or chain.
 - Report the selected workflow(s), why, and the observed-vs-prepared evidence boundary; a routing decision is not execution, review, CI, or merge evidence.
 - If no shell/CLI surface is available, ask the wrapper to run the bounded `omh recommend` queries or use the plugin tool surface; never guess the catalog from memory — say the catalog is unavailable and offer the workflow picker instead.
+
+## Completion Checklist
+
+- The selected workflow, confidence reason, evidence boundary, and user-facing next action are named.
+- Low-confidence or conflicting signals return a picker or clarification instead of forced routing.
+- Catalog answers are rendered without shell approval when wrapper metadata is sufficient.
+
+## Recovery Notes
+
+- If bounded recommend queries cannot run through CLI, plugin, or wrapper, retain only the imperative task, mark catalog selection not_observed, and hand back the workflow picker instead of a memorized recommendation.
+- If recommendation output contains only `omh-meta-router`, retain the consulted catalog evidence, mark workflow selection unresolved, and hand back the task remainder for a bounded re-query rather than selecting this skill.
+- If stage re-queries still leave a multi-stage task low-confidence, retain the consulted catalog evidence, mark the proposed chain tentative, and hand back a clarification question about the unresolved stage.
 
 ## Runtime Evidence
 

@@ -223,8 +223,9 @@ export function NameEditor({ bot }: { bot: Bot }) {
   );
 }
 
-const SOURCE: Record<string, string> = { slack: "Slack", discord: "Discord", cron: "Cron", telegram: "Telegram" };
-export const placeName = (src: string) => SOURCE[src] ?? src.charAt(0).toUpperCase() + src.slice(1);
+const SOURCE: Record<string, string> = { slack: "Slack", discord: "Discord", telegram: "Telegram" };
+/** A place's name: the apps by their own names, Hermes' scheduled jobs in the person's language. */
+export const placeName = (src: string) => (src === "cron" ? t("id.placeCron") : (SOURCE[src] ?? src.charAt(0).toUpperCase() + src.slice(1)));
 
 export function sinceLabel(ts: number | null): string {
   if (!ts) return "—";
@@ -261,6 +262,13 @@ export function BotFacts({ info }: { info: BotInfo | null | undefined }) {
   if (info === null) return <div className="be-facts muted">{t("id.unreadable")}</div>;
   const places = Object.entries(info.places);
   const total = places.reduce((a, [, n]) => a + n, 0);
+  // a bot that has done nothing yet: one quiet line, not four empty numbers that read as a failed load
+  if (total === 0 && info.skills === 0 && info.routines === 0 && !info.last_active)
+    return (
+      <div className="be-facts muted" data-testid="bot-facts" data-empty="">
+        {t("id.noActivity")}
+      </div>
+    );
   return (
     <div className="be-facts" data-testid="bot-facts">
       <div className="be-stats">

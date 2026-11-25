@@ -14,43 +14,13 @@ metadata:
 
 # Agent Ops Review
 
-This is a Hermes-native `agent-ops-review` workflow skill.
+Required: user request, target context, delivery or status expectation, known missing evidence. Output: agent-ops-review/v1 card or guidance, next action, prepared-vs-observed boundary.
 
 ## Why This Exists
 
 `agent-ops-review` exists so Hermes users can ask for this workflow in chat and get a structured, checkable answer instead of an improvised one.
 
-## Do Not Use When
-
-- The request is already handled by a narrower explicit skill with stronger evidence.
-- The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
-- The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
-
-## Examples
-
-Good example:
-
-- Prompt: agent-ops-review show quality, blockers, and throughput for AI-agent work.
-- Expected behavior: Produce `prepare_agent_ops_review` with required context, wrapper actions, and not-evidence boundaries.
-- Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
-
-Bad example:
-
-- Prompt: agent-ops-review claim Codex finished and CI passed because a handoff exists.
-- Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
-- Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
-
-## Completion Checklist
-
-- Each run is listed as prepared, observed, or not_observed, with the evidence behind observed.
-- Blockers and failed quality gates carry an owner or next action.
-- Throughput claims cite a measurement or say none exists.
-- An instrumentation audit gives every ladder row PASS, FAIL, or PARTIAL with its location.
-
-## Recovery Notes
-
-- If only a prepared handoff exists, mark coding progress not_observed; hand back the missing stage.
-- If P0 capture fails its audit, keep the tier checks, mark readiness unresolved; hand back quick wins.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -85,23 +55,6 @@ Handoff policy:
 
 Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 
-Required inputs:
-
-- user request
-- target context
-- delivery or status expectation
-- known missing evidence
-
-Expected outputs:
-
-- agent-ops-review/v1 card or guidance
-- next action
-- prepared-vs-observed boundary
-
-Artifact expectations:
-
-- agent-ops-review/v1 metadata-only runtime or wrapper card when recorded
-
 Artifact contracts:
 
 This label denotes the machine-enforcement level, not a skill quality score and not an observed evidence state.
@@ -112,6 +65,18 @@ Safety rules:
 
 - An agent ops review card is not source retrieval, executor dispatch, coding progress, implementation, review, verification, CI, merge, platform delivery, provider billing, or live runtime telemetry evidence. If Hermes is the coding owner, summarize `hermes_coding_harness/v1` stage, lane owner, next action, and missing evidence.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
+## Completion Checklist
+
+- Each run is listed as prepared, observed, or not_observed, with the evidence behind observed.
+- Blockers and failed quality gates carry an owner or next action.
+- Throughput claims cite a measurement or say none exists.
+- An instrumentation audit gives every ladder row PASS, FAIL, or PARTIAL with its location.
+
+## Recovery Notes
+
+- If only a prepared handoff exists, mark coding progress not_observed; hand back the missing stage.
+- If P0 capture fails its audit, keep the tier checks, mark readiness unresolved; hand back quick wins.
 
 ## Runtime Evidence
 

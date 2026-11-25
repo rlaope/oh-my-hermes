@@ -21,6 +21,28 @@ All notable changes will be documented here.
   from the 900px minimum width up. `e2e/site-preview-header.spec.ts` now checks the film-only hero (d17fb8dfb): the
   hero's film keeps playing and no live preview is mounted. It also checks the preview page on its own, which had
   failed every omher PR's e2e since that change.
+- **omher: a UI review pass across the sidebar, chat, Plans, Settings, Tasks, Automations, Plugins and TERMINALS.**
+  A review of every screen at 1280x820 and the 900x600 minimum, dark and light, English and Korean, found cards left
+  alone on a row, mixed alignments, cut text, empty bands, states that looked stuck and Korean particle fallbacks.
+  - Grids never leave a card alone beside empty slots (All bots, Plugins › Browse, Apps): an odd count's last card
+    spans the row. Card actions sit on one line per row; the bot page's places sit on the stats' columns.
+  - TERMINALS split cards lay every cell out one way, on the rows' icon column, with "Claude Code" whole at the default
+    height. A working cell shows a faint ring with one bright head going round it, never a half-filled bar. A shell's
+    own prompt is never a cell's last line. Folder headers show the parent folder, then the branch.
+  - A terminal idle at its prompt reads Ready with a still dot, as its sidebar row shows it. While an approval or a
+    question waits, the chat stops its spinner and the bot's ring and shows the amber needs dot.
+  - No empty band above the sidebar's "more" chevron, and the chevron never sits on text. An empty chat greets in the
+    middle of the column.
+  - The Claude Code block mascot draws without seams on the GPU terminal renderer.
+  - Plans rows and subagent cards name a plan by its title; times follow the UI language ("15분 09초"); the needs strip
+    names who waits.
+  - Contrast: dark secondary text 5.1:1, light waiting amber 5.3:1, the light waiting triangle on TERMINALS rows.
+  - Korean: polite endings throughout (a test fails on 습니다), no 이(가)/을(를)/(으)로 after a name, "셸" for shell,
+    the approval card's title translated.
+  - Every inline confirm puts its action first and Cancel second.
+  Each fix is pinned by an e2e or vitest check that fails on the old layout (`apps/omher/e2e/settings-pages-fit.spec.ts`,
+  `apps/omher/e2e/tasks-fit.spec.ts`, `apps/omher/e2e/term-blocks.spec.ts` and the screens' own specs).
+
 - **Fanout command fields are bounded in UTF-8 bytes, so a legal non-ASCII command can no longer push a unit prompt
   over its 8,000-byte ceiling.** `verification_commands`, `verification_checks[].command` and `reproduction_command`
   are capped at 240 UTF-8 bytes and `task_linked_test_runner` at 200, matching `review_focus`. Before, a 240-character

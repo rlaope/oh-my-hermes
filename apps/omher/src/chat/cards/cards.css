@@ -7,7 +7,8 @@
   display: flex;
   flex-direction: column;
   gap: 7px;
-  max-width: 76%;
+  /* about three quarters of the column; a narrow column (the side panel open) lends it up to 520px */
+  max-width: max(76%, min(100%, 520px));
   font-size: 12px;
 }
 /* .card .card-title, not .card-title: a Korean title carries lang="ko", and [lang="ko"] (theme/base.css, same
@@ -70,7 +71,7 @@
   overflow-wrap: anywhere;
 }
 .card:has(.card-plan) {
-  width: 76%;
+  width: max(76%, min(100%, 520px));
 }
 /* the plan's own headings stay under the card's question */
 .card-plan h1,

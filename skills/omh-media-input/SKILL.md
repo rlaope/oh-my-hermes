@@ -15,46 +15,13 @@ metadata:
 
 # Media Input Operator
 
-This is a Hermes-native `media-input-operator` workflow skill.
+Required: user request, target context, delivery or status expectation, known missing evidence. Output: media_input_task_card/v1, media_source_scope/v1, transcript_boundary/v1, media_summary_plan/v1, media_result_manifest/v1 when observed, next action, prepared-vs-observed boundary.
 
 ## Why This Exists
 
 `media-input-operator` exists so Hermes users can ask for this workflow in chat and get a structured, checkable answer instead of an improvised one.
 
-## Do Not Use When
-
-- The request is already handled by a narrower explicit skill with stronger evidence.
-- The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
-- The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
-- The audio is an instruction to carry out; use `omh-voice-input`.
-
-## Examples
-
-Good example:
-
-- Prompt: media-input-operator transcribe this audio meeting and summarize action items with evidence and timestamp boundaries.
-- Expected behavior: Produce `prepare_media_input_card` with required context, wrapper actions, and not-evidence boundaries.
-- Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
-
-Bad example:
-
-- Prompt: media-input-operator invent a YouTube transcript and claim the timestamps are verified without media evidence.
-- Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
-- Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
-
-## Completion Checklist
-
-- Receipt OCR checks items sum to the total, states assumed currency and date order, and masks card and ID numbers.
-- Media type, source location, permission boundary, transcript availability, language, requested output, timestamp requirement, and stop condition are explicit.
-- Downloads, uploads, ASR, transcript extraction, speaker labels, copyrighted media access, and provider setup are gated or marked missing.
-- Transcript text, OCR output, screenshot text, receipt fields, timestamps, quotes, action items, and media-summary claims are reported only from observed media or supplied transcript/extraction evidence.
-
-## Recovery Notes
-
-- If the media or transcript is missing, ask for the smallest source, file, transcript, or provider result needed.
-- If the request is broad current-source research about a video topic, route to `ulw-research` or `omh-source-finder` before summary.
-- If the user wants a PPT/PDF/report generated from the media summary, route to `omh-materials-package` after media input evidence is clear.
-- If the request is about whether a live duplex voice connector keeps whole spoken turns, route to `omh-external-connector-readiness` for a realtime_voice_trial_receipt/v1 rather than treating a supplied recording as that evidence.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -86,36 +53,25 @@ Handoff policy:
 
 Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 
-Required inputs:
-
-- user request
-- target context
-- delivery or status expectation
-- known missing evidence
-
-Expected outputs:
-
-- media_input_task_card/v1
-- media_source_scope/v1
-- transcript_boundary/v1
-- media_summary_plan/v1
-- media_result_manifest/v1 when observed
-- next action
-- prepared-vs-observed boundary
-
-Artifact expectations:
-
-- media_input_task_card/v1 metadata-only wrapper card when prepared
-- media_source_scope/v1 with media type, source location, permission boundary, requested time range, and stop condition
-- transcript_boundary/v1 separating supplied transcript, missing transcript, ASR/extraction requirement, language, speaker labels, and confidence gaps
-- media_summary_plan/v1 naming action-item, timestamped, clip, chapter, quote, or evidence-linked summary method
-- media_result_manifest/v1 only when supplied transcript, media file metadata, provider response, or observed transcript output exists
-
 Safety rules:
 
 - A media input card is not media access, file upload, download, transcript extraction, OCR output, screenshot text extraction, receipt fields, speech-to-text output, timestamp accuracy, copyright clearance, source retrieval, or summary correctness evidence unless observed media-result evidence records it.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 - A media_result_manifest/v1 describes a supplied recording or transcript. It is never a live duplex session, one-input-to-one-dispatch integrity, audible response behavior, or realtime voice readiness, and it cannot be promoted into one.
+
+## Completion Checklist
+
+- Receipt OCR checks items sum to the total, states assumed currency and date order, and masks card and ID numbers.
+- Media type, source location, permission boundary, transcript availability, language, requested output, timestamp requirement, and stop condition are explicit.
+- Downloads, uploads, ASR, transcript extraction, speaker labels, copyrighted media access, and provider setup are gated or marked missing.
+- Transcript text, OCR output, screenshot text, receipt fields, timestamps, quotes, action items, and media-summary claims are reported only from observed media or supplied transcript/extraction evidence.
+
+## Recovery Notes
+
+- If the media or transcript is missing, ask for the smallest source, file, transcript, or provider result needed.
+- If the request is broad current-source research about a video topic, route to `ulw-research` or `omh-source-finder` before summary.
+- If the user wants a PPT/PDF/report generated from the media summary, route to `omh-materials-package` after media input evidence is clear.
+- If the request is about whether a live duplex voice connector keeps whole spoken turns, route to `omh-external-connector-readiness` for a realtime_voice_trial_receipt/v1 rather than treating a supplied recording as that evidence.
 
 ## Runtime Evidence
 

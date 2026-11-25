@@ -15,46 +15,13 @@ metadata:
 
 # Data Analysis
 
-This is a Hermes-native `data-analysis` workflow skill.
+Required: user request, target context, delivery or status expectation, known missing evidence. Output: data_analysis_task_card/v1, dataset_scope/v1, analysis_method_plan/v1, operations_data_harness/v1, product_evidence_loop/v1, analysis_result_summary/v1 when observed, next action, prepared-vs-observed boundary.
 
 ## Why This Exists
 
 `data-analysis` exists because a model that reads a table by eye returns means, trends and anomalies that look observed and are wrong, and a gap between two groups reads as a finding with no test, sample size or interval: every number here comes from a command output that can be named, and every comparison carries its evidence.
 
-## Do Not Use When
-
-- Polygon overlay and area computation from supplied layers; use `omh-geospatial-analysis`.
-- Budget variance, cash or close analysis with accounting periods and controls; use `omh-finance-analysis`.
-- The table must become a deck, workbook or exported report; use `omh-materials-package` after the analysis scope is clear.
-
-## Examples
-
-Good example:
-
-- Prompt: data-analysis analyze this CSV and summarize anomalies by segment.
-- Expected behavior: Produce `prepare_data_analysis_card` with required context, wrapper actions, and not-evidence boundaries.
-- Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
-
-Bad example:
-
-- Prompt: data-analysis is the Q3 lift significant? (two columns of five numbers each)
-- Expected behavior: Compute the comparison with code and report n per group, the effect size and an interval or test with its assumptions, flagging that five per group makes the result fragile, instead of calling the gap significant or refusing for lack of data.
-- Why: The data was supplied; the failure is a comparison reported without n, an effect size or an interval.
-
-## Completion Checklist
-
-- Dataset or corpus source, record scope, schema or extraction method, join assumptions, analysis question, method, and stop condition are explicit.
-- The data was loaded with code (pandas, SQL or a spreadsheet tool) and shape, dtypes, null counts, duplicate rows and the min and max of key columns were printed before any claim; every number in the answer comes from a command output you can name. With no code tool, say so and analyse only what fits in context, labelled as read by eye.
-- Numeric claims, anomalies, trends, segments, and log patterns are reported only from observed data or supplied evidence.
-- Every comparison states n per group, the effect size and an interval or test (named, with its assumptions); the answer says how many segments were looked at, and the headline is checked against its major subgroups.
-- Causal claims require observed identification evidence: a randomized or explicitly identified design. Otherwise report association as association.
-- Source acquisition, file conversion, report generation, and code fixes are routed to the narrower workflow when stronger.
-
-## Recovery Notes
-
-- If the data itself is missing, ask for the smallest dataset sample, schema, or query output needed.
-- If the user wants datasets found online, route to `omh-source-finder` before analysis.
-- If the user wants a PPT/PDF/XLSX report generated from data, route to `omh-materials-package` or `omh-deliverable-package` after analysis scope is clear.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -86,37 +53,25 @@ Handoff policy:
 
 Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 
-Required inputs:
-
-- user request
-- target context
-- delivery or status expectation
-- known missing evidence
-
-Expected outputs:
-
-- data_analysis_task_card/v1
-- dataset_scope/v1
-- analysis_method_plan/v1
-- operations_data_harness/v1
-- product_evidence_loop/v1
-- analysis_result_summary/v1 when observed
-- next action
-- prepared-vs-observed boundary
-
-Artifact expectations:
-
-- data_analysis_task_card/v1 metadata-only wrapper card when prepared
-- dataset_scope/v1 with source, row/record scope, columns or schema, filters, and stop condition
-- analysis_method_plan/v1 naming summary, anomaly, trend, segment, schema, or log-pattern methods
-- operations_data_harness/v1 for relationship and causal boundaries
-- product_evidence_loop/v1 for prepared opaque data reference metadata
-- analysis_result_summary/v1 only from observed data, calculations, query output, or supplied evidence
-
 Safety rules:
 
 - A data analysis card is not file extraction, query execution, chart generation, statistical proof, data correctness, hallucination-safe numeric evidence, association, or causality unless observed data and method evidence records it.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
+## Completion Checklist
+
+- Dataset or corpus source, record scope, schema or extraction method, join assumptions, analysis question, method, and stop condition are explicit.
+- The data was loaded with code (pandas, SQL or a spreadsheet tool) and shape, dtypes, null counts, duplicate rows and the min and max of key columns were printed before any claim; every number in the answer comes from a command output you can name. With no code tool, say so and analyse only what fits in context, labelled as read by eye.
+- Numeric claims, anomalies, trends, segments, and log patterns are reported only from observed data or supplied evidence.
+- Every comparison states n per group, the effect size and an interval or test (named, with its assumptions); the answer says how many segments were looked at, and the headline is checked against its major subgroups.
+- Causal claims require observed identification evidence: a randomized or explicitly identified design. Otherwise report association as association.
+- Source acquisition, file conversion, report generation, and code fixes are routed to the narrower workflow when stronger.
+
+## Recovery Notes
+
+- If the data itself is missing, ask for the smallest dataset sample, schema, or query output needed.
+- If the user wants datasets found online, route to `omh-source-finder` before analysis.
+- If the user wants a PPT/PDF/XLSX report generated from data, route to `omh-materials-package` or `omh-deliverable-package` after analysis scope is clear.
 
 ## Runtime Evidence
 

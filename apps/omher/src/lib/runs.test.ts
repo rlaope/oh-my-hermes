@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { setLang } from "../i18n";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { markFor } from "../ui/ModelIcon";
-import { attachDelegations, attachOwners, attachPlanned, cliName, countsOf, fromDag, isCliRun, fromDelegation, layerOf, nodeModel, routeTable, sortRuns, span, summary, type AgentRun, type DagRecord, type Delegation, type RouteRecord, liveSpan, lengthOf } from "./runs";
+import { attachDelegations, attachOwners, attachPlanned, cliName, countsOf, fromDag, isCliRun, fromDelegation, layerOf, nodeModel, routeTable, sortRuns, span, summary, type AgentRun, type DagRecord, type Delegation, type RouteRecord, liveSpan, lengthOf, firstUnitOf } from "./runs";
 
 const fx = (name: string) => readFileSync(fileURLToPath(new URL(`./__fixtures__/${name}`, import.meta.url)), "utf-8");
 const rec = (name: string) => JSON.parse(fx(name)) as DagRecord;
@@ -115,6 +116,23 @@ describe("ordering and time", () => {
     expect([liveSpan(7), liveSpan(14 * 60 + 5), liveSpan(2 * 3600 + 5 * 60 + 9), liveSpan(26 * 3600)]).toEqual(["7s", "14m 05s", "2h 05m 09s", "1d 2h"]);
     expect(lengthOf(100, undefined, 100 + 125)).toBe("2m 05s");
     expect(lengthOf(100, 100 + 125, 9999)).toBe("2m");
+  });
+  it("says its units in the person's language, as the chat beside it does", () => {
+    setLang("ko");
+    try {
+      expect([liveSpan(15 * 60 + 9), span(11 * 60), span(3600 + 58 * 60), liveSpan(2 * 3600 + 5 * 60 + 9), span(26 * 3600)]).toEqual(["15분 09초", "11분", "1시간 58분", "2시간 05분 09초", "1일 2시간"]);
+      expect(firstUnitOf(0, 3660, 0)).toBe("1시간");
+    } finally {
+      setLang("en");
+    }
+    setLang("zh");
+    try {
+      // zh writes spaces inside its units: the first unit is a word, never a split at a space
+      expect(firstUnitOf(0, 3660, 0)).toBe("1 小时");
+    } finally {
+      setLang("en");
+    }
+    expect(firstUnitOf(0, 3660, 0)).toBe("1h");
   });
   it("span is coarse", () => {
     expect([span(40), span(14 * 60 + 30), span(2 * 3600 + 5 * 60), span(3 * 3600), span(5 * 86400)]).toEqual(["40s", "14m", "2h 5m", "3h", "5d"]);

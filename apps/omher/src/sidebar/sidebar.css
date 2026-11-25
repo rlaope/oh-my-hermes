@@ -203,6 +203,22 @@
   overflow-y: auto;
   min-height: 0;
 }
+/* BOTS scrolled with a row cut at its top edge (edgeFade.ts `data-cut-top`): the bottom edge's cue mirrored, a fade
+   from the sidebar's colour over the cut row with an up chevron, so a lone subtitle under the header reads as more
+   above, not as a stray line. It takes no room (sticky, pulled back by its own height). */
+.side-sec > .bot-list:not(.ss-list)[data-cut-top]::before {
+  content: "";
+  position: sticky;
+  top: 0;
+  flex: none;
+  height: 28px;
+  margin-bottom: -30px;
+  background:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23908a94' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'><path d='m6 15 6-6 6 6'/></svg>") center top 2px / 10px 10px no-repeat,
+    linear-gradient(to top, transparent, var(--side) 70%);
+  pointer-events: none;
+  z-index: 1;
+}
 .bot {
   display: flex;
   gap: 10px;
@@ -391,25 +407,23 @@
   outline: 2px solid var(--muted);
   outline-offset: -2px;
 }
-/* the Automations count: a small number on the icon's corner, cut out of the sidebar's colour (no filled chip) */
+/* the Automations count: a small filled pill on the icon's corner, ringed in the sidebar's colour so it stands off the
+   glyph (a bare digit there read as a superscript, "folder⁶"); neutral, never the accent of an unread count */
 .nav.nav-i .nav-count {
   position: absolute;
-  top: 2px;
-  right: 1px;
+  top: 1px;
+  right: -1px;
   margin: 0;
-  min-width: 12px;
-  padding: 0 2px;
-  border-radius: 6px;
+  min-width: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
   font-size: 9.5px;
-  line-height: 12px;
+  line-height: 14px;
   font-weight: 600;
   text-align: center;
-  color: var(--muted);
-  background: var(--side);
-}
-.nav.nav-i.on .nav-count,
-.nav.nav-i:hover .nav-count {
-  background: transparent;
+  color: var(--body);
+  background: var(--raise2);
+  box-shadow: 0 0 0 1.5px var(--side);
 }
 .foot-row .usage {
   position: static;
@@ -861,10 +875,11 @@ button.upd:hover {
 /* ---- Needs you: approvals and questions waiting on the person ------------------------------------
    Amber, so it never reads as an unread count (the accent badge). Selected rows stay gray. A subagent row in the
    chat that waits on the person (.sa-row) says "waiting" in the same amber, and so does its card's head when every
-   row still out waits (.sa-head). */
+   row still out waits (.sa-head), and the chat's activity line shows its dot while the turn waits (.act-h). */
 .side,
 .sa-row,
-.sa-head {
+.sa-head,
+.act-h {
   --needs: #e9a23b;
   --needs-ink: #1b1204;
   --needs-soft: rgba(233, 162, 59, 0.12);
@@ -872,12 +887,13 @@ button.upd:hover {
 }
 [data-theme="light"] .side,
 [data-theme="light"] .sa-row,
-[data-theme="light"] .sa-head {
+[data-theme="light"] .sa-head,
+[data-theme="light"] .act-h {
   --needs: #e39a2a;
   --needs-ink: #1b1204;
   --needs-soft: rgba(227, 154, 42, 0.14);
-  /* amber text on the light sidebar: a deeper shade, so 11px stays readable */
-  --needs-text: #a8640a;
+  /* amber text on the light sidebar: a deeper shade, so 11px stays readable (5.3:1 on --side) */
+  --needs-text: #94570a;
 }
 /* per row: a plain dot, never a number (a number reads as unread; the strip above carries the count) */
 .needs-dot {
@@ -954,7 +970,7 @@ button.upd:hover {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-/* who asked last and the ask's first words: the count stays the strong part */
+/* who waits: the count stays the strong part */
 .needs-who {
   font-weight: 400;
   color: var(--body);
@@ -962,11 +978,6 @@ button.upd:hover {
 /* " · " and the word after it: one box, so a cut line never ends on a lone separator */
 .needs-sep {
   display: inline-block;
-}
-.needs-k {
-  font-size: 10.5px;
-  font-weight: 500;
-  color: var(--muted);
 }
 .needs-chev {
   display: grid;

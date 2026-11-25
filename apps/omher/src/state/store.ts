@@ -10,7 +10,7 @@ import { findTokens, toWire } from "../chat/parts/skillTokens";
 import { forBots, parseResume, RESUME_KEY, type ResumeSnap } from "../app/resume";
 import { getDraft } from "../app/drafts";
 import { moveInSidebar } from "./order";
-import { LANG_KEY, readLang, setLang, t as tr, type Key, type Lang } from "../i18n";
+import { lang, LANG_KEY, readLang, setLang, t as tr, type Key, type Lang } from "../i18n";
 import type {
   PlatformsRead,
   Away,
@@ -1868,8 +1868,18 @@ export function askFrom(state: AppState, key: string): string {
 }
 
 /** One plain line for an ask: "Allow `rm -rf build/`?" or the (first) question. */
+/** An approval's title in the person's language. Hermes words it in English (its pattern's description, or the
+ *  bridge's "Allow this command?"): a title it is known to send reads in the UI's language, and any other stays as
+ *  Hermes wrote it in English and reads "Approval needed" in the others (its words stay in the card's tooltip). */
+export function approvalTitle(title: string | undefined): string {
+  const known: Record<string, Key> = { "Allow this command?": "ask.allowThis" };
+  if (!title) return tr("card.approvalNeeded");
+  if (known[title]) return tr(known[title]);
+  return lang() === "en" ? title : tr("card.approvalNeeded");
+}
+
 export function askText(it: ApprovalItem | ClarifyItem): string {
-  if (it.kind === "approval") return it.command ? tr("ask.allowCmd", { cmd: `\`${it.command}\`` }) : it.title || tr("ask.allowThis");
+  if (it.kind === "approval") return it.command ? tr("ask.allowCmd", { cmd: `\`${it.command}\`` }) : it.title ? approvalTitle(it.title) : tr("ask.allowThis");
   const n = it.questions?.length ?? 0;
   return n > 1 ? tr("ask.questions", { n, first: it.questions![0].question }) : it.question;
 }

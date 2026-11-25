@@ -15,48 +15,13 @@ metadata:
 
 # Feedback Triage
 
-This is a Hermes-native `feedback-triage` workflow skill.
+Required: feedback items or summary, source boundary, product area. Output: clusters, severity or opportunity ranking, next workflow recommendation, product_evidence_loop/v1.
 
 ## Why This Exists
 
 `feedback-triage` exists to keep customer and community signals from jumping straight into roadmap or coding; it clusters evidence, ranks signals, and chooses the next workflow.
 
-## Do Not Use When
-
-- The request already contains an accepted product decision and asks for implementation.
-- There are no feedback items, source boundary, or product area to classify.
-- The user wants current market research rather than triage of supplied signals.
-- The triage result asks for a retention or activation intervention rather than another cluster; use `omh-lifecycle-growth`.
-- The supplied material is opportunity records and the request is portfolio health or forecast review; use `omh-sales-pipeline-review`.
-- The request is one reproducible bug with a fix asked for, not a set of reports to cluster; use the coding handoff.
-
-## Examples
-
-Good example:
-
-- Prompt: Cluster these customer payment failure reports and feature requests before we plan fixes.
-- Expected behavior: Cluster bug signals and feature asks, rank severity or opportunity, and recommend research, planning, or coding as a next workflow.
-- Why: The input is mixed feedback that needs classification before delivery decisions.
-
-Bad example:
-
-- Prompt: feedback-triage implement the accepted billing fix now.
-- Expected behavior: Route to planning or coding handoff instead of re-triaging.
-- Why: The decision is already accepted, so triage would add delay without improving evidence.
-
-## Completion Checklist
-
-- The source boundary, signal clusters, severity, and follow-up lane are named.
-- Bug, feature, research, strategy, and coding handoff outcomes stay separate.
-- The next workflow is recommended before any implementation claim.
-- A cluster is ranked by distinct customers reporting it (one customer counted once), severity (lost data or money, then a blocked task, then annoyance), and whether a workaround exists, with the count and its source.
-- Quotes carry names, emails, order ids, and card digits masked, and keep the raw item reference.
-
-## Recovery Notes
-
-- If no feedback items are supplied, no cluster stands; mark triage not_observed and hand back the request for feedback items or a summary, source boundary, and product area.
-- If bug and feature signals cannot be separated from the supplied reports, retain source-bounded clusters, mark their classification and ranking tentative, and hand back the missing evidence with research or strategy follow-up options.
-- If a triaged cluster has no explicit coding intent or accepted-plan evidence, retain the clusters and ranking, mark the coding handoff unresolved, and hand back the next workflow recommendation with product_evidence_loop/v1 still prepared-only.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -88,29 +53,26 @@ Handoff policy:
 
 Keep feedback triage in Hermes; recommend the next workflow and prepare a selected executor/runtime handoff only after explicit coding intent or accepted plan evidence.
 
-Required inputs:
-
-- feedback items or summary
-- source boundary
-- product area
-
-Expected outputs:
-
-- clusters
-- severity or opportunity ranking
-- next workflow recommendation
-- product_evidence_loop/v1
-
-Artifact expectations:
-
-- feedback triage record when a wrapper captures it
-
 Safety rules:
 
 - Do not turn feedback into a roadmap, implementation plan, or coding handoff by default.
 - Separate bug signal, feature ask, severity, opportunity, and missing evidence.
 - Route code changes only after explicit user intent or accepted planning evidence.
 - product_evidence_loop/v1 is prepared-only opaque references, not observed evidence or execution.
+
+## Completion Checklist
+
+- The source boundary, signal clusters, severity, and follow-up lane are named.
+- Bug, feature, research, strategy, and coding handoff outcomes stay separate.
+- The next workflow is recommended before any implementation claim.
+- A cluster is ranked by distinct customers reporting it (one customer counted once), severity (lost data or money, then a blocked task, then annoyance), and whether a workaround exists, with the count and its source.
+- Quotes carry names, emails, order ids, and card digits masked, and keep the raw item reference.
+
+## Recovery Notes
+
+- If no feedback items are supplied, no cluster stands; mark triage not_observed and hand back the request for feedback items or a summary, source boundary, and product area.
+- If bug and feature signals cannot be separated from the supplied reports, retain source-bounded clusters, mark their classification and ranking tentative, and hand back the missing evidence with research or strategy follow-up options.
+- If a triaged cluster has no explicit coding intent or accepted-plan evidence, retain the clusters and ranking, mark the coding handoff unresolved, and hand back the next workflow recommendation with product_evidence_loop/v1 still prepared-only.
 
 ## Runtime Evidence
 

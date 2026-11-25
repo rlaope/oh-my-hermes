@@ -72,6 +72,16 @@
   text-transform: none;
   letter-spacing: 0;
 }
+/* a bot's name inside a section label stays as the person wrote it ("Kami's plans", never "KAMI'S PLANS"); the
+   label around it is one inline run (.pn-of), so the name never becomes a flex item of its own */
+.pn-sec > .pn-of {
+  margin-left: 0;
+  text-transform: uppercase;
+  letter-spacing: inherit;
+}
+.pn-sec .pn-name {
+  text-transform: none;
+}
 .pn-ref {
   width: 20px;
   height: 20px;

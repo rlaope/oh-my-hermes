@@ -11,7 +11,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _body(skill: str) -> str:
-    return (ROOT / "skills" / skill / "SKILL.md").read_text(encoding="utf-8")
+    content = (ROOT / "skills" / skill / "SKILL.md").read_text(encoding="utf-8")
+    full_contract = ROOT / "skills" / skill / "references" / "full-contract.md"
+    if full_contract.is_file():
+        content = content + "\n" + full_contract.read_text(encoding="utf-8")
+    return content
 
 
 class SkillInputShapeTests(unittest.TestCase):

@@ -500,6 +500,17 @@ def cmd_docs_skill_sources(args: argparse.Namespace) -> int:
     return 1 if args.check and not payload["ok"] else 0
 
 
+def cmd_docs_hermes_skill_parity(args: argparse.Namespace) -> int:
+    from ..skills.hermes_parity import hermes_skill_parity_markdown, hermes_skill_parity_payload
+
+    payload = hermes_skill_parity_payload()
+    if args.json:
+        _print_json(payload)
+    else:
+        print(hermes_skill_parity_markdown(), end="")
+    return 1 if args.check and not payload["ok"] else 0
+
+
 def _add_docs_commands(sub) -> None:
     docs = sub.add_parser("docs", help="Render or check generated OMH workflow reference docs.")
     docs_sub = docs.add_subparsers(dest="docs_command", required=True)
@@ -539,6 +550,17 @@ def _add_docs_commands(sub) -> None:
     skill_sources.add_argument("--json", action="store_true", help="Print the machine-readable skill_source_closure_audit/v1 payload.")
     skill_sources.add_argument("--root", default=".", help="Repository tree holding the registry and the receipt ledger.")
     skill_sources.set_defaults(func=cmd_docs_skill_sources)
+
+    hermes_parity = docs_sub.add_parser(
+        "hermes-skill-parity",
+        help=(
+            "Audit OMH skill value mechanisms and upstream Hermes bundled/optional skill boundaries "
+            "offline against the pinned upstream snapshot (maintainers)."
+        ),
+    )
+    hermes_parity.add_argument("--check", action="store_true", help="Exit 1 when any parity or value-mechanism finding is reported.")
+    hermes_parity.add_argument("--json", action="store_true", help="Print the machine-readable omh_hermes_skill_parity/v1 payload.")
+    hermes_parity.set_defaults(func=cmd_docs_hermes_skill_parity)
 
     docs_agents = docs_sub.add_parser("agent-skills", help="Generate or byte-check the portable Agent Skills tree (maintainers).")
     docs_agents.add_argument("--output", default=None, help="Projection root (default: agent-skills).")

@@ -3267,6 +3267,40 @@ def _progressive_workflow_full_contract(definition: SkillDefinition, name: str) 
     from .jev_skills import JEV_SKILL_NAMES
 
     method_body = name not in _PROGRESSIVE_WORKFLOW_OPERATIONS and name not in JEV_SKILL_NAMES
+    compact_workflow_body = method_body and name not in _EXPLICIT_PROGRESSIVE_METHOD_SKILLS and name != "show-reel"
+    if compact_workflow_body:
+        return f"""# {title}
+
+Load this on-demand contract after the compact `{name}` body identifies the
+workflow. The main body already holds `Why This Exists`, `First Steps`,
+`Quality bar`, `Handoff policy`, `Safety rules`, `Completion Checklist`,
+`Recovery Notes`, and the runtime rail; this file holds only the examples,
+sibling routing boundaries, and expanded input/output/artifact lists.
+
+## Do Not Use When
+
+{_tuple_list(tuple(loadable_skill_mentions(line) for line in definition.do_not_use_when))}
+
+## Examples
+
+{_example_block("Good", definition, good=True)}
+
+{_example_block("Bad", definition, good=False)}
+
+## Full Input, Output, and Artifact Expectations
+
+Required inputs:
+
+{_tuple_list(definition.required_inputs)}
+
+Expected outputs:
+
+{_tuple_list(definition.expected_outputs)}
+
+Artifact expectations:
+
+{_tuple_list(definition.artifact_expectations)}{_detailed_procedure_line(definition)}
+"""
     rubric = (
         f"""## Do Not Use When
 
@@ -3297,6 +3331,7 @@ Safety rules:
 Safety rules:
 
 {_tuple_list(definition.safety_rules)}"""
+    required_inputs = _tuple_list(definition.required_inputs)
     return f"""# {title}
 
 Load this on-demand contract after the compact `{name}` body identifies the
@@ -3322,11 +3357,11 @@ Quality bar:
 
 Handoff policy:
 
-{loadable_skill_mentions(definition.handoff_policy)}{_executor_readiness_skill_note(definition)}{_delegation_transparency_skill_note(definition)}
+{loadable_skill_mentions(definition.handoff_policy)}{_executor_readiness_skill_note(definition)}{_delegation_transparency_skill_note(definition)}{_route_capacity_skill_note(definition)}
 
 Required inputs:
 
-{_tuple_list(definition.required_inputs)}
+{required_inputs}
 
 Expected outputs:
 
@@ -3338,8 +3373,20 @@ Artifact expectations:
 """
 
 
+_EXPLICIT_PROGRESSIVE_METHOD_SKILLS: frozenset[str] = frozenset(
+    {
+        "market-research",
+        "geospatial-analysis",
+        "sprite-forge",
+        "biomedical-evidence",
+        "molecular-docking",
+        "ai-job-search",
+    }
+)
+
+
 def _progressive_method_body(definition: SkillDefinition, name: str) -> str:
-    """Render a compact body for a method skill with no workflow-artifact operation.
+    """Render a compact body for an explicitly authored progressive method skill.
 
     Every line is drawn from the catalog definition, so the body cannot drift
     from it; the method detail stays in `references/full-contract.md`.
@@ -3394,6 +3441,78 @@ Quality tier: `{definition.quality_tier}`
 {awareness_workflow_context_markdown(name)}
 
 {_common_rail_sections(definition, declared_primary_harness(name))}
+"""
+
+
+def _progressive_compact_workflow_body(definition: SkillDefinition, name: str) -> str:
+    """Render a progressive-disclosure body for standard `omh-*` workflow skills.
+
+    Keeps all actionable counter-default rules (`Quality bar`, `Handoff policy`,
+    `Safety rules`, `First Steps`, `Expert clarification questions`, upstream
+    `HermesSkillLine` deferrals, and `Artifact contracts`) inline on the first
+    `skill_view` load, while moving heavy examples, sibling routing boundaries,
+    and verbose input/output/artifact lists to `references/full-contract.md`.
+    """
+    title = name.replace("-", " ").title()
+    primary_harness = declared_primary_harness(name)
+    bundled_boundary = "".join(
+        f"**Do Not Use When:** {loadable_skill_mentions(line)}\n\n"
+        for line in definition.do_not_use_when
+        if isinstance(line, HermesSkillLine)
+    )
+    expert_questions = expert_questions_markdown(
+        definition,
+        limit=1 if definition.procedure_steps else None,
+    )
+    expert_block = f"\n\n{expert_questions}" if expert_questions else ""
+    artifact_contracts = _artifact_contract_block(definition)
+    return f"""# {title}
+
+Required: {", ".join(definition.required_inputs)}. Output: {", ".join(definition.expected_outputs)}.
+
+{bundled_boundary}## Why This Exists
+
+{definition.why_this_exists}
+{_opening_steps_block(definition)}
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).{_procedure_pointer(definition)}
+
+{awareness_workflow_context_markdown(name)}
+
+## When to Use
+
+{definition.use_when}
+
+    Strong routing signals: {_shipped_triggers(definition)}
+
+## Catalog Metadata
+
+Category: `{definition.category}`
+Phase: `{definition.phase}`
+Hermes role: `{definition.hermes_role}`
+Quality tier: `{definition.quality_tier}`
+Reasoning demand: `{definition.reasoning_demand}`
+
+Quality bar:
+
+{_tuple_list(definition.quality_bar)}
+
+Handoff policy:
+
+{loadable_skill_mentions(definition.handoff_policy)}{_executor_readiness_skill_note(definition)}{_delegation_transparency_skill_note(definition)}{_route_capacity_skill_note(definition)}{expert_block}{artifact_contracts}
+
+Safety rules:
+
+{_tuple_list(definition.safety_rules)}{_procedure_skill_suffix(definition)}
+
+## Completion Checklist
+
+{_tuple_list(definition.final_checklist)}
+
+## Recovery Notes
+
+{_tuple_list(tuple(loadable_skill_mentions(line) for line in definition.recovery_notes))}
+
+{_common_rail_sections(definition, primary_harness)}
 """
 
 
@@ -3459,7 +3578,9 @@ Category: `{definition.category}`. Phase: `{definition.phase}`. Hermes role: `{d
 """
     operation = _PROGRESSIVE_WORKFLOW_OPERATIONS.get(name)
     if operation is None:
-        return _progressive_method_body(definition, name)
+        if name in _EXPLICIT_PROGRESSIVE_METHOD_SKILLS:
+            return _progressive_method_body(definition, name)
+        return _progressive_compact_workflow_body(definition, name)
     title = name.replace("-", " ").title()
     compact_contracts = {
         "decision-prototype": "Required: one decision, a bounded experiment, an isolated scratch boundary, and a measurement method. Output: a decision record, prepared handoff, observation ledger, and receipt. When Hermes' bundled `spike` skill is loaded for the same question, build the way it says and keep these records: `references/spike-composition.md`. For a logic, state, or layout question, or prototype code a later plan may reference, load `references/artifact-shapes.md`.",

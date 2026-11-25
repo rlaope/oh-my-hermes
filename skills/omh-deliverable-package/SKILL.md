@@ -15,42 +15,13 @@ metadata:
 
 # Deliverable Package
 
-This is a Hermes-native `deliverable-package` workflow skill.
+Required: user request, target context, delivery or status expectation, known missing evidence. Output: deliverable-package/v1 card or guidance, next action, prepared-vs-observed boundary.
 
 ## Why This Exists
 
 `deliverable-package` exists because a requested file moves through prepared, generated, QA-checked, approved, and attached states that no single tool reports together: it tracks each file through them and reports a state only from that state's own evidence, never from an earlier one's.
 
-## Do Not Use When
-
-- Planning a deck, PDF, workbook, or document from source inputs before any file exists (its outline, target formats, and QA ladder); use `omh-materials-package`.
-- A text-only report, executive brief, or slide outline with no file to produce; use `omh-report-package`.
-
-## Examples
-
-Good example:
-
-- Prompt: deliverable-package the deck and PDF are generated; check they were rendered, get my approval of v2, and tell me whether the PDF was attached to the thread.
-- Expected behavior: Produce `prepare_deliverable_package` with required context, wrapper actions, and not-evidence boundaries.
-- Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
-
-Bad example:
-
-- Prompt: deliverable-package tell the client the PDF is attached.
-- Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
-- Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
-
-## Completion Checklist
-
-- The deliverable type, audience, source inputs, QA ladder, and delivery boundary are named.
-- Prepared generation, generated file, render QA, approval, attachment, and delivery are separate states.
-- The next action says whether to generate, revise, QA, approve, attach, or deliver.
-
-## Recovery Notes
-
-- If rendered images do not match slide_count or remain uninspected, retain the observed slide_count, mark render_screenshot unresolved, and hand back the exact file and outstanding image checks.
-- If the person's approval names no final file, retain each generated version's read-back, mark approval unresolved, and hand back the stable id and version choices without selecting by modification time.
-- If a publication URL resolves to a different content hash, retain the approved file and any archive evidence already read back, mark publication unresolved, and hand back the URL and expected sha256 for destination read-back.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -89,27 +60,22 @@ Handoff policy:
 
 Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 
-Required inputs:
-
-- user request
-- target context
-- delivery or status expectation
-- known missing evidence
-
-Expected outputs:
-
-- deliverable-package/v1 card or guidance
-- next action
-- prepared-vs-observed boundary
-
-Artifact expectations:
-
-- deliverable-package/v1 metadata-only runtime or wrapper card when recorded
-
 Safety rules:
 
 - A deliverable package card is not binary generation, render QA, formula recalculation, approval, upload, attachment, or delivery evidence.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
+## Completion Checklist
+
+- The deliverable type, audience, source inputs, QA ladder, and delivery boundary are named.
+- Prepared generation, generated file, render QA, approval, attachment, and delivery are separate states.
+- The next action says whether to generate, revise, QA, approve, attach, or deliver.
+
+## Recovery Notes
+
+- If rendered images do not match slide_count or remain uninspected, retain the observed slide_count, mark render_screenshot unresolved, and hand back the exact file and outstanding image checks.
+- If the person's approval names no final file, retain each generated version's read-back, mark approval unresolved, and hand back the stable id and version choices without selecting by modification time.
+- If a publication URL resolves to a different content hash, retain the approved file and any archive evidence already read back, mark publication unresolved, and hand back the URL and expected sha256 for destination read-back.
 
 ## Runtime Evidence
 

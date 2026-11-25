@@ -226,7 +226,7 @@ test("light: the ring keeps its 2.5px band and deeper stops with no glow; waitin
   expect(g).toEqual({ band: "2.5px", arc: "140deg", filter: "none" });
   await emit(ev("friren", "approval.request", { request_id: "ap-l", title: "Run shell command", command: "ls", choices: ["once", "deny"] }));
   await expect(row.getByTestId("bot-time")).toHaveText("waiting");
-  await expect(row.getByTestId("bot-time")).toHaveCSS("color", "rgb(168, 100, 10)");
+  await expect(row.getByTestId("bot-time")).toHaveCSS("color", "rgb(148, 87, 10)");
   await emit(ev("friren", "prompt.expired", { request_id: "ap-l", reason: "timeout" }), ev("friren", "turn.end", { outcome: "done" }));
 });
 
@@ -347,6 +347,30 @@ test("chat: an approval card replaces the typing bubble while the bot waits on y
   await expect(tl.locator('[data-kind="approval"]')).toBeVisible();
   await expect(tl.getByTestId("typing")).toHaveCount(0);
   await emit(ev("kami", "turn.end", { outcome: "interrupted" }));
+});
+
+test("chat: while an ask waits on the person, the activity line shows the needs dot and the face's ring stops", async ({ page }) => {
+  await open(page);
+  const tl = page.getByTestId("timeline");
+  await emit(ev("kami", "turn.start"), ev("kami", "tool.start", { tool_id: "w1", name: "terminal", detail: "ls" }));
+  const act = tl.getByTestId("activity").last();
+  await expect(act.locator(".ui-spin")).toHaveCount(1);
+  await emit(ev("kami", "approval.request", { request_id: "ap-w", title: "Run shell command", command: "rm -rf build/", choices: ["once", "deny"] }));
+  await expect(tl.locator('[data-kind="approval"]')).toBeVisible();
+  // blocked, not busy: no spinner and no turning ring, as the sidebar row (amber dot, ring off)
+  await expect(act.getByTestId("activity-waiting")).toBeVisible();
+  await expect(act.locator(".ui-spin")).toHaveCount(0);
+  await expect(tl.locator("[data-testid=face-ring], [data-testid=typing-ring]")).toHaveCount(0);
+  const [dot, row] = await Promise.all([
+    act.getByTestId("activity-waiting").evaluate((e) => getComputedStyle(e).backgroundColor),
+    page.getByTestId("bot-kami").getByTestId("needs").evaluate((e) => getComputedStyle(e).backgroundColor),
+  ]);
+  expect(dot).toBe(row);
+  // answered: the turn works again, the spinner and the ring come back
+  await emit(ev("kami", "prompt.expired", { request_id: "ap-w", reason: "timeout" }));
+  await expect(act.locator(".ui-spin")).toHaveCount(1);
+  await expect(tl.locator("[data-testid=face-ring], [data-testid=typing-ring]")).toHaveCount(1);
+  await emit(ev("kami", "turn.end", { outcome: "done" }));
 });
 
 test("reduced motion: the arc and the dots stand still", async ({ page }) => {

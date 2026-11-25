@@ -156,7 +156,7 @@ class InstalledLayoutTests(unittest.TestCase):
             for template in builtin_skill_reference_templates()
             if template.skill_name == "apple-design"
         }
-        self.assertEqual(len(expected), 5)
+        self.assertEqual(len(expected), 6)
 
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
