@@ -389,8 +389,10 @@
   min-height: 44px;
 }
 .be-facts.muted {
+  display: flex;
+  align-items: center;
   font-size: 12px;
-  color: var(--quiet);
+  color: var(--muted);
 }
 .be-stats {
   display: grid;
@@ -408,11 +410,12 @@
   font-size: 11px;
   color: var(--muted);
 }
+/* the places sit on the stats' four columns, one per cell, the date in the last column */
 .be-places {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: center;
-  gap: 6px 12px;
+  gap: 6px 8px;
   margin-top: 10px;
   padding-top: 9px;
   border-top: 1px solid var(--line);
@@ -430,7 +433,7 @@
   font-variant-numeric: tabular-nums;
 }
 .be-since {
-  margin-left: auto;
+  grid-column: -2 / -1;
   font-size: 11px;
   color: var(--quiet);
 }
@@ -467,10 +470,16 @@
   outline: none;
   border-color: var(--line-strong);
 }
+/* Two columns at most in the 760px page (one under 610px), every row as tall as the tallest card, and an odd count's
+   last card takes the whole row: no count leaves a card alone beside empty slots. */
 .bots-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-auto-rows: 1fr;
   gap: 10px;
+}
+.bots-grid > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
 }
 .bots-empty {
   font-size: 12px;
@@ -1036,14 +1045,10 @@
   margin-top: 8px;
 }
 
-/* Settings › General › Language: its own group under Appearance; each language in its own words, never wrapped */
+/* Settings › General › Language: its own group under Appearance; each language in its own words, never wrapped (a
+   small Seg: equal segments, as wide as the column's other switches or as its words need) */
 .st-grp-lang {
   margin-top: 10px;
-}
-.st-grp-lang .mseg button {
-  flex: none;
-  white-space: nowrap;
-  padding: 0 10px;
 }
 
 /* the bot page's sections (BotSections.tsx): persona, memory, automations, elsewhere, open threads */
@@ -1055,11 +1060,6 @@
   margin-top: 14px;
   font-size: 11.5px;
   color: var(--quiet);
-}
-.bp-gh {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
 }
 .bp-link {
   font-size: 11.5px;
@@ -1165,7 +1165,7 @@
 }
 .bp-bar-in {
   flex: 1;
-  max-width: 180px;
+  min-width: 0;
   height: 4px;
   border-radius: 2px;
   background: var(--line);
@@ -1173,6 +1173,7 @@
 }
 .bp-bar-in i {
   display: block;
+  min-width: 3px;
   height: 100%;
   background: var(--accent);
 }
@@ -1247,4 +1248,10 @@ a.bp-row:hover {
 }
 .bp-row-st.ok {
   color: var(--ok);
+}
+
+/* light theme: the white selected segment on the #f2eff3 track differed by bold text only; a --raise2 track under it
+   shows which one is on (Settings pages; the chat's own pickers keep theirs) */
+[data-theme="light"] .st-page .mseg {
+  background: var(--raise2);
 }

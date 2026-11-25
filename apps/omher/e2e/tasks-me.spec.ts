@@ -323,3 +323,18 @@ test("GitHub's rate limit says try again soon instead of failing", async ({ page
   await page.getByTestId("me-refresh").click();
   await expect.poll(async () => (await taskCalls(page)).filter((c) => c.op === "me" && c.fresh).length).toBeGreaterThan(0);
 });
+
+test("ko: the GitHub lead names the Tasks › 나 view in Korean; an account not added is an empty ring, not a fill", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("omher.lang", "ko"));
+  await setup(page, { chosen: false });
+  await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
+  await page.getByTestId("me").click();
+  const gh = page.getByTestId("accounts-github");
+  await expect(gh.locator(".acc-lead")).toHaveText(/^작업 › 나 화면이 쓰는 GitHub 계정이에요/);
+  await expect(gh.locator(".acc-lead")).not.toContainText("Tasks");
+  const dot = gh.getByTestId("gh-dot-off-octo");
+  await expect(dot).toBeVisible();
+  const look = await dot.evaluate((el) => ({ bg: getComputedStyle(el).backgroundColor, ring: getComputedStyle(el).boxShadow }));
+  expect(look.bg, JSON.stringify(look)).toBe("rgba(0, 0, 0, 0)");
+  expect(look.ring, JSON.stringify(look)).toContain("inset");
+});
