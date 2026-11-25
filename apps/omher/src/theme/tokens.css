@@ -49,7 +49,8 @@
   --ink: #f3eff4;
   --body: #dcd6de;
   --muted: #9a929d;
-  --quiet: #6f6872;
+  /* 4.5:1 or more on --side and --bg: it carries 11px text (row times, date dividers) */
+  --quiet: #8a828d;
   --ok: #7fd6a4;
   --danger: #f08a8a;
   --accent: #f07cc4;

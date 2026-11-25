@@ -9,8 +9,8 @@ export const CARD_MIN_H = 46, CARD_MAX_H = 240, CARD_DEFAULT_CAP = 150, CELL_MIN
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
-/** The card's map height before anyone drags it: more panes, a taller map, raised so the shortest cell is still
- *  CELL_MIN_H tall (a 1+3 split's third-height cells), never past CARD_MAX_H. */
+/** The card's map height before anyone drags it: more panes, a taller map, raised so the shortest cell's share is
+ *  CELL_MIN_H (a 1+3 split's third-height cells), never past CARD_MAX_H. */
 export function defaultCardHeight(layout: Layout): number {
   const base = clamp(36 + 13 * panesOf(layout).length, CARD_MIN_H, CARD_DEFAULT_CAP);
   let share = 1;
@@ -23,14 +23,32 @@ export function defaultCardHeight(layout: Layout): number {
 /** A dragged map height, whole px inside [CARD_MIN_H, CARD_MAX_H]. */
 export const clampCardHeight = (h: number): number => clamp(Math.round(h), CARD_MIN_H, CARD_MAX_H);
 
-/** How a cell places its mark, title and last line: one line when short, stacked when tall and not too wide, else the
- *  mark beside the title with the last line under it. */
+/** How a card's cells place their mark, title and last line, all left-aligned on the TERMINALS rows' icon column:
+ *  `line` (mark and title on one line, no last line) when a cell is too short for two, `beside` (the title beside the
+ *  mark, the last line under the title) when every cell is wide enough for a CLI's name there, else `stack` (the mark
+ *  above the title, so the title has the cell's whole width). */
 export type CellText = "line" | "beside" | "stack";
-export function cellText(w: number, h: number): CellText {
-  if (h < 34) return "line";
-  if (h >= 62 && w < 2.2 * h) return "stack";
-  return "beside";
+/** Below this a cell has no room for the mark above its title (16 + 2 + a 14 px title line, 4 px above and below; a
+ *  default card's shortest cell, CELL_MIN_H less the 2 px gap, is 40): it shows one line, the title beside the mark. */
+export const STACK_MIN_H = 40;
+/** A stacked cell shows its last line from this height (mark 16, title 14, line 13, their gaps and 4 px above and
+ *  below). */
+export const STACK_LINE_H = 56;
+/** From this width the title fits beside the 16 px mark: \"Claude Code\" (about 69 px at 11 px) and the cell's padding. */
+export const BESIDE_MIN_W = 120;
+
+/** One layout for a whole card, from what its smallest cell can hold, so a card never mixes layouts (a stacked tall
+ *  cell beside short cells read as two designs); `lines`: whether every cell shows its last line. */
+export function cardText(cells: readonly { w: number; h: number }[]): { text: CellText; lines: boolean } {
+  if (!cells.length) return { text: "beside", lines: true };
+  const minH = Math.min(...cells.map((c) => c.h));
+  if (minH < STACK_MIN_H) return { text: "line", lines: false };
+  if (cells.every((c) => c.w >= BESIDE_MIN_W)) return { text: "beside", lines: true };
+  return { text: "stack", lines: minH >= STACK_LINE_H };
 }
+
+/** The layout one w×h cell would take on its own. */
+export const cellText = (w: number, h: number): CellText => cardText([{ w, h }]).text;
 
 /** The one state a cell's edge shows: a wait omher knows (a bot's request to type, `asked`) beats working, which beats
  *  background work; a ring seen by no one (`news`: a bell, an OSC 9 message, a progress done) is quiet news, not a

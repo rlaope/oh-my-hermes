@@ -371,7 +371,7 @@ test("start a mock terminal session, type, see the echo, then switch to a bot ch
   const row = page.locator("[data-testid=session-list] .ss-row").first();
   await expect(row).toContainText("oh-my-hermes");
   await expect(row.locator(".bot-p")).toHaveText("Grok");
-  await expect(page.getByTestId("session-status")).toHaveText("Running");
+  await expect(page.getByTestId("session-status")).toHaveText(/^(Working|Ready)$/);
   await expect(row.getByTestId("live-dot")).toBeVisible();
   await expect(row).toHaveClass(/active/);
   await expect(page.getByTestId("bot-kami")).not.toHaveAttribute("aria-current", "true");
@@ -482,7 +482,7 @@ test("the stop question is shown whole, and Esc cancels it", async ({ page }) =>
   await expect(confirm).toHaveCount(0);
   await expect(row.locator(".ss-open")).toBeFocused();
   expect((await calls(page)).some((c) => c.op === "close")).toBe(false);
-  await expect(page.getByTestId("session-status")).toHaveText("Running");
+  await expect(page.getByTestId("session-status")).toHaveText(/^(Working|Ready)$/);
 });
 
 test("closing a running session asks first and stops the program", async ({ page }) => {

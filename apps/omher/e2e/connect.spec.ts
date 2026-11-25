@@ -182,7 +182,7 @@ test("the first-run install of Hermes lands in the default bot's chat, where the
 });
 
 for (const [lang, needs, finish] of [
-  ["ko", "Kami이(가) 답하려면 AI 계정이 필요해요.", "터미널 창에서 로그인을 마치세요."],
+  ["ko", "Kami 봇이 답하려면 AI 계정이 필요해요.", "터미널 창에서 로그인을 마치세요."],
   ["ja", "Kami が答えるには AI アカウントが必要です。", "ターミナルのウィンドウでサインインを完了してください。"],
   ["zh", "Kami 需要一个 AI 账户才能回答。", "请在终端里完成登录。"],
 ] as const) {

@@ -178,7 +178,9 @@ test("empty and error states say what is there", async ({ page }) => {
 
   // a SOUL.md that is a link, a memory file that could not be read
   await botPage(page, "default");
-  await expect(page.getByTestId("bp-persona")).toHaveText("SOUL.md is a link, so omher does not read it.");
+  // the card keeps its header (file name, Edit) and says why it was not read; no size for a file not read
+  await expect(page.getByTestId("bp-persona")).toContainText("SOUL.md is a link, so omher does not read it.");
+  await expect(page.getByTestId("bp-soul-size")).toHaveCount(0);
   await expect(page.getByTestId("bp-mem-memory")).toContainText("memories/MEMORY.md could not be read.");
   await expect(page.getByTestId("bp-elsewhere")).toHaveText("No sessions elsewhere yet.");
 
@@ -186,6 +188,8 @@ test("empty and error states say what is there", async ({ page }) => {
   await botPage(page, "omh-tui");
   await expect(page.getByTestId("bp-soul-missing")).toBeVisible();
   await expect(page.getByTestId("bp-mem-empty-memory")).toBeVisible();
+  // an empty file says so once: no empty meter track beside "Nothing remembered yet."
+  await expect(page.getByTestId("bp-use-memory")).toHaveCount(0);
   await expect(page.getByTestId("bp-automations")).toHaveText("No automations.");
 });
 
@@ -259,4 +263,52 @@ test("in Korean every section is in Korean", async ({ page }) => {
   await expect(sections).not.toContainText("bp.");
   await page.getByTestId("bp-edit-soul").click();
   await expect(page.getByTestId("composer")).toHaveValue("SOUL.md를 이렇게 고쳐줘: ");
+});
+
+test("the facts, meters and Edit links line up: places on the stats' columns, a full-width meter, Edit in each card's header", async ({ page }) => {
+  await open(page);
+  await botPage(page, "kami");
+  await expect(page.getByTestId("bot-places")).toBeVisible();
+  await expect(page.getByTestId("bp-use-memory")).toBeVisible();
+  // every place starts on one of the four stat columns, the date in the last one
+  const cols = await page.getByTestId("bot-facts").evaluate((f) => {
+    const x = (el: Element) => Math.round(el.getBoundingClientRect().left);
+    return { stats: [...f.querySelectorAll(".be-stat")].map(x), places: [...f.querySelectorAll(".be-place, .be-since")].map(x) };
+  });
+  expect(cols.stats).toHaveLength(4);
+  expect(cols.places.length).toBeGreaterThan(1);
+  for (const p of cols.places) expect(cols.stats, JSON.stringify(cols)).toContain(p);
+  await expect(page.getByTestId("bot-places")).toContainText("Cron15");
+  // the meter's track runs to the count at the card's right, not a 180px stub
+  const meter = await page.getByTestId("bp-use-memory").evaluate((row) => ({ row: row.getBoundingClientRect().width, bar: row.querySelector(".bp-bar-in")!.getBoundingClientRect().width }));
+  expect(meter.bar / meter.row, JSON.stringify(meter)).toBeGreaterThan(0.6);
+  // Persona's Edit and each memory file's Edit share one right edge, inside their cards
+  const rights = await page.locator("[data-testid=bp-edit-soul], [data-testid=bp-edit-memory], [data-testid=bp-edit-user]").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().right)));
+  expect(rights).toHaveLength(3);
+  expect(new Set(rights).size, JSON.stringify(rights)).toBe(1);
+  await expect(page.getByTestId("bp-persona").getByTestId("bp-edit-soul")).toBeVisible();
+  // the Model group's row says which model it is, not the heading again
+  const model = page.getByTestId("settings-page-bot-kami");
+  await expect(model.locator(".st-row b", { hasText: /^Model$/ })).toHaveCount(0);
+  await expect(model.locator(".st-row b", { hasText: "Main chat model" })).toHaveCount(1);
+});
+
+test("a bot with no history: one quiet line instead of four empty numbers", async ({ page }) => {
+  await open(page);
+  await botPage(page, "omh-tui");
+  const facts = page.getByTestId("bot-facts");
+  await expect(facts).toHaveText("No activity yet.");
+  await expect(facts.locator(".be-stat")).toHaveCount(0);
+});
+
+test("ko: the scheduled-jobs place is in Korean, the memory row and empty facts read in Korean", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("omher.lang", "ko"));
+  await page.goto("/");
+  await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
+  await page.getByTestId("nav-settings").click();
+  await page.getByTestId("settings-nav-bot-kami").click();
+  await expect(page.getByTestId("bot-places")).toContainText("예약 작업15");
+  await expect(page.getByTestId("bot-places")).not.toContainText("Cron");
+  await page.getByTestId("settings-nav-bot-omh-tui").click();
+  await expect(page.getByTestId("bot-facts")).toHaveText("아직 활동이 없어요.");
 });

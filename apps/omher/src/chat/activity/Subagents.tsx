@@ -11,7 +11,8 @@ import { ChevronRight, ModelIcon, Spinner } from "../../ui";
 import { elapsed } from "../../app/time";
 import { useClock } from "../../app/clock";
 import { t } from "../../i18n";
-import { modelName } from "../../runs/format";
+import { modelName, runName } from "../../runs/format";
+import { useBotRuns } from "../../runs/live";
 import { DiffView } from "./Work";
 import { AgentChat } from "../../harness/AgentChat";
 import { HarnessMark } from "../../harness/HarnessMark";
@@ -99,7 +100,7 @@ export function SubagentLine({
             {state === "stopped" ? t("sub.stopped") : state === "waiting" ? t("sub.waiting") : t(STATE_KEY[sub.state])}
           </span>
           <span className="sa-t" data-testid="subagent-time">
-            {elapsed(rowMs(sub, now))}
+            {elapsed(rowMs(sub, now), live && !subagentEnded(sub))}
           </span>
         </button>
         {onChat && (
@@ -160,13 +161,17 @@ export function FanoutCard({ fan, live, bot }: { fan: Fanout; live: boolean; bot
   // before it ended, which can be before omher heard of it) to now, or to its last end; never less than its longest row
   const begun = Math.min(fan.startedAt, ...subs.map((s) => (s.seconds !== undefined && s.endedAt !== undefined ? s.endedAt - s.seconds * 1000 : s.startedAt)));
   const ends = subs.map((s) => s.endedAt ?? s.startedAt + rowMs(s, now));
-  const span = elapsed(Math.max((running ? now : Math.max(begun, ...ends)) - begun, ...subs.map((s) => rowMs(s, now))));
+  const span = elapsed(Math.max((running ? now : Math.max(begun, ...ends)) - begun, ...subs.map((s) => rowMs(s, now))), running);
   const failed = subs.filter((s) => s.state === "failed").length;
   // every row still out waits on the person (its approval or question is open): the head says so, not "Running"
   const out = subs.filter((s) => !subagentEnded(s));
   const waits = running && out.length > 0 && out.length === total - done && out.every((s) => waiting.has(s.id));
   const run = subs.find((s) => s.dag)?.dag?.run ?? null;
   const open = () => getStore().actions.openRun(run ?? (fan.delegation ? `delegate:${fan.delegation}` : null));
+  // the plan's own title, as its header in Plans says it ("Codex coexistence (live)"); the run's short name until
+  // the runs are read
+  const runs = useBotRuns(bot).runs;
+  const plan = run ? runs?.find((r) => runName(r.id) === run)?.title || run : null;
   // one subagent's own session, opened in place under the card as a chat (Kami › that subagent › …)
   const [chat, setChat] = useState<SubagentRow | null>(null);
   const botRow = useStore().bots.find((b) => b.name === bot);
@@ -188,8 +193,8 @@ export function FanoutCard({ fan, live, bot }: { fan: Fanout; live: boolean; bot
             : t(total === 1 ? "sub.ran1" : "sub.ranN", { n: total, t: span }) + (failed ? ` · ${t("sub.nfailed", { n: failed })}` : "")}
         </span>
         {(run || fan.delegation) && (
-          <button type="button" className="sa-open" onClick={open} data-testid="fanout-open" title={t("plans.open", { name: run ?? t("plans.tab") })}>
-            {run ?? t("plans.tab")}
+          <button type="button" className="sa-open" onClick={open} data-testid="fanout-open" data-run={run ?? undefined} title={t("plans.open", { name: run ?? t("plans.tab") })}>
+            {plan ?? t("plans.tab")}
           </button>
         )}
       </div>

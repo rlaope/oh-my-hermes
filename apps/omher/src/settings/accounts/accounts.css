@@ -51,9 +51,10 @@
   padding: 8px 10px 8px 12px;
   min-height: 46px;
 }
+/* a switch, then its label over its one-line description: every switch's text starts on one column */
 .acc-auto {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   min-height: 16px;
   line-height: 16px;
@@ -61,10 +62,14 @@
   font-size: 11.5px;
   color: var(--muted);
 }
+.acc-auto-t {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
 .acc-auto b {
   font-weight: 500;
   color: var(--body);
-  margin-right: 2px;
 }
 .acc-auto.off {
   opacity: 0.55;
@@ -118,12 +123,11 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* the meta line (source · plan · usage and its reset time) wraps to a second line rather than cut the reset time */
 .acc-sub {
   font-size: 11.5px;
   color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .acc-plan {
   color: var(--body);
@@ -343,13 +347,35 @@
   flex: 1;
   min-width: 0;
 }
+/* "switched to …": the card's width, its text on the rows' name column, an amber mark in the rows' mark column */
 .acc-toast {
+  position: relative;
   margin: 0 0 8px;
-  padding: 7px 10px;
+  padding: 7px 10px 7px var(--acc-text);
   border-radius: var(--r);
   background: var(--raise2);
-  color: var(--body);
+  color: var(--ink);
   font-size: 12px;
+}
+.acc-toast::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--acc-in) + 13px - 3px);
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: var(--usage-amber);
+}
+/* a group's own lead (GitHub's) sits on the group's text column, not the page edge */
+.acc-g-lead {
+  margin: -2px 0 6px var(--acc-text);
+}
+/* a GitHub account not added to omher: an empty ring, not a fill in the border colour */
+.acc-dot-off {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px var(--quiet);
 }
 
 /* Settings › Accounts › GitHub */

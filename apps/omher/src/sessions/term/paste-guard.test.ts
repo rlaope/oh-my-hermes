@@ -22,8 +22,8 @@ describe("multi-line paste guard", () => {
 
   it("previews the first lines, each cut to a width with an ellipsis, and says how many there are", () => {
     const long = "x".repeat(PREVIEW_COLS + 40);
-    const p = previewOf(`echo 1\n${long}\necho 3\necho 4\necho 5\n`);
-    expect(p.total).toBe(5);
+    const p = previewOf(`echo 1\n${long}\necho 3\necho 4\necho 5\necho 6\necho 7\necho 8\n`);
+    expect(p.total).toBe(8);
     expect(p.lines).toHaveLength(PREVIEW_LINES);
     expect(p.lines[0]).toBe("echo 1");
     expect(p.lines[1]).toHaveLength(PREVIEW_COLS);

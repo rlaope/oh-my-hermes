@@ -370,12 +370,24 @@ export interface SessionRec {
 /** How long a TERMINALS card's second line may be (the card truncates it further with an ellipsis). */
 export const LAST_LINE_MAX = 160;
 
+/** A shell's own prompt at the start of a line, whatever its theme: `you@host dir %`, `user@host:~/dir$`,
+ *  `[user@host dir]#`, `host:dir user$`, `~/dir ❯`, `PS C:\dir>`; group 1 is what was typed after it. */
+const SHELL_PROMPT = /^(?:PS [^>]*>|\[[^\]]*\][$#%>]|\S*@\S+(?: \S+)? ?[$#%>❯]|\S+:\S* \S+[$#]|[~/]\S* ?[$#%>❯›])(?: (.*))?$/;
+/** A line that ends on a prompt mark after a space (`web-app on main ❯`, `api-server %`): a themed prompt waiting. */
+const PROMPT_END = /\s[$#%>❯›➜λ]$/;
+
 /** The last line of `lines` (a terminal's screen, top to bottom) that says something: trimmed, runs of spaces made
- *  one, a leading prompt mark dropped, and a line of only box-drawing, block or rule characters (a frame's edge, a prompt bar) skipped. "" = none. */
+ *  one, a leading prompt mark dropped, a shell's own prompt dropped (it only repeats the folder its header shows; what
+ *  was typed after it stays), and a line of only box-drawing, block or rule characters (a frame's edge, a prompt bar)
+ *  skipped. "" = none. */
 export function lastPrintedLine(lines: readonly string[]): string {
   for (let i = lines.length - 1; i >= 0; i--) {
-    // an input prompt's mark before the text (Codex's › and •, Claude's ❯, ⏺ and its ✻ spinner, a quote bar) is not part of what it says
-    const l = lines[i]!.replace(/\s+/g, " ").trim().replace(/^[›❯▌>•⏺✻✶✳✢✽·*]+ /, "");
+    // an input prompt's mark before the text (Codex's › and •, Claude's ❯, ⏺ and its ✻ spinner, a quote bar, a tool
+    // result's ⎿ or └ tree mark) is not part of what it says
+    let l = lines[i]!.replace(/\s+/g, " ").trim().replace(/^[›❯▌>•⏺✻✶✳✢✽·*⎿└]+ /, "");
+    const prompt = SHELL_PROMPT.exec(l);
+    if (prompt) l = (prompt[1] ?? "").trim();
+    else if (PROMPT_END.test(l)) continue;
     if (!l || /^[\u2500-\u259f\u2800-\u28ff\s|+\-=_.:>▌❯›•⏺$%#]*$/.test(l)) continue;
     return l.length > LAST_LINE_MAX ? `${l.slice(0, LAST_LINE_MAX - 1)}…` : l;
   }

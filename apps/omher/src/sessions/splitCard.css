@@ -1,5 +1,6 @@
 /* The TERMINALS split card (SplitLayoutCard.tsx). Theme tokens only; the attention colour is the row's bell colour, with a
-   darker one on light. Motion: keyframes on SVG strokes (pathLength 100 for the orbit) and on opacity, nothing else. */
+   darker one on light. Motion: keyframes on SVG strokes (pathLength 100 for the orbit's head) and on opacity, nothing
+   else. */
 .split-card {
   --sc-attn: #e8a33c;
   --sc-orbit: var(--accent);
@@ -74,44 +75,26 @@
   stroke: var(--danger);
   stroke-width: 1.5;
 }
-/* work: a segment orbits the edge clockwise from the top-left, one lap per 2 s; three strokes, heads aligned */
+/* work: the whole edge in a faint accent (the ring) and one short bright head running round it clockwise from the
+   top-left, one lap per 2 s. Any still frame shows a whole ring with a mark on it, never a segment that reads as a
+   progress bar's fill (owner, 2026-11-25) */
+.sc-ring {
+  stroke: var(--sc-orbit);
+  stroke-width: 1.2;
+  opacity: 0.35;
+}
 .sc-orbit {
   stroke: var(--sc-orbit);
+  stroke-width: 2.5;
   stroke-linecap: round;
-  animation: 2s linear infinite;
+  stroke-dashoffset: 5;
+  animation: sc-orbit 2s linear infinite;
 }
-.sc-cell[data-focused="true"] .sc-orbit {
+.sc-cell[data-focused="true"] .sc-orbit,
+.sc-cell[data-focused="true"] .sc-ring {
   stroke: color-mix(in srgb, var(--accent) 60%, var(--ink));
 }
-.sc-o20 {
-  stroke-dashoffset: 20;
-  animation-name: sc-orbit-20;
-}
-.sc-o12 {
-  stroke-dashoffset: 12;
-  animation-name: sc-orbit-12;
-}
-.sc-o5 {
-  stroke-dashoffset: 5;
-  animation-name: sc-orbit-5;
-}
-@keyframes sc-orbit-20 {
-  from {
-    stroke-dashoffset: 20;
-  }
-  to {
-    stroke-dashoffset: -80;
-  }
-}
-@keyframes sc-orbit-12 {
-  from {
-    stroke-dashoffset: 12;
-  }
-  to {
-    stroke-dashoffset: -88;
-  }
-}
-@keyframes sc-orbit-5 {
+@keyframes sc-orbit {
   from {
     stroke-dashoffset: 5;
   }
@@ -180,12 +163,22 @@
     opacity: 0.04;
   }
 }
-/* the cell's button: the whole cell, its text laid out for the cell's size (data-text) */
-.sc-open {
+/* the cell's button: the whole cell, its text laid out once for the whole card (data-text, splitCard.ts cardText),
+   always from the inline start. The start padding puts the first cell's mark on the TERMINALS rows' icon column:
+   a row's mark sits at its list's edge + 1 (border) + --side-x + 7 + 12 (status glyph) + 7 = --side-x + 27; a cell's
+   box starts at the list's edge + --side-x + 10 (the card's inset, below) + 1 (border) + 4 (padding) + 1 (half the
+   cells' gap) = --side-x + 16, so 11 px more. */
+.sc-open,
+.sc-open.line {
   position: absolute;
   inset: 0;
+  /* the whole cell, whatever its layout class: chat.css's one-line `.line` (24 px tall) must not shrink a "line" cell's
+     face, which let a right-click below it reach the list's background menu */
+  height: auto;
+  gap: 0;
+  font-size: inherit;
   display: flex;
-  padding: 0 7px;
+  padding: 0 6px 0 11px;
   border: 0;
   border-radius: 6px;
   background: none;
@@ -203,6 +196,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
+  align-items: stretch;
   gap: 2px;
   min-width: 0;
   width: 100%;
@@ -231,30 +225,21 @@
   font-size: 9.5px;
   color: var(--muted);
 }
+/* beside: the last line under the title, past the 16 px mark and its gap */
 .sc-open.beside .sc-l {
-  padding-inline-start: 18px;
+  padding-inline-start: 21px;
 }
-.sc-open.stack .sc-body {
-  align-items: center;
-  gap: 4px;
-  text-align: center;
-}
-/* stacked: every line is the cell's width and centred in it, so a long title ellipsizes at its end and keeps its start */
+/* stack: the mark above the title, both from the inline start, so a narrow cell gives its title the whole width; a
+   long title keeps its start and ends in an ellipsis */
 .sc-open.stack .sc-t {
   flex-direction: column;
-  gap: 5px;
+  align-items: flex-start;
+  gap: 2px;
   width: 100%;
-  max-width: 100%;
 }
-.sc-open.stack .sc-n,
-.sc-open.stack .sc-l {
-  width: 100%;
+.sc-open.stack .sc-n {
   max-width: 100%;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-align: center;
+  line-height: 14px;
 }
 .sc-editing .ss-name-in {
   min-width: 0;
@@ -308,15 +293,13 @@
     animation: none !important;
     transition: none;
   }
-  /* work: the whole edge, thin and still */
+  /* work: no head that would stand still on one edge; the ring alone, still (a ring, never a fill level), thinner and
+     fainter than a focused cell's edge so the two do not read alike */
   .sc-orbit {
-    stroke-dasharray: none;
-    stroke-width: 1px;
-    opacity: 0.6;
-  }
-  .sc-o12,
-  .sc-o5 {
     display: none;
+  }
+  .sc-ring {
+    opacity: 0.6;
   }
   .sc-wait {
     opacity: 1;

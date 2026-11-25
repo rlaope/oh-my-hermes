@@ -10,6 +10,7 @@ import { addGhLoginTab, GH_LOGIN_ENDED } from "../../terminal/state";
 import { detectAccounts, forgetAccount, useMeData } from "../../tasks/me";
 import { chooseAccount, cycleAccountColor, removeAccount, useTasks } from "../../tasks/state";
 import { AccountDot } from "../../tasks/MeView";
+import { SourceMark } from "../../tasks/marks";
 import { accountId, type ChosenAccount, type GhAccount } from "../../tasks/types";
 
 const HOST_RX = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
@@ -37,9 +38,12 @@ export function GithubAccounts() {
   return (
     <section className="acc-g" data-testid="accounts-github">
       <div className="acc-gh">
+        <span className="acc-gh-i">
+          <SourceMark source="github" size={16} />
+        </span>
         <b>{t("acc.gh.title")}</b>
       </div>
-      <p className="acc-lead">{t("acc.gh.lead")}</p>
+      <p className="acc-lead acc-g-lead">{t("acc.gh.lead")}</p>
       <div className="st-grp">
         {!det ? (
           <p className="st-note">{t("acc.gh.loading")}</p>
@@ -63,7 +67,7 @@ export function GithubAccounts() {
                       <AccountDot color={c.color} />
                     </button>
                   ) : (
-                    <AccountDot color="var(--line)" />
+                    <i className="tk-dot acc-dot-off" aria-hidden="true" data-testid={`gh-dot-off-${login}`} />
                   )}
                 </span>
                 <span className="acc-who">

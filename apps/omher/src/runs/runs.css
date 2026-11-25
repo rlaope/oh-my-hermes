@@ -39,7 +39,7 @@
   --bx-hi: rgba(255, 255, 255, 0.9);
   --bx-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   --bx-ring: #8e8694;
-  --ph-needs: #a8640a;
+  --ph-needs: #94570a; /* the sidebar's light waiting amber (sidebar.css --needs-text) */
 }
 /* the surface a box stands on: its own background is this colour, so a line never shows through a dragged box */
 .rn {
