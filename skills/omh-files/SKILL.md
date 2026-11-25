@@ -48,6 +48,7 @@ Quality bar:
 - Name the user-facing workflow objective, required context, next action, and stop condition.
 - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
 - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Cite `session_file_activity/v1` (`omh quality-evidence file-activity --hermes-session <id> --json`) in `file_observation_manifest/v1` for which workspace files a Hermes session's read_file, write_file, and patch calls named and the outcome Hermes recorded; never as file-content, hash, diff, test, review, CI, or merge evidence.
 
 Handoff policy:
 

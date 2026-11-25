@@ -893,8 +893,10 @@ _FEATURE_SURFACE_SKILLS = (
             "workspace_file_task_card/v1 metadata-only wrapper card when prepared",
             "file_operation_scope/v1 with path root, allowed operations, excluded paths, and stop condition",
             "file_observation_manifest/v1 only when directory listings, file stats, hashes, diffs, or operation output are observed",
-            "session_file_activity/v1 (`omh quality-evidence file-activity --hermes-session <id> --json`) cited in that manifest for which workspace files a Hermes session's read_file, write_file, and patch calls named and the outcome Hermes recorded; never as file-content, hash, diff, test, review, CI, or merge evidence",
             "file_confirmation_gate/v1 for delete, overwrite, move, rename, chmod, archive mutation, or irreversible cleanup, recording checkpoint availability before the step and keeping the confirmation either way: on Hermes, checkpoints are off unless the user turned them on (`checkpoints.enabled`, or a session started with the `--checkpoints` flag), and one covers only the directory Hermes snapshots for the step (for a terminal command, its working directory), minus its excludes (among them archives, media, logs, `.env` files, and dependency and build folders) and its limits (a file over the size cap, 10 MB by default, or a directory with more than 50,000 entries), so record `available` only when the user's `/rollback` lists checkpoints for a directory that holds the target and the target is not excluded or over a limit, `not_available` otherwise, and `not_observed` until then",
+        ),
+        extra_quality_bar=(
+            "Cite `session_file_activity/v1` (`omh quality-evidence file-activity --hermes-session <id> --json`) in `file_observation_manifest/v1` for which workspace files a Hermes session's read_file, write_file, and patch calls named and the outcome Hermes recorded; never as file-content, hash, diff, test, review, CI, or merge evidence.",
         ),
         final_checklist=(
             "The path root, allowed file operations, excluded paths, destructive-operation policy, and stop condition are explicit.",
