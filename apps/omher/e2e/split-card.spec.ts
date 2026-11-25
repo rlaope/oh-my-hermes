@@ -429,6 +429,13 @@ test("one tall cell and two stacked ones (1280x820, and capped short at 900x600)
   await expect(grip).toHaveAttribute("aria-valuenow", "46");
   await expect.poll(async () => [...new Set((await looks(page)).map((x) => x.text))]).toEqual(["line"]);
   expect(await one()).toBe("line");
+  // a one-line cell's face is still the whole cell: a right-click anywhere on it is the row menu
+  const faces = await page.locator('[data-testid="split-cell"]').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().height - e.querySelector(".sc-open")!.getBoundingClientRect().height)));
+  expect(faces).toEqual([0, 0, 0]);
+  const box = (await cell(page, a).boundingBox())!;
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height - 4, { button: "right" });
+  await expect(page.getByTestId("session-row-menu")).toBeVisible();
+  await expect(page.getByTestId("sessions-context-menu")).toHaveCount(0);
 });
 
 test("at the default grip no CLI's name is cut, and the cells' marks sit on the TERMINALS rows' icon column at the rows' size", async ({ page }) => {

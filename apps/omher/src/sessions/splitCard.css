@@ -168,9 +168,15 @@
    a row's mark sits at its list's edge + 1 (border) + --side-x + 7 + 12 (status glyph) + 7 = --side-x + 27; a cell's
    box starts at the list's edge + --side-x + 10 (the card's inset, below) + 1 (border) + 4 (padding) + 1 (half the
    cells' gap) = --side-x + 16, so 11 px more. */
-.sc-open {
+.sc-open,
+.sc-open.line {
   position: absolute;
   inset: 0;
+  /* the whole cell, whatever its layout class: chat.css's one-line `.line` (24 px tall) must not shrink a "line" cell's
+     face, which let a right-click below it reach the list's background menu */
+  height: auto;
+  gap: 0;
+  font-size: inherit;
   display: flex;
   padding: 0 6px 0 11px;
   border: 0;
