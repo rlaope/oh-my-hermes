@@ -112,7 +112,9 @@ jobs:
       # per platform: the macOS runner queue alone used to hold a PR 45-65 minutes before an hour of e2e.
       - name: End-to-end tests that behave per platform
         working-directory: apps/omher
-        run: bash scripts/e2e-shards.sh 2 $( [ "$RUNNER_OS" = macOS ] && echo "$E2E_MACOS" || echo "$E2E_WINDOWS" )
+        run: |
+          if [ "$RUNNER_OS" = macOS ]; then read -ra specs <<< "$E2E_MACOS"; else read -ra specs <<< "$E2E_WINDOWS"; fi
+          bash scripts/e2e-shards.sh 2 "${specs[@]}"
         env:
           E2E_MACOS: >-
             e2e/cards-webkit.spec.ts e2e/term-kitty.spec.ts e2e/term-split-panes.spec.ts e2e/term-find.spec.ts
