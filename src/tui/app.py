@@ -9136,8 +9136,14 @@ class App(ModesMixin, AgentViewMixin):
             # /dag has no echo: during a turn this waits under what runs
             self.transcript.add_aside(NoticeBlock("No delegation graph: this session has no recent delegated work."))
             return
+        from .dag_evidence import read_handoff
+
+        stored = self.stored_id
+        home = self.environ.get("OMH_HOME")
         self._show_pager(DagPager(
             "delegation graph", payload=lambda: self.hud.payload if self.hud is not None else None,
+            read_handoff=lambda node: read_handoff(home, stored, node),
+            same_session=lambda: bool(stored) and self.stored_id == stored,
             read_at=lambda: self.hud.received_at if self.hud is not None else None, depth=self.color_depth,
             clock=self.wall_clock,  # the HUD poller stamps its reads with the wall clock
             aura=self._aura_phase,
