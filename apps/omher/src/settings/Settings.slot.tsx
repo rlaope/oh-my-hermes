@@ -222,7 +222,7 @@ function BotPage({ bot }: { bot: Bot }) {
           </Value>
         </Row>
         <Row title={t("set.reasoning")} hint={t("set.reasoningHint")}>
-          <Value>{reasoning ? reasoningPill(reasoning, wire) : "—"}</Value>
+          <Value>{reasoningPill(reasoning, wire, opts?.reasoning_levels) || "—"}</Value>
         </Row>
         <Row title={t("set.change")} hint={t("set.changeHint")}>
           <button type="button" className="st-btn" onClick={() => void s.selectBot(bot.name)} disabled={offline}>

@@ -1822,6 +1822,10 @@ it says `ctrl+t effort` until the session reports one. A level you set
 shows dimmed with `…` until Hermes confirms it; a level Hermes refuses leaves
 the line as it was and says so. `/reasoning <level>` sets the level as
 `/effort <level>` does, and a typed command says the level set under it.
+When Hermes reports that the session's route sends a weaker level than the one
+set (`reasoning_effort_wire`: `ultra` goes out as `max` on a Claude or other
+OpenAI-compatible route), the info line shows the level sent and the reply
+says so (`Reasoning effort ultra for this session; this route sends max.`).
 
 A steer adds what you typed to the turn that is running, without interrupting
 it, as Claude Code does with text you send mid-turn: Enter sends one while a

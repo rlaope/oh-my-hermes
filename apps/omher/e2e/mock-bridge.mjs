@@ -593,11 +593,32 @@ const SIGN_IN_MODELS = {
 // Hermes with no account lists.
 const PROVIDERS_LONG = JSON.parse(readFileSync(new URL("./fixtures/providers-long.json", import.meta.url), "utf-8"));
 let providerFixture = "default";
+// Hermes' whole ladder: what chat.set_model accepts (a level the route clamps is still accepted: Hermes clamps it).
 const REASONING_LEVELS = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"];
-// What the route sends for a level (Hermes' `reasoning_effort_wire`): an OpenAI-compatible route has no `ultra` and
-// clamps it to `max`; every other level goes as picked. "" for thinking off, as Hermes stamps none.
-const wireOf = (level) => (level === "ultra" ? "max" : level === "none" ? "" : level);
-const current = (m) => ({ ...m, reasoning_wire: wireOf(m.reasoning) });
+// mock.codex {bot}: bots whose profile runs openai-codex on the codex app-server runtime (`model.openai_runtime`).
+let codexRuntime = new Set();
+// The levels a route sends, as Hermes' `route_supported_efforts`: openai-codex per model generation (gpt-6 / 5.6 reach
+// max, older stop at xhigh, neither takes minimal) plus `ultra` on the app-server runtime when the set has max; every
+// other route the OpenAI-compatible set, which has no ultra. models.options answers "none" plus these.
+const COMPAT_LEVELS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
+function routeLevels(bot, m) {
+  if (m.provider !== "openai-codex") return COMPAT_LEVELS;
+  const base = /^gpt-(6|5\.6)/.test(m.model) ? ["none", "low", "medium", "high", "xhigh", "max"] : ["none", "low", "medium", "high", "xhigh"];
+  return codexRuntime.has(bot) && base.includes("max") ? [...base, "ultra"] : base;
+}
+// What the route sends for a level (Hermes' `reasoning_effort_wire`, its `clamp_effort`): the level when the route has
+// it, else the nearest weaker one (`ultra` on a Claude route sends max). "" for thinking off, as Hermes stamps none.
+function wireOf(bot, m) {
+  const level = m.reasoning;
+  if (!level || level === "none") return "";
+  const set = routeLevels(bot, m);
+  if (set.includes(level)) return level;
+  const at = REASONING_LEVELS.indexOf(level);
+  const below = set.filter((l) => l !== "none" && REASONING_LEVELS.indexOf(l) < at);
+  return below.length ? below[below.length - 1] : set.find((l) => l !== "none") ?? level;
+}
+const current = (bot) => ({ ...models[bot], reasoning_wire: wireOf(bot, models[bot]) });
+const providersOf = (bot) => (codexRuntime.has(bot) ? [...PROVIDERS, SIGN_IN_MODELS["openai-codex"]] : PROVIDERS);
 
 // ---- mutable state ---------------------------------------------------------------------------
 
@@ -858,6 +879,7 @@ function reset() {
   usageFixture = "default";
   skillsLater = { add: [], after: 0 };
   providerFixture = "default";
+  codexRuntime = new Set();
   acct = {
     claude: [{ id: "default", label: "", email: "owner@example.com", logged_in: true }],
     codex: [{ id: "default", label: "", logged_in: true }, { id: "work", label: "Work", logged_in: true }],
@@ -1340,7 +1362,7 @@ const OPS = {
       model: m.model,
       provider: m.provider,
       reasoning: m.reasoning,
-      reasoning_wire: wireOf(m.reasoning),
+      reasoning_wire: wireOf(b.name, m),
     };
   },
   "folder.open": (p) => {
@@ -1831,15 +1853,16 @@ const OPS = {
   "models.options": (p) => {
     const b = needBot(p);
     const signed = notReady.get(b.name);
+    const levels = routeLevels(b.name, models[b.name]);
     if (signed && SIGN_IN_MODELS[signed]) {
-      return { providers: [...PROVIDERS, SIGN_IN_MODELS[signed]], current: current(models[b.name]), reasoning_levels: REASONING_LEVELS };
+      return { providers: [...PROVIDERS, SIGN_IN_MODELS[signed]], current: current(b.name), reasoning_levels: levels };
     }
     // a Hermes installed a minute ago with no account lists no provider at all (measured on Hermes 0.23.2)
-    if (providerFixture === "empty") return { providers: [], current: current(models[b.name]), reasoning_levels: REASONING_LEVELS };
+    if (providerFixture === "empty") return { providers: [], current: current(b.name), reasoning_levels: levels };
     if (providerFixture === "long") {
-      return { providers: PROVIDERS_LONG.providers, current: { ...current(models[b.name]), ...PROVIDERS_LONG.current }, reasoning_levels: REASONING_LEVELS };
+      return { providers: PROVIDERS_LONG.providers, current: { ...current(b.name), ...PROVIDERS_LONG.current }, reasoning_levels: levels };
     }
-    return { providers: PROVIDERS, current: current(models[b.name]), reasoning_levels: REASONING_LEVELS };
+    return { providers: providersOf(b.name), current: current(b.name), reasoning_levels: levels };
   },
   "chat.set_model": (p) => {
     const b = needBot(p);
@@ -1849,7 +1872,7 @@ const OPS = {
       return { model: p.model, provider: p.provider ?? models[b.name].provider, reasoning: models[b.name].reasoning };
     }
     const cur = models[b.name];
-    if (p.provider !== undefined && !PROVIDERS.some((x) => x.slug === p.provider) && !(notReady.get(b.name) === p.provider && SIGN_IN_MODELS[p.provider])) throw new OpError("bad_request", `unknown provider ${p.provider}`);
+    if (p.provider !== undefined && !providersOf(b.name).some((x) => x.slug === p.provider) && !(notReady.get(b.name) === p.provider && SIGN_IN_MODELS[p.provider])) throw new OpError("bad_request", `unknown provider ${p.provider}`);
     if (p.reasoning !== undefined && !REASONING_LEVELS.includes(p.reasoning)) throw new OpError("bad_request", `unknown reasoning level ${p.reasoning}`);
     if (p.model !== undefined && typeof p.model !== "string") throw new OpError("bad_request", "model must be a string");
     models[b.name] = {
@@ -1857,7 +1880,8 @@ const OPS = {
       provider: p.provider ?? cur.provider,
       reasoning: p.reasoning ?? cur.reasoning,
     };
-    return current(models[b.name]);
+    // the levels of the route the chat now runs on, so the picker shows a switched model's at once
+    return { ...current(b.name), reasoning_levels: routeLevels(b.name, models[b.name]) };
   },
   "usage.read": () => ({ providers: USAGE[usageFixture]() }),
   "accounts.list": () => accountsList(),
@@ -1923,6 +1947,14 @@ const OPS = {
     if (!(p.fixture in USAGE)) throw new OpError("bad_request", "unknown usage fixture");
     usageFixture = p.fixture;
     return {};
+  },
+  // a bot whose profile runs openai-codex on the codex app-server runtime, on a model whose ladder reaches max: its
+  // route sends `ultra` (codex's own harness mode), so the picker offers it there
+  "mock.codex": (p) => {
+    const b = needBot(p);
+    codexRuntime.add(b.name);
+    models[b.name] = { model: "gpt-6-sol", provider: "openai-codex", reasoning: p.reasoning ?? "ultra" };
+    return current(b.name);
   },
   "mock.providers": (p) => {
     if (!["default", "long", "empty"].includes(p.fixture)) throw new OpError("bad_request", "unknown providers fixture");

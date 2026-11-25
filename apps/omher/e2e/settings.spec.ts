@@ -64,12 +64,21 @@ test("model pill: the model control plus the panel button, popover lists provide
   // selection is gray, never the brand gradient
   expect(await on.evaluate((el) => getComputedStyle(el).backgroundImage)).toBe("none");
   await expect(pop.getByRole("radio", { name: "high", exact: true })).toHaveAttribute("aria-checked", "true");
-  // Hermes' whole ladder in its order; eight do not fit one row, so they sit in two rows of four, no label clipped
+  // only the levels the bot's route sends, in Hermes' order: a Claude route has no ultra next to max (Hermes clamps it
+  // to max there). Seven do not fit one row, so they sit in rows of four, no label clipped
   const levels = pop.getByTestId("reasoning-seg").getByRole("radio");
-  await expect(levels).toHaveText(["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]);
-  const boxes = await levels.evaluateAll((bs) => bs.map((b) => ({ top: Math.round(b.getBoundingClientRect().top), fits: b.scrollWidth <= b.clientWidth })));
+  await expect(levels).toHaveText(["none", "minimal", "low", "medium", "high", "xhigh", "max"]);
+  const boxes = await levels.evaluateAll((bs) =>
+    bs.map((b) => {
+      const r = b.getBoundingClientRect();
+      return { top: Math.round(r.top), left: r.left, right: r.right, fits: b.scrollWidth <= b.clientWidth };
+    }),
+  );
   expect(new Set(boxes.map((b) => b.top)).size).toBe(2);
   expect(boxes.slice(0, 4).every((b) => b.top === boxes[0].top) && boxes.slice(4).every((b) => b.top === boxes[4].top)).toBe(true);
+  // the three-button last row stretches the full width: its edges line up with the first row's
+  expect(Math.abs(boxes[4].left - boxes[0].left)).toBeLessThanOrEqual(1);
+  expect(Math.abs(boxes[6].right - boxes[3].right)).toBeLessThanOrEqual(1);
   expect(boxes.every((b) => b.fits)).toBe(true);
 
   // Escape closes
@@ -89,15 +98,12 @@ test("changing reasoning and model calls chat.set_model and updates the pill", a
     { bot: "kami", reasoning: "xhigh" },
   ]);
 
-  // the top of the ladder, which the picker used to hide. The mock's route has no ultra and sends max, as Hermes'
-  // OpenAI-compatible routes do (`reasoning_effort_wire`): the pill and the popover say so, in Hermes' words
-  await pop.getByRole("radio", { name: "ultra", exact: true }).click();
-  await expect(page.getByTestId("reasoning-label")).toHaveText("ultra · sends max");
-  await expect(pop.getByTestId("reasoning-sent")).toHaveText("ultra (sends max on this route)");
-  await expect(pop.getByRole("radio", { name: "ultra", exact: true })).toHaveAttribute("aria-checked", "true");
+  await pop.getByRole("radio", { name: "max", exact: true }).click();
+  await expect(page.getByTestId("reasoning-label")).toHaveText("max");
+  await expect(pop.getByRole("radio", { name: "ultra", exact: true })).toHaveCount(0);
   await expect.poll(async () => (await callsOf("chat.set_model")).map((c) => c.params)).toEqual([
     { bot: "kami", reasoning: "xhigh" },
-    { bot: "kami", reasoning: "ultra" },
+    { bot: "kami", reasoning: "max" },
   ]);
 
   await pop.getByTestId("model-opt").filter({ hasText: "gpt-6.1-terra" }).click();
@@ -108,15 +114,43 @@ test("changing reasoning and model calls chat.set_model and updates the pill", a
   await expect(page.getByTestId("model-note")).toHaveCount(0);
 });
 
-test("a level the route clamps reads the same on the bot's Settings page as in the pill", async ({ page }) => {
+test("a saved level the route clamps reads as the level sent, in the pill, the picker and the bot's Settings page", async ({ page }) => {
+  // `ultra` saved from elsewhere (Hermes' own /reasoning, an older omher): a Claude route sends max
+  expect(await mock("chat.set_model", { bot: "kami", reasoning: "ultra" })).toMatchObject({ reasoning: "ultra", reasoning_wire: "max" });
   await open(page);
+  await expect(page.getByTestId("reasoning-label")).toHaveText("max");
   await page.getByTestId("model-pill").click();
   const pop = page.getByTestId("model-pop");
-  await pop.getByRole("radio", { name: "ultra", exact: true }).click();
-  await expect(page.getByTestId("reasoning-label")).toHaveText("ultra · sends max");
-  await page.getByRole("button", { name: "Bot settings" }).click();
+  const seg = pop.getByTestId("reasoning-seg");
+  await expect(seg.getByRole("radio")).toHaveText(["none", "minimal", "low", "medium", "high", "xhigh", "max"]);
+  await expect(seg.getByRole("radio", { name: "max", exact: true })).toHaveAttribute("aria-checked", "true");
+  await expect(pop).not.toContainText("ultra");
+  // picking the level shown replaces the saved one
+  await seg.getByRole("radio", { name: "max", exact: true }).click();
+  await expect.poll(async () => (await callsOf("chat.set_model")).map((c) => c.params).at(-1)).toEqual({ bot: "kami", reasoning: "max" });
+  await expect(page.getByTestId("reasoning-label")).toHaveText("max");
+  await page.getByRole("button", { name: "Bot settings" }).click(); // the popover's link to the bot's page
   const body = page.getByTestId("settings-page-bot-kami");
-  await expect(body.locator(".st-row").filter({ hasText: /^Reasoning/ })).toContainText("ultra · sends max");
+  const row = body.locator(".st-row").filter({ hasText: /^Reasoning/ });
+  await expect(row).toContainText("max");
+  await expect(row).not.toContainText("ultra");
+});
+
+test("a codex app-server route offers ultra, and switching to a Claude model takes it away at once", async ({ page }) => {
+  await mock("mock.codex", { bot: "kami" });
+  await open(page);
+  await expect(page.getByTestId("reasoning-label")).toHaveText("ultra");
+  await page.getByTestId("model-pill").click();
+  const pop = page.getByTestId("model-pop");
+  const seg = pop.getByTestId("reasoning-seg");
+  // codex's own harness mode: sent as picked there, so it is a level of this route (no minimal on codex)
+  await expect(seg.getByRole("radio")).toHaveText(["none", "low", "medium", "high", "xhigh", "max", "ultra"]);
+  await expect(seg.getByRole("radio", { name: "ultra", exact: true })).toHaveAttribute("aria-checked", "true");
+  await pop.getByTestId("model-opt").filter({ hasText: "Sonnet 5.5" }).click();
+  await expect(page.getByTestId("model-label")).toHaveText("Sonnet 5.5");
+  await expect(seg.getByRole("radio")).toHaveText(["none", "minimal", "low", "medium", "high", "xhigh", "max"]);
+  await expect(seg.getByRole("radio", { name: "max", exact: true })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByTestId("reasoning-label")).toHaveText("max");
 });
 
 test("unsupported: one gray note, the old value stays", async ({ page }) => {

@@ -9,6 +9,7 @@ export function Seg({
   disabled,
   small,
   testId,
+  repick,
 }: {
   value: string;
   options: { value: string; label: string }[];
@@ -17,6 +18,8 @@ export function Seg({
   disabled?: boolean;
   small?: boolean;
   testId?: string;
+  /** The selected segment calls onChange too (it stands for a saved value it is not, e.g. a clamped level). */
+  repick?: boolean;
 }) {
   return (
     <div className={`mseg${small ? " sm" : ""}`} role="radiogroup" aria-label={label} data-testid={testId}>
@@ -30,7 +33,7 @@ export function Seg({
             aria-checked={on}
             className={on ? "on" : undefined}
             disabled={disabled}
-            onClick={() => !on && onChange(o.value)}
+            onClick={() => (!on || repick) && onChange(o.value)}
           >
             {o.label}
           </button>

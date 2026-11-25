@@ -963,7 +963,7 @@ export type Action =
   | { type: "ui.tasks" }
   | { type: "ui.lang"; lang: Lang }
   | { type: "models"; bot: string; options: ModelOptions }
-  | { type: "model.set"; bot: string; current: ModelCurrent }
+  | { type: "model.set"; bot: string; current: ModelCurrent & { reasoning_levels?: string[] } }
   | { type: "ui.panel"; open?: boolean }
   | { type: "ui.panelTab"; tab: PanelTabId }
   | { type: "ui.run"; run: string | null }
@@ -1536,8 +1536,16 @@ export function reduce(state: AppState, a: Action): AppState {
         bots: next.bots.map((b) =>
           b.name === a.bot ? { ...b, model: a.current.model, provider: a.current.provider } : b,
         ),
+        // the current pick, and the levels of the route it now runs on when the bridge says (a model switch)
         models: next.models[a.bot]
-          ? { ...next.models, [a.bot]: { ...next.models[a.bot], current: a.current } }
+          ? {
+              ...next.models,
+              [a.bot]: {
+                ...next.models[a.bot],
+                current: { model: a.current.model, provider: a.current.provider, reasoning: a.current.reasoning, reasoning_wire: a.current.reasoning_wire },
+                ...(a.current.reasoning_levels?.length ? { reasoning_levels: a.current.reasoning_levels } : {}),
+              },
+            }
           : next.models,
       };
     }

@@ -2502,6 +2502,8 @@ class App(ModesMixin, AgentViewMixin):
         self.show_cost = False
         self.session_cost = ""  # the session's cost as Hermes' usage last said it (`cost_label`); "" while it says none
         self.effort_said = False  # the shown effort is the session's own (its info, or a level set and confirmed)
+        # The level the route sends for `effort_sent_for` when Hermes said it clamps it (`effort_shown`); "" when not.
+        self.effort_sent = self.effort_sent_for = ""
         self.mode_request_open = False  # a yolo call is out: Shift+Tab presses wait for its answer
         self.mode_asked = ""  # the mode the yolo call out leads to (`ModesMixin.mode_pending`)
         self.mode_target: str | None = None  # where Shift+Tab presses made while it is out lead (`_settle_mode_target`)
@@ -3158,6 +3160,7 @@ class App(ModesMixin, AgentViewMixin):
         self.effort_asked = ""
         self.effort = self.effort_configured  # until this session says its own (Hermes' lazy info names none)
         self.effort_said = False
+        self.effort_sent = self.effort_sent_for = ""
         self._take_session_state(info if isinstance(info, dict) else {})
         self._take_skills(info if isinstance(info, dict) else {})
         self._take_title(info if isinstance(info, dict) else {})
@@ -10729,7 +10732,7 @@ class App(ModesMixin, AgentViewMixin):
             written = f"↓{compact_count(self.turn_shown)} tokens" if self.turn_shown else ""
             effort = ""
             if self.effort in contract.REASONING_LEVELS and self.effort != "none":  # `none` is thinking off
-                effort = THINKING_EFFORT.format(self.effort)
+                effort = THINKING_EFFORT.format(self.effort_shown)
             interrupt = self._interrupt_hint() if self._esc_interrupts() else ""  # else Esc means something else now
             lead = (Span(WORKING_GLYPHS[frame % len(WORKING_GLYPHS)], self.theme.accent), Span(" "),
                     *working_spans(text, frame, self.theme))
@@ -11151,7 +11154,7 @@ class App(ModesMixin, AgentViewMixin):
 
         Its forms are the same at every width; `info_line` picks the one that fits.
         """
-        shown = (self.model, self.context_percent, self.context_used, self.context_max, self.effort, self.effort_asked,
+        shown = (self.model, self.context_percent, self.context_used, self.context_max, self.effort_shown, self.effort_asked,
                  self._busy(), self.slot is not None, self.session_title, self.show_cost and self.session_cost)
         held = self.info_held
         if held is not None and held[0] == shown and held[1] is self.theme and held[2] is self.hud:
@@ -11180,7 +11183,7 @@ class App(ModesMixin, AgentViewMixin):
         asked = self.effort_asked
         effort: Line = (
             (Span(effort_words(asked) + PENDING_MARK, self.theme.dim),) if asked
-            else (Span(effort_words(self.effort), self.theme.muted),)
+            else (Span(effort_words(self.effort_shown), self.theme.muted),)
         )
         models: list[Line] = [(Span(name, self.theme.muted),) for name in model_forms(self.model)]
         short = models[-1] if models else ()

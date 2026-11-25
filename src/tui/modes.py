@@ -125,6 +125,8 @@ EFFORT_CYCLE = ("low", "medium", "high", "xhigh", "max")
 EFFORT_DEFAULT = "default"
 EFFORT_REFUSED_NOTICE = "Hermes did not set the reasoning effort to {} ({}); it stays as shown."
 EFFORT_SET_NOTICE = "Reasoning effort {} for this session."  # under a typed `/effort <level>`; Ctrl+T says nothing
+# The same, when Hermes said its route clamps the level (`reasoning_effort_wire`): the level that really goes out.
+EFFORT_SENDS_NOTICE = "Reasoning effort {} for this session; this route sends {}."
 
 
 def mode_label(mode: str, theme: Theme, form: int = 0, pending: bool = False) -> Line:
@@ -409,6 +411,12 @@ class ModesMixin:
         return (self.mode_target or self.mode_asked) if self.mode_request_open else ""
 
     @property
+    def effort_shown(self) -> str:
+        """The effort the info line names: the level the route sends when Hermes said it clamps the session's effort
+        (`ultra` on a route that sends `max` reads `max`), else the effort itself."""
+        return self.effort_sent if self.effort_sent and self.effort_sent_for == self.effort else self.effort
+
+    @property
     def approvals_off_by_hermes(self) -> bool:
         """Whether approvals are off on Hermes' own, not by the TUI's Shift+Tab: the key then turns plan on and off."""
         return self.approvals_off and not self.yolo_by_tui
@@ -434,6 +442,9 @@ class ModesMixin:
         if isinstance(effort, str):
             self.effort = effort or EFFORT_DEFAULT
             self.effort_said = True
+            wire = info.get(contract.SESSION_INFO_REASONING_EFFORT_WIRE)
+            clamped = isinstance(wire, str) and wire in contract.REASONING_LEVELS and wire != effort
+            self.effort_sent, self.effort_sent_for = (wire, effort) if clamped else ("", "")
         yolo = info.get(contract.SESSION_INFO_YOLO)
         if not isinstance(yolo, bool):
             return
@@ -663,6 +674,8 @@ class ModesMixin:
                 now = "Hermes sets no reasoning effort for this session, so the provider's default applies."
             else:
                 now = f"Reasoning effort {self.effort}." if self.effort else "Hermes reports no reasoning effort."
+                if self.effort_shown != self.effort:
+                    now = f"Reasoning effort {self.effort}; this route sends {self.effort_shown}."
             self.transcript.add_notice(f"{now} /effort <level> sets it for this session. Levels: {levels}.")
 
     def _set_effort(self, level: str, said: bool = False) -> None:
@@ -703,8 +716,11 @@ class ModesMixin:
             self.transcript.add_notice(EFFORT_REFUSED_NOTICE.format(level, refusal), NOTICE_WARN)
         else:
             self.effort, self.effort_said = level, True
-            if said:
-                self.transcript.add_notice(EFFORT_SET_NOTICE.format(level))
+            if said:  # Hermes' session.info for the change comes before its answer, so the route's word is known
+                sent = self.effort_shown
+                self.transcript.add_notice(
+                    EFFORT_SENDS_NOTICE.format(level, sent) if sent != level else EFFORT_SET_NOTICE.format(level)
+                )
         return True
 
     def _turn_off_yolo_set_here(self, sid: str) -> None:

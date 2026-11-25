@@ -986,8 +986,6 @@ export const zh: Record<Key, string> = {
   "mp.noAccount": "{bot} 还没有 AI 账户。在聊天下方登录后，这里会列出模型。",
   "mp.reasoning": "推理强度",
   "mp.inHermes": "目前请在 Hermes 中更改",
-  "mp.sendsOnRoute": "{level}（此路由实际发送 {sent}）",
-  "mp.pillSends": "{level} · 实际发送 {sent}",
   "mp.appliesChat": "仅对此聊天生效 · {link}",
   "mp.botSettings": "机器人设置",
   "head.details": "详情（{key}）",
