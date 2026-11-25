@@ -11,6 +11,7 @@
   font-size: 11.5px;
 }
 .ag-tier {
+  white-space: nowrap;
   padding: 1px 7px;
   border-radius: 999px;
   border: 1px solid var(--line);
@@ -22,6 +23,7 @@
   border-color: var(--line-strong);
 }
 .ag-state {
+  white-space: nowrap;
   color: var(--quiet);
   min-width: 82px;
   text-align: right;

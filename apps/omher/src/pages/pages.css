@@ -180,6 +180,7 @@
   color: var(--muted);
 }
 .pg-summary {
+  white-space: nowrap;
   margin-left: auto;
   color: var(--quiet);
   font-size: 12px;
@@ -699,6 +700,7 @@
   text-overflow: ellipsis;
 }
 .pl-badge {
+  white-space: nowrap;
   flex: none;
   font-size: 10.5px;
   color: var(--quiet);
@@ -724,6 +726,11 @@
   margin-top: 7px;
 }
 .pl-adds span {
+  /* a chip is one label: a whole chip moves to the next line, and one longer than the row ends in "…" */
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 11px;
   color: var(--body);
   background: var(--raise2);
@@ -733,6 +740,11 @@
 .pl-adds span.need {
   color: var(--usage-amber, #e3a54a);
   background: color-mix(in srgb, #e3a54a 13%, transparent);
+}
+/* a warning is a sentence that names what to set ("asks for GITHUB_TOKEN, …"): it wraps, never cut */
+.pl-adds span.need:not(.ap-state) {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 [data-theme="light"] .pl-adds span.need {
   color: #9a5f00;

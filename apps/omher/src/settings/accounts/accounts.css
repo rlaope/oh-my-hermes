@@ -232,6 +232,7 @@
   padding-left: var(--acc-text);
 }
 .acc-addbtn {
+  white-space: nowrap;
   font-size: 12px;
   color: var(--body);
   padding: 3px 6px;

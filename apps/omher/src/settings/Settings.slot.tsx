@@ -190,7 +190,7 @@ function BotPage({ bot }: { bot: Bot }) {
           <NameEditor bot={bot} />
           <span className="be-sub">
             <i className={`st-dot ${live ? "working" : bot.status}`} aria-hidden="true" />
-            {live ? t("bot.working") : statusText(bot.status)}
+            <span className="be-st">{live ? t("bot.working") : statusText(bot.status)}</span>
             {bot.host && <SshMarker bot={bot} full testId="page-ssh" />}
           </span>
           {bot.description && <p className="be-desc">{bot.description}</p>}
@@ -321,7 +321,9 @@ function BotCard({ bot }: { bot: Bot }) {
           <b>{bot.display_name}</b>
           <span>
             <i className={`st-dot ${live ? "working" : bot.status}`} aria-hidden="true" />
-            {live ? t("bot.working") : statusText(bot.status)}
+            <span className="bc-st" data-testid={`bot-status-${bot.name}`}>
+              {live ? t("bot.working") : statusText(bot.status)}
+            </span>
             {bot.host ? <SshMarker bot={bot} testId={`card-ssh-${bot.name}`} /> : bot.name !== bot.display_name.toLowerCase() && <code>{bot.name}</code>}
           </span>
         </span>
