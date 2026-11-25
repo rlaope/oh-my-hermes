@@ -319,7 +319,7 @@ class RoutingPrecisionTests(unittest.TestCase):
         # Cross-platform, merged with monitor recipes: two trigger sentences naming their work stay with
         # automation-blueprint. Merged: 1390 (monitor recipes) + 37 cross-platform cases = 1427.
         # Its verification round adds three: an existing PR link, an urgent spec to PR, a recall apart from the vault.
-        # bot-template adds eleven: eight applies and lists (five English with omher's message, three Korean)
+        # bot-template adds eleven: eight applies and lists (five English with the desktop app's message, three Korean)
         # that dispatch, and a PR, a release notes and an issue template that keep their owners.
         # Its review round adds a Korean template file edit that keeps content-operator and a Korean recommend ask.
         # Its verification round adds a Korean delete that keeps code-review.
