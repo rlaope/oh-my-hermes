@@ -29,7 +29,8 @@ from omh.coding.fanout_repair import (  # noqa: E402
 )
 from omh.coding.executor_skill_discovery import ROLE_SEQUENCE_RECIPES  # noqa: E402
 from omh.coding.fanout import build_fanout_contract  # noqa: E402
-from omh.coding.fanout_contracts import MAX_UNIT_REVIEW_FOCUS_BYTES, MAX_UNIT_VERIFICATION_COMMAND_CHARS  # noqa: E402
+from omh.coding.fanout_contracts import MAX_UNIT_REVIEW_FOCUS_BYTES, MAX_UNIT_VERIFICATION_COMMAND_BYTES  # noqa: E402
+from omh.coding.postconditions import MAX_TASK_LINKED_TEST_RUNNER_BYTES  # noqa: E402
 from omh.coding.unit_prompt_assembly import BLOCK_NAMES, AssembledPrompt, assemble_unit_prompt  # noqa: E402
 from omh.coding.unit_prompt_protocol import (  # noqa: E402
     DOMAIN_SKILL_GUIDANCE,
@@ -396,7 +397,7 @@ class PromptCeilingTests(unittest.TestCase):
         # A review_focus is bounded in UTF-8 bytes. The worst case is the full byte budget (ASCII, and a 3-byte
         # script) on the live-shaped worst-case unit of every route, both as is and with the longest ASCII
         # reproduction command the contract freezes into its checks (the g62 verifier's counterexample).
-        command = "echo " + "x" * (MAX_UNIT_VERIFICATION_COMMAND_CHARS - 5)
+        command = "echo " + "x" * (MAX_UNIT_VERIFICATION_COMMAND_BYTES - 5)
         reproduction = build_fanout_contract(GOAL * 3, [{
             "unit_id": "target", "title": "Show a test failure", "file_scope": ["src/target/"],
             "kind": "reproduction", "reproduction_command": command,
@@ -413,6 +414,34 @@ class PromptCeilingTests(unittest.TestCase):
                     with self.subTest(key=key, shape=shape, script="ascii" if focus.isascii() else "hangul"):
                         self.assertIn("unit.review_focus", assembled.names())
                         self.assertLessEqual(assembled.size_bytes, UNIT_PROMPT_MAX_BYTES)
+
+    def test_the_largest_allowed_multibyte_commands_keep_every_route_under_the_ceiling(self) -> None:
+        # #3036: a 240-char 4-byte command (945 B) previously froze legally and pushed 10/20 worst-case routes
+        # over UNIT_PROMPT_MAX_BYTES (up to 8,505 B). Both reproduction_command and task_linked_test_runner are
+        # bounded in UTF-8 bytes so the largest legal 4-byte command keeps every route at or under 8,000 B.
+        repro_cmd = "echo " + "😀" * ((MAX_UNIT_VERIFICATION_COMMAND_BYTES - 5) // 4)
+        repro = build_fanout_contract(GOAL * 3, [{
+            "unit_id": "target", "title": "Show a test failure", "file_scope": ["src/target/"],
+            "kind": "reproduction", "reproduction_command": repro_cmd,
+        }])["units"][0]
+        frozen_repro = {key: repro[key] for key in ("kind", "reproduction_command", "integration_checks")}
+
+        runner_cmd = "echo " + "😀" * ((MAX_TASK_LINKED_TEST_RUNNER_BYTES - 5) // 4)
+        runner = build_fanout_contract(GOAL * 3, [{
+            "unit_id": "target", "title": "Verify with runner", "file_scope": ["src/target/"],
+            "task_linked_test_runner": runner_cmd,
+        }])["units"][0]
+        frozen_runner = {key: runner[key] for key in ("task_linked_test_runner", "integration_checks")}
+
+        for shape, extra in (("reproduction", frozen_repro), ("task_linked_runner", frozen_runner)):
+            for key, model, family in _worst_case_routes():
+                unit = {**_worst_case_unit(model, family), **extra}
+                assembled = assemble_unit_prompt(
+                    unit, GOAL * 3, route=unit["handoff"]["model_route"],  # type: ignore[index]
+                    binding=_WORST_BINDING, discovery=_WORST_DISCOVERY,
+                )
+                with self.subTest(key=key, shape=shape):
+                    self.assertLessEqual(assembled.size_bytes, UNIT_PROMPT_MAX_BYTES)
 
     def test_a_review_focus_never_tips_a_prompt_over_the_ceiling(self) -> None:
         # The g62 re-verifier's counterexample: a 218-char ASCII reproduction command plus a one-range input budget
@@ -436,7 +465,7 @@ class PromptCeilingTests(unittest.TestCase):
                                         binding=_WORST_BINDING, discovery=_WORST_DISCOVERY)
 
         tipped = cut = dropped = 0
-        for length in range(6, MAX_UNIT_VERIFICATION_COMMAND_CHARS + 1, 4):
+        for length in range(6, MAX_UNIT_VERIFICATION_COMMAND_BYTES + 1, 4):
             for budget in (False, True):
                 command = "echo " + "x" * (length - 5)
                 without = render(command, None, budget)
@@ -454,7 +483,7 @@ class PromptCeilingTests(unittest.TestCase):
         self.assertEqual(tipped, 0)
         # The counterexample's shape: a prompt just under the ceiling without a focus, where the whole focus would
         # cross it. The focus survives, cut to the bytes left, and ends in an ellipsis.
-        near = next(length for length in range(MAX_UNIT_VERIFICATION_COMMAND_CHARS, 5, -1)
+        near = next(length for length in range(MAX_UNIT_VERIFICATION_COMMAND_BYTES, 5, -1)
                     if render("echo " + "x" * (length - 5), None, True).size_bytes
                     <= UNIT_PROMPT_MAX_BYTES - 60)
         command = "echo " + "x" * (near - 5)

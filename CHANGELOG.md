@@ -21,6 +21,14 @@ All notable changes will be documented here.
   from the 900px minimum width up. `e2e/site-preview-header.spec.ts` now checks the film-only hero (d17fb8dfb): the
   hero's film keeps playing and no live preview is mounted. It also checks the preview page on its own, which had
   failed every omher PR's e2e since that change.
+- **Fanout command fields are bounded in UTF-8 bytes, so a legal non-ASCII command can no longer push a unit prompt
+  over its 8,000-byte ceiling.** `verification_commands`, `verification_checks[].command` and `reproduction_command`
+  are capped at 240 UTF-8 bytes and `task_linked_test_runner` at 200, matching `review_focus`. Before, a 240-character
+  command in 4-byte characters (945 B) froze legally and rendered up to 8,505 B on 10 of 20 worst-case routes; the
+  largest command the contract now accepts renders at most 7,980 B. ASCII commands keep the same limits. A unit file
+  that spells a lone surrogate (`"\ud800"`) in any of these fields, or in `review_focus`, now gets a contract error
+  instead of a `UnicodeEncodeError` traceback from `omh coding fanout prepare`. (#3036, #3210)
+
 - **The OMH TUI follows Hermes' `display.timestamps` and `display.show_cost`.** OMH TUI 5.0.0 dropped `/timestamps`
   and `/statusbar`, so people who had set either key in Hermes lost what it showed. Now `display.timestamps: true`
   adds a turn's local start and end minutes to its done line (`✻ 1m 20s · 10:42→10:44 · 3 tools`, a single
