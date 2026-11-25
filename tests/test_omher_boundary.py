@@ -45,7 +45,30 @@ RULES = (
     " reports or anything it sends anywhere else.",
     "For a bot on another computer (rule 31) the page asks that computer's own omher bridge over the same SSH link as the"
     " bot's other reads; that bridge reads the files there under this rule and sends them back over the link,",
-    "that is the third and last writer to a terminal's pseudo-terminal (`typeAllowed`).",
+    "that is the third writer to a terminal's pseudo-terminal (`typeAllowed`).",
+    # a Shell row puts back the CLI it had in front after a restart (2026-11-24): one fixed line, once, never over the person
+    "a Shell row's one restore line after a restart (above; `typeRestore`, the fourth and last writer to a terminal's"
+    " pseudo-terminal)",
+    "types one line and Enter, once: `claude --resume <id>`, `codex resume <id>` or `omh`, made only from that fixed"
+    " program name and the checked UUID (`typeRestore`);",
+    "a key, paste or dropped file of the person's, a bot's prompt typed there first, or anything but the shell in front"
+    " (a CLI the person's rc started, OMH's own auto-resume among them) drops the line, which is then never typed.",
+    "and a fresh look at that terminal's foreground (`session_shell_in_front`: only the session id goes out, only whether"
+    " the shell itself is in front comes back) finds the shell itself there,",
+    "A Shell row whose Claude Code or Codex had no id yet, and any other Shell row that was running, comes back paused, as"
+    " before.",
+    "first for the foreground Claude Code process and, only when that has none, for the Claude Code processes under it,"
+    " nearest first (at most 64).",
+    "so a `CLAUDE_CONFIG_DIR` the person exports in their shell rc is not seen and such a row comes back paused.",
+    "The file is opened without following a link (`O_NOFOLLOW`), read up to 64 KB, and its `sessionId` is taken only when"
+    " its `pid` is that process, its `kind` (when it has one) is `interactive`, its `procStart` (when it has one) is that"
+    " process's own start time, and the id is a UUID; only the UUID comes back, and nothing else of the file is kept,"
+    " shown or sent; Windows does not do this.",
+    "every 15 s after for as long as it stays there (a CLI can change its conversation without leaving the foreground),"
+    " and keeps the latest answer:",
+    "With the row in `omher.resume` the Shell row keeps only which CLI is in its foreground, when it is `claude`, `codex`"
+    " or `omh`, and that UUID, and forgets both once the CLI leaves the foreground; a row put back by a restart keeps"
+    " what its line puts back until that CLI is in front again or the line is dropped.",
     "Without the person's Allow, nothing a bot sent is typed.",
     "The sender name is what the requesting local process wrote in the request, and any process of the same OS user"
     " can write any name: omher shows it on the card and never treats it as proof of which bot asked.",
@@ -98,8 +121,9 @@ RULES = (
     "the only program omher starts for the person is their login shell for the bottom terminal panel (Ctrl+`) and the"
     " TERMINALS Shell row:"
     " `[$SHELL, -l]` when `$SHELL` is an absolute path to an executable file that `/etc/shells` lists,",
-    "the page sends only a folder and a size (`shell_start`), omher types nothing into it, and the shell is stopped when"
-    " its tab closes and when the app exits.",
+    "the page sends only a folder and a size (`shell_start`; for a TERMINALS Shell row also its shell id and its link id,"
+    " below), omher types nothing into it but a TERMINALS Shell row's one restore line (below), and the shell is stopped"
+    " when its tab closes and when the app exits.",
     "omher also reads the messages of the subagent sessions of the bot's own runs from its `state.db` (read-only),",
     "A child named by an earlier read (`hermes:<id>`) is read only when it is a subagent session whose parent chain reaches"
     " one of the bot's own sessions;",
@@ -443,10 +467,11 @@ RULES = (
     "omher never stops a bot, never restarts every gateway at once, never restarts anything by itself",
     # oh-my-hermes comes back after a restart (2026-11-20): the omh terminal's one variable, folder.resume's title check
     "A TERMINALS oh-my-hermes (`omh`) session that was running when omher closed also starts again by itself after the"
-    " restart, and on Restart, with no arguments; it is the one session that gets one more environment variable,"
-    " `OMHER_TERMINAL_LINK=<link id>`",
-    "The page sends only that id; the shell (`sessions::terminal_env`) checks its shape and refuses it for every other"
-    " agent, and omher types nothing into the terminal for it.",
+    " restart, and on Restart, with no arguments; it and a TERMINALS Shell row are the sessions that get one more"
+    " environment variable, `OMHER_TERMINAL_LINK=<link id>`",
+    "The page sends only that id (a bottom-panel shell gets none); the shell (`sessions::terminal_env`) checks its shape"
+    " and refuses it for every other agent, and omher types nothing into the terminal for it but a Shell row's restore"
+    " line (below).",
     "an oh-my-hermes session that was running is attached again (`folder.resume`) only by the stored session id"
     " `folder.open` returned and its row kept, and only when that session is a folder chat the bridge made for that folder.",
     # folder.resume's proof is omher's own record, and admission is serialized (review round 1, 2026-11-21)
@@ -1986,7 +2011,8 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         # conversation id (2026-11-19, terminal restore); resume_args / sessions::terminal_args check both are UUIDs.
         # `app` is Tauri's handle, injected by the shell, not sent by the page: the `session-fg` event (the CLI in the
         # session's foreground) is emitted through it (2026-11-16, terminal sessions). `link` is an oh-my-hermes row's
-        # link id, which only that terminal gets as OMHER_TERMINAL_LINK (2026-11-20, sessions::terminal_env checks it)
+        # link id, which only that terminal (and a Shell row's shell, through shell_start) gets as OMHER_TERMINAL_LINK
+        # (2026-11-20, sessions::terminal_env checks it)
         self.assertEqual(params, {"app", "shell", "agent", "cwd", "session_id", "resume", "link", "account", "cols", "rows", "on_data", "on_exit"})
         self.assertIn("app: AppHandle,", sig.group(1))
         body = self.lib[sig.end():].split("\n}\n", 1)[0]
@@ -2002,20 +2028,24 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
             self.assertIn(needle, tf)
         self.assertEqual(tf.count("is_uuid("), 2)
 
-    def test_only_an_omh_terminal_gets_its_checked_link_as_one_variable(self) -> None:
-        # rule 11: an oh-my-hermes terminal is told its row's link id (OMHER_TERMINAL_LINK) and nothing else; the shell
-        # checks the shape and refuses it for any other agent; start_agent adds it beside the account's variable
+    def test_only_an_omh_terminal_and_a_shell_row_get_their_checked_link_as_one_variable(self) -> None:
+        # rule 11: an oh-my-hermes terminal and a TERMINALS Shell row are told their row's link id (OMHER_TERMINAL_LINK)
+        # and nothing else; the shell checks the shape and refuses it for any other agent; start_agent adds it beside
+        # the account's variable, start_shell as the shell's only one
         env = self.prod.split("pub fn terminal_env", 1)[1].split("\n}\n", 1)[0]
-        self.assertIn('if id != "omh" {', env)
+        self.assertIn('if id != "omh" && id != "shell" {', env)
         self.assertIn("crate::term_link::is_link_id(link)", env)
         self.assertIn('Ok(vec![("OMHER_TERMINAL_LINK".into(), link.into())])', env)
         self.assertEqual(env.count("Ok(vec!["), 1)
         start = self.prod.split("pub fn start_agent", 1)[1].split("\n    }\n", 1)[0]
         self.assertIn("env.extend(terminal_env(agent_id, link)?);", start)
+        shell = self.prod.split("pub fn start_shell", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn('let env = terminal_env("shell", link)?;', shell)
+        self.assertIn("self.spawn(argv, &at, None, &env, cols, rows, sink)", shell)
         self.assertEqual(self.prod.count("OMHER_TERMINAL_LINK\""), 1)
-        # the page passes the row's link only for omh
+        # the page passes the row's link only for omh and a TERMINALS Shell row (the bottom panel's shells get none)
         ui = (UI_SRC / "sessions" / "sessions.ts").read_text(encoding="utf-8")
-        self.assertIn('const link = !ofChat && r.agent === "omh" && isLinkId(r.linkId) ? r.linkId : undefined;', ui)
+        self.assertIn('const link = !ofChat && (r.agent === "omh" || shell) && isLinkId(r.linkId) ? r.linkId : undefined;', ui)
 
     def test_a_session_gets_only_the_chosen_account_home(self) -> None:
         """Rule 11's account sentence: session_start and chat_start pass `accounts::session_env_for` (the saved
@@ -2336,11 +2366,35 @@ class SessionFilesStayInOmhersFolder(unittest.TestCase):
     def test_a_terminal_gets_only_a_saved_quoted_path_and_hermes_sessions_take_no_files(self) -> None:
         drop = self.ui.split("const dropOnTerminal = async", 1)[1].split("\n  };\n", 1)[0]
         self.assertIn("shellQuote(await host.saveFile(id, f.name, await f.read()), windows)", drop)
-        # xterm's own typing, the dropped path, and (rule 11) a bot's prompt the person allowed on its card
-        # (`typeAllowed`), through the terminal's PTY (the agent host, or the Shell row's login-shell host)
-        self.assertEqual(self.ui.count("io.write("), 3)
+        # xterm's own typing, the dropped path, (rule 11) a bot's prompt the person allowed on its card
+        # (`typeAllowed`), and a Shell row's restore line after a restart (`typeRestore`), through the terminal's PTY
+        # (the agent host, or the Shell row's login-shell host)
+        self.assertEqual(self.ui.count("io.write("), 4)
         allowed = self.ui.split("const typeAllowed = async", 1)[1].split("\n  };\n", 1)[0]
         self.assertEqual(allowed.count("io.write("), 1)
+        # the restore line is one fixed program name and a checked UUID (fgResume.ts), typed once, never over the
+        # person and never into a CLI in front (a fresh look at the foreground first): called only from startTerm's
+        # readiness wait
+        restore = self.ui.split("const typeRestore = async (", 1)[1].split("\n  };\n", 1)[0]
+        self.assertEqual(restore.count("io.write("), 1)
+        self.assertIn("void t.io.write(pty, `${line}\\r`)", restore)
+        self.assertIn("t.restore = undefined;", restore)
+        self.assertIn("!rec(id)?.fgAgent;", restore)
+        self.assertIn("const front = await getShellHost().shellInFront(pty).catch(() => false);", restore)
+        self.assertIn("if (!front || !still()) return dropRestore(id, t);", restore)
+        self.assertLess(restore.index("shellInFront("), restore.index("io.write("))
+        self.assertEqual(self.ui.count("typeRestore("), 1)
+        self.assertIn("      void typeRestore(id, t, run);\n", self.ui.split("const whenReady = () => {", 1)[1].split("\n    };\n", 1)[0] + "\n")
+        self.assertEqual(self.ui.count("t.restore = shell ? fgBack.get(id) : undefined;"), 1)
+        self.assertEqual(self.ui.count("fgBack.set("), 1)
+        self.assertIn("if (termAuto && line) fgBack.set(s.id, line);", self.ui)
+        self.assertIn("const line = !terminalOnly && mode === \"terminal\" ? restoreLine(s) : null;", self.ui)
+        fg = (UI_SRC / "sessions" / "fgResume.ts").read_text(encoding="utf-8")
+        line = fg.split("export function fgLine(", 1)[1].split("\n}\n", 1)[0]
+        for needle in ('if (cli === "omh") return "omh";', "if (!isUuid(id)) return null;",
+                       'return cli === "claude" ? `claude --resume ${id}` : `codex resume ${id}`;'):
+            self.assertIn(needle, line)
+        self.assertIn("const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;", fg)
         # typeAllowed is called from one place only: termShare.ts's `type`, reached by the card's Allow (or Resume and
         # send) on that request's own card; its false (nothing typed) keeps the card
         callers = []
@@ -2604,6 +2658,8 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
         for cmd, params in (("past_chats_list", "agent: String, cwds: Vec<String>"), ("past_chat_messages", "agent: String, id: String, cwd: String"),
                             ("conversation_state", "agent: String, id: String, account: Option<String>"),
                             ("codex_conversation", "shell: State<'_, Shell>, id: u32"),
+                            ("claude_conversation", "shell: State<'_, Shell>, id: u32"),
+                            ("session_shell_in_front", "shell: State<'_, Shell>, id: u32"),
                             ("session_reveal", "cwd: String"), ("session_open_terminal", "cwd: String"),
                             ("asks_badge", "window: tauri::WebviewWindow, count: u32")):
             sig = re.search(rf"async fn {cmd}\((.*?)\) -> ", self.lib, re.S)
@@ -2634,6 +2690,28 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
         self.assertIn("PROC_PIDFDVNODEPATHINFO", listing)
         self.assertIn('std::fs::read_link(e.ok()?.path())', listing)
         self.assertIn("pub fn codex_conversation(_fg: u32, _home: &Path) -> Option<String> {\n    None\n}", fg)
+        # a Shell row's Claude Code (rule 11): only a foreground Claude Code and the Claude Code under it, each read in
+        # its own `<home>/sessions/<pid>.json`, not through a link, bounded, its own pid and a UUID; Windows: none
+        own = fg.split("pub fn claude_conversation(fg: u32, home: &Path)", 1)[1].split("\n}\n", 1)[0]
+        # the foreground process's own record first; only a wrapper's descendants after it, nearest first
+        for needle in ('Probe::default().agent(pid) == Some("claude")', "if !is_claude(fg) {",
+                       "if let Some(id) = claude_session_id(home, fg, start_secs(fg)) {", "tree.len() < TREE_MAX",
+                       ".skip(1).filter(|p| is_claude(*p)).find_map(|p| claude_session_id(home, p, start_secs(p)))"):
+            self.assertIn(needle, own)
+        self.assertNotIn(".min()", own)
+        rec = fg.split("pub fn claude_session_id(home: &Path, pid: u32, started: Option<i64>)", 1)[1].split("\n}\n", 1)[0]
+        for needle in ('open_record(&home.join("sessions").join(format!("{pid}.json")))?',
+                       "meta.len() > CLAUDE_RECORD_MAX", ".take(CLAUDE_RECORD_MAX)", '!= u64::from(pid)',
+                       'k.as_str() != Some("interactive")', '"procStart"', "(recorded - started).abs() > 1",
+                       "crate::sessions::is_uuid(id)"):
+            self.assertIn(needle, rec)
+        opener = fg.split("fn open_record(path: &Path)", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("libc::O_NOFOLLOW | libc::O_NONBLOCK", opener)
+        for banned in ("Command::new", "fs::write", "OpenOptions", "remove_file"):
+            self.assertNotIn(banned, rec, banned)
+        self.assertIn("const CLAUDE_RECORD_MAX: u64 = 64 * 1024;", fg)
+        self.assertIn("pub fn claude_conversation(_fg: u32, _home: &Path) -> Option<String> {\n    None\n}", fg)
+        self.assertIn("Ok(sessions.claude_conversation(id, &user_home()?).filter(|c| sessions::is_uuid(c)))", self.lib)
         doc = _flat(DOC.read_text(encoding="utf-8"))
         self.assertIn("For a TERMINALS Codex session the shell also lists, when the page asks (`codex_conversation`, only the session id goes out), the open files of that foreground Codex process", doc)
         self.assertIn("only the UUID is kept, as the session's conversation for `codex resume` after a restart; no file is opened, and nothing else is shown, kept or sent; Windows does not do this.", doc)
@@ -2811,10 +2889,10 @@ class BotThreads(unittest.TestCase):
         self.assertNotIn("startFolderChat", start)
         # the Shell row goes through the bottom panel's login-shell command: a folder, a size and at most a shell id
         # from the shell's own list, never a program, path or argument
-        self.assertIn("await getShellHost().start(r.cwd || null, cols, rows, onData, onExit, rec(id)?.shell)", sessions)
+        self.assertIn("await getShellHost().start(r.cwd || null, cols, rows, onData, onExit, rec(id)?.shell, link)", sessions)
         lib = (self.APP / "src-tauri" / "src" / "lib.rs").read_text(encoding="utf-8")
         self.assertIn("shell_id: Option<String>,", lib)
-        self.assertIn("sessions.start_shell(cwd.as_deref(), shell_id.as_deref(), &home, cols, rows,", lib)
+        self.assertIn("sessions.start_shell(cwd.as_deref(), shell_id.as_deref(), link.as_deref(), &home, cols, rows,", lib)
         rs = (self.APP / "src-tauri" / "src" / "sessions.rs").read_text(encoding="utf-8")
         self.assertIn("pub fn shells_available<E, X>(env: &E, etc_shells: &str, is_program: X, os: Os) -> Vec<ShellEntry>", rs)
         self.assertIn("#[serde(skip)]\n    pub args: Vec<&'static str>,", rs)

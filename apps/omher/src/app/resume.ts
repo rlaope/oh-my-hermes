@@ -4,9 +4,10 @@
 // folder, account, view, the agent's own conversation id, whether it was running, and the last messages of its
 // chat, which omher draws itself). These functions are pure; resumeBoot.ts reads, writes and applies them.
 import type { PanelTabId } from "../state/store";
-import { continues, isAgentId, type AgentId } from "../sessions/agents";
+import { continues, isAgentId, isShell, type AgentId } from "../sessions/agents";
 import { isLinkId } from "../sessions/termLink";
 import { cleanShellId } from "../sessions/term/settings";
+import { fgHasId, isFgCli, isUuid, type FgCli } from "../sessions/fgResume";
 
 export const RESUME_KEY = "omher.resume";
 export const RESUME_VERSION = 1;
@@ -67,6 +68,11 @@ export interface SavedSession {
   messages?: SavedMsg[];
   /** A Shell row's shell id (`shells_available`). */
   shell?: string;
+  /** A Shell row that was running: the CLI in its foreground then (Claude Code, Codex or oh-my-hermes only), and for
+   *  Claude Code and Codex that CLI's conversation id once known (a UUID). A restart types the line that puts it back
+   *  (fgResume.ts). */
+  fgCli?: FgCli;
+  fgSession?: string;
 }
 
 export interface ResumeSnap {
@@ -128,6 +134,10 @@ function parseSession(v: unknown): SavedSession | null {
   }
   const shell = cleanShellId(v.shell);
   if (shell) out.shell = shell;
+  if (isShell(out.agent) && out.running && isFgCli(v.fgCli)) {
+    out.fgCli = v.fgCli;
+    if (fgHasId(v.fgCli) && isUuid(v.fgSession)) out.fgSession = v.fgSession.toLowerCase();
+  }
   if (Array.isArray(v.messages)) {
     const msgs = v.messages.map(parseMsg).filter((m): m is SavedMsg => !!m).slice(-MAX_MESSAGES);
     if (msgs.length) out.messages = msgs;

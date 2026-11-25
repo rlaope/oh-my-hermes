@@ -4,6 +4,19 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: a TERMINALS Shell row where you ran Claude Code, Codex or `omh` puts it back after omher restarts.** Such a
+  row used to come back as a plain shell (paused), with the CLI and its conversation gone; only rows started directly
+  as Claude Code, Codex or oh-my-hermes came back. A Shell row now keeps which of those three CLIs is in its
+  foreground and, for Claude Code and Codex, that CLI's conversation id once the shell can name it (Codex from the
+  rollout it holds open, as a Codex row already did; Claude Code from its own `~/.claude/sessions/<pid>.json` record of
+  that running process, the foreground one's own record first), asked again every 15 s so a `/resume` or `/new` inside
+  the same CLI is followed. After a restart the row starts a fresh shell by itself and, once the shell is ready (its
+  output quiet for 3 s, or for 1 s after an OSC 133 prompt mark) and a fresh look finds the shell itself in front,
+  types one line, once: `claude --resume <id>`, `codex resume <id>` or `omh`. A key you press first, or a program your
+  rc started at the first prompt (OMH's own auto-resume, say), cancels it. A CLI that went back to the shell before the
+  restart is forgotten, and a Claude Code or Codex whose id was not known yet comes back paused, as before. Shell rows also get
+  their row's `OMHER_TERMINAL_LINK` now, so an `omh` typed in one reopens the session it dropped there. Windows keeps
+  `omh` but learns no Claude Code or Codex id. (`docs/OMHER-BOUNDARY.md` rule 11)
 - **TUI: `/dag` shows the highlighted node's handoff with `e`.** In the delegation graph pager, `e` opens the
   selected DAG node's evidence (title, status, role and up to 8 KiB of its local handoff), `r` rereads it and `e`
   returns to the same graph position. It reads only that node's handoff from the current stored session's DAG
