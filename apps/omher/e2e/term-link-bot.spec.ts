@@ -124,9 +124,9 @@ test("a bot's request shows a card and types nothing until Allow; Deny types not
   await expect(card.locator("button").first()).toBeFocused();
   // the row and the Dock count show it waits on the person: the warning triangle, a wait omher knows
   await expect(page.getByTestId(`session-${id}`)).toHaveAttribute("data-term-status", "bell");
-  // the triangle is the sidebar's readable needs amber (this test runs light: the deep #a8640a, not the fill amber)
+  // the triangle is the sidebar's readable needs amber (this test runs light: the deep #94570a, not the fill amber)
   const tri = page.getByTestId(`session-${id}`).getByTestId("term-status");
-  expect(await tri.evaluate((e) => getComputedStyle(e).color)).toBe("rgb(168, 100, 10)");
+  expect(await tri.evaluate((e) => getComputedStyle(e).color)).toBe("rgb(148, 87, 10)");
   await expect(page.getByTestId(`session-${id}`).getByTestId("term-status").locator("svg path")).toHaveCount(2);
   await expect(page.getByTestId(`session-${id}`).getByTestId("term-status")).toHaveAttribute("title", "Needs your answer");
   await expect.poll(() => page.evaluate(() => (window as unknown as W).__omherBadge)).toBeGreaterThan(0);
