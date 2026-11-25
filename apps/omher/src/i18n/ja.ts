@@ -981,8 +981,6 @@ export const ja: Record<Key, string> = {
   "mp.noAccount": "{bot} にはまだ AI アカウントがありません。チャットの下でサインインすると、ここにモデルが表示されます。",
   "mp.reasoning": "推論",
   "mp.inHermes": "現在は Hermes で変更してください",
-  "mp.sendsOnRoute": "{level}（このルートでは {sent} を送信）",
-  "mp.pillSends": "{level} · {sent} を送信",
   "mp.appliesChat": "このチャットに適用 · {link}",
   "mp.botSettings": "ボット設定",
   "head.details": "詳細（{key}）",

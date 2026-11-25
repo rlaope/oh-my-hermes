@@ -981,8 +981,6 @@ export const ko: Record<Key, string> = {
   "mp.noAccount": "{bot}에 아직 AI 계정이 없어요. 채팅 아래에서 로그인하면 여기에 모델이 나와요.",
   "mp.reasoning": "추론",
   "mp.inHermes": "지금은 Hermes에서 바꿔 주세요",
-  "mp.sendsOnRoute": "{level} · 이 경로에서 실제로 보내는 값: {sent}",
-  "mp.pillSends": "{level} · 실제 {sent}",
   "mp.appliesChat": "이 채팅에 적용 · {link}",
   "mp.botSettings": "봇 설정",
   "head.details": "상세 ({key})",

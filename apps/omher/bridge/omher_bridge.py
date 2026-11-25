@@ -126,6 +126,39 @@ def reasoning_levels() -> list[str]:
     return ["none", *named] if named else list(REASONING_LEVELS)
 
 
+def route_reasoning_levels(provider: str, model: str, api_mode: str | None = None,
+                           base_url: str | None = None) -> list[str]:
+    """The levels this route really sends, for the picker: "none" (thinking off), then the levels Hermes' own
+    `agent.reasoning_effort.route_supported_efforts` lists for the route, in the order of `reasoning_levels()`. A level
+    the route's clamp would rewrite to another one (`ultra` on a Claude or OpenAI-compatible route sends `max`) is not
+    offered; `ultra` stays only where Hermes sends it verbatim (the Codex provider on the codex app-server runtime). A Hermes
+    without that function (older than the per-route clamp) answers `reasoning_levels()`."""
+    known = reasoning_levels()
+    try:
+        from agent.reasoning_effort import route_supported_efforts
+        supported = {str(s).strip().lower() for s in route_supported_efforts(provider, model, api_mode, base_url)}
+    except Exception:
+        return known
+    levels = [lvl for lvl in known if lvl == "none" or lvl in supported]
+    return levels if len(levels) > 1 else known
+
+
+def route_of(profile_dir: Path | None, provider: str) -> tuple[str | None, str | None]:
+    """`(api_mode, base_url)` of *provider* as the bot's config.yaml sets it, for `route_reasoning_levels`. api_mode is
+    `codex_app_server` when `model.openai_runtime` asks for it, as Hermes' `runtime_provider` overlay does (it applies
+    the runtime only to the Codex-capable providers, and `route_supported_efforts` reads api_mode on the Codex provider
+    alone, so no provider check is needed here), else None; base_url is `model.base_url` only when `model.provider` is
+    this provider (a stale base_url must not leak into another provider), else None."""
+    cfg = _load_yaml(profile_dir / "config.yaml") if profile_dir else {}
+    model_cfg = cfg.get("model")
+    model_cfg = model_cfg if isinstance(model_cfg, dict) else {}
+    runtime = str(model_cfg.get("openai_runtime") or "").strip().lower()
+    api_mode = "codex_app_server" if runtime == "codex_app_server" else None
+    same = str(model_cfg.get("provider") or "").strip().lower() == (provider or "").strip().lower()
+    base_url = str(model_cfg.get("base_url") or "").strip().rstrip("/") if same else ""
+    return api_mode, base_url or None
+
+
 def default_hermes_home(environ=None, platform: str | None = None) -> Path:
     """Hermes' own default home: `HERMES_HOME`, else `~/.hermes`, or `%LOCALAPPDATA%\\hermes` on Windows
     (the same rule as Hermes' `hermes_constants`, kept here so the bridge needs no Hermes import to start)."""
@@ -8121,11 +8154,16 @@ class Bridge:
                 # profile default, which a session-level switch does not change.
                 sess_model = str(info.get("model") or "")
                 sess_provider = str(info.get("provider") or "")
+        model = sess_model or str(res.get("model") or conn.bot["model"])
+        provider = sess_provider or str(res.get("provider") or conn.bot["provider"])
         return {"providers": providers,
-                "current": {"model": sess_model or str(res.get("model") or conn.bot["model"]),
-                            "provider": sess_provider or str(res.get("provider") or conn.bot["provider"]),
-                            "reasoning": reasoning, "reasoning_wire": wire},
-                "reasoning_levels": reasoning_levels()}
+                "current": {"model": model, "provider": provider, "reasoning": reasoning, "reasoning_wire": wire},
+                "reasoning_levels": self._route_levels(conn, provider, model)}
+
+    def _route_levels(self, conn: Conn, provider: str, model: str) -> list[str]:
+        """The reasoning levels the bot's route (*provider*, *model*, and its config.yaml's runtime) really sends."""
+        api_mode, base_url = route_of(conn.bot.get("path"), provider)
+        return route_reasoning_levels(provider, model, api_mode, base_url)
 
     async def op_set_model(self, p) -> dict:
         model, provider, reasoning = p.get("model"), p.get("provider"), p.get("reasoning")
@@ -8174,9 +8212,12 @@ class Bridge:
             await mutate("reasoning", {"effort": reasoning})
         snap = await self._call(conn, "session.resume", session_id=main)
         info = snap.get("info") or {}
-        return {"model": str(info.get("model") or ""), "provider": str(info.get("provider") or conn.bot["provider"]),
+        model, provider = str(info.get("model") or ""), str(info.get("provider") or conn.bot["provider"])
+        # the levels the route sends after a switch, so the picker shows the new model's at once
+        return {"model": model, "provider": provider,
                 "reasoning": str(info.get("reasoning_effort") or ""),
-                "reasoning_wire": str(info.get("reasoning_effort_wire") or "")}
+                "reasoning_wire": str(info.get("reasoning_effort_wire") or ""),
+                "reasoning_levels": self._route_levels(conn, provider, model or conn.bot["model"])}
 
     # ------------------------------------------------------------ bots / hello / routines
 

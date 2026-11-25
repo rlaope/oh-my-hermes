@@ -2802,6 +2802,31 @@ class EffortTests(unittest.TestCase):
         session_info(app, reasoning_effort="")  # Hermes' word for the provider's default
         self.assertEqual(app.effort, modes_module.EFFORT_DEFAULT)
 
+    def test_a_level_the_route_clamps_shows_as_the_level_it_sends(self) -> None:
+        """`/effort ultra` on a route that sends max (Hermes' `reasoning_effort_wire`): the info line and the reply say
+        max is what goes out, never that ultra runs; a route that sends the level as asked says nothing more."""
+        app, client = make_app()
+        type_text(app, "/effort ultra")
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.calls[-1], effort_call("ultra"))
+        session_info(app, reasoning_effort="ultra", reasoning_effort_wire="max")  # Hermes emits it before answering
+        answer(app, client, effort_set("ultra"))
+        self.assertEqual(notices(app)[-1], "Reasoning effort ultra for this session; this route sends max.")
+        self.assertIn("effort max", line_text(app._info_line(100)))
+        self.assertNotIn("ultra", line_text(app._info_line(100)))
+        type_text(app, "/effort")
+        app._on_input(Key(ENTER))
+        self.assertIn("Reasoning effort ultra; this route sends max.", notices(app)[-1])
+        type_text(app, "/effort high")
+        app._on_input(Key(ENTER))
+        session_info(app, reasoning_effort="high", reasoning_effort_wire="high")
+        answer(app, client, effort_set("high"))
+        self.assertEqual(notices(app)[-1], "Reasoning effort high for this session.")
+        self.assertIn("effort high", line_text(app._info_line(100)))
+        # an older Hermes names no wire level: the effort itself
+        session_info(app, reasoning_effort="ultra")
+        self.assertIn("effort ultra", line_text(app._info_line(100)))
+
     def started_with(self, config: dict) -> tuple[App, RecordingClient]:
         """A launched app whose `session.create` answered Hermes' lazy info (no effort), then `config.get` `config`."""
 

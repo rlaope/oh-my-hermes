@@ -11,7 +11,7 @@ import { getStore, useStore } from "../../state/store";
 import { ChevronDown, ModelIcon, Popover, SearchIcon } from "../../ui";
 import { Seg } from "./Seg";
 import { CheckIcon } from "./CheckIcon";
-import { levelOptions, reasoningPill, sentInstead } from "./levels";
+import { levelOptions, reasoningPill, sentLevel } from "./levels";
 import { filterRows, modelRows, vendorsPresent, type ModelRow } from "./modelSearch";
 import { t, tx } from "../../i18n";
 import { composing } from "../../lib/ime";
@@ -32,7 +32,8 @@ export default function ModelPicker({ bot, chat }: SlotProps["modelPicker"]) {
   const reasoning = chat?.reasoning || opts?.current.reasoning || "";
   // what the route sends for that level, from the same source as the level itself
   const wire = chat?.reasoning ? chat.reasoningWire : opts?.current.reasoning_wire;
-  const sent = sentInstead(reasoning, wire);
+  // the control selects the level the route sends: a saved `ultra` on a route that sends max selects max
+  const sent = sentLevel(reasoning, wire);
   const offline = bot.status === "offline";
   const noAccount = useBotReady(bot.name).status === "not";
   const [query, setQuery] = useState("");
@@ -228,17 +229,13 @@ export default function ModelPicker({ bot, chat }: SlotProps["modelPicker"]) {
           <div className="mp-h mp-h2">{t("mp.reasoning")}</div>
           <Seg
             label={t("mp.reasoning")}
-            value={reasoning}
+            value={sent}
             options={levelOptions(opts?.reasoning_levels)}
             onChange={(r) => void apply({ reasoning: r })}
+            repick={sent !== reasoning}
             disabled={busy || offline}
             testId="reasoning-seg"
           />
-          {sent && (
-            <div className="mp-note" data-testid="reasoning-sent">
-              {t("mp.sendsOnRoute", { level: reasoning, sent })}
-            </div>
-          )}
           {note !== null && (
             <div className="mp-note" role="status" title={note || undefined} data-testid="model-note">
               {t("mp.inHermes")}

@@ -4,6 +4,17 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: the reasoning picker offers only the levels the bot's route sends.** On a Claude route the picker listed
+  `max` and `ultra` side by side, and picking `ultra` read `ultra · sends max`, because the bridge offered Hermes'
+  whole ladder for every model. `models.options` and `chat.set_model` now answer `reasoning_levels` from Hermes' own
+  `agent.reasoning_effort.route_supported_efforts` for the chat's live provider and model (the codex app-server
+  runtime from the profile's `model.openai_runtime`, and its `base_url`), so a Claude or OpenAI-compatible route offers
+  `none` to `max`, a codex model on the app-server runtime keeps `ultra`, and a legacy codex model stops at `xhigh`; a
+  model switch in the picker updates the levels at once. A saved level the route clamps (an `ultra` set elsewhere)
+  reads and is selected as the level sent, in the pill, the picker and the bot's Settings page; the "sends max" texts
+  are gone. A Hermes without the per-route function keeps the old ladder. The OMH TUI's info line and `/effort` reply
+  name the level the route sends when Hermes reports it clamps one. (`apps/omher/bridge/omher_bridge.py`,
+  `apps/omher/src/chat/model/`, `src/tui/modes.py`)
 - **TUI: `/dag` shows the highlighted node's handoff with `e`.** In the delegation graph pager, `e` opens the
   selected DAG node's evidence (title, status, role and up to 8 KiB of its local handoff), `r` rereads it and `e`
   returns to the same graph position. It reads only that node's handoff from the current stored session's DAG

@@ -387,6 +387,7 @@ export interface BotReady {
 export interface ModelOptions {
   providers: ModelProvider[];
   current: ModelCurrent;
+  /** "none" plus the levels the bot's route really sends (Hermes' `route_supported_efforts`), in Hermes' order. */
   reasoning_levels: string[];
 }
 
@@ -523,7 +524,8 @@ export interface OpMap {
   "bots.ready": { params: { bot: string; provider?: string }; result: BotReady };
   "chat.set_model": {
     params: { bot: string; model?: string; provider?: string; reasoning?: string; session?: string };
-    result: ModelCurrent;
+    /** `reasoning_levels`: the levels the route the chat now runs on sends (absent from an older bridge). */
+    result: ModelCurrent & { reasoning_levels?: string[] };
   };
   /** Display name only; "" goes back to the profile's own name. The profile id never changes. */
   "bots.rename": { params: { bot: string; name: string }; result: { display_name: string } };
