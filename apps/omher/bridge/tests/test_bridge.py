@@ -674,6 +674,30 @@ class BotsAndChat(BridgeCase):
             with self.hermes_route(routes=routes):
                 self.assertEqual(ob.route_reasoning_levels("custom", "m"), ["none", *self.LADDER])
 
+    def test_none_is_offered_only_where_the_route_sends_it(self):
+        """A Codex Astra-family route (Hermes' CODEX_ASTRA_EFFORTS: low..max, no none) cannot send none, so it is not
+        offered there; a route whose set has none offers it first."""
+        astra = ("low", "medium", "high", "xhigh", "max")
+        with self.hermes_route(routes=lambda *a: astra):
+            self.assertEqual(ob.route_reasoning_levels("openai-codex", "gpt-6-astra"), list(astra))
+        with self.hermes_route(routes=lambda *a: ("none", *astra)):
+            self.assertEqual(ob.route_reasoning_levels("openai-codex", "gpt-6-sol"), ["none", *astra])
+
+    async def test_a_saved_none_on_a_route_without_it_is_not_offered(self):
+        """`none` saved from elsewhere on an Astra route: the session's level stays `none` (Hermes keeps the model's
+        default effort and sends no wire level), and the route's levels do not offer it."""
+        astra = ("low", "medium", "high", "xhigh", "max")
+        with self.hermes_route(routes=lambda *a: astra):
+            async with Env() as env:
+                s = await self.open(env)
+                self.assertTrue((await s.req("chat.open", bot="kami"))["ok"])
+                c = env.clients["kami"]
+                c.model_info = {"model": "gpt-6-astra", "provider": "openai-codex", "reasoning_effort": "none",
+                                "reasoning_effort_wire": ""}
+                r = (await s.req("models.options", bot="kami"))["result"]
+                self.assertEqual((r["current"]["reasoning"], r["current"]["reasoning_wire"]), ("none", ""))
+                self.assertEqual(r["reasoning_levels"], list(astra))
+
     def test_route_of_reads_the_runtime_like_hermes(self):
         with tempfile.TemporaryDirectory() as t:
             d = Path(t)

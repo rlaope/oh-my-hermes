@@ -11,7 +11,7 @@ import { getStore, useStore } from "../../state/store";
 import { ChevronDown, ModelIcon, Popover, SearchIcon } from "../../ui";
 import { Seg } from "./Seg";
 import { CheckIcon } from "./CheckIcon";
-import { levelOptions, reasoningPill, sentLevel } from "./levels";
+import { levelOptions, reasoningLabel, sentLevel } from "./levels";
 import { filterRows, modelRows, vendorsPresent, type ModelRow } from "./modelSearch";
 import { t, tx } from "../../i18n";
 import { composing } from "../../lib/ime";
@@ -32,8 +32,9 @@ export default function ModelPicker({ bot, chat }: SlotProps["modelPicker"]) {
   const reasoning = chat?.reasoning || opts?.current.reasoning || "";
   // what the route sends for that level, from the same source as the level itself
   const wire = chat?.reasoning ? chat.reasoningWire : opts?.current.reasoning_wire;
-  // the control selects the level the route sends: a saved `ultra` on a route that sends max selects max
-  const sent = sentLevel(reasoning, wire);
+  // the control selects the level the route sends: a saved `ultra` on a route that sends max selects max, and a
+  // saved `none` on a route that cannot send it selects nothing
+  const sent = sentLevel(reasoning, wire, opts?.reasoning_levels);
   const offline = bot.status === "offline";
   const noAccount = useBotReady(bot.name).status === "not";
   const [query, setQuery] = useState("");
@@ -132,11 +133,11 @@ export default function ModelPicker({ bot, chat }: SlotProps["modelPicker"]) {
         <span className="mp-l" title={model || undefined} data-testid="model-label">
           {model || t("mp.pick")}
         </span>
-        {reasoning && (
+        {sent && (
           <>
             <span className="sep" />
             <span className="eff" data-testid="reasoning-label">
-              {reasoningPill(reasoning, wire)}
+              {reasoningLabel(sent)}
             </span>
           </>
         )}

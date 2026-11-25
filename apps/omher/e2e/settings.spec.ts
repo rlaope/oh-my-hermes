@@ -68,9 +68,17 @@ test("model pill: the model control plus the panel button, popover lists provide
   // to max there). Seven do not fit one row, so they sit in rows of four, no label clipped
   const levels = pop.getByTestId("reasoning-seg").getByRole("radio");
   await expect(levels).toHaveText(["none", "minimal", "low", "medium", "high", "xhigh", "max"]);
-  const boxes = await levels.evaluateAll((bs) => bs.map((b) => ({ top: Math.round(b.getBoundingClientRect().top), fits: b.scrollWidth <= b.clientWidth })));
+  const boxes = await levels.evaluateAll((bs) =>
+    bs.map((b) => {
+      const r = b.getBoundingClientRect();
+      return { top: Math.round(r.top), left: r.left, right: r.right, fits: b.scrollWidth <= b.clientWidth };
+    }),
+  );
   expect(new Set(boxes.map((b) => b.top)).size).toBe(2);
   expect(boxes.slice(0, 4).every((b) => b.top === boxes[0].top) && boxes.slice(4).every((b) => b.top === boxes[4].top)).toBe(true);
+  // the three-button last row stretches the full width: its edges line up with the first row's
+  expect(Math.abs(boxes[4].left - boxes[0].left)).toBeLessThanOrEqual(1);
+  expect(Math.abs(boxes[6].right - boxes[3].right)).toBeLessThanOrEqual(1);
   expect(boxes.every((b) => b.fits)).toBe(true);
 
   // Escape closes

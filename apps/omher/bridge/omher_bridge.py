@@ -128,8 +128,10 @@ def reasoning_levels() -> list[str]:
 
 def route_reasoning_levels(provider: str, model: str, api_mode: str | None = None,
                            base_url: str | None = None) -> list[str]:
-    """The levels this route really sends, for the picker: "none" (thinking off), then the levels Hermes' own
-    `agent.reasoning_effort.route_supported_efforts` lists for the route, in the order of `reasoning_levels()`. A level
+    """The levels this route really sends, for the picker: the ones Hermes' own
+    `agent.reasoning_effort.route_supported_efforts` lists for the route, in the order of `reasoning_levels()`. "none"
+    (thinking off) is one of them only where Hermes lists it: a Codex Astra-family route (`CODEX_ASTRA_EFFORTS`, low..max)
+    cannot send it, so Hermes keeps the model's default effort there and the picker does not offer it. A level
     the route's clamp would rewrite to another one (`ultra` on a Claude or OpenAI-compatible route sends `max`) is not
     offered; `ultra` stays only where Hermes sends it verbatim (the Codex provider on the codex app-server runtime). A Hermes
     without that function (older than the per-route clamp) answers `reasoning_levels()`."""
@@ -139,8 +141,8 @@ def route_reasoning_levels(provider: str, model: str, api_mode: str | None = Non
         supported = {str(s).strip().lower() for s in route_supported_efforts(provider, model, api_mode, base_url)}
     except Exception:
         return known
-    levels = [lvl for lvl in known if lvl == "none" or lvl in supported]
-    return levels if len(levels) > 1 else known
+    levels = [lvl for lvl in known if lvl in supported]
+    return levels or known
 
 
 def route_of(profile_dir: Path | None, provider: str) -> tuple[str | None, str | None]:
@@ -148,7 +150,9 @@ def route_of(profile_dir: Path | None, provider: str) -> tuple[str | None, str |
     `codex_app_server` when `model.openai_runtime` asks for it, as Hermes' `runtime_provider` overlay does (it applies
     the runtime only to the Codex-capable providers, and `route_supported_efforts` reads api_mode on the Codex provider
     alone, so no provider check is needed here), else None; base_url is `model.base_url` only when `model.provider` is
-    this provider (a stale base_url must not leak into another provider), else None."""
+    this provider (a stale base_url must not leak into another provider), else None.
+    An approximation: Hermes' wire clamp reads the live agent's `api_mode` and `base_url`, which a session-level
+    switch or a resolved credential can set apart from config.yaml; the picker's levels follow config.yaml."""
     cfg = _load_yaml(profile_dir / "config.yaml") if profile_dir else {}
     model_cfg = cfg.get("model")
     model_cfg = model_cfg if isinstance(model_cfg, dict) else {}

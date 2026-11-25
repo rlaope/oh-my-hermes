@@ -28,6 +28,17 @@ describe("chat reasoning levels", () => {
     expect(reasoningPill("ultra", "max")).toBe("max"); // a level name, never a sentence, in every language
   });
 
+  it("a saved none on a route that cannot send it shows and selects no level", () => {
+    const astra = ["low", "medium", "high", "xhigh", "max"]; // Hermes' CODEX_ASTRA_EFFORTS: no none
+    expect(sentLevel("none", "", astra)).toBe("");
+    expect(reasoningPill("none", "", astra)).toBe("");
+    expect(sentLevel("high", "high", astra)).toBe("high");
+    const compat = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
+    expect(sentLevel("none", "", compat)).toBe("none"); // a route that sends none keeps it
+    expect(sentLevel("ultra", "max", compat)).toBe("max");
+    expect(sentLevel("none", "", [])).toBe("none"); // no route levels yet: the pick
+  });
+
   it("keeps the route's level with the chat from chat.open and chat.set_model", () => {
     const res = { session_id: "s", messages: [], running: false, model: "m", provider: "p", reasoning: "ultra" };
     let s = reduce(initialState(), { type: "chat.opened", bot: "kami", res: { ...res, reasoning_wire: "max" }, now: 1 });
