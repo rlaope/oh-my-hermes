@@ -11,26 +11,11 @@ All notable changes will be documented here.
   targets, and sends nothing to the gateway. The DAG record reader loads on the first evidence read, so a TUI
   session that never opens it imports no plugin runtime reader. (`src/tui/dag_evidence.py`,
   `src/tui/dag_pager.py`, `src/system/secure_regular_file.py`) (#3194)
-- **omher: TERMINALS folders say where they are, and a split stays in its folder.** A folder header showed only the
-  folder's last name, so `~`, `~/Desktop/khope` and `~/work/khope` read alike; it now shows the path from home under
-  the name, with the git branch after it. A split's card sat above every folder; it now sits at the top of its first
-  pane's folder, and that folder's count and live state include the split's sessions. The `+` menu starts in the open
-  terminal's folder, and each folder header has its own `+` that opens the menu in that folder.
 - **omher: a slash command reaches the bot as typed.** omher appended its own notes (the open-threads note, the
   terminal-link blocks, the peer note) to every main-chat message, slash commands included. Hermes reads all of a
   slash command's text as its arguments, so `/usage` answered `Unknown /usage subcommand: [omher] Open threads:
   none. ...`. A message that starts with `/` now goes with no note, and a slash command with a reply target is
   refused instead of sent with the target block. (`apps/omher/bridge/omher_bridge.py`)
-- **omher: a bot on another computer has threads, like a local one** (#3172). A bot connected over SSH
-  (`<peer>:<name>`) had only its main chat: no New thread on its row, no `./thread`, and its page said threads ran on
-  this computer only, because the peer link refused `thread.*` and every `session=` op. Its threads are sessions of
-  that bot on its own gateway, so the link now forwards `thread.create`, `thread.list`, `thread.open` and
-  `thread.remove` to that computer's bridge, and forwards `session=<id>` on send, interrupt, steer, approval, question
-  and model, and that session's events back, only for an id the peer's bridge itself answered as one of the bot's
-  threads; a folder chat there or any other id is still refused. A new thread there takes no folder from this computer
-  and its folder never starts this computer's terminal panel; a dropped link ends a running thread turn as stopped,
-  as it does the main chat's. Folder chats, Restart and a thread's pull requests stay on this computer (BOUNDARY rule
-  31).
 - **omher: Settings › Accounts › GitHub keeps Add and Remove on one line.** A GitHub account row reused the
   accounts grid, whose last column is the 26px ⋯ menu. 추가 just fit there in macOS's font; on Windows, whose Korean
   font is wider, it broke into 추 / 가 and was clipped. That row's button column now takes the label's width in any
@@ -263,6 +248,14 @@ All notable changes will be documented here.
   reported as a stray that has not exited. The
   `--json` report gains `idle_exit` and `overdue` per gateway. (`src/maintenance/gateway_health.py` `_unrecorded_line`,
   `IDLE_EXIT_STALE_SECONDS`, `src/system/process_listing.py` `IDLE_EXIT_FLAG`)
+- **omher 1.2.1.** TERMINALS folders say where they are, bots on another computer get threads, and Antigravity's
+  signed-in turns read cleanly.
+  - **Folders:** a folder header shows its path from home and its branch; a split's card sits at the top of its own
+    folder, which keeps its place in the list; the `+` menu starts in the open terminal's folder, and each folder
+    header has its own `+` (#3183).
+  - **Splits:** a split pane no longer takes the keyboard from a menu or card opened right after the drop (#3183).
+  - **Peers:** a bot connected over SSH lists and opens threads like a local one (#3177).
+  - **Antigravity:** a signed-in Antigravity chat shows its shell commands and file reads by name (#3192).
 - **omher 1.2.0.** Hand a terminal to a bot, a page per bot with its apps, Google's Antigravity CLI in TERMINALS, and
   a Windows pass.
   - **Agents:** Google's Antigravity CLI (`agy`) starts from the TERMINALS `+` menu with its official mark, shows its
