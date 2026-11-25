@@ -4385,7 +4385,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user needs actual code changes; prepare a selected executor/runtime handoff after the blueprint or plan is accepted.
   - The request is one message, thread reply, or attachment delivered now with no schedule; use `gateway-intent-card`.
   - The person is inside Hermes' own /blueprint setup for one of its catalog automations; answer the questions that flow asks and let it create the job instead of preparing a second blueprint.
-  - The recurring job would move money; route it to `spend-gate` instead.
+  - The recurring job would move money -- a purchase, a renewal, a top-up, or a transfer; use `spend-gate`, because an agent run on a schedule never spends, and a no-agent script that pays is a spend set up now: its card, typed yes, and cap come before the job exists.
 - Strong routing signals: `automation-blueprint`, `scheduled ops`, `scheduled operation`, `scheduled operations`, `automation blueprint`, `cron blueprint`, `cron-ready`, `recurring ops`, `recurring workflow`, `keep watching`, `keep monitoring`, `watch continuously`, `monitor continuously`, `every morning`, `every day`, `daily digest`, `weekly digest`, `automate this`, `automate workflow`, `send to slack`, `send to discord`, `post to telegram`, `only if changed`, `silent if nothing changed`, `schedule this`, `ずっと監視`, `監視し続け`, `継続的に監視`, `매일`, `매주`, `정기`, `예약`, `자동화`, `자동화해줘`, `스케줄`, `슬랙`, `디스코드`, `텔레그램`, `보내`, `공유`, `변화 없으면`, `조용히`, `계속 감시`, `계속 모니터링`, `계속 지켜봐`, `반복해줘`, `반복 실행`, `반복 일정`, `автоматизируй`, `сделай автоматизацию`, `крон задача`, `cron задача`, `напоминай мне каждый`, `реши это скриптами`, `持续监控`, `持續監控`, `一直监控`, `rancang otomatisasi terjadwal`, `bikin alur kerja otomatis setiap hari`, `rancang pengiriman ringkasan otomatis`, `thiết kế tự động hóa theo lịch trình`, `tạo luồng công việc tự động hàng ngày`, `thiết kế gửi tóm tắt tự động`
 - Good example:
   - Prompt: automation-blueprint every weekday run an uptime check and send a Slack digest only if status changes.
@@ -4439,7 +4439,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - A prepared failure policy is not enforcement: OMH never starts, skips, queues, retries, or backfills an occurrence, and a policy decision is not proof the runtime honoured it.
   - Route later coding, material generation, or report delivery into separate accepted handoffs when needed.
   - OMH creates, pauses, and removes no cron job: activation is the user's or Hermes' (`/blueprint`, an accepted Suggested Cron Job, a `cronjob_manage` create the user asked for in this conversation, or a `hermes cron create` the user runs), and a job Hermes lists is observed status, not proof that a run delivered.
-  - Never schedule a job that moves money -- a purchase, a renewal, a top-up, or a transfer; use `spend-gate`, because an agent run on a schedule never spends, and a no-agent script that pays is a spend set up now: its card, typed yes, and cap come before the job exists.
+  - Never schedule a job that moves money because an agent run on a schedule never spends; use `spend-gate`.
 
 ### reliability-review
 
@@ -10754,7 +10754,6 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Name the user-facing workflow objective, required context, next action, and stop condition.
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
-  - Cite `session_file_activity/v1` (`omh quality-evidence file-activity --hermes-session <id> --json`) in `file_observation_manifest/v1` for which workspace files a Hermes session's read_file, write_file, and patch calls named and the outcome Hermes recorded; never as file-content, hash, diff, test, review, CI, or merge evidence.
 - Completion checklist:
   - The path root, allowed file operations, excluded paths, destructive-operation policy, and stop condition are explicit.
   - Delete, overwrite, move, rename, permission change, archive mutation, upload, and download are gated, or marked missing and not run.
@@ -10788,6 +10787,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Safety rules:
   - A workspace file operator card is not file read, file write, copy, move, rename, delete, archive, upload, download, permission change, or destructive filesystem evidence unless observed file-operation output records it.
   - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+  - Cite `session_file_activity/v1` (`omh quality-evidence file-activity --hermes-session <id> --json`) in `file_observation_manifest/v1` for which workspace files a Hermes session's read_file, write_file, and patch calls named and the outcome Hermes recorded; never as file-content, hash, diff, test, review, CI, or merge evidence.
 
 ### command-operator
 

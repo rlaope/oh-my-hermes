@@ -7080,7 +7080,7 @@ _DEFINITIONS = [
                 f"Suggested Cron Job, a `{NATIVE_CRON_TOOL}` create the user asked for in this conversation, or a "
                 "`hermes cron create` the user runs), and a job Hermes lists is observed status, not proof that a run delivered."
             ),
-            "Never schedule a job that moves money -- a purchase, a renewal, a top-up, or a transfer; use `spend-gate`, because an agent run on a schedule never spends, and a no-agent script that pays is a spend set up now: its card, typed yes, and cap come before the job exists.",
+            "Never schedule a job that moves money because an agent run on a schedule never spends; use `spend-gate`.",
         ),
         quality_tier="ops-blueprint-gated",
         quality_bar=(
@@ -7116,7 +7116,7 @@ _DEFINITIONS = [
             "The user needs actual code changes; prepare a selected executor/runtime handoff after the blueprint or plan is accepted.",
             "The request is one message, thread reply, or attachment delivered now with no schedule; use `gateway-intent-card`.",
             "The person is inside Hermes' own /blueprint setup for one of its catalog automations; answer the questions that flow asks and let it create the job instead of preparing a second blueprint.",
-            "The recurring job would move money; route it to `spend-gate` instead.",
+            "The recurring job would move money -- a purchase, a renewal, a top-up, or a transfer; use `spend-gate`, because an agent run on a schedule never spends, and a no-agent script that pays is a spend set up now: its card, typed yes, and cap come before the job exists.",
         ),
         good_example=SkillExample(
             prompt="automation-blueprint every weekday run an uptime check and send a Slack digest only if status changes.",

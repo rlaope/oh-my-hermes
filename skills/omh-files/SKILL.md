@@ -48,7 +48,6 @@ Quality bar:
 - Name the user-facing workflow objective, required context, next action, and stop condition.
 - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
 - Expose missing tools, credentials, targets, or observations as user-visible gaps.
-- Cite `session_file_activity/v1` (`omh quality-evidence file-activity --hermes-session <id> --json`) in `file_observation_manifest/v1` for which workspace files a Hermes session's read_file, write_file, and patch calls named and the outcome Hermes recorded; never as file-content, hash, diff, test, review, CI, or merge evidence.
 
 Handoff policy:
 
@@ -58,6 +57,7 @@ Safety rules:
 
 - A workspace file operator card is not file read, file write, copy, move, rename, delete, archive, upload, download, permission change, or destructive filesystem evidence unless observed file-operation output records it.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+- Cite `session_file_activity/v1` (`omh quality-evidence file-activity --hermes-session <id> --json`) in `file_observation_manifest/v1` for which workspace files a Hermes session's read_file, write_file, and patch calls named and the outcome Hermes recorded; never as file-content, hash, diff, test, review, CI, or merge evidence.
 
 ## Completion Checklist
 
