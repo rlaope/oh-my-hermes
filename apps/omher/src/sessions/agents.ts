@@ -353,8 +353,9 @@ export interface SessionRec {
    *  it; gone when that CLI leaves the foreground. Kept with the row so a restart continues it (fgResume.ts). */
   fgSession?: string;
   /** A Shell row put back after a restart: the CLI (and its conversation id) its fresh shell types the line for, kept
-   *  (and saved) until that CLI comes to the front or the line is dropped, so a second restart soon after keeps it. */
-  fgBack?: { cli: FgCli; session?: string };
+   *  (and saved) until that CLI comes to the front or the line is dropped, so a second restart soon after keeps it;
+   *  `typed` once the line went, so only the CLI it typed is handed that conversation. */
+  fgBack?: { cli: FgCli; session?: string; typed?: true };
   /** ms since epoch of the terminal's last output (throttled), for the row's spinner and age. */
   lastOut?: number;
   /** The last line the terminal shows with text on it (read from its own screen, throttled): the card's second line. */

@@ -1162,9 +1162,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const r = rec(id);
     if (!r || (r.fgAgent ?? null) === agent) return;
     // a CLI that left a Shell row's foreground takes its conversation id with it: a restart then gives a plain shell. The
-    // CLI a restart's line put back starts with the conversation it was put back with (asked again from now on); any
-    // CLI in front ends what was kept for that line
-    const back = r.fgBack && agent === r.fgBack.cli ? r.fgBack.session : undefined;
+    // CLI a restart's line put back starts with the conversation it was put back with (asked again from now on), only
+    // once that line was typed (not a CLI the rc started first); any CLI in front ends what was kept for that line
+    const back = r.fgBack?.typed && agent === r.fgBack.cli ? r.fgBack.session : undefined;
     patchRec(id, { fgAgent: agent, fgSession: back, ...(agent && r.fgBack ? { fgBack: undefined } : {}) });
     clearTimeout(fgIdTimer.get(id));
     fgIdTimer.delete(id);
@@ -1506,7 +1506,10 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     t.restore = shell ? fgBack.get(id) : undefined;
     fgBack.delete(id);
     let quiet: ReturnType<typeof setTimeout> | null = null;
+    // once typeRestore runs, no later output or prompt mark starts the wait again (its await can see more output)
+    let typing = false;
     const readyIn = (ms: number) => {
+      if (typing) return;
       if (quiet !== null) clearTimeout(quiet);
       quiet = setTimeout(whenReady, ms);
     };
@@ -1515,6 +1518,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       // its pty id comes with the start's answer, which can follow its first output
       if (t.restore && t.run === run && t.hostId === null && !t.closed) return readyIn(RESTORE_QUIET_MS);
       stopPrompt?.();
+      typing = true;
       void typeRestore(id, t, run);
     };
     const stopPrompt = t.restore ? onPrompt(t.el, () => readyIn(PROMPT_SETTLE_MS)) : null;
@@ -1999,14 +2003,18 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     // a program that was replaced leaves the next one's line alone
     if (terms.get(id) !== t || t.run !== run) return;
     const line = t.restore;
+    // no line (typed already, or dropped): nothing to do, and what the row keeps for a typed line stays
+    if (!line) return;
     const pty = t.hostId;
     const still = () => terms.get(id) === t && t.run === run && t.restore === line && !t.closed && !t.held && t.hostId === pty && !rec(id)?.fgAgent;
-    if (!line || pty === null || !still()) return dropRestore(id, t);
+    if (pty === null || !still()) return dropRestore(id, t);
     const front = await getShellHost().shellInFront(pty).catch(() => false);
     if (terms.get(id) !== t || t.run !== run) return;
     if (!front || !still()) return dropRestore(id, t);
     t.restore = undefined;
     void t.io.write(pty, `${line}\r`).catch(() => undefined);
+    const kept = rec(id)?.fgBack;
+    if (kept) patchRec(id, { fgBack: { ...kept, typed: true } });
     // the CLI it typed reports in (setSessionFg ends what was kept for the line), or what was kept goes
     setTimeout(() => {
       const r = rec(id);
