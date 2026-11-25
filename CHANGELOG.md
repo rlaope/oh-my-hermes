@@ -4,6 +4,23 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: short labels no longer break inside a word, in every UI language.** In Settings › Bots a card's status
+  read "연결" on one line and "됨" on the next, beside the `default` chip. The Korean rule (`overflow-wrap: anywhere`)
+  let any label in a tight row shrink to one syllable wide, and Japanese and Chinese break between any two
+  characters, so "接続中" and "已连接" split the same way. The Korean rule now uses `break-word`: Korean still breaks
+  only between words and long paths or URLs still wrap, but a label is never narrower than its longest word. A card's
+  status word sits on one line and its profile chip ends in "…" first when the row is tight. The "In list" / "Add to
+  list" corner label clears the name, and the status line under it gets the card's full width. The bot page's stat
+  captions ("ほかの場所のセッション") stay on one line. Status, tier and state chips, badges and counts on the agents,
+  plugins, apps, platforms, accounts and bot pages, and the sidebar's row times, keep one line too. Only Korean keeps
+  words whole now (`word-break: keep-all`). Chat bubbles, card titles, the Automations and Plugins pages, the plugin
+  sheet, a bot-made card and a new thread's empty line used to set it in every language. In Japanese and Chinese a
+  sentence there broke only at its punctuation, leaving ragged short lines; now it fills each line as those
+  languages do. A Korean reply or card question keeps its words whole in any UI language: its element is marked
+  `lang="ko"`. Long URLs and paths still wrap. A new e2e spec (`e2e/text-wrap.spec.ts`) checks all four languages
+  from the 900px minimum width up. `e2e/site-preview-header.spec.ts` now checks the film-only hero (d17fb8dfb): the
+  hero's film keeps playing and no live preview is mounted. It also checks the preview page on its own, which had
+  failed every omher PR's e2e since that change.
 - **omher: a UI review pass across the sidebar, chat, Plans, Settings, Tasks, Automations, Plugins and TERMINALS.**
   A review of every screen at 1280x820 and the 900x600 minimum, dark and light, English and Korean, found cards left
   alone on a row, mixed alignments, cut text, empty bands, states that looked stuck and Korean particle fallbacks.

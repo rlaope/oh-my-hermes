@@ -11,12 +11,13 @@
   max-width: max(76%, min(100%, 520px));
   font-size: 12px;
 }
-.card-title {
+/* .card .card-title, not .card-title: a Korean title carries lang="ko", and [lang="ko"] (theme/base.css, same
+   specificity as a lone class) would otherwise win or lose on stylesheet order for overflow-wrap */
+.card .card-title {
   color: var(--ink);
   font-weight: 600;
   font-size: 12.5px;
   line-height: 1.45;
-  word-break: keep-all;
   overflow-wrap: anywhere;
 }
 /* A risky command gets a red rail and one warning line; the buttons stay exactly as they are. */

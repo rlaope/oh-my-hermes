@@ -44,6 +44,7 @@
   font-size: 12.5px;
 }
 .pf-st {
+  white-space: nowrap;
   font-size: 12px;
   color: var(--muted);
 }

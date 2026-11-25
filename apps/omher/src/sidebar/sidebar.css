@@ -263,6 +263,7 @@
   min-width: 0;
 }
 .bot-t {
+  white-space: nowrap;
   color: var(--quiet);
   font-size: 11px;
   line-height: 18px;

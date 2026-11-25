@@ -15,6 +15,7 @@ import { t } from "../../i18n";
 import { hhmm } from "../../app/time";
 import { QueueMark, type QueueChoice, type QueueOffReasons } from "./QueueMark";
 import type { Quote } from "./answers";
+import { koText } from "./textLang";
 
 /** Messenger bubble, filled on both sides. Bot text renders markdown; user text stays plain. Files the bot
  * sent (`MEDIA:` lines) leave the text and show under it in the same column as the bubble, in order; while
@@ -105,7 +106,7 @@ export const Bubble = memo(function Bubble({
             <div className="msg-line">
               {copy}
               <QueueMark onPick={onQueue} busy={queueBusy} off={queueOff} unknown={!!item.steerUnknown} />
-              <div className="b">
+              <div className="b" lang={koText(item.text)}>
                 <SkillText text={item.text} skills={item.skills} />
               </div>
             </div>
@@ -116,12 +117,12 @@ export const Bubble = memo(function Bubble({
                 {copy}
                 {read}
               </span>
-              <div className="b">
+              <div className="b" lang={koText(item.text)}>
                 <SkillText text={item.text} skills={item.skills} />
               </div>
             </div>
           ) : (
-            <div className="b">
+            <div className="b" lang={koText(item.text)}>
               <SkillText text={item.text} skills={item.skills} />
               {copy}
             </div>
@@ -194,7 +195,7 @@ export const Bubble = memo(function Bubble({
           was only a draft block shows its chip alone */}
       <div className="msg-col">
         {(shown || streaming || (paths.length === 0 && shown === text)) && (
-          <div className="b md">
+          <div className="b md" lang={koText(shown)}>
             <Markdown text={shown} />
             {/* copy the answer: beside the bubble's last line, on hover; it takes no room */}
             {!streaming && shown.trim() && <CopyButton className="msg-copy" text={() => shown} testId="copy-answer" />}
