@@ -244,6 +244,22 @@ describe("TERMINALS card second line", () => {
     expect(lastPrintedLine(["✻ Running tests… (12s · esc to interrupt)"])).toBe("Running tests… (12s · esc to interrupt)");
     expect(lastPrintedLine(["", "   ", "────"])).toBe("");
   });
+  it("never shows a shell's own prompt: the line above it, what was typed after it, else nothing", () => {
+    // zsh, bash (Debian and macOS), root, a bracketed prompt, fish, a themed prompt, PowerShell
+    for (const p of ["you@mock api-server %", "you@mock api-server % ", "user@host:~/code/api$", "root@box:/#", "[me@host api]$", "host:api me$", "me@host ~/api>", "~/code/api ❯", "api-server on  main ❯", "PS C:\\Users\\me>"])
+      expect(lastPrintedLine(["(mock) login shell in /home/you/api-server", p]), p).toBe("(mock) login shell in /home/you/api-server");
+    expect(lastPrintedLine(["you@mock api-server %"])).toBe("");
+    expect(lastPrintedLine(["you@mock api-server % make test"])).toBe("make test");
+    expect(lastPrintedLine(["user@host:~/api$ git status"])).toBe("git status");
+    // output that only looks like one stays
+    expect(lastPrintedLine(["Coverage 85%"])).toBe("Coverage 85%");
+    expect(lastPrintedLine(["bob@example.com replied"])).toBe("bob@example.com replied");
+    expect(lastPrintedLine(["git@github.com: Permission denied (publickey)."])).toBe("git@github.com: Permission denied (publickey).");
+  });
+  it("drops Claude Code's and Codex's tool-output tree marks", () => {
+    expect(lastPrintedLine(["⏺ Write(db/0042.sql)", "  ⎿  Wrote 31 lines"])).toBe("Wrote 31 lines");
+    expect(lastPrintedLine(["• Explored", "  └ Read retry.py, test_retry.py"])).toBe("Read retry.py, test_retry.py");
+  });
   it("cuts a very long line with an ellipsis", () => {
     const l = lastPrintedLine(["x".repeat(400)]);
     expect(l.length).toBe(LAST_LINE_MAX);

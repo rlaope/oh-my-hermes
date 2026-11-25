@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Layout } from "../terminal/layout";
-import { CARD_MAX_H, CARD_MIN_H, cellBoxes, cellState, cellText, clampCardHeight, defaultCardHeight, elapsedLabel } from "./splitCard";
+import { CARD_MAX_H, CARD_MIN_H, cardText, cellBoxes, cellState, cellText, clampCardHeight, defaultCardHeight, elapsedLabel } from "./splitCard";
 
 const row = (a: Layout, b: Layout, ratio = 0.5): Layout => ({ dir: "row", ratio, a, b });
 const col = (a: Layout, b: Layout, ratio = 0.5): Layout => ({ dir: "col", ratio, a, b });
@@ -31,12 +31,44 @@ describe("split card height", () => {
 });
 
 describe("cell text placement", () => {
-  it("follows the cell's own size", () => {
+  it("follows a lone cell's size", () => {
     expect(cellText(120, 30)).toBe("line");
     expect(cellText(200, 44)).toBe("beside");
-    expect(cellText(110, 120)).toBe("stack");
-    // tall enough but too wide for a stack
+    expect(cellText(100, 120)).toBe("stack");
     expect(cellText(300, 80)).toBe("beside");
+  });
+
+  it("is one layout per card, from its smallest cell: never a stacked cell beside cells with text beside the mark", () => {
+    // the sidebar's map is 202 px wide (248 px sidebar): side by side, each cell is 99 px
+    const W = 202;
+    const of = (layout: Layout, h: number) => cardText(cellBoxes(layout, W, h));
+    // two side by side at the default 62 px: stacked, with their last lines
+    expect(of(row(P(1), P(2)), defaultCardHeight(row(P(1), P(2))))).toEqual({ text: "stack", lines: true });
+    // one tall on the left, two stacked on the right (84 px): all stacked; the 40 px right cells hold no last line
+    expect(of(row(P(1), col(P(2), P(3))), 84)).toEqual({ text: "stack", lines: false });
+    // the same card capped to 46 px (a short window): every cell one line
+    expect(of(row(P(1), col(P(2), P(3))), 46)).toEqual({ text: "line", lines: false });
+    // 1+3 at its default 126 px: one layout for all four
+    expect(of(row(P(1), col(P(2), col(P(3), P(4)), 1 / 3)), 126).text).toBe("stack");
+    // two stacked full-width cells: each wide enough for the title beside the mark
+    expect(of(col(P(1), P(2)), 84)).toEqual({ text: "beside", lines: true });
+  });
+
+  it("gives every cell in a card the same answer, whatever its own size", () => {
+    const W = 202;
+    for (const [layout, h] of [
+      [row(P(1), col(P(2), P(3))), 84],
+      [row(P(1), col(P(2), P(3))), 46],
+      [row(P(1), col(P(2), P(3))), 140],
+      [col(row(P(1), P(2)), row(P(3), P(4))), 88],
+      [row(P(1), col(P(2), col(P(3), P(4)), 1 / 3)), 240],
+    ] as const) {
+      const boxes = cellBoxes(layout, W, h);
+      const own = new Set(boxes.map((b) => cellText(b.w, b.h)));
+      const card = cardText(boxes).text;
+      // a mixed card is what the review found (C1, C5); the card's one answer is that of its tightest cell
+      expect([...own]).toContain(card);
+    }
   });
 });
 
