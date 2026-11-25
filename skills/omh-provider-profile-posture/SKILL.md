@@ -15,43 +15,13 @@ metadata:
 
 # Provider Profile Posture
 
-This is a Hermes-native `provider-profile-posture` workflow skill.
+Required: user request, target context, delivery or status expectation, known missing evidence. Output: provider_profile_posture/v1, metadata-only secret requirements, allowed and prohibited actions.
 
 ## Why This Exists
 
 `provider-profile-posture` exists so a profile's required secret names and capabilities are recorded as present, missing, or unknown without any secret value being read or any provider being called.
 
-## Do Not Use When
-
-- Choosing or adopting a connector; use `omh-external-connector-readiness`.
-- Listing every tool and credential a workflow needs; use `omh-toolbelt-readiness`.
-- Connecting a model provider or its login; use `omh-model-setup`.
-
-## Examples
-
-Good example:
-
-- Prompt: Prepare provider profile posture for this connector using metadata-only secret presence.
-- Expected behavior: Produce `prepare_provider_profile_posture` with required context, wrapper actions, and not-evidence boundaries.
-- Why: The card records which key names are present, missing, or unknown, and never reads a value.
-
-Bad example:
-
-- Prompt: Read the secret, validate the credential, call the provider, or create a payment route.
-- Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
-- Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
-
-## Completion Checklist
-
-- Provider ID, profile ID, requested capabilities (chat, embedding, tool_call, image), and secret presence are explicit, and `omh ops provider-profile-posture --input <file>` made the record from JSON with `schema_version` `provider_profile_posture_input/v1`, `provider_id`, `profile_id`, `requested_capabilities`, `secret_requirements` as `{name, present: true|false|"unknown"}`, optional `host_observations`.
-- No secret value, credential validation, provider call, model route, wallet, or payment action is claimed.
-- Any host observation reference remains supplied metadata, not a live connector check.
-
-## Recovery Notes
-
-- If provider ID or profile ID is missing, retain the supplied capability requirements, mark provider_profile_posture/v1 unresolved, and hand back a request for the missing ID without reading any secret.
-- If secret-presence metadata is absent, retain the named provider, profile, and requested capabilities, mark secret presence not_observed, and hand back metadata-only secret requirements plus allowed and prohibited actions.
-- If only a host observation reference is supplied, retain it as metadata, mark provider connectivity not_observed, and hand back provider_profile_posture/v1 without claiming credential validation or making a provider call.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -83,27 +53,22 @@ Handoff policy:
 
 Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 
-Required inputs:
-
-- user request
-- target context
-- delivery or status expectation
-- known missing evidence
-
-Expected outputs:
-
-- provider_profile_posture/v1
-- metadata-only secret requirements
-- allowed and prohibited actions
-
-Artifact expectations:
-
-- provider_profile_posture/v1 metadata-only preparation record
-
 Safety rules:
 
 - Provider/profile posture is OMH-local preparation metadata; it is not credential validation, provider connectivity, model routing, payment/wallet, or host execution evidence.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
+## Completion Checklist
+
+- Provider ID, profile ID, requested capabilities (chat, embedding, tool_call, image), and secret presence are explicit, and `omh ops provider-profile-posture --input <file>` made the record from JSON with `schema_version` `provider_profile_posture_input/v1`, `provider_id`, `profile_id`, `requested_capabilities`, `secret_requirements` as `{name, present: true|false|"unknown"}`, optional `host_observations`.
+- No secret value, credential validation, provider call, model route, wallet, or payment action is claimed.
+- Any host observation reference remains supplied metadata, not a live connector check.
+
+## Recovery Notes
+
+- If provider ID or profile ID is missing, retain the supplied capability requirements, mark provider_profile_posture/v1 unresolved, and hand back a request for the missing ID without reading any secret.
+- If secret-presence metadata is absent, retain the named provider, profile, and requested capabilities, mark secret presence not_observed, and hand back metadata-only secret requirements plus allowed and prohibited actions.
+- If only a host observation reference is supplied, retain it as metadata, mark provider connectivity not_observed, and hand back provider_profile_posture/v1 without claiming credential validation or making a provider call.
 
 ## Runtime Evidence
 

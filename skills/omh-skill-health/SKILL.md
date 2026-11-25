@@ -15,45 +15,13 @@ metadata:
 
 # Skill Health
 
-This is a Hermes-native `skill-health` workflow skill.
+Required: user request, target context, delivery or status expectation, known missing evidence. Output: catalog, generated, reference, harness, and capability-surface status, observed failure signals, or an explicit statement that none were supplied, pending amendment review slots and top safe actions with owner lane and verification path.
 
 ## Why This Exists
 
 `skill-health` exists because a skill portfolio drifts in ways no single run shows -- a managed skill changed in place, an authoring finding nobody fixed, an update waiting on its hub -- and use counts measure none of that: it gathers the observed signals into one card with an owner lane and a safe next action for each, and changes nothing itself.
 
-## Do Not Use When
-
-- OMH setup, install, or a skill that does not load; use `omh-doctor`.
-- One run that missed a route or went wrong; use `omh-workflow-learning`.
-- Finding a new skill to adopt; use `omh-skill-scout`.
-
-## Examples
-
-Good example:
-
-- Prompt: skill-health show the OMH skill portfolio dashboard with stale surfaces, failure patterns, pending amendments, and top improvement actions.
-- Expected behavior: Produce `prepare_skill_health` with required context, wrapper actions, and not-evidence boundaries.
-- Why: Drift comes from `lint_warnings` and, on Hermes, the curator ledger, not use counts.
-
-Bad example:
-
-- Prompt: skill-health claim every skill is working and patch the failures automatically without observed signals or review.
-- Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
-- Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
-
-## Completion Checklist
-
-- Dashboard scope, source surfaces, stale/duplicate criteria, and stop condition are explicit.
-- Install/setup health is routed to `omh-doctor`; catalog operations are routed to `omh-skill`; failure retrospectives are routed to `omh-workflow-learning`.
-- No skill, prompt, doc, memory, or model behavior is claimed changed until a reviewed implementation records evidence.
-- Never present use, view, or load counts, `.usage.json` included, as a health, prune, archive, or retire signal: a rarely used skill is not an unhealthy one, and no health card recommends removing, archiving, or pruning a skill for being used little.
-- On Hermes, read the skill audit ledger read-only (that skill's entries in `skills/.curator_ledger.jsonl` under the active profile's Hermes home, or `hermes curator ledger --skill <name> --limit <n>`, which lists only the 20 newest entries by default): an entry against an OMH-managed skill means Hermes changed that managed copy outside OMH, so it may no longer match its generated body; report it as drift with the entry's `action` and `actor` (`agent`, `user`, or `curator`, which covers Hermes' curator and its background review). An OMH-managed skill is one OMH installed, under a label OMH's catalog renders such as `omh-plan` or `ulw-work`; a companion skill the person or an agent created is theirs, whatever its name. An empty ledger is unknown, not clean, because `skills.ledger: false` turns it off.
-- On Hermes, record an authoring finding only from the `lint_warnings` a `skill_manage` write returned, which are advisory and never proof a skill works; only some writes return them (an `edit` never does), so a write without them is not a clean lint. Record an available update for a hub-installed skill only from `hermes skills check` output that was seen; that hub request is Hermes' own, not OMH's.
-
-## Recovery Notes
-
-- If the request is about OMH setup, install, stale package paths, or command availability, route to `omh-doctor`.
-- If the request is a missed-route or self-improvement trace, route to `omh-workflow-learning` before adding health actions.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -85,27 +53,25 @@ Handoff policy:
 
 Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 
-Required inputs:
-
-- user request
-- target context
-- delivery or status expectation
-- known missing evidence
-
-Expected outputs:
-
-- catalog, generated, reference, harness, and capability-surface status
-- observed failure signals, or an explicit statement that none were supplied
-- pending amendment review slots and top safe actions with owner lane and verification path
-
-Artifact expectations:
-
-- skill_health_card/v1 metadata-only wrapper card recording surface status, observed-only failure signals, pending amendments, and the non-mutation boundary
-
 Safety rules:
 
 - A skill health dashboard is not install/setup health, live skill execution success, automatic skill mutation, model training, verification, review, CI, or proof that future routing is fixed.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
+## Completion Checklist
+
+- Dashboard scope, source surfaces, stale/duplicate criteria, and stop condition are explicit.
+- Install/setup health is routed to `omh-doctor`; catalog operations are routed to `omh-skill`; failure retrospectives are routed to `omh-workflow-learning`.
+- No skill, prompt, doc, memory, or model behavior is claimed changed until a reviewed implementation records evidence.
+- Never present use, view, or load counts, `.usage.json` included, as a health, prune, archive, or retire signal: a rarely used skill is not an unhealthy one, and no health card recommends removing, archiving, or pruning a skill for being used little.
+- On Hermes, read the skill audit ledger read-only (that skill's entries in `skills/.curator_ledger.jsonl` under the active profile's Hermes home, or `hermes curator ledger --skill <name> --limit <n>`, which lists only the 20 newest entries by default): an entry against an OMH-managed skill means Hermes changed that managed copy outside OMH, so it may no longer match its generated body; report it as drift with the entry's `action` and `actor` (`agent`, `user`, or `curator`, which covers Hermes' curator and its background review). An OMH-managed skill is one OMH installed, under a label OMH's catalog renders such as `omh-plan` or `ulw-work`; a companion skill the person or an agent created is theirs, whatever its name. An empty ledger is unknown, not clean, because `skills.ledger: false` turns it off.
+- On Hermes, record an authoring finding only from the `lint_warnings` a `skill_manage` write returned, which are advisory and never proof a skill works; only some writes return them (an `edit` never does), so a write without them is not a clean lint. Record an available update for a hub-installed skill only from `hermes skills check` output that was seen; that hub request is Hermes' own, not OMH's.
+- Run `omh docs hermes-skill-parity --json` offline when auditing portfolio overlap: surface any upstream Hermes bundled/optional boundary findings and list `prose_template_review` skills queued for with-vs-without base-model lift verification.
+
+## Recovery Notes
+
+- If the request is about OMH setup, install, stale package paths, or command availability, route to `omh-doctor`.
+- If the request is a missed-route or self-improvement trace, route to `omh-workflow-learning` before adding health actions.
 
 ## Runtime Evidence
 

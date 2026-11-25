@@ -15,42 +15,13 @@ metadata:
 
 # Run Efficiency
 
-This is a Hermes-native `run-efficiency` workflow skill.
+Required: user request, target context, delivery or status expectation, known missing evidence. Output: run_efficiency_report/v1, context utilization, host_usage: Hermes' recorded usage for a named session, or not_observed, not_observed provider and billing gaps.
 
 ## Why This Exists
 
 `run-efficiency` exists so a question about how a run spent its time, tools, and context gets the supplied timings and context budget, plus what Hermes itself recorded for a named session's tokens and cost, instead of figures a model guesses.
 
-## Do Not Use When
-
-- The user asks only what this Hermes conversation has used or cost so far; Hermes' /usage shows this session's tokens and context, /insights estimates cost across recent sessions, and the omh_run_summary tool relays this conversation's recorded tokens and cost.
-- The user wants service latency, uptime, error rates, or supplied metric-provider figures; use `omh-ops-observability-card`.
-- The user wants a provider invoice or quota truth; no OMH report observes either, so name the provider's own console as the source.
-
-## Examples
-
-Good example:
-
-- Prompt: Show the local run efficiency report from this run's supplied context budget and timings.
-- Expected behavior: Produce `show_run_efficiency_report` with required context, wrapper actions, and not-evidence boundaries.
-- Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
-
-Bad example:
-
-- Prompt: Claim this report proves provider billing, host load, or cron execution without observations.
-- Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
-- Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
-
-## Completion Checklist
-
-- The run ID, context budget, surfaces, and supplied observations are explicit.
-- Host usage is Hermes' recorded accounting for the named session, observed only when it recorded tokens; provider billing and cron stay not_observed.
-- The report does not intercept, route, or execute provider or host work.
-
-## Recovery Notes
-
-- If the named Hermes session has no row or recorded tokens, retain supplied timings and context data in run_efficiency_report/v1, mark host_usage not_observed, and hand back the session ID for a recorded-usage check.
-- If session_activity_receipt/v1 omits tool durations or context-budget metrics, retain its available observations, mark the missing metrics not_observed rather than zero, and hand back the exact missing measurements.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -82,30 +53,21 @@ Handoff policy:
 
 Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 
-Required inputs:
-
-- user request
-- target context
-- delivery or status expectation
-- known missing evidence
-
-Expected outputs:
-
-- run_efficiency_report/v1
-- context utilization
-- host_usage: Hermes' recorded usage for a named session, or not_observed
-- not_observed provider and billing gaps
-
-Artifact expectations:
-
-- run_efficiency_report/v1 metadata-only report, built with `omh runtime efficiency-report --input <run_efficiency_input/v1 file> [--hermes-session <id>] [--write]`; the input is JSON with exactly `schema_version` (`run_efficiency_input/v1`), `run_id`, `context_budget` (`schema_version` `omh_run_context_budget/v1`, `run_id`, `budget_bytes`, `emitted_bytes`, `remaining_bytes` equal to the difference, and `surfaces` mapping a surface name to a count) and `observations` (at most 20 entries of `metric`, one of `wall_clock_duration_ms`, `tool_duration_ms`, `context_bytes`, an integer `value` and a `source_ref`); with no input file you ask for the timings and never write estimates into it
-- supplied `session_activity_receipt/v1` when available; unavailable metrics stay unavailable, never zero
-- `host_usage` from the Hermes-accounted part of the cost receipt `omh_run_summary` returns (the session, its delegated children, and its kanban workers; `--hermes-session`, and a local Hermes terminal holds the id in `$HERMES_SESSION_ID`): observed only when Hermes recorded tokens for it; no session row or no tokens stays not_observed, never zero
-
 Safety rules:
 
 - Run efficiency is supplied OMH-local metadata plus, for a named Hermes session, Hermes' own recorded usage; it is not provider billing, cron, or host-load evidence.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
+## Completion Checklist
+
+- The run ID, context budget, surfaces, and supplied observations are explicit.
+- Host usage is Hermes' recorded accounting for the named session, observed only when it recorded tokens; provider billing and cron stay not_observed.
+- The report does not intercept, route, or execute provider or host work.
+
+## Recovery Notes
+
+- If the named Hermes session has no row or recorded tokens, retain supplied timings and context data in run_efficiency_report/v1, mark host_usage not_observed, and hand back the session ID for a recorded-usage check.
+- If session_activity_receipt/v1 omits tool durations or context-budget metrics, retain its available observations, mark the missing metrics not_observed rather than zero, and hand back the exact missing measurements.
 
 ## Runtime Evidence
 

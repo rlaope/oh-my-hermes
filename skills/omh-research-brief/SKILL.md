@@ -15,46 +15,13 @@ metadata:
 
 # Research Brief
 
-This is a Hermes-native `research-brief` workflow skill.
+Required: business question, source boundary, recency or market scope. Output: evidence table, inference summary, confidence and uncertainty.
 
 ## Why This Exists
 
 `research-brief` exists because a decision brief goes wrong when a vendor claim, a source's date and the analyst's inference share one sentence: it keeps each evidence row typed observed, vendor-asserted or inferred, with its source date, so the decision owner can see what would change the answer.
 
-## Do Not Use When
-
-- The user needs to decide whether a customer problem deserves product investment with evidence typing and customer re-entry; use `omh-product-discovery-validation`.
-- The request is only fresh links, citations, or current facts without a business question or decision audience; use `omh-web-research` for one cited lookup, or `ulw-research` for a depth-budget study.
-- Sources have not yet been selected and the user wants source types, candidates, or acquisition state; use `omh-source-finder`.
-- A scoped TAM/SAM/SOM model, customer-evidence matrix, or comparable competitor or pricing profile is the deliverable; use `omh-market-research`, then return here for the audience synthesis.
-- The research is recurring and run by several roles; use `omh-research-department`.
-
-## Examples
-
-Good example:
-
-- Prompt: research-brief: compare three onboarding analytics vendors using customer notes and confidence gaps.
-- Expected behavior: Prepare a source-backed brief with evidence, inference, confidence, and retrieval gaps separated.
-- Why: The user needs business research synthesis, not recurring operations or coding.
-
-Bad example:
-
-- Prompt: research-brief: how big is the dental-clinic software market, TAM, SAM and SOM?
-- Expected behavior: Hand the sizing to `omh-market-research`; return here only for the audience synthesis.
-- Why: Sizing is a model with units and calculation receipts, not a brief.
-
-## Completion Checklist
-
-- The research question, source boundaries, recency assumptions, and confidence level are named.
-- Observed sources, inference, synthesis, and unresolved retrieval gaps are separated.
-- Follow-up planning or handoff uses the research summary without calling it execution evidence.
-- Each evidence row that cites a ledger source carries the id as `[n]` and its quote, and the citation check is reported from an observed ledger verify run that cited at least one source, or as `not_observed`.
-
-## Recovery Notes
-
-- If ledger verification cites zero distinct sources, retain the source ledger and evidence table, mark the citation check not_observed, and hand back the draft with the missing [n] source IDs for correction.
-- If an evidence row's quote cannot be attached from the page text, retain the retrieved source and other supported rows, mark that claim unresolved, and hand back the unmatched wording and source for correction.
-- If a pricing comparison mixes periods, currencies, or denominators, retain its dated source rows, mark the comparison tentative, and hand back the missing common basis before drawing a decision implication.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -92,27 +59,24 @@ Handoff policy:
 
 Keep business research in Hermes; prepare a selected executor/runtime handoff only after a later accepted plan requires code changes.
 
-Required inputs:
-
-- business question
-- source boundary
-- recency or market scope
-
-Expected outputs:
-
-- evidence table
-- inference summary
-- confidence and uncertainty
-
-Artifact expectations:
-
-- research brief or source ledger when the wrapper captures observed sources
-
 Safety rules:
 
 - Do not claim sources were fetched unless Hermes or the wrapper observed them.
 - Separate evidence, inference, confidence, source diversity, and missing-source gaps.
 - Route later implementation separately through an accepted plan and coding handoff.
+
+## Completion Checklist
+
+- The research question, source boundaries, recency assumptions, and confidence level are named.
+- Observed sources, inference, synthesis, and unresolved retrieval gaps are separated.
+- Follow-up planning or handoff uses the research summary without calling it execution evidence.
+- Each evidence row that cites a ledger source carries the id as `[n]` and its quote, and the citation check is reported from an observed ledger verify run that cited at least one source, or as `not_observed`.
+
+## Recovery Notes
+
+- If ledger verification cites zero distinct sources, retain the source ledger and evidence table, mark the citation check not_observed, and hand back the draft with the missing [n] source IDs for correction.
+- If an evidence row's quote cannot be attached from the page text, retain the retrieved source and other supported rows, mark that claim unresolved, and hand back the unmatched wording and source for correction.
+- If a pricing comparison mixes periods, currencies, or denominators, retain its dated source rows, mark the comparison tentative, and hand back the missing common basis before drawing a decision implication.
 
 ## Runtime Evidence
 

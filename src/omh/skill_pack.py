@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from .skills import (
+    BESPOKE_SKILL_BODY_NAMES,
     CORE_PROFILE_SKILLS,
     CORE_SKILLS,
     DESCRIPTIONS,
+    SKILL_PACKS,
+    SKILL_PACK_NAMES,
     HarnessDefinition,
     SkillDefinition,
     SkillExample,
@@ -17,10 +20,12 @@ from .skills import (
     builtin_skill_reference_templates,
     builtin_skill_templates,
     capability_definitions,
+    core_with_packs_skill_names,
     harness_definition,
     harness_quality_contract,
     installable_skill_definitions,
     installable_skill_names,
+    resolve_skill_pack_names,
     routable_definitions,
     routable_skill_names,
     router_skill,
@@ -32,9 +37,12 @@ from .skills import (
 )
 
 __all__ = [
+    "BESPOKE_SKILL_BODY_NAMES",
     "CORE_PROFILE_SKILLS",
     "CORE_SKILLS",
     "DESCRIPTIONS",
+    "SKILL_PACKS",
+    "SKILL_PACK_NAMES",
     "HarnessDefinition",
     "SkillDefinition",
     "SkillExample",
@@ -48,10 +56,12 @@ __all__ = [
     "builtin_skill_reference_templates",
     "builtin_skill_templates",
     "capability_definitions",
+    "core_with_packs_skill_names",
     "harness_definition",
     "harness_quality_contract",
     "installable_skill_definitions",
     "installable_skill_names",
+    "resolve_skill_pack_names",
     "routable_definitions",
     "routable_skill_names",
     "router_skill",

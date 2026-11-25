@@ -15,46 +15,13 @@ metadata:
 
 # Gateway Intent Card
 
-This is a Hermes-native `gateway-intent-card` workflow skill.
+Required: user request, target context, delivery or status expectation, known missing evidence. Output: gateway-intent-card/v1 card or guidance, next action, prepared-vs-observed boundary.
 
 ## Why This Exists
 
 `gateway-intent-card` exists so Hermes users can ask for this workflow in chat and get a structured, checkable answer instead of an improvised one.
 
-## Do Not Use When
-
-- The request is already handled by a narrower explicit skill with stronger evidence.
-- The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
-- The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
-- The request names a cadence or a recurring job (every morning, a daily digest, a cron job); use `omh-automation-blueprint`.
-
-## Examples
-
-Good example:
-
-- Prompt: gateway-intent-card route this Discord thread update silently unless action is needed.
-- Expected behavior: Produce `prepare_gateway_intent_card` with required context, wrapper actions, and not-evidence boundaries.
-- Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
-
-Bad example:
-
-- Prompt: gateway-intent-card prove the Telegram attachment was sent.
-- Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
-- Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
-
-## Completion Checklist
-
-- The origin platform, thread/session boundary, delivery target, and update policy are named.
-- Prepared card or command output is separate from platform registration, send, attachment, or delivery evidence.
-- The next wrapper action is explicit and platform-safe.
-- For `send_message` the delivery target is a bare platform name (its home channel), `platform:chat_id` (channel-level) or `platform:chat_id:thread_id` (thread-level); `origin` is only a cron job's `deliver` value and `send_message` refuses it, and a reply to the same chat is just the reply.
-- An attachment is a `MEDIA:/absolute/path` line in the reply, and the platform adapter that cannot send it is named instead of promising the file.
-- A silent update is a whole final reply of `[SILENT]` or `NO_REPLY`: a live gateway chat stays silent for an internal or heartbeat turn, a message known to expect no reply, or a healthy completed turn in a room with `allow_silence: true` (Hermes 0.22.6 and later); on any other human message Hermes 0.21.6 and later replaces the marker with a visible warning asking them to retry, an older Hermes drops it with no reply, and cron and webhook runs follow a looser rule.
-
-## Recovery Notes
-
-- If silent update conflicts with a status notice, keep the thread; hand back the silent-or-notify choice.
-- If an action would touch a thread other than the named one, mark it unresolved; hand back the target.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -86,27 +53,24 @@ Handoff policy:
 
 Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 
-Required inputs:
-
-- user request
-- target context
-- delivery or status expectation
-- known missing evidence
-
-Expected outputs:
-
-- gateway-intent-card/v1 card or guidance
-- next action
-- prepared-vs-observed boundary
-
-Artifact expectations:
-
-- gateway-intent-card/v1 metadata-only runtime or wrapper card when recorded
-
 Safety rules:
 
 - A gateway intent card is not platform login, message send, thread mutation, attachment upload, or delivery evidence.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
+## Completion Checklist
+
+- The origin platform, thread/session boundary, delivery target, and update policy are named.
+- Prepared card or command output is separate from platform registration, send, attachment, or delivery evidence.
+- The next wrapper action is explicit and platform-safe.
+- For `send_message` the delivery target is a bare platform name (its home channel), `platform:chat_id` (channel-level) or `platform:chat_id:thread_id` (thread-level); `origin` is only a cron job's `deliver` value and `send_message` refuses it, and a reply to the same chat is just the reply.
+- An attachment is a `MEDIA:/absolute/path` line in the reply, and the platform adapter that cannot send it is named instead of promising the file.
+- A silent update is a whole final reply of `[SILENT]` or `NO_REPLY`: a live gateway chat stays silent for an internal or heartbeat turn, a message known to expect no reply, or a healthy completed turn in a room with `allow_silence: true` (Hermes 0.22.6 and later); on any other human message Hermes 0.21.6 and later replaces the marker with a visible warning asking them to retry, an older Hermes drops it with no reply, and cron and webhook runs follow a looser rule.
+
+## Recovery Notes
+
+- If silent update conflicts with a status notice, keep the thread; hand back the silent-or-notify choice.
+- If an action would touch a thread other than the named one, mark it unresolved; hand back the target.
 
 ## Runtime Evidence
 

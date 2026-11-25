@@ -10,50 +10,20 @@ metadata:
     phase: diagnostics
     role: tracker
     quality_tier: evidence-gated
+    related_skills: [hermes-agent]
 ---
 
 # Doctor
 
-This is a Hermes-native `doctor` workflow skill.
+Required: omh home, Hermes home, observed issue. Output: health checks, fix guidance, known proof boundary.
+
+**Do Not Use When:** The user is asking how Hermes Agent itself works, its built-in config keys, or upstream Hermes features with no OMH install/plugin health issue; load Hermes' bundled `hermes-agent` skill instead of this one.
 
 ## Why This Exists
 
 `doctor` exists to turn confusing install/setup states into grouped, local health evidence and the next repair action without treating a check as a fix.
 
-## Do Not Use When
-
-- The user is asking for a general product explanation rather than local health diagnostics.
-- The requested change is a repository bug fix, not an installed-environment check.
-- The wrapper wants to claim Hermes reload, skill execution, or plugin behavior that was not observed.
-
-## Examples
-
-Good example:
-
-- Prompt: doctor after omh update says setup is next but Hermes skills still look stale.
-- Expected behavior: Inspect managed skills, Hermes registration, runtime state, and next repair action with explicit proof boundaries.
-- Why: The issue is local installation health and needs grouped diagnostic evidence.
-
-Bad example:
-
-- Prompt: doctor implement a new uninstall command UX.
-- Expected behavior: Route to planning or implementation instead of health diagnostics.
-- Why: That is product development work, not a local health check.
-
-## Completion Checklist
-
-- Command availability, managed skills, Hermes registration, runtime state, and optional surfaces are grouped separately.
-- Blocking issues and warnings are separated, with one next repair action named for each blocking area.
-- Plugin install, plugin import/register smoke, and Hermes runtime load are not collapsed into one claim.
-- The final status says whether setup/update/doctor repaired anything or only observed health.
-- `omh doctor --json` was run (`--no-state-write` writes nothing, `--no-personal-files` skips SOUL.md and memory files) and `recommended_next_action` is quoted.
-
-## Recovery Notes
-
-- If managed skills are stale, recommend omh update or omh setup depending on whether registration also needs repair.
-- If skills.external_dirs or Hermes config is missing, route to setup repair rather than editing hidden runtime state.
-- If plugin register smoke fails, reinstall the plugin bundle with `omh setup --force` before claiming plugin readiness.
-- If omh is missing from PATH, use the installer-reported absolute command path and then re-run doctor.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -84,26 +54,25 @@ Handoff policy:
 
 Run directly as local health inspection; propose executor work only when a repo fix is required.
 
-Required inputs:
-
-- omh home
-- Hermes home
-- observed issue
-
-Expected outputs:
-
-- health checks
-- fix guidance
-- known proof boundary
-
-Artifact expectations:
-
-- doctor state summary when runtime artifacts are writable
-
 Safety rules:
 
 - Do not imply hidden Hermes runtime behavior.
 - Use the smallest verification that can prove the claim.
+
+## Completion Checklist
+
+- Command availability, managed skills, Hermes registration, runtime state, and optional surfaces are grouped separately.
+- Blocking issues and warnings are separated, with one next repair action named for each blocking area.
+- Plugin install, plugin import/register smoke, and Hermes runtime load are not collapsed into one claim.
+- The final status says whether setup/update/doctor repaired anything or only observed health.
+- `omh doctor --json` was run (`--no-state-write` writes nothing, `--no-personal-files` skips SOUL.md and memory files) and `recommended_next_action` is quoted.
+
+## Recovery Notes
+
+- If managed skills are stale, recommend omh update or omh setup depending on whether registration also needs repair.
+- If skills.external_dirs or Hermes config is missing, route to setup repair rather than editing hidden runtime state.
+- If plugin register smoke fails, reinstall the plugin bundle with `omh setup --force` before claiming plugin readiness.
+- If omh is missing from PATH, use the installer-reported absolute command path and then re-run doctor.
 
 ## Runtime Evidence
 

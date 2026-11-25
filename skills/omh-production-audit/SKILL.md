@@ -15,42 +15,13 @@ metadata:
 
 # Production Audit
 
-This is a Hermes-native `production-audit` workflow skill.
+Required: product, service, release, or artifact scope, target environment and release channel, known test, CI, deploy, observability, security, and support evidence, rollback owner and acceptable risk threshold. Output: production_audit_plan/v1, readiness_matrix/v1, release_gate_verdict/v1, rollback_and_monitoring_plan/v1, risk_register/v1, not-evidence boundary.
 
 ## Why This Exists
 
 `production-audit` gives OMH a preflight release surface so operators can see production risks before launch while OMH stays out of deploy and infrastructure execution.
 
-## Do Not Use When
-
-- The user wants to implement a feature or fix; prepare a coding handoff first.
-- The user wants incident/SLO analysis after production behavior; use `omh-reliability-review`.
-- The user wants a narrow code diff review; use `omh-code-review`.
-
-## Examples
-
-Good example:
-
-- Prompt: production-audit 이 릴리즈가 운영에 나가도 되는지 테스트, CI, 롤백, 모니터링 기준으로 봐줘.
-- Expected behavior: Prepare readiness_matrix/v1, release_gate_verdict/v1, rollback_and_monitoring_plan/v1, and missing-evidence list.
-- Why: The request is release-readiness review, not implementation or deploy execution.
-
-Bad example:
-
-- Prompt: production-audit 지금 바로 prod 배포하고 정상이라고 말해줘.
-- Expected behavior: Block deploy/health claims without observed operator evidence and route deploy to an explicit authorized workflow.
-- Why: Production audit can assess readiness, but it cannot secretly deploy or observe live health.
-
-## Completion Checklist
-
-- Each of the nine matrix rows reads observed, failed, or missing, with its evidence id, and the verdict follows the GO, BLOCK, HOLD rule.
-- The rollback plan names signals, owner, threshold, and recovery path; OMH deployed and scanned nothing.
-- The result ends with a `Not checked` list, one reason per entry, or `Not checked: none` when coverage was complete.
-
-## Recovery Notes
-
-- If build or CI evidence is missing for the target release, retain the evidenced readiness_matrix/v1 rows, mark readiness unresolved, and hand back release_gate_verdict/v1 on HOLD with the missing evidence list.
-- If rollback owner, health thresholds, or recovery path is missing, retain the evidenced readiness_matrix/v1 rows, mark rollback readiness unresolved, and hand back rollback_and_monitoring_plan/v1 with the exact gaps.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -86,28 +57,6 @@ Handoff policy:
 
 Keep readiness synthesis in Hermes. Code fixes, deploys, infrastructure changes, security scans, and platform actions require selected executor/runtime or operator evidence.
 
-Required inputs:
-
-- product, service, release, or artifact scope
-- target environment and release channel
-- known test, CI, deploy, observability, security, and support evidence
-- rollback owner and acceptable risk threshold
-
-Expected outputs:
-
-- production_audit_plan/v1
-- readiness_matrix/v1
-- release_gate_verdict/v1
-- rollback_and_monitoring_plan/v1
-- risk_register/v1
-- not-evidence boundary
-
-Artifact expectations:
-
-- readiness_matrix/v1 covering build, tests, CI, security/privacy, performance, observability, rollback, docs/support, and release communication
-- release_gate_verdict/v1 with GO, HOLD, or BLOCK plus missing evidence
-- rollback_and_monitoring_plan/v1 with health signals, owner, threshold, and recovery path
-
 Artifact contracts:
 
 This label denotes the machine-enforcement level, not a skill quality score and not an observed evidence state.
@@ -119,6 +68,17 @@ Safety rules:
 - Do not claim production deploy, security scan, live traffic, monitoring health, rollback readiness, or support readiness without observed evidence.
 - Do not perform deploy, infra, credential, production, or external-platform actions from the audit lane.
 - Keep readiness verdict separate from implementation, CI, incident closure, or merge evidence.
+
+## Completion Checklist
+
+- Each of the nine matrix rows reads observed, failed, or missing, with its evidence id, and the verdict follows the GO, BLOCK, HOLD rule.
+- The rollback plan names signals, owner, threshold, and recovery path; OMH deployed and scanned nothing.
+- The result ends with a `Not checked` list, one reason per entry, or `Not checked: none` when coverage was complete.
+
+## Recovery Notes
+
+- If build or CI evidence is missing for the target release, retain the evidenced readiness_matrix/v1 rows, mark readiness unresolved, and hand back release_gate_verdict/v1 on HOLD with the missing evidence list.
+- If rollback owner, health thresholds, or recovery path is missing, retain the evidenced readiness_matrix/v1 rows, mark rollback readiness unresolved, and hand back rollback_and_monitoring_plan/v1 with the exact gaps.
 
 ## Runtime Evidence
 

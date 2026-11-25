@@ -214,8 +214,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # 546679 -> 550928 and the digests re-derived: app-work-intake adds one row to each producer (+4249 and
             # +952 with separators); dropping only that row reproduces 8e3f5c83...d898 at 546679 and
             # 7bf53703...578d at 146420.
-            (skill_capabilities, 550928, FULL_ROW_DELTA_CAP,
-             '2fec48bb1e87b82946c4e022849e290bec8c07693076e71041a1c0ff9a62cbd1',
+            (skill_capabilities, 551032, FULL_ROW_DELTA_CAP,
+             '7a56ace7cb24f749d6cc1188d18a679f52fd71584e559bf50807580bba2e763f',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 147372, STANDALONE_ROW_DELTA_CAP,
              'adad03a49ec76047544490d099be7f9dd53414a9ac71b73b939710d61cae9d4b',
@@ -590,7 +590,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # The cross-platform workflows then add app-work-intake and move frontend (the Figma frame line),
         # operating-rhythm (meeting to issues) and wiki (vault as knowledge), merged with both branches above;
         # the pin before it was ba130d2d...7694.
-        self.assertEqual(_digest(legacy_hashes), '2f25c65fc8efd3f5de4568ede2d5834cb209c6092bf185bcfef5c96d29cb7a09')
+        # Universal progressive disclosure for non-bespoke `omh-*` skills and upstream Hermes
+        # bundled/optional deferrals update the legacy Hermes bodies (lowering total body size
+        # from 1,549,057 -> 1,348,078 and repeated bytes from 93,533 -> 92,654); re-derived from producer.
+        self.assertEqual(_digest(legacy_hashes), '53162d403db6e3bdba6f3c121549a0d5324386fb635df228cd7b9d5cd927291f')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -617,7 +620,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 83439 -> 91443: the one reply line takes back the turn-ending rule (+276 in each repeated section).
         # 91443 -> 91785: skill-eval's Workflow Lane rail adds 342.
         # 91785 -> 93533: app-work-intake's Workflow Lane (342) and Runtime Evidence (1406) rails.
-        self.assertEqual(legacy['repeated']['bytes'], 93533)
+        # 93533 -> 92654: universal progressive disclosure for non-bespoke `omh-*` skills drops repeated
+        # `Do Not Use When` defaults (-879).
+        self.assertEqual(legacy['repeated']['bytes'], 92654)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
         self.assertLessEqual(delta, REPEATED_DELTA_CAP)
@@ -651,7 +656,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             'role_context_chars_max': 2600,
             'full_capability_skill_item_chars_max': 9000,
             'standalone_capability_skill_item_chars_max': 2200,
-            'full_profile_skill_body_chars': 1600000,  # Re-derived from 1450927 measured, +10%, up to the next 50,000 (itemized at FULL_PROFILE_SKILL_BODY_MEASURED_CHARS).
+            'full_profile_skill_body_chars': 1500000,  # Re-derived from 1348472 measured, +10%, up to the next 50,000 (itemized at FULL_PROFILE_SKILL_BODY_MEASURED_CHARS).
             'full_profile_skill_body_repeated_chars': 100000,  # Re-derived from 84569 measured, +10%, up to the next 10,000.
             'skill_density_filler_hits': 0,
         }

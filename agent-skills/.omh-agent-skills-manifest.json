@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "5c86ccf50026636d49a463f03495594ea183c3b649291042d09df364d01b9cfe",
+  "catalog_revision": "68cf35ecea91164f604ae6da655762369dccd55976a5cdb72eda15e787c4d06d",
   "files": {
     "omh-accessibility-audit/SKILL.md": "01b41b6815463311a950c558300afeb4e2659a1bba44efcf741568cacac6f1d6",
     "omh-accessibility-audit/references/a11y-rules.md": "615cc9eaa24ee36089d395b215cc25b2d9b0d2549f228a5f81df0553f45d2f75",
@@ -96,7 +96,7 @@
     "omh-external-connector-readiness/references/memory-provider-trial.md": "b6eda7efc3307d8bd6540bec47b2564f3e565da5ad8133bd998b2ebcabdf29a3",
     "omh-failure-signal-audit/SKILL.md": "32972affbfcfe107f22b9aa223ae36eb1fd2d51696c24f61ac748903c9e34f83",
     "omh-feedback-triage/SKILL.md": "5e618b899c424a53ccdb50f13391db8d52274bbe937cefcf24b0d047cbb4ab19",
-    "omh-files/SKILL.md": "98a01aa206ddbf3977d550d2876011c9de82e6a7de4d8b06122e955a17e0dc3a",
+    "omh-files/SKILL.md": "b5b0cdbc113d67fe7ea9b1c01455e913c36b389d238b04b6a2594bb518d0068b",
     "omh-finance-analysis/SKILL.md": "84355b490e9fcb64e5fdeabc6b8d8b0ada12e9d56fcb1afa2a026a05e95c79f7",
     "omh-finance-analysis/references/procedure.md": "fb075457f77f14ef34229998d2ef807d57aa1a7aca8d1e5dd52e7c871e75d000",
     "omh-frontend-refactor/SKILL.md": "ab1bccec8e591b2c8cd4a6e9f3e9c300114194e04eeab8c55f095f9774b5fed7",
@@ -288,7 +288,7 @@
     "omh-show-reel/toolkit/upstream-manifest.json": "45a999baaeb042ffdb27b5c125c6d3466ff560c00c5d38e1726540765601418d",
     "omh-skill-eval/SKILL.md": "c4236444a7b5be831e091f04c7ec4d0d5efc5e3eded8d5503d154589f9be4c53",
     "omh-skill-eval/references/with-without-eval.md": "3086f67ffab63bd366843424b259ec53212f17d9330380c9854ef7e23f1ea27b",
-    "omh-skill-health/SKILL.md": "d2d6b0b9fff581322a8b4f9f744d04d418d60bdc07982f225deffb42f12fb6e4",
+    "omh-skill-health/SKILL.md": "8e5ff5fd41ae5cbe183ccfc2d0eb837efc614cffe27056df21abe29c4ad10c84",
     "omh-skill-scout/SKILL.md": "64e0442d62e4f017509d4c1e6ea1c34c76e3b552b84e1ae42824df83f5f90620",
     "omh-source-finder/SKILL.md": "e40d9ffbc07607ee199bd26a1a12dc9fe302b0dab4f5efe27d69aabbbba5eb5d",
     "omh-source-finder/references/literature-retrieval.md": "c85578485137c87efbcd98185b180e559bc6ef8636f00e39e14c6d656d978f13",

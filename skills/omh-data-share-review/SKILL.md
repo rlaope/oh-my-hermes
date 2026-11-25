@@ -15,7 +15,7 @@ metadata:
 
 # Data Share Review
 
-This is a Hermes-native `data-share-review` workflow skill.
+Required: the file or export about to leave, the destination it goes to, and the countries whose id and phone formats apply, why the destination needs it, which decides the fields it may keep, the header or schema, and per-column shape counts when a field's content is unclear, where the pseudonym mapping may be kept locally, when a field must stay joinable. Output: field_inventory/v1, minimization_plan/v1, residual_scan/v1, share_record/v1.
 
 ## Why This Exists
 
@@ -26,41 +26,7 @@ This is a Hermes-native `data-share-review` workflow skill.
 - Ask where the file goes and what the destination needs it for before touching a field.
 - Inventory the fields from the header and the schema before planning any masking.
 
-## Do Not Use When
-
-- Whether the data may lawfully leave at all -- the lawful basis, a DPA, consent, or a cross-border transfer -- is a contract and compliance question; use `omh-legal-compliance-review`, then return here for the fields.
-- The exposure is an agent's tool permissions, a secret in code, or a prompt-injection path rather than a file about to leave; use `omh-security-safety-review`.
-- The ask is analysing the dataset itself -- trends, a cleanup, a chart; use `omh-data-analysis`.
-- Filing the issue once its attachment is clean -- the title, labels, and reproduction steps; use `omh-github-issue-intake`.
-- Building the training set or deciding whether to train once the corpus is clean; use `omh-model-finetuning`.
-- Working the support queue -- triaging or answering tickets rather than exporting them; use `omh-support-operations`.
-
-## Examples
-
-Good example:
-
-- Prompt: the analytics vendor wants last month's ticket export, take the customer details out first
-- Expected behavior: Ask what the vendor needs, inventory the columns from the header and per-column shape counts, drop the ones it does not need, pseudonymize the customer id with the mapping kept in a local folder, count email shapes, phone shapes, secret shapes and every original identifier value in the output with a scan that prints counts only, and write the share record.
-- Why: A masking step that was never followed by a scan of the shipped file has not shown that anything came out.
-
-Bad example:
-
-- Prompt: I ran find and replace on the emails, so the file is clean, right
-- Expected behavior: Hold the verdict at not_observed: count every class in the exact file that leaves, free-text fields included, before calling it redacted.
-- Why: A find and replace covers the shapes it was given; names and account numbers in a notes column stay.
-
-## Completion Checklist
-
-- Every field has a class and an action, and each kept field names the destination's need for it.
-- The pseudonym mapping, if any, sits at a local path outside the shipped file.
-- The residual scan ran on the exact file that leaves and counted every class, free text included.
-- The verdict is redacted only with that scan observed; otherwise it reads not_observed.
-- The share record holds destination, date, fields, row count, and digest, and no value from the file.
-
-## Recovery Notes
-
-- If the scan cannot run in this session, hand the user the per-class scan and keep the verdict not_observed until the counts come back.
-- If a class still has hits after masking, fix the field or the free text and scan again; never ship on an explained hit that was not accepted by name.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -94,27 +60,6 @@ Handoff policy:
 
 Keep the field inventory, minimization plan, residual scan result, and share record in Hermes. Field classes come from the header, the schema, and per-column shape counts; scan counts come only from an observed scan of the exact file that leaves; OMH uploads nothing, stores no raw value, and keeps no pseudonym mapping.
 
-Required inputs:
-
-- the file or export about to leave, the destination it goes to, and the countries whose id and phone formats apply
-- why the destination needs it, which decides the fields it may keep
-- the header or schema, and per-column shape counts when a field's content is unclear
-- where the pseudonym mapping may be kept locally, when a field must stay joinable
-
-Expected outputs:
-
-- field_inventory/v1
-- minimization_plan/v1
-- residual_scan/v1
-- share_record/v1
-
-Artifact expectations:
-
-- field_inventory/v1 lists every column, key, and free-text field with its class -- direct identifier, quasi-identifier, secret, free text, sensitive category, or not personal -- and the evidence for the class
-- minimization_plan/v1 gives each field one action -- drop, aggregate, generalize, mask, or pseudonymize -- with the destination's need for the fields it keeps, and names the local path that holds any pseudonym mapping outside the shipped file
-- residual_scan/v1 records, for the exact file that leaves, the scan method and an observed count per class with zero hits or each remaining hit accepted by name, its sha256 of the scanned bytes, the free-text sample the reviewer read, and its verdict: redacted, not redacted with the counts while a hit remains unaccepted, or not_observed when no scan ran, no free-text sample was read or its digest differs from the share record's
-- share_record/v1 is metadata only -- destination, date, fields shipped, row count, the sha256 digest of the shipped file, and its data_state (pseudonymized, still personal data, when identifiers were pseudonymized) -- and holds no value from it
-
 Safety rules:
 
 - Call the output redacted only after an observed residual scan of the exact file that leaves, counted per class; without one the state is not_observed, whatever the masking step reported.
@@ -123,6 +68,19 @@ Safety rules:
 - Treat free text as unscanned until the residual scan counts it: notes, comments, and transcript excerpts hide names, emails, and account numbers that a column plan never touches.
 - A scan prints counts, never matched values; a hit printed to the session reaches the model provider the same way the raw file would.
 - OMH uploads nothing, keeps no raw value, and records only the metadata-only share record; whether the data may lawfully leave at all is not decided here.
+
+## Completion Checklist
+
+- Every field has a class and an action, and each kept field names the destination's need for it.
+- The pseudonym mapping, if any, sits at a local path outside the shipped file.
+- The residual scan ran on the exact file that leaves and counted every class, free text included.
+- The verdict is redacted only with that scan observed; otherwise it reads not_observed.
+- The share record holds destination, date, fields, row count, and digest, and no value from the file.
+
+## Recovery Notes
+
+- If the scan cannot run in this session, hand the user the per-class scan and keep the verdict not_observed until the counts come back.
+- If a class still has hits after masking, fix the field or the free text and scan again; never ship on an explained hit that was not accepted by name.
 
 ## Runtime Evidence
 

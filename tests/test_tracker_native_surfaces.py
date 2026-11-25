@@ -142,8 +142,18 @@ _NEGATED = re.compile(r"\b(?:never|not|no)\b", re.IGNORECASE)
 
 
 def _projections(name: str) -> dict[str, str]:
-    """The Hermes body and, when the skill is projected, the portable body."""
-    hermes = {template.name: template.content for template in builtin_skill_templates()}
+    """The Hermes body (+ full-contract when progressive) and, when projected, the portable body."""
+    from omh.skills.packaging import builtin_skill_reference_templates
+
+    full_contracts = {
+        ref.skill_name: ref.content
+        for ref in builtin_skill_reference_templates()
+        if ref.relative_path == "references/full-contract.md"
+    }
+    hermes = {
+        template.name: template.content + "\n" + full_contracts.get(template.name, "")
+        for template in builtin_skill_templates()
+    }
     portable = {template.name: template.content for template in agent_skill_templates()}
     bodies = {"hermes": hermes[name]}
     if omh_skill_display_name(name) in portable:

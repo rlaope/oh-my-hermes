@@ -10,48 +10,20 @@ metadata:
     phase: visual-prompt-card
     role: operator
     quality_tier: visual-card-gated
-    related_skills: [omh-materials-package, omh-report-package]
+    related_skills: [omh-materials-package, omh-report-package, baoyu-infographic]
 ---
 
 # Img Summary
 
-This is a Hermes-native `img-summary` workflow skill.
+Required: source/image, create/edit, format, ratio, headline or source text, audience, language mode, card sections, source excerpts, or preserve/remove constraints. Output: visual_prompt_card/v1, image_generation_setup/v1 when generator capability is missing, source-specific visual format, detected domain_key, domain-aware visual theme, poster_archetype/v1, poster archetype visual grammar, background, texture, camera, and lighting direction, image-safe card copy, generation prompt, image transformation brief when editing a supplied image, negative prompt, quality checks, visual evidence boundary, visual_generation_receipt/v1 when a producer reports an image attempt, requested route separate from observed route.
+
+**Do Not Use When:** The user wants a general-purpose stylized infographic generated directly from a layout-by-style preset rather than an OMH evidence-bounded PR/meeting card brief; load Hermes' bundled `baoyu-infographic` skill instead of this one.
 
 ## Why This Exists
 
 `img-summary` exists so Hermes can turn common communication work into provider-neutral image-card prompts while adapting format, domain mood, background, texture, lighting, camera, and poster grammar, and keeping generation, QA, and delivery as observed-only evidence.
 
-## Do Not Use When
-
-- The user needs a deck, PDF, spreadsheet, HWP, Markdown package, or binary file export plan; use `omh-materials-package`.
-- The user wants a text-only report, leadership brief, or PPT-ready outline; use `omh-report-package`.
-- The user asks OMH to directly generate, inspect, upload, or post an image without a wrapper-supplied observed evidence path.
-- A standalone picture with no source material to summarize; call the host image tool with the user's own prompt, no card format.
-
-## Examples
-
-Good example:
-
-- Prompt: img-summary make a PR summary card for reviewers.
-- Expected behavior: Prepare visual_prompt_card/v1 with the PR review infographic format, copy mode, generation prompt, negative prompt, and not-evidence boundaries.
-- Why: The request asks for an image-card communication artifact, not a PDF/deck package or hidden image generation.
-
-Bad example:
-
-- Prompt: img-summary prove this generated card was posted to Slack.
-- Expected behavior: Ask for visual_observation/v1 delivery evidence or report delivery as not_observed.
-- Why: A prompt card cannot prove generated image, QA, or delivery evidence.
-
-## Completion Checklist
-
-- The source kind, format, ratio and language mode are named.
-- Prompt prepared, image generated, text read back, visual QA and delivery are separate states.
-
-## Recovery Notes
-
-- If image_generation_capability/v1 is unknown or prompt_only, retain visual_prompt_card/v1, mark generation not_observed, and hand back image_generation_setup/v1 with the question of which image tool to use.
-- If an edit lacks the supplied image reference or preserve/remove constraints, retain only the supplied edit intent, mark transformation unresolved, and hand back the missing inputs for the image transformation brief.
-- If visual_generation_receipt/v1 reports a failed or partial attempt, retain visual_prompt_card/v1 and the receipt's failure stage, mark generation not_observed, and hand back the failed attempt without claiming an image.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -95,43 +67,6 @@ Handoff policy:
 
 Keep card copy shaping, source-kind selection, language mode, prompt assembly, and evidence narration in Hermes. Use wrapper-reported image generation only as an optional action; record generated image, visual QA, and delivery claims only from visual_observation/v1 evidence.
 
-Required inputs:
-
-- source/image
-- create/edit
-- format
-- ratio
-- headline or source text
-- audience
-- language mode
-- card sections, source excerpts, or preserve/remove constraints
-
-Expected outputs:
-
-- visual_prompt_card/v1
-- image_generation_setup/v1 when generator capability is missing
-- source-specific visual format
-- detected domain_key
-- domain-aware visual theme
-- poster_archetype/v1
-- poster archetype visual grammar
-- background, texture, camera, and lighting direction
-- image-safe card copy
-- generation prompt
-- image transformation brief when editing a supplied image
-- negative prompt
-- quality checks
-- visual evidence boundary
-- visual_generation_receipt/v1 when a producer reports an image attempt
-- requested route separate from observed route
-
-Artifact expectations:
-
-- visual_prompt_card/v1 prompt card when prepared
-- image_generation_setup/v1 fallback when image_generation_capability/v1 is unknown or prompt_only
-- visual_observation/v1 only when a wrapper or user records generated image, visual QA, or delivery evidence
-- visual_generation_receipt/v1 only when a producer reports one image attempt, with unattested route fields left unknown
-
 Safety rules:
 
 - Do not call image providers, LLMs, APIs, or network services from OMH core.
@@ -146,6 +81,17 @@ Safety rules:
 - For image edits, require a supplied image reference and state preserve, remove, replace, crop, and output constraints without claiming the source image was loaded.
 - On Hermes, report image_generation_capability/v1 as `connected` when `image_generate` is in your tool list or tool_search finds it, since Hermes offers that tool only while an image backend is configured, and as `prompt_only` otherwise; never infer it from a Hermes version, a provider key, or a model name.
 - A supplied-image edit goes through that tool only when its own description offers to edit an existing image; when it says text-to-image only, the edit stays a prompt card. A result with `success: true` names the file or URL in `image` and backs one visual_generation_receipt/v1 attempt, with every route field the result does not state left unknown; a generated-image claim still needs visual_observation/v1, and visual QA and delivery stay separate.
+
+## Completion Checklist
+
+- The source kind, format, ratio and language mode are named.
+- Prompt prepared, image generated, text read back, visual QA and delivery are separate states.
+
+## Recovery Notes
+
+- If image_generation_capability/v1 is unknown or prompt_only, retain visual_prompt_card/v1, mark generation not_observed, and hand back image_generation_setup/v1 with the question of which image tool to use.
+- If an edit lacks the supplied image reference or preserve/remove constraints, retain only the supplied edit intent, mark transformation unresolved, and hand back the missing inputs for the image transformation brief.
+- If visual_generation_receipt/v1 reports a failed or partial attempt, retain visual_prompt_card/v1 and the receipt's failure stage, mark generation not_observed, and hand back the failed attempt without claiming an image.
 
 ## Runtime Evidence
 

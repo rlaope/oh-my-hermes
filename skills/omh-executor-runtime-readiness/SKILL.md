@@ -15,44 +15,13 @@ metadata:
 
 # Executor Runtime Readiness
 
-This is a Hermes-native `executor-runtime-readiness` workflow skill.
+Required: user request, target context, delivery or status expectation, known missing evidence. Output: executor-runtime-readiness/v1 card or guidance, next action, prepared-vs-observed boundary.
 
 ## Why This Exists
 
 `executor-runtime-readiness` exists so Hermes users can ask for this workflow in chat and get a structured, checkable answer instead of an improvised one.
 
-## Do Not Use When
-
-- A named plugin or API to adopt; use `omh-external-connector-readiness`.
-- Which tool or credential is missing for work already chosen; use `omh-toolbelt-readiness`.
-
-## Examples
-
-Good example:
-
-- Prompt: executor-runtime-readiness can this task run in Codex, Claude Code, or Hermes coding?
-- Expected behavior: Produce `prepare_executor_runtime_readiness` with required context, wrapper actions, and not-evidence boundaries.
-- Why: The choice depends on which CLI is on PATH and the flags it accepts.
-
-Bad example:
-
-- Prompt: executor-runtime-readiness claim Codex already started the session.
-- Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
-- Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
-
-## Completion Checklist
-
-- The selected coding or runtime owner is named before any implementation claim.
-- Prepared handoff, dispatch, execution, verification, review, CI, and merge states are separated.
-- The final status cites observed runtime evidence or keeps the work prepared_not_observed.
-- When Hermes is the selected coding owner, use `hermes_coding_harness/v1` to keep builder, verifier, reviewer, docs, and PR lanes separate.
-- Report the current harness stage, owner, next action, and missing evidence without claiming PR creation, review, CI, merge-readiness, or merge until matching runtime observations exist.
-- Run `omh coding executor-readiness --executor <profile>`; report status and `auth_signal` separately, since ready is a PATH probe, not login proof.
-
-## Recovery Notes
-
-- If the scratch-edit probe (see Delegation transparency) is denied, keep the denial, mark permission unresolved; hand back the grant needed.
-- If a dispatch result has no session_id or thread_id, mark resumability unresolved; hand back the output flag (`--output-format json` for Claude Code, `--json` for Codex).
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -97,27 +66,24 @@ Delegation transparency:
 - Capture a resumable session or thread id at dispatch and report it in the status message: for non-interactive Claude Code pass `--output-format json` and read `session_id` from the result (resume with `claude -p --resume <session-id>`); for Codex pass `--json` and read `thread_id` (resume with `codex exec resume <thread-id>`, repeating `--skip-git-repo-check` outside a git repo). Never leave a delegate run with no recorded way to resume or steer it.
 - Before dispatch, grant the executor session every permission the task will need — file write/edit, command/test execution, and the working directory — on the dispatch command itself, not through settings-file guesses: for non-interactive Claude Code pass `--permission-mode acceptEdits` or an explicit `--allowedTools` list (`--dangerously-skip-permissions` only inside an isolated worktree or sandbox), and the equivalent sandbox/approval flags for other CLIs. `acceptEdits: true` is not a settings key and `~/.claude/settings.local.json` is not a file Claude Code reads — user scope is `~/.claude/settings.json` and project scope is the dispatch cwd's `.claude/settings.local.json` with rules under `permissions.allow`. Prove the grant with a bounded scratch-edit probe run before the real dispatch: a permission denial in a non-interactive run recurs identically on retry, so never redispatch until a changed grant is proven, and surface an ungrantable permission as a blocker before dispatch, not after minutes of silence.
 
-Required inputs:
-
-- user request
-- target context
-- delivery or status expectation
-- known missing evidence
-
-Expected outputs:
-
-- executor-runtime-readiness/v1 card or guidance
-- next action
-- prepared-vs-observed boundary
-
-Artifact expectations:
-
-- executor-runtime-readiness/v1 metadata-only runtime or wrapper card when recorded
-
 Safety rules:
 
 - Runtime readiness is not executor dispatch, plugin load, tool invocation, repository mutation, review, CI, or merge evidence.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
+## Completion Checklist
+
+- The selected coding or runtime owner is named before any implementation claim.
+- Prepared handoff, dispatch, execution, verification, review, CI, and merge states are separated.
+- The final status cites observed runtime evidence or keeps the work prepared_not_observed.
+- When Hermes is the selected coding owner, use `hermes_coding_harness/v1` to keep builder, verifier, reviewer, docs, and PR lanes separate.
+- Report the current harness stage, owner, next action, and missing evidence without claiming PR creation, review, CI, merge-readiness, or merge until matching runtime observations exist.
+- Run `omh coding executor-readiness --executor <profile>`; report status and `auth_signal` separately, since ready is a PATH probe, not login proof.
+
+## Recovery Notes
+
+- If the scratch-edit probe (see Delegation transparency) is denied, keep the denial, mark permission unresolved; hand back the grant needed.
+- If a dispatch result has no session_id or thread_id, mark resumability unresolved; hand back the output flag (`--output-format json` for Claude Code, `--json` for Codex).
 
 ## Runtime Evidence
 

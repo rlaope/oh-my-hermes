@@ -15,48 +15,13 @@ metadata:
 
 # Running Work Board
 
-This is a Hermes-native `running-work-board` workflow skill.
+Required: local coding artifacts, on Hermes, this conversation's `omh_hud` rows. Output: per-unit runtime and model, observed tokens and elapsed, on Hermes, delegate children and kanban workers, labelled by source, explicit unknowns.
 
 ## Why This Exists
 
 `running-work-board` exists because multi-session coding work was invisible: the runtime was tracked but the model was dropped, token counts had no write site at all, and a blocking dispatch could not report that it was still running. The board answers which model on which runtime, or says unknown.
 
-## Do Not Use When
-
-- The user wants to start, plan, or dispatch coding work rather than observe it.
-- The user wants to create or change tasks on an agent board, or to coordinate profiles; use `omh-agent-board`.
-- The user wants review, CI, or merge evidence, which a status board never provides.
-- The user is asking about their own application's runtime status rather than OMH coding units.
-
-## Examples
-
-Good example:
-
-- Prompt: what is running right now
-- Expected behavior: One line per unit: label, runtime, model, status, elapsed, tokens, with unknown printed where nothing was observed.
-- Why: The request is about observed local coding activity, not about starting work.
-
-Bad example:
-
-- Prompt: is the deploy done and did CI pass
-- Expected behavior: Route to verification or CI evidence instead of the activity board.
-- Why: Observed activity is not result, review, CI, or merge evidence.
-
-## Completion Checklist
-
-- The board is rendered with `omh coding status-board --json` (read-only: local dispatch and progress artifacts; on Hermes it also reads delegate children and workers from Hermes' own records), not recalled.
-- Runtime and model are named per unit, or explicitly reported as unknown.
-- Token counts and session references are observed values or the literal unknown, never estimates.
-- Elapsed time for an unfinished unit comes from its start marker, which cannot prove the unit is still alive.
-- The board is labelled observed activity, not result, verification, review, CI, or merge evidence.
-- On Hermes, `delegate_task` children and kanban workers of this conversation come from `omh_hud` (its `subagents` rows and `kanban` block, read from Hermes' own records) beside the OMH units, each labelled by source; `/agents` is the person's own Hermes list of running agents and tasks in Hermes' own terminal; the OMH TUI refuses `/agents`, and its agent list (Down on an empty composer while subagents show) shows the subagents of the running turn.
-
-## Recovery Notes
-
-- If no units are found, say so plainly rather than implying nothing ever ran.
-- If `omh_hud` is not available, say delegate children and kanban workers were not read rather than implying none are running.
-- If a marker is stale because a process died, report it as observed-start-without-end instead of claiming the unit is running.
-- If tokens are unknown for a runtime with no structured output, say the runtime does not report them.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -87,26 +52,26 @@ Handoff policy:
 
 Read local dispatch and progress artifacts and, on Hermes, `omh_hud`'s delegate and kanban rows, and render the board; never dispatch, stop, or modify a unit from this workflow.
 
-Required inputs:
-
-- local coding artifacts
-- on Hermes, this conversation's `omh_hud` rows
-
-Expected outputs:
-
-- per-unit runtime and model
-- observed tokens and elapsed
-- on Hermes, delegate children and kanban workers, labelled by source
-- explicit unknowns
-
-Artifact expectations:
-
-- metadata-only status board projection from local artifacts
-
 Safety rules:
 
 - Do not imply hidden Hermes runtime behavior.
 - Use the smallest verification that can prove the claim.
+
+## Completion Checklist
+
+- The board is rendered with `omh coding status-board --json` (read-only: local dispatch and progress artifacts; on Hermes it also reads delegate children and workers from Hermes' own records), not recalled.
+- Runtime and model are named per unit, or explicitly reported as unknown.
+- Token counts and session references are observed values or the literal unknown, never estimates.
+- Elapsed time for an unfinished unit comes from its start marker, which cannot prove the unit is still alive.
+- The board is labelled observed activity, not result, verification, review, CI, or merge evidence.
+- On Hermes, `delegate_task` children and kanban workers of this conversation come from `omh_hud` (its `subagents` rows and `kanban` block, read from Hermes' own records) beside the OMH units, each labelled by source; `/agents` is the person's own Hermes list of running agents and tasks in Hermes' own terminal; the OMH TUI refuses `/agents`, and its agent list (Down on an empty composer while subagents show) shows the subagents of the running turn.
+
+## Recovery Notes
+
+- If no units are found, say so plainly rather than implying nothing ever ran.
+- If `omh_hud` is not available, say delegate children and kanban workers were not read rather than implying none are running.
+- If a marker is stale because a process died, report it as observed-start-without-end instead of claiming the unit is running.
+- If tokens are unknown for a runtime with no structured output, say the runtime does not report them.
 
 ## Runtime Evidence
 

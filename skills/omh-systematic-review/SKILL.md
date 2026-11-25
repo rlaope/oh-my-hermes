@@ -15,7 +15,7 @@ metadata:
 
 # Systematic Review
 
-This is a Hermes-native `systematic-review` workflow skill.
+Required: inclusion and exclusion criteria the person approved, ordered exclusion codes (E1, E2, ...), records JSONL with id, title and abstract, new screening directory and an integer seed. Output: DIR/protocol.json (screening_protocol/v1, write-once), DIR/tasks/A and DIR/tasks/B blind batches plus DIR/manifest.json (screening_manifest/v1), screening_merge/v1 with counts, conflict and pending ids, agreement_stats/v1 and reviewer_independence.
 
 ## Why This Exists
 
@@ -31,38 +31,7 @@ Two reviewers screening the same records only count as dual review when neither 
 - Call `omh research screening merge --dir DIR --answers-a DIR/answers/A --answers-b DIR/answers/B --reviewer-models A=<model>,B=<model> --json`. Exit 1 means conflicts or pending records remain; exit 2 is an input error to fix, not a result.
 - Show the conflict and pending ids to the person, or give a third child only the conflict records and the frozen criteria; pass its lines with `--adjudication` and merge again.
 
-## Do Not Use When
-
-- Finding candidate papers, datasets or repositories on a topic belongs to `omh-source-finder`.
-- Explaining one supplied paper section by section belongs to `omh-paper-learning`.
-- Checking a HellaSwag log against the paper's reported conditions belongs to `omh-repro-audit`.
-- Full-text screening, search-string building, risk-of-bias and data extraction are not covered; this skill screens title and abstract only.
-- Drafting the manuscript itself is paper writing: load Hermes' optional research-paper-writing skill when it is installed.
-
-## Examples
-
-Good example:
-
-- Prompt: Screen these 400 abstracts for my systematic review of statin trials with two reviewers.
-- Expected behavior: Freeze the agreed criteria, prepare blind batches, dispatch reviewers A and B, merge, and report conflicts, pending records and agreement with the independence label.
-- Why: The person has records and a review protocol, and needs dual screening.
-
-Bad example:
-
-- Prompt: Do a systematic code review of this PR.
-- Expected behavior: Route to code review; nothing here screens literature.
-- Why: Systematic describes the review style, not a literature screening protocol.
-
-## Completion Checklist
-
-- protocol.json was frozen before any reviewer saw a record.
-- Each reviewer received only its own task files.
-- The report gives included, excluded by code, conflicts, adjudicated and pending counts, agreement and the independence label from the observed merge output.
-
-## Recovery Notes
-
-- If freeze refuses because protocol.json exists, choose a new DIR; never delete or edit the frozen protocol.
-- If merge reports pending records, send the missing ids back to that reviewer only, then merge again.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -93,29 +62,23 @@ Handoff policy:
 
 Hermes owns the protocol conversation, the two reviewer children and the report. `omh research screening` only freezes, prepares and merges local files; it makes no model or network call and never decides a record itself.
 
-Required inputs:
-
-- inclusion and exclusion criteria the person approved
-- ordered exclusion codes (E1, E2, ...)
-- records JSONL with id, title and abstract
-- new screening directory and an integer seed
-
-Expected outputs:
-
-- DIR/protocol.json (screening_protocol/v1, write-once)
-- DIR/tasks/A and DIR/tasks/B blind batches plus DIR/manifest.json (screening_manifest/v1)
-- screening_merge/v1 with counts, conflict and pending ids, agreement_stats/v1 and reviewer_independence
-
-Artifact expectations:
-
-- Keep protocol.json, manifest.json, every task file and every answer file under DIR; the merge payload carries ids and codes only, never titles, abstracts or answer text.
-
 Safety rules:
 
 - A record with no answer line, two different lines or an unknown code is pending for that reviewer; never read it as an exclusion.
 - Same-model reviewers are not independent: report `reviewer_independence` as the merge prints it, and keep the `broken_independence` warning in the report.
 - Agreement (kappa, PABAK) is agreement between two reviewers, not accuracy; never call it correctness against a human gold set.
 - AI screening decisions are decision support; the review team verifies them before any PRISMA count is published.
+
+## Completion Checklist
+
+- protocol.json was frozen before any reviewer saw a record.
+- Each reviewer received only its own task files.
+- The report gives included, excluded by code, conflicts, adjudicated and pending counts, agreement and the independence label from the observed merge output.
+
+## Recovery Notes
+
+- If freeze refuses because protocol.json exists, choose a new DIR; never delete or edit the frozen protocol.
+- If merge reports pending records, send the missing ids back to that reviewer only, then merge again.
 
 ## Runtime Evidence
 
