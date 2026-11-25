@@ -13,6 +13,12 @@ set -uo pipefail
 
 n="${1:-3}"
 shift || true
+# Optional: this runner is part P of T runners (OMHER_E2E_PART=P/T). Its N shards are the suite's shards
+# (P-1)*N+1 .. P*N of T*N, so T runners of N shards each cover it once.
+part="${OMHER_E2E_PART:-1/1}"
+p="${part%/*}"
+t="${part#*/}"
+total=$((n * t))
 cd "$(dirname "$0")/.."
 mkdir -p test-results
 
@@ -21,7 +27,7 @@ started=$(date +%s)
 for i in $(seq 1 "$n"); do
   OMHER_PORT=$((5310 + 10 * i)) OMHER_MOCK_PORT=$((5311 + 10 * i)) \
     OMHER_VITE_CACHE_DIR="node_modules/.vite-shard-$i" \
-    pnpm exec playwright test --shard="$i/$n" --reporter=line --output "test-results/shard-$i" "$@" \
+    pnpm exec playwright test --shard="$(( (p - 1) * n + i ))/$total" --reporter=line --output "test-results/shard-$i" "$@" \
     > "test-results/shard-$i.log" 2>&1 &
   pids+=("$!")
 done
@@ -30,11 +36,11 @@ failed=0
 for i in $(seq 1 "$n"); do
   wait "${pids[$((i - 1))]}"
   rc=$?
-  echo "::group::e2e shard $i/$n (exit $rc)"
+  echo "::group::e2e shard $(( (p - 1) * n + i ))/$total (exit $rc)"
   cat "test-results/shard-$i.log"
   echo "::endgroup::"
   if [ "$rc" -ne 0 ]; then
-    echo "e2e shard $i/$n failed (exit $rc)"
+    echo "e2e shard $(( (p - 1) * n + i ))/$total failed (exit $rc)"
     failed=1
   fi
 done
