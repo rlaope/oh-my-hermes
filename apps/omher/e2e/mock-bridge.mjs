@@ -53,6 +53,8 @@
 // mock.botPageFail {bot, on} (the bot page's bots.page read fails for that bot until turned off),
 // mock.platforms {available?, bots?} (what bots.platforms answers: OMH's `omh hermes platforms`, rule 43; by default
 // every listed platform is connected),
+// mock.peerPlatforms {available?, why?, bots?} (what every attached computer's own bridge answered, under `peers`, as
+// the bridge's rule 45 read gives it already checked; by default each lists its bots with no platform),
 // Add bot › New bot (rule 44): bots.templates answers OMH's catalog (TEMPLATE_SEED) or `missing`/`unavailable`
 // (mock.templates {omh}); bots.create {name} checks Hermes' name rule and the bots here as the bridge does, then makes
 // the bot as `hermes profile create` would (no oh-my-hermes skills yet: mock.skills adds `omh-bot-template`), or fails
@@ -645,6 +647,8 @@ let noSkills;
 let botPageFail;
 // Each bot's messaging platforms as the bridge's PlatformStates answers (mock.platforms {available?, bots?}).
 let platformsRead;
+// What each attached computer's bridge answered for its bots (mock.peerPlatforms), the same for every peer.
+let peerPlatformsRead;
 // As OMH reports them: every profile of the Hermes home, most with no messaging platform.
 const PLATFORMS_NONE = () => Object.fromEntries(BOT_SEED.map((b) => [b.name, { log: "read", platforms: [] }]));
 const PLATFORMS_SEED = () => ({
@@ -935,6 +939,7 @@ function reset() {
   createNext = null;
   botPageFail = new Set();
   platformsRead = PLATFORMS_SEED();
+  peerPlatformsRead = null; // null: every peer bot with no platform, its logs read
   linearMcp = new Map();
   appState = new Map([["kami:linear", "installed"], ["kami:figma", "needs_signin"], ["kami:datadog", "disabled"]]);
   appsNext = {};
@@ -1617,7 +1622,17 @@ const OPS = {
       routines: (ROUTINE_SEED[b.name] ?? []).length,
     };
   },
-  "bots.platforms": () => structuredClone(platformsRead),
+  "bots.platforms": () => ({
+    ...structuredClone(platformsRead),
+    peers: Object.fromEntries(
+      [...peers.keys()].map((id) => [
+        id,
+        structuredClone(
+          peerPlatformsRead ?? { available: true, why: "", bots: Object.fromEntries((peerBots ?? PEER_BOTS_SEED).map((b) => [b.name, { log: "read", platforms: [] }])) },
+        ),
+      ]),
+    ),
+  }),
   "bots.page": (p) => {
     const b = needBotAny(p);
     if (botPageFail.has(b.name)) throw new OpError("bot_offline", `${b.name} is offline`);
@@ -2260,6 +2275,11 @@ const OPS = {
   },
   "mock.platforms": (p) => {
     platformsRead = { available: p.available !== false, bots: { ...PLATFORMS_NONE(), ...(p.bots ?? {}) } };
+    return {};
+  },
+  "mock.peerPlatforms": (p) => {
+    const available = p.available !== false;
+    peerPlatformsRead = { available, why: available ? "" : p.why === "offline" ? "offline" : "unread", bots: available ? (p.bots ?? {}) : {} };
     return {};
   },
   "mock.botPageFail": (p) => {

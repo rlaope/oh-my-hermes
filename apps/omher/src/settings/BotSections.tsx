@@ -45,7 +45,8 @@ export function BotSections({ bot }: { bot: Bot }) {
     );
     void s.loadElsewhere(bot.name);
     void s.loadAutomations();
-    if (!remote) void s.loadPlatforms(seq > 0);
+    // a bot on another computer is read there (rule 45): Read again re-asks this bridge, which never forwards `fresh`
+    void s.loadPlatforms(!remote && seq > 0);
     void s.loadThreads(bot.name);
     return () => {
       live = false;

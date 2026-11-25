@@ -132,3 +132,61 @@ test("a bot with no messaging platform shows none, and Korean says it in Korean"
   await expect(page.getByTestId("pf-none")).toContainText("메신저 플랫폼이 없어요");
   await expect(page.getByTestId("bp-platforms")).not.toContainText("pf.");
 });
+
+// A bot on another computer (rule 45): its platforms are what that computer's own bridge read there, under `peers`.
+async function attachPeer(page: Page): Promise<string> {
+  await page.evaluate(() => localStorage.removeItem("omher.mockPeers"));
+  await page.reload();
+  await page.getByRole("button", { name: "Add a bot" }).click();
+  await page.getByTestId("addbot-ssh").click();
+  const card = page.getByTestId("peer-card");
+  await card.getByTestId("peer-host").fill("build-box");
+  await card.getByTestId("peer-label").fill("Build box");
+  await card.getByTestId("peer-check").click();
+  await expect(card.getByTestId("peer-found")).toBeVisible();
+  await card.getByTestId("peer-connect").click();
+  const row = page.locator('button.bot[data-testid$=":mini"]');
+  await expect(row).toBeVisible();
+  return (await row.getAttribute("data-testid"))!.slice("bot-".length);
+}
+
+test("a bot on another computer: its own computer's read shows on its row and page, with where to restart", async ({ page }) => {
+  await mock("mock.peerPlatforms", one("mini", { ...REFUSED, restart: "hermes -p mini gateway restart" }));
+  await page.goto("/");
+  const key = await attachPeer(page);
+  const chip = page.getByTestId(`platform-down-${key}`);
+  await expect(chip).toHaveText("!Discord disconnected"); // read when the computer attached, not a minute later
+  await expect(page.getByTestId("platform-down-default")).toHaveCount(0); // this computer's bots are unchanged
+
+  await botPage(page, key);
+  const section = page.getByTestId("bp-platforms");
+  const item = section.getByTestId("pf-discord");
+  await expect(item.getByTestId("pf-state-discord")).toHaveText("!Disconnected");
+  await expect(item.getByTestId("pf-restart")).toHaveText("hermes -p mini gateway restart");
+  await expect(item.getByTestId("pf-fix-discord")).toContainText("Run it on Build box");
+  await expect(item.getByTestId("pf-portal")).toHaveAttribute("href", "https://discord.com/developers/applications");
+  await expect(section).toContainText("Read on Build box by its own oh-my-hermes");
+  // the page asks this bridge once for every computer; Read again never sends `fresh` for a bot there
+  await page.getByTestId("bp-refresh").click();
+  await expect.poll(async () => (await platformReads()).length).toBeGreaterThan(1);
+  expect((await platformReads()).every((c) => c.params.fresh !== true && c.params.bot === undefined)).toBe(true);
+});
+
+test("a computer that could not say, or whose link is down: cannot tell, never connected or not", async ({ page }) => {
+  await mock("mock.peerPlatforms", { available: false, why: "unread" });
+  await page.goto("/");
+  const key = await attachPeer(page);
+  await expect.poll(async () => (await platformReads()).length).toBeGreaterThan(1);
+  await expect(page.getByTestId(`platform-down-${key}`)).toHaveCount(0);
+  await botPage(page, key);
+  const told = page.getByTestId("pf-peer-cannot-tell");
+  await expect(told).toHaveAttribute("data-why", "unread");
+  await expect(told).toContainText("Build box gave no answer omher could use");
+  await expect(page.getByTestId("pf-discord")).toHaveCount(0);
+
+  await mock("mock.peerPlatforms", { available: false, why: "offline" });
+  await page.getByTestId("bp-refresh").click();
+  await expect(told).toHaveAttribute("data-why", "offline");
+  await expect(told).toContainText("Build box is not connected now");
+  await expect(page.getByTestId("bp-platforms")).not.toContainText("Connected");
+});
