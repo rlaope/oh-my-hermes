@@ -181,7 +181,7 @@ describe("real agent streams through the reducer", () => {
   it("OmO's statuses after its answer start nothing (the owner's 안녕 turn)", () => {
     const omo = all.find((r) => r.name === "omo-1-plain.jsonl")!;
     // what the adapter used to forward after agent_end
-    const late = [{ event: "status", text: "(😺 OmO Native)" }, { event: "status", text: "mem:khope-sionic-ai-d09472c9 9d ago (+1)" }, { event: "thinking" }];
+    const late = [{ event: "status", text: "(😺 OmO Native)" }, { event: "status", text: "mem:demo-00000000 9d ago (+1)" }, { event: "thinking" }];
     const s = replay({ ...omo, events: [...omo.events, ...late] });
     const c = s.chats["agent:s1"];
     expect(c.turn).toBeNull();

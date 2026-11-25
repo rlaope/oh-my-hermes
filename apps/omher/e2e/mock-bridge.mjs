@@ -86,7 +86,7 @@ const MIN = 60;
 // ---- seed data -------------------------------------------------------------------------------
 
 const BOT_SEED = [
-  { name: "kami", display_name: "Kami", is_default: false, model: "Opus 5.5", provider: "claude-proxy", description: "khope's everyday assistant", status: "online", running: true, reasoning: "high" },
+  { name: "kami", display_name: "Kami", is_default: false, model: "Opus 5.5", provider: "claude-proxy", description: "demo's everyday assistant", status: "online", running: true, reasoning: "high" },
   { name: "friren", display_name: "Friren", is_default: false, model: "Sonnet 5.5", provider: "claude-proxy", description: "research and reading", status: "online", running: false, reasoning: "medium" },
   { name: "default", display_name: "Hermes", is_default: true, model: "Haiku 5", provider: "claude-proxy", description: "the default profile", status: "online", running: false, reasoning: "low" },
   { name: "omh-tui", display_name: "OMH TUI", is_default: false, model: "Sonnet 5.5", provider: "claude-proxy", description: "", status: "online", running: false, reasoning: "medium" },
@@ -99,8 +99,8 @@ const LINKS = JSON.parse(readFileSync(new URL("./fixtures/links.json", import.me
 // six channels is left out on purpose, so its chip shows the fallback.
 const LINK_PLACES = {
   kami: {
-    slack: { C0BLC924P1P: "#docs-agent", C0C7TPCQZSL: "#product-docs", C0BU9M6C6EA: "#lab" },
-    discord: { "1544259371528232980": "#cron" },
+    slack: { C0000000001: "#docs-agent", C0000000004: "#product-docs", C0000000003: "#lab" },
+    discord: { "1100000000000000010": "#cron" },
   },
 };
 
@@ -144,8 +144,8 @@ const mediaLines = (text) =>
 const AWAY_SEED = {
   kami: [
     { id: "slack-og-dev-502", source: "slack", title: "gateway 502 on /v1/responses", place: "#og-dev", url: "slack://channel?team=T1&id=C1&thread_ts=1794186944.520669", target: "slack:C0123ABCD:1794186944.520669", reply: "Reading gateway logs from 14:31. Upstream resets look like keep-alive expiry.", started: 4 * MIN, last: 20, count: 14, running: true },
-    { id: "discord-cron-openmaus", source: "discord", title: "OpenMausBot 조사후 브리핑", place: "#cron", url: "https://discord.com/channels/1/2", target: "discord:1569310397687791637:1569310397687791637", reply: "OpenMausBot은 Claude·Codex·Grok CLI를 채팅 앱으로 묶는 Electron 앱입니다. ⭐17,657, Apache-2.0입니다.", started: 3 * 3600, last: 2 * 3600, count: 6, running: false },
-    { id: "discord-omh-2657", source: "discord", title: "PR #2657 review", place: "#oh-my-hermes", url: "https://discord.com/channels/1/3", target: "discord:1544259371528232981", started: 27 * 3600, last: 26 * 3600, count: 9, running: false },
+    { id: "discord-cron-openmaus", source: "discord", title: "OpenMausBot 조사후 브리핑", place: "#cron", url: "https://discord.com/channels/1/2", target: "discord:1100000000000000040:1100000000000000040", reply: "OpenMausBot은 Claude·Codex·Grok CLI를 채팅 앱으로 묶는 Electron 앱입니다. ⭐17,657, Apache-2.0입니다.", started: 3 * 3600, last: 2 * 3600, count: 6, running: false },
+    { id: "discord-omh-2657", source: "discord", title: "PR #2657 review", place: "#oh-my-hermes", url: "https://discord.com/channels/1/3", target: "discord:1100000000000000011", started: 27 * 3600, last: 26 * 3600, count: 9, running: false },
   ],
   friren: [{ id: "telegram-reading-list", source: "telegram", title: "Reading list", started: 6 * 3600, last: 4 * 3600, count: 5, running: false }],
   default: [],
@@ -2379,7 +2379,7 @@ const OPS = {
     automations = automations.filter((x) => x.id !== j.id);
     automations.push(j);
     broadcast({ event: "routines.update", bot: b.name });
-    broadcast({ event: "brief.ready", bot: b.name, owner_name: "Hope" });
+    broadcast({ event: "brief.ready", bot: b.name, owner_name: "Demo" });
     return { id: j.id };
   },
   "mock.watches": () => {

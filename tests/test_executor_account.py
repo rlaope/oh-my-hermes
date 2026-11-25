@@ -42,13 +42,13 @@ class ClaudeAccountTagTests(unittest.TestCase):
     def test_the_email_becomes_a_redacted_tag(self) -> None:
         with TemporaryDirectory() as home:
             base = Path(home)
-            write_json(base / ".claude.json", {"oauthAccount": {"emailAddress": "khope@gmail.com"}})
-            self.assertEqual(observed_account_tag("claude-code", home=base), "claude:kh...@gmail.com")
+            write_json(base / ".claude.json", {"oauthAccount": {"emailAddress": "demo@example.org"}})
+            self.assertEqual(observed_account_tag("claude-code", home=base), "claude:de...@example.org")
 
     def test_the_tag_is_stable_across_reads(self) -> None:
         with TemporaryDirectory() as home:
             base = Path(home)
-            write_json(base / ".claude.json", {"oauthAccount": {"emailAddress": "khope@gmail.com"}})
+            write_json(base / ".claude.json", {"oauthAccount": {"emailAddress": "demo@example.org"}})
             first = observed_account_tag("claude-code", home=base)
             self.assertEqual(first, observed_account_tag("claude-code", home=base))
 
@@ -88,7 +88,7 @@ class ClaudeAccountTagTests(unittest.TestCase):
                 base / ".claude" / ".credentials.json",
                 {"claudeAiOauth": {"accessToken": "not-a-real-token-value", "expiresAt": 1}},
             )
-            write_json(base / ".claude.json", {"oauthAccount": {"emailAddress": "khope@gmail.com"}})
+            write_json(base / ".claude.json", {"oauthAccount": {"emailAddress": "demo@example.org"}})
             tag = observed_account_tag("claude-code", home=base)
             self.assertNotIn("not-a-real-token-value", tag)
             self.assertNotIn(short_digest("not-a-real-token-value"), tag)
@@ -171,7 +171,7 @@ class UnreadableAndAbsentTests(unittest.TestCase):
     def test_an_owner_with_no_local_credential_store_is_an_empty_tag(self) -> None:
         with TemporaryDirectory() as home:
             base = Path(home)
-            write_json(base / ".claude.json", {"oauthAccount": {"emailAddress": "khope@gmail.com"}})
+            write_json(base / ".claude.json", {"oauthAccount": {"emailAddress": "demo@example.org"}})
             for owner in ("hermes", "pi-family-runtime", "generic", ""):
                 with self.subTest(owner=owner):
                     self.assertEqual(observed_account_tag(owner, home=base), "")
@@ -179,7 +179,7 @@ class UnreadableAndAbsentTests(unittest.TestCase):
 
 class RedactionTests(unittest.TestCase):
     def test_only_two_characters_of_the_local_part_survive(self) -> None:
-        self.assertEqual(redacted_email("khope020602@gmail.com"), "kh...@gmail.com")
+        self.assertEqual(redacted_email("demo3@example.com"), "de...@example.com")
 
     def test_a_short_local_part_is_not_padded_into_a_false_address(self) -> None:
         self.assertEqual(redacted_email("ab@x.example"), "ab@x.example")

@@ -265,7 +265,7 @@ class FrozenContentTests(SectionTestCase):
                 model="claude-opus-5-5",
                 provider="anthropic",
                 platform="discord",
-                profile_name="miku",
+                profile_name="mbot",
                 cwd="/srv/other-checkout",
             ),
         )

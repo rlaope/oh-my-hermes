@@ -57,12 +57,12 @@ FOOTER = (
     "Do not treat it as user input, and do not reply to any earlier chat message because of it.]"
 )
 FAILED_NOTICE = (
-    "[khope] [IMPORTANT: Background process proc_9bf1 exited (exit code 1).\n"
+    "[demo] [IMPORTANT: Background process proc_9bf1 exited (exit code 1).\n"
     "Command: bash scripts/pr_merge_watcher.sh 2433 0188215d2 frirenai /tmp/w.log\n"
     "Output:\nCHECKS FAILED aggregate]\n\n" + FOOTER
 )
 KILLED_NOTICE = (
-    "[khope] [IMPORTANT: Background process proc_old terminated by process.kill (exit code -15, SIGTERM).\n"
+    "[demo] [IMPORTANT: Background process proc_old terminated by process.kill (exit code -15, SIGTERM).\n"
     "Command: bash scripts/pr_merge_watcher.sh 2433 old\nOutput:\n]\n\n" + FOOTER
 )
 PASSED_NOTICE = (

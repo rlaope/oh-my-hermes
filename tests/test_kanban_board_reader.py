@@ -115,7 +115,7 @@ def build_state_db(db: Path, sessions: list[dict], *, ddl: str = SESSIONS_DDL) -
 
 
 def task(identity: str, status: str, **fields) -> dict:
-    row = {"id": identity, "title": f"Task {identity}", "assignee": "miku", "status": status, "created_at": NOW - 600}
+    row = {"id": identity, "title": f"Task {identity}", "assignee": "mbot", "status": status, "created_at": NOW - 600}
     row.update(fields)
     return row
 
@@ -259,7 +259,7 @@ class KanbanLaneTests(unittest.TestCase):
         running = by_id["run00001"]
         self.assertEqual(
             (running["role"], running["model"], running["provider"], running["effort"], running["assignee"]),
-            ("research", "gpt-5.6-sol", "openai", "high", "miku"),
+            ("research", "gpt-5.6-sol", "openai", "high", "mbot"),
         )
         self.assertEqual((running["lane_backend"], running["board"], running["tokens"]), ("kanban", "default", None))
         self.assertEqual(running["elapsed_seconds"], 100.0)
@@ -421,7 +421,7 @@ class KanbanWorkerUsageTests(unittest.TestCase):
         self.hermes = self.root / ".hermes"
         self.hermes.mkdir()
         self.db = self.hermes / "kanban.db"
-        self.profile_db = self.hermes / "profiles" / "miku" / "state.db"
+        self.profile_db = self.hermes / "profiles" / "mbot" / "state.db"
         self.env = mock.patch.dict(os.environ, {"HERMES_KANBAN_HOME": "", "HERMES_KANBAN_BOARD": ""})
         self.env.start()
         self.addCleanup(self.env.stop)
@@ -630,12 +630,12 @@ class KanbanWorkerUsageTests(unittest.TestCase):
 
     def test_the_assignee_profile_decides_which_state_db_is_read(self) -> None:
         root = self.hermes
-        (root / "profiles" / "miku").mkdir(parents=True)
+        (root / "profiles" / "mbot").mkdir(parents=True)
         (root / "state.db").write_bytes(b"")
-        (root / "profiles" / "miku" / "state.db").write_bytes(b"")
-        self.assertEqual(reader._worker_state_db(root, "miku"), root / "profiles" / "miku" / "state.db")
+        (root / "profiles" / "mbot" / "state.db").write_bytes(b"")
+        self.assertEqual(reader._worker_state_db(root, "mbot"), root / "profiles" / "mbot" / "state.db")
         # Hermes normalizes the name before it resolves the home.
-        self.assertEqual(reader._worker_state_db(root, " Miku "), root / "profiles" / "miku" / "state.db")
+        self.assertEqual(reader._worker_state_db(root, " Mbot "), root / "profiles" / "mbot" / "state.db")
         # The default profile IS the root, and so is an unnamed assignee.
         for name in ("", "default", "Default"):
             with self.subTest(name=name):
@@ -654,13 +654,13 @@ class KanbanWorkerUsageTests(unittest.TestCase):
         build_state_db(elsewhere / "state.db", [worker_session("sess-live-1")])
         self.profile_db.parent.mkdir(parents=True)
         self.profile_db.symlink_to(elsewhere / "state.db")
-        self.assertIsNone(reader._worker_state_db(self.hermes, "miku"))
+        self.assertIsNone(reader._worker_state_db(self.hermes, "mbot"))
         self.board(runs=[run("t_run00001")])
         self.assertIsNone(self.row()["tokens"])
 
     def test_one_connection_per_state_db_serves_every_row(self) -> None:
         build_board(self.db, [
-            task(f"t_{index:08d}", "running", assignee="miku", started_at=NOW - 300,
+            task(f"t_{index:08d}", "running", assignee="mbot", started_at=NOW - 300,
                  last_heartbeat_at=NOW - 5, workspace_path=self.WORKSPACE)
             for index in range(4)
         ] + [task("t_default01", "running", assignee="default", started_at=NOW - 300, last_heartbeat_at=NOW - 5)])
@@ -743,7 +743,7 @@ class KanbanHudMergeTests(unittest.TestCase):
         # The running lane's worker recorded its own session in the assignee
         # profile's home; the stalled lane was claimed an hour earlier, so no
         # session answers its window and its row keeps the board's facts only.
-        build_state_db(self.hermes / "profiles" / "miku" / "state.db",
+        build_state_db(self.hermes / "profiles" / "mbot" / "state.db",
                        [worker_session("sess-live-1", started_at=float(NOW - 270))])
         payload = self.hud()
         native = {"scope": "global", "state": "running", "task_id": "a1b2c3d4", "role": "hermes-native",
@@ -768,7 +768,7 @@ class KanbanHudMergeTests(unittest.TestCase):
         self.assertEqual(len(lines), 4)
         self.assertIn("category:architect(claude-fable-5-1:xhigh)", lines[0])
         running = next(line for line in lines if "Ship the board lane" in line)
-        self.assertIn("kanban/miku(gpt-5.6-sol:high)", running)
+        self.assertIn("kanban/mbot(gpt-5.6-sol:high)", running)
         self.assertIn("running · 4m 40s", running)
         self.assertIn("13.3k tokens", running)
         wide_board = next(line for line in wide if "Ship the board lane" in line)
@@ -778,8 +778,8 @@ class KanbanHudMergeTests(unittest.TestCase):
         self.assertIn("$0.1234", wide_board, "the session's recorded cost reads like a native row's")
         stale = next(line for line in lines if "Stalled worker" in line)
         self.assertTrue(stale.startswith("! "), stale)
-        self.assertIn("kanban/miku", stale)
-        self.assertNotIn("kanban/miku(", stale, "no model pin, no parenthesis")
+        self.assertIn("kanban/mbot", stale)
+        self.assertNotIn("kanban/mbot(", stale, "no model pin, no parenthesis")
         self.assertIn("running ·", stale, "the tail keeps the native status word")
         self.assertNotIn("tokens", stale, "an unlinked lane shows blank cells, never a borrowed figure")
         queued = next(line for line in lines if "Write the release notes" in line)

@@ -7,7 +7,7 @@
     {
      "admission_id": "42801ff190ca473d9e09851adf9fa2f3",
      "ref": {
-      "profile_id": "/Users/khope@sionic.ai/.hermes/profiles/kami",
+      "profile_id": "/Users/demo/.hermes/profiles/kami",
       "session_id": "local-6c2573db857d60032c913a4300d89bee9b4e7058399db3a3426d74aa80169673"
      },
      "sequence": 1261,
@@ -43,7 +43,7 @@
     {
      "admission_id": "42801ff190ca473d9e09851adf9fa2f3",
      "ref": {
-      "profile_id": "/Users/khope@sionic.ai/.hermes/profiles/kami",
+      "profile_id": "/Users/demo/.hermes/profiles/kami",
       "session_id": "local-6c2573db857d60032c913a4300d89bee9b4e7058399db3a3426d74aa80169673"
      },
      "sequence": 1261,
@@ -77,10 +77,10 @@
    "source": "cli",
    "model": "claude-opus-5-5",
    "lazy": false,
-   "profile_id": "/Users/khope@sionic.ai/.hermes/profiles/kami",
+   "profile_id": "/Users/demo/.hermes/profiles/kami",
    "desktop_protocol": "hermes-gateway-v1",
    "profile_name": "kami",
-   "cwd": "/Users/khope@sionic.ai/.hermes/profiles/kami/workspace",
+   "cwd": "/Users/demo/.hermes/profiles/kami/workspace",
    "reasoning_effort": "high",
    "reasoning_effort_wire": "high",
    "service_tier": "",

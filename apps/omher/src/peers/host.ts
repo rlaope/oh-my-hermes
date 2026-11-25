@@ -90,7 +90,7 @@ class TauriPeers implements PeersHost {
  *  (the mock serves both on its own port). Hosts that end in a failure word fail the way ssh would. */
 const MOCK_HOSTS = ["mini", "build-box", "studio"];
 const MOCK_FAIL: Record<string, Failure> = {
-  "denied": { kind: "auth", line: "sionic@denied: Permission denied (publickey,password)." },
+  "denied": { kind: "auth", line: "demo@denied: Permission denied (publickey,password)." },
   "nowhere": { kind: "unreachable", line: "ssh: Could not resolve hostname nowhere: nodename nor servname provided, or not known" },
   "slow": { kind: "timeout", line: "ssh: connect to host slow port 22: Operation timed out" },
   "bare": { kind: "no_hermes", line: "" },
@@ -133,12 +133,12 @@ class MockPeers implements PeersHost {
     await new Promise((r) => setTimeout(r, 120));
     const word = host.split("@").pop() ?? host;
     const fail = MOCK_FAIL[word];
-    if (fail) throw { ...fail, line: fail.line.replace("sionic@denied", host) };
+    if (fail) throw { ...fail, line: fail.line.replace("demo@denied", host) };
     return {
       check: `c${++this.seq}`,
       url: mockPeerUrl(),
       found: {
-        python: "/home/sionic/.hermes/tools/python-3.14.9/bin/python3",
+        python: "/home/demo/.hermes/tools/python-3.14.9/bin/python3",
         pyver: "3.14.9",
         command: `ssh -o BatchMode=yes -o ConnectTimeout=10 -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -T -L 127.0.0.1:53005:127.0.0.1:41873 -- ${host} sh -c '<remote script>'`,
         script: "",
