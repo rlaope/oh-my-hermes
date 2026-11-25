@@ -55,9 +55,12 @@ type Sample = {
   dot: boolean;
 };
 
-/** One reading of the chat header inside the preview iframe. */
+/** One reading of the chat header inside the preview iframe. The story also passes through a terminal session
+    (`ss-head-*`) and pages (`pg-head`), whose headers share the test id; only the chat header is read. */
 function readHeader(): Sample | null {
-  const h = document.querySelector('[data-testid="header"]');
+  const h = [...document.querySelectorAll('[data-testid="header"]')].find(
+    (el) => !el.querySelector(".ss-head-mark") && !el.classList.contains("pg-head"),
+  );
   if (!h) return null;
   const hr = h.getBoundingClientRect();
   const wh = (sel: string): [number, number] | null => {
