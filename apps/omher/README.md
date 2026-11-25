@@ -129,7 +129,8 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   templates (`omh --hermes-home <root> profile bot-templates --json`, through rule 43's `omh` runner) beside No
   template; Create checks the name against Hermes' own profile rule and runs Hermes' `hermes -p default profile create
   <name> --no-alias`, and with a template sends the new bot's main chat one `/omh-bot-template` line that the bot
-  applies with its own approvals, every schedule paused. A new profile sees oh-my-hermes' skills after the next
+  applies with its own approvals, every schedule paused. A new profile sees oh-my-hermes' skills once the person runs
+  `omh apply --profile <name>` (that profile only, no restart; omher shows the command and never runs it) or the next
   `omh update`; until then the gallery, and later the bot's page, wait for Apply template (`e2e/new-bot.spec.ts`).
 - **Link chips** (`src/chat/parts/linkKinds.ts`, `e2e/links.spec.ts`): a link in a message shows as the service's mark
   and what it points at, read from the address alone (nothing is fetched): GitHub, Slack, Discord, Google (Docs,
