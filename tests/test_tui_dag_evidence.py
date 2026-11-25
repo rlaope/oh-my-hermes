@@ -4,6 +4,8 @@ from __future__ import annotations
 from copy import deepcopy
 import os
 from pathlib import Path
+import subprocess
+import sys
 from tempfile import TemporaryDirectory
 import time
 import unittest
@@ -43,6 +45,24 @@ def seed(home: Path, session: str, *, record_session: str | None = None) -> Path
 
 def text(rows) -> str:
     return "\n".join("".join(span.text for span in row) for row in rows)
+
+
+class DagEvidenceImportTests(unittest.TestCase):
+    def test_the_tui_loads_the_dag_record_reader_only_when_evidence_is_read(self) -> None:
+        # A fresh interpreter: this process imported dag_run above.
+        probe = (
+            "import sys, tempfile\n"
+            "import omh.tui.app\n"
+            "names = ('omh.plugin_bundle.omh.dag_run', 'omh.plugin_bundle.omh.runtime_reader')\n"
+            "print('after import:', [name for name in names if name in sys.modules])\n"
+            "from omh.tui.dag_evidence import read_handoff\n"
+            "with tempfile.TemporaryDirectory() as home:\n"
+            "    print('read:', repr(read_handoff(home, '20261014_000000_aaaaaa', 'd:r1:api')))\n"
+            "print('after a read:', 'omh.plugin_bundle.omh.dag_run' in sys.modules)\n"
+        )
+        done = subprocess.run([sys.executable, "-P", "-c", probe], capture_output=True, text=True, timeout=120)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout.splitlines(), ["after import: []", "read: ''", "after a read: True"])
 
 
 class DagEvidenceTests(unittest.TestCase):

@@ -8,7 +8,7 @@ from pathlib import Path
 import re
 from typing import Any
 
-from ..plugin_bundle.omh import dag_run, runtime_reader
+from ..plugin_bundle.omh import runtime_paths
 from ..system.secure_regular_file import SecureFileError, open_regular_read, read_bounded
 from .escapes import strip_escapes
 from .markdown import clean_text, render_markdown
@@ -94,8 +94,12 @@ def read_handoff(home: str | Path | None, stored: str, selected: str) -> str:
     if not stored or match is None:
         return ""
     run, node = match.groups()
+    # On demand: `dag_pager` imports this module with the TUI, and the TUI keeps the plugin's runtime
+    # readers out of a session until they are used (`HudReaderImportTests`).
+    from ..plugin_bundle.omh import dag_run
+
     try:
-        root = Path(home).expanduser() if home else runtime_reader.default_omh_home()
+        root = Path(home).expanduser() if home else runtime_paths.default_omh_home()
         with open_regular_read(dag_run.record_path(root, stored, run)) as fd:
             record = json.loads(read_bounded(fd, dag_run.MAX_RECORD_BYTES))
         if (not isinstance(record, dict) or record.get("schema_version") != dag_run.DAG_SCHEMA_VERSION
