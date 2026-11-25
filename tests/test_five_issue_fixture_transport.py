@@ -183,10 +183,10 @@ class FixtureTransportTests(unittest.TestCase):
 
     def test_the_verification_command_does_not_grow_with_the_checkout_path(self) -> None:
         # #1474: the command embedded `sys.executable` and an inline script, so
-        # a deep worktree pushed it past MAX_UNIT_VERIFICATION_COMMAND_CHARS and
+        # a deep worktree pushed it past MAX_UNIT_VERIFICATION_COMMAND_BYTES and
         # the fixture's verdict became a function of where the repo lives.
         from five_issue_cases import diagnostics
-        from omh.coding.fanout import MAX_UNIT_VERIFICATION_COMMAND_CHARS
+        from omh.coding.fanout import MAX_UNIT_VERIFICATION_COMMAND_BYTES
 
         captured: list[str] = []
         real_build = diagnostics.build_fanout_contract
@@ -218,7 +218,7 @@ class FixtureTransportTests(unittest.TestCase):
         self.assertNotIn(checkout, argv[1])
         # Headroom for a checkout far deeper than this one, measured rather
         # than assumed: the command may not consume the whole cap.
-        self.assertLess(len(command), MAX_UNIT_VERIFICATION_COMMAND_CHARS - 40)
+        self.assertLess(len(command.encode("utf-8")), MAX_UNIT_VERIFICATION_COMMAND_BYTES - 40)
 
     def test_diagnostics_fixture_survives_isolated_home_without_codex_state(self) -> None:
         from five_issue_cases import diagnostics
