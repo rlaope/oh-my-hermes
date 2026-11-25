@@ -158,7 +158,7 @@ test("a session opened as a terminal ends with its program, shows the ended line
   await page.getByTestId("session-restart").click();
   await expect(page.getByTestId("session-ended")).toHaveCount(0);
   await expect(page.locator(".xterm-rows")).toContainText("(mock)");
-  await expect(page.getByTestId("session-status")).toHaveText("Running");
+  await expect(page.getByTestId("session-status")).toHaveText(/^(Working|Ready)$/);
   const starts = (await calls(page)).filter((c) => c.op === "start");
   expect(starts).toHaveLength(2);
   expect(starts[1]).toMatchObject({ agent: "claude", cwd: "/home/you/code/web-app" });

@@ -383,14 +383,15 @@ const FRACTIONS = [0, 0.25, 0.43, 0.7, 1];
 
 // owner (2026-11-16, "no empty band"), fix5: a region's last visible thing is a whole row at its end, or a row cut
 // under the soft bottom fade, never an empty band (over 12px, besides the chevron's 14px). At the top of an auto
-// split the regions end on whole rows; scrolled, the cut row shows under the fade, as in any scrolling list.
+// split the regions end on whole rows; scrolled, the cut row shows under the fade, as in any scrolling list. A region
+// at its top whose next whole-row end is refused (an open folder's header) shows its cut row under the fade too
+// rather than an empty band (UI review C8): a row cut at the top of a list is never shown without the fade.
 function expectNoBand(b: Awaited<ReturnType<typeof bands>>, f: number) {
   for (const r of [b.bots!, b.terms!]) {
     const at = JSON.stringify({ f, ...b });
     expect(r.band, at).toBeLessThanOrEqual(12);
     expect(r.openHeadsAlone, at).toBe(0);
     if (r.cut) expect(r.fade, at).toBe(true);
-    if (f === 0 && r.scrollTop === 0) expect(r.cut, at).toBe(false);
   }
 }
 

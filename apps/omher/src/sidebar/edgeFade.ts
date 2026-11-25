@@ -4,8 +4,12 @@
 // - at its top ("below"): no row is shown cut. The row the region's end would cut (and any row in the cue's band) is
 //   hidden whole by a clip on the list, so the chevron sits on empty sidebar; the auto split (autoSplit.ts) sizes the
 //   regions so that this hides nothing but the cue's band.
-// - scrolled ("both"): the cut row shows, under a soft bottom fade with the chevron on it, as in any scrolling list.
-//   Hiding it there left its whole height empty above the chevron.
+// - scrolled ("both"): the cut row shows, under a soft bottom fade, as in any scrolling list. Hiding it there left its
+//   whole height empty above the chevron. The chevron's own band (CUE_PX) is clipped, so it never sits on text.
+// - at its top, when hiding the cut row whole would leave more than BAND_MAX empty above the chevron (the next row is
+//   an open folder's first card, which the region may not end without, or the region is taller than its last whole
+//   row), it takes the scrolled treatment instead (`data-fade`): rows never hide behind the chevron under an empty
+//   band.
 // At the top edge, a row cut there (only its subtitle under the header) gets the same fade and chevron
 // (`data-cut-top`); a reveal (revealBot.ts) first tries to land the edge between two rows.
 // The clip is paint only: the list keeps its size, so nothing below it moves. Use the returned callback as the list's
@@ -17,6 +21,8 @@ import { useCallback, useRef } from "react";
 export const CUT_ROWS = ".bot-w > .bot, .th-row, .tg-h, .ss-row, .split-card, .bot-list > :not(.bot-w):not(.tg)";
 /** The band kept free at a cut bottom edge for the chevron (sessions.css draws it there). */
 export const CUE_PX = 14;
+/** The most empty space a region may show above its chevron while it hides rows. */
+export const BAND_MAX = 12;
 
 /** How many px to hide at the bottom of a list whose box ends at `bottom`: from the top of the first row that would
  *  reach into the cue band, at least the band itself. `rows`: the rows' tops and bottoms. With the list's `top` given,
@@ -109,14 +115,24 @@ export function useEdgeFade<T extends HTMLElement>(own?: { current: T | null }):
         if (m) el.dataset.more = m;
         else delete el.dataset.more;
         let clip = "";
-        if (m === "below") {
+        let fade = m === "both";
+        if (m === "below" || m === "both") {
           const box = el.getBoundingClientRect();
           const rows = [...el.querySelectorAll<HTMLElement>(CUT_ROWS)].map((r) => {
             const b = r.getBoundingClientRect();
             return { top: b.top, bottom: b.bottom, head: isHead(r) };
           });
-          clip = `inset(0 0 ${cutBelow(box.bottom, rows, CUE_PX, box.top)}px 0)`;
+          if (m === "below") {
+            const cut = cutBelow(box.bottom, rows, CUE_PX, box.top);
+            // hiding the cut row whole would leave an empty band over the chevron: show it under the fade instead
+            if (cut - CUE_PX > BAND_MAX) fade = true;
+            else clip = `inset(0 0 ${cut}px 0)`;
+          }
+          // under the fade only the chevron's band is clipped: the cut row shows above it, never under the chevron
+          if (fade) clip = `inset(0 0 ${CUE_PX}px 0)`;
         }
+        if (fade) el.dataset.fade = "true";
+        else delete el.dataset.fade;
         if (el.style.clipPath !== clip) el.style.clipPath = clip;
         // scrolled, a row the top edge cuts (a list too short to show the open row and whole rows above it) gets
         // the bottom edge's cue mirrored: a fade from the sidebar's colour and a chevron (sidebar.css)

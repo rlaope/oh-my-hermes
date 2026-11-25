@@ -1,6 +1,7 @@
 // A TERMINALS split drawn as one card in the sidebar (owner's option A, the layout card): one cell per pane at the
-// pane's real place and proportions, each with its CLI mark, title and last line, laid out for the cell's own size
-// (splitCard.ts cellText). A cell's edge says its state: an accent segment orbits it while output flows, a dashed edge
+// pane's real place and proportions, each with its CLI mark, title and last line, laid out once for the whole card from
+// its smallest cell (splitCard.ts cardText), left-aligned on the TERMINALS rows' icon column. A cell's edge says its
+// state: a faint accent ring with one short bright head running round it while output flows, a dashed edge
 // flows while it reports background work, an attention edge blinks while a bot asks to type into it (held on the
 // focused cell), a soft accent edge breathes slowly when it rang unseen (news, not a warning), a danger edge after an
 // error. The motion is CSS keyframes on SVG strokes sized from a ResizeObserver: no
@@ -16,7 +17,7 @@ import { TermRowMark } from "./TermRowMark";
 import { focusSplitPane, splitWith } from "./SplitView";
 import { pressToSplit } from "./splitDrag";
 import { groupSessions, setMapHeight, type SplitGroup } from "./splitState";
-import { CARD_MAX_H, CARD_MIN_H, cellBoxes, cellState, cellText, clampCardHeight, defaultCardHeight, elapsedLabel, GRIP_STEP, type CellState } from "./splitCard";
+import { CARD_MAX_H, CARD_MIN_H, cardText, cellBoxes, cellState, clampCardHeight, defaultCardHeight, elapsedLabel, GRIP_STEP, type CellState, type CellText } from "./splitCard";
 import { usePendingRequests } from "./termShare";
 import { countRender, useTermFace } from "./termActivity";
 import { pickTitle } from "./titles";
@@ -36,13 +37,9 @@ export interface RowMenuKit {
   Hand: ComponentType<{ at: { x: number; y: number }; rec: SessionRec; back: () => HTMLElement | null; onClose: () => void }>;
 }
 
-/** The orbit's three strokes, head aligned: [length % of the edge, width px, opacity]. Drawn 1.25 px in, so the 2.5 px
- *  head stays inside the cell's clip. */
-const ORBIT: readonly [number, number, number][] = [
-  [20, 1.1, 0.35],
-  [12, 1.7, 0.65],
-  [5, 2.5, 1],
-];
+/** The working head's length, % of the cell's edge: short, so a still frame (a screenshot, a paused animation) shows a
+ *  ring with a mark on it, never a segment that reads as a progress bar's fill. */
+export const ORBIT_HEAD = 5;
 
 /** A rounded rect `inset` px inside a w×h cell, as SVG attributes. */
 const inRect = (w: number, h: number, inset: number, r = 6) => ({ x: inset, y: inset, width: Math.max(0, w - 2 * inset), height: Math.max(0, h - 2 * inset), rx: Math.max(0, r - inset) });
@@ -50,7 +47,7 @@ const inRect = (w: number, h: number, inset: number, r = 6) => ({ x: inset, y: i
 /** One pane's cell, `x` from the inline start (the right in a right-to-left document, as the main split's row mirrors
  *  there). Memoised on primitives: a card re-render (a drag of the grip, another cell's state) passes the same
  *  values and skips it. */
-const SplitCell = memo(function SplitCell({ rec, x, y, w, h, focused, agents, unseen, ticking, onClose, kit }: { rec: SessionRec; x: number; y: number; w: number; h: number; focused: boolean; agents: AgentInfo[] | null; unseen?: Unseen; ticking: boolean; lang: string; onClose: (rec: SessionRec) => void; kit: RowMenuKit }) {
+const SplitCell = memo(function SplitCell({ rec, x, y, w, h, text, lines, focused, agents, unseen, ticking, onClose, kit }: { rec: SessionRec; x: number; y: number; w: number; h: number; text: CellText; lines: boolean; focused: boolean; agents: AgentInfo[] | null; unseen?: Unseen; ticking: boolean; lang: string; onClose: (rec: SessionRec) => void; kit: RowMenuKit }) {
   countRender(`cell:${rec.id}`);
   const [editing, setEditing] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -72,7 +69,6 @@ const SplitCell = memo(function SplitCell({ rec, x, y, w, h, focused, agents, un
   }, [state, act.busySince, now]);
   const title = pickTitle(rec, termFallbackName(rec, agents));
   const line = termActivity({ agent: rec.agent, fgAgent: rec.fgAgent, lastLine: act.lastLine, oscTitle: act.oscTitle }).line;
-  const text = cellText(w, h);
   const name = splitPaneName(rec, agents);
   const actions = kit.items(rec);
   const endEdit = (v: string | null | undefined) => {
@@ -82,14 +78,14 @@ const SplitCell = memo(function SplitCell({ rec, x, y, w, h, focused, agents, un
   };
   // the cell's face: the keyboard goes back to it when its menu or Hand card closes
   const opener = () => wrap.current?.querySelector<HTMLElement>(".sc-open") ?? null;
-  const markSize = text === "stack" ? 20 : text === "line" ? 12 : 13;
   const body = (
     <span className="sc-body">
       <span className="sc-t">
-        <TermRowMark agent={termMarkAgent(rec)} size={markSize} />
+        {/* the TERMINALS rows' mark, at their size: one icon column and one icon size down the folder */}
+        <TermRowMark agent={termMarkAgent(rec)} size={16} />
         {editing ? <kit.Name initial={title.title} auto={title.source !== "person"} onDone={endEdit} /> : <span className="sc-n" data-testid="split-cell-name">{title.title}</span>}
       </span>
-      {text !== "line" && line && <span className="sc-l">{line}</span>}
+      {lines && line && <span className="sc-l">{line}</span>}
     </span>
   );
   return (
@@ -116,10 +112,12 @@ const SplitCell = memo(function SplitCell({ rec, x, y, w, h, focused, agents, un
     >
       <svg className="sc-svg" width={w} height={h} aria-hidden="true">
         <rect className="sc-edge" {...inRect(w, h, focused ? 0.75 : 0.6)} />
-        {state === "work" &&
-          ORBIT.map(([len, sw, op]) => (
-            <rect key={len} className={`sc-orbit sc-o${len}`} {...inRect(w, h, focused ? 3 : 1.25)} pathLength={100} strokeWidth={sw} opacity={op} strokeDasharray={`${len} ${100 - len}`} />
-          ))}
+        {state === "work" && (
+          <>
+            <rect className="sc-ring" {...inRect(w, h, focused ? 3 : 1.25)} />
+            <rect className="sc-orbit" {...inRect(w, h, focused ? 3 : 1.25)} pathLength={100} strokeDasharray={`${ORBIT_HEAD} ${100 - ORBIT_HEAD}`} />
+          </>
+        )}
         {state === "bg" && <rect className="sc-dash" {...inRect(w, h, 1)} />}
         {state === "wait" && <rect className="sc-wait" {...inRect(w, h, 0.75)} pathLength={100} />}
         {state === "news" && <rect className="sc-news" {...inRect(w, h, 0.75)} />}
@@ -222,6 +220,8 @@ export function SplitCard({ group, current, list, agents, unseen, ticking, lang,
     set(next);
   };
   const boxes = mapW > 0 ? cellBoxes(group.layout, mapW, drawnH > 0 ? drawnH : mapH) : [];
+  // one text layout for every cell, from what the smallest one holds
+  const look = cardText(boxes);
   return (
     <div className="split-card" role="group" aria-label={t("split.card", { n: ids.length })} data-testid="split-card" data-panes={ids.length} data-away={away ? "true" : undefined} data-map-h={mapH}>
       <div ref={map} className="sc-map" style={{ height: `max(${CARD_MIN_H}px, min(${mapH}px, var(--sc-cap, ${mapH}px)))` }}>
@@ -229,7 +229,7 @@ export function SplitCard({ group, current, list, agents, unseen, ticking, lang,
           const rec = list.find((r) => r.id === b.id);
           // a pane whose session just went (the prune runs after this render) draws nothing
           if (!rec) return null;
-          return <SplitCell key={b.id} rec={rec} x={b.x} y={b.y} w={b.w} h={b.h} focused={current === b.id} agents={agents} unseen={unseen[b.id]} ticking={ticking} lang={lang} onClose={onClose} kit={kit} />;
+          return <SplitCell key={b.id} rec={rec} x={b.x} y={b.y} w={b.w} h={b.h} text={look.text} lines={look.lines} focused={current === b.id} agents={agents} unseen={unseen[b.id]} ticking={ticking} lang={lang} onClose={onClose} kit={kit} />;
         })}
       </div>
       <div
