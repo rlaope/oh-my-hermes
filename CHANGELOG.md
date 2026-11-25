@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The OMH TUI follows Hermes' `display.timestamps` and `display.show_cost`.** OMH TUI 5.0.0 dropped `/timestamps`
+  and `/statusbar`, so people who had set either key in Hermes lost what it showed. Now `display.timestamps: true`
+  adds a turn's local start and end minutes to its done line (`✻ 1m 20s · 10:42→10:44 · 3 tools`, a single
+  `10:42` when both are in the same minute). `/timestamps on|off` (or `/ts`) sets this for the current run without
+  writing Hermes' config. `display.show_cost: true` adds the session's cost to the info line, but only the
+  `usage.cost_usd` figure Hermes sends. OMH prices nothing, so when Hermes sends no cost, nothing is shown, not
+  `$0.00`. Hermes' gateway does not fill `cost_usd` yet, so the cost appears once Hermes does. `/statusbar` stays
+  dropped, and its notice now names `display.show_cost`. Both keys are off unless they are YAML `true`. Requested
+  by @wesleion. (#3187; `docs/OMH-TUI-BOUNDARY.md`, Turn clock times and session cost)
 - **omher: TERMINALS folders say where they are, and a split stays in its folder.** A folder header showed only the
   folder's last name, so `~`, `~/Desktop/khope` and `~/work/khope` read alike; it now shows the path from home under
   the name, with the git branch after it. A split's card sat above every folder; it now sits at the top of its first

@@ -29,6 +29,7 @@ from omh.tui.app import (
     REFUSAL_SENTENCES,
     SIDE_ANSWERS_LEFT_NOTICE,
     STEER_UNANSWERED_OUTCOME,
+    TIMESTAMPS_NOTICE,
 )
 from omh.tui import gateway_contract as contract
 from omh.tui.gateway import Event, Response
@@ -380,10 +381,11 @@ class RoutedToHermesTests(unittest.TestCase):
         self.assertEqual(notices(app, NOTICE_ERROR), [f"{REFUSAL_SENTENCES['unsupported_command']} {hint}"])
 
     def test_timestamps_sends_nothing(self) -> None:
+        # It sets this run's done lines only: no `config.set`, since the display keys are the person's.
         app, client = make_app()
         send(app, "/timestamps on")
         self.assertEqual(client.calls, [])
-        self.assertIn("/timestamps is an Ink display setting; the OMH TUI has no equivalent.", notices(app))
+        self.assertIn(TIMESTAMPS_NOTICE.format(state="on"), notices(app))
 
 
 if __name__ == "__main__":

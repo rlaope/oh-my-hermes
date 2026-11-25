@@ -110,10 +110,17 @@ class RouteTableTests(unittest.TestCase):
         self.assertEqual([c.name for c in slash.completions("", catalog) if c.name in dict(catalog)], [])
         self.assertEqual(slash.catalog_categories({"categories": [{"name": "Session", "pairs": catalog}]}), [])
 
-    def test_ink_timestamps_are_a_dropped_display_setting(self) -> None:
+    def test_timestamps_are_the_tuis_own_and_the_statusbar_stays_dropped_pointing_at_show_cost(self) -> None:
+        # #3187: `/timestamps` sets the done lines' clock times (`display.timestamps`) for the run; the info line
+        # always shows, so `/statusbar` still means nothing here, and its notice names `display.show_cost`.
         for name in ("timestamps", "ts"):
             with self.subTest(name=name):
-                self.assertEqual(slash.parse_slash(f"/{name} on").command.route, slash.DROPPED)
+                self.assertEqual(slash.parse_slash(f"/{name} on").command.route, slash.LOCAL)
+        statusbar = slash.parse_slash("/statusbar").command
+        self.assertEqual(statusbar.route, slash.DROPPED)
+        self.assertIn("`display.show_cost: true`", slash.dropped_notice(statusbar))
+        self.assertEqual(slash.dropped_notice(slash.parse_slash("/mouse").command),
+                         "/mouse is an Ink display setting; the OMH TUI has no equivalent.")
 
     def test_hermes_notice_names_the_hermes_door(self) -> None:
         notice = slash.hermes_notice(slash.parse_slash("/voice").command)

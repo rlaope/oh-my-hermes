@@ -7,9 +7,10 @@ own, and the TUI's gateway child answers the ones a shared gateway's
 `/undo`, `/stop`, ...: `attach/gateway_attach.py` SLASH_VERBS), so the OMH
 TUI only has to own five kinds:
 
-- `local`: commands about this terminal (help, quit, history, theme, the OMH
-  model picker), the ones whose screen is the TUI's own (attaching an image,
-  the session and model pickers, the plan as `/todos`), `/export`, which
+- `local`: commands about this terminal (help, quit, history, theme, the
+  clock times on the done lines, the OMH model picker), the ones whose
+  screen is the TUI's own (attaching an image, the session and model
+  pickers, the plan as `/todos`), `/export`, which
   says what Hermes exports before it runs, and `/reload-skills`, which has
   to reach the gateway itself: `slash.exec` runs commands in a separate
   per-session worker, so a rescan there would leave the gateway's skill
@@ -128,6 +129,9 @@ COMMANDS: tuple[SlashCommand, ...] = (
                  echo_bare=False),
     SlashCommand("wallpaper", LOCAL,
                  "Turn the look's background colour and its moving scene on or off (/wallpaper on|off)"),
+    SlashCommand("timestamps", LOCAL,
+                 "Show each turn's clock times on its done line for this run (/timestamps on|off; display.timestamps)",
+                 ("ts",)),
     SlashCommand("omh-model", LOCAL, "Pick OMH model chains"),
     SlashCommand("topup", LOCAL, "Nous credit balance and the top-up link (Hermes' /topup)"),
     SlashCommand("reload-skills", LOCAL, "Re-scan Hermes' skills, so one installed since the start runs as /<name>",
@@ -170,7 +174,6 @@ COMMANDS: tuple[SlashCommand, ...] = (
     SlashCommand("dialog-test", DROPPED, "Demo widget"),
     SlashCommand("grid-test", DROPPED, "Demo widget"),
     SlashCommand("ticker", DROPPED, "Demo widget"),
-    SlashCommand("timestamps", DROPPED, "Transcript timestamps", ("ts",)),
     # What only Hermes' classic CLI runs (`gateway/session_commands.py` REFUSAL_HINTS names the way to each).
     SlashCommand("handoff", CLASSIC, "Hand the session to a messaging platform"),
     SlashCommand("worktree", CLASSIC, "Start in a fresh git worktree"),
@@ -266,6 +269,7 @@ RUNS_DURING_TURN = frozenset({
     "copy",  # copies the last reply to the clipboard
     "theme",  # this terminal's look
     "wallpaper",  # this terminal's background and scene
+    "timestamps",  # whether the done lines from the next one say their clock times, in this terminal only
     "image",  # attaches an image to the draft, as a paste does during a turn; the turn gets nothing
     "paste",  # attaches the clipboard image to the draft, as Ctrl+V does
     "gateway",  # `/gateway restart` asks first, and Hermes' restart lets running turns, this one too, finish first
@@ -306,8 +310,16 @@ def hermes_notice(command: SlashCommand) -> str:
     return f"/{command.name} runs in Hermes' own terminal: `{HERMES_DOOR}`."
 
 
+# What a dropped command's notice adds, where the OMH TUI has something near it.
+DROPPED_POINTERS = {
+    "statusbar": " The info line under the composer always shows; `display.show_cost: true` in Hermes' config.yaml "
+                 "adds the session's cost to it when Hermes reports one.",
+}
+
+
 def dropped_notice(command: SlashCommand) -> str:
-    return f"/{command.name} is an Ink display setting; the OMH TUI has no equivalent."
+    pointer = DROPPED_POINTERS.get(command.name, "")
+    return f"/{command.name} is an Ink display setting; the OMH TUI has no equivalent.{pointer}"
 
 
 @dataclass(frozen=True)

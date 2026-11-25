@@ -511,6 +511,36 @@ the signal and omher marks the session as news itself, because a bell is not
 a warning (the owner's decision of 2026-11-23). A question or an approval rings
 the bell on every terminal, omher included, unless `OMH_TUI_BELL=0`.
 
+## Turn clock times and session cost
+
+Two of Hermes' display keys reach the OMH TUI, read from the `config.get` it
+already sends as a session opens and after a reconnect. It writes neither.
+Each counts only when it is YAML `true`, as Hermes' own TUI reads
+`display.timestamps`; anything else, absent included, leaves it off.
+
+- `display.timestamps: true` adds the local wall-clock minutes a turn ran
+  between to its done line, after the time: `✻ 1m 20s · 10:42→10:44 · 3 tools`.
+  A turn inside one minute says that minute once (`10:42`), and a turn past
+  midnight reads `23:59→00:01` with no day. A narrow line drops the clock
+  after the tokens and the tools. `/timestamps on|off` (alias `/ts`; alone,
+  it switches) sets this for the run, over what the config says, and sends
+  nothing: it does not save the setting. Hermes' own `/timestamps` writes
+  the key, and OMH writes no display key.
+- `display.show_cost: true` adds the session's cost to the info line, after
+  the effort, but only the figure Hermes' usage carries in `cost_usd`
+  (`session.info`, `session.usage`, `message.complete`; the `Usage` contract
+  in Hermes' `tui_gateway/contracts/common.py`). It reads `$0.42`, `$0.0046`
+  under a cent and `$<0.0001` for a figure above 0 that rounds to none, with
+  `~` before it when `cost_status` is `estimated`. OMH computes no price.
+  While Hermes sends no number there, the line shows no cost at all, never
+  `$0.00` or an estimate. Hermes' gateway does not fill `cost_usd` today, so
+  the cost appears once Hermes does. A usage block without the field keeps
+  the last figure, and a session opened or switched to starts without one.
+  A narrow line drops the cost before anything else.
+
+`/statusbar` stays dropped: the info line always shows. Its notice names
+`display.show_cost`.
+
 ## herdr
 
 Inside a herdr pane, and only there (`HERDR_ENV=1` and a `HERDR_PANE_ID`, the
