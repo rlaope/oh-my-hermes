@@ -15,6 +15,15 @@ All notable changes will be documented here.
   are gone. A Hermes without the per-route function keeps the old ladder. The OMH TUI's info line and `/effort` reply
   name the level the route sends when Hermes reports it clamps one. (`apps/omher/bridge/omher_bridge.py`,
   `apps/omher/src/chat/model/`, `src/tui/modes.py`)
+- **The OMH TUI follows Hermes' `display.timestamps` and `display.show_cost`.** OMH TUI 5.0.0 dropped `/timestamps`
+  and `/statusbar`, so people who had set either key in Hermes lost what it showed. Now `display.timestamps: true`
+  adds a turn's local start and end minutes to its done line (`✻ 1m 20s · 10:42→10:44 · 3 tools`, a single
+  `10:42` when both are in the same minute). `/timestamps on|off` (or `/ts`) sets this for the current run without
+  writing Hermes' config. `display.show_cost: true` adds the session's cost to the info line, but only the
+  `usage.cost_usd` figure Hermes sends. OMH prices nothing, so when Hermes sends no cost, or marks it `unknown`,
+  nothing is shown, not `$0.00`; a subscription-`included` cost reads `included`. Hermes' gateway does not fill `cost_usd` yet, so the cost appears once Hermes does. `/statusbar` stays
+  dropped, and its notice now names `display.show_cost`. Both keys are off unless they are YAML `true`. Requested
+  by @wesleion. (#3187; `docs/OMH-TUI-BOUNDARY.md`, Turn clock times and session cost)
 - **Claude lanes can run on a Claude Pro/Max subscription through Hermes' DirectSDK plugin.** OMH did not see
   Hermes' official `claude-subscription-directsdk` model-provider plugin, so on a machine where it was the only
   Claude path, Claude aliases counted as unserved: Claude-headed chains (`deep`, `architect`, `writing`,
