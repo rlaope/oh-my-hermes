@@ -44,7 +44,7 @@ const HOOKS: Record<string, [string, string][]> = {
   "src/terminal/host.ts": [
     ['const MOCK_HOME = "/home/you";', 'const MOCK_HOME = "/Users/you";'],
     ["return `\\x1b[32myou@mock\\x1b[0m", "return `\\x1b[32myou@macbook\\x1b[0m"],
-    ["setTimeout(() => onData(`\\x1b[2m(mock) login shell in ${at}\\x1b[0m\\r\\n${this.prompt(at)}`), 20);", "setTimeout(() => onData(this.prompt(at)), 20);"],
+    ["setTimeout(() => onData(`\\x1b[2m(mock) ${name}login shell in ${at}\\x1b[0m\\r\\n${this.prompt(at)}`), 20);", "setTimeout(() => onData(this.prompt(at)), 20);"],
   ],
 };
 

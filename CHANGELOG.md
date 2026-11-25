@@ -17,6 +17,19 @@ All notable changes will be documented here.
   (`omh model-chains provider set claude-subscription-directsdk-experimental anthropic`), route the alias to it, or
   clear the other provider. `omh setup` labels the plugin's row.
   (#3186, carried; thanks @jaehyeokl; `docs/INSTALLATION.md`)
+- **omher: a TERMINALS Shell row where you ran Claude Code, Codex or `omh` puts it back after omher restarts.** Such a
+  row used to come back as a plain shell (paused), with the CLI and its conversation gone; only rows started directly
+  as Claude Code, Codex or oh-my-hermes came back. A Shell row now keeps which of those three CLIs is in its
+  foreground and, for Claude Code and Codex, that CLI's conversation id once the shell can name it (Codex from the
+  rollout it holds open, as a Codex row already did; Claude Code from its own `~/.claude/sessions/<pid>.json` record of
+  that running process, the foreground one's own record first), asked again every 15 s so a `/resume` or `/new` inside
+  the same CLI is followed. After a restart the row starts a fresh shell by itself and, once the shell is ready (its
+  output quiet for 3 s, or for 1 s after an OSC 133 prompt mark) and a fresh look finds the shell itself in front,
+  types one line, once: `claude --resume <id>`, `codex resume <id>` or `omh`. A key you press first, or a program your
+  rc started at the first prompt (OMH's own auto-resume, say), cancels it. A CLI that went back to the shell before the
+  restart is forgotten, and a Claude Code or Codex whose id was not known yet comes back paused, as before. Shell rows also get
+  their row's `OMHER_TERMINAL_LINK` now, so an `omh` typed in one reopens the session it dropped there. Windows keeps
+  `omh` but learns no Claude Code or Codex id. (`docs/OMHER-BOUNDARY.md` rule 11)
 - **TUI: `/dag` shows the highlighted node's handoff with `e`.** In the delegation graph pager, `e` opens the
   selected DAG node's evidence (title, status, role and up to 8 KiB of its local handoff), `r` rereads it and `e`
   returns to the same graph position. It reads only that node's handoff from the current stored session's DAG
@@ -24,26 +37,11 @@ All notable changes will be documented here.
   targets, and sends nothing to the gateway. The DAG record reader loads on the first evidence read, so a TUI
   session that never opens it imports no plugin runtime reader. (`src/tui/dag_evidence.py`,
   `src/tui/dag_pager.py`, `src/system/secure_regular_file.py`) (#3194)
-- **omher: TERMINALS folders say where they are, and a split stays in its folder.** A folder header showed only the
-  folder's last name, so `~`, `~/Desktop/khope` and `~/work/khope` read alike; it now shows the path from home under
-  the name, with the git branch after it. A split's card sat above every folder; it now sits at the top of its first
-  pane's folder, and that folder's count and live state include the split's sessions. The `+` menu starts in the open
-  terminal's folder, and each folder header has its own `+` that opens the menu in that folder.
 - **omher: a slash command reaches the bot as typed.** omher appended its own notes (the open-threads note, the
   terminal-link blocks, the peer note) to every main-chat message, slash commands included. Hermes reads all of a
   slash command's text as its arguments, so `/usage` answered `Unknown /usage subcommand: [omher] Open threads:
   none. ...`. A message that starts with `/` now goes with no note, and a slash command with a reply target is
   refused instead of sent with the target block. (`apps/omher/bridge/omher_bridge.py`)
-- **omher: a bot on another computer has threads, like a local one** (#3172). A bot connected over SSH
-  (`<peer>:<name>`) had only its main chat: no New thread on its row, no `./thread`, and its page said threads ran on
-  this computer only, because the peer link refused `thread.*` and every `session=` op. Its threads are sessions of
-  that bot on its own gateway, so the link now forwards `thread.create`, `thread.list`, `thread.open` and
-  `thread.remove` to that computer's bridge, and forwards `session=<id>` on send, interrupt, steer, approval, question
-  and model, and that session's events back, only for an id the peer's bridge itself answered as one of the bot's
-  threads; a folder chat there or any other id is still refused. A new thread there takes no folder from this computer
-  and its folder never starts this computer's terminal panel; a dropped link ends a running thread turn as stopped,
-  as it does the main chat's. Folder chats, Restart and a thread's pull requests stay on this computer (BOUNDARY rule
-  31).
 - **omher: Settings › Accounts › GitHub keeps Add and Remove on one line.** A GitHub account row reused the
   accounts grid, whose last column is the 26px ⋯ menu. 추가 just fit there in macOS's font; on Windows, whose Korean
   font is wider, it broke into 추 / 가 and was clipped. That row's button column now takes the label's width in any
@@ -276,6 +274,14 @@ All notable changes will be documented here.
   reported as a stray that has not exited. The
   `--json` report gains `idle_exit` and `overdue` per gateway. (`src/maintenance/gateway_health.py` `_unrecorded_line`,
   `IDLE_EXIT_STALE_SECONDS`, `src/system/process_listing.py` `IDLE_EXIT_FLAG`)
+- **omher 1.2.1.** TERMINALS folders say where they are, bots on another computer get threads, and Antigravity's
+  signed-in turns read cleanly.
+  - **Folders:** a folder header shows its path from home and its branch; a split's card sits at the top of its own
+    folder, which keeps its place in the list; the `+` menu starts in the open terminal's folder, and each folder
+    header has its own `+` (#3183).
+  - **Splits:** a split pane no longer takes the keyboard from a menu or card opened right after the drop (#3183).
+  - **Peers:** a bot connected over SSH lists and opens threads like a local one (#3177).
+  - **Antigravity:** a signed-in Antigravity chat shows its shell commands and file reads by name (#3192).
 - **omher 1.2.0.** Hand a terminal to a bot, a page per bot with its apps, Google's Antigravity CLI in TERMINALS, and
   a Windows pass.
   - **Agents:** Google's Antigravity CLI (`agy`) starts from the TERMINALS `+` menu with its official mark, shows its
