@@ -5462,6 +5462,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Deploy as the gated runbook: docker's three load-bearing flags (`--ipc=host`, HF cache mount, `HF_TOKEN`) or the Kubernetes five-step (secret gate, existing-deployment gate, apply, rollout+readiness verify, summary+smoke); the port invariant touches four places or it did not change the port.
   - Troubleshoot from the symptom table first - slow TTFT to prefix caching/chunked prefill, OOM to gpu-memory-utilization/max-model-len/quantization - before inventing flags.
   - Measure with the protocol: TTFT/TPOT/ITL/E2EL as mean/median/P99, goodput against an explicit SLO, one load shape per run, results saved with metadata; the full contract is `omh-inference-serving/references/serving-bench.md`.
+  - Run `toolkit/scripts/vram_kv_calc.py` for offline weight, KV-cache, tensor-parallel divisibility, and max-concurrency arithmetic instead of estimating VRAM by hand.
   - Report observed-only: each runbook step is prepared until its command's exit status and output are seen.
 - Completion checklist:
   - The engine/quantization verdict names the situation-table row it came from and the rejected options.
@@ -6970,6 +6971,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Build the evidence ledger first; the `Tested:` and validation sections are projections of it, not prose.
   - Write the subject in the repository's shape and the body as why the change exists, not a restated diff.
   - Load `references/commit-and-pr-conventions.md` for trailer, sign-off, and template-section mapping instead of improvising them.
+  - Run `toolkit/scripts/merge_danger_scan.py` on the unified diff before finalizing Risk/Rollout notes to catch migrations, lockfile churn, deleted public symbols, and secret prefixes.
   - Put `Closes #N` on its own line only when every success criterion of that issue is met.
 - Completion checklist:
   - The convention read names the template and log sample it drew from.
@@ -7736,6 +7738,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Load `references/data-share-method.md` for the field classes, the minimization order, the pseudonymization method, the per-class scan patterns, and the quasi-identifier group check instead of recalling them.
   - Count each class with `search_files` in its `count` output mode, or with a detector script run through `execute_code` when `execute_code` is in your tool list or tool_search finds it; its stdout returns, and so do stderr and any traceback, so it prints counts only and catches its own errors without echoing a value. With neither, hand the user the scan to run and keep the verdict not_observed until the counts come back.
   - Hermes' `privacy.redact_pii` hashes user and chat identifiers in the gateway's session prompt on the platforms that allow it, and `security.redact_secrets` masks secret-shaped strings in tool output; neither changes a file that leaves, so neither is this scan.
+  - Run `toolkit/scripts/residual_scan.py` (counts-only, never prints matched values) on the exact file that leaves to produce the observed `residual_scan/v1` record.
   - Keep inventoried, minimized, masked, scanned, and shipped as separate states for the file.
 - Completion checklist:
   - Every field has a class and an action, and each kept field names the destination's need for it.
