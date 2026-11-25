@@ -923,7 +923,9 @@ class Adapter:
             self.held.append({"jsonrpc": "2.0", "id": request_id, "method": "session.list", "params": params})
             return []
         requested = params.get("limit")
-        limit = requested if type(requested) is int and requested > 0 else _PICKER_SOURCE_LIMIT
+        limit = _PICKER_SOURCE_LIMIT
+        if isinstance(requested, int) and not isinstance(requested, bool) and requested > 0:
+            limit = requested
         asked: dict[str, Any] = {"limit": _PICKER_SOURCE_LIMIT}
         if "session-list-picker-v1" in self.capabilities:
             asked["picker"] = True
