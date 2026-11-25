@@ -451,6 +451,7 @@
   grid-column: -2 / -1;
   font-size: 11px;
   color: var(--quiet);
+  white-space: nowrap;
 }
 
 /* All bots */
