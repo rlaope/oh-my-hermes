@@ -122,6 +122,10 @@ export interface SessionHost extends HistoryHost {
   /** The conversation the Codex in the foreground of terminal session `id` (its pty) holds open: the UUID of the
    *  rollout that process keeps open in its Codex home, or null while it holds none (rule 11; only the id comes back). */
   codexConversation?(id: number): Promise<string | null>;
+  /** The conversation the Claude Code in the foreground of terminal session `id` (a Shell row's pty) runs: the UUID
+   *  Claude Code's own record of that running process names, or null while there is none (rule 11; only the id comes
+   *  back). */
+  claudeConversation?(id: number): Promise<string | null>;
   /** How many asks wait: a Dock / launcher count, or a dot on the Windows taskbar button. 0 clears it. */
   badge(count: number): Promise<void>;
   /** Keep the computer awake while agents work (src/lib/power.ts): a busy or idle edge. `now`: the setting went off,
@@ -273,6 +277,10 @@ export class TauriHost implements SessionHost {
   async codexConversation(id: number) {
     const { invoke } = await this.core();
     return invoke<string | null>("codex_conversation", { id });
+  }
+  async claudeConversation(id: number) {
+    const { invoke } = await this.core();
+    return invoke<string | null>("claude_conversation", { id });
   }
   async badge(count: number) {
     const { invoke } = await this.core();
@@ -478,6 +486,9 @@ type MockGlobals = {
   __omherPastReads?: { op: "list" | "read" | "own"; agent: string; cwds?: string[]; id?: string; cwd?: string; pty?: number }[];
   /** e2e: the conversation each mock pty's Codex holds open (pty id -> UUID), as a real Codex once its rollout exists */
   __omherMockCodexOwn?: Record<number, string>;
+  /** e2e: the conversation of the Claude Code or Codex a test runs in a Shell row's pty (pty id -> UUID), as the shell
+   *  reads it from the CLI in that terminal's foreground */
+  __omherMockFgOwn?: Record<number, string>;
   /** e2e: the Dock / taskbar count omher last set */
   __omherBadge?: number;
   /** e2e: the mock's copy of omher's custom-agents file (`agents` of `~/.omher/custom-agents.json`, as written) */
@@ -929,8 +940,16 @@ export class MockHost implements SessionHost {
   async codexConversation(id: number) {
     (this.g.__omherPastReads ??= []).push({ op: "own", agent: "codex", pty: id });
     const s = this.live.get(id);
-    if (!s || s.agent !== "codex") return null;
+    // not one of these: a Shell row's pty (the mock shell host's), whose foreground CLI the test names
+    if (!s) return this.g.__omherMockFgOwn?.[id] ?? null;
+    if (s.agent !== "codex") return null;
     return this.g.__omherMockCodexOwn?.[id] ?? null;
+  }
+  /** As the shell: the conversation of the Claude Code a test runs in Shell pty `id` (`__omherMockFgOwn[id]`). */
+  async claudeConversation(id: number) {
+    (this.g.__omherPastReads ??= []).push({ op: "own", agent: "claude", pty: id });
+    if (this.live.has(id)) return null;
+    return this.g.__omherMockFgOwn?.[id] ?? null;
   }
   async badge(count: number) {
     this.g.__omherBadge = count;
