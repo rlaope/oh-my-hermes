@@ -3196,6 +3196,9 @@ def _hud_segments(payload: dict[str, Any], *, preset: str) -> list[str]:
     if topology_label != "unknown":
         focused.append(f"target:{topology_label}")
     focused.append(_coding_agent_segment(runtime, executor))
+    cache_segment = _cache_segment(payload.get("cache"))
+    if cache_segment:
+        focused.append(cache_segment)
     evidence_state = str(runtime.get("evidence_state", "unknown") or "unknown")
     if preset == "full" and evidence_state not in {"idle", "unknown"}:
         focused.append(f"evidence:{_evidence_display_status(evidence_state)}")
@@ -3205,6 +3208,14 @@ def _hud_segments(payload: dict[str, Any], *, preset: str) -> list[str]:
         # An unobserved total gets no denominator rather than a made-up 0.
         focused.append(f"ach:{achievements.get('unlocked_count')}" + (f"/{total}" if total is not None else ""))
     return focused
+
+
+def _cache_segment(cache: Any) -> str:
+    """`cache:NN%`, the main sessions' 24h prompt-cache read share, or "" when the payload has none."""
+    share = cache.get("read_share") if isinstance(cache, dict) else None
+    if isinstance(share, bool) or not isinstance(share, (int, float)):
+        return ""
+    return f"cache:{round(share * 100)}%"
 
 
 REPEAT_STAGE_LABELS = {

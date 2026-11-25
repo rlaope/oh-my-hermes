@@ -16,7 +16,8 @@ checks that no other file reads that folder. To add a harness, add one registry 
    CLI run's agent, or the `kind` that the bridge's `runs.node_session` returns. Names are matched without regard to
    case, and aliases also match (`claude-code` → claude, `codex`, `omp`, `gemini-cli` …).
 2. **The ACP command's basename.** `claude-agent-acp` and `claude-code-acp` → claude, `codex-acp` → codex. `gemini`,
-   `opencode`, `kimi`, `qwen`, `copilot`, `cline` and `goose` are matched with their `--acp`/`acp` argument. The path
+   `opencode`, `kimi`, `qwen`, `copilot`, `cline` and `goose` are matched with their `--acp`/`acp` argument, and
+   `agy acp` (Google's Antigravity CLI; also the names `antigravity` and `antigravity-cli`) → antigravity. The path
    and a Windows `.exe` suffix are ignored. An ACP command that no row knows → `generic`.
 3. **A plain Hermes child.** If only a provider or model is known, the work ran inside Hermes, so the harness is
    `hermes`. The model maker's mark (Claude, OpenAI, Gemini, DeepSeek, xAI, Z.ai …) is a second, smaller fact

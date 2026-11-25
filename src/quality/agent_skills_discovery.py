@@ -118,6 +118,7 @@ PROBE_UNSUPPORTED: Final[Mapping[str, str]] = {
     "cursor": "OMH has verified no credential-free, non-interactive command that lists discovered skills",
     "openclaw": "OMH has verified no credential-free, non-interactive command that lists discovered skills",
     "pi": "OMH has verified no credential-free, non-interactive command that lists discovered skills",
+    "antigravity": "OMH has verified no credential-free, non-interactive command that lists discovered skills",
 }
 
 RECEIPT_KEYS: Final = frozenset(
@@ -738,7 +739,7 @@ def build_agent_skills_evidence(
 
         version_probe = agent_cli_version
     files = agent_skill_files()
-    # One inventory per pack: the five `.agents` hosts copy the portable pack,
+    # One inventory per pack: the six `.agents` hosts copy the portable pack,
     # Claude Code its own copy (`host_pack_files`), so the digest a receipt
     # binds is its host's pack's. `catalog_revision` stays the portable
     # pack's, the one catalog both copies are generated from.

@@ -193,6 +193,39 @@ test("Settings › Accounts › GitHub adds gh's accounts and runs gh's own sign
   expect(writes.map((w: any) => w.data).join("")).toBe("\r");
 });
 
+test("a GitHub account row's button is as wide as its label, in Korean, at any width (Windows report)", async ({ page }) => {
+  // The row's last column was the ⋯ menu's fixed 26px. 추가 just fits there in macOS's font; Windows' wider Korean
+  // font broke it into 추 / 가 and clipped it. The label must set the width, whatever the font.
+  await page.addInitScript(() => localStorage.setItem("omher.lang", "ko"));
+  await setup(page, { chosen: false });
+  await page.getByTestId("tasks-open").click();
+  await page.getByTestId("tasks-scope-me").click();
+  await page.getByTestId("me-connect-btn").click();
+  await expect(page.getByTestId("gh-add-octo")).toHaveText("추가");
+  for (const width of [1280, 900]) { // the window's own range (tauri.conf minWidth 900)
+    await page.setViewportSize({ width, height: 720 });
+    for (const login of ["octo", "octo-work"]) {
+      const fit = await page.getByTestId(`gh-add-${login}`).evaluate((el) => {
+        const probe = el.cloneNode(true) as HTMLElement;
+        probe.style.cssText = "position:absolute;visibility:hidden;width:max-content";
+        el.parentElement!.appendChild(probe);
+        const natural = probe.getBoundingClientRect().width;
+        probe.remove();
+        const b = el.getBoundingClientRect();
+        const row = el.closest(".acc-row")!.getBoundingClientRect();
+        return { wide: b.width >= natural - 0.5, inside: b.right <= row.right + 0.5, natural, width: b.width };
+      });
+      expect(fit.wide, `${login} at ${width}px: ${JSON.stringify(fit)}`).toBe(true);
+      expect(fit.inside, `${login} at ${width}px stays in its row: ${JSON.stringify(fit)}`).toBe(true);
+    }
+  }
+  // a chosen account's 빼기 too
+  await page.getByTestId("gh-add-octo").click();
+  const remove = page.getByTestId("gh-remove-octo");
+  const fits = await remove.evaluate((el) => el.scrollWidth <= el.clientWidth && el.getBoundingClientRect().height < 40);
+  expect(fits).toBe(true);
+});
+
 test("the scope toggle, both accounts' rows sorted by attention, chips and the sidebar badge", async ({ page }) => {
   await setup(page, { scope: "repo" });
   await page.getByTestId("tasks-open").click();

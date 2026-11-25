@@ -22,7 +22,7 @@ hashed, and never persisted. The only inputs to a tag are an email address, an
 account uuid, and an account id — identifiers, not credentials.
 
 Redaction. An email becomes the first two characters of its local part, an
-ellipsis, and its domain (`kh...@gmail.com`): stable across runs, enough for an
+ellipsis, and its domain (`de...@example.org`): stable across runs, enough for an
 operator to recognise their own account, and not the address itself. Every
 other identifier becomes the first 8 hex characters of its SHA-256, which is
 one-way and stable. The tag is prefixed with the owner's family (`claude:` /
@@ -70,7 +70,7 @@ ACCOUNT_TAG_OWNERS: Final[tuple[str, ...]] = ("claude-code", "codex")
 _OWNER_PREFIXES: Final[dict[str, str]] = {"claude-code": "claude", "codex": "codex"}
 
 # Enough of the local part to recognise an account, not enough to be the
-# address. Two characters is the same amount `kh...@gmail.com` shows.
+# address. Two characters is the same amount `de...@example.org` shows.
 _EMAIL_VISIBLE_CHARS: Final[int] = 2
 _DIGEST_CHARS: Final[int] = 8
 _MAX_TAG_CHARS: Final[int] = 96
@@ -127,7 +127,7 @@ def _codex_identifier(home: Path) -> str:
 
 
 def redacted_email(email: str) -> str:
-    """`khope@gmail.com` -> `kh...@gmail.com`; a value with no `@` is digested."""
+    """`demo@example.org` -> `de...@example.org`; a value with no `@` is digested."""
     local, separator, domain = str(email).partition("@")
     if not separator or not domain:
         return short_digest(email)

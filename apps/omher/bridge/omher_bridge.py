@@ -55,7 +55,7 @@ try:
 except ImportError:
     msvcrt = None
 
-VERSION = "1.1.3"
+VERSION = "1.2.1"
 BOT_CHAT_TITLE = "Bot Chat"
 FOLDER_CHAT_PREFIX = "omher · "
 MAX_FOLDER_CHATS = 16
@@ -5964,6 +5964,8 @@ def pending_turns(snap: dict, watch_names: set[str] | frozenset[str] = frozenset
 # person's own `ssh`. This bridge only opens a WebSocket client to that port: it merges the peer's bots into
 # `bots.list` as `<peer>:<name>` (with a `host` field), forwards each bot-scoped op with the bare name and passes the
 # peer's events back under the namespaced name. Ops that need this computer's folders or programs are refused.
+# A peer bot's threads are sessions on that bot's own gateway, made by the peer's bridge: `thread.*` is forwarded,
+# and `session=<id>` crosses only for an id the peer's bridge itself answered as a thread (`PeerLink.threads`).
 
 PEER_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,31}")
 PEER_HOST = re.compile(r"(?:[A-Za-z0-9_][A-Za-z0-9._-]{0,31}@)?[A-Za-z0-9][A-Za-z0-9.-]{0,252}")
@@ -5976,12 +5978,16 @@ PEER_OPEN_TIMEOUT = 15.0
 PEER_FORWARD = frozenset({
     "chat.open", "chat.send", "chat.interrupt", "chat.discard", "chat.steer", "approval.respond", "clarify.respond", "chat.attach", "chat.set_model",
     "models.options", "bots.ready", "bots.rename", "bots.avatar", "bots.set_avatar", "bots.info", "skills.list",
-    "commands.list", "bots.page",
+    "commands.list", "bots.page", "thread.create", "thread.list", "thread.open", "thread.remove",
     "links.places", "tasks.linear", "elsewhere.list", "routines.list", "runs.list", "runs.get", "runs.prs",
     "runs.node_session",
     "panel.terminal", "panel.worktrees", "panel.diff", "media.read", "automations.add", "automations.pause",
     "automations.resume", "automations.remove", "plugins.list", "plugins.catalog", "plugins.inspect",
     "plugins.install", "plugins.toggle", "plugins.update", "plugins.remove", "plugins.reload",
+})
+# Ops that take ``session=<thread>`` for a peer's bot, forwarded only when the id is one of that bot's threads.
+PEER_SESSION_OPS = frozenset({
+    "chat.send", "chat.interrupt", "chat.steer", "approval.respond", "clarify.respond", "chat.set_model",
 })
 # Ops that need this computer: refused for a peer's bot, with the reason the person reads.
 PEER_REFUSED = {
@@ -6005,6 +6011,10 @@ class PeerLink:
         self.hello: dict = {}
         self.rows: list[dict] = []      # the peer's bots.list rows, bare names
         self.running: set[str] = set()  # bare names whose main-chat turn runs now
+        # bare name -> the thread ids the peer's bridge answered for it (thread.create / thread.list / thread.added),
+        # the only `session` values forwarded for that bot; and the (name, thread) pairs whose turn runs now
+        self.threads: dict[str, set[str]] = {}
+        self.thread_running: set[tuple[str, str]] = set()
         self.on_event = None
         self.on_lost = None
 
@@ -7408,6 +7418,11 @@ class Bridge:
         reply_to = p.get("reply_to")
         if reply_to is not None and (not isinstance(reply_to, str) or not reply_to):
             raise BridgeError("bad_request", "reply_to must be a session id")
+        # A slash command goes as typed: Hermes reads all of its text as the command and its arguments, so a note
+        # appended to it becomes an argument ("Unknown /usage subcommand: [omher] Open threads: ...").
+        command = text.lstrip().startswith("/")
+        if command and reply_to is not None:
+            raise BridgeError("bad_request", "a slash command takes no reply target")
         conn = await self._conn(p.get("bot"))
         main, chat = await self._target(conn, p)
         if reply_to is not None:
@@ -7419,13 +7434,13 @@ class Bridge:
             if ref is None:
                 raise BridgeError("bad_request", "that session has no thread to reply in")
             text = f"{text.rstrip()}\n\n{reply_block(*ref)}"
-        if chat is None:
+        if chat is None and not command:
             blocks = await asyncio.to_thread(term_link_blocks, text, self.omher_home)
             if blocks:
                 text = f"{text.rstrip()}\n\n{blocks}"
-        if peer_hint_wanted(text):
+        if not command and peer_hint_wanted(text):
             text = f"{text.rstrip()}\n\n{PEER_HINT}"
-        if chat is None and conn.threads_shown:
+        if chat is None and conn.threads_shown and not command:
             text = f"{text.rstrip()}\n\n{thread_hint(self._hint_rows(conn))}"
         input_id = str(uuid.uuid4())
         await self._probe_clarify_batch(conn)
@@ -8987,7 +9002,9 @@ class Bridge:
                 for r in link.rows]
 
     async def _peer_op(self, p) -> dict:
-        """A bot-scoped op for `<peer>:<name>`: forwarded with the bare name, or refused when it needs this computer."""
+        """A bot-scoped op for `<peer>:<name>`: forwarded with the bare name, or refused when it needs this computer.
+        ``session`` crosses only for a thread of that bot the peer's bridge answered (``PeerLink.threads``); any other
+        id (a folder chat there, a made-up id) is refused as a folder chat."""
         key = p["bot"]
         peer, _, name = key.partition(":")
         link = self.peers.get(peer)
@@ -8996,7 +9013,9 @@ class Bridge:
             raise BridgeError("unknown_bot", f"no bot named {key}")
         if op in PEER_REFUSED:
             raise BridgeError("remote_bot", PEER_REFUSED[op].format(label=link.label))
-        if p.get("session") is not None:
+        session = p.get("session")
+        if session is not None and not (op in PEER_SESSION_OPS and isinstance(session, str)
+                                        and session in link.threads.get(name, ())):
             raise BridgeError("remote_bot", PEER_REFUSED["folder.open"].format(label=link.label))
         if op == "bots.restart_scope":
             row = next((r for r in link.rows if r["name"] == name), None)
@@ -9005,6 +9024,11 @@ class Bridge:
             raise BridgeError("remote_bot", f"{op} is not available for a bot on another computer")
         if name not in link.names:
             raise BridgeError("unknown_bot", f"no bot named {key}")
+        if op == "thread.create" and p.get("cwd") is not None:
+            # a folder is a path on this computer; the thread starts where that bot's own config starts it
+            raise BridgeError("remote_bot", PEER_REFUSED["folder.open"].format(label=link.label))
+        if op in ("thread.open", "thread.remove") and p.get("thread") not in link.threads.get(name, ()):
+            raise BridgeError("not_found", "no such thread")
         params = {k: v for k, v in p.items() if k not in ("id", "op")}
         params["bot"] = name
         if op == "automations.add" and params.get("deliver") == f"bot-chat:{key}":
@@ -9014,16 +9038,54 @@ class Bridge:
             # the file is on the other computer: the bytes came over the link; nothing here may open its path
             out = {**out, "remote": True}
         if op == "chat.send":
-            link.running.add(name)
+            if session is None:
+                link.running.add(name)
+            else:
+                link.thread_running.add((name, session))
+        if op.startswith("thread."):
+            out = self._peer_thread_result(link, name, op, p, out)
         return out
+
+    def _peer_thread_result(self, link: PeerLink, name: str, op: str, p: dict, out):
+        """Learn the thread ids a peer's bridge answered, and drop each row's folder: it is a path on that
+        computer, so nothing here (the terminal panel, Tasks) may start in it."""
+        known = link.threads.setdefault(name, set())
+        if op == "thread.remove":
+            known.discard(p.get("thread"))
+            link.thread_running.discard((name, p.get("thread")))
+            return out
+        if not isinstance(out, dict):
+            return out
+        if op == "thread.list":
+            rows = [r for r in out.get("threads") or [] if isinstance(r, dict) and isinstance(r.get("thread"), str)]
+            known.update(r["thread"] for r in rows)
+            return {**out, "threads": [{**r, "cwd": ""} for r in rows]}
+        if isinstance(out.get("thread"), str):
+            known.add(out["thread"])
+        return {**out, "cwd": ""} if "cwd" in out else out
 
     async def _peer_event(self, link: PeerLink, f: dict) -> None:
         """A peer's event, passed on under the namespaced bot name. Events of no bot (the other computer's own
-        accounts) and of a folder chat (omher opens none there) are dropped."""
+        accounts) are dropped, and so are events of a session that is not one of that bot's threads (a folder chat
+        there: omher opens none)."""
         bot, event = f.get("bot"), f.get("event")
-        if not isinstance(bot, str) or not PEER_BOT.fullmatch(bot) or f.get("session") is not None:
+        if not isinstance(bot, str) or not PEER_BOT.fullmatch(bot):
             return
-        if event == "turn.start":
+        known = link.threads.setdefault(bot, set())
+        if event == "thread.added" and isinstance(f.get("thread"), str):
+            known.add(f["thread"])
+        elif event == "thread.removed" and isinstance(f.get("thread"), str):
+            known.discard(f["thread"])
+            link.thread_running.discard((bot, f["thread"]))
+        session = f.get("session")
+        if session is not None:
+            if not isinstance(session, str) or session not in known:
+                return
+            if event == "turn.start":
+                link.thread_running.add((bot, session))
+            elif event == "turn.end":
+                link.thread_running.discard((bot, session))
+        elif event == "turn.start":
             link.running.add(bot)
         elif event == "turn.end":
             link.running.discard(bot)
@@ -9037,6 +9099,9 @@ class Bridge:
         running, link.running = set(link.running), set()
         for bot in sorted(running):
             await self.emit("turn.end", f"{link.peer}:{bot}", outcome="interrupted", error=reason)
+        in_threads, link.thread_running = set(link.thread_running), set()
+        for bot, thread in sorted(in_threads):
+            await self.emit("turn.end", f"{link.peer}:{bot}", session=thread, outcome="interrupted", error=reason)
         for r in link.rows:
             await self.emit("bot.status", f"{link.peer}:{r['name']}", status="offline", running=False)
 

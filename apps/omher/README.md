@@ -168,7 +168,7 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   `THIRD_PARTY_NOTICES.md`), font, size, line height, cursor, scrollback, contrast and padding, kept on this
   computer (`src/sessions/term/`). In a terminal, Cmd/Ctrl+F finds in the scrollback and Cmd/Ctrl+click opens a web
   link in the browser. The shell reads a program only as far ahead of the terminal as the terminal has drawn (2 MiB
-  at most), so a runaway program holds memory flat and Ctrl+C is answered at once. The UI sends only an agent id (`claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`, `opencode`, `gemini`, `qwen`, `kimi`, `copilot`, `cline`); the shell
+  at most), so a runaway program holds memory flat and Ctrl+C is answered at once. The UI sends only an agent id (`claude`, `codex`, `omo`, `dsh`, `omh`, `pi`, `omp`, `grok`, `opencode`, `gemini`, `qwen`, `kimi`, `copilot`, `cline`, `agy`); the shell
   refuses anything else and never takes a command line or arguments. Closing a session or quitting the app stops
   the program. In a plain browser (dev, e2e) a mock host echoes what you type instead. A row's first line is the
   session's name: the one you gave it (double-click or right-click › Rename), else the title the agent gave the
@@ -222,10 +222,13 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   offer it). Before OpenCode starts, omher reads its resolved rules (`opencode agent list`) and starts it with
   ask rules built from them: what you allow asks first, what you deny stays denied. If omher cannot confirm OpenCode
   kept them, it does not start OpenCode. Gemini CLI (`gemini --acp`), Qwen Code (`qwen --acp`), Kimi Code
-  (`kimi acp`), Copilot CLI (`copilot --acp`) and Cline (`cline --acp`) are rows of one list in the shell
+  (`kimi acp`), Copilot CLI (`copilot --acp`), Cline (`cline --acp`) and Google's Antigravity CLI (`agy acp`) are rows
+  of one list in the shell
   (`src-tauri/src/acp_agents.rs`: program, argument, sign-in and install lines, mark), which the agent look-up hands
-  to the UI; they use their own approval requests, with no permission override from omher. Their signed-in turns have not been tested. An agent that is not signed in
-  ends its session with one line naming its own sign-in command (`gemini`, `kimi login`, `cline auth`, ...) and
+  to the UI; they use their own approval requests, with no permission override from omher. Antigravity CLI 1.5.16
+  signed-in turns are checked against recorded runs (`tests/fixtures/acp/agy-*.jsonl`); the other five generic ACP
+  agents' signed-in turns have not been tested. An agent that is not signed in
+  ends its session with one line naming its own sign-in command (`gemini`, `kimi login`, `cline auth`, `agy acp --login`, ...) and
   Open in Terminal; omher never signs in for it and never takes a key.
 - **Your own ACP agents** (Settings › Agents, `src-tauri/src/custom_agents.rs`): the page lists every offered
   agent read-only with its tier (Main / ACP / Built-in) and whether it is installed, then yours. Add agent takes a
@@ -264,7 +267,7 @@ Rules the code keeps:
 - **Loopback only.** The bridge listens on 127.0.0.1 and talks to the gateway Hermes itself runs on this machine.
 - **No model calls of its own.** Every model call is Hermes'. omher has no API key and no HTTP client.
 - **Sessions run only allow-listed agents.** Only when you start one, only `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`,
-  `omp`, `grok`, `opencode`, `gemini`, `qwen`, `kimi`, `copilot` or `cline`, with no arguments besides the fixed chat mode and a conversation id to continue, in the folder you
+  `omp`, `grok`, `opencode`, `gemini`, `qwen`, `kimi`, `copilot`, `cline` or `agy` (Antigravity), with no arguments besides the fixed chat mode and a conversation id to continue, in the folder you
   picked; stopped when the session is closed or the app quits.
 - **Automations and plugins change only through the bot.** The Automations page reads each profile's
   `cron/jobs.json` and changes a job only with that bot's `cron.manage` (add, pause, resume, remove); Run now and
@@ -317,6 +320,7 @@ node e2e/mock-bridge.mjs --port 5308   # the mock bridge for that
 pnpm tauri dev            # the app: starts the real bridge from ./bridge
 pnpm typecheck && pnpm test            # tsc, vitest
 pnpm e2e                  # Playwright (chromium) against the mock bridge
+bash scripts/e2e-shards.sh 3           # the same as 3 shards at once, each with its own ports (what CI runs)
 (cd src-tauri && cargo test)           # the shell's Rust tests
 (cd src-tauri && cargo test real_agents_print_their_version -- --ignored --nocapture)  # `claude/codex --version` through the PTY
 python -m unittest discover -s bridge/tests -v   # bridge tests with a FakeGateway; needs no Hermes

@@ -4,6 +4,22 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **TUI: `/dag` shows the highlighted node's handoff with `e`.** In the delegation graph pager, `e` opens the
+  selected DAG node's evidence (title, status, role and up to 8 KiB of its local handoff), `r` rereads it and `e`
+  returns to the same graph position. It reads only that node's handoff from the current stored session's DAG
+  record, refuses symlinks, FIFOs, remote handoff roots and another session's record, drops Markdown link
+  targets, and sends nothing to the gateway. The DAG record reader loads on the first evidence read, so a TUI
+  session that never opens it imports no plugin runtime reader. (`src/tui/dag_evidence.py`,
+  `src/tui/dag_pager.py`, `src/system/secure_regular_file.py`) (#3194)
+- **omher: a slash command reaches the bot as typed.** omher appended its own notes (the open-threads note, the
+  terminal-link blocks, the peer note) to every main-chat message, slash commands included. Hermes reads all of a
+  slash command's text as its arguments, so `/usage` answered `Unknown /usage subcommand: [omher] Open threads:
+  none. ...`. A message that starts with `/` now goes with no note, and a slash command with a reply target is
+  refused instead of sent with the target block. (`apps/omher/bridge/omher_bridge.py`)
+- **omher: Settings › Accounts › GitHub keeps Add and Remove on one line.** A GitHub account row reused the
+  accounts grid, whose last column is the 26px ⋯ menu. 추가 just fit there in macOS's font; on Windows, whose Korean
+  font is wider, it broke into 추 / 가 and was clipped. That row's button column now takes the label's width in any
+  language and font. (`apps/omher/src/settings/accounts/accounts.css`)
 - **omher: Ctrl+V pastes and Ctrl+C copies in a Windows terminal, as in Windows Terminal.** On Windows, Ctrl+V in a
   terminal used to reach the program as ^V; only Ctrl+Shift+V and Shift+Insert pasted. Now Ctrl+V pastes through the
   same path as those keys (the multi-line confirm, and a pasted picture's saved path), and the paste happens once.
@@ -243,6 +259,31 @@ All notable changes will be documented here.
   reported as a stray that has not exited. The
   `--json` report gains `idle_exit` and `overdue` per gateway. (`src/maintenance/gateway_health.py` `_unrecorded_line`,
   `IDLE_EXIT_STALE_SECONDS`, `src/system/process_listing.py` `IDLE_EXIT_FLAG`)
+- **omher 1.2.1.** TERMINALS folders say where they are, bots on another computer get threads, and Antigravity's
+  signed-in turns read cleanly.
+  - **Folders:** a folder header shows its path from home and its branch; a split's card sits at the top of its own
+    folder, which keeps its place in the list; the `+` menu starts in the open terminal's folder, and each folder
+    header has its own `+` (#3183).
+  - **Splits:** a split pane no longer takes the keyboard from a menu or card opened right after the drop (#3183).
+  - **Peers:** a bot connected over SSH lists and opens threads like a local one (#3177).
+  - **Antigravity:** a signed-in Antigravity chat shows its shell commands and file reads by name (#3192).
+- **omher 1.2.0.** Hand a terminal to a bot, a page per bot with its apps, Google's Antigravity CLI in TERMINALS, and
+  a Windows pass.
+  - **Agents:** Google's Antigravity CLI (`agy`) starts from the TERMINALS `+` menu with its official mark, shows its
+    mark on a running row, in Settings › Agents and on a Hermes child that runs `agy acp` (#3176).
+  - **Hand to a bot:** right-click a TERMINALS row, a split cell or a worktree to hand its folder to a bot, with the
+    keyboard back on the row after the card closes (#3143, #3163, #3171).
+  - **Bots:** a bot's page shows its persona, memory and work (#3148), an Apps page connects it to Hermes' MCP catalog
+    (#3152), a bot whose Discord or Slack stopped connecting says so (#3157), a chat that stopped after a crash says
+    why and recovers (#3127, #3129), and the reasoning picker offers every level Hermes accepts (#3134).
+  - **Terminals:** drag a header to merge two terminals of one folder (#3145), each split shows as one layout card
+    (#3138, #3167), make a folder from the right-click menu with sharp pictures in terminals (#3073), and a panel tab
+    click right after maximise picks that tab (#3146).
+  - **Threads and links:** a thread lists the pull requests its bot linked with their checks (#3149), and links to
+    Jira, Confluence, Sentry, Asana, Todoist, ClickUp, GitLab and Obsidian become chips (#3151).
+  - **Windows:** Ctrl+V pastes and Ctrl+C copies as in Windows Terminal (#3132), "Reply there" and fonts fixed
+    (#3142), an oh-my-hermes terminal reads oh-my-hermes (#3135), and SSH to a Windows Hermes with only `hermes.cmd`
+    works (#3118). Settings › Accounts › GitHub keeps Add and Remove on one line (#3174).
 - **omher 1.1.3.** GitHub across your repositories and accounts, a Claude usage meter that shows numbers, and terminals
   and bridges that recover by themselves.
   - **GitHub:** Tasks gains a "나" scope: your review requests, your pull requests, issues assigned to you and mentions,
@@ -643,6 +684,57 @@ All notable changes will be documented here.
   questions and stop keys stay on main's screen; on the shared gateway the view reads one page at a time until an
   empty page, at most 50 reads after the agent ends, then says it could not read the rest. (`src/tui/subagent_session.py`,
   `src/tui/agent_view.py`, `src/tui/app.py`, `src/tui/frame.py`)
+- **omher: Google's Antigravity CLI (`agy`) is an agent you can start in TERMINALS.** The TERMINALS `+` menu offers
+  Antigravity with its official mark, and starts `agy` with no arguments in a terminal in the folder you pick; when it
+  is not installed, More agents shows its official installer line (`curl -fsSL https://antigravity.google/cli/install.sh | bash`).
+  omher finds `agy` where that installer puts it (`~/.local/bin`, and `%LOCALAPPDATA%\agy\bin` on Windows, now
+  searched too) even when omher was started from the Dock with a short PATH. A terminal row running `agy`, also one
+  you typed into a Shell, shows the Antigravity mark and name; Settings › Agents lists it as an ACP agent; and a
+  Hermes child that works through `agy acp` shows the Antigravity mark. Its ACP row is `agy acp`; signed out, it ends
+  with one line naming `agy acp --login`, checked against a real Antigravity CLI 1.5.16 handshake. Signed-in turns and
+  its approval cards were not run. (`apps/omher/src-tauri/src/acp_agents.rs`; `docs/OMHER-BOUNDARY.md` rule 11)
+
+- **Sibling dag-ulw child tasks start with the same bytes, so a provider prompt cache can serve the shared part.**
+  Each child task used to open with its own node prompt, so two siblings of one run shared almost no prefix (6
+  characters in a 3-node sample). Now the run-wide block comes first: the saved run goal with its acceptance-context
+  line, then the stay-inside-your-SCOPE rule, the same bytes for every node whatever its role, so a writer and a
+  verify node in one call share it too, with or without a saved goal. The node's own block follows: prompt, review
+  focus, resume, escalation and re-plan text, handoff, read-first, the verify lines, and the commit-only-your-SCOPE and
+  shared-machine rules that only writing nodes get. The same sample now shares 300 characters. No line was reworded or
+  dropped, and the `[dag:run/node]` goal is unchanged. A
+  `ready` call that carries several tasks now has a `note`: OMH does not stagger their start. (`src/plugin_bundle/omh/dag_run.py`)
+
+- **`omh doctor` now says when the prompt-cache TTL does not match what the route keeps, and why warming stopped.**
+  A new `prompt_cache_route` row and **Prompt cache (read-only)** section read only `config.yaml` and the tail of
+  `logs/agent.log`. On a route that keeps 1h entries (a loopback, localhost or private `base_url` serving Claude, as
+  CLIProxyAPI does; the provider name counts only when no `base_url` is set, so `api.anthropic.com` is never a proxy)
+  they warn when `prompt_caching.cache_ttl` is pinned to `5m` (a `1h` route ceiling does not lift a `5m` pin) or when
+  the route has no `1h` ceiling, and when caching is off, and print only the fix that applies:
+  `hermes config set prompt_caching.cache_ttl auto` and/or
+  `hermes config set prompt_caching.route_ttl_ceilings.<provider> 1h`. They also count the warmer's stop reasons
+  over the last 24h with a plain explanation of each. `omh model` repeats the TTL warning. No model request is sent.
+  (`src/maintenance/prompt_cache_route.py`, `src/maintenance/doctor.py`)
+
+- **Cron, webhook and other machine-paced sessions no longer pay for the identity catalog in their system prompt.**
+  `omh.awareness` already left the identity catalog out of `delegate_task` children. It now leaves it out of every
+  platform Hermes counts as machine-paced, the `MACHINE_PACED_SOURCES` list in its `agent/prompt_caching.py`, copied
+  as data (`subagent`, `cron`, `oneshot`, `webhook`, `kanban`, `api`, `api_server`, `tool`, `batch`, `curator`, `a2a`,
+  `msgraph_webhook`, `gateway_hygiene`). Those sessions keep the full primer, boundary lines included. A cron session
+  with custom identities drops from 3,689 to 1,667 section chars on the test fixture. A new test renders every OMH
+  system-prompt section in two Python processes with different `PYTHONHASHSEED` and `TZ` and checks the bytes match,
+  so a set order, clock or mtime that reaches the frozen prefix fails CI. No difference was found. OMH adds no skill
+  index or candidate text to the system prompt. (`src/plugin_bundle/omh/hooks/llm_hooks.py`)
+
+- **`omh cache` shows how warm a profile's prompt cache is and why it goes cold.** It reads the profile's `state.db`
+  read-only and prints, for the last 7 days (`--days N`, `--json`): the cache read share per session source; the gaps
+  between user messages in human-paced sessions (`<5m`, `5-60m`, `>1h`); per cron job (title before `' · '`) the runs,
+  model runs, cache writes, median gap and distinct system prompts; and the cron write split into cold (a run more
+  than 1h after the job's previous one), churn (a warm run whose system prompt changed) and other (growth inside
+  runs), using the job's smallest run write as its prefix. For the top churn job it prints the first differing system
+  prompt line, cut to 160 characters, then one to three suggestions. The HUD payload gains a `cache` field: the last
+  24h read share of main sessions from one bounded read-only query that never waits on a lock, left out when it
+  cannot be read, and shown on the plain `omh hud` / `omh status` line as `cache:NN%`. It sends no model request.
+  (`src/maintenance/cache_report.py`, `src/commands/cache.py`, `src/surfaces/hud.py`, `docs/PROMPT-CACHE.md`)
 
 ## 5.0.0 - 2026-11-21
 
@@ -13510,7 +13602,7 @@ Highlights of this major release (details in the entries below):
   skill name that resolves to two different files across
   `skills.external_dirs`, and every generation refresh made the two copies
   differ, so after each update every OMH skill present in both failed to
-  load by name in that bot (#1857; on the owner machine `profiles/miku`
+  load by name in that bot (#1857; on the owner machine `profiles/mbot`
   recorded `Ambiguous skill name 'omh-model-setup'`). `_apply_result` run
   from the installer-managed command now retires every other OMH-managed
   entry in the same config write that registers the pointer, so the home

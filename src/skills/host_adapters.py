@@ -2,11 +2,12 @@
 
 Claude's installers copy their own committed pack (`CLAUDE_PACK_SOURCE`), the
 portable pack with Claude Code's listing change applied at generation; the
-other five copy `agent-skills/` as is.
+other six copy `agent-skills/` as is.
 
 These are installation contracts, not evidence of host selection/execution.
-Claude's correction was observed with 2.1.270 on 2026-09-13; the other rows
-retain the recorded documentation/source assessment and its caveats.
+Claude's correction was observed with 2.1.270 on 2026-09-13 and Antigravity's
+discovery was observed with 1.5.16 on 2026-11-25; the other rows retain the
+recorded documentation/source assessment and its caveats.
 """
 from __future__ import annotations
 
@@ -46,6 +47,9 @@ HOST_ADAPTERS = (
                 "Custom OPENCLAW_STATE_DIR skips the standard user path; workspace skills can take precedence."),
     HostAdapter("pi", ".agents/skills", ".agents/skills", _EVIDENCE,
                 "Trusted projects only; first duplicate name wins."),
+    HostAdapter("antigravity", ".agents/skills", ".agents/skills", _EVIDENCE,
+                "Repo and user discovery observed in Antigravity CLI 1.5.16, 2026-11-25; "
+                "large combined skill catalogs are subject to host context-budget exclusion; not workflow execution."),
 )
 
 
@@ -83,7 +87,7 @@ def checksum_inventory(hashes: dict[str, str]) -> str:
 
 
 def source_digest(hashes: dict[str, str]) -> str:
-    """sha256 of ``checksum_inventory``; one value per pack, shared by the five `.agents` hosts."""
+    """sha256 of ``checksum_inventory``; one value per pack, shared by the six `.agents` hosts."""
     return hashlib.sha256(checksum_inventory(hashes).encode("utf-8")).hexdigest()
 
 

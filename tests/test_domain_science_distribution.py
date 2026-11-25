@@ -173,9 +173,9 @@ class DomainDistributionTests(unittest.TestCase):
                     preflight_support(root, list(skill_record(owner).support()), None)
                 self.assertFalse((root / "foreign").exists())
 
-    def test_six_host_adapters_fresh_unchanged_edited_unowned_and_stale(self):
+    def test_host_adapters_fresh_unchanged_edited_unowned_and_stale(self):
         expected = expected_support()
-        for host in ("cursor", "claude", "codex", "opencode", "openclaw", "pi"):
+        for host in ("cursor", "claude", "codex", "opencode", "openclaw", "pi", "antigravity"):
             with self.subTest(host=host), tempfile.TemporaryDirectory() as td:
                 root = Path(td)
                 target = root / (".claude/skills" if host == "claude" else ".agents/skills")

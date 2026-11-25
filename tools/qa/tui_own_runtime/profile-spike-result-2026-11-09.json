@@ -19,7 +19,7 @@
   "pid": 68447,
   "gateway_state": "running",
   "served_profiles": [],
-  "hermes_home": "/Users/khope@sionic.ai/.hermes/profiles/omh-tui"
+  "hermes_home": "/Users/demo/.hermes/profiles/omh-tui"
  },
  "own_platforms": {},
  "session_create": {
@@ -92,7 +92,7 @@
   },
   {
    "step": "profile placed",
-   "home": "/Users/khope@sionic.ai/.hermes/profiles/omh-tui",
+   "home": "/Users/demo/.hermes/profiles/omh-tui",
    "t": 0.08
   },
   {
@@ -176,14 +176,14 @@
  ],
  "root_auth_unchanged": true,
  "root_writes_outside_tui_profile_and_root_gateway_housekeeping": [
-  "/Users/khope@sionic.ai/.hermes/cron/.tick.lock",
-  "/Users/khope@sionic.ai/.hermes/cron/ticker_heartbeat",
-  "/Users/khope@sionic.ai/.hermes/cron/ticker_last_success"
+  "/Users/demo/.hermes/cron/.tick.lock",
+  "/Users/demo/.hermes/cron/ticker_heartbeat",
+  "/Users/demo/.hermes/cron/ticker_last_success"
  ],
  "root_writes_total": 113,
  "own_gateway_log_tail": [
   "2026-11-09 14:56:14,371 WARNING gateway.run: No messaging platforms enabled.",
-  "2026-11-09 14:56:14,898 INFO gateway.run: kanban dispatcher: another gateway already holds the dispatcher lock (/Users/khope@sionic.ai/.hermes/kanban/.dispatcher.lock); this gateway will NOT dispatch.",
+  "2026-11-09 14:56:14,898 INFO gateway.run: kanban dispatcher: another gateway already holds the dispatcher lock (/Users/demo/.hermes/kanban/.dispatcher.lock); this gateway will NOT dispatch.",
   "2026-11-09 14:56:14,900 INFO gateway.run: Cron scheduler will tick 3 profile(s): ['default', 'kami', 'omh-tui']",
   "2026-11-09 14:56:14,902 INFO gateway.run: Auto-started gateway: exits after 30s with no clients, adapters, cron/kanban work or admissions (gateway.unmanaged_idle_exit_seconds)"
  ]

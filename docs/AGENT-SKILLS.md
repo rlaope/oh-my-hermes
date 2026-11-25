@@ -1,7 +1,8 @@
 # Agent Skills projection
 
 OMH can project its reviewed workflow catalog into the open Agent Skills
-`SKILL.md` format for Claude Code, Codex, Cursor, opencode, OpenClaw, and pi.
+`SKILL.md` format for Claude Code, Codex, Cursor, opencode, OpenClaw, pi, and
+Antigravity.
 This is a guidance projection, not a port of the Hermes runtime, plugin, or
 wrapper. The existing managed Hermes skills and their installation are unchanged.
 
@@ -19,7 +20,7 @@ sh "$HOME/oh-my-hermes/.cursor/install.sh"
 sh "$HOME/oh-my-hermes/.cursor/install.sh" --user
 ```
 
-Replace `.cursor` with `.claude`, `.codex`, `.opencode`, `.openclaw`, or `.pi`.
+Replace `.cursor` with `.claude`, `.codex`, `.opencode`, `.openclaw`, `.pi`, or `.antigravity`.
 Each directory contains generated `install.sh`, `install.ps1`, and
 `manifest.json`; there are no handwritten host skill copies. POSIX installation
 uses ordinary shell utilities plus `sha256sum` or `shasum` (automatic fallback),
@@ -42,11 +43,11 @@ the same line with `pwsh` in place of `powershell`.
 
 Claude installs only `.claude/skills/`, from its own generated copy of the
 pack in `.claude/agent-skills/` (see
-[Claude Code skill listing](#claude-code-skill-listing)); the other five
+[Claude Code skill listing](#claude-code-skill-listing)); the other six
 adapters install `agent-skills/` into `.agents/skills/` only. User scope places the same relative path under the user's
 home. These paths come from the recorded [host matrix](#host-support-matrix),
-not invented vendor-specific directories. In particular, `.openclaw/` and
-`.pi/` contain installers, **not** new host skill scan paths. OpenClaw's custom
+not invented vendor-specific directories. In particular, `.openclaw/`,
+`.pi/`, and `.antigravity/` contain installers, **not** new host skill scan paths. OpenClaw's custom
 `OPENCLAW_STATE_DIR` caveat below still applies; no alternative path is guessed.
 
 Both installers read their pack's one inventory,
@@ -289,8 +290,8 @@ settings for it:
 ## Duplicate copies
 
 Every installer writes one of two directories: `.agents/skills/` (Codex,
-Cursor, opencode, OpenClaw, pi) or `.claude/skills/` (Claude Code). Some hosts
-read both. Per each vendor's skills documentation, read on 2026-10-25:
+Cursor, opencode, OpenClaw, pi, Antigravity) or `.claude/skills/` (Claude Code). Some hosts
+read both. Per each vendor's skills documentation, read on 2026-10-25 (and Antigravity on 2026-11-25):
 
 | Host | Reads `.agents/skills/` | Reads `.claude/skills/` | With the same name in both |
 | --- | --- | --- | --- |
@@ -300,19 +301,21 @@ read both. Per each vendor's skills documentation, read on 2026-10-25:
 | opencode | yes | yes (Claude-compatible, repo and global) | loads both; its docs ask for names unique across all locations |
 | OpenClaw | yes | no | n/a |
 | pi | yes | not documented | first discovered wins, with a warning |
+| Antigravity | yes | no | n/a |
 
 Sources: [Claude Code](https://code.claude.com/docs/en/skills),
 [Codex](https://learn.chatgpt.com/docs/build-skills),
 [Cursor](https://cursor.com/docs/context/skills),
 [opencode](https://opencode.ai/docs/skills/),
-[OpenClaw](https://docs.openclaw.ai/tools/skills), and
-[pi](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/skills.md).
+[OpenClaw](https://docs.openclaw.ai/tools/skills),
+[pi](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/skills.md), and
+[Antigravity](https://antigravity.google/docs/skills).
 
 Two ways create both copies under one root:
 
 - `omh install --target agents` without `--host`, in either scope. That mode
   writes both on purpose, because it cannot know which host you use.
-- `.claude/install.sh` (or `.ps1`) plus any of the other five installers.
+- `.claude/install.sh` (or `.ps1`) plus any of the other six installers.
 
 Both paths warn instead of refusing, since a person who uses Claude Code and a
 `.agents/skills/` host needs both copies. The CLI adds the warning to
@@ -487,9 +490,9 @@ not authorization to imitate its host-specific behavior.
 
 ## Host support matrix
 
-Except for the explicitly observed Claude Code discovery result below, this
+Except for the explicitly observed Claude Code and Antigravity discovery results below, this
 is a documentation/source compatibility assessment, not observed skill
-selection or execution in six running hosts. The evidence-class column says
+selection or execution in seven running hosts. The evidence-class column says
 what the [host evidence matrix](#host-evidence-matrix) can observe for each
 row; it is not an observation on any machine.
 
@@ -503,6 +506,16 @@ standard-facts assumption that Claude Code scans repo `.agents/skills/`.
 It establishes discovery for the reported version and runs, not execution of
 every workflow or a guarantee about other versions.
 
+**Observed discovery, 2026-11-25 (Antigravity CLI 1.5.16):** Running
+`agy acp` in a temporary workspace containing `.agents/skills/probe-pineapple/SKILL.md`
+alongside user-scope `~/.agents/skills/` listed both the workspace skill and
+every installed OMH skill in `available_commands_update`, and prompting
+`Use the probe-pineapple skill.` read `.agents/skills/probe-pineapple/SKILL.md`
+through `read_file`. In sessions with many combined user and workspace skills,
+Antigravity applies a context-budget cap and excludes overflow skills from the
+prompt listing. This establishes discovery for Antigravity CLI 1.5.16, not
+workflow execution or a guarantee about other versions.
+
 | Host | Repo scan path | User installation | Discovery and caveats | Evidence class |
 | --- | --- | --- | --- | --- |
 | Claude Code | `.claude/skills/` mirror (observed 2.1.270) | `~/.claude/skills/` mirror | Repo `.agents/skills/` not discovered in two isolated runs; `.claude/skills/` discovery observed | `installed` read by OMH; later stages `probe_unsupported` (a model session lists them; no verified credential-free command) |
@@ -511,6 +524,7 @@ every workflow or a guarantee about other versions.
 | opencode | `.agents/skills/` | `~/.agents/skills/` | Permission-gated `skill` tool, implicit nomination; description must be 1-1024 characters | `installed` read by OMH; later stages `probe_unsupported` (a model session lists them; no verified credential-free command) |
 | OpenClaw | `.agents/skills/` | `~/.agents/skills/` with default state root | Implicit and `/skill <name>`/`$name`; workspace `skills/` can outrank this pack | `installed` read by OMH; later stages `probe_unsupported` (no verified credential-free command) |
 | pi | `.agents/skills/` | `~/.agents/skills/` | Trusted projects only; implicit and `/skill:name`; first duplicate name wins | `installed` read by OMH; later stages `probe_unsupported` (no verified credential-free command) |
+| Antigravity | `.agents/skills/` (observed 1.5.16) | `~/.agents/skills/` (observed 1.5.16) | Progressive disclosure (`read_file` on `SKILL.md`) and `/<name>` listing; large combined skill catalogs are subject to host context-budget exclusion | `installed` read by OMH; later stages `probe_unsupported` (no verified credential-free command) |
 
 OpenClaw **skips `~/.agents/skills/` when `OPENCLAW_STATE_DIR` points elsewhere**.
 No extra OpenClaw target is installed in v1. Its injected discovery summary is

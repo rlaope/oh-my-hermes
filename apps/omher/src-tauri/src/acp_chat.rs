@@ -1,6 +1,7 @@
 //! One chat adapter for every agent that speaks the Agent Client Protocol (ACP: JSON-RPC 2.0, one object per
 //! line on stdio), plus a row per agent: OpenCode (`opencode acp`, [`ACP_AGENTS`], with its own rule check) and the
-//! generic agents of [`crate::acp_agents::ACP_LIST`] (Gemini CLI, Qwen Code, Kimi Code, Copilot CLI, Cline).
+//! generic agents of [`crate::acp_agents::ACP_LIST`] (Gemini CLI, Qwen Code, Kimi Code, Copilot CLI, Cline,
+//! Antigravity).
 //!
 //! - start: `initialize` with the client's file-system and terminal capabilities OFF, so the agent uses its
 //!   own tools and omher reads and writes nothing new; then `session/resume` when the agent offers it and omher
@@ -17,8 +18,9 @@
 //! - An unknown request from the agent gets a JSON-RPC error answer so the agent never waits on omher; unknown
 //!   notifications, fields and lines are ignored and nothing raw reaches the chat.
 //!
-//! Checked against OpenCode 1.19.5 (`tests/fixtures/acp/opencode-*.jsonl`, recorded from real runs); the generic
-//! agents up to their signed-out `session/new` (`<agent>-signed-out.jsonl`).
+//! Checked against OpenCode 1.19.5 (`tests/fixtures/acp/opencode-*.jsonl`, recorded from real runs) and
+//! Antigravity CLI 1.5.16 (`tests/fixtures/acp/agy-*.jsonl`, recorded from real signed-in runs); the remaining
+//! generic agents up to their signed-out `session/new` (`<agent>-signed-out.jsonl`).
 
 use std::collections::HashMap;
 use std::time::Instant;
@@ -546,12 +548,17 @@ impl Acp {
     fn tool_detail(&self, kind: &str, title: &str, raw: &Value) -> String {
         let pick = |k: &str| raw.get(k).and_then(Value::as_str).map(str::trim).filter(|x| !x.is_empty()).map(String::from);
         let d = match kind {
-            "terminal" => pick("command"),
-            // some agents' permission requests name it `filepath`
-            "patch" | "read_file" => pick("filePath").or_else(|| pick("path")).or_else(|| pick("file_path")).or_else(|| pick("filepath")).map(|p| rel(&p, &self.cwd)),
-            "search_files" => pick("pattern").or_else(|| pick("query")),
-            "web_extract" => pick("url"),
-            "web_search" => pick("query"),
+            "terminal" => pick("command").or_else(|| pick("CommandLine")),
+            // some agents' permission requests name it `filepath`; Antigravity uses PascalCase `Path`
+            "patch" | "read_file" => pick("filePath")
+                .or_else(|| pick("path"))
+                .or_else(|| pick("file_path"))
+                .or_else(|| pick("filepath"))
+                .or_else(|| pick("Path"))
+                .map(|p| rel(&p, &self.cwd)),
+            "search_files" => pick("pattern").or_else(|| pick("query")).or_else(|| pick("Pattern")).or_else(|| pick("Query")),
+            "web_extract" => pick("url").or_else(|| pick("Url")),
+            "web_search" => pick("query").or_else(|| pick("Query")),
             _ => pick("description"),
         };
         // the title stands in only when it says more than the tool's name (`Reply with kiwi`, not `bash`)
@@ -1367,7 +1374,7 @@ fn decide_on(rules: &[(String, String, String)], tool: &str, input: &str, fold: 
         assert_eq!(written(&a.on_line(&init(json!({"loadSession": true, "sessionCapabilities": {"resume": {}}}))))[0]["method"], "session/new");
     }
 
-    /// Each of the five agents without a free model, as recorded on a Mac where nobody signed it in (scratch HOME):
+    /// Each of the six agents without a free model, as recorded on a Mac where nobody signed it in (scratch HOME):
     /// its real `initialize`, then its real `-32000` to `session/new`. The person sees one line with the row's sign-in
     /// command, the session is marked signed out (the UI ends it), nothing raw reaches the chat, `authenticate` is
     /// never sent, and a second message is refused with the same line.
@@ -1379,6 +1386,8 @@ fn decide_on(rules: &[(String, String, String)], tool: &str, input: &str, fold: 
             ("kimi", "kimi-signed-out.jsonl", "Kimi Code is not signed in. Run `kimi login` in a terminal and sign in.", "--login"),
             ("copilot", "copilot-signed-out.jsonl", "Copilot CLI is not signed in. Run `copilot login` in a terminal and sign in.", "copilot-darwin-arm64"),
             ("cline", "cline-signed-out.jsonl", "Cline is not signed in. Run `cline auth` in a terminal and sign in.", "Call authenticate"),
+            // Antigravity CLI 1.5.16 (`agy acp`): its bare "Authentication required" and its auth method names stay out
+            ("agy", "agy-signed-out.jsonl", "Antigravity is not signed in. Run `agy acp --login` in a terminal and sign in.", "Log in with Google"),
         ] {
             let mut a = Acp::new(acp_agent(id).unwrap(), "/w/proj", None);
             // the person's first message goes in at once, as a draft's first send does; the conversation never opens
@@ -1953,5 +1962,151 @@ fn decide_on(rules: &[(String, String, String)], tool: &str, input: &str, fold: 
         for bad in ["", "../x", "ses x", "--yolo ", "a;b", "ses_é", &"a".repeat(129)] {
             assert!(!is_acp_session_id(bad), "{bad}");
         }
+    }
+
+    fn agy() -> &'static AcpAgent {
+        acp_agent("agy").unwrap()
+    }
+
+    #[test]
+    fn real_agy_1_plain_answer() {
+        let mut a = Acp::new(agy(), "/w/proj", None);
+        let st = replay(&mut a, "agy-1-plain.jsonl", Some("Reply with just the word pineapple."), &[]);
+        one_clean_turn(&st.events);
+        let w = written(&st);
+        assert_eq!(w.iter().map(|x| s(x, "method")).collect::<Vec<_>>(), ["initialize", "session/new", "session/prompt"]);
+        assert_eq!(w[1]["params"], json!({"cwd": "/w/proj", "mcpServers": []}));
+        let info = of(&st.events, "session.info");
+        assert_eq!(s(info[0], "agent_session"), "fb651e12-bba7-46a3-b2d2-8a35db09baa8");
+        assert_eq!(s(info[1], "model"), "Gemini 4 Neon");
+        assert_eq!(s(info[2], "title"), "Pineapple Response Request");
+        let models = &of(&st.events, "session.models")[0]["options"];
+        assert_eq!(models.as_array().unwrap().len(), 11);
+        assert_eq!(models[0], json!({"id": "gemini-4-neon", "label": "Gemini 4 Neon", "detail": ""}));
+        let msgs: Vec<String> = of(&st.events, "message").iter().map(|e| s(e, "text")).collect();
+        assert_eq!(msgs, ["pineapple"]);
+        assert_eq!(s(of(&st.events, "turn.end")[0], "outcome"), "done");
+        let cmds = &of(&st.events, "session.commands")[0]["commands"];
+        let cmd_names: Vec<String> = cmds.as_array().unwrap().iter().map(|c| s(c, "name")).collect();
+        assert_eq!(cmd_names, ["goal", "compact", "plan", "ulw-work"]);
+    }
+
+    #[test]
+    fn real_agy_2_resume_continues_the_conversation() {
+        let mut a = Acp::new(agy(), "/w/proj", Some("fb651e12-bba7-46a3-b2d2-8a35db09baa8"));
+        let st = replay(&mut a, "agy-2-resume.jsonl", Some("Which fruit word did you reply with earlier?"), &[]);
+        one_clean_turn(&st.events);
+        let w = written(&st);
+        assert_eq!(w[1]["method"], "session/resume");
+        assert_eq!(w[1]["params"], json!({"sessionId": "fb651e12-bba7-46a3-b2d2-8a35db09baa8", "cwd": "/w/proj", "mcpServers": []}));
+        assert_eq!(s(of(&st.events, "session.info")[0], "agent_session"), "fb651e12-bba7-46a3-b2d2-8a35db09baa8");
+        let msgs: Vec<String> = of(&st.events, "message").iter().map(|e| s(e, "text")).collect();
+        assert_eq!(msgs, ["pineapple"]);
+    }
+
+    #[test]
+    fn real_agy_3_allow_once_runs_the_command() {
+        let mut a = Acp::new(agy(), "/w/proj", None);
+        let st = replay(&mut a, "agy-3-allow-once.jsonl", Some("run echo hi > a.txt"), &["once"]);
+        one_clean_turn(&st.events);
+        let card = of(&st.events, "approval.request")[0];
+        assert_eq!(s(card, "title"), "Run this command?");
+        assert_eq!(s(card, "command"), "echo hi > a.txt");
+        assert_eq!(s(card, "cwd"), "/w/proj");
+        assert_eq!(card["choices"], json!(["deny", "once"]));
+        let answer = written(&st).into_iter().find(|w| w.get("result").is_some()).unwrap();
+        // Antigravity sends a JSON string request id ("1"), echoed verbatim
+        assert_eq!(answer["id"], json!("1"));
+        assert_eq!(answer["result"], json!({"outcome": {"outcome": "selected", "optionId": "allow"}}));
+        let tools: Vec<(String, String)> = of(&st.events, "tool.start").iter().map(|e| (s(e, "name"), s(e, "detail"))).collect();
+        assert_eq!(tools, [("terminal".to_string(), "echo hi > a.txt".to_string())]);
+        let end = of(&st.events, "tool.end");
+        assert_eq!(end.len(), 1);
+        assert_eq!(end[0]["ok"], true);
+    }
+
+    #[test]
+    fn real_agy_4_deny_fails_the_step_not_the_turn() {
+        let mut a = Acp::new(agy(), "/w/proj", None);
+        let st = replay(&mut a, "agy-4-deny.jsonl", Some("run echo bye > b.txt"), &["deny"]);
+        one_clean_turn(&st.events);
+        let answer = written(&st).into_iter().find(|w| w.get("result").is_some()).unwrap();
+        assert_eq!(answer["result"], json!({"outcome": {"outcome": "selected", "optionId": "deny"}}));
+        assert_eq!(of(&st.events, "tool.end")[0]["ok"], false);
+        assert_eq!(s(of(&st.events, "turn.end")[0], "outcome"), "done");
+    }
+
+    #[test]
+    fn real_agy_5_stop_with_a_card_open_answers_cancelled_and_ends_interrupted() {
+        let mut a = Acp::new(agy(), "/w/proj", None);
+        let st = replay(&mut a, "agy-5-stop.jsonl", Some("sleep 30"), &["stop"]);
+        one_clean_turn(&st.events);
+        let w = written(&st);
+        let answer = w.iter().find(|w| w.get("result").is_some()).unwrap();
+        assert_eq!(answer["result"], json!({"outcome": {"outcome": "cancelled"}}));
+        assert!(w.iter().any(|x| x["method"] == "session/cancel" && x["params"]["sessionId"] == "c32c42bb-5e84-4dd9-a89c-5895d35035ed"));
+        let expired = of(&st.events, "prompt.expired");
+        assert_eq!(expired.len(), 1);
+        assert_eq!(s(expired[0], "request_id"), s(of(&st.events, "approval.request")[0], "request_id"));
+        assert_eq!(s(of(&st.events, "turn.end")[0], "outcome"), "interrupted");
+        assert!(a.on_input(Input::Approve { request_id: s(expired[0], "request_id"), choice: "once".into() }).is_err());
+    }
+
+    #[test]
+    fn real_agy_6_skill_read_extracts_relative_path() {
+        let mut a = Acp::new(agy(), "/w/proj", None);
+        let st = replay(&mut a, "agy-6-skill.jsonl", Some("Use the probe-pineapple skill."), &[]);
+        one_clean_turn(&st.events);
+        // Antigravity loads skills via `read_file` with PascalCase `rawInput.Path`; detail stays workspace-relative
+        let tools: Vec<(String, String)> = of(&st.events, "tool.start").iter().map(|e| (s(e, "name"), s(e, "detail"))).collect();
+        assert_eq!(tools, [("read_file".to_string(), ".agents/skills/probe-pineapple/SKILL.md".to_string())]);
+        let msgs: Vec<String> = of(&st.events, "message").iter().map(|e| s(e, "text")).collect();
+        assert_eq!(msgs, ["kumquat"]);
+    }
+
+    #[test]
+    fn real_agy_7_model_switch_unknown_model_and_resume_fallback() {
+        let lines = real("agy-7-lifecycle.jsonl");
+        let mut a = Acp::new(agy(), "/w/proj", None);
+        a.start();
+        let mut st = Step::default();
+        for l in &lines[..2] {
+            st.events.extend(a.on_line(l).events);
+        }
+        assert_eq!(s(of(&st.events, "session.info")[0], "agent_session"), "5a0f290f-703a-413f-b6da-9d2e07dd48a8");
+        let w = written(&a.on_input(Input::Model { model: "gemini-4-carbon".into() }).unwrap());
+        assert_eq!(w[0]["method"], "session/set_config_option");
+        assert_eq!(w[0]["params"], json!({"sessionId": "5a0f290f-703a-413f-b6da-9d2e07dd48a8", "configId": "model", "value": "gemini-4-carbon"}));
+        let mut st = Step::default();
+        for l in &lines[2..4] {
+            st.events.extend(a.on_line(l).events);
+        }
+        assert_eq!(of(&st.events, "session.info").iter().map(|e| s(e, "model")).collect::<Vec<_>>(), ["Gemini 4 Carbon"]);
+        // unknown model error keeps current model
+        a.on_input(Input::Model { model: "no-such-model-xyz".into() }).unwrap();
+        let st = a.on_line(&lines[4]);
+        let err = of(&st.events, "session.error");
+        assert_eq!(err.len(), 1);
+        assert!(s(err[0], "message").contains("Unknown model ID"), "{err:?}");
+        assert!(of(&st.events, "session.info").is_empty());
+        // unknown session id on resume falls back to session/new
+        let mut b = Acp::new(agy(), "/w/proj", Some("00000000-0000-0000-0000-000000000000"));
+        b.start();
+        let w = written(&b.on_line(&lines[0]));
+        assert_eq!(w[0]["method"], "session/resume");
+        let resume_err = lines[5].replace("\"id\":5", &format!("\"id\":{}", w[0]["id"]));
+        let st = b.on_line(&resume_err);
+        assert!(s(of(&st.events, "session.error")[0], "message").contains("could not continue"));
+        assert_eq!(written(&st)[0]["method"], "session/new");
+    }
+
+    #[test]
+    fn agy_single_word_command_line_is_not_dropped() {
+        let a = Acp::new(agy(), "/w/proj", None);
+        assert_eq!(a.tool_detail("terminal", "pwd", &json!({"CommandLine": "pwd"})), "pwd");
+        assert_eq!(a.tool_detail("patch", "File src/lib.rs", &json!({"Path": "/w/proj/src/lib.rs"})), "src/lib.rs");
+        assert_eq!(a.tool_detail("search_files", "grep", &json!({"Pattern": "needle"})), "needle");
+        assert_eq!(a.tool_detail("web_search", "search", &json!({"Query": "omh"})), "omh");
+        assert_eq!(a.tool_detail("web_extract", "fetch", &json!({"Url": "https://omher.app"})), "https://omher.app");
     }
 }

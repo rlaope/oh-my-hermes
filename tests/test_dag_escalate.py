@@ -75,16 +75,18 @@ class EscalationClimbsTheLadderTest(unittest.TestCase):
                          f"{QUESTION} Read its handoff at {handoff} for what it found, decide the question, then do "
                          "the task.")
             self.assertIn(paragraph, context)
-            # After the resume line's place, before the run goal.
-            self.assertLess(context.index(paragraph), context.index("Run goal (saved):"))
+            # In the node block after the run-wide head: after the run goal and the prompt.
+            self.assertLess(context.index("Run goal (saved):"), context.index(dag_tests.PROMPT))
+            self.assertLess(context.index(dag_tests.PROMPT), context.index(paragraph))
             fresh = node["attempts"][-1]
             self.assertFalse(fresh["fallback"])
             self.assertNotIn("resume_handle", fresh)
             # unspecified-low still has a rung above and one escalation left.
             self.assertIn(ESCALATE_LINE, context)
+            # The scope rule leads, in the run-wide head; the commit rule follows the escalate line in the node block.
             self.assertEqual(context.index(ESCALATE_LINE) + len(ESCALATE_LINE) + 1,
                              context.index("Commit only your own SCOPE paths"))
-            self.assertLess(context.index("Commit only your own SCOPE paths"), context.index("Stay inside your SCOPE"))
+            self.assertLess(context.index("Stay inside your SCOPE"), context.index(dag_tests.PROMPT))
 
             self.assertEqual(_settle(record, "escalated", "Which index wins?", now + 3), "escalated")
             self.assertEqual(node["category"], "unspecified-high")

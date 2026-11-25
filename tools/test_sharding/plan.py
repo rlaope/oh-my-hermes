@@ -20,6 +20,7 @@ from typing import Final
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from tools.test_sharding import JsonValue, ShardingError
+from tools.test_sharding.scope import FULL_SCOPE, change_scope, narrow_inventory, read_changed_paths, scoped_modules
 from tools.test_sharding.static_inventory import discover_inventory
 
 MAX_DURATION_SECONDS: Final = 3600.0
@@ -218,7 +219,33 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--quarantine", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--start-dir", type=Path, default=Path("tests"))
+    parser.add_argument(
+        "--changed-paths",
+        type=Path,
+        help="pull request only: file of changed paths; an omher-only change plans the omher-relevant slice",
+    )
     return parser
+
+
+def scoped_inputs(inputs: PlanningInputs, changed: tuple[str, ...], start_dir: Path) -> tuple[str, PlanningInputs]:
+    """Narrow the inventory for an omher-only change; anything else plans in full.
+
+    The quarantine is validated against the full inventory first, so a stale
+    entry still fails here, then only the entries the slice holds are kept.
+    """
+
+    scope = change_scope(changed)
+    if scope == FULL_SCOPE:
+        return scope, inputs
+    expand_quarantine(inputs.quarantine, inputs.inventory)
+    inventory = narrow_inventory(inputs.inventory, scoped_modules(start_dir))
+    if not inventory:
+        return FULL_SCOPE, inputs
+    quarantine = tuple(
+        entry for entry in inputs.quarantine
+        if any(test_id == entry.match or test_id.startswith(entry.match + ".") for test_id in inventory)
+    )
+    return scope, PlanningInputs(inventory, inputs.durations, quarantine)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -226,12 +253,20 @@ def main(argv: list[str] | None = None) -> int:
 
     args = _parser().parse_args(argv)
     try:
-        plan = build_plan(PlanningInputs(discover_inventory(args.start_dir), load_timings(args.durations), load_quarantine(args.quarantine)), args.shards, args.shard0_offset)
+        inputs = PlanningInputs(discover_inventory(args.start_dir), load_timings(args.durations), load_quarantine(args.quarantine))
+        scope = FULL_SCOPE
+        if args.changed_paths is not None:
+            try:
+                changed = read_changed_paths(args.changed_paths)
+            except (OSError, UnicodeDecodeError) as exc:
+                raise ShardingError(f"changed-paths file is not readable: {args.changed_paths}") from exc
+            scope, inputs = scoped_inputs(inputs, changed, args.start_dir)
+        plan = build_plan(inputs, args.shards, args.shard0_offset)
         write_plan(plan, args.out)
     except ShardingError as exc:
         print(f"test sharding: {exc}", file=sys.stderr)
         return 2
-    print(f"test sharding: planned {plan.payload()['counts']}")
+    print(f"test sharding: planned {plan.payload()['counts']} scope={scope}")
     return 0
 
 
