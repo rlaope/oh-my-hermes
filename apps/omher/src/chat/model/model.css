@@ -208,11 +208,14 @@
 .mp-pop .mseg {
   margin: 4px 6px 2px;
 }
-/* More than six levels do not fit one row of a model popover: they sit in rows of four. Intentionally general: it
-   holds for Hermes' eight-level ladder in the chat picker and for any SESSIONS agent that offers as many. */
+/* More than six levels do not fit one row of a model popover: they wrap at four a row, and a shorter last row stretches
+   to the full width (seven levels read 4 + 3, never 4 + 3 and an empty slot). Intentionally general: it holds for a
+   route's ladder in the chat picker and for any SESSIONS agent that offers as many. */
 .mp-pop .mseg:has(> button:nth-child(7)) {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  flex-wrap: wrap;
+}
+.mp-pop .mseg:has(> button:nth-child(7)) > button {
+  flex: 1 1 calc(25% - 2px);
 }
 .mp-note {
   font-size: 11.5px;
