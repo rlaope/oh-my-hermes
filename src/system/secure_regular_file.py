@@ -208,7 +208,9 @@ def open_regular_read(path: Path) -> Iterator[int]:
         return
     with _open_posix_parent(path, create=False, private=False) as (parent, name):
         try:
-            descriptor = os.open(name, os.O_RDONLY | _BINARY | _CLOEXEC | _NOFOLLOW, dir_fd=parent)
+            # Refuse a FIFO without blocking before fstat can check its type.
+            flags = os.O_RDONLY | _BINARY | _CLOEXEC | _NOFOLLOW | os.O_NONBLOCK
+            descriptor = os.open(name, flags, dir_fd=parent)
         except OSError as exc:
             raise SecureFileError(f"could not open regular file: {path}") from exc
         try:
