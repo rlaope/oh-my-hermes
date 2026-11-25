@@ -77,6 +77,39 @@ REQUIRED_OPTIONAL_OVERLAP_BOUNDARIES: dict[str, tuple[str, ...]] = {
     "wiki": ("llm-wiki",),
 }
 
+# Reviewed consolidation/retirement review queue derived from the base-model
+# sufficiency + upstream Hermes overlap audit. Final retirement requires a
+# live 2-model `benchmarks/skill-lift/v1/` run showing no lift.
+CONSOLIDATION_CANDIDATES: tuple[dict[str, object], ...] = (
+    {
+        "group": "hermes-setup-and-readiness",
+        "tier": "tier4_setup_readiness",
+        "candidates": [
+            "parallel-tools",
+            "websearch-setup",
+            "morning-brief",
+            "executor-runtime-readiness",
+            "provider-profile-posture",
+            "toolbelt-readiness",
+            "workspace-audit",
+        ],
+        "target_surface": "omh-doctor / consolidated setup reference pack",
+        "decision_gate": "benchmarks/skill-lift/v1/ (2-model live lift gate)",
+    },
+    {
+        "group": "thin-duplicate-status-and-attachment-cards",
+        "tier": "tier5_duplicate_or_thin_card",
+        "candidates": [
+            "deliverable-package",
+            "gateway-intent-card",
+            "achievements",
+            "ops-observability-card",
+        ],
+        "target_surface": "omh-materials-package / omh-ops-review / omh-doctor",
+        "decision_gate": "benchmarks/skill-lift/v1/ (2-model live lift gate)",
+    },
+)
+
 
 def hermes_skill_parity_payload() -> dict[str, object]:
     """Build the deterministic offline `omh_hermes_skill_parity/v1` audit payload."""
@@ -251,6 +284,7 @@ def hermes_skill_parity_payload() -> dict[str, object]:
                 excluded=("unmapped_optional_skills",),
             ).to_payload(),
         },
+        "consolidation_candidates": list(CONSOLIDATION_CANDIDATES),
         "findings": findings,
         "claim_boundary": (
             "Offline parity audit against the pinned upstream Hermes snapshot and reviewed value-mechanism table. "

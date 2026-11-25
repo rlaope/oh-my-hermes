@@ -5486,6 +5486,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - serving decision and runbook per `omh-inference-serving/references/serving-runbooks.md`
   - benchmark protocol per `omh-inference-serving/references/serving-bench.md`
   - result files with metadata only after observed runs
+  - optional offline VRAM/KV-cache/TP budget via `toolkit/scripts/vram_kv_calc.py` (`vram_kv_budget/v1`, calculated estimate only)
 - Safety rules:
   - Never claim the server is up without the observed rollout/readiness or smoke-request evidence.
   - Never write credentials into runbooks or results; tokens are referenced (`HF_TOKEN`, a named secret), never inlined.
@@ -6996,6 +6997,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - evidence_ledger/v1 lists every command with observed or not_observed; observed carries the exit status and where it was seen
   - commit_message_draft/v1 and pr_body_draft/v1 take `Tested:` and the validation section only from observed ledger rows
   - commit_message_draft/v1 lists the paths the commit covers, so whoever records it stages those paths and nothing else
+  - optional offline diff hazard summary via `toolkit/scripts/merge_danger_scan.py` (`merge_danger_scan/v1`, read-only)
 - Safety rules:
   - List a command under `Tested:` only when the evidence ledger records it as observed; a command that was prepared, planned, or described as passing without a run record goes under `Not-tested:`, whatever the wording says.
   - Never commit, amend, push, or open the PR; OMH prepares the text and the user or the executor records it.
@@ -7759,6 +7761,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - minimization_plan/v1 gives each field one action -- drop, aggregate, generalize, mask, or pseudonymize -- with the destination's need for the fields it keeps, and names the local path that holds any pseudonym mapping outside the shipped file
   - residual_scan/v1 records, for the exact file that leaves, the scan method and an observed count per class with zero hits or each remaining hit accepted by name, its sha256 of the scanned bytes, the free-text sample the reviewer read, and its verdict: redacted, not redacted with the counts while a hit remains unaccepted, or not_observed when no scan ran, no free-text sample was read or its digest differs from the share record's
   - share_record/v1 is metadata only -- destination, date, fields shipped, row count, the sha256 digest of the shipped file, and its data_state (pseudonymized, still personal data, when identifiers were pseudonymized) -- and holds no value from it
+  - optional offline counts-only residual scan via `toolkit/scripts/residual_scan.py` (`residual_scan/v1`, never prints matched values)
 - Safety rules:
   - Call the output redacted only after an observed residual scan of the exact file that leaves, counted per class; without one the state is not_observed, whatever the masking step reported.
   - Minimize before masking: drop every field the destination does not need, because a masked field that ships still links rows back to people.

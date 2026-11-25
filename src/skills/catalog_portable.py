@@ -593,6 +593,12 @@ PORTABLE_SUPPORT_PATHS = frozenset({
     'show-reel/toolkit/examples/timing.json',
     'show-reel/toolkit/examples/music-spec.json',
     'show-reel/toolkit/examples/README.md',
+    'data-share-review/toolkit/README.md',
+    'data-share-review/toolkit/scripts/residual_scan.py',
+    'commit-pr-authoring/toolkit/README.md',
+    'commit-pr-authoring/toolkit/scripts/merge_danger_scan.py',
+    'inference-serving/toolkit/README.md',
+    'inference-serving/toolkit/scripts/vram_kv_calc.py',
 })
 
 

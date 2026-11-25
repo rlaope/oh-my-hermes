@@ -50,3 +50,4 @@ Artifact expectations:
 - evidence_ledger/v1 lists every command with observed or not_observed; observed carries the exit status and where it was seen
 - commit_message_draft/v1 and pr_body_draft/v1 take `Tested:` and the validation section only from observed ledger rows
 - commit_message_draft/v1 lists the paths the commit covers, so whoever records it stages those paths and nothing else
+- optional offline diff hazard summary via `toolkit/scripts/merge_danger_scan.py` (`merge_danger_scan/v1`, read-only)

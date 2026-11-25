@@ -96,6 +96,7 @@ Artifact expectations:
 - serving decision and runbook per `omh-inference-serving/references/serving-runbooks.md`
 - benchmark protocol per `omh-inference-serving/references/serving-bench.md`
 - result files with metadata only after observed runs
+- optional offline VRAM/KV-cache/TP budget via `toolkit/scripts/vram_kv_calc.py` (`vram_kv_budget/v1`, calculated estimate only)
 
 Safety rules:
 
