@@ -167,8 +167,8 @@ class AiJobSearchDistributionTests(unittest.TestCase):
             self.assertEqual(body.read_bytes(), original)
 
     @requires_posix
-    def test_six_portable_host_adapters(self):
-        for host in ('cursor', 'claude', 'codex', 'opencode', 'openclaw', 'pi'):
+    def test_portable_host_adapters(self):
+        for host in ('cursor', 'claude', 'codex', 'opencode', 'openclaw', 'pi', 'antigravity'):
             with self.subTest(host=host):
                 root = self.root / host
                 root.mkdir()

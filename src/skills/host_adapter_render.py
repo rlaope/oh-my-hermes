@@ -282,7 +282,7 @@ def host_pack_tree(files: dict[str, str]) -> dict[str, str]:
 
 
 def host_adapter_files(files: dict[str, str]) -> dict[str, str]:
-    """All 18 committed files derive from the host rows alone; none carries a file digest."""
+    """All 21 committed files derive from the host rows alone; none carries a file digest."""
     # The scripts accept only these paths; JSON would escape others, and a
     # `.`/`..` segment would alias or escape the destination.
     unsafe = sorted(path for path in files if not re.fullmatch(r"[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*", path)

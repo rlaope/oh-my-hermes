@@ -224,9 +224,10 @@ class Limits(unittest.TestCase):
         self.assertEqual(ob.PR_POOL, 4)
 
     def test_a_peer_bots_thread_is_never_read_over_ssh(self):
-        # rule 31: thread ops stay on this computer, so a peer bot's thread has no PR state (the number only)
+        # rule 31: a peer bot's threads cross (#3172), but its PRs are read on this computer only, so a thread over
+        # there has no PR state (the number only); the session-taking ops never include the PR read either
         self.assertNotIn("thread.prs", ob.PEER_FORWARD)
-        self.assertNotIn("thread.list", ob.PEER_FORWARD)
+        self.assertNotIn("thread.prs", ob.PEER_SESSION_OPS)
 
 
 def save_rows(profile: Path, sid: str, rows: list[tuple], display_kind: bool = True) -> None:

@@ -83,7 +83,7 @@ omh setup
 
 ### omher desktop
 
-<img src="assets/omher-hero.webp" alt="The omher desktop app in dark mode: the sidebar has Tasks with GitHub, GitLab and Linear, then the bot Kami with three threads it opened, each its own chat in a different live state (Fix flaky login test is running with Claude Code at work, Write 2.4 changelog needs you to allow gh pr create, Bump mobile SDK is done), the bots Friren and Juno, and TERMINALS with a Shell, a Codex session and a Claude Code session in the api-server folder, each with its CLI's logo; Kami's chat holds the ask that opened the three threads and a live answer about a slow nightly build" width="900">
+<img src="assets/omher-hero.webp" alt="The omher desktop app in dark mode: the sidebar has Tasks with GitHub, GitLab and Linear, then the bot Kami with three threads it opened, each its own chat in a different live state (Fix flaky login test is running with Claude Code at work, Write 2.4 changelog needs you to allow gh pr create, Bump mobile SDK is done with PR #418 open), and TERMINALS in three named folders, each with its path and git branch: api-server (release/2.4) holds a side-by-side split of Codex reviewing 2.4 and Claude Code migrating the database, oh-my-hermes holds an OMH session running a /dag-ulw release plan, and web-app holds a Claude Code session that rang with news, each with its CLI's logo; Kami's chat holds the morning check-in, the ask that opened the three threads and a live answer about a slow nightly build" width="900">
 
 Your Hermes bots and coding agents, in one window.
 

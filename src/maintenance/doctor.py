@@ -570,6 +570,7 @@ def run_doctor(paths: OmhPaths, *, state_write: bool = True) -> list[Check]:
     checks.append(_delegate_route_fallback_chain_check(paths))
     checks.append(_hermes_model_routing_check(paths))
     checks.append(_provider_entitlements_check(paths))
+    checks.append(_prompt_cache_route_check(paths))
     checks.append(_jev_sidekick_check(paths))
     profile_installs = state.get("last_team_profile_install") if isinstance(state, dict) else None
     if not profile_installs:
@@ -1132,6 +1133,42 @@ def _hermes_model_routing_check(paths: OmhPaths) -> Check:
         "; ".join(disagreements),
         severity="warning",
         next_action=model_routing_next_action(preflight),
+    )
+
+
+def _prompt_cache_route_check(paths: OmhPaths) -> Check:
+    """Does `prompt_caching.cache_ttl` match what the main route keeps, and why did warming stop?
+
+    Reads `config.yaml` and a bounded tail of `logs/agent.log` only; no Hermes
+    import, no network, no model request. ok stays True like
+    `hermes_model_routing`: a cache TTL the user owns is not an OMH install
+    failure. A mismatch or a disabled cache is a warning whose next action is
+    the exact `hermes config set` fix; the full report rides in `detail`.
+    """
+    from .prompt_cache_route import prompt_cache_route_report
+
+    report = prompt_cache_route_report(paths.hermes_home)
+    findings = list(report.get("findings") or [])
+    fixes = list(report.get("fixes") or [])
+    if not report.get("config_read"):
+        return Check(
+            "prompt_cache_route",
+            True,
+            f"Hermes config not readable at {report['config_path']}; prompt-cache TTL not checked",
+            observed=False,
+            detail=report,
+        )
+    if not findings:
+        lines = report.get("lines")
+        summary = str(lines[0]) if isinstance(lines, list) and lines else "main route"
+        return Check("prompt_cache_route", True, f"{summary}; cache TTL matches what the route keeps", detail=report)
+    return Check(
+        "prompt_cache_route",
+        True,
+        "; ".join(findings),
+        severity="warning",
+        next_action="Run: " + " && ".join(f"`{fix}`" for fix in fixes),
+        detail=report,
     )
 
 

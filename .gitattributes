@@ -57,6 +57,9 @@ agent-skills/.omh-agent-skills-manifest.json text eol=lf
 .pi/install.sh text eol=lf
 .pi/install.ps1 text eol=lf
 .pi/manifest.json text eol=lf
+.antigravity/install.sh text eol=lf
+.antigravity/install.ps1 text eol=lf
+.antigravity/manifest.json text eol=lf
 docs/WORKFLOWS.md text eol=lf
 docs/ROLES.md text eol=lf
 src/plugin_bundle/omh/tools/capability_families.json text eol=lf
@@ -78,3 +81,6 @@ src/skills/monitor_watch_toolkit/** text eol=lf
 # The gateway health fixture is Hermes' log bytes as written (LF); the reader is
 # tested on those bytes on every checkout.
 tests/fixtures/gateway_health/** text eol=lf
+
+# Run by bash in the omher workflow on windows-latest too, where a CRLF checkout breaks it.
+apps/omher/scripts/*.sh text eol=lf

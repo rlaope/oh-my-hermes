@@ -17,11 +17,26 @@ All notable changes will be documented here.
   restart is forgotten, and a Claude Code or Codex whose id was not known yet comes back paused, as before. Shell rows also get
   their row's `OMHER_TERMINAL_LINK` now, so an `omh` typed in one reopens the session it dropped there. Windows keeps
   `omh` but learns no Claude Code or Codex id. (`docs/OMHER-BOUNDARY.md` rule 11)
+- **omher: TERMINALS folders say where they are, and a split stays in its folder.** A folder header showed only the
+  folder's last name, so `~`, `~/Desktop/khope` and `~/work/khope` read alike; it now shows the path from home under
+  the name, with the git branch after it. A split's card sat above every folder; it now sits at the top of its first
+  pane's folder, and that folder's count and live state include the split's sessions. The `+` menu starts in the open
+  terminal's folder, and each folder header has its own `+` that opens the menu in that folder.
 - **omher: a slash command reaches the bot as typed.** omher appended its own notes (the open-threads note, the
   terminal-link blocks, the peer note) to every main-chat message, slash commands included. Hermes reads all of a
   slash command's text as its arguments, so `/usage` answered `Unknown /usage subcommand: [omher] Open threads:
   none. ...`. A message that starts with `/` now goes with no note, and a slash command with a reply target is
   refused instead of sent with the target block. (`apps/omher/bridge/omher_bridge.py`)
+- **omher: a bot on another computer has threads, like a local one** (#3172). A bot connected over SSH
+  (`<peer>:<name>`) had only its main chat: no New thread on its row, no `./thread`, and its page said threads ran on
+  this computer only, because the peer link refused `thread.*` and every `session=` op. Its threads are sessions of
+  that bot on its own gateway, so the link now forwards `thread.create`, `thread.list`, `thread.open` and
+  `thread.remove` to that computer's bridge, and forwards `session=<id>` on send, interrupt, steer, approval, question
+  and model, and that session's events back, only for an id the peer's bridge itself answered as one of the bot's
+  threads; a folder chat there or any other id is still refused. A new thread there takes no folder from this computer
+  and its folder never starts this computer's terminal panel; a dropped link ends a running thread turn as stopped,
+  as it does the main chat's. Folder chats, Restart and a thread's pull requests stay on this computer (BOUNDARY rule
+  31).
 - **omher: Settings › Accounts › GitHub keeps Add and Remove on one line.** A GitHub account row reused the
   accounts grid, whose last column is the 26px ⋯ menu. 추가 just fit there in macOS's font; on Windows, whose Korean
   font is wider, it broke into 추 / 가 and was clipped. That row's button column now takes the label's width in any
@@ -680,6 +695,48 @@ All notable changes will be documented here.
   Hermes child that works through `agy acp` shows the Antigravity mark. Its ACP row is `agy acp`; signed out, it ends
   with one line naming `agy acp --login`, checked against a real Antigravity CLI 1.5.16 handshake. Signed-in turns and
   its approval cards were not run. (`apps/omher/src-tauri/src/acp_agents.rs`; `docs/OMHER-BOUNDARY.md` rule 11)
+
+- **Sibling dag-ulw child tasks start with the same bytes, so a provider prompt cache can serve the shared part.**
+  Each child task used to open with its own node prompt, so two siblings of one run shared almost no prefix (6
+  characters in a 3-node sample). Now the run-wide block comes first: the saved run goal with its acceptance-context
+  line, then the stay-inside-your-SCOPE rule, the same bytes for every node whatever its role, so a writer and a
+  verify node in one call share it too, with or without a saved goal. The node's own block follows: prompt, review
+  focus, resume, escalation and re-plan text, handoff, read-first, the verify lines, and the commit-only-your-SCOPE and
+  shared-machine rules that only writing nodes get. The same sample now shares 300 characters. No line was reworded or
+  dropped, and the `[dag:run/node]` goal is unchanged. A
+  `ready` call that carries several tasks now has a `note`: OMH does not stagger their start. (`src/plugin_bundle/omh/dag_run.py`)
+
+- **`omh doctor` now says when the prompt-cache TTL does not match what the route keeps, and why warming stopped.**
+  A new `prompt_cache_route` row and **Prompt cache (read-only)** section read only `config.yaml` and the tail of
+  `logs/agent.log`. On a route that keeps 1h entries (a loopback, localhost or private `base_url` serving Claude, as
+  CLIProxyAPI does; the provider name counts only when no `base_url` is set, so `api.anthropic.com` is never a proxy)
+  they warn when `prompt_caching.cache_ttl` is pinned to `5m` (a `1h` route ceiling does not lift a `5m` pin) or when
+  the route has no `1h` ceiling, and when caching is off, and print only the fix that applies:
+  `hermes config set prompt_caching.cache_ttl auto` and/or
+  `hermes config set prompt_caching.route_ttl_ceilings.<provider> 1h`. They also count the warmer's stop reasons
+  over the last 24h with a plain explanation of each. `omh model` repeats the TTL warning. No model request is sent.
+  (`src/maintenance/prompt_cache_route.py`, `src/maintenance/doctor.py`)
+
+- **Cron, webhook and other machine-paced sessions no longer pay for the identity catalog in their system prompt.**
+  `omh.awareness` already left the identity catalog out of `delegate_task` children. It now leaves it out of every
+  platform Hermes counts as machine-paced, the `MACHINE_PACED_SOURCES` list in its `agent/prompt_caching.py`, copied
+  as data (`subagent`, `cron`, `oneshot`, `webhook`, `kanban`, `api`, `api_server`, `tool`, `batch`, `curator`, `a2a`,
+  `msgraph_webhook`, `gateway_hygiene`). Those sessions keep the full primer, boundary lines included. A cron session
+  with custom identities drops from 3,689 to 1,667 section chars on the test fixture. A new test renders every OMH
+  system-prompt section in two Python processes with different `PYTHONHASHSEED` and `TZ` and checks the bytes match,
+  so a set order, clock or mtime that reaches the frozen prefix fails CI. No difference was found. OMH adds no skill
+  index or candidate text to the system prompt. (`src/plugin_bundle/omh/hooks/llm_hooks.py`)
+
+- **`omh cache` shows how warm a profile's prompt cache is and why it goes cold.** It reads the profile's `state.db`
+  read-only and prints, for the last 7 days (`--days N`, `--json`): the cache read share per session source; the gaps
+  between user messages in human-paced sessions (`<5m`, `5-60m`, `>1h`); per cron job (title before `' · '`) the runs,
+  model runs, cache writes, median gap and distinct system prompts; and the cron write split into cold (a run more
+  than 1h after the job's previous one), churn (a warm run whose system prompt changed) and other (growth inside
+  runs), using the job's smallest run write as its prefix. For the top churn job it prints the first differing system
+  prompt line, cut to 160 characters, then one to three suggestions. The HUD payload gains a `cache` field: the last
+  24h read share of main sessions from one bounded read-only query that never waits on a lock, left out when it
+  cannot be read, and shown on the plain `omh hud` / `omh status` line as `cache:NN%`. It sends no model request.
+  (`src/maintenance/cache_report.py`, `src/commands/cache.py`, `src/surfaces/hud.py`, `docs/PROMPT-CACHE.md`)
 
 ## 5.0.0 - 2026-11-21
 

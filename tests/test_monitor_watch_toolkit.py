@@ -325,7 +325,27 @@ class ApiWatchTest(unittest.TestCase):
         def answer():
             conn, _ = server.accept()
             with conn:
-                conn.recv(65536)
+                # Read the whole request (headers, then the Content-Length body of the GraphQL POST) before
+                # replying. One recv() can return the headers alone; closing a socket with request bytes still
+                # unread makes Windows send RST instead of FIN, and the client then reports `network`, not
+                # the `bad_response` this test is about (seen on test-windows in two CI runs).
+                data = b""
+                while b"\r\n\r\n" not in data:
+                    chunk = conn.recv(65536)
+                    if not chunk:
+                        break
+                    data += chunk
+                head, _, body = data.partition(b"\r\n\r\n")
+                length = 0
+                for line in head.split(b"\r\n")[1:]:
+                    name, _, value = line.partition(b":")
+                    if name.strip().lower() == b"content-length":
+                        length = int(value.strip())
+                while len(body) < length:
+                    chunk = conn.recv(65536)
+                    if not chunk:
+                        break
+                    body += chunk
                 conn.sendall(b"GARBAGE\r\n\r\n")
         thread = threading.Thread(target=answer, daemon=True)
         thread.start()
