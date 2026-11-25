@@ -15,46 +15,13 @@ metadata:
 
 # Command Operator
 
-This is a Hermes-native `command-operator` workflow skill.
+Required: user request, target context, delivery or status expectation, known missing evidence. Output: command_task_card/v1, command_scope/v1, command_safety_gate/v1, command_result_manifest/v1 when observed, next action, prepared-vs-observed boundary.
 
 ## Why This Exists
 
 `command-operator` exists because a host's own approval gate flags only some commands and can approve one with nobody asked: it fixes the working directory, environment, timeout, and stop condition, confirms every irreversible or externally visible command in chat whether or not the host flags it, records the host's own approval answer beside that confirmation, and reports results only from what the run returned.
 
-## Do Not Use When
-
-- An ordinary read-only or test command with a known working directory and nothing to gate; run it with the native terminal tool.
-- The user pasted a failed command's output and asks for the cause; use `omh-build-failure-triage`, or `omh-agent-debug` when the agent itself is stuck.
-- The user wants a command blocked for the agent from now on; use `omh-security-safety-review`, which prepares a proposed deny-glob list for the user to apply.
-
-## Examples
-
-Good example:
-
-- Prompt: command-operator run the staging deploy script from the repo root and confirm with me before it touches anything.
-- Expected behavior: Produce `prepare_command_operator_card` with required context, wrapper actions, and not-evidence boundaries.
-- Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
-
-Bad example:
-
-- Prompt: command-operator run rm -rf without cwd, confirmation, or observation gates.
-- Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
-- Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
-
-## Completion Checklist
-
-- Command text, working directory, environment assumptions, timeout, safety level, and stop condition are explicit.
-- Irreversible or externally visible commands (data deletion or overwrite, force-push, database drop, credentialed or networked mutation, install, deploy, production change, external send) are confirmed in chat before the run, or marked missing and not run; a native approval note is recorded beside that confirmation, never in place of it.
-- With nobody to answer the confirmation (a scheduled job, a one-shot run, a webhook run), an irreversible or externally visible action is not run: it is handed to a person's turn and its confirmation is recorded as missing. The one exception is a bot whose person turned on its PR delivery grant (`omh capability-policy pr-delivery on`, which only the person runs; the bot only tells them the command): it may push a new branch under the grant's branch prefix, open a pull request from that branch, and push fix commits to and comment on a pull request it opened, and nothing else. Merging, force-pushing, pushing to the default branch, and anything on a pull request it did not open stay a person's, grant or no grant.
-- Exit codes, stdout/stderr, test results, package-manager effects, and filesystem mutations are reported only from observed command evidence; token-like values in output are masked before quoting.
-
-## Recovery Notes
-
-- If command text or working directory is missing, ask for the smallest missing scope needed before preparing the command task.
-- If the command is irreversible or externally visible, require an explicit confirmation gate in chat before the run, whether or not the host flags it: deleting or overwriting user data, discarding history or force-pushing, deleting a remote branch, dropping, deleting from, truncating, or flushing a database, a credentialed or networked mutation, device actuation, an install, a deploy, a production change, or an external send.
-- On Hermes, record the terminal result's `approval` note beside that confirmation as additional evidence, never in place of it: a note that the command "was approved by the user" is the person's answer to Hermes' own prompt for that command, while "auto-approved by smart approval" or no note at all is not a person's consent, and a `pending_approval` status means the command has not run and will not run on its own (Hermes stores it without running it, and `/approve` resumes only a run that is still waiting on an approval), so it is never re-run or reworded and goes to a person's turn.
-- On Hermes, a cron job, a one-shot `-q` run, or a webhook run denies a flagged command by default (`approvals.cron_mode`, `approvals.single_query_mode`, `approvals.unattended_mode`): record the block as the gate's outcome and hand the command to a person's turn, never rephrase it to get past the gate. Nobody can answer the chat confirmation in those runs either, so an irreversible or externally visible command that Hermes does not flag is not run: it is handed to a person's turn and its confirmation is recorded as missing.
-- If the user supplied failed command output and asks for root cause, route to `omh-build-failure-triage` or `omh-agent-debug` instead of preparing a fresh command.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -87,33 +54,25 @@ Handoff policy:
 
 Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 
-Required inputs:
-
-- user request
-- target context
-- delivery or status expectation
-- known missing evidence
-
-Expected outputs:
-
-- command_task_card/v1
-- command_scope/v1
-- command_safety_gate/v1
-- command_result_manifest/v1 when observed
-- next action
-- prepared-vs-observed boundary
-
-Artifact expectations:
-
-- command_task_card/v1 metadata-only wrapper card when prepared
-- command_scope/v1 with command text, working directory, environment assumptions, timeout, and stop condition
-- command_safety_gate/v1 separating read-only, write/mutation, network, credential, and destructive-risk commands, holding the chat confirmation for each irreversible or externally visible command and, on Hermes, the terminal result's `approval` note or its `blocked` or `pending_approval` status as additional observed evidence
-- command_result_manifest/v1 only when exit code, stdout/stderr, logs, or terminal transcript are observed
-
 Safety rules:
 
 - A command operator card is not terminal launch, shell execution, package-manager action, test run, stdout/stderr capture, exit-code success, filesystem mutation, network access, or destructive command evidence unless observed command-result evidence records it.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
+## Completion Checklist
+
+- Command text, working directory, environment assumptions, timeout, safety level, and stop condition are explicit.
+- Irreversible or externally visible commands (data deletion or overwrite, force-push, database drop, credentialed or networked mutation, install, deploy, production change, external send) are confirmed in chat before the run, or marked missing and not run; a native approval note is recorded beside that confirmation, never in place of it.
+- With nobody to answer the confirmation (a scheduled job, a one-shot run, a webhook run), an irreversible or externally visible action is not run: it is handed to a person's turn and its confirmation is recorded as missing. The one exception is a bot whose person turned on its PR delivery grant (`omh capability-policy pr-delivery on`, which only the person runs; the bot only tells them the command): it may push a new branch under the grant's branch prefix, open a pull request from that branch, and push fix commits to and comment on a pull request it opened, and nothing else. Merging, force-pushing, pushing to the default branch, and anything on a pull request it did not open stay a person's, grant or no grant.
+- Exit codes, stdout/stderr, test results, package-manager effects, and filesystem mutations are reported only from observed command evidence; token-like values in output are masked before quoting.
+
+## Recovery Notes
+
+- If command text or working directory is missing, ask for the smallest missing scope needed before preparing the command task.
+- If the command is irreversible or externally visible, require an explicit confirmation gate in chat before the run, whether or not the host flags it: deleting or overwriting user data, discarding history or force-pushing, deleting a remote branch, dropping, deleting from, truncating, or flushing a database, a credentialed or networked mutation, device actuation, an install, a deploy, a production change, or an external send.
+- On Hermes, record the terminal result's `approval` note beside that confirmation as additional evidence, never in place of it: a note that the command "was approved by the user" is the person's answer to Hermes' own prompt for that command, while "auto-approved by smart approval" or no note at all is not a person's consent, and a `pending_approval` status means the command has not run and will not run on its own (Hermes stores it without running it, and `/approve` resumes only a run that is still waiting on an approval), so it is never re-run or reworded and goes to a person's turn.
+- On Hermes, a cron job, a one-shot `-q` run, or a webhook run denies a flagged command by default (`approvals.cron_mode`, `approvals.single_query_mode`, `approvals.unattended_mode`): record the block as the gate's outcome and hand the command to a person's turn, never rephrase it to get past the gate. Nobody can answer the chat confirmation in those runs either, so an irreversible or externally visible command that Hermes does not flag is not run: it is handed to a person's turn and its confirmation is recorded as missing.
+- If the user supplied failed command output and asks for root cause, route to `omh-build-failure-triage` or `omh-agent-debug` instead of preparing a fresh command.
 
 ## Runtime Evidence
 

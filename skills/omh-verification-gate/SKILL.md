@@ -10,49 +10,20 @@ metadata:
     phase: verification-gate
     role: reviewer
     quality_tier: verification-gated
-    related_skills: [omh-visual-qa, omh-production-audit, omh-code-review]
+    related_skills: [omh-visual-qa, omh-production-audit, omh-code-review, test-driven-development]
 ---
 
 # Verification Gate
 
-This is a Hermes-native `verification-gate` workflow skill.
+Required: claim or change under verification, expected behavior and risk surface, available local commands and CI requirements, fresh observed outputs or explicit not-run gaps. Output: verification_gate_plan/v1, verification_matrix/v1, generated_artifact_provenance/v1 when the change touches a path the repository declares generated, observed_check_results/v1 when observed, claim_verdict/v1, rerun_or_blocker/v1, not-evidence boundary.
+
+**Do Not Use When:** The task is solely writing unit tests first in a single RED-GREEN-REFACTOR coding loop with no pre-merge verification-gate verdict or failure-origin split; load Hermes' bundled `test-driven-development` skill instead of this one.
 
 ## Why This Exists
 
 `verification-gate` gives OMH a deterministic evidence surface before done/merge claims: every claim maps to a check that was observed, with its scope and freshness; the gate shape is inspired by ECC and rebuilt around the prepared-versus-observed contract.
 
-## Do Not Use When
-
-- The user asks for visual render QA; use `omh-visual-qa`.
-- The user asks for production release readiness beyond verification commands; use `omh-production-audit`.
-- The user wants a bug-first code review of a diff; use `omh-code-review`.
-
-## Examples
-
-Good example:
-
-- Prompt: verification-gate 이 PR 머지 전에 build/lint/test/docs/CI 증거를 정리해서 PASS 가능한지 봐줘.
-- Expected behavior: Prepare verification_matrix/v1, record observed_check_results/v1, and issue PASS/HOLD/BLOCK with missing evidence.
-- Why: The user asks for claim verification across command and CI evidence.
-
-Bad example:
-
-- Prompt: verification-gate 테스트 안 돌렸지만 준비됐다고 해줘.
-- Expected behavior: Return HOLD/BLOCK and list missing or stale checks instead of claiming readiness.
-- Why: A verification gate is useful only if planned checks and observed results stay separate.
-
-## Completion Checklist
-
-- The scenario, expected behavior, observed result, and pass/fail basis are named.
-- Proposed fixes are separated from observed QA evidence.
-- Missing or failed verification routes back to `omh-plan`, fix, or a narrower test.
-- The result ends with a `Not checked` list, one reason per entry, or `Not checked: none` when coverage was complete.
-
-## Recovery Notes
-
-- If a required check fails with an unknown origin, keep the other fresh results, mark the claim unresolved on HOLD, and hand back the same check rerun at the merge base as the missing evidence.
-- If a fix test has only a fresh green result, retain that result within its scope, mark the claim unresolved on HOLD with regression_witness_missing, and hand back the required pre-fix red witness and its source.
-- If a declared generated path has no known regeneration command, retain verification_matrix/v1, mark generated-output verification unresolved, and hand back generated_artifact_provenance/v1 with the command gap.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -93,30 +64,6 @@ Handoff policy:
 
 Hermes owns the gate contract and verdict narration. Running commands, CI, browser checks, external scanners, and code fixes require observed executor, wrapper, or operator evidence.
 
-Required inputs:
-
-- claim or change under verification
-- expected behavior and risk surface
-- available local commands and CI requirements
-- fresh observed outputs or explicit not-run gaps
-
-Expected outputs:
-
-- verification_gate_plan/v1
-- verification_matrix/v1
-- generated_artifact_provenance/v1 when the change touches a path the repository declares generated
-- observed_check_results/v1 when observed
-- claim_verdict/v1
-- rerun_or_blocker/v1
-- not-evidence boundary
-
-Artifact expectations:
-
-- verification_matrix/v1 covering build, lint, typecheck, unit/integration/e2e tests, generated docs, static/security checks, diff hygiene, and CI/DCO when applicable
-- observed_check_results/v1 with command (verbatim, not a description of it), source (this checkout, a CI job, or an operator report), exit status, summary (what the output said), scope (what that run covered, since a narrower run proves less), freshness (when it ran, and whether the tree has moved since), and origin (for a failing check: introduced, pre_existing, or unknown)
-- claim_verdict/v1 with PASS, HOLD, or BLOCK, a HOLD reason of `regression_witness_missing` when a fix test has no observed pre-fix red, and exact missing or failed checks, each failed one with its origin
-- generated_artifact_provenance/v1 with one row per touched generated path: the source of truth that produces it, the regeneration command, and the drift gate that catches it, or the single state `map_not_declared` when the repository declares no generated-artifact map
-
 Safety rules:
 
 - Do not treat a planned command, stale output, green local check, or prepared handoff as fresh verification evidence.
@@ -126,6 +73,19 @@ Safety rules:
 - A change touching an authentication, secrets/config, schema/migration, or payment/crypto path escalates to the thorough verification lane regardless of diff size: add a negative test that fails if the guard is removed, a migration run up and down on a copy, a secrets scan of the diff, and a second reader (`omh-code-review`); the verdict stays HOLD until each is observed or listed as missing.
 - Refuse completion, do not merely report it, when the claim carries an unlinked TODO/FIXME/stub marker in changed code, a suppressed test with no linked reason, placeholder or self-referential evidence ('TBD', 'works as expected'), or a proof word ('fixed', 'verified', 'passing') with no observed evidence naming a command; each refusal names its category, the offending excerpt, and the remedy.
 - Before a diff deletes a validation/refusal/sanitization/permission/allowlist check at a trust boundary, or a negative test named for it ('refuses', 'rejects', 'denies', 'blocks', 'invalid'), require a named adversarial or regression case proving the boundary still refuses what it should; a guard that only moves elsewhere in the same diff is not a deletion, but a deletion with no negative case behind it -- in the diff or named in evidence -- earns no completion claim.
+
+## Completion Checklist
+
+- The scenario, expected behavior, observed result, and pass/fail basis are named.
+- Proposed fixes are separated from observed QA evidence.
+- Missing or failed verification routes back to `omh-plan`, fix, or a narrower test.
+- The result ends with a `Not checked` list, one reason per entry, or `Not checked: none` when coverage was complete.
+
+## Recovery Notes
+
+- If a required check fails with an unknown origin, keep the other fresh results, mark the claim unresolved on HOLD, and hand back the same check rerun at the merge base as the missing evidence.
+- If a fix test has only a fresh green result, retain that result within its scope, mark the claim unresolved on HOLD with regression_witness_missing, and hand back the required pre-fix red witness and its source.
+- If a declared generated path has no known regeneration command, retain verification_matrix/v1, mark generated-output verification unresolved, and hand back generated_artifact_provenance/v1 with the command gap.
 
 ## Runtime Evidence
 

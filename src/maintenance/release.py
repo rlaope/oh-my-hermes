@@ -2340,10 +2340,16 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # 1499208 -> 1450927 (the ceiling 1650000 -> 1600000): every body's reply-voice paragraph becomes one line; the
 # record-term and turn-ending clauses it repeated live in the shared rail's Reply Language And Host Voice and Turn
 # Ending sections, which already held them. 1,450,927 plus 10%, rounded up to the next 50,000, is 1,600,000.
-FULL_PROFILE_SKILL_BODY_MEASURED_CHARS = 1450927
+# 1450927 -> 1348078 (the ceiling 1600000 -> 1500000): universal progressive disclosure across all non-bespoke
+# `omh-*` workflow skills moves heavy examples, sibling routing boundaries, and verbose input/output/artifact
+# lists into `references/full-contract.md` while keeping all actionable counter-default rules (`Quality bar`,
+# `Handoff policy`, `Safety rules`, `First Steps`, `Expert clarification questions`, upstream deferrals) inline
+# (-200,979 bytes from 1,549,057 pre-change; repeated bytes also fell 95,280 -> 94,401). 1,348,078 plus 10%,
+# rounded up to the next 50,000, is 1,500,000.
+FULL_PROFILE_SKILL_BODY_MEASURED_CHARS = 1348078
 FULL_PROFILE_SKILL_BODY_HEADROOM_PERCENT = 10
 FULL_PROFILE_SKILL_BODY_CEILING_STEP_CHARS = 50000
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 1600000
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 1500000
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 # Repeated bytes: characters of full-profile SKILL.md `##` sections that are
 # byte-identical to the same section in another skill -- the second and later

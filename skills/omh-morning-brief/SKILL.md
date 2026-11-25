@@ -14,43 +14,13 @@ metadata:
 
 # Morning Brief
 
-This is a Hermes-native `morning-brief` workflow skill.
+Required: mail and calendar MCP connection status, OAuth/app-password availability; value through secure entry or user-side setup only. Output: read-only diagnosis of the current mail/calendar MCP connection state, diff-approved MCP config write limited to read and create-draft tools.
 
 ## Why This Exists
 
 `morning-brief` exists to connect mail and calendar access for an on-demand brief while limiting the connection to read and create-draft tools and keeping credential entry outside chat, with explicit storage authorization.
 
-## Do Not Use When
-
-- The user wants Hermes to check their email or calendar right now rather than set up the connection.
-- The connection is already configured and the user only wants today's brief, not a setup walkthrough; read mail and calendar with the connected tools and summarise them.
-- The request needs a repository code change rather than a local MCP config edit.
-
-## Examples
-
-Good example:
-
-- Prompt: connect my email for a morning brief — I want a daily summary of mail and calendar.
-- Expected behavior: Check the MCP prerequisite, diagnose the current connection, guide OAuth/token issuance, show the read/draft-only diff, and apply only after approval.
-- Why: The request is a mail/calendar integration setup and needs the shared setup contract plus the Send-permission guardrail.
-
-Bad example:
-
-- Prompt: morning-brief: check my email for anything urgent.
-- Expected behavior: Route to a mail-reading task instead of starting a connection setup walkthrough.
-- Why: A one-off email check is a task request, not an integration setup request.
-
-## Completion Checklist
-
-- If a prerequisite is unmet, mark that item "not applicable" and continue with the rest of the guide instead of blocking or guessing.
-- Success is applicable-only: verification passes when every applicable item is confirmed complete, not when every possible item exists.
-- The send boundary is confirmed before the brief is reported ready: the server's include list (exact tool names, no globs) where it has an `mcp_servers` entry, otherwise the tools the session registers, hold no send operation (observed), and the report says whether the credential itself can send; else the check stays not_observed.
-- With neither mail nor calendar connected the status is blocked, not complete.
-
-## Recovery Notes
-
-- If the mail or calendar prerequisite is unmet, mark that surface "not applicable" and offer the brief scoped to whichever surface is connected.
-- If authentication fails, guide reauthorization or reissuance through secure entry or user-side setup; do not request the failed credential in chat or silently retry it.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -86,20 +56,6 @@ Handoff policy:
 
 Run diagnosis and guidance directly in Hermes for the mail/calendar connection. Diagnosis reads non-secret metadata only; no writes. Show redacted placeholders in the config or `.env` diff; apply only after the user explicitly approves. Never ask the user to paste secrets into chat. Use Hermes-native secure entry or user-side OAuth/token setup; if unavailable, stop credential application and guide user-side setup. Use only a user-authorized credential store or local configuration; disclose destination and scope first. Keep secrets out of chat, previews, logs and evidence. Do not promise chat or platform non-retention. Delegate to a selected coding executor only if the user needs a change outside chat-driven MCP config edits.
 
-Required inputs:
-
-- mail and calendar MCP connection status
-- OAuth/app-password availability; value through secure entry or user-side setup only
-
-Expected outputs:
-
-- read-only diagnosis of the current mail/calendar MCP connection state
-- diff-approved MCP config write limited to read and create-draft tools
-
-Artifact expectations:
-
-- connection verification note when the wrapper captures it
-
 Safety rules:
 
 - Configure mail and calendar MCP access as read and draft only; never enable Send permission, even if the user asks — drafts stay for the user to send themselves.
@@ -107,6 +63,18 @@ Safety rules:
 - Do not treat a prepared connection as an observed brief; only report a brief after the connection is verified.
 - A draft-capable Gmail credential can also send (every scope that creates drafts sends; `gmail.compose` is "Manage drafts and send emails"); say so before consent. The boundary is the MCP server's `mcp_servers.<name>.tools.include` list with read and create-draft tools only. Report "send tool not exposed, credential can send", never "read and draft-only". Evidence is the include list plus the tools the session registers, not `hermes mcp test`, which lists everything the server offers. Only `gmail.readonly` earns "cannot send", and it has no drafts. Microsoft 365: `Mail.ReadWrite` without `Mail.Send`, `Mail.Send.Shared` or `SMTP.Send`, and it can also delete.
 - The bundled `google-workspace` OAuth setup requests `gmail.send` and `gmail.modify` on every run, and its setup script accepts no `--services` flag to narrow the request, though that skill's own instructions show one; Google's consent screen lets the user untick a permission and the script then keeps only what was granted. Never apply that path as this skill's connection, and when the user connects it themselves, report `gmail.send` and `gmail.modify` as granted unless the setup script's `--check` lists them among the missing scopes, never as read-and-draft-only on the strength of the request.
+
+## Completion Checklist
+
+- If a prerequisite is unmet, mark that item "not applicable" and continue with the rest of the guide instead of blocking or guessing.
+- Success is applicable-only: verification passes when every applicable item is confirmed complete, not when every possible item exists.
+- The send boundary is confirmed before the brief is reported ready: the server's include list (exact tool names, no globs) where it has an `mcp_servers` entry, otherwise the tools the session registers, hold no send operation (observed), and the report says whether the credential itself can send; else the check stays not_observed.
+- With neither mail nor calendar connected the status is blocked, not complete.
+
+## Recovery Notes
+
+- If the mail or calendar prerequisite is unmet, mark that surface "not applicable" and offer the brief scoped to whichever surface is connected.
+- If authentication fails, guide reauthorization or reissuance through secure entry or user-side setup; do not request the failed credential in chat or silently retry it.
 
 ## Runtime Evidence
 

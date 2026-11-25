@@ -15,48 +15,13 @@ metadata:
 
 # Live Info Operator
 
-This is a Hermes-native `live-info-operator` workflow skill.
+Required: user request, target context, delivery or status expectation, known missing evidence. Output: live_info_task_card/v1, live_info_scope/v1, freshness_boundary/v1, live_info_result_manifest/v1 when observed, next action, prepared-vs-observed boundary.
 
 ## Why This Exists
 
 `live-info-operator` exists because a live number answered from recall, or from a quote with no timestamp, is wrong in a way the reader cannot see: it runs the lookup with an available tool and then checks what came back for provider, time, units and staleness before it is stated.
 
-## Do Not Use When
-
-- The question is a broad current-facts or citation question rather than one live value; use `omh-web-research`.
-- A supplied ledger, budget or close needs analysis rather than a live rate; use `omh-finance-analysis`.
-- The request would create, update, send or mutate state in an external app; use `omh-apps`.
-
-## Examples
-
-Good example:
-
-- Prompt: live-info-operator check today's Seoul weather with freshness, units, and provider boundaries before answering.
-- Expected behavior: Run the lookup with an available tool, then state the resolved place, the provider's observation time, units and local time zone; produce `prepare_live_info_operator_card` only when no tool can reach a provider.
-- Why: The value is retrieved and checked, not recalled, and the card is the fallback rather than the answer.
-
-Bad example:
-
-- Prompt: live-info-operator invent the latest stock price without provider evidence or timestamp.
-- Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
-- Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
-
-## Completion Checklist
-
-- The lookup was run with an available tool - a maps or time-zone tool, a quotes tool, otherwise web search or extract of one named provider page - and the card is prepared alone only when no tool can reach a provider.
-- Domain, location or symbol, time window, provider preference, freshness, units, and stop condition are explicit.
-- Weather names the resolved place (and the match when ambiguous), the provider's observation or forecast time, units and local time zone; a forecast is not an observation.
-- A price or rate names the symbol or pair, venue, currency, quote timestamp, and whether the feed is delayed (free equity feeds often are, by about 15 minutes) or the market is closed.
-- A score says live, final or scheduled, with the kickoff time zone; a time-zone answer uses an IANA zone name and the date the offset applies to (daylight saving).
-- If the provider timestamp is older than the window the person needs (name it), say so instead of answering.
-- Provider setup, API access, source quality, stale data, and missing location/symbol decisions are gated or marked missing.
-- Weather, price, score, exchange-rate, time-zone, map, place, and traffic facts are reported only from observed provider evidence.
-
-## Recovery Notes
-
-- If the provider, plugin, API key, or connector is missing, route to `omh-toolbelt-readiness` before preparing result claims.
-- If the request asks for citations, best practices, docs, or broad current-source synthesis, route to `ulw-research` instead.
-- If the request would create, update, invite, send, or mutate external provider state, route to `omh-apps` instead.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -88,33 +53,27 @@ Handoff policy:
 
 Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 
-Required inputs:
-
-- user request
-- target context
-- delivery or status expectation
-- known missing evidence
-
-Expected outputs:
-
-- live_info_task_card/v1
-- live_info_scope/v1
-- freshness_boundary/v1
-- live_info_result_manifest/v1 when observed
-- next action
-- prepared-vs-observed boundary
-
-Artifact expectations:
-
-- live_info_task_card/v1 metadata-only wrapper card when prepared
-- live_info_scope/v1 with domain, location or symbol, time window, provider preference, units, and stop condition
-- freshness_boundary/v1 separating requested recency, provider timestamp, source quality, and stale-result handling
-- live_info_result_manifest/v1 only when provider response, timestamp, quote/source id, or rendered result is observed
-
 Safety rules:
 
 - A live information card is not provider availability, API access, live data retrieval, weather, market price, sports score, exchange-rate, time-zone, map, or place-result evidence unless observed live-info result evidence records it.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
+## Completion Checklist
+
+- The lookup was run with an available tool - a maps or time-zone tool, a quotes tool, otherwise web search or extract of one named provider page - and the card is prepared alone only when no tool can reach a provider.
+- Domain, location or symbol, time window, provider preference, freshness, units, and stop condition are explicit.
+- Weather names the resolved place (and the match when ambiguous), the provider's observation or forecast time, units and local time zone; a forecast is not an observation.
+- A price or rate names the symbol or pair, venue, currency, quote timestamp, and whether the feed is delayed (free equity feeds often are, by about 15 minutes) or the market is closed.
+- A score says live, final or scheduled, with the kickoff time zone; a time-zone answer uses an IANA zone name and the date the offset applies to (daylight saving).
+- If the provider timestamp is older than the window the person needs (name it), say so instead of answering.
+- Provider setup, API access, source quality, stale data, and missing location/symbol decisions are gated or marked missing.
+- Weather, price, score, exchange-rate, time-zone, map, place, and traffic facts are reported only from observed provider evidence.
+
+## Recovery Notes
+
+- If the provider, plugin, API key, or connector is missing, route to `omh-toolbelt-readiness` before preparing result claims.
+- If the request asks for citations, best practices, docs, or broad current-source synthesis, route to `ulw-research` instead.
+- If the request would create, update, invite, send, or mutate external provider state, route to `omh-apps` instead.
 
 ## Runtime Evidence
 

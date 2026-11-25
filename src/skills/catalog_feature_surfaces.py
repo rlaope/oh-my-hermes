@@ -831,6 +831,12 @@ _FEATURE_SURFACE_SKILLS = (
             "A web lookup or a cited answer rather than an interaction with a page; use `web-research`.",
             "A page step that moves money -- a checkout, a payment, a booking deposit, a top-up; use `spend-gate`, which shows the pre-spend card and takes the person's typed yes even when Hermes prompts on its own.",
         ),
+        extra_do_not_use_when=(
+            HermesSkillLine(
+                "The user needs native desktop GUI control outside a browser session (native macOS/Windows/Linux windows or background desktop driving); load Hermes' bundled `computer-use` skill instead of this one.",
+                ("computer-use",),
+            ),
+        ),
     ),
     _feature_surface_skill(
         "workspace-file-operator",
@@ -1099,6 +1105,12 @@ _FEATURE_SURFACE_SKILLS = (
             "Only the reply or thread policy of a Discord, Slack, or Telegram conversation is in question; use `gateway-intent-card`.",
             "The user is choosing or adopting a new provider, MCP server, or integration rather than acting through one; use `external-connector-readiness`.",
             "Launching or quitting a local desktop application; use `command-operator` or the host's computer-use tool.",
+        ),
+        extra_do_not_use_when=(
+            HermesSkillLine(
+                "The user wants an email inbox triaged or replies drafted under inbox reply policy; load Hermes' bundled `email-inbox-triage` skill instead of this one.",
+                ("email-inbox-triage",),
+            ),
         ),
     ),
     _feature_surface_skill(
@@ -2583,6 +2595,7 @@ _FEATURE_SURFACE_SKILLS = (
             "Never present use, view, or load counts, `.usage.json` included, as a health, prune, archive, or retire signal: a rarely used skill is not an unhealthy one, and no health card recommends removing, archiving, or pruning a skill for being used little.",
             f"On Hermes, read the skill audit ledger read-only (that skill's entries in {_CURATOR_LEDGER_FILE}, or `hermes curator ledger --skill <name> --limit <n>`, {_CURATOR_LEDGER_LIMIT}): an entry against an OMH-managed skill means Hermes changed that managed copy outside OMH, so it may no longer match its generated body; report it as drift with the entry's `action` and `actor` (`agent`, `user`, or `curator`, which covers Hermes' curator and its background review). {OMH_MANAGED_SKILL_CLAUSE} {_CURATOR_LEDGER_EMPTY}",
             "On Hermes, record an authoring finding only from the `lint_warnings` a `skill_manage` write returned, which are advisory and never proof a skill works; only some writes return them (an `edit` never does), so a write without them is not a clean lint. Record an available update for a hub-installed skill only from `hermes skills check` output that was seen; that hub request is Hermes' own, not OMH's.",
+            "Run `omh docs hermes-skill-parity --json` offline when auditing portfolio overlap: surface any upstream Hermes bundled/optional boundary findings and list `prose_template_review` skills queued for with-vs-without base-model lift verification.",
         ),
         recovery_notes=(
             PortableLine(

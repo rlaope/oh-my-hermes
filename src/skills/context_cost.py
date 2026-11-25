@@ -31,7 +31,7 @@ from .catalog import omh_skill_display_name
 from dataclasses import dataclass
 from typing import TypedDict
 
-from .catalog import CORE_PROFILE_SKILLS
+from .catalog import CORE_PROFILE_SKILLS, SKILL_PACKS, SKILL_PACK_NAMES, core_with_packs_skill_names
 from .packaging import builtin_skill_reference_templates, builtin_skill_templates
 from .render import SkillReferenceTemplate as _SkillReferenceTemplate
 from .render import SkillTemplate as _SkillTemplate
@@ -262,6 +262,25 @@ def _ulw_context_increment(
     }
 
 
+def _pack_context_cost_summary(
+    pack: str,
+    templates: list[_SkillTemplate],
+    reference_templates: list[_SkillReferenceTemplate],
+) -> dict[str, object]:
+    selected = set(core_with_packs_skill_names((pack,)))
+    names = {template.name for template in templates if template.name in selected}
+    slices = _section_slices(names, templates)
+    total_chars = sum(len(section.body) for section in slices)
+    total_lines = sum(len(section.body.splitlines()) for section in slices)
+    return {
+        "pack": pack,
+        "pack_only_skill_count": len(SKILL_PACKS[pack]),
+        "core_plus_pack_skill_count": len(names),
+        "skill_body": _size_payload(total_chars, total_lines),
+        "references": _reference_payload(names, reference_templates),
+    }
+
+
 def skill_context_cost_payload() -> SkillContextCostPayload:
     templates = builtin_skill_templates()
     reference_templates = builtin_skill_reference_templates()
@@ -280,6 +299,9 @@ def skill_context_cost_payload() -> SkillContextCostPayload:
         },
         "profiles": [
             _skill_context_cost_profile(profile, templates, reference_templates) for profile in ("core", "full")
+        ],
+        "packs": [
+            _pack_context_cost_summary(pack, templates, reference_templates) for pack in SKILL_PACK_NAMES
         ],
     }
 

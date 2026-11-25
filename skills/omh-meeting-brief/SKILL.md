@@ -15,44 +15,15 @@ metadata:
 
 # Meeting Brief
 
-This is a Hermes-native `meeting-brief` workflow skill.
+Required: meeting goal, date and length, audience, known context, decision topics and who decides. Output: agenda, discussion prompts, decisions needed, action-item template.
+
+**Do Not Use When:** The meeting already happened, its notes or transcript are in hand, and the user wants decisions, owners, follow-ups, or tickets drawn from them; load Hermes' bundled `meeting-action-items` skill instead of this one.
 
 ## Why This Exists
 
 `meeting-brief` exists to turn scattered context into a focused agenda, discussion prompts, decision points, and a record template without pretending the meeting already happened.
 
-## Do Not Use When
-
-- The user needs observed meeting minutes, decisions, or action items but has not provided notes.
-- The request is strategy synthesis without a meeting audience, agenda, or decision ceremony.
-- The follow-up is implementation work that already has accepted requirements and should become a plan or handoff.
-- The user wants minutes, scrum history or a decision log for a recurring meeting; use `omh-operating-rhythm`.
-- The meeting already happened, its notes or transcript are in hand, and the user wants decisions, owners, follow-ups, or tickets drawn from them; load Hermes' bundled `meeting-action-items` skill instead of this one.
-
-## Examples
-
-Good example:
-
-- Prompt: Prepare a meeting agenda for a leadership sync on setup UX, plugin bridge defaults, and release risk.
-- Expected behavior: Prepare agenda topics, prompts, decisions needed, and a record template with unknowns marked.
-- Why: The request is preparation for a meeting and should separate prep from observed outcomes.
-
-Bad example:
-
-- Prompt: meeting-brief summarize what the team decided yesterday.
-- Expected behavior: Ask for meeting notes or route to an ops/status summary with explicit evidence gaps.
-- Why: A prepared agenda cannot be treated as observed minutes or decisions.
-
-## Completion Checklist
-
-- The agenda, participants or audience, decisions needed, and record template are named.
-- Meeting prep, observed minutes, accepted decisions, and action ownership are separate states.
-- Missing context that would change the meeting structure is surfaced.
-
-## Recovery Notes
-
-- If decision topics lack known context, retain the supplied meeting goal and audience, mark the agenda tentative, and hand back discussion prompts and the decisions-needed list with its open questions.
-- If follow-up coding lacks observed decisions or an accepted plan, retain the meeting brief, mark the coding handoff unresolved, and hand back the decisions needed rather than an implementation claim.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -86,29 +57,22 @@ Handoff policy:
 
 Run meeting preparation in Hermes; only create follow-up coding handoff from observed decisions or accepted plans.
 
-Required inputs:
-
-- meeting goal, date and length
-- audience
-- known context
-- decision topics and who decides
-
-Expected outputs:
-
-- agenda
-- discussion prompts
-- decisions needed
-- action-item template
-
-Artifact expectations:
-
-- meeting brief or record template when the wrapper captures it
-
 Safety rules:
 
 - Do not claim the meeting happened from a prepared agenda.
 - Separate proposed action items from observed decisions.
 - Use a later status or decision record for actual meeting outcomes.
+
+## Completion Checklist
+
+- The agenda, participants or audience, decisions needed, and record template are named.
+- Meeting prep, observed minutes, accepted decisions, and action ownership are separate states.
+- Missing context that would change the meeting structure is surfaced.
+
+## Recovery Notes
+
+- If decision topics lack known context, retain the supplied meeting goal and audience, mark the agenda tentative, and hand back discussion prompts and the decisions-needed list with its open questions.
+- If follow-up coding lacks observed decisions or an accepted plan, retain the meeting brief, mark the coding handoff unresolved, and hand back the decisions needed rather than an implementation claim.
 
 ## Runtime Evidence
 

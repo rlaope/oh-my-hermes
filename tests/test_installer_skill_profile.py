@@ -226,7 +226,8 @@ class InstallerSkillProfileTests(unittest.TestCase):
         self.assertTrue(installed_names.issubset(full_names))
         self.assertTrue(set(CORE_SKILLS).issubset(installed_names))
         self.assertEqual(installed_names, set(CORE_PROFILE_SKILLS))
-        self.assertIn("buzz", installed_names)
+        self.assertIn("code-review", installed_names)
+        self.assertIn("spend-gate", installed_names)
         self.assertNotIn("context_cost_warning", result)
 
     def test_full_profile_installs_everything_and_emits_context_cost_warning(self) -> None:

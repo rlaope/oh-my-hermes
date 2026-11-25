@@ -15,50 +15,13 @@ metadata:
 
 # External Connector Readiness
 
-This is a Hermes-native `external-connector-readiness` workflow skill.
+Required: user request, target context, delivery or status expectation, known missing evidence. Output: external_connector_readiness_card/v1, connector_capability_matrix/v1, auth_cost_boundary/v1, live_data_freshness_policy/v1 when live data is required, multimodal_routing_policy/v1 when screenshots, audio, video, or files are involved, fallback_route_policy/v1, connector_trial_manifest/v1 when observed, memory_provider_posture/v1 when the candidate is an optional memory provider, memory_provider_trial_comparison/v1 when two or more memory providers are trialled on one corpus, realtime_voice_trial_receipt/v1 when a supplied realtime voice trial is observed, realtime_voice_readiness/v1 verdict per voice dimension when a receipt is supplied, next action, prepared-vs-observed boundary.
 
 ## Why This Exists
 
 `external-connector-readiness` exists because adopting a plugin, connector, API, or memory provider changes what the agent can reach, spend, and remember, and a host's install-time scan or a vendor's docs answer only part of that: it scores capability, auth, cost, freshness, safety, and fallback for each candidate, and reports a trial only from what was observed.
 
-## Do Not Use When
-
-- Choosing which coding owner runs a task; use `omh-executor-runtime-readiness`.
-- Finding which tool, credential, or install is missing for work already chosen; use `omh-toolbelt-readiness`.
-- A read-only live lookup or an external write through a connector already adopted; use `omh-live-info` or `omh-apps`.
-
-## Examples
-
-Good example:
-
-- Prompt: external-connector-readiness compare weather plugin and wxtrain candidates with cost, freshness, multimodal evidence, and fallback routes before adoption.
-- Expected behavior: Produce `prepare_external_connector_readiness` with required context, wrapper actions, and not-evidence boundaries.
-- Why: Two named weather connectors need a cost, freshness, and fallback comparison before either is enabled; no provider has been called.
-
-Bad example:
-
-- Prompt: external-connector-readiness silently enable a paid connector and claim weather, SQL, and screenshot results without observed provider evidence.
-- Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
-- Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
-
-## Completion Checklist
-
-- Candidate connector, target domain, read/write scope, modality needs, provider owner, fallback workflow, and stop condition are explicit.
-- Cost, quota, credential, permission, live-data freshness, multimodal capture, safety, and compliance boundaries are marked ready, missing, risky, or not_observed.
-- Route live read-only lookups to `omh-live-info`, external writes to `omh-apps`, datasets/SQL to `omh-data-analysis`, and missing tools to `omh-toolbelt-readiness` before claiming results.
-- Provider responses, screenshots, audio/video/file captures, query outputs, message ids, and external mutations are reported only from observed trial evidence.
-- For a memory provider, disabling it, removing its local cache, deleting its remote memory, deleting the account, and switching away are reported as distinct operations with distinct postconditions.
-- Unknown deletion, isolation, or write semantics block automatic writes and irreversible adoption instead of resolving to an OMH or Hermes default.
-- For a realtime voice connector, keep turn integrity, latency, fallback, interruption, and spoken tool safety separate; report unsupported or unobserved dimensions as hold or block rather than as a pass.
-- On Hermes, record its install-time scans as observed evidence beside the card, never in place of it: `hermes plugins install` scans a plugin before installing it (`safe`, `caution`, or `dangerous`, and a `dangerous` verdict is refused even with `--force`), and an MCP server started through `npx`, `uvx`, or `pipx` is checked against OSV malware advisories and refused on a match with an error that reads `MCP server '<name>': BLOCKED: ...`. A scan counts only when its output was seen: the plugin scan does not run with `plugins.scan_on_install` off, and the OSV check covers known malware only and lets the server start when its lookup fails, so a quiet install or launch is not a clean result.
-
-## Recovery Notes
-
-- If the candidate list is unknown, route to `omh-skill-scout` or `omh-source-finder` before readiness scoring.
-- If credentials, cost authority, or connector installation is missing, keep readiness blocked and route setup to `omh-toolbelt-readiness`.
-- If a specific provider action is already selected, route read-only live data to `omh-live-info` or write/mutation tasks to `omh-apps`.
-- If a memory-provider lifecycle field is unknown, ask the operator to declare it or supply an observed trial receipt; hand the result to `omh-memory-sync` as not_omh_reviewed context rather than importing it into OMH review.
-- If a realtime voice connector has no supplied realtime_voice_trial_receipt/v1, route the setup and the trial run to the host, connector, or operator that owns the microphone, call, or room, then consume only the returned receipt.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -91,42 +54,6 @@ Handoff policy:
 
 Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 
-Required inputs:
-
-- user request
-- target context
-- delivery or status expectation
-- known missing evidence
-
-Expected outputs:
-
-- external_connector_readiness_card/v1
-- connector_capability_matrix/v1
-- auth_cost_boundary/v1
-- live_data_freshness_policy/v1 when live data is required
-- multimodal_routing_policy/v1 when screenshots, audio, video, or files are involved
-- fallback_route_policy/v1
-- connector_trial_manifest/v1 when observed
-- memory_provider_posture/v1 when the candidate is an optional memory provider
-- memory_provider_trial_comparison/v1 when two or more memory providers are trialled on one corpus
-- realtime_voice_trial_receipt/v1 when a supplied realtime voice trial is observed
-- realtime_voice_readiness/v1 verdict per voice dimension when a receipt is supplied
-- next action
-- prepared-vs-observed boundary
-
-Artifact expectations:
-
-- external_connector_readiness_card/v1 metadata-only wrapper card when prepared
-- connector_capability_matrix/v1 with candidate, domain, read/write shape, modality, owner workflow, and fallback route
-- auth_cost_boundary/v1 separating missing connector, missing credentials, paid/provider cost risk, quota, and user authority
-- live_data_freshness_policy/v1 for requested recency, provider timestamp, stale-result handling, and source-quality thresholds
-- multimodal_routing_policy/v1 for screenshot, audio, video, file, OCR, or visual QA evidence routes when needed
-- connector_trial_manifest/v1 only when a provider response, capture id, query transcript, message id, or tool-call observation is recorded
-- memory_provider_posture/v1 for an optional memory provider, covering identity scope, automatic hooks, storage boundary, synchronization, failure, retention, deletion, export/import, backup/restore, and portability, each marked ready, missing, risky, not_observed, or unknown
-- memory_provider_trial_comparison/v1 built on the connector_trial_manifest/v1 pattern: one corpus and one query set per candidate, retrieval quality, latency, and cost each reported per provider or marked not_observed, plus the migration route and the rollback that was exercised rather than asserted
-- realtime_voice_trial_receipt/v1 only when an authorized host, connector, or operator supplies the observed trial: connector build identity, requested versus observed stack, per-turn milestones on one declared timing reference, turn-integrity states, fallback path, interruption behavior, and spoken tool decisions
-- realtime_voice_readiness/v1 with a pass, hold, or block state and reasons for turn integrity, latency, fallback, interruption, and tool safety, plus the separated connector-configured, synthetic-trial, actual-environment-trial, voice-turn, tool-action, and session-completed states
-
 Safety rules:
 
 - An external connector readiness card is not connector installation, credential validation, provider access, API invocation, multimodal capture, live-data retrieval, external mutation, cost authorization, or successful trial evidence unless observed connector-trial evidence records it.
@@ -140,6 +67,25 @@ Safety rules:
 - Generic connector, voice-input, and media-input records are not realtime voice readiness; a turn that lost its onset, split, merged, dispatched twice, truncated, or replayed after audible output blocks the verdict rather than reporting latency.
 - A memory-provider trial reports retrieval quality, latency, and cost per candidate only from host-supplied observation; a dimension nobody measured is not_observed, never a default or a zero, and a corpus is never copied into the record.
 - A rollback is proven by exercising it during the trial and recording what came back; a documented rollback path is prepared, not reversible.
+
+## Completion Checklist
+
+- Candidate connector, target domain, read/write scope, modality needs, provider owner, fallback workflow, and stop condition are explicit.
+- Cost, quota, credential, permission, live-data freshness, multimodal capture, safety, and compliance boundaries are marked ready, missing, risky, or not_observed.
+- Route live read-only lookups to `omh-live-info`, external writes to `omh-apps`, datasets/SQL to `omh-data-analysis`, and missing tools to `omh-toolbelt-readiness` before claiming results.
+- Provider responses, screenshots, audio/video/file captures, query outputs, message ids, and external mutations are reported only from observed trial evidence.
+- For a memory provider, disabling it, removing its local cache, deleting its remote memory, deleting the account, and switching away are reported as distinct operations with distinct postconditions.
+- Unknown deletion, isolation, or write semantics block automatic writes and irreversible adoption instead of resolving to an OMH or Hermes default.
+- For a realtime voice connector, keep turn integrity, latency, fallback, interruption, and spoken tool safety separate; report unsupported or unobserved dimensions as hold or block rather than as a pass.
+- On Hermes, record its install-time scans as observed evidence beside the card, never in place of it: `hermes plugins install` scans a plugin before installing it (`safe`, `caution`, or `dangerous`, and a `dangerous` verdict is refused even with `--force`), and an MCP server started through `npx`, `uvx`, or `pipx` is checked against OSV malware advisories and refused on a match with an error that reads `MCP server '<name>': BLOCKED: ...`. A scan counts only when its output was seen: the plugin scan does not run with `plugins.scan_on_install` off, and the OSV check covers known malware only and lets the server start when its lookup fails, so a quiet install or launch is not a clean result.
+
+## Recovery Notes
+
+- If the candidate list is unknown, route to `omh-skill-scout` or `omh-source-finder` before readiness scoring.
+- If credentials, cost authority, or connector installation is missing, keep readiness blocked and route setup to `omh-toolbelt-readiness`.
+- If a specific provider action is already selected, route read-only live data to `omh-live-info` or write/mutation tasks to `omh-apps`.
+- If a memory-provider lifecycle field is unknown, ask the operator to declare it or supply an observed trial receipt; hand the result to `omh-memory-sync` as not_omh_reviewed context rather than importing it into OMH review.
+- If a realtime voice connector has no supplied realtime_voice_trial_receipt/v1, route the setup and the trial run to the host, connector, or operator that owns the microphone, call, or room, then consume only the returned receipt.
 
 ## Runtime Evidence
 

@@ -15,42 +15,13 @@ metadata:
 
 # Toolbelt Readiness
 
-This is a Hermes-native `toolbelt-readiness` workflow skill.
+Required: user request, target context, delivery or status expectation, known missing evidence. Output: toolbelt-readiness/v1 card or guidance, next action, prepared-vs-observed boundary.
 
 ## Why This Exists
 
 `toolbelt-readiness` exists so the tools, CLIs, credentials, and connectors a workflow needs are listed as present, missing, optional, or unsafe before the work starts, instead of failing midway on a tool nobody checked.
 
-## Do Not Use When
-
-- One named integration needs assessing end to end before adoption; use `omh-external-connector-readiness`.
-- The question is which coding owner should run the work; use `omh-executor-runtime-readiness`.
-- The user wants a tool installed, a credential validated, or a connector called now; the card names that step and who runs it, and performs none of them.
-
-## Examples
-
-Good example:
-
-- Prompt: toolbelt-readiness what MCP or CLI tools do I need for weekly Linear and GitHub triage?
-- Expected behavior: Produce `prepare_toolbelt_readiness` with required context, wrapper actions, and not-evidence boundaries.
-- Why: Linear and GitHub triage needs two read credentials and matching MCP servers or CLIs, listed before the first run.
-
-Bad example:
-
-- Prompt: toolbelt-readiness claim Gmail access works without an observed credential check.
-- Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
-- Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
-
-## Completion Checklist
-
-- Each required tool is listed once as present, missing, optional, or unsafe, with how it was observed: the tool list or `tool_search` for native tools, `hermes mcp list` on Hermes (else the host's MCP list) for MCP servers, `command -v <cli>` for CLIs, the env-var NAME only for credentials.
-- Unsafe says why: a tool that writes outside the stated scope, or a credential broader than the task needs.
-- Name the smallest next verification or handoff and who runs it, instead of claiming completion from narration.
-
-## Recovery Notes
-
-- If tool_search finds a deferred native tool but access is untested, retain its present classification, mark API access not_observed, and hand back the tool_call step for a user-approved check instead of listing the tool as missing.
-- If a required MCP server or CLI is absent, retain the present, optional, and unsafe inventory entries, mark workflow readiness unresolved, and hand back the missing dependency and installation owner without installing it.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -83,27 +54,21 @@ Handoff policy:
 
 Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 
-Required inputs:
-
-- user request
-- target context
-- delivery or status expectation
-- known missing evidence
-
-Expected outputs:
-
-- toolbelt-readiness/v1 card or guidance
-- next action
-- prepared-vs-observed boundary
-
-Artifact expectations:
-
-- toolbelt-readiness/v1 metadata-only runtime or wrapper card when recorded
-
 Safety rules:
 
 - A toolbelt readiness card is not MCP server installation, credential validation, API access, connector invocation, or successful workflow execution evidence.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
+## Completion Checklist
+
+- Each required tool is listed once as present, missing, optional, or unsafe, with how it was observed: the tool list or `tool_search` for native tools, `hermes mcp list` on Hermes (else the host's MCP list) for MCP servers, `command -v <cli>` for CLIs, the env-var NAME only for credentials.
+- Unsafe says why: a tool that writes outside the stated scope, or a credential broader than the task needs.
+- Name the smallest next verification or handoff and who runs it, instead of claiming completion from narration.
+
+## Recovery Notes
+
+- If tool_search finds a deferred native tool but access is untested, retain its present classification, mark API access not_observed, and hand back the tool_call step for a user-approved check instead of listing the tool as missing.
+- If a required MCP server or CLI is absent, retain the present, optional, and unsafe inventory entries, mark workflow readiness unresolved, and hand back the missing dependency and installation owner without installing it.
 
 ## Runtime Evidence
 

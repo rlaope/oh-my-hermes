@@ -236,7 +236,17 @@ class FeatureSurfaceOverrideTests(unittest.TestCase):
 
 class NativeGateClauseTests(unittest.TestCase):
     def test_each_operator_body_states_its_gate(self) -> None:
-        templates = {template.name: template.content for template in builtin_skill_templates()}
+        from omh.skills.packaging import builtin_skill_reference_templates
+
+        full_contracts = {
+            ref.skill_name: ref.content
+            for ref in builtin_skill_reference_templates()
+            if ref.relative_path == "references/full-contract.md"
+        }
+        templates = {
+            template.name: template.content + "\n" + full_contracts.get(template.name, "")
+            for template in builtin_skill_templates()
+        }
         for name, clauses in NATIVE_GATE_CLAUSES.items():
             for clause in clauses:
                 with self.subTest(skill=name, clause=clause[:60]):

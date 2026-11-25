@@ -15,47 +15,13 @@ metadata:
 
 # Workspace File Operator
 
-This is a Hermes-native `workspace-file-operator` workflow skill.
+Required: user request, target context, delivery or status expectation, known missing evidence. Output: workspace_file_task_card/v1, file_operation_scope/v1, file_observation_manifest/v1 when observed, file_confirmation_gate/v1 when destructive, next action, prepared-vs-observed boundary.
 
 ## Why This Exists
 
 `workspace-file-operator` exists because a delete, overwrite, or bulk move often has no undo point: it scopes the path, confirms each destructive step, records beforehand whether a checkpoint covers the target (Hermes takes none unless checkpoints are on), and reports only what file evidence shows.
 
-## Do Not Use When
-
-- An ordinary list, search, read, or one-file edit inside a known folder; use the native file tools directly.
-- The request converts files or produces a deck, PDF, or attachment; use `omh-materials-package` or `omh-deliverable-package`.
-
-## Examples
-
-Good example:
-
-- Prompt: workspace-file-operator list files in the reports folder and move old PDFs into archive after confirmation.
-- Expected behavior: Produce `prepare_workspace_file_operator_card` with required context, wrapper actions, and not-evidence boundaries.
-- Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
-
-Bad example:
-
-- Prompt: workspace-file-operator delete every matching file without path scope or confirmation.
-- Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
-- Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
-
-## Completion Checklist
-
-- The path root, allowed file operations, excluded paths, destructive-operation policy, and stop condition are explicit.
-- Delete, overwrite, move, rename, permission change, archive mutation, upload, and download are gated, or marked missing and not run.
-- With nobody to answer the confirmation (a scheduled job, a one-shot run, a webhook run), an irreversible or externally visible action is not run: it is handed to a person's turn and its confirmation is recorded as missing. The one exception is a bot whose person turned on its PR delivery grant (`omh capability-policy pr-delivery on`, which only the person runs; the bot only tells them the command): it may push a new branch under the grant's branch prefix, open a pull request from that branch, and push fix commits to and comment on a pull request it opened, and nothing else. Merging, force-pushing, pushing to the default branch, and anything on a pull request it did not open stay a person's, grant or no grant.
-- Before a bulk change, list the exact paths and the destination names that already exist; never overwrite a name the confirmation did not name, and compare the listing after the run with the plan.
-- Checkpoint availability is recorded before any destructive step, and the confirmation gate holds either way; without an observed checkpoint covering the target, a reversible copy or a move to trash comes first.
-- Directory listings, file contents, hashes, diffs, and operation results are reported only from observed file evidence.
-
-## Recovery Notes
-
-- If the target path or folder is missing, ask for the smallest path scope needed before preparing the operation.
-- If delete, overwrite, move, rename, chmod, or irreversible cleanup is requested, require an explicit confirmation gate.
-- If the request is file conversion, deck/PDF export, or attachment delivery, route to `omh-materials-package` or `omh-deliverable-package` instead.
-- On Hermes, when a checkpoint covers the change, the user's `/rollback` restores it and `/diff session` shows what the session changed since the checkpoint baseline; cite either only after the user runs it.
-- On Hermes, a write that its own file guards refuse or hold for approval (a sensitive system path, a protected instruction file) is that gate's outcome to record, `blocked` or the user's answer, never a write to retry through another tool.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -87,34 +53,27 @@ Handoff policy:
 
 Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 
-Required inputs:
-
-- user request
-- target context
-- delivery or status expectation
-- known missing evidence
-
-Expected outputs:
-
-- workspace_file_task_card/v1
-- file_operation_scope/v1
-- file_observation_manifest/v1 when observed
-- file_confirmation_gate/v1 when destructive
-- next action
-- prepared-vs-observed boundary
-
-Artifact expectations:
-
-- workspace_file_task_card/v1 metadata-only wrapper card when prepared
-- file_operation_scope/v1 with path root, allowed operations, excluded paths, and stop condition
-- file_observation_manifest/v1 only when directory listings, file stats, hashes, diffs, or operation output are observed
-- session_file_activity/v1 (`omh quality-evidence file-activity --hermes-session <id> --json`) cited in that manifest for which workspace files a Hermes session's read_file, write_file, and patch calls named and the outcome Hermes recorded; never as file-content, hash, diff, test, review, CI, or merge evidence
-- file_confirmation_gate/v1 for delete, overwrite, move, rename, chmod, archive mutation, or irreversible cleanup, recording checkpoint availability before the step and keeping the confirmation either way: on Hermes, checkpoints are off unless the user turned them on (`checkpoints.enabled`, or a session started with the `--checkpoints` flag), and one covers only the directory Hermes snapshots for the step (for a terminal command, its working directory), minus its excludes (among them archives, media, logs, `.env` files, and dependency and build folders) and its limits (a file over the size cap, 10 MB by default, or a directory with more than 50,000 entries), so record `available` only when the user's `/rollback` lists checkpoints for a directory that holds the target and the target is not excluded or over a limit, `not_available` otherwise, and `not_observed` until then
-
 Safety rules:
 
 - A workspace file operator card is not file read, file write, copy, move, rename, delete, archive, upload, download, permission change, or destructive filesystem evidence unless observed file-operation output records it.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
+## Completion Checklist
+
+- The path root, allowed file operations, excluded paths, destructive-operation policy, and stop condition are explicit.
+- Delete, overwrite, move, rename, permission change, archive mutation, upload, and download are gated, or marked missing and not run.
+- With nobody to answer the confirmation (a scheduled job, a one-shot run, a webhook run), an irreversible or externally visible action is not run: it is handed to a person's turn and its confirmation is recorded as missing. The one exception is a bot whose person turned on its PR delivery grant (`omh capability-policy pr-delivery on`, which only the person runs; the bot only tells them the command): it may push a new branch under the grant's branch prefix, open a pull request from that branch, and push fix commits to and comment on a pull request it opened, and nothing else. Merging, force-pushing, pushing to the default branch, and anything on a pull request it did not open stay a person's, grant or no grant.
+- Before a bulk change, list the exact paths and the destination names that already exist; never overwrite a name the confirmation did not name, and compare the listing after the run with the plan.
+- Checkpoint availability is recorded before any destructive step, and the confirmation gate holds either way; without an observed checkpoint covering the target, a reversible copy or a move to trash comes first.
+- Directory listings, file contents, hashes, diffs, and operation results are reported only from observed file evidence.
+
+## Recovery Notes
+
+- If the target path or folder is missing, ask for the smallest path scope needed before preparing the operation.
+- If delete, overwrite, move, rename, chmod, or irreversible cleanup is requested, require an explicit confirmation gate.
+- If the request is file conversion, deck/PDF export, or attachment delivery, route to `omh-materials-package` or `omh-deliverable-package` instead.
+- On Hermes, when a checkpoint covers the change, the user's `/rollback` restores it and `/diff session` shows what the session changed since the checkpoint baseline; cite either only after the user runs it.
+- On Hermes, a write that its own file guards refuse or hold for approval (a sensitive system path, a protected instruction file) is that gate's outcome to record, `blocked` or the user's answer, never a write to retry through another tool.
 
 ## Runtime Evidence
 

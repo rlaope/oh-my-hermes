@@ -15,45 +15,13 @@ metadata:
 
 # Tech Debt Audit
 
-This is a Hermes-native `tech-debt-audit` workflow skill.
+Required: the repo root or the scoped path list the audit is confined to, the stack truth from manifests (package/build files), not from memory of the tree, the previous ledger when one exists, so the rerun can reconcile instead of restart. Output: orientation summary: manifests read, churn ranking, largest files, test and CI entry points, findings table per `tech_debt_ledger/v1`: id, dimension, file:line, severity, effort, recommendation, top fixes ranked by severity and the quick wins ranked by payoff-per-effort, the looks-bad-but-is-actually-fine list, and the RESOLVED/NEW/CARRIED reconciliation on rerun.
 
 ## Why This Exists
 
 `tech-debt-audit` exists so accumulated debt becomes a ranked, reconcilable ledger instead of a one-off complaint: findings cite file:line, severity and effort make the trade-off explicit, quick wins are separated from big fixes, and reruns mark what was resolved instead of rediscovering it.
 
-## Do Not Use When
-
-- The target is one diff, PR, or claim rather than the codebase's accumulated state; use `omh-code-review`.
-- The user wants the debt removed now, behavior preserved; use `omh-ai-slop-cleaner` for deletion-first cleanup.
-- A boundary-changing fix from the ledger needs its execution shaped into phases; use `omh-refactor-plan`.
-- The question is release risk for a specific deploy rather than source quality; use `omh-production-audit`.
-
-## Examples
-
-Good example:
-
-- Prompt: Audit our tech debt and tell me what to fix first - we have maybe two weeks of cleanup budget.
-- Expected behavior: Orientation from manifests and churn, dimension-by-dimension findings with file:line citations, the severity-by-effort ledger with top fixes and quick wins sized to the budget, and the looks-bad-but-fine list.
-- Why: A budgeted what-to-fix-first question is exactly the ranked ledger this workflow produces.
-
-Bad example:
-
-- Prompt: This module is a mess, rewrite it properly.
-- Expected behavior: Refuse the rewrite framing: audit the module into ledger findings with bounded fixes, or route a decided restructure to `omh-refactor-plan`.
-- Why: A rewrite recommendation is the failure mode the ledger exists to replace with bounded, ranked fixes.
-
-## Completion Checklist
-
-- Orientation evidence is observed: manifests, churn ranking, and largest files are named, not assumed.
-- Every finding has id, dimension, file:line, severity, effort, and a bounded recommendation.
-- Quick wins and top fixes are ranked, and the looks-bad-but-is-actually-fine section is present.
-- On rerun, every prior finding is reconciled RESOLVED, CARRIED, or superseded - none silently dropped.
-
-## Recovery Notes
-
-- If the stack is unrecognized, orient from the manifests first and say which dimensions lack detection commands rather than guessing.
-- If a finding cannot be cited to file:line, demote it to an open question and keep it out of the ranked table.
-- If the previous ledger's ids no longer match the tree, map them by dimension plus path before declaring anything RESOLVED.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -88,30 +56,25 @@ Handoff policy:
 
 Hermes owns the orientation, the dimension audit, and the ledger; detection commands run through the operator's terminal and stay prepared_not_observed until their output is seen, and every fix the ledger recommends is coding work for the selected executor lane, never part of the audit.
 
-Required inputs:
-
-- the repo root or the scoped path list the audit is confined to
-- the stack truth from manifests (package/build files), not from memory of the tree
-- the previous ledger when one exists, so the rerun can reconcile instead of restart
-
-Expected outputs:
-
-- orientation summary: manifests read, churn ranking, largest files, test and CI entry points
-- findings table per `tech_debt_ledger/v1`: id, dimension, file:line, severity, effort, recommendation
-- top fixes ranked by severity and the quick wins ranked by payoff-per-effort
-- the looks-bad-but-is-actually-fine list, and the RESOLVED/NEW/CARRIED reconciliation on rerun
-
-Artifact expectations:
-
-- debt ledger per `omh-tech-debt-audit/references/debt-dimensions.md`
-- prepared detection commands named per stack, marked observed only after their output is seen
-
 Safety rules:
 
 - Never recommend a rewrite; the ledger names bounded fixes or it names nothing.
 - A finding without a file:line citation is an open question, not a finding.
 - Detection commands are prepared context until their exit status and output are observed.
 - A scoped path list is a boundary: out-of-scope findings are reported as out of scope, never audited silently.
+
+## Completion Checklist
+
+- Orientation evidence is observed: manifests, churn ranking, and largest files are named, not assumed.
+- Every finding has id, dimension, file:line, severity, effort, and a bounded recommendation.
+- Quick wins and top fixes are ranked, and the looks-bad-but-is-actually-fine section is present.
+- On rerun, every prior finding is reconciled RESOLVED, CARRIED, or superseded - none silently dropped.
+
+## Recovery Notes
+
+- If the stack is unrecognized, orient from the manifests first and say which dimensions lack detection commands rather than guessing.
+- If a finding cannot be cited to file:line, demote it to an open question and keep it out of the ranked table.
+- If the previous ledger's ids no longer match the tree, map them by dimension plus path before declaring anything RESOLVED.
 
 ## Runtime Evidence
 

@@ -15,46 +15,15 @@ metadata:
 
 # Codebase Uml
 
-This is a Hermes-native `codebase-uml` workflow skill.
+Required: repo root or current workspace, view: whole repo at package level, one area by `--focus <path>`, or module level for a subsystem, delivery target (chat attachment, PR, doc) which fixes the format: PNG for chat, SVG only when asked, renderer readiness from the command's render plan (`plantuml` on PATH, or `PLANTUML_JAR` plus `java`). Output: codebase_uml/v1 model (units, interfaces, edges, omissions) via `omh codegraph uml --json`, PlantUML source written by `omh codegraph uml --output <file>.puml`, uml_render_plan/v1 naming the exact render command or the blocker, one rendered PNG (or SVG on request) attached to the reply, with the omissions legend visible, not-evidence boundary.
+
+**Do Not Use When:** The user describes a system, cloud, or infrastructure architecture in words and wants it drawn as a styled diagram, with no repository to read the structure from; load Hermes' bundled `architecture-diagram` skill instead of this one.
 
 ## Why This Exists
 
 `codebase-uml` exists so 'visualize our codebase' produces one deterministic, readable picture instead of a hand-drawn guess: the interface each unit exposes is ranked by who imports it, the layout is bounded before PlantUML sees it, and every omission the bounding made is printed on the image.
 
-## Do Not Use When
-
-- The user wants the local code index refreshed or a task-scoped handoff pack, not a picture; use `omh-codegraph-refresh`.
-- The user wants a narrative first-read tour, reading path, or glossary; use `omh-codebase-onboarding`.
-- The user wants a summary card, thumbnail, or explainer image of a PR, meeting, or release rather than a structural diagram; use `omh-image-cards`.
-- The user describes a system, cloud, or infrastructure architecture in words and wants it drawn as a styled diagram, with no repository to read the structure from; load Hermes' bundled `architecture-diagram` skill instead of this one.
-
-## Examples
-
-Good example:
-
-- Prompt: Visualize our codebase and drop the picture here so the new teammate can see how the routing package fits.
-- Expected behavior: Run `omh codegraph uml --focus src/routing --output .omh/uml/routing.puml`, render with the plan's command, attach the PNG, and read back the legend (units shown, folded, edges pruned).
-- Why: The request is a structural picture of one area for a chat surface, which is exactly the bounded diagram this workflow produces.
-
-Bad example:
-
-- Prompt: Just sketch what you think the architecture looks like from the README.
-- Expected behavior: Decline to draw from memory; generate the diagram from the tree with `omh codegraph uml` or say the renderer is missing and name the install step.
-- Why: A diagram not derived from the actual tree misleads more than no diagram.
-
-## Completion Checklist
-
-- The view (package, focus, or module) matches the question asked, and only one view was rendered unless more were requested.
-- The render command and its observed result are recorded before the image is claimed.
-- The legend's omissions were read back to the user in the reply.
-- Follow-up exploration used narrower generated views, not recollection of the first picture.
-
-## Recovery Notes
-
-- The generator reads Python files only. Before generating, check `omh codegraph summary` finds Python files; for a TypeScript, Go, Java, or Rust repository (or an empty model) say the generator cannot read it, stop, and attach nothing. Do the same when Python is a small share of the source (compare the summary's Python file count with `git ls-files | grep -c -E '\.(ts|tsx|js|go|java|rs)$'`): the picture would show only that part, and saying so is the answer. A picture drawn from a description is a different request, not this workflow.
-- If the render plan is blocked, send the PlantUML source path plus the install hint; do not attach a stale or hand-drawn image.
-- If the picture is still unreadable, lower `--max-nodes`, narrow `--focus`, or raise `--depth` by one, and say which knob changed.
-- If Graphviz `dot` is missing, rerun with `--layout smetana`; the layout differs but the content is identical.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -90,27 +59,6 @@ Handoff policy:
 
 Keep diagram scoping, the `omh codegraph uml` source generation, and the render command in Hermes; the render runs through Hermes' own terminal tool and the image is attached by the chat surface. A generated `.puml` is prepared context; the picture exists only when the render command's exit status and output file are observed, and neither is architecture proof, review, CI, or merge evidence.
 
-Required inputs:
-
-- repo root or current workspace
-- view: whole repo at package level, one area by `--focus <path>`, or module level for a subsystem
-- delivery target (chat attachment, PR, doc) which fixes the format: PNG for chat, SVG only when asked
-- renderer readiness from the command's render plan (`plantuml` on PATH, or `PLANTUML_JAR` plus `java`)
-
-Expected outputs:
-
-- codebase_uml/v1 model (units, interfaces, edges, omissions) via `omh codegraph uml --json`
-- PlantUML source written by `omh codegraph uml --output <file>.puml`
-- uml_render_plan/v1 naming the exact render command or the blocker
-- one rendered PNG (or SVG on request) attached to the reply, with the omissions legend visible
-- not-evidence boundary
-
-Artifact expectations:
-
-- codebase_uml/v1 with `view` (level, depth, focus, caps), `nodes` carrying fan-in-ranked public interfaces, weighted `edges`, `layout` hardening, and `omissions` counts
-- uml_render_plan/v1 with `status`, `renderer`, `layout_engine`, `command`, `blockers`, and `notes`
-- the rendered image path only after the render command is observed to exit 0 and the file exists
-
 Safety rules:
 
 - Do not hand-draw the diagram from memory or from a partial read; the boxes and arrows come from `omh codegraph uml` over the actual tree.
@@ -118,6 +66,20 @@ Safety rules:
 - Do not present the picture as complete architecture: the legend's folded units, pruned edges, and hidden symbols are part of the answer.
 - Never send the diagram to a chat surface or repository the user did not name; the render is local and the attachment is the wrapper's observed action.
 - The render surface is the local Java CLI or `PLANTUML_JAR` invocation only; browser/TeaVM PlantUML render options are not part of this workflow.
+
+## Completion Checklist
+
+- The view (package, focus, or module) matches the question asked, and only one view was rendered unless more were requested.
+- The render command and its observed result are recorded before the image is claimed.
+- The legend's omissions were read back to the user in the reply.
+- Follow-up exploration used narrower generated views, not recollection of the first picture.
+
+## Recovery Notes
+
+- The generator reads Python files only. Before generating, check `omh codegraph summary` finds Python files; for a TypeScript, Go, Java, or Rust repository (or an empty model) say the generator cannot read it, stop, and attach nothing. Do the same when Python is a small share of the source (compare the summary's Python file count with `git ls-files | grep -c -E '\.(ts|tsx|js|go|java|rs)$'`): the picture would show only that part, and saying so is the answer. A picture drawn from a description is a different request, not this workflow.
+- If the render plan is blocked, send the PlantUML source path plus the install hint; do not attach a stale or hand-drawn image.
+- If the picture is still unreadable, lower `--max-nodes`, narrow `--focus`, or raise `--depth` by one, and say which knob changed.
+- If Graphviz `dot` is missing, rerun with `--layout smetana`; the layout differs but the content is identical.
 
 ## Runtime Evidence
 

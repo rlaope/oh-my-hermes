@@ -15,43 +15,15 @@ metadata:
 
 # Skill
 
-This is a Hermes-native `skill` workflow skill.
+Required: skill action, target skill name or directory. Output: skill inventory or mutation result, verification note.
+
+**Do Not Use When:** The user is writing or editing a skill that ships in the hermes-agent repository itself rather than a local one; load Hermes' optional `hermes-agent-skill-authoring` skill instead of this one when installed (if skill_view cannot find it: hermes skills install official/software-development/hermes-agent-skill-authoring).
 
 ## Why This Exists
 
 `skill` exists to route listing, reading, searching, installing, and editing skills to Hermes' own skill tools and commands, and to keep OMH-managed skills, whose bodies OMH generates, out of hand edits.
 
-## Do Not Use When
-
-- The user wants an OMH capability family turned on or off; use `omh-capability-toggle`.
-- The user wants a public skill found and vetted before installing it; use `omh-skill-scout`.
-- The user wants skill health checked: stale surfaces, failure patterns, or pending amendments; use `omh-skill-health`.
-- The user is writing or editing a skill that ships in the hermes-agent repository itself rather than a local one; load Hermes' `hermes-agent-skill-authoring` skill instead of this one (if skill_view cannot find it: hermes skills install official/software-development/hermes-agent-skill-authoring).
-
-## Examples
-
-Good example:
-
-- Prompt: which skills do I have, and add one for our release checklist
-- Expected behavior: List with `skills_list`, read close matches with `skill_view`, create the new skill with `skill_manage` under a name of the person's own, and report it from the tool result.
-- Why: Listing and creating a person's own skill are Hermes' native skill tools' job.
-
-Bad example:
-
-- Prompt: skill: patch omh-plan's SKILL.md with skill_manage so it asks fewer questions
-- Expected behavior: Decline the in-place edit and offer a separately named skill or an OMH catalog change instead.
-- Why: An OMH-managed body is generated from OMH's catalog, so the patch would not carry into the next generation.
-
-## Completion Checklist
-
-- Every listed or read skill came from `skills_list` or `skill_view`, not a guessed path.
-- Each create, edit, or delete is reported from `skill_manage`'s result, and no OMH-managed skill was edited.
-- Search, install, uninstall, and hiding are named as the person's own `hermes skills` commands.
-
-## Recovery Notes
-
-- If `skill_manage` is absent from this session, give the person the exact change instead of writing the skill through another tool.
-- If the person wants an OMH-managed skill changed, offer a separately named companion skill or an OMH catalog change, never an in-place edit.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -84,24 +56,21 @@ Handoff policy:
 
 Use Hermes for inventory and guidance; delegate only repository code changes to the selected coding executor.
 
-Required inputs:
-
-- skill action
-- target skill name or directory
-
-Expected outputs:
-
-- skill inventory or mutation result
-- verification note
-
-Artifact expectations:
-
-- manifest update when managed skills change
-
 Safety rules:
 
 - Write no Hermes config: hiding, enabling, or installing a skill is the person's own command.
 - Report a skill changed only from `skill_manage`'s result or a re-read with `skill_view`.
+
+## Completion Checklist
+
+- Every listed or read skill came from `skills_list` or `skill_view`, not a guessed path.
+- Each create, edit, or delete is reported from `skill_manage`'s result, and no OMH-managed skill was edited.
+- Search, install, uninstall, and hiding are named as the person's own `hermes skills` commands.
+
+## Recovery Notes
+
+- If `skill_manage` is absent from this session, give the person the exact change instead of writing the skill through another tool.
+- If the person wants an OMH-managed skill changed, offer a separately named companion skill or an OMH catalog change, never an in-place edit.
 
 ## Runtime Evidence
 

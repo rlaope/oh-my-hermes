@@ -14,49 +14,13 @@ metadata:
 
 # Model Setup
 
-This is a Hermes-native `model-setup` workflow skill.
+Required: metadata-only discovery report and its source/candidate states, user confirmation of which discovered models and providers are currently active, target Hermes model alias (`main` or a user-named alias), semantic category, X-platform domain, or external coding owner, optional user-edited recommendation overrides. Output: source-labeled candidate inventory separating historical observation from confirmed-active models, editable editorial recommendation chains resolved only against confirmed-active compatible candidates, Hermes-native alias/provider preview or a separate Maestro ordered external-handoff recommendation, verification checklist or an incomplete non-blocking setup advisory with exact next actions.
 
 ## Why This Exists
 
 `model-setup` exists to turn local model history into a safe, user-confirmed activation flow: Hermes retains native aliases and providers, Maestro remains an external-handoff coordinator, and editable recommendations can fall through missing preferred models without turning metadata into availability or execution claims.
 
-## Do Not Use When
-
-- The user is asking which model Hermes currently is, not asking to inspect, change, connect, or route one.
-- The request needs a repository code change rather than local model setup or recommendation review.
-- The user wants anti-ban, cooldown-bypass, hidden retry, benchmark-superiority, or provider-entitlement claims.
-
-## Examples
-
-Good example:
-
-- Prompt: Set up models from what I already have; only Qwen and Gemini are active, and show me the Hermes versus external-owner changes before applying anything.
-- Expected behavior: Inspect safe metadata, ask the user to confirm active candidates, keep unavailable preferred heads visible, resolve compatible fallbacks, and separately preview Hermes-native config and Maestro external-handoff guidance.
-- Why: The request needs flexible missing-model resolution while preserving owner and approval boundaries.
-
-Bad example:
-
-- Prompt: Use an old session entry to prove my Grok account is active and silently replace the main alias.
-- Expected behavior: Treat the entry as observed_before only, require active confirmation, show any alias collision, and refuse an unapproved write.
-- Why: Historical metadata is not provider readiness and cannot authorize a configuration change.
-
-## Completion Checklist
-
-- If a prerequisite is unmet, mark that item "not applicable" and continue with the rest of the guide instead of blocking or guessing.
-- Success is applicable-only: verification passes when every applicable item is confirmed complete, not when every possible item exists.
-- Every emitted metadata identifier passed the safe allowlist and every candidate retains a closed source state.
-- Hermes-native configuration and Maestro external-handoff recommendations are reported as separate owner surfaces.
-- Every requested write was previewed, explicitly approved, digest-checked, and re-verified; unresolved model items did not block unrelated setup.
-
-## Recovery Notes
-
-- If discovery is absent, truncated, unreadable, or layout_unverified, name that source state and continue with manual confirmed-active input instead of scanning more broadly.
-- If a provider serves only dated snapshot ids (`gpt-6.2-sol-YYYY-MM-DD`), confirm the dated id as active and keep it as served: OMH reads a trailing `-YYYY-MM-DD` as the base alias for recommendation chains, HUD labels, prices, and calibration, so the base's chain position applies without renaming the id; a date on a base no chain names still resolves nothing.
-- If a preferred Kimi, Claude, OpenAI, GLM, DeepSeek, Grok, or Gemini candidate is missing, preserve it as inactive and try the next confirmed-active compatible editorial candidate; do not substitute for an explicit unavailable choice.
-- If no compatible model is confirmed active, record owner_default, finish applicable OMH setup without a model-config write, and name the relevant Hermes-native provider/auth or user-override next action.
-- If the diagnosed Hermes config cannot be read, report the read failure and stop before proposing a diff; if the config digest changes or the user rejects the diff, do not apply it.
-- If an OAuth provider (OpenAI Codex/ChatGPT, Anthropic, Qwen OAuth) needs login or an account switch, guide the user to `hermes model` in another terminal (interactive provider selection with browser OAuth), which works whichever surface they chat in, then `/model --refresh` back in the session. In Hermes' own terminal (`hermes --tui`), `/setup` also runs the interactive wizard, including provider login, and the `/model` picker there handles only inline API-key entry, not OAuth; the OMH TUI refuses `/setup`, and its bare `/model` lists the models Hermes offers this session and switches to the one picked, with no login step.
-- If a provider hit its quota or rate limit, guide Hermes pooled credentials instead of abandoning the provider: `hermes auth add` registers an additional account for the same provider, `hermes auth status` shows which credential is exhausted, and `hermes auth reset` clears recorded exhaustion after limits recover; delegation lanes can also route around the exhausted ecosystem via the category chains' cross-provider tails.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -98,26 +62,6 @@ Handoff policy:
 
 Keep Hermes-native model setup in Hermes: inspect its config, provider plugins, auth presence, and aliases, then use Hermes-native config/auth flows for an approved change. Maestro coordinates prepared external coding handoffs for Codex, Claude Code, pi-family/OMC/OMX, and generic owners; it is not an executor and never owns Hermes aliases, providers, skill execution, or Kanban model selection. Diagnosis uses local Hermes config/auth commands and reads only config plus auth/plugin presence; it never reads `.env` values, credential material, or session prose. Show the exact Hermes-native command/config preview, bind it to the inspected config digest, and apply only after explicit approval; verify by re-inspecting Hermes state. A prepared Hermes binding or Maestro handoff is not model invocation, dispatch, or execution evidence.
 
-Required inputs:
-
-- metadata-only discovery report and its source/candidate states
-- user confirmation of which discovered models and providers are currently active
-- target Hermes model alias (`main` or a user-named alias), semantic category, X-platform domain, or external coding owner
-- optional user-edited recommendation overrides
-
-Expected outputs:
-
-- source-labeled candidate inventory separating historical observation from confirmed-active models
-- editable editorial recommendation chains resolved only against confirmed-active compatible candidates
-- Hermes-native alias/provider preview or a separate Maestro ordered external-handoff recommendation
-- verification checklist or an incomplete non-blocking setup advisory with exact next actions
-
-Artifact expectations:
-
-- model_discovery/v1 metadata-only report when local discovery runs
-- model_recommendation_resolution/v3 recommendation result when a chain is resolved
-- omh_model_activation/v1 setup receipt when the setup surface captures it
-
 Safety rules:
 
 - Treat session and config stores as untrusted metadata sources. Read only allowlisted provider, model, variant, timestamp, and source identifiers; never read or emit transcript prose, prompts, tool results, credentials, token values, entitlement, or quota.
@@ -126,6 +70,24 @@ Safety rules:
 - Do not add a second Hermes provider registry, edit Hermes YAML directly, invoke a model, contact a provider, or run network readiness probes from OMH core.
 - CCAPI for Claude is an editorial provider-family preference only, not observed availability, entitlement, or credential evidence. Do not promise anti-ban behavior, cooldown bypasses, hidden retries, or provider-specific superiority.
 - Keep prerequisite check, diagnosis, guidance, apply, and verify as separate, explicit steps.
+
+## Completion Checklist
+
+- If a prerequisite is unmet, mark that item "not applicable" and continue with the rest of the guide instead of blocking or guessing.
+- Success is applicable-only: verification passes when every applicable item is confirmed complete, not when every possible item exists.
+- Every emitted metadata identifier passed the safe allowlist and every candidate retains a closed source state.
+- Hermes-native configuration and Maestro external-handoff recommendations are reported as separate owner surfaces.
+- Every requested write was previewed, explicitly approved, digest-checked, and re-verified; unresolved model items did not block unrelated setup.
+
+## Recovery Notes
+
+- If discovery is absent, truncated, unreadable, or layout_unverified, name that source state and continue with manual confirmed-active input instead of scanning more broadly.
+- If a provider serves only dated snapshot ids (`gpt-6.2-sol-YYYY-MM-DD`), confirm the dated id as active and keep it as served: OMH reads a trailing `-YYYY-MM-DD` as the base alias for recommendation chains, HUD labels, prices, and calibration, so the base's chain position applies without renaming the id; a date on a base no chain names still resolves nothing.
+- If a preferred Kimi, Claude, OpenAI, GLM, DeepSeek, Grok, or Gemini candidate is missing, preserve it as inactive and try the next confirmed-active compatible editorial candidate; do not substitute for an explicit unavailable choice.
+- If no compatible model is confirmed active, record owner_default, finish applicable OMH setup without a model-config write, and name the relevant Hermes-native provider/auth or user-override next action.
+- If the diagnosed Hermes config cannot be read, report the read failure and stop before proposing a diff; if the config digest changes or the user rejects the diff, do not apply it.
+- If an OAuth provider (OpenAI Codex/ChatGPT, Anthropic, Qwen OAuth) needs login or an account switch, guide the user to `hermes model` in another terminal (interactive provider selection with browser OAuth), which works whichever surface they chat in, then `/model --refresh` back in the session. In Hermes' own terminal (`hermes --tui`), `/setup` also runs the interactive wizard, including provider login, and the `/model` picker there handles only inline API-key entry, not OAuth; the OMH TUI refuses `/setup`, and its bare `/model` lists the models Hermes offers this session and switches to the one picked, with no login step.
+- If a provider hit its quota or rate limit, guide Hermes pooled credentials instead of abandoning the provider: `hermes auth add` registers an additional account for the same provider, `hermes auth status` shows which credential is exhausted, and `hermes auth reset` clears recorded exhaustion after limits recover; delegation lanes can also route around the exhausted ecosystem via the category chains' cross-provider tails.
 
 ## Runtime Evidence
 

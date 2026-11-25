@@ -15,46 +15,13 @@ metadata:
 
 # Design Quality Gate
 
-This is a Hermes-native `design-quality-gate` workflow skill.
+Required: surface/channel, audience and purpose, source content or gaps, style references, ordinary-output baseline or competitor/reference quality bar, viewport/page/export constraints, observed render QA for completion claims. Output: design_quality_gate/v1, content_quality_review/v1, surface_quality_matrix/v1, comparative_quality_rubric/v1, layout_validation_plan/v1, visual_qa_evidence/v1 when observed, publishing_readiness/v1, downstream route: `omh-frontend`, `omh-materials-package`, `omh-image-cards`, or `omh-deliverable-package`.
 
 ## Why This Exists
 
 `design-quality-gate` makes high-stakes visual deliverables premium and trustworthy by treating taste, content, layout, accessibility, and render QA as first-class evidence.
 
-## Do Not Use When
-
-- Basic image prompt card only; use `omh-image-cards`.
-- The artifact is a throwaway probe whose quality is irrelevant to the decision it answers; use `omh-decision-prototype`.
-- Ordinary file packaging/export plan only; use `omh-materials-package` or `omh-deliverable-package`.
-- Pure backend, CLI, data, or text-only research with no visual surface.
-- The user asks to claim deployment, export, publication, or visual QA without evidence.
-
-## Examples
-
-Good example:
-
-- Prompt: design-quality-gate make this landing page and deck premium and verified.
-- Expected behavior: Prepare design_quality_gate/v1 with references, comparative_quality_rubric/v1, surface_quality_matrix/v1, hierarchy, layout plan, visual QA checklist, route, and evidence boundaries.
-- Why: The request asks for superior visual quality and publishing readiness.
-
-Bad example:
-
-- Prompt: design-quality-gate say the PDF and website look amazing because the plan says so.
-- Expected behavior: Require rendered PDF/page screenshots or mark visual QA as not_observed.
-- Why: A quality brief is not render, visual QA, export, deployment, or delivery evidence.
-
-## Completion Checklist
-
-- The surface, audience, source content, baseline/reference bar, and artifact type are named.
-- The comparative_quality_rubric/v1 explains how the result must beat ordinary output.
-- The surface_quality_matrix/v1 covers web, deck/PPT, PDF/poster, accessibility, and CJK-relevant checks as applicable.
-- Prepared quality gates, generated artifacts, visual QA, export, publication, approval, and delivery remain separate states.
-- The next action names whether to revise content, prepare implementation/export handoff, gather render evidence, or report blocked QA.
-
-## Recovery Notes
-
-- If the baseline or references are missing, prepare the gate with an explicit comparative-quality gap instead of calling the result premium.
-- If render QA is unavailable, keep PASS unavailable and ask for the smallest screenshot, deck/PDF render, or operator observation that proves the target surface.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -90,35 +57,6 @@ Handoff policy:
 
 Keep the quality brief, reference selection, design rubric, content-structure review, and QA checklist in Hermes; delegate implementation or binary generation only after the surface, owner, references, and observed QA path are explicit.
 
-Required inputs:
-
-- surface/channel
-- audience and purpose
-- source content or gaps
-- style references
-- ordinary-output baseline or competitor/reference quality bar
-- viewport/page/export constraints
-- observed render QA for completion claims
-
-Expected outputs:
-
-- design_quality_gate/v1
-- content_quality_review/v1
-- surface_quality_matrix/v1
-- comparative_quality_rubric/v1
-- layout_validation_plan/v1
-- visual_qa_evidence/v1 when observed
-- publishing_readiness/v1
-- downstream route: `omh-frontend`, `omh-materials-package`, `omh-image-cards`, or `omh-deliverable-package`
-
-Artifact expectations:
-
-- design_quality_gate/v1 when prepared
-- surface_quality_matrix/v1 with web: responsive viewport, deck/PPT: slide rhythm, PDF/poster: print-safe, and accessibility/CJK checks
-- comparative_quality_rubric/v1 that names how this should be better than ordinary output
-- visual_qa_evidence/v1 only from fresh screenshots/renders/observations
-- export/publish evidence only when observed
-
 Safety rules:
 
 - Require references/rubric plus fresh render QA before PASS.
@@ -127,6 +65,19 @@ Safety rules:
 - Route web to `omh-frontend`, binary files to `omh-materials-package` or `omh-deliverable-package`, and image cards to `omh-image-cards`.
 - For Korean/CJK text, awkward breaks, clipped glyphs, orphan particles, or tiny copy block visual QA.
 - Do not call a result high-quality unless it is compared against a named ordinary-output baseline or references.
+
+## Completion Checklist
+
+- The surface, audience, source content, baseline/reference bar, and artifact type are named.
+- The comparative_quality_rubric/v1 explains how the result must beat ordinary output.
+- The surface_quality_matrix/v1 covers web, deck/PPT, PDF/poster, accessibility, and CJK-relevant checks as applicable.
+- Prepared quality gates, generated artifacts, visual QA, export, publication, approval, and delivery remain separate states.
+- The next action names whether to revise content, prepare implementation/export handoff, gather render evidence, or report blocked QA.
+
+## Recovery Notes
+
+- If the baseline or references are missing, prepare the gate with an explicit comparative-quality gap instead of calling the result premium.
+- If render QA is unavailable, keep PASS unavailable and ask for the smallest screenshot, deck/PDF render, or operator observation that proves the target surface.
 
 ## Runtime Evidence
 

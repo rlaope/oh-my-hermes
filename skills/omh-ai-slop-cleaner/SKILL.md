@@ -15,46 +15,15 @@ metadata:
 
 # Ai Slop Cleaner
 
-This is a Hermes-native `ai-slop-cleaner` workflow skill.
+Required: target smell, or a scoped file list when the user has not named one, current behavior, regression checks. Output: smell inventory naming each finding's category before any edit, small cleanup diff, one pass at a time, before/after verification, closing report: changed files, simplifications, behavior lock, remaining risks.
+
+**Do Not Use When:** The user asks to simplify their own recent changes, a commit, or the staged diff with a reuse, quality, and efficiency pass rather than a behavior-locked removal of existing code; load Hermes' bundled `simplify-code` skill for that instead of this one.
 
 ## Why This Exists
 
 `ai-slop-cleaner` exists to keep `maintenance` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 
-## Do Not Use When
-
-- The goal is new or changed behavior rather than removing existing code; a plain refactor, feature, or fix request belongs to `ulw-work`.
-- The cleanup would change architecture or module boundaries and needs its execution shaped into phases first; use `omh-refactor-plan`, or `ulw-plan` when the direction itself is still contested.
-- The user wants code judged for bugs or merge readiness with no drafted slop removal to inspect; use `omh-code-review` for a bug-first review and `omh-failure-signal-audit` for swallowed failures.
-- The user asks to simplify their own recent changes, a commit, or the staged diff with a reuse, quality, and efficiency pass rather than a behavior-locked removal of existing code; load Hermes' bundled `simplify-code` skill for that instead of this one.
-
-## Examples
-
-Good example:
-
-- Prompt: $ai-slop-cleaner remove duplicated router branches and lock behavior with regression tests before refactoring.
-- Expected behavior: Plan cleanup, preserve behavior, delete or simplify code, and prove it with targeted tests.
-- Why: The request is maintenance cleanup with regression risk.
-
-Bad example:
-
-- Prompt: ai-slop-cleaner: treat casual chat or unaccepted work as if this workflow already produced verified results.
-- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `ai-slop-cleaner`.
-- Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
-
-## Completion Checklist
-
-- The selected coding or runtime owner is named before any implementation claim.
-- Prepared handoff, dispatch, execution, verification, review, CI, and merge states are separated.
-- The final status cites observed runtime evidence or keeps the work prepared_not_observed.
-- When Hermes is the selected coding owner, use `hermes_coding_harness/v1` to keep builder, verifier, reviewer, docs, and PR lanes separate.
-- Report the current harness stage, owner, next action, and missing evidence without claiming PR creation, review, CI, merge-readiness, or merge until matching runtime observations exist.
-
-## Recovery Notes
-
-- If baseline regression checks cannot run, retain the categorized smell inventory, mark the behavior lock unresolved, and hand back the cleanup plan and missing before-checks without starting risky edits.
-- If verification fails between single-smell passes, retain the last verified pass's evidence, mark the new pass unresolved, and hand back its small diff and failed check for a fix or revert before the next pass.
-- If the cleanup has no runtime record, retain its observed diff and before/after checks, mark the cleaner run not_observed, and hand back the four-part closing report for recording before an AC-SLOP checkpoint.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -107,29 +76,26 @@ Delegation transparency:
 - Capture a resumable session or thread id at dispatch and report it in the status message: for non-interactive Claude Code pass `--output-format json` and read `session_id` from the result (resume with `claude -p --resume <session-id>`); for Codex pass `--json` and read `thread_id` (resume with `codex exec resume <thread-id>`, repeating `--skip-git-repo-check` outside a git repo). Never leave a delegate run with no recorded way to resume or steer it.
 - Before dispatch, grant the executor session every permission the task will need — file write/edit, command/test execution, and the working directory — on the dispatch command itself, not through settings-file guesses: for non-interactive Claude Code pass `--permission-mode acceptEdits` or an explicit `--allowedTools` list (`--dangerously-skip-permissions` only inside an isolated worktree or sandbox), and the equivalent sandbox/approval flags for other CLIs. `acceptEdits: true` is not a settings key and `~/.claude/settings.local.json` is not a file Claude Code reads — user scope is `~/.claude/settings.json` and project scope is the dispatch cwd's `.claude/settings.local.json` with rules under `permissions.allow`. Prove the grant with a bounded scratch-edit probe run before the real dispatch: a permission denial in a non-interactive run recurs identically on retry, so never redispatch until a changed grant is proven, and surface an ungrantable permission as a blocker before dispatch, not after minutes of silence.
 
-Required inputs:
-
-- target smell, or a scoped file list when the user has not named one
-- current behavior
-- regression checks
-
-Expected outputs:
-
-- smell inventory naming each finding's category before any edit
-- small cleanup diff, one pass at a time
-- before/after verification
-- closing report: changed files, simplifications, behavior lock, remaining risks
-
-Artifact expectations:
-
-- cleanup plan and regression evidence for non-trivial work
-
 Safety rules:
 
 - Lock behavior with tests before risky cleanup.
 - Prefer deletion and existing utilities over new layers.
 - Do not add dependencies for cleanup unless explicitly requested.
 - A scoped file list is a boundary: never widen it silently; out-of-scope findings are reported, not edited.
+
+## Completion Checklist
+
+- The selected coding or runtime owner is named before any implementation claim.
+- Prepared handoff, dispatch, execution, verification, review, CI, and merge states are separated.
+- The final status cites observed runtime evidence or keeps the work prepared_not_observed.
+- When Hermes is the selected coding owner, use `hermes_coding_harness/v1` to keep builder, verifier, reviewer, docs, and PR lanes separate.
+- Report the current harness stage, owner, next action, and missing evidence without claiming PR creation, review, CI, merge-readiness, or merge until matching runtime observations exist.
+
+## Recovery Notes
+
+- If baseline regression checks cannot run, retain the categorized smell inventory, mark the behavior lock unresolved, and hand back the cleanup plan and missing before-checks without starting risky edits.
+- If verification fails between single-smell passes, retain the last verified pass's evidence, mark the new pass unresolved, and hand back its small diff and failed check for a fix or revert before the next pass.
+- If the cleanup has no runtime record, retain its observed diff and before/after checks, mark the cleaner run not_observed, and hand back the four-part closing report for recording before an AC-SLOP checkpoint.
 
 ## Runtime Evidence
 

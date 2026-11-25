@@ -15,7 +15,7 @@ metadata:
 
 # Repro Audit
 
-This is a Hermes-native `repro-audit` workflow skill.
+Required: local Harness results JSON or normalized case, explicit acc or acc_norm selection, paper conditions and human-reviewed source mappings, or explicit unknowns, new output directory with existing parent. Output: validation.json, report.json and offline escaped report.html after accepted audit, original-input hash and JSON pointers in import-review.json, blocking unknowns and pending review.
 
 ## Why This Exists
 
@@ -30,39 +30,7 @@ A displayed score is not evidence that evaluation conditions match. This audit c
 - Review the selected source claims and paper conditions with the person. No command records confirmation yet: never edit evidence.json or reported.json to stand in for one, so imported claims stay pending and the audit reports them as blockers.
 - Call `omh paper audit --case CASE --out NEW_REPORT`; read validation.json and report.json, then explain blockers and the offline report. Exit 0 means an audit artifact was written, not that conditions match.
 
-## Do Not Use When
-
-- A bug report whose reproduction steps need checking is software debugging, not an evaluation audit; use `omh-app-debugging`.
-- A results file for any benchmark other than HellaSwag (the importer reads only the HellaSwag task); say it is unsupported and do not map it onto HellaSwag.
-- A supplied article needs section-by-section explanation rather than comparison of retained records.
-- A pull request needs code correctness review rather than research evidence mapping.
-- The request requires running an evaluator, downloading weights or verifying scientific reproduction.
-
-## Examples
-
-Good example:
-
-- Prompt: Compare this HellaSwag log to the paper's reported conditions
-- Expected behavior: Ask for the metric, import selected claims, retain pending review and explain audit blockers.
-- Why: The person has existing results, not a request for model execution.
-
-Bad example:
-
-- Prompt: Explain how HellaSwag score is computed
-- Expected behavior: Answer the question directly.
-- Why: Naming the benchmark is not a request to compare a supplied record with a paper.
-
-## Completion Checklist
-
-- The selected metric and source pointers are explicit.
-- No model or tokenizer was executed; unknown and pending confirmation stay blocked.
-- Report paths exist only after observed command success; an accepted artifact is not a reproduction verdict.
-
-## Recovery Notes
-
-- If validation rejects an input, show sanitized reason codes, not source contents, and request a corrected file.
-- A raw lm-eval results file that holds a home-directory path (model_args pretrained=/home/...) is refused as an attached artifact (sensitive_input); import it with import-harness, which keeps only the derived extract.
-- If the output exists, choose a new directory instead of deleting or replacing it.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -93,25 +61,6 @@ Handoff policy:
 
 Keep source mapping and local evidence comparison in Hermes. Never launch a model, tokenizer, evaluator, subprocess or network request from the audit feature.
 
-Required inputs:
-
-- local Harness results JSON or normalized case
-- explicit acc or acc_norm selection
-- paper conditions and human-reviewed source mappings, or explicit unknowns
-- new output directory with existing parent
-
-Expected outputs:
-
-- validation.json
-- report.json and offline escaped report.html after accepted audit
-- original-input hash and JSON pointers in import-review.json
-- blocking unknowns and pending review
-
-Artifact expectations:
-
-- Keep selected evidence only; never copy arbitrary model_args, credentials or raw logs.
-- Preserve import-review.json beside the case: original hash, derived hash, lexical number token and original JSON pointers have different meanings.
-
 Safety rules:
 
 - Never infer immutable revisions, sample completion, normalization algorithm, human approval or N/A from missing fields.
@@ -119,6 +68,18 @@ Safety rules:
 - Unknown is not equal. Imported pending-review evidence cannot establish comparable conditions or a completed run. Scientific verdict stays not_assessed.
 - Only macOS/Linux safe descriptor-relative filesystem operations are supported; other platforms fail closed before reading or writing. Do not bypass the guard.
 - Require new-only output directories; reject symlinks, traversal, malformed inputs and overlapping case/report paths. Never overwrite the source or an existing output.
+
+## Completion Checklist
+
+- The selected metric and source pointers are explicit.
+- No model or tokenizer was executed; unknown and pending confirmation stay blocked.
+- Report paths exist only after observed command success; an accepted artifact is not a reproduction verdict.
+
+## Recovery Notes
+
+- If validation rejects an input, show sanitized reason codes, not source contents, and request a corrected file.
+- A raw lm-eval results file that holds a home-directory path (model_args pretrained=/home/...) is refused as an attached artifact (sensitive_input); import it with import-harness, which keeps only the derived extract.
+- If the output exists, choose a new directory instead of deleting or replacing it.
 
 ## Runtime Evidence
 

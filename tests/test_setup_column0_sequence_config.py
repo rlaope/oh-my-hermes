@@ -446,8 +446,10 @@ class SetupCommandTest(unittest.TestCase):
                     + f"  entries:\n    omh:\n      settings:\n        omh_home: '{omh.as_posix()}'\n"
                     + "memory:\n  provider: honcho\n" + PROVIDERS,
                 )
+                from omh.skill_pack import CORE_PROFILE_SKILLS
+
                 skills = sorted(path.parent.name for path in (omh / "skills").rglob("SKILL.md"))
-                self.assertEqual(len(skills), 10, skills)
+                self.assertEqual(len(skills), len(CORE_PROFILE_SKILLS), skills)
                 if hermes_reads("a: 1\n") is not None:
                     loaded = hermes_load(written)
                     self.assertEqual(loaded["toolsets"], ["hermes-cli"])

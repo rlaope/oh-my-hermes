@@ -10,47 +10,20 @@ metadata:
     phase: status-review
     role: operator
     quality_tier: status-gated
-    related_skills: [omh-sales-pipeline-review, omh-operating-rhythm]
+    related_skills: [omh-sales-pipeline-review, omh-operating-rhythm, weekly-review-planning]
 ---
 
 # Ops Review
 
-This is a Hermes-native `ops-review` workflow skill.
+Required: status evidence, scope, time window, known risks. Output: status summary, risks, blockers, priorities, follow-up actions.
+
+**Do Not Use When:** The user wants a recurring personal or calendar weekly reset across tasks and inbox rather than a team operating-status brief; load Hermes' bundled `weekly-review-planning` skill instead of this one.
 
 ## Why This Exists
 
 `ops-review` exists to keep `operations` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 
-## Do Not Use When
-
-- The review is over sales stages, forecast categories, deal aging, or seller forecast rather than generic operating status; use `omh-sales-pipeline-review`.
-- The primary output is durable cadence history, minutes, a decision log, or action history; use `omh-operating-rhythm`.
-
-## Examples
-
-Good example:
-
-- Prompt: ops-review: summarize this week’s support queue, release blockers, owner status, and next operating risks.
-- Expected behavior: Create an operations status review with owners, blockers, evidence gaps, and next actions.
-- Why: The request is an operating review rather than a one-off plan or coding handoff.
-
-Bad example:
-
-- Prompt: ops-review: treat casual chat or unaccepted work as if this workflow already produced verified results.
-- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `ops-review`.
-- Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
-
-## Completion Checklist
-
-- Confirm the workflow target, evidence boundary, and stop condition are named.
-- Report which outputs are prepared, observed, blocked, or missing.
-- Order priorities by impact on the next release or customer, then by time left; a blocker names who unblocks it and by when, or says the owner is unknown.
-- Name the smallest next verification or handoff instead of claiming completion from narration.
-
-## Recovery Notes
-
-- If status evidence covers only part of the requested time window, retain the dated observations in the status summary, mark uncovered status not_observed, and hand back the missing periods and affected priorities.
-- If a blocker needs a code fix but no follow-up is accepted, retain the observed blocker and risk, mark remediation unresolved, and hand back the follow-up action for acceptance before delegation.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -82,25 +55,6 @@ Handoff policy:
 
 Keep operating review and status narration in Hermes; delegate code fixes only from explicit accepted follow-up items.
 
-Required inputs:
-
-- status evidence
-- scope
-- time window
-- known risks
-
-Expected outputs:
-
-- status summary
-- risks
-- blockers
-- priorities
-- follow-up actions
-
-Artifact expectations:
-
-- ops review record or status artifact when a wrapper captures it
-
 Artifact contracts:
 
 This label denotes the machine-enforcement level, not a skill quality score and not an observed evidence state.
@@ -112,6 +66,18 @@ Safety rules:
 - Do not infer status from missing evidence.
 - Separate observed facts, risks, blockers, decisions, and follow-up actions.
 - Do not report review, CI, release, or merge readiness from an ops summary alone.
+
+## Completion Checklist
+
+- Confirm the workflow target, evidence boundary, and stop condition are named.
+- Report which outputs are prepared, observed, blocked, or missing.
+- Order priorities by impact on the next release or customer, then by time left; a blocker names who unblocks it and by when, or says the owner is unknown.
+- Name the smallest next verification or handoff instead of claiming completion from narration.
+
+## Recovery Notes
+
+- If status evidence covers only part of the requested time window, retain the dated observations in the status summary, mark uncovered status not_observed, and hand back the missing periods and affected priorities.
+- If a blocker needs a code fix but no follow-up is accepted, retain the observed blocker and risk, mark remediation unresolved, and hand back the follow-up action for acceptance before delegation.
 
 ## Runtime Evidence
 

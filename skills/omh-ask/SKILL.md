@@ -15,44 +15,13 @@ metadata:
 
 # Ask
 
-This is a Hermes-native `ask` workflow skill.
+Required: question, context summary, why external advice helps. Output: advisor summary, accepted/rejected advice, decision note.
 
 ## Why This Exists
 
 `ask` exists to put one outside model's critique beside the agent's own answer when the user wants it, as advice the agent weighs in the open rather than a verdict it adopts, from the advisor the user named or configured and never from a default one.
 
-## Do Not Use When
-
-- The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
-- The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
-- The user wants typed yes/no, pick-one, or scored probabilities from Jev over supplied text; use `omh-jev-ask`.
-- The user wants several perspectives to attack a proposal and a distilled constraint bundle; use `omh-adversarial-consensus`. Use this skill for one named outside advisor.
-
-## Examples
-
-Good example:
-
-- Prompt: ask: ask Claude as an external advisor to critique this plugin bridge plan before implementation.
-- Expected behavior: Prepare an advisor prompt, capture the response boundary, and summarize reusable critique.
-- Why: The user wants outside review before committing to a direction.
-
-Bad example:
-
-- Prompt: ask: should I rename this variable?
-- Expected behavior: Answer directly; no outside advisor would change the answer.
-- Why: An outside critique is worth its cost only when it could change the decision.
-
-## Completion Checklist
-
-- Findings or no-issue results are grounded in concrete file, artifact, command, or source evidence.
-- Open questions, residual risk, and missing verification are named.
-- Fixes or follow-up work are separate handoffs unless the user explicitly asked to implement them.
-
-## Recovery Notes
-
-- If no advisor is configured, retain the question and context summary, mark external advice not_observed, and hand back the agent's own answer without choosing a default advisor.
-- If the named advisor returns no response, retain the prepared advisor prompt, mark external advice not_observed, and hand back the question and context summary for a later consultation.
-- If advisor claims lack file, artifact, command, or source evidence, retain the captured advice as advice only, mark those conclusions tentative, and hand back accepted/rejected points and unresolved questions in the decision note.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -84,27 +53,23 @@ Handoff policy:
 
 Use as optional advice gathering; evaluate the advice in Hermes and delegate coding changes separately.
 
-Required inputs:
-
-- question
-- context summary
-- why external advice helps
-
-Expected outputs:
-
-- advisor summary
-- accepted/rejected advice
-- decision note
-
-Artifact expectations:
-
-- advisor transcript reference only when explicitly captured
-
 Safety rules:
 
 - Use only when configured and materially useful.
 - Treat advisor output as evidence to evaluate, not authority.
 - Do not send secrets or private prompts without explicit opt-in.
+
+## Completion Checklist
+
+- Findings or no-issue results are grounded in concrete file, artifact, command, or source evidence.
+- Open questions, residual risk, and missing verification are named.
+- Fixes or follow-up work are separate handoffs unless the user explicitly asked to implement them.
+
+## Recovery Notes
+
+- If no advisor is configured, retain the question and context summary, mark external advice not_observed, and hand back the agent's own answer without choosing a default advisor.
+- If the named advisor returns no response, retain the prepared advisor prompt, mark external advice not_observed, and hand back the question and context summary for a later consultation.
+- If advisor claims lack file, artifact, command, or source evidence, retain the captured advice as advice only, mark those conclusions tentative, and hand back accepted/rejected points and unresolved questions in the decision note.
 
 ## Runtime Evidence
 

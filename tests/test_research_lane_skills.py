@@ -52,7 +52,7 @@ class ResearchLaneSkillTextTests(unittest.TestCase):
         self.assertIn("read_window", planner)
 
     def test_data_analysis_computes_with_code_and_guards_statistics(self) -> None:
-        body = self.bodies["data-analysis"]
+        body = self.bodies["data-analysis"] + "\n" + self.refs.get(("data-analysis", "references/full-contract.md"), "")
         self.assertIn("loaded with code", body)
         self.assertIn("n per group", body)
         self.assertIn("report association as association", body)

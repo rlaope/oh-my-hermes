@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "5c86ccf50026636d49a463f03495594ea183c3b649291042d09df364d01b9cfe",
+  "catalog_revision": "21b40cd81c2d08c0c5b0507d74188f9680f6dacb53fb3e7afba59472bef93122",
   "files": {
     "omh-accessibility-audit/SKILL.md": "01b41b6815463311a950c558300afeb4e2659a1bba44efcf741568cacac6f1d6",
     "omh-accessibility-audit/references/a11y-rules.md": "615cc9eaa24ee36089d395b215cc25b2d9b0d2549f228a5f81df0553f45d2f75",
@@ -288,7 +288,7 @@
     "omh-show-reel/toolkit/upstream-manifest.json": "45a999baaeb042ffdb27b5c125c6d3466ff560c00c5d38e1726540765601418d",
     "omh-skill-eval/SKILL.md": "c4236444a7b5be831e091f04c7ec4d0d5efc5e3eded8d5503d154589f9be4c53",
     "omh-skill-eval/references/with-without-eval.md": "3086f67ffab63bd366843424b259ec53212f17d9330380c9854ef7e23f1ea27b",
-    "omh-skill-health/SKILL.md": "d2d6b0b9fff581322a8b4f9f744d04d418d60bdc07982f225deffb42f12fb6e4",
+    "omh-skill-health/SKILL.md": "8e5ff5fd41ae5cbe183ccfc2d0eb837efc614cffe27056df21abe29c4ad10c84",
     "omh-skill-scout/SKILL.md": "64e0442d62e4f017509d4c1e6ea1c34c76e3b552b84e1ae42824df83f5f90620",
     "omh-source-finder/SKILL.md": "e40d9ffbc07607ee199bd26a1a12dc9fe302b0dab4f5efe27d69aabbbba5eb5d",
     "omh-source-finder/references/literature-retrieval.md": "c85578485137c87efbcd98185b180e559bc6ef8636f00e39e14c6d656d978f13",

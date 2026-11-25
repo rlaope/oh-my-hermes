@@ -15,43 +15,13 @@ metadata:
 
 # Support Operations
 
-This is a Hermes-native `support-operations` workflow skill.
+Required: support case, known facts, customer impact, support tier or SLA, and arrival time, available ownership or escalation path. Output: customer-safe reply draft with stated facts, unknowns, and tone, issue/severity/impact/escalation matrix, internal next-step and owner handoff brief, missing repro, account, entitlement, or approval evidence list.
 
 ## Why This Exists
 
 `support-operations` turns a bounded customer case into response and escalation guidance without treating drafts or recommendations as helpdesk actions.
 
-## Do Not Use When
-
-- The request clusters a backlog of customer signals to find product patterns or roadmap candidates; use `omh-feedback-triage`.
-- The user only needs a generic, non-support marketing or email rewrite with no case, severity, or escalation context; use `omh-content-operator`.
-- The request asks to send a reply, change ticket priority or status, issue a refund, modify an account, or update a helpdesk; use `omh-apps` with an explicit target and observed result.
-- The request is an incident that is still open, needing severity declared, a commander assigned, and a running timeline rather than a support-case response; use `omh-live-incident-response`.
-- The request is a closed incident's postmortem or reliability evidence rather than a support-case response; use `omh-reliability-review`.
-
-## Examples
-
-Good example:
-
-- Prompt: Draft a calm reply for this login-outage customer and tell me whether it needs an engineering escalation.
-- Expected behavior: Prepare a customer-safe reply, severity matrix, engineering escalation recommendation, and owner handoff.
-- Why: The request is one support case with reply and escalation decisions, not a feedback backlog or ticket mutation.
-
-Bad example:
-
-- Prompt: Cluster last quarter's support feedback into roadmap opportunities.
-- Expected behavior: Route to `omh-feedback-triage`, not `support-operations`.
-- Why: A historical signal backlog needs product-pattern triage rather than case-level support guidance.
-
-## Completion Checklist
-
-- The reply states only case facts and unknowns and promises no timing, refund or fix the user did not authorize.
-- Severity and priority are separate, with SLA time left when supplied; account takeover, exposed personal data, legal or regulator contact, payment disputes and safety go to their owner, not a product escalation.
-
-## Recovery Notes
-
-- If customer impact or reproduction evidence is missing, retain the stated case facts, mark severity tentative, and hand back the reply draft and missing repro, account, or entitlement evidence list.
-- If no escalation owner or path is available, retain the issue/severity/impact/escalation matrix, mark ownership unresolved, and hand back the internal next-step and owner handoff brief with the owner question.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -82,28 +52,10 @@ Handoff policy:
 
 Keep domain framing, clarification, source/evidence synthesis, draft outputs, and next-work routing in Hermes. A prepared brief, review, reply, or plan is not an external action, approval, filing, send, publish, data mutation, implementation, review, CI, or merge claim. Prepare a connector, file, coding, or human-review handoff only when the user explicitly accepts that next step; report it only from observed evidence. Reply text is a draft, escalation is a recommendation, and no ticket state, message send, refund, account action, or customer outcome is claimed.
 
-Required inputs:
-
-- support case
-- known facts
-- customer impact, support tier or SLA, and arrival time
-- available ownership or escalation path
-
 Expert clarification questions:
 - `support case`
   - English: Which support case should we examine first?
   - Korean: 어떤 지원 사례를 먼저 살펴봐야 하나요?
-
-Expected outputs:
-
-- customer-safe reply draft with stated facts, unknowns, and tone
-- issue/severity/impact/escalation matrix
-- internal next-step and owner handoff brief
-- missing repro, account, entitlement, or approval evidence list
-
-Artifact expectations:
-
-- prepared support case brief when a wrapper captures it
 
 Artifact contracts:
 
@@ -115,6 +67,16 @@ Safety rules:
 
 - Keep customer-safe facts, unknowns, and escalation recommendations distinct.
 - Do not claim ticket mutation, message send, refund, account action, or case outcome.
+
+## Completion Checklist
+
+- The reply states only case facts and unknowns and promises no timing, refund or fix the user did not authorize.
+- Severity and priority are separate, with SLA time left when supplied; account takeover, exposed personal data, legal or regulator contact, payment disputes and safety go to their owner, not a product escalation.
+
+## Recovery Notes
+
+- If customer impact or reproduction evidence is missing, retain the stated case facts, mark severity tentative, and hand back the reply draft and missing repro, account, or entitlement evidence list.
+- If no escalation owner or path is available, retain the issue/severity/impact/escalation matrix, mark ownership unresolved, and hand back the internal next-step and owner handoff brief with the owner question.
 
 ## Runtime Evidence
 
