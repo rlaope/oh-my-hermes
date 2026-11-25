@@ -214,7 +214,7 @@ function BotPage({ bot }: { bot: Bot }) {
 
       <div className="st-gh">{t("set.model")}</div>
       <div className="st-grp">
-        <Row title={t("set.model")} hint={t("set.modelHint")}>
+        <Row title={t("set.modelMain")}>
           <Value>
             {model || "—"}
             {provider && <small>{providerName(opts, provider)}</small>}

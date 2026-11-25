@@ -80,7 +80,7 @@ export function PlatformsBody({ bot, read }: { bot: Bot; read: PlatformsRead | n
             ))}
           </ul>
         )}
-        {!bot.host && read?.available && <p className="bp-note">{t("pf.source")}</p>}
+        {!bot.host && read?.available && <p className="bp-note pf-source">{t("pf.source")}</p>}
       </div>
     </>
   );
