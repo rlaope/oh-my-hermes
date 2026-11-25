@@ -110,15 +110,16 @@ moved, and, beyond opening and closing
 sessions (`client.capabilities`, `session.create`, `session.resume`,
 `session.close`), sends only what this bullet names below, plus
 `session.history` again when Hermes refuses a rewind; in the `/sessions`
-picker, only on the person's keys, `session.title` (the highlighted session's
-new title, after Ctrl+R and Enter), `session.delete` (after a second
-Ctrl+D; never the session it is in) and `session.transcript` (after Enter on
-a row Hermes lists as not resumable, a read that writes nothing), the first
-two of which the gateway child sends to a
-shared gateway as the owner's revision-fenced `session.mutate rename` and
-`delete`, reading the revision first with `session.resume`; when no turn runs, a
-steer Hermes refused as an ordinary prompt; and, at once, the decline frame for
-a request it cannot show (a vault unlock or save-login prompt, a terminal,
+picker, only on the person's keys, `session.list` (Ctrl+G loads older authorized
+conversations through the shared-gateway child when a continuation is offered),
+`session.title` (the highlighted session's new title, after Ctrl+R and Enter),
+`session.delete` (after a second Ctrl+D; never the session it is in) and
+`session.transcript` (after Enter on a row Hermes lists as not resumable, a read
+that writes nothing). The gateway child sends `session.title` and `session.delete`
+to a shared gateway as the owner's revision-fenced `session.mutate rename` and
+`delete`, reading the revision first with `session.resume`. When no turn runs,
+it sends a steer Hermes refused as an ordinary prompt. It also immediately sends
+the decline frame for a request it cannot show (a vault unlock or save-login prompt, a terminal,
 preview or window read, a preview action, a tour, a display sudo install, a
 clarify with no question in it, or a method it does not know). It never answers
 an approval, clarify, sudo, or secret request on its own, apart from declining

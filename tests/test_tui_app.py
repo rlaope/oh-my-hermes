@@ -54,6 +54,7 @@ from omh.tui.app import (
     RESPAWN_LEFT_REASON,
     SEND_NOW_HINT,
     SLOT_ARM_SECONDS,
+    SESSION_LIST_LIMIT,
     App,
     banner_logo,
     initial_theme,
@@ -2694,7 +2695,7 @@ class SessionSwitchTests(AppTestCase):
         self.run_main(run)
         self.assert_clean_run(run)
         startup, listing = run.calls("session.list")  # the fresh session's last-session lookup, then /sessions
-        self.assertEqual((startup["params"], listing["params"]), ({"limit": 3}, {"limit": 50}))
+        self.assertEqual((startup["params"], listing["params"]), ({"limit": 3}, {"limit": SESSION_LIST_LIMIT}))
         picker = "\n".join(terminal.captures["picker"])
         self.assertIn("Reply with ok", picker)  # the `/resume` card: its name, then `● this session · …`
         self.assertIn("● this session", picker)
