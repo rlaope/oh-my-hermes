@@ -15,6 +15,19 @@ All notable changes will be documented here.
   are gone. A Hermes without the per-route function keeps the old ladder. The OMH TUI's info line and `/effort` reply
   name the level the route sends when Hermes reports it clamps one. (`apps/omher/bridge/omher_bridge.py`,
   `apps/omher/src/chat/model/`, `src/tui/modes.py`)
+- **Claude lanes can run on a Claude Pro/Max subscription through Hermes' DirectSDK plugin.** OMH did not see
+  Hermes' official `claude-subscription-directsdk` model-provider plugin, so on a machine where it was the only
+  Claude path, Claude aliases counted as unserved: Claude-headed chains (`deep`, `architect`, `writing`,
+  `ultrabrain`, ...) fell to the next model and a delegated Claude lane was refused. Now an installed plugin that is
+  not in `plugins.disabled` (in `config.yaml` or Hermes' managed config) counts as an `anthropic` provider under the id
+  `claude-subscription-directsdk-experimental`, with the source `plugin`. Claude aliases count as served, the chains
+  reorder, and a Claude lane on a session that cannot serve it is pinned to the plugin. OMH reads only the manifest's
+  `name` and `kind`; it never imports or runs the plugin. When another Claude provider is also there (a Hermes
+  Anthropic login, `ANTHROPIC_API_KEY`, a recorded `ccapi`), the pin stays on that provider, as before the plugin was
+  installed, even after `omh setup` records both. To pin the plugin instead, record only it
+  (`omh model-chains provider set claude-subscription-directsdk-experimental anthropic`), route the alias to it, or
+  clear the other provider. `omh setup` labels the plugin's row.
+  (#3186, carried; thanks @jaehyeokl; `docs/INSTALLATION.md`)
 - **omher: a TERMINALS Shell row where you ran Claude Code, Codex or `omh` puts it back after omher restarts.** Such a
   row used to come back as a plain shell (paused), with the CLI and its conversation gone; only rows started directly
   as Claude Code, Codex or oh-my-hermes came back. A Shell row now keeps which of those three CLIs is in its
@@ -205,6 +218,20 @@ All notable changes will be documented here.
   the home used to report `path_escape`); nothing is written through either. A read that races a write can still
   report `not_regular_file` for that one read, on every platform; that predates this change and is a follow-up.
   (`src/coding/user_executors.py`)
+- **A Hermes child dispatch that completed is no longer reported as failed because its scratch home was still in
+  use.** Hermes' `chat` starts a detached idle-exit gateway for the dispatch's scratch `HERMES_HOME`. The gateway
+  can still write into that home, or hold its log open (Windows then refuses the unlink), after the child exits, and
+  the failed removal turned a `completed` child into `failed`. The status is now the child's own. The removal is
+  retried briefly. A home that cannot be removed is left with a `cleanup_note` ("scratch home left at <path>: …") on
+  the result, on the fanout recovery record and on the CLI's stderr. Its OMH marker lets a later dispatch remove it
+  once it is older than a day and past that dispatch's own recorded deadline (start, timeout and an hour; an infinite
+  or oversized timeout records the largest deadline, so that home is never swept). A NaN timeout is now refused. The
+  marker goes last and is restored if a removal took it, and it is written as bytes, so Windows no longer writes a
+  `\r\n` marker that no sweep accepts. On Windows a child with an infinite or very long timeout is now waited for in
+  hour-long slices; `Popen.wait` there could not take that timeout, and the dispatch raised `OverflowError` or
+  reported `timed_out`. OMH still never signals that gateway. A child whose own process group or pipes did not finish still fails.
+  (`src/coding/hermes_child_dispatch.py` `_remove_scratch`, `_sweep_scratch_homes`, `_wait_until`; `AGENTS.md`
+  Hermes-native child boundary)
 - **`omh setup` connects to a Hermes config whose root keys hold column-0 lists, or whose section keys carry a
   comment.** Step 2 stopped with "non-mapping or unsupported root YAML is user-owned" on a `config.yaml` that writes a
   root key's list items at the left edge (`toolsets:` then `- hermes-cli`), the spelling older Hermes releases, hand

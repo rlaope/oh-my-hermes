@@ -332,8 +332,25 @@ class LaunchWaitTests(LaunchWaitCase):
     def test_off_a_terminal_each_phase_is_one_line_and_nothing_is_rewritten(self) -> None:
         run = self.normal()
         refused = [lambda _own, n=n: self.refusing_spawn(run, f"refused-{n}") for n in range(2)]
+        make = self.clients(run, refused)
+
+        def asking_once(spawn: object, **options: object) -> GatewayClient:
+            # `GatewayClient.call` asks `cancel` only while no answer has arrived, so on a loaded runner the replayed
+            # session.create can answer before the opening phase is ever asked and that line is never written
+            # (seen on CI). Ask it once as the call starts, as a gateway that is slow to answer would.
+            client = make(spawn, **options)
+            call = client.call
+
+            def acting(name: str, params: dict, timeout: float = 30.0, cancel: object = None) -> dict:
+                if name == "session.create" and cancel is not None:
+                    cancel()  # type: ignore[operator]
+                return call(name, params, timeout, cancel)  # type: ignore[arg-type]
+
+            client.call = acting  # type: ignore[method-assign]
+            return client
+
         with fast_wait():
-            self.launch(run, self.clients(run, refused), stderr=io.StringIO())
+            self.launch(run, asking_once, stderr=io.StringIO())
         self.assert_clean_run(run)
         said = run.stderr.getvalue()
         self.assertNotIn("\r", said)

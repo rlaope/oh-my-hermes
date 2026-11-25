@@ -413,10 +413,13 @@ def effective_mixture_category_chains(
 # the operator declined to say (treated as a gateway, so nothing is demoted
 # on a guess). `subscription_clis` lists the external coding CLIs whose
 # subscription the operator confirmed and that only the Maestro lane can
-# spend. Claude Code is the one such CLI today: Hermes has no way to use a
-# Claude subscription, so the answer's only effect is the Claude Code
-# `--model` preference. A Codex login is spent by Hermes' own openai-codex
-# provider and therefore belongs under `providers`, not here.
+# spend. Claude Code is the one such CLI today, and the answer's only effect
+# is the Claude Code `--model` preference. Hermes itself spends a Claude
+# subscription's plan allowance only through an installed provider plugin
+# (`claude-subscription-directsdk-experimental`), which detection counts
+# under `providers` as `anthropic`; Hermes' own Anthropic OAuth login draws
+# on extra-usage credits instead. A Codex login is spent by Hermes' own
+# openai-codex provider and therefore belongs under `providers`, not here.
 PROVIDER_ENTITLEMENTS_SCHEMA_VERSION = "provider_entitlements/v1"
 PROVIDER_KIND_GATEWAY = "gateway"
 PROVIDER_KIND_UNKNOWN = "unknown"
@@ -814,12 +817,13 @@ def parse_provider_entitlements(raw: object) -> tuple[dict[str, Any] | None, str
 
 PROVIDER_ENTITLEMENT_SOURCE_RECORDED = "recorded"
 # Display order for the providers a surface lists: the operator's own word
-# first, then a login, a config key, a variable name.
+# first, then a login, a config key, a provider plugin, a variable name.
 _PROVIDER_SOURCE_RANK: dict[str, int] = {
     PROVIDER_ENTITLEMENT_SOURCE_RECORDED: 0,
     "login": 1,
     "config": 2,
-    "env": 3,
+    "plugin": 3,
+    "env": 4,
 }
 
 
@@ -835,9 +839,9 @@ def effective_provider_entitlements(
     branch. ``document_status`` is `load_provider_entitlements`' own status,
     unchanged, so a surface can still say whether the operator answered.
     ``providers`` lists every provider counted, one row per id, with the
-    `source` it came from (`recorded`, `login`, `config`, `env`) and the
-    `evidence` (the document, a section of `auth.json`, a config key, a
-    variable NAME).
+    `source` it came from (`recorded`, `login`, `config`, `plugin`, `env`)
+    and the `evidence` (the document, a section of `auth.json`, a config
+    key, a plugin directory, a variable NAME).
 
     Detection (`provider_detection`) is the baseline: a provider Hermes can
     already use counts the moment it is linked, without a second interview.

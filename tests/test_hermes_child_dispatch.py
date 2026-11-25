@@ -9,7 +9,12 @@ from pathlib import Path
 import signal
 import socket
 from tempfile import TemporaryDirectory
+import shutil
+import stat
+import tempfile
 import textwrap
+import time
+import types
 from threading import Event, Thread
 import threading
 import tracemalloc
@@ -20,6 +25,7 @@ from _local_package import load_local_package
 
 load_local_package()
 
+from omh.coding import hermes_child_dispatch  # noqa: E402
 from omh.coding.hermes_child_dispatch import (  # noqa: E402
     CancellationToken,
     DispatchConfirmationError,
@@ -743,6 +749,485 @@ class HermesChildDispatchTests(unittest.TestCase):
                     observe=events.append,
                 )
         self.assertEqual(events[-1].status, "cancelled")
+
+
+
+_REAL_RMTREE = shutil.rmtree
+
+
+class ScratchHomeCleanupTests(unittest.TestCase):
+    """A dispatch's result is its child's outcome; removing the scratch home is a bounded step reported beside it.
+
+    Hermes' `chat` starts a detached `gateway run --idle-exit` for the scratch `HERMES_HOME` (a launchd job on macOS)
+    that outlives the child and may still write into that home, or hold a log open, when the dispatch removes it.
+    The removal is faked here, so nothing depends on the host or on timing: a writer that recreates a file right
+    after the tree is gone, and Windows' refusal to unlink a file another process holds open.
+    """
+
+    def setUp(self) -> None:
+        self.temp = TemporaryDirectory(prefix="omh-scratch-test-")
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.hermes = self.root / "hermes.py"
+        self.hermes.write_text(textwrap.dedent(_FAKE_HERMES).lstrip(), encoding="utf-8")
+        self.hermes.chmod(0o755)
+        self.tmp = self.root / "tmp"
+        self.tmp.mkdir()
+        tempdir = patch.object(tempfile, "tempdir", str(self.tmp))
+        tempdir.start()
+        self.addCleanup(tempdir.stop)
+        no_wait = patch.object(hermes_child_dispatch, "_sleep", lambda seconds: None)
+        no_wait.start()
+        self.addCleanup(no_wait.stop)
+        self.env = {**os.environ, "OMH_HOME": str(self.root / ".omh")}
+
+    def home(self, name: str, *, age: float, text: str | None = None, deadline: float | None = None) -> Path:
+        directory = self.tmp / name
+        (directory / "hermes").mkdir(parents=True)
+        marker = directory / ".omh-hermes-child-scratch"
+        stamp = time.time() - age
+        if text is None:
+            text = f"omh-hermes-child-scratch/v1\n{int(stamp + 900 if deadline is None else deadline)}\n"
+        marker.write_bytes(text.encode("ascii"))
+        os.utime(marker, (stamp, stamp))
+        return directory
+
+    def dispatch(self, prompt: str = "do focused work", timeout: float = 5.0):
+        request = HermesChildRequest(
+            prompt=prompt, model="fake/model", provider="fake-provider", reasoning="low",
+            parent_run_id="parent-123", run_id="child-456", timeout_seconds=timeout,
+            termination_grace_seconds=0.2, hermes=str(self.hermes), cwd=self.root, env=self.env,
+        )
+        return dispatch_hermes_child(request, dispatch_policy="ask_before_dispatch", confirmed=True)
+
+    def scratch_dir(self) -> Path:
+        """The one scratch home of the running dispatch (a fake removal may get only an entry name and a dir_fd)."""
+        return next(self.tmp.glob("omh-hermes-child-*"))
+
+    def scratch_root(self) -> Path:
+        isolated = json.loads((self.root / "isolated-paths.json").read_text(encoding="utf-8"))
+        return Path(isolated["HERMES_HOME"]).parent
+
+    def test_a_writer_recreating_a_file_after_removal_leaves_a_completed_dispatch_completed(self) -> None:
+        seen: list[bool] = []
+
+        def removal_then_a_gateway_write(path, *args, **kwargs):
+            seen.append((self.scratch_dir() / ".omh-hermes-child-scratch").is_file())
+            root = self.scratch_dir()
+            _REAL_RMTREE(path, *args, **kwargs)
+            if Path(path).name == "hermes":
+                (root / "hermes" / "logs").mkdir(parents=True)
+                (root / "hermes" / "logs" / "gateway-stdio.log").write_text("late line\n", encoding="utf-8")
+
+        with patch("shutil.rmtree", side_effect=removal_then_a_gateway_write):
+            result = self.dispatch()
+        scratch = self.scratch_root()
+        self.addCleanup(_REAL_RMTREE, scratch, True)
+        self.assertEqual((result.status, result.exit_code), ("completed", 0))
+        self.assertFalse(result.cleanup_verified)
+        self.assertEqual(getattr(result, "scratch_left", None), str(scratch))
+        self.assertIn(f"scratch home left at {scratch}", getattr(result, "cleanup_note", ""))
+        self.assertTrue(seen and seen[0], "the scratch root carries OMH's marker while it exists")
+        self.assertTrue((scratch / ".omh-hermes-child-scratch").read_text(encoding="utf-8").startswith(
+            "omh-hermes-child-scratch/v1\n"), "a home recreated after removal is left with a valid marker again")
+
+    def test_a_left_home_that_lost_its_marker_gets_it_back_and_a_later_sweep_takes_it(self) -> None:
+        # NTFS lists `.omh-hermes-child-scratch` before `hermes`, so a removal that stops at the open log has
+        # already taken the marker.
+        def marker_first_then_refused(path, *args, **kwargs):
+            (self.scratch_dir() / ".omh-hermes-child-scratch").unlink(missing_ok=True)
+            raise PermissionError(13, "in use")
+
+        with patch("shutil.rmtree", side_effect=marker_first_then_refused):
+            result = self.dispatch()
+        scratch = self.scratch_root()
+        self.addCleanup(_REAL_RMTREE, scratch, True)
+        self.assertEqual(result.status, "completed")
+        restored = (scratch / ".omh-hermes-child-scratch").read_text(encoding="utf-8").split("\n")
+        self.assertEqual(restored[0], "omh-hermes-child-scratch/v1")
+        self.assertGreater(int(restored[1]), time.time() + 5.0, "the restored marker keeps this dispatch's deadline")
+        self.assertIn("older than 86400 s and past this dispatch's deadline", result.cleanup_note)
+        with patch.object(hermes_child_dispatch, "_clock", lambda: time.time() + 2 * 86400):
+            hermes_child_dispatch._sweep_scratch_homes()
+        self.assertFalse(scratch.exists())
+
+    def test_a_live_dispatchs_home_is_kept_until_its_own_deadline(self) -> None:
+        # Two days old, but its dispatch has a three-day timeout: still running, so never swept before its deadline.
+        deadline = time.time() - 2 * 86400 + 3 * 86400 + 3600
+        live = self.home("omh-hermes-child-live", age=2 * 86400, deadline=deadline)
+        hermes_child_dispatch._sweep_scratch_homes()
+        self.assertTrue(live.exists())
+        with patch.object(hermes_child_dispatch, "_clock", lambda: deadline + 1):
+            hermes_child_dispatch._sweep_scratch_homes()
+        self.assertFalse(live.exists())
+
+    def test_a_long_timeout_is_accepted_and_written_as_the_markers_deadline(self) -> None:
+        seen: list[str] = []
+
+        def read_marker(path, *args, **kwargs):
+            seen.append((self.scratch_dir() / ".omh-hermes-child-scratch").read_text(encoding="utf-8"))
+            _REAL_RMTREE(path, *args, **kwargs)
+
+        with patch.object(hermes_child_dispatch, "_clock", lambda: 1_600_000_000.0), \
+                patch("shutil.rmtree", side_effect=read_marker):
+            result = self.dispatch(timeout=5 * 86400.0)
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(seen[0], f"omh-hermes-child-scratch/v1\n{1_600_000_000 + 5 * 86400 + 3600 + 1}\n")
+
+    def test_an_infinite_or_huge_timeout_still_runs_and_records_the_largest_deadline(self) -> None:
+        for timeout in (float("inf"), 1e30):
+            with self.subTest(timeout=timeout):
+                seen: list[str] = []
+
+                def read_marker(path, *args, **kwargs):
+                    seen.append((self.scratch_dir() / ".omh-hermes-child-scratch").read_text(encoding="utf-8"))
+                    _REAL_RMTREE(path, *args, **kwargs)
+
+                with patch("shutil.rmtree", side_effect=read_marker):
+                    result = self.dispatch(timeout=timeout)
+                self.assertEqual(result.status, "completed")
+                self.assertEqual(seen[0], "omh-hermes-child-scratch/v1\n" + "9" * 20 + "\n")
+
+    def test_a_nan_timeout_is_refused_before_anything_is_emitted_or_created(self) -> None:
+        observed: list[object] = []
+        request = HermesChildRequest(
+            prompt="p", model="fake/model", provider="fake-provider", reasoning="low", parent_run_id="parent-123",
+            run_id="child-456", timeout_seconds=float("nan"), hermes=str(self.hermes), cwd=self.root, env=self.env,
+        )
+        with self.assertRaisesRegex(ValueError, "positive timeout"):
+            dispatch_hermes_child(request, dispatch_policy="ask_before_dispatch", confirmed=True,
+                                  observe=observed.append)
+        self.assertEqual(observed, [])
+        self.assertEqual(list(self.tmp.iterdir()), [])
+
+    def test_a_marker_that_cannot_be_written_is_a_typed_failure_before_the_child_starts(self) -> None:
+        real_write = Path.write_bytes
+
+        def refuse_marker(self_path, *args, **kwargs):
+            if self_path.name == ".omh-hermes-child-scratch":
+                raise OSError(28, "No space left on device")
+            return real_write(self_path, *args, **kwargs)
+
+        with patch.object(Path, "write_bytes", refuse_marker):
+            result = self.dispatch()
+        self.assertEqual((result.status, result.exit_code), ("failed", None))
+        self.assertIn("could not be marked (OSError)", result.stderr)
+        self.assertFalse((self.root / "argv.json").exists(), "the child never started")
+        self.assertEqual(list(self.tmp.iterdir()), [])
+
+    def test_a_forged_far_deadline_garbage_or_an_old_header_only_marker_keeps_the_home(self) -> None:
+        kept = [
+            self.home("omh-hermes-child-far", age=2 * 86400, deadline=time.time() + 10 ** 12),
+            self.home("omh-hermes-child-garbage", age=2 * 86400, text="omh-hermes-child-scratch/v1\n12e5\n"),
+            self.home("omh-hermes-child-negative", age=2 * 86400, text="omh-hermes-child-scratch/v1\n-5\n"),
+            self.home("omh-hermes-child-extra", age=2 * 86400, text="omh-hermes-child-scratch/v1\n5\nmore\n"),
+            self.home("omh-hermes-child-header-only", age=2 * 86400, text="omh-hermes-child-scratch/v1\n"),
+        ]
+        hermes_child_dispatch._sweep_scratch_homes()
+        self.assertTrue(all(directory.exists() for directory in kept))
+
+    def test_a_sweep_that_fails_after_the_first_entry_keeps_the_marker_for_the_next_one(self) -> None:
+        old = self.home("omh-hermes-child-held", age=2 * 86400)
+        (old / "home").mkdir()
+        calls: list[str] = []
+
+        def first_entry_then_refused(path, *args, **kwargs):
+            calls.append(str(path))
+            if len(calls) > 1:
+                raise PermissionError(13, "in use")
+            _REAL_RMTREE(path, *args, **kwargs)
+
+        with patch("shutil.rmtree", side_effect=first_entry_then_refused):
+            hermes_child_dispatch._sweep_scratch_homes()
+        self.assertEqual(len(calls), 2)
+        self.assertTrue((old / ".omh-hermes-child-scratch").is_file())
+        hermes_child_dispatch._sweep_scratch_homes()
+        self.assertFalse(old.exists())
+
+    def test_a_sweep_whose_root_comes_back_restores_the_same_marker(self) -> None:
+        old = self.home("omh-hermes-child-rewritten", age=2 * 86400)
+        before = (old / ".omh-hermes-child-scratch").read_bytes()
+        stamp = (old / ".omh-hermes-child-scratch").stat().st_mtime
+        real_rmdir = os.rmdir
+
+        def refused(target, *args, **kwargs):
+            if Path(target).name == old.name:
+                raise OSError(66, "Directory not empty")
+            real_rmdir(target, *args, **kwargs)
+
+        with patch.object(os, "rmdir", refused):
+            hermes_child_dispatch._sweep_scratch_homes()
+        marker = old / ".omh-hermes-child-scratch"
+        self.assertEqual(marker.read_bytes(), before)
+        self.assertEqual(int(marker.stat().st_mtime), int(stamp))
+        hermes_child_dispatch._sweep_scratch_homes()
+        self.assertFalse(old.exists())
+
+    def populated_outside(self) -> Path:
+        outside = self.root / "outside"
+        (outside / "sub").mkdir(parents=True)
+        (outside / "sub" / "f").write_text("keep\n", encoding="utf-8")
+        (outside / "g").write_text("keep\n", encoding="utf-8")
+        return outside
+
+    def assert_untouched(self, outside: Path) -> None:
+        self.assertEqual((outside / "sub" / "f").read_text(encoding="utf-8"), "keep\n")
+        self.assertEqual((outside / "g").read_text(encoding="utf-8"), "keep\n")
+
+    def link(self, link: Path, target: Path) -> None:
+        try:
+            link.symlink_to(target, target_is_directory=target.is_dir())
+        except OSError:
+            self.skipTest("this platform refuses to create symlinks for this user")
+
+    def test_a_symlinked_root_is_refused_and_its_target_untouched(self) -> None:
+        outside = self.populated_outside()
+        (outside / ".omh-hermes-child-scratch").write_bytes(b"omh-hermes-child-scratch/v1\n1\n")
+        root = self.tmp / "omh-hermes-child-link"
+        self.link(root, outside)
+        with self.assertRaises(OSError):
+            hermes_child_dispatch._remove_marker_last(root)
+        note = hermes_child_dispatch._remove_scratch(root, time.time(), "omh-hermes-child-scratch/v1\n1\n")
+        self.assertIn("is not a plain directory", note)
+        stamp = time.time() - 3 * 86400
+        os.utime(outside / ".omh-hermes-child-scratch", (stamp, stamp))
+        hermes_child_dispatch._sweep_scratch_homes()
+        self.assert_untouched(outside)
+        self.assertTrue((outside / ".omh-hermes-child-scratch").is_file())
+
+    def test_the_dispatchs_own_home_swapped_after_creation_is_refused(self) -> None:
+        # The dispatch removes only the directory its own mkdtemp made (same st_dev/st_ino). A file system may reuse
+        # an inode for a recreated directory, so the identity it recorded is made to differ here, not left to chance.
+        other = self.home("omh-hermes-child-made", age=0)
+        (other / "home").mkdir()
+        seen = os.lstat(other)
+        recorded = types.SimpleNamespace(st_dev=seen.st_dev, st_ino=seen.st_ino + 1)
+        note = hermes_child_dispatch._remove_scratch(other, time.time(), "omh-hermes-child-scratch/v1\n1\n", recorded)
+        self.assertIn("changed after it was checked", note)
+        self.assertTrue((other / "home").is_dir())
+
+    def test_the_marker_is_written_as_bytes_so_no_platform_translates_its_newlines(self) -> None:
+        # Text mode writes `\r\n` on Windows, which `_marker_deadline` refuses: no home would ever be swept.
+        def no_text_mode(self_path, *args, **kwargs):
+            raise AssertionError(f"text-mode write of {self_path.name}")
+
+        seen: list[bytes] = []
+
+        def read_marker(path, *args, **kwargs):
+            seen.append((self.scratch_dir() / ".omh-hermes-child-scratch").read_bytes())
+            raise PermissionError(13, "in use")
+
+        with patch.object(Path, "write_text", no_text_mode), patch("shutil.rmtree", side_effect=read_marker):
+            result = self.dispatch()
+        self.addCleanup(_REAL_RMTREE, self.scratch_root(), True)
+        self.assertEqual(result.status, "completed")
+        self.assertNotIn(b"\r", seen[0])
+        self.assertIsNotNone(hermes_child_dispatch._marker_deadline(seen[0]))
+
+    def test_a_windows_shaped_sweep_takes_an_old_home_and_keeps_a_young_one(self) -> None:
+        # Windows: no `os.getuid`, no O_NOFOLLOW / dir_fd removal. Both are taken away here.
+        old = self.home("omh-hermes-child-win-old", age=2 * 86400, deadline=time.time() - 86400)
+        young = self.home("omh-hermes-child-win-young", age=60)
+        getuid = getattr(os, "getuid", None)
+        if getuid is not None:
+            del os.getuid
+        try:
+            with patch.object(hermes_child_dispatch, "_descriptor_removal", lambda: False):
+                hermes_child_dispatch._sweep_scratch_homes()
+        finally:
+            if getuid is not None:
+                os.getuid = getuid
+        self.assertFalse(old.exists())
+        self.assertTrue(young.exists())
+
+    def test_a_long_wait_is_taken_in_slices_windows_can_convert(self) -> None:
+        # Windows' `Popen.wait` turns its timeout into whole milliseconds: `inf` raises OverflowError there.
+        real_wait = subprocess.Popen.wait
+        asked: list[float | None] = []
+
+        def windows_like_wait(process, timeout=None):
+            asked.append(timeout)
+            if timeout is not None and (timeout == float("inf") or timeout * 1000 > 2 ** 32 - 2):
+                raise OverflowError("cannot convert float infinity to integer")
+            return real_wait(process, timeout=timeout)
+
+        with patch.object(subprocess.Popen, "wait", windows_like_wait), \
+                patch.object(hermes_child_dispatch, "_WAIT_SLICE_SECONDS", 0.05):
+            for timeout in (float("inf"), 1e30):
+                with self.subTest(timeout=timeout):
+                    self.assertEqual(self.dispatch(timeout=timeout).status, "completed")
+        self.assertTrue(all(value is None or value <= 3600.0 for value in asked))
+
+    def test_a_root_swapped_for_a_link_after_the_sweeps_checks_is_refused(self) -> None:
+        outside = self.populated_outside()
+        old = self.home("omh-hermes-child-swapped", age=2 * 86400, deadline=time.time() - 86400)
+        real = hermes_child_dispatch._remove_marker_last
+
+        def swap_then_remove(path, expected=None):
+            _REAL_RMTREE(path)
+            self.link(path, outside)
+            return real(path, expected)
+
+        with patch.object(hermes_child_dispatch, "_remove_marker_last", swap_then_remove):
+            hermes_child_dispatch._sweep_scratch_homes()
+        self.assertTrue(old.is_symlink())
+        self.assert_untouched(outside)
+
+    def test_a_link_inside_the_home_is_removed_and_what_it_points_at_untouched(self) -> None:
+        outside = self.populated_outside()
+        home = self.home("omh-hermes-child-inner", age=0)
+        self.link(home / "hermes" / "escape", outside)
+        self.link(home / "escape-file", outside / "g")
+        if not hermes_child_dispatch._descriptor_removal():
+            with self.assertRaises(OSError):
+                hermes_child_dispatch._remove_marker_last(home)
+        else:
+            hermes_child_dispatch._remove_marker_last(home)
+            self.assertFalse(home.exists())
+        self.assert_untouched(outside)
+
+    def test_the_lstat_fallback_removes_a_plain_home_and_refuses_a_link_inside(self) -> None:
+        # The branch Windows takes (no O_NOFOLLOW / dir_fd removal), run here by turning the descriptor path off.
+        with patch.object(hermes_child_dispatch, "_descriptor_removal", lambda: False):
+            plain = self.home("omh-hermes-child-plain", age=0)
+            (plain / "home").mkdir()
+            hermes_child_dispatch._remove_marker_last(plain)
+            self.assertFalse(plain.exists())
+            outside = self.populated_outside()
+            linked = self.home("omh-hermes-child-linked", age=0)
+            self.link(linked / "escape", outside)
+            with self.assertRaisesRegex(OSError, "is a link or reparse point"):
+                hermes_child_dispatch._remove_marker_last(linked)
+            self.assertTrue((linked / ".omh-hermes-child-scratch").is_file())
+        self.assert_untouched(outside)
+
+    def test_a_reparse_point_root_is_refused(self) -> None:
+        home = self.home("omh-hermes-child-junction", age=0)
+        real = home.lstat()
+        reparse = types.SimpleNamespace(st_mode=real.st_mode, st_dev=real.st_dev, st_ino=real.st_ino,
+                                        st_file_attributes=stat.FILE_ATTRIBUTE_REPARSE_POINT)
+        real_lstat = os.lstat
+
+        def lstat(target, *args, **kwargs):
+            return reparse if Path(target) == home else real_lstat(target, *args, **kwargs)
+
+        with patch.object(os, "lstat", lstat), self.assertRaisesRegex(OSError, "not a plain directory"):
+            hermes_child_dispatch._remove_marker_last(home)
+        self.assertTrue((home / ".omh-hermes-child-scratch").is_file())
+
+    def test_young_homes_named_first_do_not_starve_an_old_one(self) -> None:
+        for index in range(40):
+            (self.tmp / f"aaa-other-{index:02d}").mkdir()
+        young = [self.home(f"omh-hermes-child-a{index:02d}", age=60) for index in range(32)]
+        old = self.home("omh-hermes-child-zzz", age=2 * 86400)
+        hermes_child_dispatch._sweep_scratch_homes()
+        self.assertFalse(old.exists())
+        self.assertTrue(all(directory.exists() for directory in young))
+
+    def test_the_sweep_takes_no_link_no_foreign_owner_and_no_other_marker(self) -> None:
+        wrong_text = self.home("omh-hermes-child-wrong", age=2 * 86400, text="omh-hermes-child-scratch/v2\n1\n")
+        foreign = self.home("omh-hermes-child-foreign", age=2 * 86400)
+        target = self.home("target-old", age=2 * 86400)
+        links: list[Path] = []
+        try:
+            (self.tmp / "omh-hermes-child-link").symlink_to(target, target_is_directory=True)
+            linked_marker = self.tmp / "omh-hermes-child-linked-marker"
+            (linked_marker / "hermes").mkdir(parents=True)
+            (linked_marker / ".omh-hermes-child-scratch").symlink_to(target / ".omh-hermes-child-scratch")
+            links = [self.tmp / "omh-hermes-child-link", linked_marker]
+        except OSError:
+            pass  # Windows without the symlink privilege: the two link cases cannot be built there
+        owner = foreign.lstat().st_uid
+
+        def uid_for(path_owner: int):
+            # Only the foreign home reads as another user's.
+            real_lstat = Path.lstat
+
+            def lstat(self_path):
+                info = real_lstat(self_path)
+                if self_path == foreign:
+                    return os.stat_result((info.st_mode, info.st_ino, info.st_dev, info.st_nlink,
+                                           path_owner + 1, info.st_gid, info.st_size,
+                                           int(info.st_atime), int(info.st_mtime), int(info.st_ctime)))
+                return info
+            return lstat
+
+        with patch.object(os, "getuid", lambda: owner, create=True), patch.object(Path, "lstat", uid_for(owner)):
+            hermes_child_dispatch._sweep_scratch_homes()
+        self.assertTrue(wrong_text.exists())
+        self.assertTrue(foreign.exists())
+        self.assertTrue((target / ".omh-hermes-child-scratch").is_file())
+        self.assertTrue(all(path.exists() or path.is_symlink() for path in links))
+
+    def test_a_file_another_process_holds_open_on_windows_is_a_note_not_a_failure(self) -> None:
+        refusal = PermissionError(13, "The process cannot access the file because it is being used by another process")
+        with patch("shutil.rmtree", side_effect=refusal) as removal:
+            result = self.dispatch()
+        scratch = self.scratch_root()
+        self.addCleanup(_REAL_RMTREE, scratch, True)
+        self.assertEqual(result.status, "completed")
+        self.assertGreater(removal.call_count, 1, "the removal is retried before it is given up")
+        self.assertIn("PermissionError", getattr(result, "cleanup_note", ""))
+        self.assertTrue(scratch.exists())
+
+    def test_a_removal_that_succeeds_on_retry_is_clean(self) -> None:
+        calls: list[str] = []
+
+        def busy_once(path, *args, **kwargs):
+            calls.append(str(path))
+            if len(calls) == 1:
+                raise OSError(66, "Directory not empty")
+            _REAL_RMTREE(path, *args, **kwargs)
+
+        with patch("shutil.rmtree", side_effect=busy_once):
+            result = self.dispatch()
+        self.assertEqual((result.status, result.cleanup_verified), ("completed", True))
+        self.assertEqual(getattr(result, "cleanup_note", None), "")
+        self.assertFalse(self.scratch_root().exists())
+
+    def test_a_failed_child_stays_failed_and_an_unreaped_child_group_still_fails(self) -> None:
+        self.assertEqual(self.dispatch("fail").status, "failed")
+        with patch("omh.coding.hermes_child_dispatch._terminate_process_group", return_value=((), False)):
+            self.assertEqual(self.dispatch().status, "failed")
+        with patch("omh.coding.hermes_child_dispatch._await_pipe_threads", return_value=False):
+            self.assertEqual(self.dispatch().status, "failed")
+
+    def test_the_next_dispatch_sweeps_only_old_scratch_homes_that_carry_omhs_marker(self) -> None:
+        day_and_more = time.time() - 2 * 86400
+        old = self.tmp / "omh-hermes-child-old"
+        young = self.tmp / "omh-hermes-child-young"
+        unmarked = self.tmp / "omh-hermes-child-unmarked"
+        foreign = self.tmp / "someone-else-old"
+        for directory in (old, young, unmarked, foreign):
+            (directory / "hermes").mkdir(parents=True)
+        for directory in (old, young, foreign):
+            (directory / ".omh-hermes-child-scratch").write_bytes(
+                f"omh-hermes-child-scratch/v1\n{int(day_and_more) + 900}\n".encode("ascii"))
+        for directory in (old, unmarked, foreign):
+            os.utime(directory / ".omh-hermes-child-scratch" if directory != unmarked else directory,
+                     (day_and_more, day_and_more))
+        result = self.dispatch()
+        self.assertEqual(result.status, "completed")
+        self.assertFalse(old.exists())
+        self.assertTrue(young.exists())
+        self.assertTrue(unmarked.exists())
+        self.assertTrue(foreign.exists())
+
+
+    def test_the_fanout_record_carries_the_note_beside_a_completed_status(self) -> None:
+        from omh.coding import dispatch_failure_recovery
+
+        with patch("shutil.rmtree", side_effect=PermissionError(13, "in use")):
+            result = self.dispatch()
+        self.addCleanup(_REAL_RMTREE, self.scratch_root(), True)
+        with patch("omh.coding.hermes_child_dispatch.dispatch_hermes_child", return_value=result):
+            record = dispatch_failure_recovery.dispatch_unit_via_hermes_child(
+                prompt="p", routing={"model": "fake/model", "provider": "fake-provider", "reasoning": "low"},
+                parent_run_id="parent-123", run_id="child-456", cwd=self.root, timeout_seconds=5.0,
+            )
+        self.assertEqual(record["status"], "completed")
+        self.assertIn("scratch home left at <temp>/omh-hermes-child-", record["cleanup_note"])
+        self.assertNotIn(str(self.tmp), record["cleanup_note"])
 
 
 if __name__ == "__main__":
