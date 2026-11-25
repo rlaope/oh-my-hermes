@@ -1127,7 +1127,10 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 64019
 # preferred usage included) plus its separator (+4249); the operating-rhythm, wiki and frontend rows
 # did not move (their new lines sit past the first-four slice). Measured per row from the producer.
 # No headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 554000
+# 554000 -> 554104 (2026-11-25): automation-blueprint keeps its scheduled-spend guardrail inline in
+# safety_rules under universal progressive disclosure (+104, only that row); measured from producer.
+# No headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 554104
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three

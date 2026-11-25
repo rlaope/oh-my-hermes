@@ -70,6 +70,7 @@ Safety rules:
 - A prepared failure policy is not enforcement: OMH never starts, skips, queues, retries, or backfills an occurrence, and a policy decision is not proof the runtime honoured it.
 - Route later coding, material generation, or report delivery into separate accepted handoffs when needed.
 - OMH creates, pauses, and removes no cron job: activation is the user's or Hermes' (`/blueprint`, an accepted Suggested Cron Job, a `cronjob_manage` create the user asked for in this conversation, or a `hermes cron create` the user runs), and a job Hermes lists is observed status, not proof that a run delivered.
+- Never schedule a job that moves money because an agent run on a schedule never spends; use `omh-spend-gate`.
 
 ## Completion Checklist
 

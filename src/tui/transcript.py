@@ -369,6 +369,7 @@ class TurnSummaryBlock:
     output_tokens: int | None = None
     done: bool = True
     waited: float = 0.0  # the part of `seconds` a question Hermes asked waited on the person
+    clock: str = ""  # its local wall-clock start and end (`turn_clock`), under Hermes' `display.timestamps`; "" off
 
 
 # How an agent's briefing (`AgentDoneBlock`) says it ended: its mark, and the word after its name. Only a completed
@@ -1197,16 +1198,27 @@ def review_line(text: str) -> str:
 TURN_DONE_MARK = "✻ "
 # After a turn's wall-clock time, the part of it a question waited on the person, when that is a second or more.
 TURN_WAITED = " ({elapsed} waiting on you)"
+TURN_CLOCK_FORMAT = "%H:%M"  # the minute, as Hermes' own `display.timestamps` labels say it
+TURN_CLOCK_ARROW = "→"
+
+
+def turn_clock(started: float, ended: float, local: Callable[[float], time.struct_time] = time.localtime) -> str:
+    """`10:42→10:44`: the local wall-clock minutes a turn started and ended at (epoch seconds); one minute alone,
+    `10:42`, when both fall in it. A turn that runs past midnight reads `23:59→00:01`: the day is not said."""
+    start, end = (time.strftime(TURN_CLOCK_FORMAT, local(at)) for at in (started, ended))
+    return start if start == end else f"{start}{TURN_CLOCK_ARROW}{end}"
 
 
 def _summary_rows(block: TurnSummaryBlock, width: int, theme: Theme) -> list[Line]:
     """`  ✻ 34s · 3 tools · ↓1.2k`: the turn's facts in one dim line under the reply's words (no tool count for none).
 
     The time is the turn's wall clock, with the wait on the person beside it
-    (`✻ 30s (27s waiting on you)`) when that is a second or more. A line too
-    narrow for all of it drops whole facts, the tokens first, then the tools,
-    then the wait; the time stays, and is cut at the edge only where it does
-    not fit alone.
+    (`✻ 30s (27s waiting on you)`) when that is a second or more, and the
+    clock times it ran between after it (`✻ 1m 20s · 10:42→10:44 · 3 tools`)
+    when the block carries them. A line too narrow for all of it drops whole
+    facts, the tokens first, then the tools, then the clock times, then the
+    wait; the time stays, and is cut at the edge only where it does not fit
+    alone.
     """
     elapsed = elapsed_text(block.seconds)
     waited = TURN_WAITED.format(elapsed=elapsed_text(block.waited)) if int(block.waited) >= 1 else ""
@@ -1214,7 +1226,8 @@ def _summary_rows(block: TurnSummaryBlock, width: int, theme: Theme) -> list[Lin
     written = f"↓{compact_count(block.output_tokens)}" if block.output_tokens else ""
     lead: Line = (Span(ASSISTANT_INDENT), Span(TURN_DONE_MARK, theme.dim))
     done: Line = ()
-    for facts in ((elapsed + waited, tools, written), (elapsed + waited, tools), (elapsed + waited,), (elapsed,)):
+    took, clock = elapsed + waited, block.clock
+    for facts in ((took, clock, tools, written), (took, clock, tools), (took, clock), (took,), (elapsed,)):
         done = (*lead, Span(" · ".join(fact for fact in facts if fact), theme.muted))
         if line_width(done) <= width:
             break
@@ -1956,10 +1969,15 @@ class Transcript:
         else:
             self._append(NoticeBlock(text, level))
 
-    def add_turn_summary(self, seconds: float, output_tokens: int | None, waited: float = 0.0) -> None:
+    def add_turn_summary(
+        self, seconds: float, output_tokens: int | None, waited: float = 0.0, ended_at: float | None = None
+    ) -> None:
         """Close the turn that just ended with its done line; its tool calls are counted from the turn's blocks.
 
         `waited` is the part of `seconds` questions waited on the person.
+        `ended_at`, the wall clock (epoch seconds) as it ended, puts the
+        clock times it ran between on the line (`turn_clock`); None leaves
+        them off.
 
         A command typed during the turn whose echo is still held for Hermes'
         answer is written above the done line with what has arrived, and
@@ -1969,7 +1987,9 @@ class Transcript:
         for block in self._held:
             if isinstance(block, CommandBlock):
                 block.done = True
-        self._append(TurnSummaryBlock(max(seconds, 0.0), tools, output_tokens, waited=max(waited, 0.0)))
+        seconds = max(seconds, 0.0)
+        clock = turn_clock(ended_at - seconds, ended_at) if ended_at is not None else ""
+        self._append(TurnSummaryBlock(seconds, tools, output_tokens, waited=max(waited, 0.0), clock=clock))
 
     def set_waiting(self, waiting: bool) -> None:
         """Whether a question Hermes asked waits on the person from now: a tool's duration leaves that time out."""

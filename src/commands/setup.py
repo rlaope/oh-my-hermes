@@ -122,6 +122,7 @@ from ..plugin_bundle.omh.provider_detection import (
     LINKED_SOURCE_CONFIG,
     LINKED_SOURCE_ENV,
     LINKED_SOURCE_LOGIN,
+    LINKED_SOURCE_PLUGIN,
     detect_linked_providers,
     env_key_names,
     env_row_is_covered,
@@ -4110,11 +4111,12 @@ def _finish_model_onboarding(args: argparse.Namespace, paths: OmhPaths, language
     return _launch_model_onboarding(paths, language)
 
 
-# The candidate sources that are not an env-var name. Both come from the
+# The candidate sources that are not an env-var name. All come from the
 # bundle's detector so the interview offers exactly the rows routing already
 # counts on its own (see `provider_detection`).
 _PROVIDER_SOURCE_CONFIG = LINKED_SOURCE_CONFIG
 _PROVIDER_SOURCE_LOGIN = LINKED_SOURCE_LOGIN
+_PROVIDER_SOURCE_PLUGIN = LINKED_SOURCE_PLUGIN
 
 
 def _env_key_names(paths: OmhPaths) -> set[str]:
@@ -4130,12 +4132,13 @@ def _provider_candidates(paths: OmhPaths) -> list[tuple[str, str, str]]:
     """Provider ids worth asking about: `(id, default kind, where it was found)`.
 
     The rows are the bundle's `detect_linked_providers` rows -- a `hermes
-    auth` login, a `providers.<id>` key or `model.provider`, an env-key NAME
-    -- so the interview offers exactly what routing already counts without
-    it, and exists to let the operator correct a kind, clear a row, or add
-    an id OMH could not place. The third element is the evidence line and
-    nothing else: `login`, `config`, or the variable NAME. It is a reason to
-    pre-tick a row, never a claim that the account works.
+    auth` login, a `providers.<id>` key or `model.provider`, an installed
+    provider plugin, an env-key NAME -- so the interview offers exactly what
+    routing already counts without it, and exists to let the operator
+    correct a kind, clear a row, or add an id OMH could not place. The third
+    element is the evidence line and nothing else: `login`, `config`,
+    `plugin`, or the variable NAME. It is a reason to pre-tick a row, never
+    a claim that the account works.
     """
     candidates: list[tuple[str, str, str]] = []
     for row in detect_linked_providers(paths.hermes_home, env_names=_env_key_names(paths)):
@@ -4232,7 +4235,7 @@ def _provider_entitlement_options(
     for provider_id, hinted_kind, source in candidates:
         # A key name the operator once recorded under the family's own id
         # (`openai` for OPENAI_API_KEY) is one account, not a second row.
-        is_env_row = source not in (_PROVIDER_SOURCE_CONFIG, _PROVIDER_SOURCE_LOGIN)
+        is_env_row = source not in (_PROVIDER_SOURCE_CONFIG, _PROVIDER_SOURCE_LOGIN, _PROVIDER_SOURCE_PLUGIN)
         if (
             provider_id not in previous_providers
             and is_env_row
@@ -4245,6 +4248,8 @@ def _provider_entitlement_options(
             descriptions[provider_id] = tr(language, "provider_detected_config")
         elif source == _PROVIDER_SOURCE_LOGIN:
             descriptions[provider_id] = tr(language, "provider_detected_login")
+        elif source == _PROVIDER_SOURCE_PLUGIN:
+            descriptions[provider_id] = tr(language, "provider_detected_plugin")
         else:
             descriptions[provider_id] = tr(language, "provider_detected_env", name=source)
     for provider_id in sorted(previous_providers):
@@ -4355,10 +4360,13 @@ def _ask_provider_entitlements(args: argparse.Namespace, paths: OmhPaths, langua
     kind, clear a row, add an id OMH could not place, and name a
     subscription CLI.
 
-    A confirmed Claude Code subscription is a Maestro-lane entitlement: the
-    Hermes lane cannot spend it (Hermes needs an API provider), so the only
-    routing consequence is the Claude Code `--model` preference, seeded to the
-    Claude chain head when the operator has not set one.
+    A confirmed Claude Code subscription is a Maestro-lane entitlement here:
+    its only routing consequence is the Claude Code `--model` preference,
+    seeded to the Claude chain head when the operator has not set one. The
+    Hermes lane spends a Claude subscription's plan allowance only when the
+    DirectSDK provider plugin (`claude-subscription-directsdk-experimental`)
+    is installed, and detection already counts that plugin as an `anthropic`
+    provider.
     """
     if not _will_ask_provider_entitlements(args, paths):
         # A repeat call keeps the answer it already has; a first call with

@@ -3399,11 +3399,12 @@ linked: the ids under `providers` in `auth.json` and the `credential_pool`
 entries Hermes itself counts (a `hermes auth` device-code or PKCE login, a
 manual add, an `env:`-seeded row whose variable is still in `.env` — never a
 credential borrowed from another CLI), every `providers.<id>` key and
-`model.provider` in `config.yaml`, and the API-key variable NAMES Hermes'
-registry lists, read from `$HERMES_HOME/.env`. A key exported only in a
-shell is not counted (Hermes did not record it; the interview below still
-offers it). Only ids, names, and a pool row's `source` label are read —
-never a token or a key — and nothing is invoked. A registry id carries its
+`model.provider` in `config.yaml`, an installed model-provider plugin OMH
+can place (see below), and the API-key variable NAMES Hermes' registry
+lists, read from `$HERMES_HOME/.env`. A key exported only in a shell is not
+counted (Hermes did not record it; the interview below still offers it).
+Only ids, names, and a pool row's `source` label are read — never a token
+or a key — and nothing is invoked. A registry id carries its
 vendor family (`openai-codex`, `zai`, `kimi-coding`); an id OMH cannot place
 is your own endpoint, and the block says where it points — a `base_url`
 naming a vendor's documented API host (`openrouter.ai`, `api.deepseek.com`,
@@ -3420,7 +3421,59 @@ a linked row you untick in the interview is written as `excluded_providers`
 and stops counting — the one way short of unlinking it from Hermes. Beyond
 that neither side removes the other's providers. `omh model-chains show`,
 the CLI picker, and `/omh-model` list the providers counted, each with where
-it was found (`login`, `config`, `env`, or `recorded`).
+it was found (`login`, `config`, `plugin`, `env`, or `recorded`).
+
+#### A Claude Pro/Max subscription through the DirectSDK plugin
+
+`claude-subscription-directsdk` is the official Hermes model-provider plugin
+from Nous Research
+([hermes-official-plugins](https://github.com/NousResearch/hermes-official-plugins/tree/main/claude-subscription-directsdk)).
+It runs Hermes turns on a Claude Pro/Max subscription through the official
+Claude Code CLI, so the `claude` CLI must be installed and logged in.
+Install it with Hermes:
+
+```sh
+hermes plugins install claude-subscription-directsdk
+```
+
+Its settings, such as its `extra_usage` policy, are in the plugin's own
+README. Usage and billing belong to the plugin and your Claude account, not
+to OMH.
+
+OMH counts the installed plugin as an `anthropic` provider under the id
+`claude-subscription-directsdk-experimental`, with the source `plugin`. It
+finds the plugin the way Hermes does — in `$HERMES_HOME/plugins/model-providers/<dir>/`,
+or cloned flat into `$HERMES_HOME/plugins/<dir>/` with a manifest declaring
+`kind: model-provider` (only the flat layout needs it) — and reads only the
+manifest's `name` and `kind`;
+the plugin is never imported or called, and the Claude CLI login is never
+read. Claude aliases then count as served and the chains reorder, and a
+delegated Claude lane on a session whose provider cannot serve it is pinned
+to the plugin. `omh model-chains show` lists it as
+`claude-subscription-directsdk-experimental (plugin)`.
+
+When another provider you hold also serves Claude — a Hermes Anthropic
+login, an `ANTHROPIC_API_KEY`, a recorded `ccapi` — the automatic pin keeps
+choosing that provider, as it did before the plugin was installed: OMH does
+not pick between two billing paths on its own. To prefer the subscription:
+
+- record only it: `omh model-chains provider set
+  claude-subscription-directsdk-experimental anthropic`. When several
+  providers could be pinned and exactly one of them is recorded, that one
+  wins. `omh setup` records every provider it found, the plugin included,
+  so after a default setup the plugin is set aside and the other provider
+  stays the pin; to prefer the plugin, the other provider must not be in
+  the record as well (`omh model-chains provider clear <id>`, or untick it
+  in `omh setup`, below);
+- or route the alias to it in `~/.omh/routing/model-providers.json`, for
+  example `"claude-opus-5-5": {"provider":
+  "claude-subscription-directsdk-experimental", "model": "claude-opus-5-5"}`;
+- or clear the other provider: untick it in `omh setup` (a linked one is
+  written to `excluded_providers`) or remove it from the record.
+
+To stop OMH counting the plugin, add it to `plugins.disabled` in Hermes'
+`config.yaml` or in Hermes' managed config (Hermes then stops loading it as
+well), or untick it in `omh setup`.
 
 A private gateway is the case no host can answer, and the interview does not
 answer it either: a detected `providers.<id>` row arrives ticked at the kind
@@ -3449,11 +3502,14 @@ serves every family; any other vendor kind serves only the models whose
 editorial candidates name it; an explicit route in `model-providers.json`
 decides before either. The same reordered chains feed `omh_delegate_route`,
 the HUD labels, and `omh model-chains show`, which marks a reordered chain.
-A confirmed Claude Code subscription is a Maestro-lane entitlement: Hermes
-cannot spend it, so its only effect is seeding the Claude Code `--model`
-preference in `dispatch-models.json` when none is set (a Codex login is
-spent by Hermes' own `openai-codex` provider and is counted under providers
-the moment `hermes auth` records it). `--yes`, `--json`, and runs without
+A confirmed Claude Code subscription is a Maestro-lane entitlement: its only
+effect is seeding the Claude Code `--model` preference in
+`dispatch-models.json` when none is set (Hermes spends a Claude
+subscription's plan allowance only through the DirectSDK provider plugin,
+which is counted under providers as above; Hermes' own Anthropic OAuth login
+draws on extra-usage credits instead; a Codex login is spent by Hermes' own
+`openai-codex` provider and is counted under providers the moment `hermes
+auth` records it). `--yes`, `--json`, and runs without
 `--interactive` on a non-TTY ask nothing and write nothing; rerun `omh setup`
 interactively to answer again (existing answers arrive pre-ticked) or edit
 the file.

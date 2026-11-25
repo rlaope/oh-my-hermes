@@ -7080,6 +7080,7 @@ _DEFINITIONS = [
                 f"Suggested Cron Job, a `{NATIVE_CRON_TOOL}` create the user asked for in this conversation, or a "
                 "`hermes cron create` the user runs), and a job Hermes lists is observed status, not proof that a run delivered."
             ),
+            "Never schedule a job that moves money because an agent run on a schedule never spends; use `spend-gate`.",
         ),
         quality_tier="ops-blueprint-gated",
         quality_bar=(

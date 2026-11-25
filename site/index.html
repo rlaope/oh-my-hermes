@@ -558,21 +558,6 @@ details.agent .copy--agent{margin-top:12px;padding:8px 14px;border:1px solid var
 .omher__rim .r-h{stroke:#fff3f8;stroke-width:2.2;opacity:1}
 .omher__rim.still .r-c{display:none}
 .omher__rim.still .r-base{stroke:rgba(255,200,226,.16)}
-/* the live app (hero.js mounts it on desktop once the page is idle): CSS chrome with traffic lights, the real omher
-   UI in an iframe scaled to the window, faded in over the film when it says it is ready */
-.omher__live{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;background:#0b090d;opacity:0;visibility:hidden;transition:opacity .24s ease,visibility 0s linear .24s}
-.omher__live[data-live="ready"]{opacity:1;visibility:visible;transition:opacity .24s ease}
-.omher__bar{flex:none;position:relative;display:flex;align-items:center;gap:7px;height:max(22px,3.8%);padding:0 11px;background:#141117;border-bottom:1px solid rgba(255,255,255,.06);box-shadow:inset 0 1px 0 rgba(255,255,255,.07)}
-.omher__bar i{width:9px;height:9px;border-radius:50%;background:#ff5f57;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.25)}
-.omher__bar i:nth-child(2){background:#febc2e}.omher__bar i:nth-child(3){background:#28c840}
-.omher__bar span{position:absolute;left:50%;transform:translateX(-50%);font:500 11px var(--sans);color:#8e8794;letter-spacing:.01em}
-/* a quiet cue that the window is live: a pink dot and a few words at the right of the title bar, gone after the first click */
-.omher__try{position:absolute;right:12px;display:flex;align-items:center;gap:6px;font:600 11px var(--sans);color:#f3dce8;letter-spacing:.01em;transition:opacity .4s ease}
-.omher__try::before{content:"";width:6px;height:6px;border-radius:50%;background:#ff5fa2;box-shadow:0 0 6px rgba(255,95,162,.8);animation:omher-try 2.4s ease-in-out infinite}
-@keyframes omher-try{50%{opacity:.35}}
-.omher__live[data-touched] .omher__try{opacity:0}
-.omher__lbody{position:relative;flex:1;min-height:0;overflow:hidden}
-.omher__lbody iframe{position:absolute;left:0;top:0;width:1200px;border:0;transform-origin:0 0;background:#0b090d;color-scheme:dark}
 /* a light source is hovered: a soft pink rim on the pill too */
 .nav > a.dlpill.is-hot{box-shadow:-12px 12px 30px -6px rgba(176,107,255,.7),0 16px 34px -6px rgba(224,76,224,.55),12px 12px 30px -6px rgba(255,95,162,.7),0 0 0 1px #fff,0 0 14px 2px rgba(255,95,162,.55)}
 /* on load: the header slides in, then the title, the line under it and the downloads rise out of a blur one after
@@ -586,7 +571,7 @@ details.agent .copy--agent{margin-top:12px;padding:8px 14px;border:1px solid var
 .omher__win{animation:omher-fade .24s ease .2s backwards}
 .omher__get{animation:omher-rise .48s cubic-bezier(.2,.7,.2,1) .27s backwards}
 .omher__cmd{animation:omher-rise .48s cubic-bezier(.2,.7,.2,1) .34s backwards}
-@media (prefers-reduced-motion:reduce){.top__in,.omher__t,.omher__d,.omher__win,.omher__get,.omher__cmd,.omher__try::before{animation:none}.omher__live{transition:none}}
+@media (prefers-reduced-motion:reduce){.top__in,.omher__t,.omher__d,.omher__win,.omher__get,.omher__cmd{animation:none}}
 .omher__meta{position:relative;z-index:2;order:0;margin:0 auto;display:flex;flex-direction:column;align-items:center;gap:14px}
 /* the block's title: large, in the site's own type; the light pours past it onto the window */
 .omher__t{margin:0;min-height:0;font:650 var(--tf)/.98 var(--sans);letter-spacing:-.045em;color:var(--ink);text-shadow:0 2px 24px rgba(12,10,18,.55)}
@@ -752,7 +737,7 @@ body.rail-off .rail{opacity:0;pointer-events:none;visibility:hidden}
   </div>
   <!-- the window slot: the promo still today; a video element with a poster drops in here (set --win-l/t/w/h to 0 0 1 1 and --win-ar to the clip's ratio) -->
   <div class="omher__stage" data-omher-stage>
-  <figure class="omher__shot" data-app-shot><div class="omher__win" data-app-win data-app-slot><video data-app-film autoplay muted loop playsinline preload="metadata" poster="assets/omher-app.webp" width="2400" height="1240" aria-label="omher: you ask Kami for three release-day jobs and it opens a thread for each on its own; the threads run, one finishes, one waits for your approval, a Shell in TERMINALS turns into Claude Code while claude runs and back, and Kami answers a follow-up with its steps timed."><source src="assets/omher-app.webm" type="video/webm"><source src="assets/omher-app.mp4" type="video/mp4"></video><picture><source media="(max-width: 600px)" srcset="assets/omher-app-mobile.webp" width="720" height="800"><img src="assets/omher-app.webp" alt="omher: Kami split a release-day ask into three threads under its name, one running with Claude Code at work, one waiting for you, one done; TERMINALS below show named folders with their path and branch: a Codex and Claude Code split in api-server and an OMH session running a /dag-ulw plan in oh-my-hermes, each with its CLI's logo, and Tasks sits on top." width="2400" height="1239" fetchpriority="high" decoding="async"></picture><span class="omher__sheen" aria-hidden="true"></span><span class="omher__glow" aria-hidden="true"></span></div></figure>
+  <figure class="omher__shot" data-app-shot><div class="omher__win" data-app-win data-app-slot><video data-app-film autoplay muted loop playsinline preload="metadata" poster="assets/omher-app.webp" width="2400" height="1240" aria-label="omher: you ask Kami for three release-day jobs and it opens a thread for each on its own; the threads run and one hands its fix to Claude Code, one finishes with a PR, one waits for your approval; in TERMINALS the OMH session in oh-my-hermes reports progress and the Claude Code cell of the side-by-side api-server split starts working; then Kami answers a follow-up with three timed steps and a streaming reply."><source src="assets/omher-app.webm" type="video/webm"><source src="assets/omher-app.mp4" type="video/mp4"></video><picture><source media="(max-width: 600px)" srcset="assets/omher-app-mobile.webp" width="720" height="800"><img src="assets/omher-app.webp" alt="omher: Kami split a release-day ask into three threads under its name, one running with Claude Code at work, one waiting for you, one done; TERMINALS below show named folders with their path and branch: a side-by-side Codex and Claude Code split in api-server and an OMH session running a /dag-ulw plan in oh-my-hermes, each with its CLI's logo, and Tasks sits on top." width="2400" height="1239" fetchpriority="high" decoding="async"></picture><span class="omher__sheen" aria-hidden="true"></span><span class="omher__glow" aria-hidden="true"></span></div></figure>
   <div class="omher__act">
   <div class="omher__get" data-dl>
     <a class="osbtn osbtn--main" href="#omher" data-dl-k="mac-arm" data-mac-install><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.37 12.6c.02 2.4 2.1 3.2 2.13 3.21-.02.06-.33 1.14-1.1 2.26-.66.97-1.35 1.93-2.43 1.95-1.06.02-1.4-.63-2.62-.63s-1.6.61-2.6.65c-1.04.04-1.84-1.05-2.5-2.01-1.36-1.97-2.4-5.57-1-8 .69-1.21 1.93-1.97 3.28-1.99 1.02-.02 1.99.69 2.62.69.62 0 1.8-.85 3.04-.73.52.02 1.98.21 2.92 1.58-.08.05-1.74 1.02-1.74 3.02M14.37 4.68c.56-.68.93-1.62.83-2.56-.8.03-1.77.53-2.35 1.21-.51.6-.97 1.56-.85 2.48.9.07 1.81-.46 2.37-1.13"/></svg>macOS (Apple silicon)</a>

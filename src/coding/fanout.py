@@ -25,13 +25,14 @@ from .fanout_contracts import (
     MAX_SPAWN_PLAN_FIELD_CHARS,
     MAX_UNIT_VERIFICATION_CHECK_ID_CHARS,
     MAX_UNIT_VERIFICATION_CHECK_TIMEOUT,
-    MAX_UNIT_VERIFICATION_COMMAND_CHARS,
+    MAX_UNIT_VERIFICATION_COMMAND_BYTES,
     MAX_UNIT_INPUT_BUDGET_CHARS,
     MAX_UNIT_SOURCE_RANGE_DIGEST_CHARS,
     MAX_UNIT_SOURCE_RANGE_SOURCE_CHARS,
     MAX_UNIT_SOURCE_RANGE_SPAN_CHARS,
     MAX_UNIT_SOURCE_RANGES,
     MAX_UNIT_VERIFICATION_COMMANDS,
+    contract_text_utf8_bytes,
     MAX_UNIT_REVIEW_FOCUS_BYTES,
     PREPARED_NOT_OBSERVED,
     REPRODUCTION_UNIT_KIND,
@@ -579,7 +580,7 @@ def _normalized_review_focus(value: object, index: int) -> str:
     if not isinstance(value, str):
         raise FanoutContractError(f"unit at index {index} review_focus must be a string")
     text = " ".join(value.split())
-    if len(text.encode("utf-8")) > MAX_UNIT_REVIEW_FOCUS_BYTES:
+    if contract_text_utf8_bytes(text, what=f"unit at index {index} review_focus") > MAX_UNIT_REVIEW_FOCUS_BYTES:
         raise FanoutContractError(
             f"unit at index {index} review_focus must be at most {MAX_UNIT_REVIEW_FOCUS_BYTES} UTF-8 bytes"
         )
@@ -742,10 +743,11 @@ def _normalized_verification_commands(value: object, index: int) -> list[str]:
                 f"got {entry!r}"
             )
         command = " ".join(entry.split())
-        if len(command) > MAX_UNIT_VERIFICATION_COMMAND_CHARS:
+        size = contract_text_utf8_bytes(command, what=f"unit at index {index} verification_commands entries")
+        if size > MAX_UNIT_VERIFICATION_COMMAND_BYTES:
             raise FanoutContractError(
                 f"unit at index {index} verification_commands entries must be at most "
-                f"{MAX_UNIT_VERIFICATION_COMMAND_CHARS} chars"
+                f"{MAX_UNIT_VERIFICATION_COMMAND_BYTES} UTF-8 bytes"
             )
         # Parsed at freeze time so a command no dispatcher could run fails here,
         # where the operator is still holding it, rather than mid-dispatch.
@@ -784,10 +786,10 @@ def _normalized_unit_kind(unit: Mapping[str, object], index: int) -> tuple[str, 
             f"unit at index {index} is a reproduction unit and requires a non-empty reproduction_command"
         )
     command = " ".join(raw_command.split())
-    if len(command) > MAX_UNIT_VERIFICATION_COMMAND_CHARS:
+    if contract_text_utf8_bytes(command, what=f"unit at index {index} reproduction_command") > MAX_UNIT_VERIFICATION_COMMAND_BYTES:
         raise FanoutContractError(
             f"unit at index {index} reproduction_command must be at most "
-            f"{MAX_UNIT_VERIFICATION_COMMAND_CHARS} chars"
+            f"{MAX_UNIT_VERIFICATION_COMMAND_BYTES} UTF-8 bytes"
         )
     # Parsed at freeze for the reason verification commands are: the
     # dispatcher runs it through the same argv split with `shell=False`.

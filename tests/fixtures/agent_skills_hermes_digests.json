@@ -14,7 +14,7 @@
   "apple-design": "336b227bf1c05945766dee14a09b7d8ed100fc68c8a1aa068736184880897fba",
   "application-threat-model": "58e3319df3f9884285b22bd9ca7c42976c7be07d30724e190f681ed00666b321",
   "ask": "887f4b997e6f1f8f2559689978f148b131013999740a823b3739541d127bca2f",
-  "automation-blueprint": "9b53fd9bfc6f979da9dbe9f1cd720b6a72ae3c5b21339f3d00fd449823ab961c",
+  "automation-blueprint": "d9b4cfc6a4f54861ab0f60fe50bce9fe557d830992312b8081cdd979bb4f54ab",
   "award-bar-score": "ce44b35ae02f09a3643be15ad3dbb4dcc029c617a65cb4e9b5241c0338aa5179",
   "backend": "a1007e128f1f24763305717fbbb1ebb7c6e9efeb6230c569e1ba2430dfc62fd3",
   "biomedical-evidence": "fa24ae87886dcd70432ed60c5a91cf9fc2f1bc3b0a9be236879e1e1ca46bc02c",
@@ -155,5 +155,5 @@
   "wiki": "3b3c1a1581eb9f2c9258b053247158f61efdfb54baaad09118048917cc0329cb",
   "workflow-learning": "4b979102b6c66e68a6f0c6d7724a8f4f479a60a83243317c1c7372c0e4168012",
   "workspace-audit": "7732242bb1ce0595f6b718e4eaee95cd2b66e56e55ae4f1642c582c4fd9e599a",
-  "workspace-file-operator": "77ba3c3705c289deea72b7bb0d513f06e280a87693d25d0ea60f1dcb029e8b33"
+  "workspace-file-operator": "c726cbf8d7f209e322f59c148c3b96ac5b0421e0f520def8feccc47ae5416e90"
 }

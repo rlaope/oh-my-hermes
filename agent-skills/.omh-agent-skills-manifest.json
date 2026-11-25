@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "3f53a3cd1edcf100e436bb41b71fd5b36021abd7c47e9e964eec35476d427ab8",
+  "catalog_revision": "08b6016a6a7510a1abab58e68870fc7dbf8063ea84a7ea87ac6f2540c4906a7c",
   "files": {
     "omh-accessibility-audit/SKILL.md": "01b41b6815463311a950c558300afeb4e2659a1bba44efcf741568cacac6f1d6",
     "omh-accessibility-audit/references/a11y-rules.md": "615cc9eaa24ee36089d395b215cc25b2d9b0d2549f228a5f81df0553f45d2f75",
@@ -100,7 +100,7 @@
     "omh-external-connector-readiness/references/memory-provider-trial.md": "b6eda7efc3307d8bd6540bec47b2564f3e565da5ad8133bd998b2ebcabdf29a3",
     "omh-failure-signal-audit/SKILL.md": "32972affbfcfe107f22b9aa223ae36eb1fd2d51696c24f61ac748903c9e34f83",
     "omh-feedback-triage/SKILL.md": "5e618b899c424a53ccdb50f13391db8d52274bbe937cefcf24b0d047cbb4ab19",
-    "omh-files/SKILL.md": "98a01aa206ddbf3977d550d2876011c9de82e6a7de4d8b06122e955a17e0dc3a",
+    "omh-files/SKILL.md": "b5b0cdbc113d67fe7ea9b1c01455e913c36b389d238b04b6a2594bb518d0068b",
     "omh-finance-analysis/SKILL.md": "84355b490e9fcb64e5fdeabc6b8d8b0ada12e9d56fcb1afa2a026a05e95c79f7",
     "omh-finance-analysis/references/procedure.md": "fb075457f77f14ef34229998d2ef807d57aa1a7aca8d1e5dd52e7c871e75d000",
     "omh-frontend-refactor/SKILL.md": "ab1bccec8e591b2c8cd4a6e9f3e9c300114194e04eeab8c55f095f9774b5fed7",

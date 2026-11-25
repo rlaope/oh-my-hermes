@@ -214,8 +214,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # 546679 -> 550928 and the digests re-derived: app-work-intake adds one row to each producer (+4249 and
             # +952 with separators); dropping only that row reproduces 8e3f5c83...d898 at 546679 and
             # 7bf53703...578d at 146420.
-            (skill_capabilities, 550928, FULL_ROW_DELTA_CAP,
-             '2fec48bb1e87b82946c4e022849e290bec8c07693076e71041a1c0ff9a62cbd1',
+            (skill_capabilities, 551032, FULL_ROW_DELTA_CAP,
+             '7a56ace7cb24f749d6cc1188d18a679f52fd71584e559bf50807580bba2e763f',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 147372, STANDALONE_ROW_DELTA_CAP,
              'adad03a49ec76047544490d099be7f9dd53414a9ac71b73b939710d61cae9d4b',
@@ -593,7 +593,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # Universal progressive disclosure for non-bespoke `omh-*` skills and upstream Hermes
         # bundled/optional deferrals update the legacy Hermes bodies (lowering total body size
         # from 1,549,057 -> 1,348,078 and repeated bytes from 93,533 -> 92,654); re-derived from producer.
-        self.assertEqual(_digest(legacy_hashes), 'eb1c4d6b74dbcab0df0364a79bd889eff8e5e848813f0997b45e43f047b9d3b4')
+        # Companion toolkit pointers in quality_bar for data-share-review, commit-pr-authoring, and
+        # inference-serving update those three legacy bodies; re-derived from the producer.
+        self.assertEqual(_digest(legacy_hashes), '47bcd46de3af3d550cdccb59a94ded8718ae2eb0c0ced6e98d373f7ad114a50a')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
