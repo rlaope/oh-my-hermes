@@ -189,8 +189,11 @@ All notable changes will be documented here.
   the result, on the fanout recovery record and on the CLI's stderr. Its OMH marker lets a later dispatch remove it
   once it is older than a day and past that dispatch's own recorded deadline (start, timeout and an hour; an infinite
   or oversized timeout records the largest deadline, so that home is never swept). A NaN timeout is now refused. The
-  marker goes last and is restored if a removal took it. OMH still never signals that gateway. A child whose own process group or pipes did not
-  finish still fails. (`src/coding/hermes_child_dispatch.py` `_remove_scratch`, `_sweep_scratch_homes`; `AGENTS.md`
+  marker goes last and is restored if a removal took it, and it is written as bytes, so Windows no longer writes a
+  `\r\n` marker that no sweep accepts. On Windows a child with an infinite or very long timeout is now waited for in
+  hour-long slices; `Popen.wait` there could not take that timeout, and the dispatch raised `OverflowError` or
+  reported `timed_out`. OMH still never signals that gateway. A child whose own process group or pipes did not finish still fails.
+  (`src/coding/hermes_child_dispatch.py` `_remove_scratch`, `_sweep_scratch_homes`, `_wait_until`; `AGENTS.md`
   Hermes-native child boundary)
 - **`omh setup` connects to a Hermes config whose root keys hold column-0 lists, or whose section keys carry a
   comment.** Step 2 stopped with "non-mapping or unsupported root YAML is user-owned" on a `config.yaml` that writes a
