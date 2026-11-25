@@ -29,7 +29,7 @@
 // above the first node that waits on it; a dependency on a failed node that has repairs is an edge from those
 // repairs, which is what the dependent waits on; a duration reads as everywhere else in the app (`span`).
 import type { AgentRun, RunNode } from "../lib/runs";
-import { cliName, isRepaired, lengthOf, nodeModel, type CliAgent, type NodePr } from "../lib/runs";
+import { cliName, firstUnitOf, isRepaired, lengthOf, nodeModel, type CliAgent, type NodePr } from "../lib/runs";
 import { prLabel } from "./pr";
 import { t } from "../i18n";
 import { markFor } from "../ui/ModelIcon";
@@ -258,6 +258,47 @@ export function titleLines(n: RunNode, repair: boolean, inner: number, measure: 
   return measure(titleOf(n), "title") + (repair ? G.icon + G.iconGap : 0) <= inner ? 1 : 2;
 }
 
+/** The title a two-line box shows. A title longer than two lines keeps its trailing "(…)" whole and loses words
+ *  from the middle instead ("Codex skill discovery reads … (Hermes)"): two steps of one task often differ only
+ *  there, and an end cut showed them as the same name. Any other long title is returned as it is, for the box's
+ *  own end cut. `lead`: px before the text on its first line (a repair's icon). The tooltip keeps the whole title. */
+export function twoLineTitle(title: string, inner: number, measure: Measure, lead = 0): string {
+  const tail = /^(.*\S)\s+(\([^()]{1,32}\))$/.exec(title);
+  if (!tail || lines(title, inner, measure, lead) <= 2) return title;
+  const [, head, end] = tail;
+  let cut = [...head];
+  while (cut.length > 1 && lines(`${cut.join("").trimEnd()}… ${end}`, inner, measure, lead) > 2) cut = cut.slice(0, -1);
+  return `${cut.join("").trimEnd()}… ${end}`;
+}
+
+/** How many lines `text` wraps to in a box `inner` px wide, breaking at spaces and after a "/" or "_" inside a word
+ *  (titleParts) as the box does; a piece wider than a line breaks anywhere. `lead`: px taken on the first line. */
+function lines(text: string, inner: number, measure: Measure, lead: number): number {
+  const pieces = text.split(/(?<= )/).flatMap(titleParts);
+  let n = 1;
+  let line = "";
+  let room = inner - lead;
+  for (const p of pieces) {
+    if (measure((line + p).trimEnd(), "title") <= room) {
+      line += p;
+      continue;
+    }
+    if (line) {
+      n += 1;
+      room = inner;
+    }
+    line = p;
+    while (measure(line.trimEnd(), "title") > room) {
+      // a piece wider than the line: it fills lines whole
+      let k = line.length;
+      while (k > 1 && measure(line.slice(0, k), "title") > room) k -= 1;
+      line = line.slice(k);
+      n += 1;
+    }
+  }
+  return n;
+}
+
 /** A node's facts after its mark. One line wherever the model and its effort fit side by side ("Opus 5.5 · high"):
  *  the parts after them follow whole while they fit, the first that does not is cut with "…" when a good piece of
  *  it still shows ("visual-engin…") and left out otherwise, and "via Codex" ends the line only where everything
@@ -359,11 +400,12 @@ export function boxText(
   const room = inner - G.icon - G.iconGap - (pr ? prWidth(pr, measure) : 0);
   // the duration whole, else its first unit alone ("1h" for "1h 1m"), else none
   const whole = st.timed ? durationOf(n, nowS) : "";
+  const first = st.timed && n.started !== undefined ? firstUnitOf(n.started, n.ended, nowS) : "";
   const fit = (s: string) => w(s) <= room - 0.5;
   const said = (d: string) => (d ? `${st.word} ${d}` : st.word);
-  let time = [whole, whole.split(" ")[0], ""].find((d) => fit(said(d))) ?? "";
+  let time = [whole, first, ""].find((d) => fit(said(d))) ?? "";
   // a note says more than how long it took ("Failed · repaired"): where both do not fit, the duration gives way
-  if (st.note && time && !fit([said(time), st.note].join(SEP))) time = [whole.split(" ")[0], ""].find((d) => fit([said(d), st.note].join(SEP))) ?? time;
+  if (st.note && time && !fit([said(time), st.note].join(SEP))) time = [first, ""].find((d) => fit([said(d), st.note].join(SEP))) ?? time;
   // whole or not at all: a count or a note never ends in "…"
   const extras: string[] = [];
   for (const extra of [st.note, n.tokens && n.tokens > 0 ? t("graph.tokens", { n: compactCount(n.tokens) }) : ""])

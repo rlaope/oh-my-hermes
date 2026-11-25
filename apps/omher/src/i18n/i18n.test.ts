@@ -30,6 +30,15 @@ describe("i18n", () => {
     for (const l of LANGS) for (const [k, v] of Object.entries(DICT[l])) expect(v, `${l} ${k}`).not.toMatch(banned);
   });
 
+  it("writes Korean in the polite 해요 style, never the formal 습니다 ending", () => {
+    for (const [k, v] of Object.entries(DICT.ko)) expect(v, k).not.toMatch(/니다[.\s,)"]|니다$/);
+  });
+
+  it("names the bot in the lost-turn note without a 이(가) fallback particle", () => {
+    for (const k of ["lost.paused", "lost.after", "lost.failed"] as const) expect(DICT.ko[k], k).not.toMatch(/\([이을은과]\)|\((가|를|는|와)\)/);
+    expect(t("lost.paused", { bot: "OMH TUI" }, "ko")).toMatch(/^OMH TUI의 턴이 /);
+  });
+
   it("names the run list Plans: 계획, 計画, 计划", () => {
     expect(LANGS.map((l) => t("plans.tab", undefined, l))).toEqual(["Plans", "계획", "計画", "计划"]);
   });

@@ -167,7 +167,7 @@ test("Needs you lists an open PR with failing checks, rings once for that head, 
   const strip = page.getByTestId("needs-strip");
   await expect(strip).toBeVisible();
   await expect(page.getByTestId("needs-line")).toContainText("1 needs you");
-  await expect(page.getByTestId("needs-line")).toContainText("Failing PR: checks failing on #101");
+  await expect(page.getByTestId("needs-line")).toHaveText("1 needs you · Failing PR");
   await expect.poll(() => notes(page)).toEqual(["Failing PR: checks failing on #101|acme/web"]);
   await strip.click();
   const item = page.getByTestId("needs-pr");

@@ -85,6 +85,10 @@
   margin: 0 auto;
   flex: none;
 }
+/* the empty chat's hello fills the column and centres in it */
+.thread > .chat-empty {
+  flex: 1;
+}
 .thread > .day {
   margin: 10px auto 2px;
   text-align: center;

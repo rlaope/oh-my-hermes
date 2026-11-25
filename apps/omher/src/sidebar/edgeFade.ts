@@ -6,6 +6,8 @@
 //   regions so that this hides nothing but the cue's band.
 // - scrolled ("both"): the cut row shows, under a soft bottom fade with the chevron on it, as in any scrolling list.
 //   Hiding it there left its whole height empty above the chevron.
+// At the top edge, a row cut there (only its subtitle under the header) gets the same fade and chevron
+// (`data-cut-top`); a reveal (revealBot.ts) first tries to land the edge between two rows.
 // The clip is paint only: the list keeps its size, so nothing below it moves. Use the returned callback as the list's
 // `ref` (the list can mount after its section, as TERMINALS does with its first session).
 import { useCallback, useRef } from "react";
@@ -77,6 +79,11 @@ function cardCap(el: HTMLElement): string {
 export const isHead = (r: Element) =>
   (r.matches(".tg-h") && !r.closest(".tg")?.matches(".shut")) || (r.matches(".bot-w > .bot") && !!r.parentElement?.querySelector(".th-tree"));
 
+/** Whether a row stands cut at the list's top edge (`top`): its top above the edge, its bottom below it. */
+export function cutAbove(top: number, rows: readonly { top: number; bottom: number }[]): boolean {
+  return rows.some((r) => r.top < top - 0.5 && r.bottom > top + 0.5);
+}
+
 export function edgeOf(el: { scrollTop: number; clientHeight: number; scrollHeight: number }): "above" | "below" | "both" | null {
   const above = el.scrollTop > 1;
   const below = el.scrollTop + el.clientHeight < el.scrollHeight - 1;
@@ -111,6 +118,11 @@ export function useEdgeFade<T extends HTMLElement>(own?: { current: T | null }):
           clip = `inset(0 0 ${cutBelow(box.bottom, rows, CUE_PX, box.top)}px 0)`;
         }
         if (el.style.clipPath !== clip) el.style.clipPath = clip;
+        // scrolled, a row the top edge cuts (a list too short to show the open row and whole rows above it) gets
+        // the bottom edge's cue mirrored: a fade from the sidebar's colour and a chevron (sidebar.css)
+        const cutTop = (m === "above" || m === "both") && cutAbove(el.getBoundingClientRect().top, [...el.querySelectorAll(CUT_ROWS)].map((r) => r.getBoundingClientRect()));
+        if (cutTop) el.dataset.cutTop = "";
+        else delete el.dataset.cutTop;
       };
       read();
       el.addEventListener("scroll", read, { passive: true });
