@@ -96,7 +96,7 @@ test("Korean shows no raw keys", async ({ page }) => {
   await expect(page.getByTestId("lost-turn-discard")).toHaveText("버리고 계속하기");
   // polite 해요 style, the bot's name without a 이(가) fallback particle
   const note = page.getByTestId("lost-turn");
-  await expect(page.getByTestId("lost-turn-text")).toHaveText(/^Kami의 턴이 도중에 멈춰서/);
+  await expect(page.getByTestId("lost-turn-text")).toHaveText(/^Kami의 턴이 도중에 끊겨서/);
   await expect(note).not.toContainText("(가)");
   await expect(note).not.toContainText("니다");
 });
