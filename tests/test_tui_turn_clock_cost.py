@@ -17,7 +17,9 @@ import unittest
 from _tui_lines import line_text
 from test_tui_command_output import send
 from test_tui_modes import SID, make_app, notices
-from omh.tui.app import TIMESTAMPS_NOTICE, TIMESTAMPS_USAGE_NOTICE, App, cost_label, display_on
+from omh.tui.app import (
+    TIMESTAMPS_NOTICE, TIMESTAMPS_STATUS_NOTICE, TIMESTAMPS_USAGE_NOTICE, App, cost_label, display_on,
+)
 from omh.tui.gateway import Event
 from omh.tui.theme import DEFAULT_THEME as THEME
 from omh.tui.transcript import NOTICE_WARN, TurnSummaryBlock, block_rows, turn_clock
@@ -121,6 +123,29 @@ class AppTimestampsTests(unittest.TestCase):
         self.assertIn(TIMESTAMPS_NOTICE.format(state="on"), notices(app))
         self.assertEqual(run_turn(app, clock, wall, 5.0).clock, turn_clock(wall.now - 5.0, wall.now))
 
+    def test_slash_timestamps_status_says_which_and_changes_nothing(self) -> None:
+        app, client, clock, wall = self.make()
+        app._take_settings(settings(timestamps=True))
+        sent = len(client.calls)
+        send(app, "/timestamps status")
+        self.assertIn(TIMESTAMPS_STATUS_NOTICE.format(state="on"), notices(app))
+        self.assertEqual(client.calls[sent:], [])
+        self.assertIsNone(app.timestamps_said)  # the config's setting still holds
+        send(app, "/ts off")
+        send(app, "/ts status")
+        self.assertIn(TIMESTAMPS_STATUS_NOTICE.format(state="off"), notices(app))
+
+    def test_slash_timestamps_during_a_turn_applies_to_that_turns_done_line(self) -> None:
+        app, _client, clock, wall = self.make()
+        app._send_prompt("go")
+        app._on_event(Event("message.start", SID, {}))
+        send(app, "/timestamps on")  # runs at once (`RUNS_DURING_TURN`)
+        clock.now += 80.0
+        wall.now += 80.0
+        app._on_event(Event("message.complete", SID, {"text": "done", "status": "complete"}))
+        (block,) = [block for block in app.transcript.blocks if isinstance(block, TurnSummaryBlock)]
+        self.assertEqual(block.clock, turn_clock(AT_10_42, AT_10_42 + 80.0))
+
     def test_slash_timestamps_with_another_word_says_how_to_use_it(self) -> None:
         app, _client, clock, wall = self.make()
         send(app, "/timestamps maybe")
@@ -137,6 +162,15 @@ class CostLabelTests(unittest.TestCase):
         self.assertEqual(cost_label({"cost_usd": 0.00001}), "$<0.0001")
         self.assertEqual(cost_label({"cost_usd": 0.42, "cost_status": "estimated"}), "~$0.42")
         self.assertEqual(cost_label({"cost_usd": 0.42, "cost_status": "actual"}), "$0.42")
+
+    def test_a_cost_hermes_could_not_price_shows_none(self) -> None:
+        # Hermes leaves the total at 0.0 for a model it cannot price, with `cost_status: unknown` (its label: n/a).
+        self.assertIsNone(cost_label({"cost_usd": 0.0, "cost_status": "unknown"}))
+        self.assertIsNone(cost_label({"cost_usd": 0.42, "cost_status": "unknown"}))
+
+    def test_a_subscription_included_cost_says_included(self) -> None:
+        self.assertEqual(cost_label({"cost_usd": 0.0, "cost_status": "included"}), "included")
+        self.assertIsNone(cost_label({"cost_status": "included"}))  # still only with Hermes' figure there
 
     def test_no_number_no_label(self) -> None:
         for usage in ({}, {"cost_usd": None}, {"cost_usd": "0.42"}, {"cost_usd": True}, {"cost_usd": math.nan},
@@ -166,6 +200,14 @@ class InfoLineCostTests(unittest.TestCase):
         app._take_settings(settings(show_cost=True))
         app._on_event(usage_event(cost_usd=0.42))
         self.assertTrue(info_text(app).endswith(" $0.42"), info_text(app))
+
+    def test_an_unknown_cost_keeps_the_line_without_one(self) -> None:
+        app, _client = make_app()
+        app.model = "openai/gpt-5"
+        app._take_settings(settings(show_cost=True))
+        before = info_text(app)
+        app._on_event(usage_event(cost_usd=0.0, cost_status="unknown"))
+        self.assertEqual(info_text(app), before)
 
     def test_no_figure_from_hermes_shows_no_cost_at_all(self) -> None:
         # Hermes' gateway `_get_usage` fills no `cost_usd` today: the line stays as it was, with no `$0.00`.

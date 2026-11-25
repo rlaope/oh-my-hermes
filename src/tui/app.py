@@ -777,7 +777,10 @@ WALLPAPER_SIDE_NOTICE = ("Living wallpaper held off: /theme {mode} names a {mode
                          "terminal, whose text colour would not read on a {mode} ground; /theme auto shows it again.")
 TIMESTAMPS_NOTICE = ("Turn clock times {state} for this TUI run; `display.timestamps: true` in Hermes' config.yaml "
                      "keeps them on at every launch.")
-TIMESTAMPS_USAGE_NOTICE = "Use /timestamps on or /timestamps off; /timestamps alone switches them."
+TIMESTAMPS_STATUS_NOTICE = ("Turn clock times are {state}; /timestamps on or off sets them for this TUI run, "
+                            "`display.timestamps: true` in Hermes' config.yaml at every launch.")
+TIMESTAMPS_USAGE_NOTICE = ("Use /timestamps on or /timestamps off; /timestamps alone switches them, /timestamps status "
+                           "says which.")
 LAUNCH_SESSION_NOTICE = "Launch look {name} for this session; there is no OMH home to keep it in."
 LAUNCH_SAVE_FAILED_NOTICE = "Launch look {name} for this session; it could not be saved to {path}: {error}"
 LAUNCH_SWATCH_STEPS = 6  # the colours a look's swatch shows in the /theme picker
@@ -1816,17 +1819,29 @@ def display_on(config_result: Mapping[str, Any], key: str) -> bool:
 COST_SUBCENT = 0.01
 
 
+# The `cost_status` Hermes gives a total it could not price: it leaves `cost_usd` at 0.0, and its own label says n/a.
+COST_UNKNOWN = "unknown"
+# The `cost_status` of usage a subscription covers: no invoice follows it, so the line says that instead of a figure.
+COST_INCLUDED = "included"
+
+
 def cost_label(usage: object) -> str | None:
     """The session's cost as a usage block's `cost_usd` says it (`$0.42`, `$0.0046` under a cent, `$<0.0001` for a
-    figure above 0 that rounds to none), with `~` before it when its `cost_status` is `estimated`; None when the
-    block carries no finite number of 0 or more there. OMH prices nothing: the figure is Hermes' own or none."""
+    figure above 0 that rounds to none), with `~` before it when its `cost_status` is `estimated`, and `included`
+    when it is `included`; None when the block carries no finite number of 0 or more there, or its `cost_status` is
+    `unknown`, whose 0.0 is no price. OMH prices nothing: the figure is Hermes' own or none."""
     cost = usage.get("cost_usd") if isinstance(usage, dict) else None
     if not isinstance(cost, int | float) or isinstance(cost, bool) or not math.isfinite(cost) or cost < 0:
         return None
+    status = usage.get("cost_status")
+    if status == COST_UNKNOWN:
+        return None
+    if status == COST_INCLUDED:
+        return COST_INCLUDED
     text = f"${cost:.4f}" if 0 < cost < COST_SUBCENT else f"${cost:.2f}"
     if text == "$0.0000":
         text = "$<0.0001"
-    return f"~{text}" if usage.get("cost_status") == "estimated" else text
+    return f"~{text}" if status == "estimated" else text
 
 
 def context_percent(usage: object) -> float | None:
@@ -10176,9 +10191,14 @@ class App(ModesMixin, AgentViewMixin):
         return self.timestamps_configured if self.timestamps_said is None else self.timestamps_said
 
     def _timestamps_command(self, arg: str) -> None:
-        """`/timestamps on|off` puts the clock times on the turns' done lines from the next one, for this run only (the
-        config is the person's: OMH writes no display key); alone, switches them."""
+        """`/timestamps on|off` puts the clock times on each turn's done line as the turn ends, the running one's
+        included, for this run only (the config is the person's: OMH writes no display key); alone, switches them;
+        `status` says which they are."""
         choice = arg.strip().lower()
+        if choice == "status":
+            state = "on" if self._timestamps_shown() else "off"
+            self.transcript.add_notice(TIMESTAMPS_STATUS_NOTICE.format(state=state))
+            return
         if choice not in ("", "on", "off"):
             self.transcript.add_notice(TIMESTAMPS_USAGE_NOTICE, NOTICE_WARN)
             return

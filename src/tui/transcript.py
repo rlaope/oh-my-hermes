@@ -1214,7 +1214,7 @@ def _summary_rows(block: TurnSummaryBlock, width: int, theme: Theme) -> list[Lin
 
     The time is the turn's wall clock, with the wait on the person beside it
     (`✻ 30s (27s waiting on you)`) when that is a second or more, and the
-    clock times it ran between after it (`✻ 1m20s · 10:42→10:44 · 3 tools`)
+    clock times it ran between after it (`✻ 1m 20s · 10:42→10:44 · 3 tools`)
     when the block carries them. A line too narrow for all of it drops whole
     facts, the tokens first, then the tools, then the clock times, then the
     wait; the time stays, and is cut at the edge only where it does not fit

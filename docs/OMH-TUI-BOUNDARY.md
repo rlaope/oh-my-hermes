@@ -523,15 +523,19 @@ Each counts only when it is YAML `true`, as Hermes' own TUI reads
   A turn inside one minute says that minute once (`10:42`), and a turn past
   midnight reads `23:59→00:01` with no day. A narrow line drops the clock
   after the tokens and the tools. `/timestamps on|off` (alias `/ts`; alone,
-  it switches) sets this for the run, over what the config says, and sends
-  nothing: it does not save the setting. Hermes' own `/timestamps` writes
+  it switches; `status` says which) sets this for the run, over what the
+  config says, from the done line of the turn that ends next, a running one
+  included. It sends nothing: it does not save the setting. Hermes' own `/timestamps` writes
   the key, and OMH writes no display key.
 - `display.show_cost: true` adds the session's cost to the info line, after
   the effort, but only the figure Hermes' usage carries in `cost_usd`
   (`session.info`, `session.usage`, `message.complete`; the `Usage` contract
   in Hermes' `tui_gateway/contracts/common.py`). It reads `$0.42`, `$0.0046`
   under a cent and `$<0.0001` for a figure above 0 that rounds to none, with
-  `~` before it when `cost_status` is `estimated`. OMH computes no price.
+  `~` before it when `cost_status` is `estimated`. A `cost_status` of
+  `unknown` (Hermes could not price the model and left its 0.0) shows no
+  cost, and `included` (a subscription covers it) shows `included` instead
+  of a figure. OMH computes no price.
   While Hermes sends no number there, the line shows no cost at all, never
   `$0.00` or an estimate. Hermes' gateway does not fill `cost_usd` today, so
   the cost appears once Hermes does. A usage block without the field keeps

@@ -130,7 +130,7 @@ COMMANDS: tuple[SlashCommand, ...] = (
     SlashCommand("wallpaper", LOCAL,
                  "Turn the look's background colour and its moving scene on or off (/wallpaper on|off)"),
     SlashCommand("timestamps", LOCAL,
-                 "Show each turn's clock times on its done line for this run (/timestamps on|off; display.timestamps)",
+                 "Show each turn's clock times on its done line for this run (/timestamps on|off|status)",
                  ("ts",)),
     SlashCommand("omh-model", LOCAL, "Pick OMH model chains"),
     SlashCommand("topup", LOCAL, "Nous credit balance and the top-up link (Hermes' /topup)"),
@@ -269,7 +269,7 @@ RUNS_DURING_TURN = frozenset({
     "copy",  # copies the last reply to the clipboard
     "theme",  # this terminal's look
     "wallpaper",  # this terminal's background and scene
-    "timestamps",  # whether the done lines from the next one say their clock times, in this terminal only
+    "timestamps",  # whether a done line says its clock times, as its turn ends (the running one's too); this run only
     "image",  # attaches an image to the draft, as a paste does during a turn; the turn gets nothing
     "paste",  # attaches the clipboard image to the draft, as Ctrl+V does
     "gateway",  # `/gateway restart` asks first, and Hermes' restart lets running turns, this one too, finish first
