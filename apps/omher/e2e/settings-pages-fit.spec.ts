@@ -169,3 +169,56 @@ test("Agents at 900: Add agent's rows stack label, hint and a full-width input, 
   expect(new Set(rows.map((r) => r.h)).size, JSON.stringify(rows)).toBe(1);
   for (const hint of await page.locator("[data-testid=agent-form] .st-k span").all()) expect(await lineCount(hint)).toBe(1);
 });
+
+test("Automations › New: the schedule hint sits under its field, the buttons on the fields' column", async ({ page }) => {
+  await open(page);
+  await page.getByTestId("nav-automations").click();
+  await page.getByTestId("auto-new").click();
+  const form = page.getByTestId("auto-form");
+  await expect(form).toBeVisible();
+  const m = await form.evaluate((f) => {
+    const x = (el: Element) => Math.round(el.getBoundingClientRect().left);
+    const sched = f.querySelector("[data-testid=form-schedule]")!;
+    const hint = f.querySelector("[data-testid=form-schedule-hint]")!;
+    const text = document.createRange();
+    text.selectNodeContents(hint);
+    return {
+      field: x(sched),
+      hintText: Math.round(text.getBoundingClientRect().left),
+      add: x(f.querySelector("[data-testid=form-add]")!),
+      hintGap: Math.round(hint.getBoundingClientRect().top - sched.getBoundingClientRect().bottom),
+      afterSched: sched.closest("label")!.nextElementSibling === hint,
+    };
+  });
+  expect(m.afterSched, JSON.stringify(m)).toBe(true);
+  expect(m.hintGap, JSON.stringify(m)).toBeLessThanOrEqual(8);
+  expect(m.hintText, JSON.stringify(m)).toBe(m.field);
+  expect(m.add, JSON.stringify(m)).toBe(m.field);
+});
+
+for (const lang of ["en", "ko"] as const) {
+  test(`Automations at 900 ${lang} with a job open: one suggestion row, the summary and both New buttons as a unit, whole schedules`, async ({ page }) => {
+    await page.setViewportSize({ width: 900, height: 600 });
+    await page.addInitScript((l) => localStorage.setItem("omher.lang", l), lang);
+    await open(page);
+    await page.getByTestId("nav-automations").click();
+    await expect(page.getByTestId("auto-list")).toBeVisible();
+    const sugTops = await page.getByTestId("suggestions").getByRole("button").evaluateAll((els) => [...new Set(els.map((e) => Math.round(e.getBoundingClientRect().top)))]);
+    expect(sugTops, "suggestions on one row").toHaveLength(1);
+    await page.getByTestId("auto-row-c93a7f1e0b55").click();
+    const sugTops2 = await page.getByTestId("suggestions").getByRole("button").evaluateAll((els) => [...new Set(els.map((e) => Math.round(e.getBoundingClientRect().top)))]);
+    expect(sugTops2, "suggestions on one row with a job open").toHaveLength(1);
+    // the two New buttons share one row, and the group stays inside the list's edges
+    const ends = await page.locator("[data-testid=watch-new], [data-testid=auto-new]").evaluateAll((els) => [...new Set(els.map((e) => Math.round(e.getBoundingClientRect().top)))]);
+    expect(ends, JSON.stringify(ends)).toHaveLength(1);
+    const fit = await page.evaluate(() => {
+      const list = document.querySelector("[data-testid=auto-list]")!.getBoundingClientRect();
+      const b = document.querySelector("[data-testid=auto-new]")!.getBoundingClientRect();
+      return { list: Math.round(list.right), btn: Math.round(b.right) };
+    });
+    expect(fit.btn, JSON.stringify(fit)).toBeLessThanOrEqual(fit.list);
+    // no schedule is cut
+    const cut = await page.locator("[data-testid^=auto-sched-]").evaluateAll((els) => els.filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent));
+    expect(cut).toEqual([]);
+  });
+}

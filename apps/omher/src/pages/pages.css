@@ -134,13 +134,22 @@
 }
 
 /* suggestion chips, filter chips */
+/* one row: in a narrow list it scrolls sideways instead of leaving one suggestion alone on a second row */
 .pg-sug {
   display: flex;
-  flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 18px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* the row's right end fades, so a chip that runs past it reads as "more this way", not as a cut */
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+.pg-sug::-webkit-scrollbar {
+  display: none;
 }
 .pg-sug button {
+  flex: none;
+  white-space: nowrap;
   font-size: 12px;
   color: var(--muted);
   border: 1px solid var(--line);
@@ -179,11 +188,27 @@
 .pg-chip.on .pg-n {
   color: var(--muted);
 }
-.pg-summary {
+/* the summary and both New buttons wrap together, as one unit at the row's end */
+.pg-filters-end {
   margin-left: auto;
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+}
+/* the two New buttons never part */
+.pg-new {
+  display: inline-flex;
+  gap: 4px;
+  flex: none;
+}
+.pg-summary {
   color: var(--quiet);
   font-size: 12px;
   padding: 0 6px;
+  white-space: nowrap;
 }
 
 /* buttons */
@@ -621,10 +646,19 @@
 .au-f .mseg {
   justify-self: start;
 }
+/* the hint under its field and the form's buttons sit on the fields' column (96px labels + 10px gap) */
 .au-f-hint {
   color: var(--quiet);
   font-size: 11.5px;
   padding-left: 106px;
+  margin: -4px 0 0;
+}
+.au-f-btns,
+.au-f-err {
+  padding-left: 106px;
+}
+.au-f-err {
+  margin: 0;
 }
 
 /* ---- Plugins ---- */
@@ -1100,6 +1134,16 @@
     grid-row: 2;
     flex-direction: row;
     gap: 6px;
+  }
+  /* the cadence is what the job is: it keeps its words and the countdown beside it gives way */
+  .au-row .au-sched {
+    flex: none;
+    max-width: 100%;
+  }
+  .au-row .au-when small {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .au-row .au-st {
     grid-column: 2;
