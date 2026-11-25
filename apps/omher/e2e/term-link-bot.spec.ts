@@ -124,9 +124,9 @@ test("a bot's request shows a card and types nothing until Allow; Deny types not
   await expect(card.locator("button").first()).toBeFocused();
   // the row and the Dock count show it waits on the person: the warning triangle, a wait omher knows
   await expect(page.getByTestId(`session-${id}`)).toHaveAttribute("data-term-status", "bell");
-  // the triangle is the app's "needs attention" colour (--needs), which has a darker light-theme value
+  // the triangle is the sidebar's readable needs amber (this test runs light: the deep #a8640a, not the fill amber)
   const tri = page.getByTestId(`session-${id}`).getByTestId("term-status");
-  expect(await tri.evaluate((e) => getComputedStyle(e).color)).toBe(await page.evaluate(() => { const p = document.createElement("span"); p.style.color = "var(--needs)"; document.querySelector(".side")!.appendChild(p); const c = getComputedStyle(p).color; p.remove(); return c; }));
+  expect(await tri.evaluate((e) => getComputedStyle(e).color)).toBe("rgb(168, 100, 10)");
   await expect(page.getByTestId(`session-${id}`).getByTestId("term-status").locator("svg path")).toHaveCount(2);
   await expect(page.getByTestId(`session-${id}`).getByTestId("term-status")).toHaveAttribute("title", "Needs your answer");
   await expect.poll(() => page.evaluate(() => (window as unknown as W).__omherBadge)).toBeGreaterThan(0);
@@ -138,6 +138,17 @@ test("a bot's request shows a card and types nothing until Allow; Deny types not
   await page.waitForTimeout(2000);
   expect(await writes(page, id)).toEqual(before);
   await expect(page.locator(".xterm-rows").last()).not.toContainText("rm -rf build");
+});
+
+test("on the dark sidebar the waiting triangle is the bright needs amber", async ({ page }) => {
+  await open(page, "dark");
+  const id = await newTerm(page, "shell");
+  const link = await linkId(page, id);
+  await expect.poll(async () => Object.keys(await files(page))).toContain(link);
+  await ask(page, link, "make");
+  await expect(page.getByTestId(`session-${id}`)).toHaveAttribute("data-term-status", "bell");
+  const tri = page.getByTestId(`session-${id}`).getByTestId("term-status");
+  expect(await tri.evaluate((e) => getComputedStyle(e).color)).toBe("rgb(233, 162, 59)");
 });
 
 test("Allow once types the prompt and Enter once; the next request asks again", async ({ page }) => {

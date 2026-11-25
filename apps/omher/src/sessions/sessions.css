@@ -1834,9 +1834,10 @@ body.split-dragging .xterm {
 .tst.err {
   color: var(--danger);
 }
-/* a wait omher knows: the app's "needs attention" colour, darker on light so the triangle reads on the sidebar */
+/* a wait omher knows: the sidebar's readable needs shade (--needs-text: the fill amber on dark, a deeper one on the
+   light sidebar, where the fill amber is under 2:1), so the 12 px triangle reads in both themes */
 .tst.bell {
-  color: var(--needs);
+  color: var(--needs-text, var(--needs));
 }
 /* news: a 6 px accent dot, the folder summary dots' size, centred in the glyph's 12 px box */
 .tst.news {
