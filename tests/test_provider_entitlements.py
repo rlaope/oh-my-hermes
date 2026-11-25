@@ -656,6 +656,7 @@ class MultiChoicePromptTests(unittest.TestCase):
             "provider_detected_config",
             "provider_detected_env",
             "provider_detected_login",
+            "provider_detected_plugin",
             "provider_recorded_before",
             "provider_opengateway_desc",
             "provider_skip_label",
@@ -865,6 +866,26 @@ class SetupInterviewTests(unittest.TestCase):
         self.assertEqual(values[:2], ["openai-codex", "openai"])
         self.assertEqual(preselected, ["openai-codex", "openai"])
         self.assertEqual(kinds["openai"], "openai")
+
+    def test_an_installed_provider_plugin_is_offered_as_a_pre_ticked_row(self) -> None:
+        directsdk = "claude-subscription-directsdk-experimental"
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = self._paths(root)
+            plugin = paths.hermes_home / "plugins" / "directsdk"
+            plugin.mkdir(parents=True)
+            (plugin / "plugin.yaml").write_text(f"name: {directsdk}\nkind: model-provider\n", encoding="utf-8")
+            (plugin / "__init__.py").write_text("", encoding="utf-8")
+            with patch.object(setup_module, "_env_key_names", return_value=set()):
+                candidates = setup_module._provider_candidates(paths)
+        self.assertEqual(candidates, [(directsdk, "anthropic", "plugin")])
+        # A plugin row is a provider of its own, never folded into a recorded
+        # account of the same kind the way a key name is.
+        options, preselected, kinds = setup_module._provider_entitlement_options(candidates, {"my-anthropic": "anthropic"}, "en")
+        self.assertEqual([option["value"] for option in options][:2], [directsdk, "my-anthropic"])
+        self.assertEqual(options[0]["description"], "found: a Hermes provider plugin is installed")
+        self.assertEqual(preselected[:2], [directsdk, "my-anthropic"])
+        self.assertEqual(kinds[directsdk], "anthropic")
 
     def test_a_hermes_auth_login_is_offered_as_a_pre_ticked_row(self) -> None:
         with TemporaryDirectory() as tmp:
