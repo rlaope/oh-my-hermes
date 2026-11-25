@@ -102,8 +102,8 @@ test("Save opens the confirm card with the exact command; Cancel writes nothing"
   await expect(card).toBeVisible();
   await expect(page.getByTestId("agent-confirm-command")).toHaveText("/opt/homebrew/bin/cursor-agent acp");
   await expect(card).toContainText("In the folder you pick for each session.");
-  // Cancel comes first, Add second
-  expect(await card.locator("button").allTextContents()).toEqual(["Cancel", "Add"]);
+  // the action first and Cancel second, as every confirm on omher's pages (Cancel keeps the focus)
+  expect(await card.locator("button").allTextContents()).toEqual(["Add", "Cancel"]);
   expect(await file(page)).toBeNull();
   await page.getByTestId("agent-confirm-cancel").click();
   await expect(card).toHaveCount(0);

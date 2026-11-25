@@ -467,6 +467,7 @@ export const ja: Record<Key, string> = {
   "set.notifications": "通知",
   "set.keyboard": "キーボード",
   "set.system": "システム",
+  "set.sidebar": "サイドバー",
   "win.close": "ウインドウを閉じたとき",
   "win.closeHint": "omher はメニューバーに残り、ターミナルとエージェントは作業を続けます。終了はアイコンから。",
   "win.closeHintOther": "omher は通知領域に残り、ターミナルとエージェントは作業を続けます。終了はアイコンから。",

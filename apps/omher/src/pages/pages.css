@@ -1159,3 +1159,8 @@
   margin-top: 8px;
   font-size: 12px;
 }
+
+/* light theme: the same --raise2 track as Settings, so the white selected segment shows (the automation form) */
+[data-theme="light"] .pg .mseg {
+  background: var(--raise2);
+}

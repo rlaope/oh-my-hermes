@@ -42,9 +42,6 @@ export function RemoteMachines() {
               {asking === p.id ? (
                 <>
                   <span className="peer-ask">{t("peer.removeAsk", { label: p.label })}</span>
-                  <button type="button" className="st-btn" onClick={() => setAsking(null)} data-testid={`remote-keep-${p.id}`}>
-                    {t("update.cancel")}
-                  </button>
                   <button
                     type="button"
                     className="st-btn peer-danger"
@@ -55,6 +52,9 @@ export function RemoteMachines() {
                     data-testid={`remote-remove-yes-${p.id}`}
                   >
                     {t("peer.remove")}
+                  </button>
+                  <button type="button" className="st-btn" onClick={() => setAsking(null)} data-testid={`remote-keep-${p.id}`}>
+                    {t("update.cancel")}
                   </button>
                 </>
               ) : (

@@ -467,6 +467,7 @@ export const zh: Record<Key, string> = {
   "set.notifications": "通知",
   "set.keyboard": "键盘",
   "set.system": "系统",
+  "set.sidebar": "侧栏",
   "win.close": "关闭 omher 界面时",
   "win.closeHint": "omher 留在菜单栏中，终端和智能体继续工作。从它的图标退出。",
   "win.closeHintOther": "omher 留在通知区域中，终端和智能体继续工作。从它的图标退出。",

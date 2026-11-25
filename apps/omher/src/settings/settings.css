@@ -1045,14 +1045,10 @@
   margin-top: 8px;
 }
 
-/* Settings › General › Language: its own group under Appearance; each language in its own words, never wrapped */
+/* Settings › General › Language: its own group under Appearance; each language in its own words, never wrapped (a
+   small Seg: equal segments, as wide as the column's other switches or as its words need) */
 .st-grp-lang {
   margin-top: 10px;
-}
-.st-grp-lang .mseg button {
-  flex: none;
-  white-space: nowrap;
-  padding: 0 10px;
 }
 
 /* the bot page's sections (BotSections.tsx): persona, memory, automations, elsewhere, open threads */
@@ -1252,4 +1248,10 @@ a.bp-row:hover {
 }
 .bp-row-st.ok {
   color: var(--ok);
+}
+
+/* light theme: the white selected segment on the #f2eff3 track differed by bold text only; a --raise2 track under it
+   shows which one is on (Settings pages; the chat's own pickers keep theirs) */
+[data-theme="light"] .st-page .mseg {
+  background: var(--raise2);
 }

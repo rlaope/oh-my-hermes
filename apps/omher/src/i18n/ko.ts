@@ -467,6 +467,7 @@ export const ko: Record<Key, string> = {
   "set.notifications": "알림",
   "set.keyboard": "키보드",
   "set.system": "시스템",
+  "set.sidebar": "사이드바",
   "win.close": "창을 닫으면",
   "win.closeHint": "omher가 메뉴 막대에 남고 터미널과 에이전트는 계속 실행돼요. 종료는 아이콘에서 하세요.",
   "win.closeHintOther": "omher가 알림 영역에 남고 터미널과 에이전트는 계속 실행돼요. 종료는 아이콘에서 하세요.",

@@ -469,6 +469,7 @@ export const en = {
   "set.notifications": "Notifications",
   "set.keyboard": "Keyboard",
   "set.system": "System",
+  "set.sidebar": "Sidebar",
   "win.close": "When the window closes",
   "win.closeHint": "omher stays in the menu bar and your terminals and agents keep working. Quit from its icon.",
   "win.closeHintOther": "omher stays in the notification area and your terminals and agents keep working. Quit from its icon.",
