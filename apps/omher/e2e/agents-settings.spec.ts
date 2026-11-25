@@ -191,7 +191,7 @@ test.skip("a broken entry of the file is listed as broken, never offered, and ca
 
 for (const [lang, title, main, add, card] of [
   ["en", "Agents", "Main", "Add agent", "Add Cursor?"],
-  ["ko", "에이전트", "메인", "에이전트 추가", "Cursor을(를) 추가할까요?"],
+  ["ko", "에이전트", "메인", "에이전트 추가", "Cursor 추가할까요?"],
   ["ja", "エージェント", "メイン", "エージェントを追加", "Cursor を追加しますか？"],
   ["zh", "智能体", "主要", "添加智能体", "添加 Cursor？"],
 ] as const) {
