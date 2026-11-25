@@ -1416,9 +1416,11 @@ class ThreadPullRequests(unittest.TestCase):
         checks = ast.unparse(fns["pr_checks_of"])
         for word in ("'name'", "'context'", "'description'", "'detailsUrl'", "'targetUrl'", "'workflowName'"):
             self.assertNotIn(word, checks)
-        # thread ops never cross to a peer: a peer bot's threads are not read (rule 31)
+        # a peer bot's threads cross (rule 31, #3172), but a thread's PRs are read on this computer only
         forward = re.search(r"PEER_FORWARD = frozenset\(\{(.*?)\}\)", self.source, re.S).group(1)
-        self.assertNotIn('"thread.', forward)
+        self.assertNotIn('"thread.prs"', forward)
+        self.assertEqual(sorted(re.findall(r'"(thread\.[a-z]+)"', forward)),
+                         ["thread.create", "thread.list", "thread.open", "thread.remove"])
 
 
 class AccountsNeverCarryAToken(unittest.TestCase):

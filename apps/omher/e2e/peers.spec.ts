@@ -273,6 +273,37 @@ test("a remote bot: folder chats and Restart refuse it; Settings removes the com
   expect((await calls()).some((c) => c.op === "peers.detach")).toBe(true);
 });
 
+test("a remote bot has threads (#3172): the row's + opens one, a send goes into it, its page lists it", async ({ page }) => {
+  await open(page);
+  await attachMini(page);
+  const key = "mac-mini:mini";
+  await page.getByTestId(`bot-row-${key}`).hover();
+  await page.getByTestId(`bot-new-${key}`).click();
+  await expect.poll(async () => (await calls()).filter((c) => c.op === "thread.create" && c.params.bot === key).length).toBe(1);
+  const create = (await calls()).find((c) => c.op === "thread.create" && c.params.bot === key)!;
+  expect(create.params.cwd).toBeUndefined(); // no folder from this computer
+  const chat = page.getByTestId("thread-chat");
+  await expect(chat).toBeVisible();
+  const id = (await chat.getAttribute("data-thread"))!;
+  await expect(page.getByTestId("composer")).toBeFocused();
+  await page.getByTestId("composer").fill("tail the nightly build log");
+  await page.keyboard.press("Enter");
+  await expect
+    .poll(async () => (await calls()).filter((c) => c.op === "chat.send" && c.params.bot === key && c.params.session === id).length)
+    .toBe(1);
+  // nothing went to that bot's main chat
+  expect((await calls()).some((c) => c.op === "chat.send" && c.params.bot === key && c.params.session === undefined)).toBe(false);
+  await shot(page, "peer-thread-dark.png");
+  // its page lists the thread instead of saying threads are this computer's only
+  await page.getByTestId(`bot-${key}`).click({ button: "right" });
+  await page.getByTestId("row-menu").getByRole("menuitem", { name: "Edit bot" }).click();
+  await expect(page.getByTestId("bot-sections")).toBeVisible();
+  await expect(page.getByTestId("bp-threads").getByTestId("bp-thread")).toHaveCount(1);
+  // folder chats and Restart still refuse it, and so does a folder from this computer for a new thread
+  expect((await mock("thread.create", { bot: key, cwd: "/tmp" })).error.code).toBe("remote_bot");
+  expect((await mock("folder.open", { bot: key, cwd: "/tmp" })).error.code).toBe("remote_bot");
+});
+
 test("ko: the card and the marker read in Korean", async ({ page }) => {
   await open(page);
   await page.evaluate(() => localStorage.setItem("omher.lang", "ko"));

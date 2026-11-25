@@ -403,7 +403,12 @@ _HANDOFF_BEFORE = re.compile(
 _HANDOFF_WORDS_AFTER = frozenset({"workflow", "skill", "lane", "owns"})
 _CHAIN_SEPARATOR = re.compile(r"(?:, |, or |, and | or | and )")
 # `owner/repo@sha` names an upstream project's skill, never an OMH one.
-_UPSTREAM_ATTRIBUTION = re.compile(r"[\w.-]+/[\w.-]+@[0-9a-f]{7,}")
+# The lookbehind anchors each attempt at the start of a `[\w.-]` run. Without it a
+# long run with no `/` is rescanned from every offset, quadratic in line length:
+# a 200,000-character line took 6-7 minutes per lint in CI. Any match the
+# unanchored pattern finds also starts at its run's first character, so
+# `search()` answers the same on every input.
+_UPSTREAM_ATTRIBUTION = re.compile(r"(?<![\w.-])[\w.-]+/[\w.-]+@[0-9a-f]{7,}")
 _WORD = re.compile(r"[A-Za-z]+")
 
 

@@ -43,7 +43,13 @@ const textareaOf = (id: string) => document.querySelector<HTMLElement>(`[data-te
 /** Give the keyboard to session `id`'s pane: its session opens (header, row, Plans follow) and its terminal is focused. */
 export function focusSplitPane(id: string): void {
   if (getStore().getState().ui.session !== id) getStore().actions.openSession(id);
-  requestAnimationFrame(() => textareaOf(id)?.focus({ preventScroll: true }));
+  // on the next frame, unless the keyboard went to a menu, a dialog or a field meanwhile (a cell's menu opened right
+  // after a drop): the pane does not take it from there
+  requestAnimationFrame(() => {
+    const el = document.activeElement as HTMLElement | null;
+    if (el?.closest("[role=menu], [role=dialog], input, [contenteditable]")) return;
+    textareaOf(id)?.focus({ preventScroll: true });
+  });
 }
 
 /** Put `add` in a new pane on the `dir` side of `at`'s (moving it there when it is in that split already); it takes

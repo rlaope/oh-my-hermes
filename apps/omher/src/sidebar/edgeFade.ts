@@ -65,7 +65,10 @@ function cardCap(el: HTMLElement): string {
   if (el.scrollHeight + give <= el.clientHeight + 1) return "";
   const box = el.getBoundingClientRect();
   const m = map.getBoundingClientRect();
-  const above = m.top - box.top + el.scrollTop;
+  // the card sits under its folder's header, which may be far down the list: it fits the box once that folder is
+  // scrolled to its top (the list's own top band counted for the first folder)
+  const groupTop = (first.closest(".tg") ?? first).getBoundingClientRect().top;
+  const above = m.top - groupTop + Math.min(Math.max(0, groupTop - box.top + el.scrollTop), 16);
   const below = first.getBoundingClientRect().bottom - m.bottom;
   return `${Math.max(0, Math.floor(el.clientHeight - above - below - CUE_PX))}px`;
 }

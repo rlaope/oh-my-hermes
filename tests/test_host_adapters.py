@@ -14,7 +14,7 @@ import unittest
 from _cli_harness import run_cli
 
 ROOT = Path(__file__).resolve().parents[1]
-HOSTS = ("cursor", "claude", "codex", "opencode", "openclaw", "pi")
+HOSTS = ("cursor", "claude", "codex", "opencode", "openclaw", "pi", "antigravity")
 
 
 def tree(root):
@@ -152,7 +152,7 @@ class HostAdapterTests(unittest.TestCase):
         with chdir(ROOT):
             code, output, error = run_cli(["docs", "agent-skills", "--check"])
         self.assertEqual(code, 0, error + output)
-        self.assertEqual(json.loads(output).get("adapter_file_count"), 18)
+        self.assertEqual(json.loads(output).get("adapter_file_count"), 21)
         for host in HOSTS:
             for name in ("install.sh", "install.ps1", "manifest.json"):
                 self.assertTrue((ROOT / f".{host}" / name).is_file())

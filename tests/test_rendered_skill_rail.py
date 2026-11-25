@@ -11,6 +11,7 @@ and must not touch a word that only shares an installed skill's name.
 from __future__ import annotations
 
 import re
+import time
 import unittest
 
 from omh.plugin_bundle.omh.awareness import awareness_primer_markdown, awareness_shared_context_markdown
@@ -402,6 +403,27 @@ class RenderedReferenceShapeTests(unittest.TestCase):
         )
         self.assertNotIn("....", registry)
         self.assertNotIn("..:", registry)
+
+
+class UpstreamAttributionPatternTests(unittest.TestCase):
+    def test_credits_still_match_where_they_did(self):
+        for line in (
+            "the `frontend` skill of `code-yeongyu/oh-my-openagent@0123abc`",
+            "see owner.name/repo-x@deadbeef12 for the source",
+            "(a/b@1234567)",
+        ):
+            with self.subTest(line=line):
+                self.assertIsNotNone(_UPSTREAM_ATTRIBUTION.search(line))
+        for line in ("owner/repo@main", "owner/repo@123456", "no credit here"):
+            with self.subTest(line=line):
+                self.assertIsNone(_UPSTREAM_ATTRIBUTION.search(line))
+
+    def test_a_long_word_run_is_scanned_in_linear_time(self):
+        # Unanchored, this search rescanned the run from every offset: a
+        # 200,000-character line held one CI test for 6-7 minutes.
+        started = time.monotonic()
+        self.assertIsNone(_UPSTREAM_ATTRIBUTION.search("x" * 200_000))
+        self.assertLess(time.monotonic() - started, 1.0)
 
 
 if __name__ == "__main__":
