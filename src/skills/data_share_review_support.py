@@ -21,7 +21,7 @@ def data_share_review_support_templates():
             raw = stream.read(1_048_577)
         if len(raw) > 1_048_576:
             raise ValueError("data-share-review toolkit resource exceeds size limit")
-        texts[relative] = raw.decode("utf-8")
+        texts[relative] = raw.decode("utf-8").replace("\r\n", "\n")
     return validate_support_templates(
         [
             SkillSupportTemplate(SKILL_NAME, "toolkit/" + relative, texts[relative])

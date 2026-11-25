@@ -8593,7 +8593,7 @@ _DEFINITIONS = [
             "Deploy as the gated runbook: docker's three load-bearing flags (`--ipc=host`, HF cache mount, `HF_TOKEN`) or the Kubernetes five-step (secret gate, existing-deployment gate, apply, rollout+readiness verify, summary+smoke); the port invariant touches four places or it did not change the port.",
             "Troubleshoot from the symptom table first - slow TTFT to prefix caching/chunked prefill, OOM to gpu-memory-utilization/max-model-len/quantization - before inventing flags.",
             "Measure with the protocol: TTFT/TPOT/ITL/E2EL as mean/median/P99, goodput against an explicit SLO, one load shape per run, results saved with metadata; the full contract is `omh-inference-serving/references/serving-bench.md`.",
-            "Run `toolkit/scripts/vram_kv_calc.py` for offline weight, KV-cache, tensor-parallel divisibility, and max-concurrency arithmetic instead of estimating VRAM by hand.",
+            "Run `toolkit/scripts/vram_kv_calc.py` (usage in `toolkit/README.md`: `skill_view(name='omh-inference-serving', file_path='toolkit/README.md')`) for offline weight, KV-cache, tensor-parallel divisibility, and max-concurrency arithmetic instead of estimating VRAM by hand.",
             "Report observed-only: each runbook step is prepared until its command's exit status and output are seen.",
         ),
         why_this_exists=(
@@ -10857,7 +10857,7 @@ _DEFINITIONS.append(
             "Build the evidence ledger first; the `Tested:` and validation sections are projections of it, not prose.",
             "Write the subject in the repository's shape and the body as why the change exists, not a restated diff.",
             "Load `references/commit-and-pr-conventions.md` for trailer, sign-off, and template-section mapping instead of improvising them.",
-            "Run `toolkit/scripts/merge_danger_scan.py` on the unified diff before finalizing Risk/Rollout notes to catch migrations, lockfile churn, deleted public symbols, and secret prefixes.",
+            "Run `toolkit/scripts/merge_danger_scan.py` (usage in `toolkit/README.md`: `skill_view(name='omh-commit-pr-authoring', file_path='toolkit/README.md')`) on the unified diff before finalizing Risk/Rollout notes to catch migrations, lockfile churn, deleted public symbols, and secret prefixes.",
             "Put `Closes #N` on its own line only when every success criterion of that issue is met.",
         ),
         why_this_exists=(
@@ -12228,7 +12228,7 @@ _DEFINITIONS.append(
             + native_tool_presence_clause("execute_code", code=True)
             + "; its stdout returns, and so do stderr and any traceback, so it prints counts only and catches its own errors without echoing a value. With neither, hand the user the scan to run and keep the verdict not_observed until the counts come back.",
             "Hermes' `privacy.redact_pii` hashes user and chat identifiers in the gateway's session prompt on the platforms that allow it, and `security.redact_secrets` masks secret-shaped strings in tool output; neither changes a file that leaves, so neither is this scan.",
-            "Run `toolkit/scripts/residual_scan.py` (counts-only, never prints matched values) on the exact file that leaves to produce the observed `residual_scan/v1` record.",
+            "Run `toolkit/scripts/residual_scan.py` (see `skill_view(name='omh-data-share-review', file_path='toolkit/README.md')`, counts-only, never prints matched values) on the exact file that leaves to produce the observed `residual_scan/v1` record.",
             "Keep inventoried, minimized, masked, scanned, and shipped as separate states for the file.",
         ),
         why_this_exists=(
@@ -12291,12 +12291,12 @@ _DEFINITIONS.append(
                 "Load `references/data-share-method.md` for the field classes, the minimization order, the pseudonymization method, the per-class scan patterns, and the quasi-identifier group check instead of recalling them.",
                 "Count each class with the host's content search in a count-only mode, or with a detector script that prints counts only and catches its own errors, since its error output returns too. With neither, hand the user the scan to run and keep the verdict not_observed until the counts come back.",
                 "A host's own redaction of chat or tool output never changes a file that leaves, so it is not this scan.",
-                "Run `toolkit/scripts/residual_scan.py` (counts-only, never prints matched values) on the exact file that leaves to produce the observed `residual_scan/v1` record.",
+                "Run `toolkit/scripts/residual_scan.py` (see `toolkit/README.md`, counts-only, never prints matched values) on the exact file that leaves to produce the observed `residual_scan/v1` record.",
                 "Keep inventoried, minimized, masked, scanned, and shipped as separate states for the file.",
             ),
         },
         portable_override_shadows={
-            "quality_bar": "9f480f86a565933c9150af0257807787822b9beb58b678885d25f880c06e0807",
+            "quality_bar": "f210bdca66b4413aa142e71d73b65d0a0b26cc3c1aeb10ccd2bf59f01b08327f",
         },
     )
 )

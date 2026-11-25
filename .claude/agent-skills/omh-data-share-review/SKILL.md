@@ -81,7 +81,7 @@ Quality bar:
 - Load `references/data-share-method.md` for the field classes, the minimization order, the pseudonymization method, the per-class scan patterns, and the quasi-identifier group check instead of recalling them.
 - Count each class with the host's content search in a count-only mode, or with a detector script that prints counts only and catches its own errors, since its error output returns too. With neither, hand the user the scan to run and keep the verdict not_observed until the counts come back.
 - A host's own redaction of chat or tool output never changes a file that leaves, so it is not this scan.
-- Run `toolkit/scripts/residual_scan.py` (counts-only, never prints matched values) on the exact file that leaves to produce the observed `residual_scan/v1` record.
+- Run `toolkit/scripts/residual_scan.py` (see `toolkit/README.md`, counts-only, never prints matched values) on the exact file that leaves to produce the observed `residual_scan/v1` record.
 - Keep inventoried, minimized, masked, scanned, and shipped as separate states for the file.
 
 Required inputs:

@@ -200,7 +200,7 @@ def main(argv: list[str] | None = None) -> int:
         if not target.is_file():
             raise FileNotFoundError("input path does not exist or is not a regular file")
         payload = scan_file(target, free_text_sampled=bool(args.free_text_sampled))
-    except Exception as exc:  # Never echo file content in tracebacks.
+    except (OSError, ValueError, UnicodeDecodeError, json.JSONDecodeError, csv.Error) as exc:
         error_payload = {
             "schema_version": SCHEMA_VERSION,
             "ok": False,

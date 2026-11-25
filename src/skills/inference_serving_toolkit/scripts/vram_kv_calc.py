@@ -187,7 +187,7 @@ def main(argv: list[str] | None = None) -> int:
             gpu_memory_utilization=args.gpu_memory_utilization,
             cuda_activation_overhead_gib_per_gpu=args.overhead_gib_per_gpu,
         )
-    except Exception as exc:
+    except (ValueError, ZeroDivisionError) as exc:
         print(json.dumps({"schema_version": SCHEMA_VERSION, "ok": False, "error": str(exc)}, indent=2), file=sys.stderr)
         return 2
 

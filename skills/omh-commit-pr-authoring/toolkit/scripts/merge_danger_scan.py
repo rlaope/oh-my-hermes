@@ -206,7 +206,7 @@ def main(argv: list[str] | None = None) -> int:
             diff_text = Path(args.diff_file).read_text(encoding="utf-8")
             source = Path(args.diff_file).name
         payload = scan_diff(diff_text, source=source)
-    except Exception as exc:
+    except (OSError, ValueError, UnicodeDecodeError) as exc:
         print(
             json.dumps({"schema_version": SCHEMA_VERSION, "ok": False, "error": str(exc)}, indent=2),
             file=sys.stderr,

@@ -32,6 +32,15 @@ agent-skills/omh-biomedical-evidence/toolkit/** text eol=lf
 src/skills/molecular_docking_toolkit/** text eol=lf
 skills/omh-molecular-docking/toolkit/** text eol=lf
 agent-skills/omh-molecular-docking/toolkit/** text eol=lf
+src/skills/data_share_review_toolkit/** text eol=lf
+skills/omh-data-share-review/toolkit/** text eol=lf
+agent-skills/omh-data-share-review/toolkit/** text eol=lf
+src/skills/commit_pr_authoring_toolkit/** text eol=lf
+skills/omh-commit-pr-authoring/toolkit/** text eol=lf
+agent-skills/omh-commit-pr-authoring/toolkit/** text eol=lf
+src/skills/inference_serving_toolkit/** text eol=lf
+skills/omh-inference-serving/toolkit/** text eol=lf
+agent-skills/omh-inference-serving/toolkit/** text eol=lf
 # The pack's digest inventory, copied verbatim as every installer's receipt.
 agent-skills/.omh-agent-skills-manifest.json text eol=lf
 
