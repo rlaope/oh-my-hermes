@@ -17,6 +17,13 @@ All notable changes will be documented here.
   (`omh model-chains provider set claude-subscription-directsdk-experimental anthropic`), route the alias to it, or
   clear the other provider. `omh setup` labels the plugin's row.
   (#3186, carried; thanks @jaehyeokl; `docs/INSTALLATION.md`)
+- **TUI: `/dag` shows the highlighted node's handoff with `e`.** In the delegation graph pager, `e` opens the
+  selected DAG node's evidence (title, status, role and up to 8 KiB of its local handoff), `r` rereads it and `e`
+  returns to the same graph position. It reads only that node's handoff from the current stored session's DAG
+  record, refuses symlinks, FIFOs, remote handoff roots and another session's record, drops Markdown link
+  targets, and sends nothing to the gateway. The DAG record reader loads on the first evidence read, so a TUI
+  session that never opens it imports no plugin runtime reader. (`src/tui/dag_evidence.py`,
+  `src/tui/dag_pager.py`, `src/system/secure_regular_file.py`) (#3194)
 - **omher: TERMINALS folders say where they are, and a split stays in its folder.** A folder header showed only the
   folder's last name, so `~`, `~/Desktop/khope` and `~/work/khope` read alike; it now shows the path from home under
   the name, with the git branch after it. A split's card sat above every folder; it now sits at the top of its first
