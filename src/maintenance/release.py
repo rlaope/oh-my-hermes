@@ -210,7 +210,9 @@ CONCEPTUAL_AWARENESS_SURFACES = ("request-to-handoff", "executor selection", "co
 # weights" again (+3 in its index line), measured from the producer; no headroom.
 # 13054 -> 13141: one `app-work-intake` index line (the cross-platform workflows' one new
 # skill), measured from the producer; no headroom.
-SKILL_INDEX_CHAR_LIMIT = 13141
+# 13141 -> 13223: one `bot-template` index line plus newline (+82), measured
+# from the producer; no headroom.
+SKILL_INDEX_CHAR_LIMIT = 13223
 # The longest single skill line in that index. Every description is already cut
 # to 60 characters, so what moves this is a longer skill name.
 # 100 -> 99: same word-boundary cut as above, measured from the producer.
@@ -1127,7 +1129,9 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 64019
 # preferred usage included) plus its separator (+4249); the operating-rhythm, wiki and frontend rows
 # did not move (their new lines sit past the first-four slice). Measured per row from the producer.
 # No headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 554000
+# 554000 -> 558410: one `bot-template` capability row (4408) plus its separator
+# (+4410); dropping only that row reproduces 554000. Measured from the producer.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 558410
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -1243,7 +1247,9 @@ FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # separator (+937); the lift method stays in its on-demand reference.
 # 147355 -> 148307: one 950-character standalone `app-work-intake` row plus
 # separator (+952); its three recipes stay in on-demand references.
-STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 148307
+# 148307 -> 149250: one 941-character standalone `bot-template` row plus
+# separator (+943); the templates stay in its on-demand reference.
+STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 149250
 STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # ULW fold context ceiling (issue #954, PR D). The limit is the pre-D measured
 # value of the full profile's `skill_body` chars on `main` @ acb9a060, in the

@@ -121,7 +121,12 @@ class RoutingPrecisionTests(unittest.TestCase):
         # a secrets vault, a bolt, and two questions about meeting notes.
         # Merged: 1584 (monitor recipes) + 17 cross-platform cases = 1601.
         # Its anchor round adds one: viewing a Figma frame is a question.
-        self.assertEqual(payload["summary"]["case_count"], 1602)
+        # bot-template adds eight: four bot templates coded for a messenger or in a language, a Korean one,
+        # and a Jinja and two prompt templates.
+        # Its review round adds four repository template files named like a template id.
+        # Its verification round adds four: a template deleted, removed, exported, or built in Python.
+        # Its last round adds two bot templates written in Python beside a template id.
+        self.assertEqual(payload["summary"]["case_count"], 1620)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -314,7 +319,12 @@ class RoutingPrecisionTests(unittest.TestCase):
         # Cross-platform, merged with monitor recipes: two trigger sentences naming their work stay with
         # automation-blueprint. Merged: 1390 (monitor recipes) + 37 cross-platform cases = 1427.
         # Its verification round adds three: an existing PR link, an urgent spec to PR, a recall apart from the vault.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1430)
+        # bot-template adds eleven: eight applies and lists (five English with omher's message, three Korean)
+        # that dispatch, and a PR, a release notes and an issue template that keep their owners.
+        # Its review round adds a Korean template file edit that keeps content-operator and a Korean recommend ask.
+        # Its verification round adds a Korean delete that keeps code-review.
+        # Its last round adds Korean Python code for a pr-review bot template, which keeps code-review.
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1445)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

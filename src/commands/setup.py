@@ -164,6 +164,7 @@ from ..setup_profiles import (
 from ..snippet import WORKSPACE_SNIPPET
 from ..system.stdin_probe import stdin_is_tty
 from ..targets import record_target_observation
+from ..catalogs.bot_templates import BotTemplateError, apply_message, bot_template_payload, bot_templates_payload
 from ..team_profiles import (
     TeamProfileError,
     inspect_operating_model,
@@ -7119,6 +7120,29 @@ def cmd_profile_inspect(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_profile_bot_templates(args: argparse.Namespace) -> int:
+    """`omh profile bot-templates`: the bot template catalog, the read path omher's Add bot gallery uses."""
+    if args.id:
+        try:
+            payload = bot_template_payload(args.id)
+        except BotTemplateError as exc:
+            raise OmhError(str(exc)) from exc
+        templates = [payload]
+    else:
+        payload = bot_templates_payload()
+        templates = payload["templates"]
+    if _wants_json(args):
+        _print_json(payload)
+        return 0
+    for template in templates:
+        jobs = ", ".join(str(row["job_name"]) for row in template["schedules"]) or "none"
+        print(f"{template['id']}: {template['title']}")
+        print(f"  {template['summary']}")
+        print(f"  skills: {', '.join(template['skills'])}; paused schedules: {jobs}")
+    print(f"Apply {'it' if args.id else 'one'} in the bot's own chat: {apply_message(args.id or '<id>')}")
+    return 0
+
+
 def cmd_recommend(args: argparse.Namespace) -> int:
     if args.limit < 1:
         raise OmhError("recommend --limit must be at least 1")
@@ -7583,3 +7607,9 @@ def _add_top_level_commands(sub) -> None:
     profile_inspect.add_argument("id")
     profile_inspect.add_argument("--json", action="store_true", help="Print the full machine-readable profile pack payload.")
     profile_inspect.set_defaults(func=cmd_profile_inspect)
+    profile_templates = profile_sub.add_parser(
+        "bot-templates", help="List the bot templates a new Hermes bot can be set up from (read only)."
+    )
+    profile_templates.add_argument("id", nargs="?", default=None, help="Print one template by id.")
+    profile_templates.add_argument("--json", action="store_true", help="Print bot_template_catalog/v1 (or one bot_template/v1).")
+    profile_templates.set_defaults(func=cmd_profile_bot_templates)

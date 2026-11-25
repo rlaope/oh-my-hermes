@@ -5,7 +5,7 @@ import { BridgeClient } from "../lib/bridge";
 import type { Bot } from "../lib/protocol";
 import type { Store } from "../state/store";
 
-async function withBridge<T>(fn: (b: BridgeClient) => Promise<T>): Promise<T> {
+export async function withBridge<T>(fn: (b: BridgeClient) => Promise<T>): Promise<T> {
   const b = new BridgeClient();
   try {
     await b.connect();
