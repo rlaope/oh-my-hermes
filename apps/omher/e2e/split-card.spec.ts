@@ -361,14 +361,16 @@ test("a tall card in a short TERMINALS gives way so it is never hidden whole: 12
       list.scrollTop = group.getBoundingClientRect().top - list.getBoundingClientRect().top;
       const lb = list.getBoundingClientRect();
       const cut = Number(/inset\(0px 0px ([\d.]+)px/.exec(list.style.clipPath)?.[1] ?? 0);
-      const card = document.querySelector(".split-card")!.getBoundingClientRect();
       const hits = [...document.querySelectorAll<HTMLElement>('[data-testid="split-cell"]')].map((e) => {
         const r = e.getBoundingClientRect();
         const [x, y] = [r.left + r.width / 2, r.top + r.height / 2];
         const at = y < lb.bottom - cut ? document.elementFromPoint(x, y) : null;
         return at?.closest<HTMLElement>('[data-testid="split-cell"]')?.dataset.session === e.dataset.session ? e.dataset.session : (at?.className ?? null);
       });
-      return { hits, shown: Math.max(0, Math.min(card.bottom, lb.bottom - cut) - card.top), card: card.height };
+      // the cells (the map): the grip under them may sit in the chevron's band, which is clipped so the chevron is
+      // never drawn over the card
+      const map = document.querySelector(".split-card .sc-map")!.getBoundingClientRect();
+      return { hits, shown: Math.max(0, Math.min(map.bottom, lb.bottom - cut) - map.top), card: map.height };
     });
   const check = async () => {
     await page.waitForTimeout(250);
@@ -380,7 +382,7 @@ test("a tall card in a short TERMINALS gives way so it is never hidden whole: 12
   await check();
   await page.setViewportSize({ width: 1280, height: 600 });
   const short = await check();
-  // the card gave way to the room: every cell is reachable, and the saved height is still 240
+  // the card gave way to the room: every cell is reachable and shown whole, and the saved height is still 240
   expect(short.hits, JSON.stringify(short)).toEqual([a, b, c, d]);
   expect(short.shown, JSON.stringify(short)).toBe(short.card);
   await expect(grip).toHaveAttribute("aria-valuenow", "240");

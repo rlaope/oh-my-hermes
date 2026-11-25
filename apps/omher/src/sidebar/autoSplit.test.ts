@@ -41,6 +41,19 @@ describe("auto BOTS | TERMINALS split", () => {
     expect(ht).toBeGreaterThanOrEqual(t.stops[0]!);
     expect(hb).toBeGreaterThanOrEqual(96);
   });
+  it("gives room the whole-row ends leave unused to the region that still hides rows: no empty band above the footer", () => {
+    // BOTS shown whole (300); TERMINALS' next whole-row end after 268 is 400 (an open folder's header is refused in
+    // between): the 61 px left would stand empty under TERMINALS while its rows hide behind the chevron
+    const b = { need: 300, stops: [100, 200, 300] };
+    const t = { need: 700, stops: [140, 268, 400, 520, 640] };
+    const [hb, ht] = planSplit(629, b, t);
+    expect(hb).toBe(300);
+    expect(hb + ht).toBe(629);
+    // both fit: the rest stays under them, as before
+    expect(planSplit(665, { need: 300, stops: [] }, { need: 250, stops: [] })).toEqual([300, 250]);
+    // a few px left over is no band: the whole-row end stays
+    expect(planSplit(576, b, t)).toEqual([300, 268]);
+  });
   it("keeps each region at least the minimum", () => {
     const [hb, ht] = planSplit(300, rows(30, 200, 3), rows(30, 200, 3));
     expect(hb).toBeGreaterThanOrEqual(96);
