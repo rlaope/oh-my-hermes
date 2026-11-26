@@ -950,7 +950,7 @@ export type Action =
   | { type: "hello"; hello: HelloResult }
   | { type: "error"; message: string | null }
   | { type: "bots"; bots: Bot[] }
-  | { type: "select"; bot: string }
+  | { type: "select"; bot: string; keepView?: boolean }
   | { type: "chat.opened"; bot: string; res: ChatOpenResult; now: number; since?: number }
   /** Automation answers that came in while omher was closed (or not attached): `count` more unread. */
   | { type: "watch.missed"; bot: string; count: number }
@@ -1408,7 +1408,7 @@ export function reduce(state: AppState, a: Action): AppState {
     case "bots":
       return { ...state, bots: a.bots };
     case "select":
-      return { ...state, selectedBot: a.bot, unread: { ...state.unread, [a.bot]: 0 }, ui: { ...state.ui, view: "chat", thread: null } };
+      return { ...state, selectedBot: a.bot, unread: { ...state.unread, [a.bot]: 0 }, ui: { ...state.ui, view: a.keepView ? state.ui.view : "chat", thread: null } };
     case "ui.thread":
       return {
         ...state,
@@ -2474,7 +2474,10 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       dispatch({ type: "ui.pin", bot, on: false });
       saveList("omher.pinned", state.ui.pinned);
     }
-    if (state.selectedBot === bot) void selectBot(selectSidebarBots(state)[0].name);
+    if (state.selectedBot === bot) {
+      // Settings / Automations stay open: selectBot would switch the view to the chat
+      void selectBot(selectSidebarBots(state)[0].name, state.ui.view !== "chat");
+    }
   };
 
   /** The roster is chosen once, on the first run of this build that sees a bot (seedRoster); when none of its
@@ -2487,10 +2490,10 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     setRoster([...(roster ?? []), ...seed.filter((n) => !roster?.includes(n))]);
   };
 
-  const selectBot = async (bot: string) => {
+  const selectBot = async (bot: string, keepView = false) => {
     // the open chat always has its row: a bot opened from Needs you, an @mention or Settings joins the list
     if (state.ui.roster && state.bots.some((b) => b.name === bot)) listBot(bot, true);
-    dispatch({ type: "select", bot });
+    dispatch({ type: "select", bot, keepView });
     markWatchSeen(bot);
     const jobs: Promise<unknown>[] = [loadElsewhere(bot), loadRoutines(bot), loadModels(bot)];
     if (!state.threads[bot]) jobs.push(loadThreads(bot));
@@ -3111,6 +3114,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     async renameBot(bot, name) {
       const r = await bridge.request("bots.rename", { bot, name });
       dispatch({ type: "bots", bots: state.bots.map((b) => (b.name === bot ? { ...b, display_name: r.display_name } : b)) });
+      // the routes' labels carry the bot name (Needs you, notifications): rebuild them with the new one
+      for (const row of state.threads[bot] ?? []) threadRoute(bot, row.thread);
     },
     async setAvatar(bot, data) {
       const r = await bridge.request("bots.set_avatar", data === null ? { bot, clear: true } : { bot, data });

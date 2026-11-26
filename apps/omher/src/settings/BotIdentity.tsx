@@ -222,7 +222,15 @@ export function NameEditor({ bot }: { bot: Bot }) {
       <button type="button" className="st-btn" onClick={() => void save()} disabled={busy} data-testid="rename-save">
         {busy ? t("id.saving") : t("id.save")}
       </button>
-      <button type="button" className="be-link quiet" onClick={() => setEditing(false)} disabled={busy}>
+      <button
+        type="button"
+        className="be-link quiet"
+        onClick={() => {
+          setEditing(false);
+          setErr("");
+        }}
+        disabled={busy}
+      >
         {t("id.cancel")}
       </button>
       <div className="be-hint">
