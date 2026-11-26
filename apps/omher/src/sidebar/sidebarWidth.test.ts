@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { CHAT_MIN, PANEL_MIN } from "../app/panelWidth";
+import { CHAT_MIN, OVERLAY_STRIP, PANEL_MIN } from "../app/panelWidth";
 import { SIDE_KEY, SIDE_MAX, SIDE_MIN, clampSide, readSideWidth, saveSideWidth, shownSideWidth, sideMax } from "./sidebarWidth";
 
 describe("sidebar width", () => {
@@ -21,8 +21,9 @@ describe("sidebar width", () => {
     // wide window with a wide panel open: chat still keeps CHAT_MIN
     expect(sideMax(1150, 500)).toBe(1150 - 500 - CHAT_MIN);
     expect(clampSide(400, 1150, 500)).toBe(290);
-    // narrow window (< 1100px): panel is an overlay, so panelW does not eat into sidebar room
-    expect(sideMax(900, 500)).toBe(SIDE_MAX);
+    // narrow window (< 1100px): overlay panel keeps at least OVERLAY_STRIP clear of the sidebar
+    expect(sideMax(900, 0)).toBe(SIDE_MAX);
+    expect(sideMax(900, 460)).toBe(900 - 460 - OVERLAY_STRIP);
     // panel maximised: sidebar may grow up to window - PANEL_MIN (capped at SIDE_MAX)
     expect(sideMax(700, 400, true)).toBe(700 - PANEL_MIN);
     // very narrow window: sidebar keeps its minimum
@@ -35,7 +36,7 @@ describe("sidebar width", () => {
     expect(readSideWidth()).toBe(342);
     expect(saveSideWidth(null)).toBeNull();
     expect(readSideWidth()).toBeNull();
-    for (const bad of ["", "wide", "0", "100", "900", "NaN", "Infinity"]) {
+    for (const bad of ["", "wide", "0", "100", "200", "900", "NaN", "Infinity"]) {
       localStorage.setItem(SIDE_KEY, bad);
       expect(readSideWidth(), bad).toBeNull();
     }

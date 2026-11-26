@@ -1,15 +1,21 @@
 /** Sidebar width the person dragged, kept on this computer. Nothing saved: tokens.css `--side-w` (248px). */
-import { CHAT_MIN, OVERLAY_BELOW, PANEL_MIN } from "../app/panelWidth";
+import { CHAT_MIN, OVERLAY_BELOW, OVERLAY_STRIP, PANEL_MIN } from "../app/panelWidth";
 
 export const SIDE_DEFAULT = 248;
-export const SIDE_MIN = 180;
+/** Wide enough for the footer's four nav buttons plus two usage rings without overflowing `.side`. */
+export const SIDE_MIN = 204;
 export const SIDE_MAX = 480;
 export const SIDE_KEY = "omher.sideWidth";
 
-/** The widest the sidebar may be in a window this wide alongside an open right panel (0 when closed or overlay). */
+/** The widest the sidebar may be in a window this wide alongside an open right panel (0 when closed). */
 export function sideMax(windowW: number, panelW = 0, panelMax = false): number {
   if (panelMax) return Math.max(SIDE_MIN, Math.min(SIDE_MAX, Math.round(windowW - PANEL_MIN)));
-  const keep = windowW < OVERLAY_BELOW ? CHAT_MIN : panelW + CHAT_MIN;
+  const keep =
+    windowW < OVERLAY_BELOW
+      ? panelW > 0
+        ? Math.max(CHAT_MIN, panelW + OVERLAY_STRIP)
+        : CHAT_MIN
+      : panelW + CHAT_MIN;
   return Math.max(SIDE_MIN, Math.min(SIDE_MAX, Math.round(windowW - keep)));
 }
 
@@ -46,4 +52,28 @@ export function saveSideWidth(w: number | null): number | null {
     /* no storage */
   }
   return next;
+}
+
+// Live target sidebar width shared with PanelResizer so it never reads a pre-mount default or a mid-transition rect.
+let liveSideW: number | null = null;
+const sideListeners = new Set<() => void>();
+
+export function getLiveSideWidth(): number {
+  if (liveSideW !== null) return liveSideW;
+  const saved = readSideWidth();
+  if (saved === null) return SIDE_DEFAULT;
+  const winW = typeof window !== "undefined" ? window.innerWidth : 1280;
+  return clampSide(saved, winW);
+}
+
+export function setLiveSideWidth(w: number): void {
+  const next = Math.round(w);
+  if (liveSideW === next) return;
+  liveSideW = next;
+  for (const fn of sideListeners) fn();
+}
+
+export function onSideWidth(fn: () => void): () => void {
+  sideListeners.add(fn);
+  return () => sideListeners.delete(fn);
 }
