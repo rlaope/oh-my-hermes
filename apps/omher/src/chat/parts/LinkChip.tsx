@@ -79,7 +79,17 @@ export function placedLabel(info: LinkInfo, p: LinkPlaces): string {
 function open(e: MouseEvent<HTMLAnchorElement>, url: string) {
   if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
   e.preventDefault();
-  void openExternal(url).catch(() => {});
+  void openLink(url);
+}
+
+/** Opens a web link as `new URL` reads it (`HTTPS://Host` becomes `https://host/`, which the opener's lower-case rule
+ *  accepts; the opener still refuses credentials). A failure goes to the app's error line, not away. */
+export async function openLink(url: string, opener: (u: string) => Promise<void> = openExternal): Promise<void> {
+  try {
+    await opener(new URL(url.trim()).href);
+  } catch (e) {
+    getStore().dispatch({ type: "error", message: t("lk.openFailed", { error: (e as { message?: string })?.message || String(e) }) });
+  }
 }
 
 /** `children` given (a markdown link with its own text): that text after the mark. Otherwise the label. A GitHub

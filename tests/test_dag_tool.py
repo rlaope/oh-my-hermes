@@ -267,9 +267,9 @@ class DefineTests(unittest.TestCase):
         self.assertEqual(result["topology"]["bottlenecks"][0], {"node": "api", "blocks": 2})
         # api and ui write code and no node reviews them, four nodes carry no judgement category, api and ui name no
         # review focus, and the run was defined without goal criteria (the define reply alone says so): advice, never
-        # a refusal.
+        # a refusal. `fast_eligible`: the graph (three build nodes, one verify node) fits the fast path.
         self.assertEqual(result["lint"], ["no_review_node", "no_judgement_node", "no_review_focus:api",
-                                          "no_review_focus:ui", "no_goal_criteria"])
+                                          "no_review_focus:ui", "no_goal_criteria", "fast_eligible"])
         self.assertEqual([(c["category"], c["nodes"], c["route"]["action"]) for c in result["calls"]],
                          [("quick", ["api"], "set"), ("unspecified-low", ["ui"], "set")])
         task = result["calls"][0]["tasks"][0]
@@ -535,8 +535,11 @@ class IdentityNodeTests(unittest.TestCase):
         (call_a,) = first["calls"]
         self.assertEqual((call_a["identity"], call_a["route"]["attempt"]), ("custom:qa", 1))
         # dev's chain has one entry: position 1 is exhausted, a typed refusal,
-        # not a silent hop onto qa's lane or the category's.
-        self.assertEqual((second["status"], second["reason"]), ("refused", "identity_chain_exhausted"), second)
+        # not a silent hop onto qa's lane or the category's. The node itself is
+        # settled (`retry`) and the refusal is the next wave's, kept apart.
+        self.assertEqual((second["status"], second["next_refused"]["reason"]),
+                         ("ok", "identity_chain_exhausted"), second)
+        self.assertEqual(second["settled"], {"node": "c", "outcome": "retry"})
         self.assertEqual(second.get("calls", []), [])
 
     def test_disabled_or_changed_selection_refuses_the_next_dispatch(self) -> None:
@@ -552,7 +555,8 @@ class IdentityNodeTests(unittest.TestCase):
                 mutate(document)
                 self._identities(home, document)
                 result = call(action="settle", run="feat", node="a", outcome="failed", provider_error=True)
-            self.assertEqual((result["status"], result["reason"]), ("refused", reason), result)
+            # The settle itself is on disk; the next dispatch is refused beside it.
+            self.assertEqual((result["status"], result["next_refused"]["reason"]), ("ok", reason), result)
             self.assertEqual(result.get("calls", []), [])
 
     def test_export_cannot_carry_a_selected_identity(self) -> None:
@@ -590,8 +594,8 @@ class IdentityNodeTests(unittest.TestCase):
         # a's retry is held only while siblings run; once the child budget is
         # spent the parent cannot stand in for a selected prompt and policy.
         self.assertEqual(retried["held_for_slots"], ["a"])
-        self.assertEqual((left["status"], left["reason"]),
-                         ("refused", "identity_capability_unavailable"), left)
+        self.assertEqual((left["status"], left["next_refused"]["reason"]),
+                         ("ok", "identity_capability_unavailable"), left)
         self.assertEqual(left.get("calls", []), [])
 
     def test_nodes_without_identity_keep_their_legacy_calls(self) -> None:

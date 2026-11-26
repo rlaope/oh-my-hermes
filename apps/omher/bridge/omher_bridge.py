@@ -1158,12 +1158,16 @@ def omh_path(which=None, environ=None, windows: bool | None = None) -> str | Non
         return found
     home = Path.home()
     data = Path(environ["XDG_DATA_HOME"]) if os.path.isabs(environ.get("XDG_DATA_HOME") or "") else home / ".local" / "share"
+    # `<data>/omh/current/venv` is the live generation; `<data>/omh/venv` is the pre-generation env, kept only as a
+    # fallback (an older omh, without the reads this page needs), so it is tried last
     if windows:
         local = environ.get("LOCALAPPDATA") or ""
-        found_in = [Path(local, "omh", "venv", "Scripts", "omh.exe")] if local else []
-        found_in.append(data / "omh" / "venv" / "Scripts" / "omh.exe")
+        roots = ([Path(local, "omh")] if local else []) + [data / "omh"]
+        found_in = [root / "current" / "venv" / "Scripts" / "omh.exe" for root in roots]
+        found_in += [root / "venv" / "Scripts" / "omh.exe" for root in roots]
     else:
-        found_in = [data / "omh" / "venv" / "bin" / "omh", home / ".local" / "bin" / "omh"]
+        found_in = [data / "omh" / "current" / "venv" / "bin" / "omh", home / ".local" / "bin" / "omh",
+                    data / "omh" / "venv" / "bin" / "omh"]
     for path in found_in:
         if path.is_file() and os.access(path, os.X_OK):
             return str(path)
@@ -8810,7 +8814,7 @@ class Bridge:
             raise BridgeError("busy", "omher is still making another bot")
         hermes = hermes_path()
         if not hermes:
-            return {"outcome": "failed", "line": "Hermes is not on this computer."}
+            return {"outcome": "failed", "reason": "no_hermes", "line": "Hermes is not on this computer."}
         self._creating = True
         try:
             code, output = await asyncio.to_thread(run_hermes_profile_create, hermes, name, self.home, PROFILE_CREATE_TIMEOUT)
@@ -8832,8 +8836,10 @@ class Bridge:
                     else f"It may still be making {name} through the running gateway.")
             line = (f"omher could not confirm that Hermes finished making {name}. {what} "
                     "Check with `hermes profile list` in a terminal." + (f"\n{said}" if said else ""))
-            return {"outcome": "unconfirmed", "line": line}
-        return {"outcome": "failed", "line": said or f"Hermes exited with code {code}."}
+            # `reason` and the parts let the page word this in its own language; `line` stays for logs
+            return {"outcome": "unconfirmed", "reason": "left" if leftovers else "running", "leftovers": leftovers,
+                    "said": said or "", "line": line}
+        return {"outcome": "failed", "reason": "hermes" if said else "exit", "code": code, "line": said or f"Hermes exited with code {code}."}
 
     async def op_tasks_linear(self, p) -> dict:
         """Tasks › Linear: whether the bot has a Linear MCP server in its config (rule 33). Hermes' gateway offers no
