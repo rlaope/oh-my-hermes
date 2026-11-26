@@ -4,6 +4,8 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+## 5.0.1 - 2026-11-26
+
 - **TUI: session picker shows conversations rather than background runs.** On a shared Hermes gateway, `/sessions` and
   `/resume` skip cron, subagent and other internal sources and empty stored runs, while keeping genuine `local-*` chats.
   The picker starts with up to 100 conversations; **Ctrl+G** loads older authorized history into the same filter on

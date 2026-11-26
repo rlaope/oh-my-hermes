@@ -34,6 +34,13 @@ SHORT_HINT = " · /whats-new lists it"
 EARLIER_TUI_STATE = ("tui/launch-skills.json",)
 
 WHATS_NEW: dict[str, tuple[str, ...]] = {
+    "5.0.1": (
+        "/sessions lists your conversations, not cron or subagent runs",
+        "The TUI follows Hermes' display.timestamps and display.show_cost",
+        "Ctrl+V pastes the clipboard's text when there is no image",
+        "In /dag, e opens the highlighted node's handoff",
+        "omh doctor says why a bot went quiet",
+    ),
     "5.0.0": (
         "A closed terminal's session comes back by itself on the next omh",
         "Code in the TUI reads in more than one colour; the accent is violet",
