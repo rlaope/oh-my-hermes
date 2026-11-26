@@ -10,7 +10,7 @@ import type { IBufferCell, IDisposable, Terminal } from "@xterm/xterm";
 import type { WebLinksAddon } from "@xterm/addon-web-links";
 import { openExternal } from "../../lib/openExternal";
 import { t } from "../../i18n";
-import { cellWrappedLinks, type CellRow } from "./engine-cell-links";
+import { cellWrappedLinks, URL_PATTERN, type CellRow } from "./engine-cell-links";
 
 /** The add-on's chunk loads with the first terminal (with xterm), never with the app. */
 let linksLoad: Promise<typeof WebLinksAddon> | null = null;
@@ -140,7 +140,7 @@ export function attachLinks(term: Terminal): () => void {
   void loadLinks().then(
     (Ctor) => {
       if (gone) return;
-      addon = new Ctor((e, uri) => void activateLink(e, uri), { hover: (e) => show(e), leave: hide });
+      addon = new Ctor((e, uri) => void activateLink(e, uri), { hover: (e) => show(e), leave: hide, urlRegex: URL_PATTERN });
       try {
         term.loadAddon(addon);
       } catch {

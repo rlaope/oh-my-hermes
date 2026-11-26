@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cellWrappedLinks, type CellRow } from "./engine-cell-links";
+import { cellWrappedLinks, URL_PATTERN, type CellRow } from "./engine-cell-links";
 
 // a screen from plain strings: a Hangul syllable or an emoji takes two columns, as xterm lays it out
 const wide = (ch: string) => /[ᄀ-ᇿ㄰-㆏가-힯]|\p{Extended_Pictographic}/u.test(ch);
@@ -100,5 +100,21 @@ describe("terminal links: an address the program broke across rows", () => {
       [2, 5, "https://github.com/a/b"],
       [8, 22, "https://b.dev/zzzzzzzzzzzzzzzzzz/"],
     ]);
+  });
+
+  it("a Korean particle written straight after the address is not part of it", () => {
+    const row = screen(["│ (https://github.com/ │", "│ sgl-project/만 보강  │"]);
+    const url = "https://github.com/sgl-project/";
+    expect(cellWrappedLinks(row, 0)).toEqual([{ y: 0, start: 3, end: 22, url }]);
+    expect(cellWrappedLinks(row, 1)).toEqual([{ y: 1, start: 2, end: 14, url }]);
+  });
+
+  it("the pattern the web-links add-on is given stops at Hangul, CJK and full-width punctuation", () => {
+    const m = (s: string) => s.match(URL_PATTERN)?.[0];
+    expect(m("https://github.com/만 링크로")).toBe("https://github.com/");
+    expect(m("https://example.com/a?b=1을")).toBe("https://example.com/a?b=1");
+    expect(m("https://example.com/x、次")).toBe("https://example.com/x");
+    expect(m("(https://example.com/a?b=1#c).")).toBe("https://example.com/a?b=1#c");
+    expect(m("https://example.com/путь")).toBe("https://example.com/путь");
   });
 });

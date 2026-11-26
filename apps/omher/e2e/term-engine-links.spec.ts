@@ -219,3 +219,16 @@ test("an address the program broke across the rows of a table cell opens whole f
   await settle(page);
   expect(await opened(page)).toEqual(urls);
 });
+
+test("a Korean particle written straight after an address is not part of the link", async ({ page }) => {
+  // `https://github.com/만`: the add-on's own pattern took the particle into the link and the underline ran on
+  await openApp(page);
+  await newTerminal(page);
+  await feed(page, "\r\n링크는 https://example.com/x만 열립니다\r\n");
+  const key = await modKey(page);
+  const p = await hover(page, "https://example.com/x");
+  await page.keyboard.down(key);
+  await page.mouse.click(p.x, p.y);
+  await page.keyboard.up(key);
+  await expect.poll(() => opened(page)).toEqual(["https://example.com/x"]);
+});

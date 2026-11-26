@@ -23,8 +23,13 @@ export interface CellLink {
 }
 
 const BORDERS = new Set(["│", "┃", "║", "|"]);
-// the web-links add-on's own pattern, so a joined address ends where an unbroken one would
-const URL_RE = /(https?|HTTPS?):[/]{2}[^\s"'!*(){}|\\^<>`]*[^\s"':,.!?{}|\\^~[\]`()<>]/g;
+// the web-links add-on's pattern, less Hangul, CJK, kana and full-width punctuation: Korean prose writes a particle
+// straight after an address (`https://github.com/만`), and the add-on's pattern took it into the link. A program
+// that prints such a path percent-encodes it. The add-on is given the same pattern (engine-links.ts), so a joined
+// address ends where an unbroken one does.
+const NOT_URL = "\\s\\u1100-\\u11ff\\u2e80-\\u9fff\\uac00-\\ud7af\\uf900-\\ufaff\\ufe30-\\ufe4f\\uff00-\\uffef";
+export const URL_PATTERN = new RegExp(`(https?|HTTPS?):[/]{2}[^${NOT_URL}"'!*(){}|\\\\^<>\`]*[^${NOT_URL}"':,.!?{}|\\\\^~[\\]\`()<>]`);
+const URL_RE = new RegExp(URL_PATTERN.source, "g");
 // a piece that ends here may go on below even with room left on its row; `.`, `,`, `:` and `?` also end sentences,
 // so after them only a full row (a word cut at the row's end) joins
 const BREAKS_AFTER = /[/\-_=&#%+~@]$/;
