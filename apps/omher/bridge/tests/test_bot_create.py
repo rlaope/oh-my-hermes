@@ -194,8 +194,24 @@ class Create(unittest.TestCase):
 
     def test_a_refused_create_shows_hermes_error_line(self):
         self.effect = lambda name: (1, "Error: Cannot create profile 'pr-bot': a running gateway still owns it\n")
-        self.assertEqual(self.op(name="pr-bot"), {"outcome": "failed",
+        self.assertEqual(self.op(name="pr-bot"), {"outcome": "failed", "reason": "hermes", "code": 1,
                                                   "line": "Error: Cannot create profile 'pr-bot': a running gateway still owns it"})
+
+    def test_a_silent_failed_create_has_an_exit_reason_not_english_only(self):
+        self.effect = lambda name: (3, "")
+        got = self.op(name="pr-bot")
+        self.assertEqual((got["outcome"], got["reason"], got["code"]), ("failed", "exit", 3))
+
+    def test_unconfirmed_carries_a_reason_and_parts_for_the_page(self):
+        def quiet(name):
+            write(self.home / "profiles" / name / "config.yaml", "model: x\n")
+            return 0, ""
+        self.effect = quiet
+        got = self.op(name="q-bot")
+        self.assertEqual((got["reason"], got["leftovers"], got["said"]), ("left", ["profiles/q-bot"], ""))
+        self.effect = lambda name: (None, "")
+        got = self.op(name="pr-bot")
+        self.assertEqual((got["reason"], got["leftovers"]), ("running", []))
 
     def test_a_name_hermes_refuses_or_one_on_disk_runs_nothing(self):
         for bad in ("PR-Bot", "a b", "-p", "x;y", "", None, 7, ["x"], "a" * 65):
@@ -228,7 +244,7 @@ class Create(unittest.TestCase):
 
     def test_without_hermes_nothing_runs(self):
         with mock.patch.object(ob, "hermes_path", lambda *a, **k: None):
-            self.assertEqual(self.op(name="pr-bot"), {"outcome": "failed", "line": "Hermes is not on this computer."})
+            self.assertEqual(self.op(name="pr-bot"), {"outcome": "failed", "reason": "no_hermes", "line": "Hermes is not on this computer."})
         self.assertEqual(self.runs, [])
 
     def test_one_create_at_a_time(self):

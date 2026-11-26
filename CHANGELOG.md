@@ -4,6 +4,14 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: the New bot card, the answered-interview line and `HTTPS://` links read and work in every language.** The
+  bridge sent English sentences ("unconfirmed", "Hermes is not on this computer.", the `busy` and `exists`
+  refusals, which also covers a leftover `profiles/<name>/` without config.yaml) and the card showed them in ko/zh/ja,
+  the store built "2 of 3" for an answered interview, and an upper-case `HTTPS://` link did nothing because the
+  opener only takes lower case and the failure was swallowed. The bridge now returns a `reason` and its parts that
+  `apps/omher/src/addbot/NewBot.tsx` words from i18n keys, the answered line uses `card.givenOfTotal`, and
+  `apps/omher/src/chat/parts/LinkChip.tsx` opens `new URL(url).href` and shows a refused open on the error line.
+
 - **omher terminal: an address a table cell breaks across rows opens whole.** Claude Code's markdown tables put
   real newlines inside a cell, so `https://github.com/` sat on one row and `sgl-project/sglang/pull/…` under it; the
   web-links add-on joins only rows xterm itself wrapped, linked the first piece alone, and Cmd+click opened

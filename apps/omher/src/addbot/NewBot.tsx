@@ -5,7 +5,7 @@
 // (OMH reaches a new profile with `omh apply --profile <name>` or the next `omh update`) waits for the person's Apply
 // template, here or on its page.
 import { useEffect, useRef, useState } from "react";
-import type { BotTemplate, BotTemplates } from "../lib/protocol";
+import type { BotCreate, BotTemplate, BotTemplates } from "../lib/protocol";
 import { getStore, useStore } from "../state/store";
 import { t, tx, type Key } from "../i18n";
 import { Spinner } from "../ui";
@@ -34,6 +34,28 @@ const NAME_LINE: Record<Exclude<NameCheck, "ok" | "empty">, Key> = {
   omh: "ab.nameOmh",
   taken: "ab.nameTaken",
 };
+
+/** The words for a create that did not finish, in the UI language; only Hermes' own output (`line` of reason
+ *  `hermes`, `said`) is shown as Hermes wrote it. */
+export function createLine(r: BotCreate, name: string): string {
+  if (r.outcome === "unconfirmed") {
+    const said = r.said ? `\n${r.said}` : "";
+    if (r.reason === "left") return t("ab.unconfirmedLeft", { name, what: (r.leftovers ?? []).join(", ") }) + said;
+    return t("ab.unconfirmedRunning", { name }) + said;
+  }
+  if (r.reason === "no_hermes") return t("ab.noHermes");
+  if (r.reason === "hermes" && r.line) return r.line;
+  if (r.reason === "exit") return t("ab.exitCode", { code: String(r.code ?? "") });
+  return t("ab.createFailed");
+}
+
+/** A bridge refusal of `bots.create` by its stable code; anything else keeps the bridge's own message. */
+export function refusalLine(e: { code?: string; message?: string }, name: string): string {
+  if (e.code === "exists") return t("ab.nameOnDisk", { name });
+  if (e.code === "busy") return t("ab.createBusy");
+  if (e.code === "bad_request") return t("ab.nameRule");
+  return e.message || t("ab.createFailed");
+}
 
 export function NewBot({ onBack, onDone }: { onBack: () => void; onDone: () => void }) {
   const s = useStore();
@@ -70,11 +92,11 @@ export function NewBot({ onBack, onDone }: { onBack: () => void; onDone: () => v
       const r = await withBridge((b) => b.request("bots.create", { name }));
       if (r.outcome === "unconfirmed") {
         // Hermes did not say it finished: nothing is listed, applied or sent; the person checks with Hermes
-        setStep({ kind: "unconfirmed", line: r.line || t("ab.createFailed") });
+        setStep({ kind: "unconfirmed", line: createLine(r, name) });
         return;
       }
       if (r.outcome !== "ok" || !r.bot) {
-        setStep({ kind: "form", line: r.line || t("ab.createFailed") });
+        setStep({ kind: "form", line: createLine(r, name) });
         return;
       }
       const bot = r.bot;
@@ -92,7 +114,7 @@ export function NewBot({ onBack, onDone }: { onBack: () => void; onDone: () => v
       else if (await applyTemplate(bot, template)) setStep({ kind: "done", bot, applied: true, notes });
       else setStep({ kind: "waiting", bot, template });
     } catch (e) {
-      setStep({ kind: "form", line: (e as { message?: string })?.message || t("ab.createFailed") });
+      setStep({ kind: "form", line: refusalLine((e ?? {}) as { code?: string; message?: string }, name) });
     } finally {
       creating.current = false;
     }

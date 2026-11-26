@@ -1223,3 +1223,15 @@ describe("a reopened chat keeps the words before a question once", () => {
     expect(said(again)).toEqual([note]);
   });
 });
+
+describe("the answered-interview line", () => {
+  it("is built from an i18n key in every language, never English-only", async () => {
+    const { t } = await import("../i18n");
+    for (const l of ["en", "ko", "zh", "ja"] as const) {
+      const line = t("card.givenOfTotal", { given: "2", n: "3" }, l);
+      expect(line).toContain("2");
+      expect(line).toContain("3");
+      if (l !== "en") expect(line).not.toContain(" of ");
+    }
+  });
+});
