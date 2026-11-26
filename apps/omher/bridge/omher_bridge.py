@@ -57,7 +57,7 @@ try:
 except ImportError:
     msvcrt = None
 
-VERSION = "1.2.2"
+VERSION = "1.2.3"
 BOT_CHAT_TITLE = "Bot Chat"
 FOLDER_CHAT_PREFIX = "omher · "
 MAX_FOLDER_CHATS = 16
