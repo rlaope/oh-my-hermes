@@ -4,6 +4,12 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher SSH bots: only the actions that work are offered, and removing a computer leaves a bot open.** The row
+  menu offered Restart (and an offline chat offered Start) for a bot on another computer, which the bridge always
+  refuses; they are no longer shown for it. Removing the computer whose bot was open left the "Pick a bot" pane:
+  the first listed bot opens now (a chat moves to it, Settings stays). Cancelling the Connect over SSH card while
+  Check was still running left its ssh tunnel up until the next check; it ends when the check answers.
+  `apps/omher/src/state/store.ts`, `apps/omher/src/peers/AttachCard.tsx`.
 - **omher threads: what you do in an open thread acts on that thread.** Esc with a thread open interrupted the
   bot's main chat (and did nothing when only the thread ran); it now stops the open thread's turn and leaves the main
   chat alone. Thread rows sit inside their bot's sidebar row, so a slow press on a thread or its × lifted the bot for
