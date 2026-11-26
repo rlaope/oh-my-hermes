@@ -435,7 +435,7 @@ of review.
   `verification_commands: [...]` beside its prose `integration_checks`. The
   field is optional and additive — a unit that declares none carries no key and
   its contract stays byte-identical to one frozen before the field existed. At
-  freeze time each command is bounded (at most 8 per unit, 240 chars each), may
+  freeze time each command is bounded (at most 8 per unit, 240 UTF-8 bytes each), may
   not be blank, and is split with `shlex` so a command no dispatcher could run
   is refused while the operator is still holding it. Leading `NAME=VALUE`
   tokens become environment overrides (this repo's own gate is spelled
@@ -478,7 +478,7 @@ of review.
   operator chose to check, and nothing ties them to the task: a compile pass
   and a few same-package modules pass whether or not the change is right. A
   unit may also declare `task_linked_test_runner`, a command prefix such as
-  `PYTHONPATH=tests python -m unittest` (at most 200 chars, parsed at freeze
+  `PYTHONPATH=tests python -m unittest` (at most 200 UTF-8 bytes, parsed at freeze
   like any verification command). The frozen unit carries it, and its prose
   "unit tests covering the unit's file_scope pass" check becomes a criterion
   naming the runner and the rule. Under `--run-verification`, after the

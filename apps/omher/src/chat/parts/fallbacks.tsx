@@ -25,7 +25,7 @@ export function ActivityFallback({ item, live }: ActivitySlotProps) {
     <div className="line" data-testid="activity-fallback">
       {live ? <Spinner /> : <span className="line-ic">✓</span>}
       <span className="line-t">{text}</span>
-      {live && <span className="line-tm">{elapsed(ms)}</span>}
+      {live && <span className="line-tm">{elapsed(ms, true)}</span>}
     </div>
   );
 }

@@ -4,6 +4,32 @@ Checklist for adding a skill to the OMH catalog. Every surface below is
 enforced by a test; skipping one fails CI with an actionable message naming
 the file and structure to edit.
 
+## 0. Admission gate (base-model lift & upstream Hermes parity)
+
+Before authoring a new installable `omh-*` skill, confirm it earns its permanent
+index slot against both 2026 frontier base-model capabilities and upstream
+`NousResearch/hermes-agent` skills:
+
+1. **Declare a concrete value mechanism** in `src/skills/value_mechanisms.py`
+   (`control_plane`, `executable_toolkit`, `counter_default_guardrail`,
+   `curated_reference_data`, or `hermes_runtime_contract`). A prose-only
+   checklist without a deterministic script, CLI, schema, or counter-default
+   failure mode belongs in `prose_template_review` and should not be added as a
+   new top-level skill.
+2. **Verify upstream Hermes parity**: run
+   `uv run python -m omh.cli docs hermes-skill-parity --check`. Ensure the name
+   does not collide with `HERMES_BUNDLED_SKILL_NAMES` or
+   `HERMES_OPTIONAL_SKILL_NAMES`, and add a `HermesSkillLine` (for bundled
+   skills) or conditional `HermesOptionalSkillLine` (for optional skills) when
+   adjacent to an upstream Hermes skill.
+3. **Supply `with-vs-without` lift cases**: add at least 3 failure scenarios
+   (plus 1 negative control) to `benchmarks/skill-lift/v1/corpus/tasks.json`
+   and validate offline with
+   `uv run python benchmarks/skill-lift/v1/bench.py validate`. Live retention
+   requires passing the 2-model lift gate (`>= +15%p` pass-rate delta or
+   `>= 50%` failure reduction, `0` negative-control regressions, `<= 1.5x`
+   token overhead).
+
 ## 1. Define the skill (single registration point)
 
 - Add the `SkillDefinition` to `src/skills/catalog_definitions.py`, which is

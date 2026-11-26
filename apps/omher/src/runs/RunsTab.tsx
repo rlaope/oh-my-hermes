@@ -109,8 +109,9 @@ function RunRow({ r, on, nowS, onPick, testId = "run-row" }: { r: AgentRunSummar
             {cliName(r.agent)}
           </span>
         )}
+        {/* the plan's title, the name its header uses; two plans with one goal read apart (the goal is in the tooltip) */}
         <span className="rn-title" data-testid="run-row-text">
-          {r.goal || r.title}
+          {r.title || r.goal}
         </span>
         <span className="rn-n">
           {r.stale ? (
@@ -200,7 +201,7 @@ export function RunsTab({ bot }: { bot: Bot }) {
   return (
     <div className="pn-body rn" data-testid="panel-runs" data-list={lists ? "open" : "closed"}>
       <div className="pn-sec">
-        {t("plans.of", { bot: bot.display_name })}
+        <span className="pn-of">{tx("plans.of", { bot: <span className="pn-name">{bot.display_name}</span> })}</span>
         {selected ? (
           <button type="button" className="rn-toggle" data-testid="run-list-toggle" aria-expanded={listOpen} onClick={() => setListOpen((v) => !v)}>
             {runs.length ? t("plans.all", { n: runs.length + cli.length }) : t("plans.cliAll", { n: cli.length })}

@@ -216,11 +216,14 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # 546679 -> 550928 and the digests re-derived: app-work-intake adds one row to each producer (+4249 and
             # +952 with separators); dropping only that row reproduces 8e3f5c83...d898 at 546679 and
             # 7bf53703...578d at 146420.
-            # 550928 -> 555338 and 147372 -> 148315, the digests re-derived: bot-template then adds one row to each
-            # producer (+4410 and +943 with separators); dropping only that row reproduces 2fec48bb...cbd1 and
-            # adad03a4...9d4b.
-            (skill_capabilities, 555338, FULL_ROW_DELTA_CAP,
-             '5ae2717c87d8b50e4d74a2aefc854ecb09836dcbdb2c5c2077d81e1646bef6eb',
+            # 550928 -> 551032: automation-blueprint keeps its scheduled-spend guardrail inline under universal
+            # progressive disclosure (+104, itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row
+            # moved, and the digest became 7a56ace7...e763f.
+            # 551032 -> 555442 and the digest re-derived: merged with the bot-template branch, bot-template adds
+            # one row to each producer (+4410 and +943 with separators); dropping only that row reproduces
+            # 7a56ace7...e763f at 551032 and adad03a4...9d4b at 147372.
+            (skill_capabilities, 555442, FULL_ROW_DELTA_CAP,
+             '9a07210f82e60876214bbea4219f409136319c42f8ef87702e6c0ca56d5cd690',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 148315, STANDALONE_ROW_DELTA_CAP,
              'b8cefdf3ebb50457f29264250068856d9302bffc0748290527bbcf0629fe7bf4',
@@ -598,9 +601,15 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # The cross-platform workflows then add app-work-intake and move frontend (the Figma frame line),
         # operating-rhythm (meeting to issues) and wiki (vault as knowledge), merged with both branches above;
         # the pin before it was ba130d2d...7694.
-        # bot-template's body then joins the legacy set; no existing body moves, and the pin before it was
-        # 2f25c65f...7a09.
-        self.assertEqual(_digest(legacy_hashes), '20d37f3510bbfbd7445d575fedd0cb3130ed9991a420a385111dd50991a6f669')
+        # Universal progressive disclosure for non-bespoke `omh-*` skills and upstream Hermes
+        # bundled/optional deferrals update the legacy Hermes bodies (lowering total body size
+        # from 1,549,057 -> 1,348,078 and repeated bytes from 93,533 -> 92,654); re-derived from producer.
+        # Companion toolkit pointers in quality_bar for data-share-review, commit-pr-authoring, and
+        # inference-serving update those three legacy bodies; re-derived from the producer.
+        # Merged with the bot-template branch: bot-template's body, rendered under universal progressive
+        # disclosure, joins the legacy set; no existing body moves, and dropping only that body reproduces
+        # 47bcd46d...a50a. Re-derived from the producer.
+        self.assertEqual(_digest(legacy_hashes), '776c5e14bdeae196d49329d2cac203b03a7dd294a01fca677488a1eb694a5fe5')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -627,8 +636,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 83439 -> 91443: the one reply line takes back the turn-ending rule (+276 in each repeated section).
         # 91443 -> 91785: skill-eval's Workflow Lane rail adds 342.
         # 91785 -> 93533: app-work-intake's Workflow Lane (342) and Runtime Evidence (1406) rails.
-        # 93533 -> 93875: bot-template's Workflow Lane rail adds 342.
-        self.assertEqual(legacy['repeated']['bytes'], 93875)
+        # 93533 -> 92654: universal progressive disclosure for non-bespoke `omh-*` skills drops repeated
+        # `Do Not Use When` defaults (-879).
+        # 92654 -> 92996: merged with the bot-template branch, bot-template's Workflow Lane rail adds 342;
+        # dropping only that body reproduces 92654.
+        self.assertEqual(legacy['repeated']['bytes'], 92996)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
         self.assertLessEqual(delta, REPEATED_DELTA_CAP)
@@ -662,7 +674,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             'role_context_chars_max': 2600,
             'full_capability_skill_item_chars_max': 9000,
             'standalone_capability_skill_item_chars_max': 2200,
-            'full_profile_skill_body_chars': 1600000,  # Re-derived from 1450927 measured, +10%, up to the next 50,000 (itemized at FULL_PROFILE_SKILL_BODY_MEASURED_CHARS).
+            'full_profile_skill_body_chars': 1500000,  # Re-derived from 1348472 measured, +10%, up to the next 50,000 (itemized at FULL_PROFILE_SKILL_BODY_MEASURED_CHARS).
             'full_profile_skill_body_repeated_chars': 100000,  # Re-derived from 84569 measured, +10%, up to the next 10,000.
             'skill_density_filler_hits': 0,
         }

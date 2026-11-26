@@ -15,41 +15,13 @@ metadata:
 
 # Idea To Deploy
 
-This is a Hermes-native `idea-to-deploy` workflow skill.
+Required: product idea, target user or customer signal, success metric, repo or app context. Output: stage rail, decision gates, executor handoff criteria, verification and deploy/monitor status boundaries.
 
 ## Why This Exists
 
 `idea-to-deploy` exists because an idea becomes a running product through decisions nobody owns together: it keeps metric, plan, executor, and release evidence as separate gates.
 
-## Do Not Use When
-
-- The task is already a concrete repo change whose stopping point is one PR-ready cycle, not product or release operations; use `ulw-work`.
-- The request is a settings-only change, one bounded edit that is explicitly low-risk and has a direct owner and verification path, or a direct answer/diagnosis; handle it directly instead of opening a product delivery loop.
-
-## Examples
-
-Good example:
-
-- Prompt: idea-to-deploy: turn this onboarding idea into a scoped plan, implementation handoff, QA gate, and release path.
-- Expected behavior: Prepare the idea-to-release lane while keeping implementation, QA, and deploy evidence observed-only.
-- Why: The request spans product shaping through deploy readiness instead of a single task.
-
-Bad example:
-
-- Prompt: idea-to-deploy: build the whole app and deploy it, I will check later.
-- Expected behavior: Refuse the single jump: ask for the success metric and scope, then produce the stage rail with an owner per stage.
-- Why: An unscoped build has no acceptance test and no rollback.
-
-## Completion Checklist
-
-- The idea, user, success metric, and non-goals are written down; each stage has an owner and the skill that runs it.
-- Plan acceptance and executor choice precede any handoff; where it runs and how secrets are provided are decided before deploy.
-
-## Recovery Notes
-
-- If the success metric or release scope is missing, retain the supplied idea and user value, mark delivery planning unresolved, and hand back the stage rail with the missing decision before an executor handoff.
-- If plan acceptance or executor choice is absent, retain the prepared decision gates and stage rail, mark the coding handoff unresolved, and hand back the acceptance or runtime-choice question.
-- If deploy evidence is missing after verification, retain the observed verification results, mark deploy and monitoring not_observed, and hand back the stage rail with the deploy evidence gate still open.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -84,29 +56,22 @@ Handoff policy:
 
 Keep idea shaping, decision gates, planning, release narration, and status in Hermes; prepare selected executor/runtime handoffs only for accepted code work and record deploy/monitoring only from observed operator or wrapper evidence.
 
-Required inputs:
-
-- product idea
-- target user or customer signal
-- success metric
-- repo or app context
-
-Expected outputs:
-
-- stage rail
-- decision gates
-- executor handoff criteria
-- verification and deploy/monitor status boundaries
-
-Artifact expectations:
-
-- app delivery loop status record when the wrapper captures stage acceptance or observations
-
 Safety rules:
 
 - Do not claim implementation, deploy, health checks, rollback, or monitoring happened from a prepared loop.
 - Keep coding, release, and monitoring observations as separate evidence gates.
 - Ask for missing success metric, release scope, or executor choice before preparing a handoff.
+
+## Completion Checklist
+
+- The idea, user, success metric, and non-goals are written down; each stage has an owner and the skill that runs it.
+- Plan acceptance and executor choice precede any handoff; where it runs and how secrets are provided are decided before deploy.
+
+## Recovery Notes
+
+- If the success metric or release scope is missing, retain the supplied idea and user value, mark delivery planning unresolved, and hand back the stage rail with the missing decision before an executor handoff.
+- If plan acceptance or executor choice is absent, retain the prepared decision gates and stage rail, mark the coding handoff unresolved, and hand back the acceptance or runtime-choice question.
+- If deploy evidence is missing after verification, retain the observed verification results, mark deploy and monitoring not_observed, and hand back the stage rail with the deploy evidence gate still open.
 
 ## Runtime Evidence
 

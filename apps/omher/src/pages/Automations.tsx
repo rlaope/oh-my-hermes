@@ -152,9 +152,11 @@ export function AutomationsPage() {
                   {b.display_name} <span className="pg-n">{counts[b.name]}</span>
                 </button>
               ))}
+            <span className="pg-filters-end">
             <span className="pg-summary" data-testid="auto-summary">
               {summary}
             </span>
+            <span className="pg-new">
             <button
               type="button"
               className="pg-btn"
@@ -182,6 +184,8 @@ export function AutomationsPage() {
               <PlusIcon size={12} />
               {t("auto.new")}
             </button>
+            </span>
+            </span>
           </div>
           {err && (
             <p className="pg-err" role="alert" data-testid="page-error">
@@ -451,6 +455,9 @@ function NewForm({ bots, initial, onDone }: { bots: Bot[]; initial?: string; onD
         <span>{t("auto.form.schedule")}</span>
         <input value={schedule} onChange={(e) => setSchedule(e.target.value)} placeholder={t("auto.form.schedulePh")} maxLength={200} data-testid="form-schedule" />
       </label>
+      <p className="au-f-hint" data-testid="form-schedule-hint">
+        {t("auto.form.hint")}
+      </p>
       <label className="au-f">
         <span>{t("auto.form.prompt")}</span>
         <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={t("auto.form.promptPh")} rows={3} maxLength={8000} data-testid="form-prompt" />
@@ -469,13 +476,12 @@ function NewForm({ bots, initial, onDone }: { bots: Bot[]; initial?: string; onD
           testId="form-deliver"
         />
       </div>
-      <p className="au-f-hint">{t("auto.form.hint")}</p>
       {err && (
-        <p className="pg-err" role="alert" data-testid="form-error">
+        <p className="pg-err au-f-err" role="alert" data-testid="form-error">
           {err}
         </p>
       )}
-      <div className="pg-btns">
+      <div className="pg-btns au-f-btns">
         <button type="submit" className="pg-btn pri" disabled={!ready || busy} data-testid="form-add">
           {t("auto.form.add")}
         </button>
@@ -588,7 +594,7 @@ function NewWatchForm({ bots, initial, onDone }: { bots: Bot[]; initial?: string
         </p>
       )}
       <p className="au-f-hint">{t("watch.form.hint", { bot: bot?.display_name ?? "" })}</p>
-      <div className="pg-btns">
+      <div className="pg-btns au-f-btns">
         <button type="submit" className="pg-btn pri" disabled={!ready} data-testid="watch-form-send">
           {t("watch.form.send", { bot: bot?.display_name ?? "" })}
         </button>

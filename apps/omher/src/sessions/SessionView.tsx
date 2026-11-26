@@ -27,7 +27,9 @@ import type { Bot } from "../lib/protocol";
 import { AgentMark } from "./AgentMark";
 import { fgName, TermRowMark } from "./TermRowMark";
 import { SessionFace } from "./SessionFace";
-import { agentDef, agentLabel, continues, GONE, isCustom, isGone, STOPS_BACKGROUND, draftOpen, folderChoices, folderName, hermesOnly, missingNote, opensAs, parentPath, sessionMode, termFallbackName, termMarkAgent, terminalNote, tildePath, type AgentId, type OpenAs, type SessionRec } from "./agents";
+import { agentDef, agentLabel, continues, GONE, isCustom, isGone, STOPS_BACKGROUND, draftOpen, folderChoices, folderName, hermesOnly, missingNote, opensAs, parentPath, sessionMode, termFallbackName, termMarkAgent, terminalNote, termStatus, tildePath, type AgentId, type OpenAs, type SessionRec, type Unseen } from "./agents";
+import { useTermFace } from "./termActivity";
+import { usePendingRequests } from "./termShare";
 import { pickTitle } from "./titles";
 import { t as tr, tx, type Key } from "../i18n";
 import { windowWatched } from "../lib/notify";
@@ -841,6 +843,22 @@ function SessionModel({ rec, options, note }: { rec: SessionRec; options: ModelO
   );
 }
 
+/** A running terminal's header state, read as its TERMINALS row reads it (termStatus): Working, with the pulsing dot,
+ *  only while output flows or its program reports progress; Needs you while a bot asks to type into it; else Ready,
+ *  with a still dot. A process that is alive but idle at its prompt is not shown as busy. */
+function TermHeadState({ rec, unseen }: { rec: SessionRec; unseen: Unseen | undefined }) {
+  const { act, now } = useTermFace(rec.id, rec.startedAt, true);
+  const asked = usePendingRequests().some((r) => r.sessionId === rec.id);
+  const st = asked ? "bell" : termStatus({ status: rec.status, exitCode: rec.exitCode, lastOut: act.progress ? now : act.lastOut }, unseen, now);
+  const [cls, key]: [string, Key] = st === "busy" ? ["running", "ss.working"] : st === "bell" ? ["running idle needs", "ss.needsYou"] : ["running idle", "ss.ready"];
+  const text = tr(key);
+  return (
+    <span className={`ss-head-st term ${cls}`} title={text} data-testid="session-status" data-state={st ?? "idle"}>
+      {text}
+    </span>
+  );
+}
+
 export function SessionView() {
   const s = useStore();
   const ss = useSessions();
@@ -980,13 +998,17 @@ export function SessionView() {
             <span data-testid="session-agent">{label}</span>
           </span>
           <span className="ss-head-now">
-            <span
-              className={`ss-head-st ${rec.view === "terminal" && canToggle ? "mode" : rec.status}${mode === "terminal" ? " term" : ""}${showChat && !turn ? " idle" : ""}${showChat && needs ? " needs" : ""}`}
-              title={status}
-              data-testid="session-status"
-            >
-              {status}
-            </span>
+            {termHead && rec.status === "running" && !rec.paused ? (
+              <TermHeadState rec={rec} unseen={unseen} />
+            ) : (
+              <span
+                className={`ss-head-st ${rec.view === "terminal" && canToggle ? "mode" : rec.status}${mode === "terminal" ? " term" : ""}${showChat && !turn ? " idle" : ""}${showChat && needs ? " needs" : ""}`}
+                title={status}
+                data-testid="session-status"
+              >
+                {status}
+              </span>
+            )}
             {bg > 0 && (
               <>
                 <span className="ss-head-bg" data-testid="session-background" title={bgText}>

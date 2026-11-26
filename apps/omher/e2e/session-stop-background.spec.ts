@@ -145,7 +145,7 @@ test("the subagent's card and its ask end at one right edge; the head says Waiti
   // looking elsewhere, the strip names it; a cut line can only end inside a word, never on a lone " · "
   await page.getByTestId("bot-friren").click();
   const line = page.getByTestId("needs-line");
-  await expect(line).toHaveText("1 needs you · web-app · Claude Code: Allow echo gamma > c.txt?");
+  await expect(line).toHaveText("1 needs you · web-app · Claude Code");
   const loose = await line.evaluate((el) => {
     const out: string[] = [];
     const walk = (n: Node) => {

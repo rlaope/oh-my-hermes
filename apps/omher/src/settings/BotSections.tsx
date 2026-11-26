@@ -69,7 +69,7 @@ export function BotSections({ bot }: { bot: Bot }) {
 
       <PlatformsSection bot={bot} />
 
-      <Head title={t("bp.persona")} onEdit={page ? () => edit("soul") : undefined} testId="bp-edit-soul" />
+      <div className="st-gh">{t("bp.persona")}</div>
       <div className="st-grp bp-grp" data-testid="bp-persona">
         {page === undefined ? (
           <Loading />
@@ -78,7 +78,7 @@ export function BotSections({ bot }: { bot: Bot }) {
             {err}
           </p>
         ) : (
-          <Soul soul={page.soul} />
+          <Soul soul={page.soul} onEdit={() => edit("soul")} />
         )}
       </div>
 
@@ -112,29 +112,46 @@ function Loading() {
   );
 }
 
-function Head({ title, onEdit, testId }: { title: string; onEdit?: () => void; testId: string }) {
+/** Edit, on the right of a file card's header: the same place for the persona and each memory file. */
+function EditLink({ onEdit, testId }: { onEdit: () => void; testId: string }) {
   return (
-    <div className="st-gh bp-gh">
-      <span>{title}</span>
-      {onEdit && (
-        <button type="button" className="bp-link" onClick={onEdit} title={t("bp.editTip")} data-testid={testId}>
-          {t("bp.edit")}
-        </button>
-      )}
-    </div>
+    <button type="button" className="bp-link" onClick={onEdit} title={t("bp.editTip")} data-testid={testId}>
+      {t("bp.edit")}
+    </button>
   );
 }
 
-function Soul({ soul }: { soul: BotPage["soul"] }) {
+function Soul({ soul, onEdit }: { soul: BotPage["soul"]; onEdit: () => void }) {
   const problem = fileProblem(soul);
-  if (problem) return <p className="bp-empty bad">{problem}</p>;
-  if (soul.state === "missing") return <p className="bp-empty" data-testid="bp-soul-missing">{t("bp.noSoul")}</p>;
-  return (
-    <div className="bp-file">
+  // asking the bot to write or fix the file is offered whatever state it is in
+  const head = (
+    <div className="bp-mem-h">
       <div className="bp-meta">
         <code>{soul.file}</code>
-        <span data-testid="bp-soul-size">{fileSize(soul.size ?? 0)}</span>
+        {!problem && soul.state !== "missing" && <span data-testid="bp-soul-size">{fileSize(soul.size ?? 0)}</span>}
       </div>
+      <EditLink onEdit={onEdit} testId="bp-edit-soul" />
+    </div>
+  );
+  if (problem)
+    return (
+      <div className="bp-file">
+        {head}
+        <p className="bp-empty bad">{problem}</p>
+      </div>
+    );
+  if (soul.state === "missing")
+    return (
+      <div className="bp-file">
+        {head}
+        <p className="bp-empty" data-testid="bp-soul-missing">
+          {t("bp.noSoul")}
+        </p>
+      </div>
+    );
+  return (
+    <div className="bp-file">
+      {head}
       {soul.lossy && <p className="bp-note">{t("bp.lossy")}</p>}
       {soul.text.trim() ? (
         <pre className="bp-text" data-testid="bp-soul-text">
@@ -164,13 +181,10 @@ function Memory({ m, onEdit }: { m: MemoryTarget; onEdit: () => void }) {
           )}
         </div>
         {/* a switched-off target: the bot cannot change it, so Edit is not offered (the note below says why) */}
-        {m.enabled && (
-          <button type="button" className="bp-link" onClick={onEdit} title={t("bp.editTip")} data-testid={`bp-edit-${m.target}`}>
-            {t("bp.edit")}
-          </button>
-        )}
+        {m.enabled && <EditLink onEdit={onEdit} testId={`bp-edit-${m.target}`} />}
       </div>
-      {!problem && (
+      {/* an empty file says so below; an empty track beside it would only repeat that */}
+      {!problem && m.chars > 0 && (
         <div className="bp-use" data-testid={`bp-use-${m.target}`}>
           <span className={`bp-bar-in${use.over ? " over" : ""}`} aria-hidden="true">
             <i style={{ width: `${use.pct}%` }} />

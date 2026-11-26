@@ -81,6 +81,7 @@ Quality bar:
 - Load `references/data-share-method.md` for the field classes, the minimization order, the pseudonymization method, the per-class scan patterns, and the quasi-identifier group check instead of recalling them.
 - Count each class with the host's content search in a count-only mode, or with a detector script that prints counts only and catches its own errors, since its error output returns too. With neither, hand the user the scan to run and keep the verdict not_observed until the counts come back.
 - A host's own redaction of chat or tool output never changes a file that leaves, so it is not this scan.
+- Run `toolkit/scripts/residual_scan.py` (see `toolkit/README.md`, counts-only, never prints matched values) on the exact file that leaves to produce the observed `residual_scan/v1` record.
 - Keep inventoried, minimized, masked, scanned, and shipped as separate states for the file.
 
 Required inputs:
@@ -103,6 +104,7 @@ Artifact expectations:
 - minimization_plan/v1 gives each field one action -- drop, aggregate, generalize, mask, or pseudonymize -- with the destination's need for the fields it keeps, and names the local path that holds any pseudonym mapping outside the shipped file
 - residual_scan/v1 records, for the exact file that leaves, the scan method and an observed count per class with zero hits or each remaining hit accepted by name, its sha256 of the scanned bytes, the free-text sample the reviewer read, and its verdict: redacted, not redacted with the counts while a hit remains unaccepted, or not_observed when no scan ran, no free-text sample was read or its digest differs from the share record's
 - share_record/v1 is metadata only -- destination, date, fields shipped, row count, the sha256 digest of the shipped file, and its data_state (pseudonymized, still personal data, when identifiers were pseudonymized) -- and holds no value from it
+- optional offline counts-only residual scan via `toolkit/scripts/residual_scan.py` (`residual_scan/v1`, never prints matched values)
 
 Safety rules:
 

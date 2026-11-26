@@ -15,49 +15,13 @@ metadata:
 
 # Adversarial Consensus
 
-This is a Hermes-native `adversarial-consensus` workflow skill.
+Required: the proposal, plan draft, or direction under review, the decision the review must inform, known constraints and non-negotiables, the perspective roster and why each angle is distinct. Output: per-perspective independent findings, cross-attack objections attributed to their author, defend, refine, or concede verdict per objection, distilled bundle in the fixed buckets Hard Constraints, Decisions, Risks, Open Questions, mandatory planner handoff naming the follow-on planning workflow.
 
 ## Why This Exists
 
 `adversarial-consensus` exists because agreement reached by perspectives that read each other is not review — it is convergence. Independent findings, an attack round nobody is allowed to defend against, and a distillation that may only subtract produce objections a single planning pass never surfaces, and the mandatory handoff keeps that bundle from being mistaken for the plan.
 
-## Do Not Use When
-
-- The user wants the plan itself, with options, acceptance criteria, and verification commands; use `ulw-plan`, which this workflow feeds.
-- The request is still too ambiguous to state the proposal being attacked; use `ulw-interview` first.
-- The user wants completed code reviewed for defects rather than a proposal attacked before it is built; use `omh-code-review`.
-- The user wants hostile runtime scenarios against a built change; use `ulw-qa`.
-- One perspective would do: a small local change with no contested decision does not earn three rounds.
-
-## Examples
-
-Good example:
-
-- Prompt: $adversarial-consensus we plan to move session state into Redis before the launch — attack it from every angle before I write the plan.
-- Expected behavior: Name the roster and their distinct angles, take blind findings from each, run one attack-only round, resolve each objection to defend/refine/concede, distill only into the four buckets, and hand the bundle to `ulw-plan` as planning input.
-- Why: The decision is contested and pre-plan, which is exactly where independent objections are worth more than one planner's confidence.
-
-Bad example:
-
-- Prompt: $adversarial-consensus give me the migration plan with the steps and the rollout order.
-- Expected behavior: Produce the distilled bundle and hand it to `ulw-plan`; the steps and rollout order are the planner's output, not this workflow's.
-- Why: The bundle is INPUT to planning. Emitting a plan here skips the reviewed-plan gate and turns the buckets into a task list.
-
-## Completion Checklist
-
-- The roster is named with 3-5 distinct angles, and no two seats argue the same one.
-- Round-one findings were produced blind, and any perspective that could not be kept blind is named as a broken-independence caveat instead of being presented as independent.
-- Every cross-attack objection targets another perspective's finding, and no perspective defended itself in that round.
-- Every objection carries exactly one verdict — defended, refined, or conceded — and conceded findings are struck, not softened.
-- The bundle contains only Hard Constraints, Decisions, Risks, Open Questions, every line traces to a surviving finding, and nothing new was added at distillation.
-- The closing message states that the bundle is input, names the follow-on planning workflow, and claims no plan, acceptance, implementation, or verification evidence.
-
-## Recovery Notes
-
-- If the proposal under review cannot be stated in one paragraph, route back to `ulw-interview` before opening round one.
-- If independence was broken — a perspective saw another's findings, or the same seat produced two angles — say so, re-run that perspective on a restated problem, and mark the round's independence as caveated rather than silently continuing.
-- If a round produces no objections at all, treat that as a roster defect rather than consensus: state which angle is missing and add or replace a seat before distilling.
-- If distillation would need a fifth bucket, the extra content is a plan trying to escape; move it to the planner handoff instead of widening the bucket set.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -94,25 +58,6 @@ Handoff policy:
 
 Keep every round in Hermes as prepared prompt contracts. The distilled bundle is planning input: hand it to `ulw-plan` or `omh-plan` for the plan itself, and prepare a selected executor/runtime handoff only after that separate planning pass produces an accepted plan.
 
-Required inputs:
-
-- the proposal, plan draft, or direction under review
-- the decision the review must inform
-- known constraints and non-negotiables
-- the perspective roster and why each angle is distinct
-
-Expected outputs:
-
-- per-perspective independent findings
-- cross-attack objections attributed to their author
-- defend, refine, or concede verdict per objection
-- distilled bundle in the fixed buckets Hard Constraints, Decisions, Risks, Open Questions
-- mandatory planner handoff naming the follow-on planning workflow
-
-Artifact expectations:
-
-- record the distilled bundle with `omh hermes plan --record --plan-file <bundle.md> --input-bundle "<proposal>"`, which writes it as `hermes_plan_input/v1` (planning input, marked INPUT TO PLANNING, NOT A PLAN) beside the plans, and which `omh hermes plan-accept` refuses; never record it without `--input-bundle`, because that stores a draft plan scaffold with canned goals and options
-
 Safety rules:
 
 - Do not write the plan here. This workflow produces the input a planner consumes, never the plan itself.
@@ -121,6 +66,22 @@ Safety rules:
 - Do not add, rename, or drop a distillation bucket; the closed set is Hard Constraints, Decisions, Risks, Open Questions.
 - Do not invent evidence on behalf of a perspective; an unsupported objection is recorded as an Open Question, not as a Hard Constraint.
 - Do not report a round transition, a perspective's output, or the distilled bundle as executed, reviewed, or accepted work; every phase output is a declaration until the user or a wrapper observes it.
+
+## Completion Checklist
+
+- The roster is named with 3-5 distinct angles, and no two seats argue the same one.
+- Round-one findings were produced blind, and any perspective that could not be kept blind is named as a broken-independence caveat instead of being presented as independent.
+- Every cross-attack objection targets another perspective's finding, and no perspective defended itself in that round.
+- Every objection carries exactly one verdict — defended, refined, or conceded — and conceded findings are struck, not softened.
+- The bundle contains only Hard Constraints, Decisions, Risks, Open Questions, every line traces to a surviving finding, and nothing new was added at distillation.
+- The closing message states that the bundle is input, names the follow-on planning workflow, and claims no plan, acceptance, implementation, or verification evidence.
+
+## Recovery Notes
+
+- If the proposal under review cannot be stated in one paragraph, route back to `ulw-interview` before opening round one.
+- If independence was broken — a perspective saw another's findings, or the same seat produced two angles — say so, re-run that perspective on a restated problem, and mark the round's independence as caveated rather than silently continuing.
+- If a round produces no objections at all, treat that as a roster defect rather than consensus: state which angle is missing and add or replace a seat before distilling.
+- If distillation would need a fifth bucket, the extra content is a plan trying to escape; move it to the planner handoff instead of widening the bucket set.
 
 ## Runtime Evidence
 

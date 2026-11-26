@@ -15,57 +15,17 @@ metadata:
 
 # Code Review
 
-This is a Hermes-native `code-review` workflow skill.
+Required: diff or files, expected behavior, test evidence, the dispatch Claim and Requirements pointer (issue, plan, or spec section) when intent is reviewable. Output: ranked findings per axis, spec-axis verdict or a named not-assessed reason, open questions, test gaps, checked-and-clean and could-not-assess lists.
+
+**Do Not Use When:** A kanban review worker needs its card's transition decided: Hermes' bundled `sdlc-review` owns approve, request-changes, and escalate there, and this skill only supplies the findings that decision cites.
+
+**Do Not Use When:** The user wants their own uncommitted changes checked before a commit or push, with a security scan, quality gates, and fixes applied in place; load Hermes' bundled `requesting-code-review` skill for that pre-commit pass instead of this one.
 
 ## Why This Exists
 
 `code-review` exists to make review bug-first and evidence-grounded: findings must cite concrete files, diffs, commands, or artifacts before any summary or fix proposal. Its Hermes Bug Hunter discipline keeps only findings that can be shown step by step, drops intended or unreachable behavior, and ends every review with what was not checked.
 
-## Do Not Use When
-
-- The user asks to implement the fix rather than review existing code or claims.
-- There is no diff, file set, claim, artifact, or expected behavior to review.
-- The request is broad product critique, strategy, or planning rather than code or evidence review.
-- The user wants build, lint, test, and CI results collected into a PASS/HOLD/BLOCK evidence matrix before merge; use `omh-verification-gate`. This skill supplies findings that matrix may cite.
-- A kanban review worker needs its card's transition decided: Hermes' bundled `sdlc-review` owns approve, request-changes, and escalate there, and this skill only supplies the findings that decision cites.
-- The user wants their own uncommitted changes checked before a commit or push, with a security scan, quality gates, and fixes applied in place; load Hermes' bundled `requesting-code-review` skill for that pre-commit pass instead of this one.
-
-## Examples
-
-Good example:
-
-- Prompt: $code-review review this PR for install/update UX regressions and missing tests.
-- Expected behavior: Lead with ranked findings, cite concrete evidence, then list open questions and test gaps.
-- Why: The task is explicitly review-shaped and has a behavioral risk surface.
-
-Bad example:
-
-- Prompt: $code-review add the missing setup flag and commit it.
-- Expected behavior: Route implementation to a selected executor/runtime after review findings are established.
-- Why: Review can identify the issue, but code mutation is a separate execution step.
-
-## Completion Checklist
-
-- Findings come first: rank ordinary findings by severity; keep gaps unranked in `verification_gaps`.
-- Every finding cites file, diff, command output, artifact, or expected behavior evidence.
-- Both axes appear in the report: correctness/risk findings, and a spec-axis verdict naming its Claim source or the `not_assessed` reason.
-- No-issue reviews still name residual risk, missing tests, and independent review evidence if unavailable.
-- The closing carries the checked-and-clean list and the could-not-assess list, each naming its surfaces.
-- The result ends with a `Not checked` list, one reason per entry, or `Not checked: none` when coverage was complete.
-- The dispatch schema matches the return, candidate validation states remain distinct, and selected checks are not reported as observed coverage.
-- Fix implementation, architecture follow-up, and CI/merge claims stay separate from the review result.
-- A reply to the person uses plain words: the verdict as whether anything found blocks the change (blocking issues found / nothing blocking found), the spec axis as whether the change does what was asked, gaps as what could not be checked and why; `ship`, `no_ship`, `not_assessed`, `spec_axis`, `verification_gaps`, and `could_not_assess` stay out of it. A dispatched reviewer's structured return keeps those schema fields.
-
-## Recovery Notes
-
-- If no diff, file set, PR, or artifact is available, inspect the requested target or ask one target question before reviewing.
-- If tests fail or are missing, cite the exact command gap and do not approve the change as verified.
-- If independent review evidence is unavailable, say so directly instead of implying a second reviewer passed it.
-- To dispatch a reviewer rather than write the findings yourself, load `omh-code-review/references/review-dispatch.md`; it carries the base-SHA rule, the findings schema the return is checked against, and the implementer status contract.
-- When findings arrive for work you own, load `omh-code-review/references/review-response.md` before changing anything.
-- For maintainability judgement calls, load `omh-code-review/references/smell-baseline.md`; it finds the repository's standards files first, then names the twelve baseline smells with their fixes and the repo-standards-override rule.
-- Load `omh-code-review/references/risk-selection.md` to select depth; when additional lenses are justified, load `omh-code-review/references/review-lenses.md` and run only those selected as separate passes.
-- Before final findings, load `omh-code-review/references/finding-validation.md` for its drop gate and candidate confirmation, rejection, and unresolved-risk handling; load `omh-code-review/references/architecture-delta.md` when ownership, contracts, dependencies, or shared-code extraction change.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -111,30 +71,34 @@ Handoff policy:
 
 Hermes may frame and summarize review evidence; fixes or code mutations found during review should be delegated to the selected coding executor.
 
-Required inputs:
-
-- diff or files
-- expected behavior
-- test evidence
-- the dispatch Claim and Requirements pointer (issue, plan, or spec section) when intent is reviewable
-
-Expected outputs:
-
-- ranked findings per axis
-- spec-axis verdict or a named not-assessed reason
-- open questions
-- test gaps
-- checked-and-clean and could-not-assess lists
-
-Artifact expectations:
-
-- critic run record when review evidence is captured
-
 Safety rules:
 
 - Findings come before summaries.
 - Cite concrete evidence for every finding.
 - Say clearly when no issue is found.
+
+## Completion Checklist
+
+- Findings come first: rank ordinary findings by severity; keep gaps unranked in `verification_gaps`.
+- Every finding cites file, diff, command output, artifact, or expected behavior evidence.
+- Both axes appear in the report: correctness/risk findings, and a spec-axis verdict naming its Claim source or the `not_assessed` reason.
+- No-issue reviews still name residual risk, missing tests, and independent review evidence if unavailable.
+- The closing carries the checked-and-clean list and the could-not-assess list, each naming its surfaces.
+- The result ends with a `Not checked` list, one reason per entry, or `Not checked: none` when coverage was complete.
+- The dispatch schema matches the return, candidate validation states remain distinct, and selected checks are not reported as observed coverage.
+- Fix implementation, architecture follow-up, and CI/merge claims stay separate from the review result.
+- A reply to the person uses plain words: the verdict as whether anything found blocks the change (blocking issues found / nothing blocking found), the spec axis as whether the change does what was asked, gaps as what could not be checked and why; `ship`, `no_ship`, `not_assessed`, `spec_axis`, `verification_gaps`, and `could_not_assess` stay out of it. A dispatched reviewer's structured return keeps those schema fields.
+
+## Recovery Notes
+
+- If no diff, file set, PR, or artifact is available, inspect the requested target or ask one target question before reviewing.
+- If tests fail or are missing, cite the exact command gap and do not approve the change as verified.
+- If independent review evidence is unavailable, say so directly instead of implying a second reviewer passed it.
+- To dispatch a reviewer rather than write the findings yourself, load `omh-code-review/references/review-dispatch.md`; it carries the base-SHA rule, the findings schema the return is checked against, and the implementer status contract.
+- When findings arrive for work you own, load `omh-code-review/references/review-response.md` before changing anything.
+- For maintainability judgement calls, load `omh-code-review/references/smell-baseline.md`; it finds the repository's standards files first, then names the twelve baseline smells with their fixes and the repo-standards-override rule.
+- Load `omh-code-review/references/risk-selection.md` to select depth; when additional lenses are justified, load `omh-code-review/references/review-lenses.md` and run only those selected as separate passes.
+- Before final findings, load `omh-code-review/references/finding-validation.md` for its drop gate and candidate confirmation, rejection, and unresolved-risk handling; load `omh-code-review/references/architecture-delta.md` when ownership, contracts, dependencies, or shared-code extraction change.
 
 ## Runtime Evidence
 

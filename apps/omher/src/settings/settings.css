@@ -136,6 +136,7 @@
   color: var(--quiet);
 }
 .st-tag {
+  white-space: nowrap;
   border: 1px solid var(--line);
   border-radius: 3px;
   padding: 0 4px;
@@ -355,6 +356,11 @@
   font-size: 11.5px;
   color: var(--muted);
 }
+/* the status word stays whole; the SSH marker beside it is the part that gives way */
+.be-st {
+  flex: none;
+  white-space: nowrap;
+}
 .be-sub code,
 .be-hint code,
 .bc-id code {
@@ -362,9 +368,14 @@
   font-size: 10.5px;
   color: var(--muted);
 }
-/* a card's profile id is one token: never split at its hyphen ("omh-" / "tui") */
+/* a card's profile id is one token: never split at its hyphen ("omh-" / "tui"); when the row is tight it gives way
+   first, cut with "…", so the status word beside it stays whole */
 .bc-id code {
   white-space: nowrap;
+  min-width: 0;
+  flex-shrink: 10;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .be-desc {
   margin: 6px 0 0;
@@ -389,12 +400,16 @@
   min-height: 44px;
 }
 .be-facts.muted {
+  display: flex;
+  align-items: center;
   font-size: 12px;
-  color: var(--quiet);
+  color: var(--muted);
 }
+/* each caption on one line: a column is never narrower than its caption, so ja "ほかの場所のセッション" does not
+   break inside "セッション" (the four fit in the narrowest page in every language) */
 .be-stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(max-content, 1fr));
   gap: 8px;
 }
 .be-stat b {
@@ -407,12 +422,14 @@
 .be-stat span {
   font-size: 11px;
   color: var(--muted);
+  white-space: nowrap;
 }
+/* the places sit on the stats' four columns, one per cell, the date in the last column */
 .be-places {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: center;
-  gap: 6px 12px;
+  gap: 6px 8px;
   margin-top: 10px;
   padding-top: 9px;
   border-top: 1px solid var(--line);
@@ -420,6 +437,7 @@
   color: var(--body);
 }
 .be-place {
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -430,9 +448,10 @@
   font-variant-numeric: tabular-nums;
 }
 .be-since {
-  margin-left: auto;
+  grid-column: -2 / -1;
   font-size: 11px;
   color: var(--quiet);
+  white-space: nowrap;
 }
 
 /* All bots */
@@ -467,10 +486,16 @@
   outline: none;
   border-color: var(--line-strong);
 }
+/* Two columns at most in the 760px page (one under 610px), every row as tall as the tallest card, and an odd count's
+   last card takes the whole row: no count leaves a card alone beside empty slots. */
 .bots-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-auto-rows: 1fr;
   gap: 10px;
+}
+.bots-grid > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
 }
 .bots-empty {
   font-size: 12px;
@@ -487,6 +512,7 @@
 }
 /* "Add to list" / "In list": the sidebar roster state, a small line in the card's top-right corner */
 .bc-list {
+  white-space: nowrap;
   position: absolute;
   top: 10px;
   right: 10px;
@@ -500,8 +526,10 @@
 .bc-list:hover {
   background: var(--raise2);
 }
-.bot-card-w .bc-top {
-  padding-right: 72px;
+/* the corner label sits beside the name line only: the name keeps clear of it (its longest translation, ja
+   "リストに追加", is 80px), and the status line under it has the card's whole width */
+.bot-card-w .bc-id b {
+  margin-right: 84px;
 }
 .bc-list.in {
   display: inline-flex;
@@ -554,8 +582,18 @@
   display: flex;
   align-items: center;
   gap: 5px;
+  min-width: 0;
   font-size: 11px;
   color: var(--muted);
+}
+/* the status is one word ("연결됨", "接続中"): one line, at its full width (the SSH marker or the profile chip beside it
+   gives way first), and "…" only if the row is narrower than the word itself */
+.bc-st {
+  flex: none;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .bc-desc {
   font-size: 11.5px;
@@ -725,6 +763,7 @@
   color: var(--muted);
 }
 .pv-copy {
+  white-space: nowrap;
   height: 18px;
   line-height: 16px;
   padding: 0 7px;
@@ -1036,14 +1075,10 @@
   margin-top: 8px;
 }
 
-/* Settings › General › Language: its own group under Appearance; each language in its own words, never wrapped */
+/* Settings › General › Language: its own group under Appearance; each language in its own words, never wrapped (a
+   small Seg: equal segments, as wide as the column's other switches or as its words need) */
 .st-grp-lang {
   margin-top: 10px;
-}
-.st-grp-lang .mseg button {
-  flex: none;
-  white-space: nowrap;
-  padding: 0 10px;
 }
 
 /* the bot page's sections (BotSections.tsx): persona, memory, automations, elsewhere, open threads */
@@ -1056,12 +1091,8 @@
   font-size: 11.5px;
   color: var(--quiet);
 }
-.bp-gh {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
 .bp-link {
+  white-space: nowrap;
   font-size: 11.5px;
   text-transform: none;
   letter-spacing: 0;
@@ -1148,6 +1179,7 @@
   color: var(--ink);
 }
 .bp-off {
+  white-space: nowrap;
   font-size: 10.5px;
   padding: 1px 6px;
   border-radius: 999px;
@@ -1165,7 +1197,7 @@
 }
 .bp-bar-in {
   flex: 1;
-  max-width: 180px;
+  min-width: 0;
   height: 4px;
   border-radius: 2px;
   background: var(--line);
@@ -1173,6 +1205,7 @@
 }
 .bp-bar-in i {
   display: block;
+  min-width: 3px;
   height: 100%;
   background: var(--accent);
 }
@@ -1238,6 +1271,7 @@ a.bp-row:hover {
   color: var(--quiet);
 }
 .bp-row-st {
+  white-space: nowrap;
   flex: none;
   font-size: 11.5px;
   color: var(--muted);
@@ -1267,4 +1301,10 @@ a.bp-row:hover {
   display: flex;
   justify-content: flex-end;
   gap: 6px;
+}
+
+/* light theme: the white selected segment on the #f2eff3 track differed by bold text only; a --raise2 track under it
+   shows which one is on (Settings pages; the chat's own pickers keep theirs) */
+[data-theme="light"] .st-page .mseg {
+  background: var(--raise2);
 }

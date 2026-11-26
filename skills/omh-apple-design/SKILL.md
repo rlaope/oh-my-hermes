@@ -14,42 +14,13 @@ metadata:
 
 # Apple Design
 
-This is a Hermes-native `apple-design` workflow skill.
+Required: mode: design, review, or improve, visual target: Apple marketing/product visual, native Apple application, or Apple-inspired web UI, target, surface/state, supplied evidence, and available execution constraints. Output: apple_design_brief/v1, apple_visual_direction/v1, apple_design_finding/v1 with severity, location/evidence, impact, source/applicability, fix, owner, and missing checks, two to four design directions before visual work when direction is open, composed remediation route to `omh-frontend`, `omh-design-quality-gate`, `omh-accessibility-audit`, `omh-visual-qa`, or `omh-award-bar-score`.
 
 ## Why This Exists
 
 `apple-design` turns Apple UI design, review, and improvement requests into a platform-aware brief that respects native and web differences while preserving OMH's existing implementation and evidence owners.
 
-## Do Not Use When
-
-- The request is generic frontend design, accessibility, screenshot QA, image-card work, or material guidance without an Apple-specific phrase or explicit `omh-apple-design` invocation; use the existing specialist lane.
-- The message concerns Apple fruit, stock, support, a glass database, material science, or unrelated Swift/macOS discussion.
-- The user needs a conformance, accessibility PASS, or visual PASS claim without supplied and observed evidence.
-
-## Examples
-
-Good example:
-
-- Prompt: Review this iPad checkout against Apple HIG and hand the concrete fixes to the frontend and accessibility owners.
-- Expected behavior: Prepare apple_design_brief/v1 with applicable evidence, findings, platform-aware remediation, and the existing owner routes.
-- Why: The request specifies an Apple platform and asks for a review plus downstream remediation without treating the brief as implementation or a verdict.
-
-Bad example:
-
-- Prompt: Call our generic WCAG screenshot check Apple-certified.
-- Expected behavior: Keep the Apple-specific verdict unavailable and route generic accessibility or rendered evidence to the existing specialist.
-- Why: A generic check without applicable Apple evidence cannot establish platform compliance or certification.
-
-## Completion Checklist
-
-- Target, convention, state, and evidence are explicit.
-- Each direction or finding names evidence, source applicability, owner, and missing verification; product visuals name original art direction.
-- Implementation remains with the selected coding owner; accessibility and visual completion remain not_observed until their existing lanes record evidence.
-
-## Recovery Notes
-
-- If the platform/version, convention, or target state is missing, ask for it before treating a guideline as applicable.
-- If no supplied screen or code exists, prepare the brief and mark visual status not_observed rather than inferring a rendered result.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -82,27 +53,6 @@ Handoff policy:
 
 Hermes directs; selected owners implement and existing lanes observe.
 
-Required inputs:
-
-- mode: design, review, or improve
-- visual target: Apple marketing/product visual, native Apple application, or Apple-inspired web UI
-- target, surface/state, supplied evidence, and available execution constraints
-
-Expected outputs:
-
-- apple_design_brief/v1
-- apple_visual_direction/v1
-- apple_design_finding/v1 with severity, location/evidence, impact, source/applicability, fix, owner, and missing checks
-- two to four design directions before visual work when direction is open
-- composed remediation route to `omh-frontend`, `omh-design-quality-gate`, `omh-accessibility-audit`, `omh-visual-qa`, or `omh-award-bar-score`
-
-Artifact expectations:
-
-- prepared Apple design brief with observations and hypotheses distinguished
-- prepared product-visual handoff when no authorized execution path exists
-- visual status not_observed when no supplied screen, capture, or rendered surface exists
-- no Apple certification, accessibility PASS, visual PASS, or implementation claim from a prepared brief
-
 Safety rules:
 
 - Choose one target: marketing/product visual, native Apple application, or Apple-inspired web UI; do not substitute marketing or web effects for native controls/Liquid Glass.
@@ -115,6 +65,17 @@ Safety rules:
 - If current source guidance applies, keep its conditional 35% bright-background note; it is not universal. When no renderer is available, do not claim a result; while work is prepared, it is not observed.
 - Never treat web glass as native, never substitute a still for motion, and use only actual evidence after production; without it, the result is not PASS.
 - While evidence is missing, use only a prepared handoff; it is not execution and not a PASS.
+
+## Completion Checklist
+
+- Target, convention, state, and evidence are explicit.
+- Each direction or finding names evidence, source applicability, owner, and missing verification; product visuals name original art direction.
+- Implementation remains with the selected coding owner; accessibility and visual completion remain not_observed until their existing lanes record evidence.
+
+## Recovery Notes
+
+- If the platform/version, convention, or target state is missing, ask for it before treating a guideline as applicable.
+- If no supplied screen or code exists, prepare the brief and mark visual status not_observed rather than inferring a rendered result.
 
 ## Runtime Evidence
 

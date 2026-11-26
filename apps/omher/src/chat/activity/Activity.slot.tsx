@@ -3,7 +3,7 @@
 // "Worked for 2m 41s · 6 steps" and a click opens one detail row per step.
 import { useState, type KeyboardEvent } from "react";
 import type { SlotProps } from "../../features";
-import { activityText, getStore, liveLabel, subagentEnded, THINKING, WORKING, type Step, type Turn } from "../../state/store";
+import { activityText, askOpen, getStore, liveLabel, subagentEnded, THINKING, useStore, WORKING, type Step, type Turn } from "../../state/store";
 import { ChevronRight, Spinner } from "../../ui";
 import { elapsed } from "../../app/time";
 import { useClock } from "../../app/clock";
@@ -204,17 +204,21 @@ export default function Activity({ bot, item, live }: SlotProps["activity"]) {
   const [open, setOpen] = useState(false);
   // the app's one clock: the elapsed time here and a subagent row's time below read the same instant
   const now = useClock(live);
-  const total = elapsed((t.endedAt ?? now) - t.startedAt);
+  const total = elapsed((t.endedAt ?? now) - t.startedAt, t.endedAt === undefined);
   // while the line names a subagent that is still out ("Asking `Count lines of b.txt`"), its time is that subagent's,
   // the number its row in the card shows; otherwise the turn's
   const last = t.steps[t.steps.length - 1];
   const named = live && last?.name === "delegate_task" && last.endedAt === undefined && liveLabel(t).code === last.detail;
   const sub = named ? t.fanouts?.flatMap((f) => f.subs).find((x) => x.id === last.id && !subagentEnded(x)) : undefined;
-  const shownTime = sub ? elapsed(rowMs(sub, now)) : total;
+  const shownTime = sub ? elapsed(rowMs(sub, now), true) : total;
   // what the details show: a delegate_task that handed out dag parts is one row per part
   const n = t.steps.reduce((k, st) => k + (st.name === "delegate_task" && st.dag?.length ? st.dag.length : 1), 0);
   const state = live ? "live" : t.outcome === "interrupted" || t.outcome === "ended" || t.outcome === "error" ? t.outcome : "done";
   const canOpen = n > 0;
+  // the turn waits on the person (an approval or a question of this chat is open): the needs dot, as the bot's
+  // sidebar row shows, never the working spinner (a blocked turn is not busy)
+  const items = useStore().chats[bot]?.items;
+  const waits = live && !!items?.some((i) => (i.kind === "approval" || i.kind === "clarify") && askOpen(items, i));
 
   let summary = "";
   if (state === "done") summary = n === 0 ? tr("act.worked0", { t: total }) : n === 1 ? tr("act.worked1", { t: total }) : tr("act.worked", { t: total, n });
@@ -232,7 +236,9 @@ export default function Activity({ bot, item, live }: SlotProps["activity"]) {
         disabled={!canOpen}
         onClick={() => setOpen((o) => !o)}
       >
-        {state === "live" ? (
+        {waits ? (
+          <span className="act-ic waiting" data-testid="activity-waiting" aria-hidden />
+        ) : state === "live" ? (
           <Spinner size={11} label={tr("ui.working")} />
         ) : (
           <span className={`act-ic ${state}`} aria-hidden>

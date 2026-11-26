@@ -787,47 +787,127 @@ class HermesReferenceLine(str):
         return (str(self), self.reference)
 
 
-# Skills Hermes bundles that an OMH skill hands part of its job to, by the name
-# Hermes loads them under. Each one is a bundled skill both at the
-# `requires_hermes` floor (tag v2026.9.7) and on upstream main (63d0b94120),
-# read with `git ls-tree <rev> -- skills` on 2026-10-13. None shares a name
-# with a catalog skill or its display label, which a test holds. A name
-# outside this set is refused, so a typo or an upstream rename fails when the
-# catalog loads instead of shipping a line naming a skill Hermes cannot load.
-# `llm-wiki` moved to `optional-skills/` on upstream main on 2026-10-28 (commit
-# 183b5ddd5f); it stays bundled at the floor tag, so its handoff line is conditional
-# on the skill being installed.
-# `email-inbox-triage` is bundled at the floor tag and at upstream caafe5389a,
-# read the same way on 2026-11-24.
+# Skills Hermes bundles under `skills/` that an OMH skill hands part of its job
+# to, by the name Hermes loads them under. Verified against
+# `NousResearch/hermes-agent` HEAD on 2026-11-25 (44 bundled skills under
+# `skills/`). Floor-tag aliases (`docx`, `powerpoint`, `xlsx`) consolidated into
+# `microsoft-office` from Hermes v0.22.6 remain in `HERMES_FLOOR_BUNDLED_ALIASES`
+# so floor-compatible lines validate cleanly. Skills that moved from `skills/`
+# into `optional-skills/` (`hermes-agent-skill-authoring`, `llm-wiki`,
+# `opencode`) live in `HERMES_OPTIONAL_SKILL_NAMES` and must use
+# `HermesOptionalSkillLine` with conditional wording.
+HERMES_FLOOR_BUNDLED_ALIASES = frozenset({"docx", "powerpoint", "xlsx"})
+
 HERMES_BUNDLED_SKILL_NAMES = frozenset(
     {
+        "apple-notes",
+        "apple-reminders",
         "architecture-diagram",
         "arxiv",
         "ascii-video",
+        "baoyu-infographic",
+        "blocked-page-recovery",
         "claude-code",
+        "claude-design",
+        "codebase-inspection",
         "codex",
         "competitor-news-monitor",
-        "docx",
+        "computer-use",
+        "document-to-action-items",
         "dogfood",
         "email-inbox-triage",
+        "findmy",
         "github",
+        "google-workspace",
         "grounded-citations",
-        "hermes-agent-skill-authoring",
+        "hermes-agent",
+        "himalaya",
         "humanizer",
-        "llm-wiki",
+        "imessage",
         "manim-video",
+        "maps",
         "meeting-action-items",
         "microsoft-office",
-        "opencode",
+        "obsidian",
+        "p5js",
         "pdf",
-        "powerpoint",
+        "popular-web-designs",
+        "product-price-monitor",
         "requesting-code-review",
         "sdlc-review",
         "simplify-code",
+        "songwriting-and-ai-music",
         "spike",
         "systematic-debugging",
-        "xlsx",
+        "teams-meeting-pipeline",
+        "test-driven-development",
+        "weekly-review-planning",
+        "xurl",
+        "youtube-content",
+        *HERMES_FLOOR_BUNDLED_ALIASES,
     }
+)
+
+# Skills in upstream Hermes `optional-skills/` (not installed by default) that
+# OMH skills conditionally hand work to when installed. Includes skills that
+# moved from `skills/` to `optional-skills/` after the supported floor tag.
+HERMES_OPTIONAL_SKILL_NAMES = frozenset(
+    {
+        "3-statement-model",
+        "adversarial-ux-test",
+        "agent-merge-conflict-arbiter",
+        "antigravity-cli",
+        "archify",
+        "ast-grep",
+        "axolotl",
+        "bioinformatics",
+        "code-wiki",
+        "comps-analysis",
+        "concept-diagrams",
+        "dcf-model",
+        "decision-questionnaire",
+        "design-md",
+        "domain-intel",
+        "drug-discovery",
+        "evaluating-llms-harness",
+        "excel-author",
+        "excalidraw",
+        "gitnexus-explorer",
+        "grill-me",
+        "hermes-agent-skill-authoring",
+        "hyperframes",
+        "impeccable",
+        "jupyter-notebook",
+        "llama-cpp",
+        "llm-wiki",
+        "node-inspect-debugger",
+        "opencode",
+        "osint-investigation",
+        "oss-forensics",
+        "pixel-art",
+        "pptx-author",
+        "pr-lens",
+        "python-debugpy",
+        "research-paper-writing",
+        "rest-graphql-debug",
+        "serving-llms-vllm",
+        "social-media-content-calendar",
+        "system-atlas",
+        "tensorrt-llm",
+        "unsloth",
+        "watchers",
+        "web-pentest",
+    }
+)
+
+_OPTIONAL_CONDITIONAL_CUES = (
+    "when installed",
+    "when it is installed",
+    "if installed",
+    "if it is installed",
+    "when available",
+    "if available",
+    "if skill_view",
 )
 
 
@@ -845,20 +925,49 @@ class HermesSkillLine(str):
     """
 
     skills: tuple[str, ...]
+    optional: bool = False
 
     def __new__(cls, text: str, skills: tuple[str, ...]) -> HermesSkillLine:
-        unknown = sorted(set(skills) - HERMES_BUNDLED_SKILL_NAMES)
-        if not skills or unknown:
-            raise ValueError(f"HermesSkillLine must name bundled Hermes skills, got {unknown or 'none'}")
-        missing = [skill for skill in skills if f"`{skill}`" not in text]
-        if missing:
-            raise ValueError(f"HermesSkillLine must name {missing} in backticks in the line")
+        if cls is HermesSkillLine:
+            unknown = sorted(set(skills) - HERMES_BUNDLED_SKILL_NAMES)
+            if not skills or unknown:
+                raise ValueError(f"HermesSkillLine must name bundled Hermes skills, got {unknown or 'none'}")
+            missing = [skill for skill in skills if f"`{skill}`" not in text]
+            if missing:
+                raise ValueError(f"HermesSkillLine must name {missing} in backticks in the line")
         line = super().__new__(cls, text)
         line.skills = tuple(skills)
         return line
 
     def __getnewargs__(self) -> tuple[str, tuple[str, ...]]:
         return (str(self), self.skills)
+
+
+class HermesOptionalSkillLine(HermesSkillLine):
+    """A conditional `do_not_use_when` line for an upstream Hermes `optional-skills/` skill.
+
+    Subclasses `HermesSkillLine` so Hermes compact-body rendering, related-skill
+    projection, and portable stripping treat it uniformly while rejecting
+    unconditional claims that an optional skill is bundled by default.
+    """
+
+    optional: bool = True
+
+    def __new__(cls, text: str, skills: tuple[str, ...]) -> HermesOptionalSkillLine:
+        unknown = sorted(set(skills) - HERMES_OPTIONAL_SKILL_NAMES)
+        if not skills or unknown:
+            raise ValueError(f"HermesOptionalSkillLine must name optional Hermes skills, got {unknown or 'none'}")
+        missing = [skill for skill in skills if f"`{skill}`" not in text]
+        if missing:
+            raise ValueError(f"HermesOptionalSkillLine must name {missing} in backticks in the line")
+        lowered = text.lower()
+        if not any(cue in lowered for cue in _OPTIONAL_CONDITIONAL_CUES):
+            raise ValueError(
+                "HermesOptionalSkillLine must state installation conditionality "
+                "(e.g. 'when installed', 'if installed', 'when available', or 'if skill_view')"
+            )
+        line = super().__new__(cls, text, skills)
+        return line
 
 
 class PortableLine(str):

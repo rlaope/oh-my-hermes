@@ -273,7 +273,9 @@ function CardShell({
         {(chips.length > 0 || warn) && (
           <div className="pl-adds">
             {chips.map((c) => (
-              <span key={c}>{c}</span>
+              <span key={c} title={c}>
+                {c}
+              </span>
             ))}
             {warn && (
               <span className="need" data-testid="needs-key">

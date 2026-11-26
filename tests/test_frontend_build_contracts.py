@@ -42,9 +42,14 @@ def _packaged(key: tuple[str, str]) -> str:
 
 
 def _body(name: str) -> str:
+    full_contract = ""
+    for ref in builtin_skill_reference_templates():
+        if ref.skill_name == name and ref.relative_path == "references/full-contract.md":
+            full_contract = "\n" + ref.content
+            break
     for template in builtin_skill_templates():
         if template.name == name:
-            return _unwrapped(template.content)
+            return _unwrapped(template.content + full_contract)
     raise AssertionError(f"missing skill {name}")
 
 

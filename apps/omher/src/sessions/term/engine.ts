@@ -21,7 +21,7 @@ import { attachMarks } from "./engine-marks";
 import { attachOsc52 } from "./engine-osc52";
 import { FIND_EVENT, makeFinder, type FindRequest } from "./engine-find";
 import { attachImages, detachImages, loadImages, virtualImages } from "./engine-image";
-import { GPU_OPTIONS } from "./look";
+import { GPU_OPTIONS, snapBlockGlyphs } from "./look";
 
 /** The add-on's chunk loads the first time a terminal wants it, never with the app and never while `gpu` is off. */
 let webglLoad: Promise<typeof WebglAddon> | null = null;
@@ -173,7 +173,15 @@ function attach(s: State): void {
       const before = new Set(s.term.element?.querySelectorAll("canvas") ?? []);
       try {
         const off = addon.onContextLoss(() => lost(s, addon));
+        // block elements tile on whole device pixels (look.ts), on each glyph atlas the renderer takes (a font, a size,
+        // a theme, a pixel ratio). The event comes just before the renderer keeps the new atlas, so it is read a
+        // moment later, still before the next frame draws; one that already drew glyphs draws them again
+        const snap = () => {
+          if (s.addon === addon && snapBlockGlyphs(addon)) addon.clearTextureAtlas();
+        };
+        const offAtlas = addon.onChangeTextureAtlas(() => queueMicrotask(snap));
         s.term.loadAddon(addon);
+        snapBlockGlyphs(addon);
         s.addon = addon;
         s.gpuLast = true;
         // xterm waits 3 s for a lost context to come back before it says so, and draws nothing meanwhile: the
@@ -183,6 +191,7 @@ function attach(s: State): void {
         for (const c of canvases) c.addEventListener("webglcontextlost", onLost);
         s.unwatch = () => {
           off.dispose();
+          offAtlas.dispose();
           for (const c of canvases) c.removeEventListener("webglcontextlost", onLost);
         };
         cellsChanged(s);

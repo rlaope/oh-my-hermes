@@ -6,7 +6,8 @@
 import "./cards.css";
 import { useState } from "react";
 import { useStore, type ThreadLinkItem, type ThreadRouteItem } from "../../state/store";
-import { t } from "../../i18n";
+import { t, tx } from "../../i18n";
+import { koText } from "../parts/textLang";
 
 export function ThreadLinkLine({ item }: { item: ThreadLinkItem }) {
   const s = useStore();
@@ -48,7 +49,7 @@ export function ThreadRouteCard({ item }: { item: ThreadRouteItem }) {
   };
   return (
     <div className="card th-route" role="group" aria-label={t("thread.routeAsk", { title: item.title })} data-testid="thread-route" data-thread={item.thread}>
-      <div className="card-title">{t("thread.routeAsk", { title: item.title })}</div>
+      <div className="card-title">{tx("thread.routeAsk", { title: <span lang={koText(item.title)}>{item.title}</span> })}</div>
       <div className="th-route-q" data-testid="thread-route-quote">
         <span className="th-route-l">{t("thread.routeYours")}</span>
         <span className="th-route-text" title={item.text}>

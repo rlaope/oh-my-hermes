@@ -10,12 +10,18 @@ metadata:
     phase: web-evidence
     role: researcher
     quality_tier: source-gated
-    related_skills: [ulw-research, omh-source-finder, omh-research-brief, omh-market-research, omh-research-department, omh-websearch-setup, omh-codebase-onboarding, grounded-citations, arxiv]
+    related_skills: [ulw-research, omh-source-finder, omh-research-brief, omh-market-research, omh-research-department, omh-websearch-setup, omh-codebase-onboarding, grounded-citations, arxiv, blocked-page-recovery]
 ---
 
 # Web Research
 
-This is a Hermes-native `web-research` workflow skill.
+Required: question, freshness or version constraints, source boundaries when the topic is contested, requested as-of date or interval when the question is point-in-time. Output: cited answer, retrieval date per time-sensitive fact, source-quality notes, named retrieval gaps, web_research_brief/v1, temporal_source_receipt/v1 per historical claim and temporal_evidence_surfaces/v1 when the question is point-in-time.
+
+**Do Not Use When:** The request is only citation bookkeeping on a draft that already exists - renumbering, rebuilding the Sources block, or checking cited ids against the ledger - with nothing new to retrieve, and Hermes' bundled `grounded-citations` skill is available; load that skill.
+
+**Do Not Use When:** The answer is an arXiv paper list or one paper's entry - a search by topic, author, category, or paper id - and Hermes' bundled `arxiv` skill is available; load that skill.
+
+**Do Not Use When:** The task is solely recovering one blocked URL (HTTP 403, HTTP 429, paywall, or WAF wall) with no broader multi-source research question; load Hermes' bundled `blocked-page-recovery` skill instead of this one.
 
 ## Why This Exists
 
@@ -25,46 +31,7 @@ This is a Hermes-native `web-research` workflow skill.
 
 - Discover the current search/read tools and authorized scope, then follow `references/search-method.md`: plan -> actual host search/read -> merge -> assess -> bounded retry. Use `omh_search` only when available; otherwise report the skill-only fallback. Keep direct file lookups direct.
 
-## Do Not Use When
-
-- The decision needs reference-implementation study, a declared depth budget, or a decision-grounding dossier; use `ulw-research`.
-- The output is a typed candidate inventory and acquisition status rather than an answer; use `omh-source-finder`.
-- The ask is a market, competitor, pricing, or customer decision brief; use `omh-research-brief`.
-- Market sizing, a customer-evidence matrix, or a competitor or pricing profile is the deliverable; use `omh-market-research`.
-- The user wants recurring monitoring, a source inbox, or Scout/Analyst/Briefer operations; use `omh-research-department`.
-- The user wants to configure or cheapen web search itself, such as a provider API key or a search or extract backend or tier; use `omh-websearch-setup`.
-- The study target is this repository rather than the open web; use `omh-codebase-onboarding`.
-- The request is only citation bookkeeping on a draft that already exists - renumbering, rebuilding the Sources block, or checking cited ids against the ledger - with nothing new to retrieve, and Hermes' bundled `grounded-citations` skill is available; load that skill.
-- The answer is an arXiv paper list or one paper's entry - a search by topic, author, category, or paper id - and Hermes' bundled `arxiv` skill is available; load that skill.
-
-## Examples
-
-Good example:
-
-- Prompt: 이번 주 기준으로 그 API 요금제 어떻게 바뀌었는지 웹서치해서 알려줘.
-- Expected behavior: Retrieve current pricing from the vendor's own page, cite it with the retrieval date, and name what the page does not state.
-- Why: A current-facts question that one cited retrieval round settles.
-
-Bad example:
-
-- Prompt: 스펙 잡기 전에 오픈소스 구현들 깊게 보고 근거 만들어줘.
-- Expected behavior: Route to `ulw-research`, which declares a depth budget and studies reference implementations with pinned refs.
-- Why: Pre-spec grounding needs the engine's dossier rather than a single lookup.
-
-## Completion Checklist
-
-- The research question, source boundaries, recency assumptions, and confidence level are named.
-- Observed sources, inference, synthesis, and unresolved retrieval gaps are separated.
-- Follow-up planning or handoff uses the research summary without calling it execution evidence.
-- The citation check is reported from an observed ledger verify run that cited at least one source, or as `not_observed`; it is never reported as fact verification.
-
-## Recovery Notes
-
-- If a source fails with HTTP 403, HTTP 429, a paywall, or a WAF or bot wall, load Hermes' `blocked-page-recovery` skill once for that source when it is available and never retry the same URL in a loop; cite an archive or cached copy it returns as a dated historical capture, never as the live page. If the skill is unavailable, recovery fails, or the source needs a login or payment, name the retrieval gap with that reason.
-- If the web is unreachable, name the retrieval gap and stop rather than substituting recalled facts.
-- If no archive access exists or the capture provider's paid authority is exhausted, record a temporal retrieval gap with no network action and keep the as-of claim in the annex; never substitute the current page for it.
-- If sources conflict, present both with their retrieval dates and say which one is primary.
-- If the follow-up round the plan issues still leaves required conditions unsupported, or leads keep expanding, hand the question to `ulw-research` with the sources already gathered.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -101,26 +68,6 @@ Handoff policy:
 
 Run as a Hermes-side web retrieval lane: Hermes fetches and cites, and reports a retrieval gap when the web is unreachable instead of answering from recall.
 
-Required inputs:
-
-- question
-- freshness or version constraints
-- source boundaries when the topic is contested
-- requested as-of date or interval when the question is point-in-time
-
-Expected outputs:
-
-- cited answer
-- retrieval date per time-sensitive fact
-- source-quality notes
-- named retrieval gaps
-- web_research_brief/v1
-- temporal_source_receipt/v1 per historical claim and temporal_evidence_surfaces/v1 when the question is point-in-time
-
-Artifact expectations:
-
-- research notes with source URLs and retrieval dates when the wrapper captures them
-
 Safety rules:
 
 - Prefer official or primary sources when they can answer the question.
@@ -129,6 +76,21 @@ Safety rules:
 - Answer from retrieved sources or name the retrieval gap; a current-facts question is never answered from model recall.
 - Bind every as-of claim to an eligible temporal_source_receipt/v1 - a historical capture at or before the cutoff with a provider-attributed capture time and a stable capture id or digest; a live page or a self-reported publication date is current evidence, never historical evidence, and a claim with no eligible capture goes to the unresolved annex as a temporal_retrieval_gap/v1.
 - web_research_brief/v1 is prepared context, not observed execution, review, CI, or merge evidence.
+
+## Completion Checklist
+
+- The research question, source boundaries, recency assumptions, and confidence level are named.
+- Observed sources, inference, synthesis, and unresolved retrieval gaps are separated.
+- Follow-up planning or handoff uses the research summary without calling it execution evidence.
+- The citation check is reported from an observed ledger verify run that cited at least one source, or as `not_observed`; it is never reported as fact verification.
+
+## Recovery Notes
+
+- If a source fails with HTTP 403, HTTP 429, a paywall, or a WAF or bot wall, load Hermes' `blocked-page-recovery` skill once for that source when it is available and never retry the same URL in a loop; cite an archive or cached copy it returns as a dated historical capture, never as the live page. If the skill is unavailable, recovery fails, or the source needs a login or payment, name the retrieval gap with that reason.
+- If the web is unreachable, name the retrieval gap and stop rather than substituting recalled facts.
+- If no archive access exists or the capture provider's paid authority is exhausted, record a temporal retrieval gap with no network action and keep the as-of claim in the annex; never substitute the current page for it.
+- If sources conflict, present both with their retrieval dates and say which one is primary.
+- If the follow-up round the plan issues still leaves required conditions unsupported, or leads keep expanding, hand the question to `ulw-research` with the sources already gathered.
 
 ## Runtime Evidence
 

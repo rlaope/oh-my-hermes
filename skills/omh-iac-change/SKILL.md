@@ -15,7 +15,7 @@ metadata:
 
 # Iac Change
 
-This is a Hermes-native `iac-change` workflow skill.
+Required: the tool and the unit of change: the Terraform workspace or stack, the cluster and namespace, or the Helm release, the environments the change reaches, in promotion order, the observed plan or diff output for the change, saved to a file where the tool allows it, the health signal each environment already exposes: rollout status, probes, error rate, or a smoke check, observed output for any drift, apply, health, or rollback claim. Output: drift_assessment/v1, blast_radius/v1, cost_delta/v1, staged_apply_plan/v1, health_gate/v1, rollback_plan/v1.
 
 ## Why This Exists
 
@@ -26,39 +26,7 @@ This is a Hermes-native `iac-change` workflow skill.
 - Ask for the saved plan or the diff output before assessing anything.
 - Separate existing drift from the proposed change before ordering stages.
 
-## Do Not Use When
-
-- The ask is shipping a new version of the application and watching its health signals after the deploy; use `omh-deploy-and-monitor`.
-- The ask is deciding a versioned release -- what goes in, its tag, or its canary -- rather than changing declared infrastructure; use `omh-release-cut`.
-- The ask is choosing and deploying a model-serving engine; use `omh-inference-serving`.
-- Production is down or degraded right now and the ask is command of the incident; use `omh-live-incident-response`.
-
-## Examples
-
-Good example:
-
-- Prompt: terraform plan shows drift in the kubernetes cluster, stage the apply
-- Expected behavior: Separate the drift from a refresh-only plan, read the saved plan's creates, replacements and destroys, give the cost delta or mark it unestimated, and stage the apply from staging to production with a rollout-status gate and a rollback per stage.
-- Why: Applying over unresolved drift changes resources nobody meant to touch.
-
-Bad example:
-
-- Prompt: just run terraform apply -auto-approve in prod, the plan looked fine yesterday
-- Expected behavior: Refuse the fresh apply: re-plan, save the plan, read its replacements and destroys, and apply that saved plan behind a health gate.
-- Why: Yesterday's plan is not today's apply; drift and other merges change what a fresh apply does.
-
-## Completion Checklist
-
-- Existing drift is separated from the proposed change.
-- Every replacement or destroy is listed, and each stateful one waits for explicit approval.
-- The cost delta is observed or marked unestimated.
-- Every stage names its health gate and its rollback.
-- OMH ran nothing, and every fact cites observed output or is marked unverified.
-
-## Recovery Notes
-
-- If no saved plan exists, stop at the plan step and ask for one; do not assess from the diff of the code alone.
-- If a resource cannot be rolled back, say so in its stage and ask for approval before that stage.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -92,32 +60,6 @@ Handoff policy:
 
 Keep the drift assessment, blast radius, cost delta, staged apply plan, health gates and rollbacks in Hermes. Plan output, diffs, apply results, rollout status and cost estimates are recorded only from executor, operator, or wrapper observed output; OMH never runs terraform, tofu, pulumi, kubectl or helm, and any apply is the operator's.
 
-Required inputs:
-
-- the tool and the unit of change: the Terraform workspace or stack, the cluster and namespace, or the Helm release
-- the environments the change reaches, in promotion order
-- the observed plan or diff output for the change, saved to a file where the tool allows it
-- the health signal each environment already exposes: rollout status, probes, error rate, or a smoke check
-- observed output for any drift, apply, health, or rollback claim
-
-Expected outputs:
-
-- drift_assessment/v1
-- blast_radius/v1
-- cost_delta/v1
-- staged_apply_plan/v1
-- health_gate/v1
-- rollback_plan/v1
-
-Artifact expectations:
-
-- drift_assessment/v1 separates drift already present between state and the running infrastructure from the change being proposed, from a refresh-only plan or a live diff, and names who resolves each drifted resource before the apply
-- blast_radius/v1 lists every resource the saved plan creates, updates in place, replaces, or destroys, calls out each replacement or destroy of a stateful resource, and names what depends on it
-- cost_delta/v1 gives the monthly delta from an observed estimate for the saved plan, or marks the delta unestimated and names the resources that drive it
-- staged_apply_plan/v1 orders the stages from the least to the most exposed environment and applies the reviewed saved plan, never a fresh one
-- health_gate/v1 names, per stage, the observed signal that promotes it -- rollout status, a follow-up plan with no changes, an error rate -- and the value that stops it
-- rollback_plan/v1 names, per stage, the command or revert that undoes it and what cannot be undone, such as a destroyed volume or a rotated resource id
-
 Safety rules:
 
 - Never promote a stage without its health gate observed; a prepared gate keeps the next stage blocked.
@@ -125,6 +67,19 @@ Safety rules:
 - Apply only the saved plan that was reviewed; a fresh apply can differ from what was read.
 - Never hand-edit a state file or a live object to hide drift; import, move, or re-declare it, and say which.
 - OMH never runs terraform, tofu, pulumi, kubectl, or helm, and never reads cloud credentials; every drift, cost, apply, and health fact comes from observed output or is marked unverified.
+
+## Completion Checklist
+
+- Existing drift is separated from the proposed change.
+- Every replacement or destroy is listed, and each stateful one waits for explicit approval.
+- The cost delta is observed or marked unestimated.
+- Every stage names its health gate and its rollback.
+- OMH ran nothing, and every fact cites observed output or is marked unverified.
+
+## Recovery Notes
+
+- If no saved plan exists, stop at the plan step and ask for one; do not assess from the diff of the code alone.
+- If a resource cannot be rolled back, say so in its stage and ask for approval before that stage.
 
 ## Runtime Evidence
 

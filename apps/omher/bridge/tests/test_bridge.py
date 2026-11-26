@@ -533,51 +533,182 @@ class BotsAndChat(BridgeCase):
             self.assertEqual(current, {"model": "claude-opus-5-5", "provider": "claude-proxy", "reasoning": "low",
                                        "reasoning_wire": ""})
 
+    LADDER = ("minimal", "low", "medium", "high", "xhigh", "max", "ultra")
+    COMPAT = ("none", "minimal", "low", "medium", "high", "xhigh", "max")  # Hermes' OPENAI_COMPAT_WIRE_EFFORTS
+
+    def hermes_route(self, calls: list | None = None, routes=None):
+        """sys.modules patched with a Hermes whose `agent.reasoning_effort.route_supported_efforts` answers as the
+        real one (openai-codex: its model's set plus `ultra` on the app-server runtime; else the OpenAI-compatible
+        set), recording each call in *calls*."""
+        def route_supported_efforts(provider, model, api_mode=None, base_url=None):
+            if calls is not None:
+                calls.append((provider, model, api_mode, base_url))
+            if routes is not None:
+                return routes(provider, model, api_mode, base_url)
+            if provider == "openai-codex":
+                base = ("none", "low", "medium", "high", "xhigh", "max") if model.startswith("gpt-6") else \
+                    ("none", "low", "medium", "high", "xhigh")
+                return (*base, "ultra") if api_mode == "codex_app_server" and "max" in base else base
+            return self.COMPAT
+        return mock.patch.dict(sys.modules, {
+            "hermes_constants": types.SimpleNamespace(VALID_REASONING_EFFORTS=self.LADDER),
+            "agent": types.ModuleType("agent"),
+            "agent.reasoning_effort": types.SimpleNamespace(route_supported_efforts=route_supported_efforts)})
+
     async def test_models_options_shape(self):
-        # pinned: the levels are the installed Hermes' tuple, whatever this machine has installed
-        ladder = ("minimal", "low", "medium", "high", "xhigh", "max", "ultra")
-        with mock.patch.dict(sys.modules, {"hermes_constants": types.SimpleNamespace(VALID_REASONING_EFFORTS=ladder)}):
+        # pinned: the levels are the ones Hermes says the bot's route sends, in the installed Hermes' order
+        calls: list = []
+        with self.hermes_route(calls):
             async with Env() as env:
                 s = await self.open(env)
                 r = (await s.req("models.options", bot="kami"))["result"]
                 self.assertEqual(r["providers"], [{"slug": "claude-proxy", "name": "Claude", "models": ["claude-opus-5-5", "x"]}])
                 self.assertEqual(r["current"]["model"], "claude-opus-5-5")
-                self.assertEqual(r["reasoning_levels"], ["none", *ladder])
+                # a Claude route: no ultra next to max (Hermes clamps ultra to max there)
+                self.assertEqual(r["reasoning_levels"], list(self.COMPAT))
+                self.assertEqual(calls, [("claude-proxy", "claude-opus-5-5", None, None)])
+
+    async def test_the_levels_follow_the_sessions_live_route(self):
+        """The session's live model and provider decide, else the profile default; `ultra` is offered only on the
+        codex app-server runtime with a model whose ladder reaches max, and a legacy codex model offers no max."""
+        calls: list = []
+        with self.hermes_route(calls):
+            async with Env() as env:
+                cfg = env.home / "profiles" / "kami" / "config.yaml"
+                cfg.write_text("model:\n  default: gpt-6-sol\n  provider: openai-codex\n  openai_runtime: codex_app_server\n"
+                               "  base_url: https://chatgpt.example/backend/\n")
+                s = await self.open(env)
+                self.assertTrue((await s.req("chat.open", bot="kami"))["ok"])
+                c = env.clients["kami"]
+                c.model_info = {"model": "gpt-6-sol", "provider": "openai-codex", "reasoning_effort": "ultra",
+                                "reasoning_effort_wire": "ultra"}
+                r = (await s.req("models.options", bot="kami"))["result"]
+                self.assertEqual(r["reasoning_levels"], ["none", "low", "medium", "high", "xhigh", "max", "ultra"])
+                self.assertEqual(calls[-1], ("openai-codex", "gpt-6-sol", "codex_app_server", "https://chatgpt.example/backend"))
+                c.model_info = {**c.model_info, "model": "gpt-5.5"}
+                r = (await s.req("models.options", bot="kami"))["result"]
+                self.assertEqual(r["reasoning_levels"], ["none", "low", "medium", "high", "xhigh"])
+                # without the runtime switch the same model's route has no ultra
+                cfg.write_text("model:\n  default: gpt-6-sol\n  provider: openai-codex\n")
+                c.model_info = {**c.model_info, "model": "gpt-6-sol"}
+                r = (await s.req("models.options", bot="kami"))["result"]
+                self.assertEqual(r["reasoning_levels"], ["none", "low", "medium", "high", "xhigh", "max"])
+                self.assertEqual(calls[-1], ("openai-codex", "gpt-6-sol", None, None))
+                # a session on another provider: the profile's base_url (for openai-codex) is not that provider's
+                cfg.write_text("model:\n  default: gpt-6-sol\n  provider: openai-codex\n  openai_runtime: codex_app_server\n"
+                               "  base_url: https://chatgpt.example/backend\n")
+                c.model_info = {"model": "claude-opus-5-5", "provider": "claude-proxy", "reasoning_effort": "max"}
+                r = (await s.req("models.options", bot="kami"))["result"]
+                self.assertEqual(r["reasoning_levels"], list(self.COMPAT))
+                self.assertEqual(calls[-1], ("claude-proxy", "claude-opus-5-5", "codex_app_server", None))
+
+    async def test_set_model_answers_the_new_routes_levels(self):
+        """Switching the model in the picker answers the levels of the route it switched to, at once."""
+        with self.hermes_route():
+            async with Env() as env:
+                s = await self.open(env)
+                self.assertTrue((await s.req("chat.open", bot="kami"))["ok"])
+                c = env.clients["kami"]
+                r = (await s.req("chat.set_model", bot="kami", reasoning="max"))["result"]
+                self.assertEqual(r["reasoning_levels"], list(self.COMPAT))
+                c.model_info = {"model": "gpt-6-sol", "provider": "openai-codex", "reasoning_effort": "max"}
+                r = (await s.req("chat.set_model", bot="kami", model="gpt-6-sol", provider="openai-codex"))["result"]
+                self.assertEqual(r["reasoning_levels"], ["none", "low", "medium", "high", "xhigh", "max"])
 
     async def test_the_level_the_route_sends_rides_with_the_pick(self):
         """Hermes clamps `ultra` to `max` on most routes (`reasoning_effort_wire`): chat.open, models.options and
-        chat.set_model carry it as `reasoning_wire` so the picker never shows ultra as a level the route has."""
-        async with Env() as env:
-            s = await self.open(env)
-            opened = (await s.req("chat.open", bot="kami"))["result"]
-            self.assertEqual(opened["reasoning_wire"], "")  # an info without the field: Hermes did not say
-            c = env.clients["kami"]
-            c.model_info = {**c.model_info, "reasoning_effort": "ultra", "reasoning_effort_wire": "max"}
-            current = (await s.req("models.options", bot="kami"))["result"]["current"]
-            self.assertEqual((current["reasoning"], current["reasoning_wire"]), ("ultra", "max"))
-            r = (await s.req("chat.set_model", bot="kami", reasoning="ultra"))["result"]
-            self.assertEqual((r["reasoning"], r["reasoning_wire"]), ("ultra", "max"))
-            self.assertEqual((await s.req("chat.open", bot="kami"))["result"]["reasoning_wire"], "max")
+        chat.set_model carry it as `reasoning_wire` so the picker selects the level actually sent. A saved level the
+        route clamps stays settable (Hermes clamps it), though the picker no longer offers it."""
+        with self.hermes_route():
+            async with Env() as env:
+                s = await self.open(env)
+                opened = (await s.req("chat.open", bot="kami"))["result"]
+                self.assertEqual(opened["reasoning_wire"], "")  # an info without the field: Hermes did not say
+                c = env.clients["kami"]
+                c.model_info = {**c.model_info, "reasoning_effort": "ultra", "reasoning_effort_wire": "max"}
+                r = (await s.req("models.options", bot="kami"))["result"]
+                self.assertEqual((r["current"]["reasoning"], r["current"]["reasoning_wire"]), ("ultra", "max"))
+                self.assertNotIn("ultra", r["reasoning_levels"])
+                r = (await s.req("chat.set_model", bot="kami", reasoning="ultra"))["result"]
+                self.assertEqual((r["reasoning"], r["reasoning_wire"]), ("ultra", "max"))
+                self.assertEqual([m["payload"] for m in c.find("session.mutate")], [{"effort": "ultra"}])
+                self.assertEqual((await s.req("chat.open", bot="kami"))["result"]["reasoning_wire"], "max")
 
     async def test_reasoning_levels_are_the_installed_hermes_ones(self):
-        """The picker offers "none" plus the installed Hermes' VALID_REASONING_EFFORTS, in its order; a level that
-        Hermes does not name is refused before any mutation."""
+        """A level that the installed Hermes does not name is refused before any mutation; one it names but the
+        route clamps is not (Hermes clamps it)."""
         older = types.SimpleNamespace(VALID_REASONING_EFFORTS=("minimal", "low", "medium", "high", "xhigh"))
-        with mock.patch.dict(sys.modules, {"hermes_constants": older}):
+        with mock.patch.dict(sys.modules, {"hermes_constants": older, "agent.reasoning_effort": None}):
             async with Env() as env:
                 s = await self.open(env)
                 r = (await s.req("models.options", bot="kami"))["result"]
+                # a Hermes without the per-route clamp: its whole ladder
                 self.assertEqual(r["reasoning_levels"], ["none", "minimal", "low", "medium", "high", "xhigh"])
                 for level in ("max", "ultra"):
                     bad = await s.req("chat.set_model", bot="kami", reasoning=level)
                     self.assertEqual(bad["error"]["code"], "bad_request", level)
                 self.assertEqual(env.clients["kami"].find("session.mutate"), [])
                 self.assertTrue((await s.req("chat.set_model", bot="kami", reasoning="minimal"))["ok"])
+        with self.hermes_route(routes=lambda *a: ("none", "low", "medium", "high")):
+            async with Env() as env:
+                s = await self.open(env)
+                self.assertEqual((await s.req("models.options", bot="kami"))["result"]["reasoning_levels"],
+                                 ["none", "low", "medium", "high"])
+                self.assertTrue((await s.req("chat.set_model", bot="kami", reasoning="xhigh"))["ok"])
+                self.assertEqual((await s.req("chat.set_model", bot="kami", reasoning="turbo"))["error"]["code"], "bad_request")
         # A Hermes that names no tuple: Hermes' full ladder (its gateway is the judge of what it accepts).
         with mock.patch.dict(sys.modules, {"hermes_constants": types.SimpleNamespace()}):
             self.assertEqual(ob.reasoning_levels(), ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"])
         with mock.patch.dict(sys.modules, {"hermes_constants": None}):  # not importable at all
             self.assertEqual(ob.reasoning_levels(), list(ob.REASONING_LEVELS))
+
+    def test_route_levels_fall_back_to_the_ladder(self):
+        """No per-route answer to trust (not importable, raising, or naming nothing the ladder has): the ladder."""
+        with mock.patch.dict(sys.modules, {"hermes_constants": types.SimpleNamespace(VALID_REASONING_EFFORTS=self.LADDER),
+                                           "agent.reasoning_effort": None}):
+            self.assertEqual(ob.route_reasoning_levels("claude-proxy", "claude-opus-5-5"), ["none", *self.LADDER])
+
+        def boom(*a):
+            raise RuntimeError("no catalog")
+        for routes in (boom, lambda *a: ("bespoke-1", "bespoke-2")):
+            with self.hermes_route(routes=routes):
+                self.assertEqual(ob.route_reasoning_levels("custom", "m"), ["none", *self.LADDER])
+
+    def test_none_is_offered_only_where_the_route_sends_it(self):
+        """A Codex Astra-family route (Hermes' CODEX_ASTRA_EFFORTS: low..max, no none) cannot send none, so it is not
+        offered there; a route whose set has none offers it first."""
+        astra = ("low", "medium", "high", "xhigh", "max")
+        with self.hermes_route(routes=lambda *a: astra):
+            self.assertEqual(ob.route_reasoning_levels("openai-codex", "gpt-6-astra"), list(astra))
+        with self.hermes_route(routes=lambda *a: ("none", *astra)):
+            self.assertEqual(ob.route_reasoning_levels("openai-codex", "gpt-6-sol"), ["none", *astra])
+
+    async def test_a_saved_none_on_a_route_without_it_is_not_offered(self):
+        """`none` saved from elsewhere on an Astra route: the session's level stays `none` (Hermes keeps the model's
+        default effort and sends no wire level), and the route's levels do not offer it."""
+        astra = ("low", "medium", "high", "xhigh", "max")
+        with self.hermes_route(routes=lambda *a: astra):
+            async with Env() as env:
+                s = await self.open(env)
+                self.assertTrue((await s.req("chat.open", bot="kami"))["ok"])
+                c = env.clients["kami"]
+                c.model_info = {"model": "gpt-6-astra", "provider": "openai-codex", "reasoning_effort": "none",
+                                "reasoning_effort_wire": ""}
+                r = (await s.req("models.options", bot="kami"))["result"]
+                self.assertEqual((r["current"]["reasoning"], r["current"]["reasoning_wire"]), ("none", ""))
+                self.assertEqual(r["reasoning_levels"], list(astra))
+
+    def test_route_of_reads_the_runtime_like_hermes(self):
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t)
+            (d / "config.yaml").write_text("model:\n  provider: openai\n  openai_runtime: Codex_App_Server\n  base_url: http://h/v1/\n")
+            self.assertEqual(ob.route_of(d, "openai"), ("codex_app_server", "http://h/v1"))
+            self.assertEqual(ob.route_of(d, "openai-codex"), ("codex_app_server", None))
+            # the runtime rides along for any provider: Hermes' route_supported_efforts reads it for openai-codex only
+            self.assertEqual(ob.route_of(d, "claude-proxy"), ("codex_app_server", None))
+            (d / "config.yaml").write_text("model: plain\n")
+            self.assertEqual(ob.route_of(d, "openai"), (None, None))
+            self.assertEqual(ob.route_of(None, "openai"), (None, None))
 
     async def test_a_gateway_that_refuses_the_level_answers_its_error(self):
         """An older gateway refusing `ultra` is an error the picker shows, never a silent success."""

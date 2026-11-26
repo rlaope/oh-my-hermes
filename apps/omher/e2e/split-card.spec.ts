@@ -2,7 +2,7 @@
 // panes' real places with each pane's CLI mark, title and last line; the members are not rows in their folders again.
 // A cell click focuses that pane, a right-click opens the row menu (Hand to <bot> included), output makes the cell's edge orbit (still under
 // reduced motion), a bell on a cell not in view is quiet news while a bot's request to type makes it wait, the grip sets the card's height (kept after a restart,
-// double-click goes back), a search draws rows instead, and a 1+3 split's tall cell stacks its text.
+// double-click goes back), a search draws rows instead, and every cell of a card takes one text layout on the rows' icon column.
 import { expect, test, type Page } from "@playwright/test";
 import { mock, openApp } from "./term-find-helpers";
 import { closeFromSidebar, dragRowOnto, type Side } from "./split-drag-helpers";
@@ -18,6 +18,7 @@ const term = (page: Page, id: string) => page.locator(`[data-testid="terminal"][
 const pane = (page: Page, id: string) => page.locator(`[data-testid="split-pane"][data-session="${id}"]`);
 const cell = (page: Page, id: string) => page.locator(`[data-testid="split-cell"][data-session="${id}"]`);
 const card = (page: Page) => page.getByTestId("split-card");
+const grip = (page: Page) => page.getByTestId("split-card-grip");
 const mapH = (page: Page) => page.locator(".sc-map").first().evaluate((e) => Math.round(e.getBoundingClientRect().height));
 
 async function sessions(page: Page, folders: string[], agent = "shell"): Promise<string[]> {
@@ -360,14 +361,16 @@ test("a tall card in a short TERMINALS gives way so it is never hidden whole: 12
       list.scrollTop = group.getBoundingClientRect().top - list.getBoundingClientRect().top;
       const lb = list.getBoundingClientRect();
       const cut = Number(/inset\(0px 0px ([\d.]+)px/.exec(list.style.clipPath)?.[1] ?? 0);
-      const card = document.querySelector(".split-card")!.getBoundingClientRect();
       const hits = [...document.querySelectorAll<HTMLElement>('[data-testid="split-cell"]')].map((e) => {
         const r = e.getBoundingClientRect();
         const [x, y] = [r.left + r.width / 2, r.top + r.height / 2];
         const at = y < lb.bottom - cut ? document.elementFromPoint(x, y) : null;
         return at?.closest<HTMLElement>('[data-testid="split-cell"]')?.dataset.session === e.dataset.session ? e.dataset.session : (at?.className ?? null);
       });
-      return { hits, shown: Math.max(0, Math.min(card.bottom, lb.bottom - cut) - card.top), card: card.height };
+      // the cells (the map): the grip under them may sit in the chevron's band, which is clipped so the chevron is
+      // never drawn over the card
+      const map = document.querySelector(".split-card .sc-map")!.getBoundingClientRect();
+      return { hits, shown: Math.max(0, Math.min(map.bottom, lb.bottom - cut) - map.top), card: map.height };
     });
   const check = async () => {
     await page.waitForTimeout(250);
@@ -379,7 +382,7 @@ test("a tall card in a short TERMINALS gives way so it is never hidden whole: 12
   await check();
   await page.setViewportSize({ width: 1280, height: 600 });
   const short = await check();
-  // the card gave way to the room: every cell is reachable, and the saved height is still 240
+  // the card gave way to the room: every cell is reachable and shown whole, and the saved height is still 240
   expect(short.hits, JSON.stringify(short)).toEqual([a, b, c, d]);
   expect(short.shown, JSON.stringify(short)).toBe(short.card);
   await expect(grip).toHaveAttribute("aria-valuenow", "240");
@@ -391,10 +394,112 @@ test("a tall card in a short TERMINALS gives way so it is never hidden whole: 12
   await check();
 });
 
-test("a 1+3 split gives its tall cell stacked text and its short cells text beside the mark", async ({ page }) => {
+/** Each cell's text layout (data-text), and whether it shows a last line. */
+const looks = (page: Page) => page.locator('[data-testid="split-cell"]').evaluateAll((els) => els.map((e) => ({ id: (e as HTMLElement).dataset.session, text: (e as HTMLElement).dataset.text, line: !!e.querySelector(".sc-l") })));
+
+test("a 1+3 split lays every cell out the same way: one text layout per card, never a stacked cell beside cells with text beside the mark", async ({ page }) => {
   await openApp(page);
   const [a, b, c, d] = await sessions(page, ["/w/a", "/w/b", "/w/c", "/w/d"]);
   await oneThree(page, [a, b, c, d]);
-  await expect(cell(page, a)).toHaveAttribute("data-text", "stack");
-  for (const id of [b, c, d]) await expect(cell(page, id)).toHaveAttribute("data-text", "beside");
+  for (const id of [a, b, c, d]) await expect(cell(page, id)).toHaveAttribute("data-text", "stack");
+});
+
+test("one tall cell and two stacked ones (1280x820, and capped short at 900x600) share one layout; the right cells' mark and title start where the left cell's do", async ({ page }) => {
+  await openApp(page);
+  const [a, b, c] = await sessions(page, ["/w/a", "/w/b", "/w/c"]);
+  await splitWith(page, a, b, "right");
+  await splitWith(page, b, c, "down");
+  await expect(card(page)).toHaveAttribute("data-panes", "3");
+  const one = async () => {
+    const l = await looks(page);
+    expect(new Set(l.map((x) => x.text)).size, JSON.stringify(l)).toBe(1);
+    expect(new Set(l.map((x) => x.line)).size, JSON.stringify(l)).toBe(1);
+    // every cell's content starts the same distance in from its own left edge
+    const inset = await page.locator('[data-testid="split-cell"]').evaluateAll((els) => els.map((e) => Math.round(e.querySelector(".trm")!.getBoundingClientRect().left - e.getBoundingClientRect().left)));
+    expect(new Set(inset).size, JSON.stringify(inset)).toBe(1);
+    return l[0]!.text;
+  };
+  await expect.poll(async () => (await looks(page)).length).toBe(3);
+  expect(await one()).toBe("stack");
+  // a short window caps the card (46 px): every cell is one line, none keeps two
+  await page.setViewportSize({ width: 900, height: 600 });
+  const grip = page.getByTestId("split-card-grip");
+  await grip.focus();
+  for (let i = 0; i < 3; i++) await grip.press("ArrowUp");
+  await expect(grip).toHaveAttribute("aria-valuenow", "46");
+  await expect.poll(async () => [...new Set((await looks(page)).map((x) => x.text))]).toEqual(["line"]);
+  expect(await one()).toBe("line");
+  // a one-line cell's face is still the whole cell: a right-click anywhere on it is the row menu
+  const faces = await page.locator('[data-testid="split-cell"]').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().height - e.querySelector(".sc-open")!.getBoundingClientRect().height)));
+  expect(faces).toEqual([0, 0, 0]);
+  const box = (await cell(page, a).boundingBox())!;
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height - 4, { button: "right" });
+  await expect(page.getByTestId("session-row-menu")).toBeVisible();
+  await expect(page.getByTestId("sessions-context-menu")).toHaveCount(0);
+});
+
+test("at the default grip no CLI's name is cut, and the cells' marks sit on the TERMINALS rows' icon column at the rows' size", async ({ page }) => {
+  await openApp(page);
+  const [a] = await sessions(page, ["/w/a"], "claude");
+  const [b, c] = await sessions(page, ["/w/a", "/w/a"]);
+  await splitWith(page, a, b);
+  await expect(grip(page)).toHaveAttribute("aria-valuenow", "62");
+  await expect(cell(page, a).getByTestId("split-cell-name")).toHaveText("Claude Code");
+  const fit = await page.locator('[data-testid="split-cell"]').evaluateAll((els) =>
+    els.map((e) => {
+      const n = e.querySelector<HTMLElement>(".sc-n")!;
+      const m = e.querySelector(".trm")!.getBoundingClientRect();
+      return { name: n.textContent, scroll: n.scrollWidth, client: n.clientWidth, markX: Math.round(m.left), markW: Math.round(m.width) };
+    }),
+  );
+  for (const f of fit) expect(f.scroll, JSON.stringify(fit)).toBeLessThanOrEqual(f.client);
+  const row = (await page.getByTestId(`session-${c}`).getByTestId("term-row-mark").boundingBox())!;
+  // the first cell's mark on the row's mark, at the row's 16 px
+  expect(Math.abs(fit[0]!.markX - Math.round(row.x)), JSON.stringify({ fit, row })).toBeLessThanOrEqual(1);
+  expect(fit.map((f) => f.markW)).toEqual([16, 16]);
+  expect(Math.round(row.width)).toBe(16);
+});
+
+test("a shell cell's last line is never its own prompt", async ({ page }) => {
+  await openApp(page);
+  const [a, b] = await sessions(page, ["/w/api-server", "/w/api-server"]);
+  await splitWith(page, a, b);
+  // the mock shell printed its first line, then sits at `you@mock api-server % `
+  await expect(cell(page, a).locator(".sc-l")).toHaveText("(mock) login shell in /w/api-server");
+  for (const id of [a, b]) await expect(cell(page, id)).not.toContainText("you@mock");
+  // what is typed after the prompt is what it shows
+  await out(page, await ptyOf(page, a), "\x1b[2J\x1b[Hyou@mock api-server % make test\r\nyou@mock api-server % ");
+  await expect(cell(page, a).locator(".sc-l")).toHaveText("make test");
+});
+
+test("a still frame of a working cell shows a whole ring with a short head, never a segment that reads as a fill level; under reduced motion only the ring, still", async ({ page }) => {
+  await openApp(page);
+  const [a, b] = await sessions(page, ["/w/a", "/w/b"]);
+  await splitWith(page, a, b);
+  const pa = await ptyOf(page, a);
+  const feed = setInterval(() => void out(page, pa, "working...\r\n").catch(() => {}), 300);
+  try {
+    await expect(cell(page, a)).toHaveAttribute("data-state", "work");
+    const ring = cell(page, a).locator(".sc-ring");
+    const head = cell(page, a).locator(".sc-orbit");
+    await expect(ring).toHaveCount(1);
+    await expect(head).toHaveCount(1);
+    const g = await cell(page, a).evaluate((e) => {
+      const ring = getComputedStyle(e.querySelector(".sc-ring")!);
+      const head = e.querySelector(".sc-orbit")!;
+      return { ringDash: ring.strokeDasharray, ringOpacity: Number(ring.opacity), headDash: head.getAttribute("stroke-dasharray"), heads: e.querySelectorAll(".sc-orbit").length };
+    });
+    // the ring is the whole edge (no dash), the head at most 6 % of it, one head only
+    expect(g.ringDash).toBe("none");
+    expect(g.ringOpacity).toBeGreaterThan(0);
+    expect(Number(g.headDash!.split(" ")[0])).toBeLessThanOrEqual(6);
+    expect(g.heads).toBe(1);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await expect(head).toBeHidden();
+    await expect.poll(() => ring.evaluate((e) => getComputedStyle(e).animationName)).toBe("none");
+    await expect(ring).toBeVisible();
+  } finally {
+    clearInterval(feed);
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+  }
 });

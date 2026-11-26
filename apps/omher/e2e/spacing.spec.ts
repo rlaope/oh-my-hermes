@@ -299,8 +299,13 @@ test("footer: Automations, Plugins, Apps and Settings in one row of icon buttons
     await expect(row.getByRole("button", { name: new RegExp(`^${name}`) })).toHaveCount(1);
     await expect(row.getByTestId(id)).toHaveAttribute("title", new RegExp(`^${name}`));
   }
-  // the Automations count stays on its icon
-  await expect(row.getByTestId("nav-automations").locator(".nav-count")).toHaveText("6");
+  // the Automations count stays on its icon, as a filled pill that stands off the glyph (not a bare superscript digit)
+  const count = row.getByTestId("nav-automations").locator(".nav-count");
+  await expect(count).toHaveText("6");
+  expect(await count.evaluate((e) => getComputedStyle(e).backgroundColor)).not.toBe(await page.evaluate(() => getComputedStyle(document.querySelector(".side")!).backgroundColor));
+  const [pill, glyph] = await Promise.all([count.boundingBox(), row.getByTestId("nav-automations").locator("svg").boundingBox()]);
+  expect(pill!.width).toBeGreaterThanOrEqual(14);
+  expect(pill!.x + pill!.width).toBeGreaterThan(glyph!.x + glyph!.width);
   await expect(row.getByTestId("nav-automations")).toHaveAttribute("title", "Automations · 6");
   // one row: the four share a line, and the usage marks sit on it too
   const ys = await page.evaluate(() => ["nav-automations", "nav-plugins", "nav-apps", "nav-settings"].map((id) => Math.round(document.querySelector(`[data-testid="${id}"]`)!.getBoundingClientRect().top)));
@@ -378,14 +383,15 @@ const FRACTIONS = [0, 0.25, 0.43, 0.7, 1];
 
 // owner (2026-11-16, "no empty band"), fix5: a region's last visible thing is a whole row at its end, or a row cut
 // under the soft bottom fade, never an empty band (over 12px, besides the chevron's 14px). At the top of an auto
-// split the regions end on whole rows; scrolled, the cut row shows under the fade, as in any scrolling list.
+// split the regions end on whole rows; scrolled, the cut row shows under the fade, as in any scrolling list. A region
+// at its top whose next whole-row end is refused (an open folder's header) shows its cut row under the fade too
+// rather than an empty band (UI review C8): a row cut at the top of a list is never shown without the fade.
 function expectNoBand(b: Awaited<ReturnType<typeof bands>>, f: number) {
   for (const r of [b.bots!, b.terms!]) {
     const at = JSON.stringify({ f, ...b });
     expect(r.band, at).toBeLessThanOrEqual(12);
     expect(r.openHeadsAlone, at).toBe(0);
     if (r.cut) expect(r.fade, at).toBe(true);
-    if (f === 0 && r.scrollTop === 0) expect(r.cut, at).toBe(false);
   }
 }
 

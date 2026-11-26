@@ -89,7 +89,7 @@ export function PlatformsBody({ bot, read }: { bot: Bot; read: PlatformsRead | n
             ))}
           </ul>
         )}
-        {r.available && <p className="bp-note">{there ? t("pf.sourcePeer", { label }) : t("pf.source")}</p>}
+        {r.available && <p className="bp-note pf-source">{there ? t("pf.sourcePeer", { label }) : t("pf.source")}</p>}
       </div>
     </>
   );

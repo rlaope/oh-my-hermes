@@ -15,43 +15,13 @@ metadata:
 
 # People Ops
 
-This is a Hermes-native `people-ops` workflow skill.
+Required: role or people-process outcome, available evidence, decision owner, policy constraints. Output: role/outcome and must-have versus trainable-criteria brief, structured interview scorecard and evidence-based debrief template, hiring-process, interviewer, and decision-owner plan, inclusion, privacy, policy, and missing-evidence flags with a next route.
 
 ## Why This Exists
 
 `people-ops` keeps recruiting and people-process guidance fair, structured, and evidence bounded before any human decision or external HR action.
 
-## Do Not Use When
-
-- The request asks for a jurisdiction-specific employment-law conclusion, policy compliance ruling, or contract interpretation; use `omh-legal-compliance-review`.
-- The user only needs a one-off job-ad, rejection, or interview-email rewrite; use `omh-content-operator`.
-- The user asks to create ATS records, send invitations, book interviews, change employment status, or modify HRIS settings; use `omh-apps` with explicit authorization and observed results.
-- The user is the candidate: tailoring a resume, preparing for their own interview or tracking applications; use `omh-ai-job-search`.
-- The prompt asks the workflow to make an unsupported candidate decision from protected characteristics or missing interview evidence; retain the process and evidence gap instead.
-
-## Examples
-
-Good example:
-
-- Prompt: Create an interview scorecard and debrief plan for our first senior support hire.
-- Expected behavior: Prepare role criteria, a structured scorecard, a debrief template, and decision-owner plan.
-- Why: The request needs a fair hiring-process brief, not a claim that a candidate was evaluated or hired.
-
-Bad example:
-
-- Prompt: Send calendar invitations to every candidate for next Tuesday.
-- Expected behavior: Route to `omh-apps`, not `people-ops`.
-- Why: Sending invitations is an explicit external calendar action.
-
-## Completion Checklist
-
-- Outcomes, must-haves and trainable skills are separate; every criterion has anchors and states the outcome it predicts; every candidate gets the same core questions; interviewers score before the debrief, and the debrief separates evidence from impression; no candidate recommendation without interview evidence; no ATS, calendar or HRIS action is claimed.
-- Where selection-rate data by group exists, compare the rates; in the US the four-fifths rule (29 CFR 1607.4(D)) is an enforcement rule of thumb, not a safe harbour. With small numbers or no such data, mark the check not_observed and route the jurisdiction question to `omh-legal-compliance-review`.
-
-## Recovery Notes
-
-- If interview evidence cannot support a candidate debrief, retain the role outcomes, must-have versus trainable criteria, and scorecard, mark the recommendation unresolved, and hand back the missing evidence to the decision owner.
-- If policy constraints need a jurisdiction-specific ruling, retain the role brief and interview scorecard, mark the policy conclusion unresolved, and hand back the flagged questions to `omh-legal-compliance-review`.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -82,34 +52,26 @@ Handoff policy:
 
 Keep domain framing, clarification, source/evidence synthesis, draft outputs, and next-work routing in Hermes. A prepared brief, review, reply, or plan is not an external action, approval, filing, send, publish, data mutation, implementation, review, CI, or merge claim. Prepare a connector, file, coding, or human-review handoff only when the user explicitly accepts that next step; report it only from observed evidence. Hermes can prepare fair process guidance and interview artifacts; it cannot claim a candidate was contacted, evaluated, hired, rejected, or recorded in an HR system.
 
-Required inputs:
-
-- role or people-process outcome
-- available evidence
-- decision owner
-- policy constraints
-
 Expert clarification questions:
 - `role or people-process outcome`
   - English: What role or people-process outcome should this work achieve?
   - Korean: 이 작업에서 어떤 역할 또는 인사 프로세스 결과를 달성해야 하나요?
-
-Expected outputs:
-
-- role/outcome and must-have versus trainable-criteria brief
-- structured interview scorecard and evidence-based debrief template
-- hiring-process, interviewer, and decision-owner plan
-- inclusion, privacy, policy, and missing-evidence flags with a next route
-
-Artifact expectations:
-
-- prepared people-operations brief when a wrapper captures it
 
 Safety rules:
 
 - Keep protected characteristics and missing interview evidence out of unsupported candidate recommendations.
 - Do not claim HRIS, ATS, outreach, interview, or employment-status actions occurred.
 - Draft no questions on protected traits or their proxies (age, family status, health, origin), and check the local rule on what a form or question may ask on an official page (in Korea, the recruitment fairness act); route that question to `omh-legal-compliance-review`, say why, and offer a job-related substitute.
+
+## Completion Checklist
+
+- Outcomes, must-haves and trainable skills are separate; every criterion has anchors and states the outcome it predicts; every candidate gets the same core questions; interviewers score before the debrief, and the debrief separates evidence from impression; no candidate recommendation without interview evidence; no ATS, calendar or HRIS action is claimed.
+- Where selection-rate data by group exists, compare the rates; in the US the four-fifths rule (29 CFR 1607.4(D)) is an enforcement rule of thumb, not a safe harbour. With small numbers or no such data, mark the check not_observed and route the jurisdiction question to `omh-legal-compliance-review`.
+
+## Recovery Notes
+
+- If interview evidence cannot support a candidate debrief, retain the role outcomes, must-have versus trainable criteria, and scorecard, mark the recommendation unresolved, and hand back the missing evidence to the decision owner.
+- If policy constraints need a jurisdiction-specific ruling, retain the role brief and interview scorecard, mark the policy conclusion unresolved, and hand back the flagged questions to `omh-legal-compliance-review`.
 
 ## Runtime Evidence
 

@@ -10,49 +10,20 @@ metadata:
     phase: connector-task
     role: guide
     quality_tier: workflow-surface-gated
-    related_skills: [omh-gateway-intent-card, omh-external-connector-readiness, omh-terminal]
+    related_skills: [omh-gateway-intent-card, omh-external-connector-readiness, omh-terminal, email-inbox-triage]
 ---
 
 # Connector Operator
 
-This is a Hermes-native `connector-operator` workflow skill.
+Required: user request, target context, delivery or status expectation, known missing evidence. Output: connector_task_card/v1, connector_scope/v1, connector_auth_boundary/v1, connector_confirmation_gate/v1 when mutating or sending, connector_result_manifest/v1 when observed, next action, prepared-vs-observed boundary.
+
+**Do Not Use When:** The user wants an email inbox triaged or replies drafted under inbox reply policy; load Hermes' bundled `email-inbox-triage` skill instead of this one.
 
 ## Why This Exists
 
 `connector-operator` exists because an email sent, a ticket written, or an invite delivered cannot be taken back: it scopes the provider, target, and payload, takes a missing connection to the host's own connection setup and respects a skip, and reports delivery only from a provider receipt.
 
-## Do Not Use When
-
-- Only the reply or thread policy of a Discord, Slack, or Telegram conversation is in question; use `omh-gateway-intent-card`.
-- The user is choosing or adopting a new provider, MCP server, or integration rather than acting through one; use `omh-external-connector-readiness`.
-- Launching or quitting a local desktop application; use `omh-terminal` or the host's computer-use tool.
-
-## Examples
-
-Good example:
-
-- Prompt: connector-operator draft an email to the customer and prepare a confirmation gate before sending.
-- Expected behavior: Produce `prepare_connector_operator_card` with required context, wrapper actions, and not-evidence boundaries.
-- Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
-
-Bad example:
-
-- Prompt: connector-operator send the Jira update with hidden credentials and claim it was delivered.
-- Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
-- Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
-
-## Completion Checklist
-
-- Provider, target object, allowed action, authority, confirmation policy, and stop condition are explicit; the confirmation shows the exact payload (recipients with cc/bcc, channel, subject, full body, attachments, attendees).
-- Credentials, missing connector setup, external writes, sends, ticket mutations, calendar invites, CRM updates, and webhook delivery are gated, or marked missing and not run.
-- With nobody to answer the confirmation (a scheduled job, a one-shot run, a webhook run), an irreversible or externally visible action is not run: it is handed to a person's turn and its confirmation is recorded as missing. The one exception is a bot whose person turned on its PR delivery grant (`omh capability-policy pr-delivery on`, which only the person runs; the bot only tells them the command): it may push a new branch under the grant's branch prefix, open a pull request from that branch, and push fix commits to and comment on a pull request it opened, and nothing else. Merging, force-pushing, pushing to the default branch, and anything on a pull request it did not open stay a person's, grant or no grant.
-- Message ids, ticket ids, provider responses, delivery receipts, and API effects are reported only from observed connector evidence.
-
-## Recovery Notes
-
-- If the connector, credentials, or permission is missing: on Hermes, when `manage_connections` is in your tool list or tool_search finds it, use it for the app the user named (`status`, then `connect`) and take each app's answer as given: `connected` proceeds, `skipped` means continue without that app or ask in chat, never calling it again on your own or reaching the app another way, and `not_connected` stays a named gap. Otherwise route to `omh-toolbelt-readiness` before preparing action success claims.
-- If the request is only chat thread delivery policy for Discord, Slack, or Telegram, route to `omh-gateway-intent-card` instead.
-- If the external app action would create, send, invite, mutate, or delete provider state, require an explicit confirmation gate in chat before the call. Hermes asks the person before such a call only in some configurations (a write-capable tool on an MCP server set to `trust: untrusted`, or a plugin hook that escalates the call), so a host prompt that does appear is recorded as additional evidence and never replaces the chat confirmation.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -84,35 +55,23 @@ Handoff policy:
 
 Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 
-Required inputs:
-
-- user request
-- target context
-- delivery or status expectation
-- known missing evidence
-
-Expected outputs:
-
-- connector_task_card/v1
-- connector_scope/v1
-- connector_auth_boundary/v1
-- connector_confirmation_gate/v1 when mutating or sending
-- connector_result_manifest/v1 when observed
-- next action
-- prepared-vs-observed boundary
-
-Artifact expectations:
-
-- connector_task_card/v1 metadata-only wrapper card when prepared
-- connector_scope/v1 with provider, target object, allowed action, exact payload for any send or write, and stop condition
-- connector_auth_boundary/v1 separating missing connector, missing credentials, user-supplied authority, and credential-use prohibition, with the host's own connection answer per app (`connected`, `skipped`, or `not_connected` on Hermes) when recorded
-- connector_confirmation_gate/v1 for sending, ticket mutation, external write, webhook delivery, CRM/database update, or irreversible provider action
-- connector_result_manifest/v1 only when provider response, message id, ticket id, API transcript, or delivery receipt is observed
-
 Safety rules:
 
 - A connector operator card is not connector availability, credential validation, API call, message send, ticket creation, ticket update, database/CRM mutation, external write, webhook delivery, or provider success evidence unless observed connector-result evidence records it.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
+## Completion Checklist
+
+- Provider, target object, allowed action, authority, confirmation policy, and stop condition are explicit; the confirmation shows the exact payload (recipients with cc/bcc, channel, subject, full body, attachments, attendees).
+- Credentials, missing connector setup, external writes, sends, ticket mutations, calendar invites, CRM updates, and webhook delivery are gated, or marked missing and not run.
+- With nobody to answer the confirmation (a scheduled job, a one-shot run, a webhook run), an irreversible or externally visible action is not run: it is handed to a person's turn and its confirmation is recorded as missing. The one exception is a bot whose person turned on its PR delivery grant (`omh capability-policy pr-delivery on`, which only the person runs; the bot only tells them the command): it may push a new branch under the grant's branch prefix, open a pull request from that branch, and push fix commits to and comment on a pull request it opened, and nothing else. Merging, force-pushing, pushing to the default branch, and anything on a pull request it did not open stay a person's, grant or no grant.
+- Message ids, ticket ids, provider responses, delivery receipts, and API effects are reported only from observed connector evidence.
+
+## Recovery Notes
+
+- If the connector, credentials, or permission is missing: on Hermes, when `manage_connections` is in your tool list or tool_search finds it, use it for the app the user named (`status`, then `connect`) and take each app's answer as given: `connected` proceeds, `skipped` means continue without that app or ask in chat, never calling it again on your own or reaching the app another way, and `not_connected` stays a named gap. Otherwise route to `omh-toolbelt-readiness` before preparing action success claims.
+- If the request is only chat thread delivery policy for Discord, Slack, or Telegram, route to `omh-gateway-intent-card` instead.
+- If the external app action would create, send, invite, mutate, or delete provider state, require an explicit confirmation gate in chat before the call. Hermes asks the person before such a call only in some configurations (a write-capable tool on an MCP server set to `trust: untrusted`, or a plugin hook that escalates the call), so a host prompt that does appear is recorded as additional evidence and never replaces the chat confirmation.
 
 ## Runtime Evidence
 

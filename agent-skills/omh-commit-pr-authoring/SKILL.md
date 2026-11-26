@@ -80,6 +80,7 @@ Quality bar:
 - Build the evidence ledger first; the `Tested:` and validation sections are projections of it, not prose.
 - Write the subject in the repository's shape and the body as why the change exists, not a restated diff.
 - Load `references/commit-and-pr-conventions.md` for trailer, sign-off, and template-section mapping instead of improvising them.
+- Run `toolkit/scripts/merge_danger_scan.py` (usage in `toolkit/README.md`: `skill_view(name='omh-commit-pr-authoring', file_path='toolkit/README.md')`) on the unified diff before finalizing Risk/Rollout notes to catch migrations, lockfile churn, deleted public symbols, and secret prefixes.
 - Put `Closes #N` on its own line only when every success criterion of that issue is met.
 
 Required inputs:
@@ -103,6 +104,7 @@ Artifact expectations:
 - evidence_ledger/v1 lists every command with observed or not_observed; observed carries the exit status and where it was seen
 - commit_message_draft/v1 and pr_body_draft/v1 take `Tested:` and the validation section only from observed ledger rows
 - commit_message_draft/v1 lists the paths the commit covers, so whoever records it stages those paths and nothing else
+- optional offline diff hazard summary via `toolkit/scripts/merge_danger_scan.py` (`merge_danger_scan/v1`, read-only)
 
 Safety rules:
 

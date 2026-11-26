@@ -86,10 +86,13 @@ test("a failed subagent reads failed in red, and the card says how many failed",
   expect(red).toBe(danger);
 });
 
-test("the card's run name opens that run in Plans", async ({ page }) => {
+test("the card's link names the plan as Plans does and opens that run there", async ({ page }) => {
   await send(page, "/delegate two lookups");
   const open = page.getByTestId("fanout-card").getByTestId("fanout-open");
-  await expect(open).toHaveText("codex-coexist-live");
+  // the plan's title, the one its header in Plans shows; the run's short name stays in the tooltip
+  await expect(open).toHaveText("Codex coexistence (live)");
+  await expect(open).toHaveAttribute("title", "Open plan codex-coexist-live");
+  await expect(page.getByTestId("run-plan-title")).toHaveText("Codex coexistence (live)");
   // the panel opened by itself on this turn's fan-out; close it, then the card's link opens it on the run
   await expect(page.getByTestId("window")).toHaveClass(/\bpanel-open\b/);
   // the button slides with the opening panel: press it once it has stopped
@@ -99,6 +102,30 @@ test("the card's run name opens that run in Plans", async ({ page }) => {
   await open.click();
   await expect(page.getByTestId("panel-tab-runs")).toHaveAttribute("aria-selected", "true");
   await expect(page.getByTestId("run-graph-box")).toHaveAttribute("data-run", LIVE);
+});
+
+test("with Plans open beside it at 1280, the card shows its summary, its time and both goals whole; a short turn reads <1s", async ({ page }) => {
+  for (const lang of ["en", "ko"]) {
+    await mock("mock.reset");
+    await page.addInitScript((l) => localStorage.setItem("omher.lang", l), lang);
+    await send(page, "/delegate two lookups");
+    const card = page.getByTestId("fanout-card");
+    await expect(card).toHaveAttribute("data-state", "done");
+    // the fan-out opened Plans: the chat column is narrow
+    await expect(page.getByTestId("window")).toHaveClass(/\bpanel-open\b/);
+    await motionDone(page);
+    const cut = await card.evaluate((c) =>
+      [...c.querySelectorAll("[data-testid=fanout-summary], [data-testid=subagent-goal], [data-testid=subagent-time]")]
+        .filter((e) => e.scrollWidth > e.clientWidth + 1)
+        .map((e) => e.textContent),
+    );
+    expect(cut, lang).toEqual([]);
+    await expect(card.getByTestId("fanout-summary")).toHaveText(lang === "en" ? /^Ran 2 subagents · \d+s$/ : /^서브에이전트 2개 실행함 · \d+초$/);
+    // the parent's turn took under a second: never "0s"
+    const worked = page.getByTestId("activity").last().getByTestId("activity-text");
+    await expect(worked).toHaveText(lang === "en" ? /^Worked for (<1s|\d+s) · 2 steps$/ : /^(1초 미만|\d+초) 동안 작업 · 2단계$/);
+    await expect(worked).not.toHaveText(/(^|\D)0s|(^|\D)0초/);
+  }
 });
 
 test("the words say subagents, never helpers, in every language", async ({ page }) => {

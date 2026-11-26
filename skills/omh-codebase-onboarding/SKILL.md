@@ -10,7 +10,7 @@ metadata:
     phase: codebase-onboarding
     role: planner
     quality_tier: onboarding-gated
-    related_skills: [ulw-work, omh-idea-to-deploy, omh-workspace-audit, omh-code-review, omh-codebase-uml, omh-codegraph-refresh]
+    related_skills: [ulw-work, omh-idea-to-deploy, omh-workspace-audit, omh-code-review, omh-codebase-uml, omh-codegraph-refresh, codebase-inspection]
 ---
 
 # Codebase Onboarding
@@ -27,6 +27,7 @@ This is a Hermes-native `codebase-onboarding` workflow skill.
 - The user needs a whole-workspace capability inventory; use `omh-workspace-audit`.
 - The user wants a code diff review; use `omh-code-review`.
 - The user wants a picture of the structure; use `omh-codebase-uml`. The user wants the code index refreshed or a task-scoped handoff pack; use `omh-codegraph-refresh`.
+- The user only wants lines-of-code counts, language percentages, or code-to-comment ratios via pygount rather than a reading path and starter-task runway; load Hermes' bundled `codebase-inspection` skill instead of this one.
 
 ## Examples
 

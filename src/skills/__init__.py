@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from .catalog import (
+    BESPOKE_SKILL_BODY_NAMES,
     CORE_PROFILE_SKILLS,
     CORE_SKILLS,
     DESCRIPTIONS,
     OMH_SKILL_DISPLAY_NAME_OVERRIDES,
     OMH_SKILL_NAME_PREFIX,
+    SKILL_PACKS,
+    SKILL_PACK_NAMES,
     HarnessDefinition,
     SkillDefinition,
     SkillExample,
@@ -13,6 +16,7 @@ from .catalog import (
     builtin_definitions,
     builtin_harnesses,
     capability_definitions,
+    core_with_packs_skill_names,
     harness_definition,
     harness_quality_contract,
     hermes_skill_categories,
@@ -21,6 +25,7 @@ from .catalog import (
     installable_skill_names,
     omh_skill_display_name,
     omh_skill_install_path,
+    resolve_skill_pack_names,
     routable_definitions,
     routable_skill_names,
     skill_exposure_payload,
@@ -66,11 +71,14 @@ def __dir__() -> list[str]:
 
 
 __all__ = [
+    "BESPOKE_SKILL_BODY_NAMES",
     "CORE_PROFILE_SKILLS",
     "CORE_SKILLS",
     "DESCRIPTIONS",
     "OMH_SKILL_DISPLAY_NAME_OVERRIDES",
     "OMH_SKILL_NAME_PREFIX",
+    "SKILL_PACKS",
+    "SKILL_PACK_NAMES",
     "HarnessDefinition",
     "SkillDefinition",
     "SkillExample",
@@ -82,6 +90,7 @@ __all__ = [
     "builtin_definitions",
     "builtin_harnesses",
     "capability_definitions",
+    "core_with_packs_skill_names",
     "harness_definition",
     "harness_quality_contract",
     "hermes_skill_categories",
@@ -90,6 +99,7 @@ __all__ = [
     "installable_skill_names",
     "omh_skill_display_name",
     "omh_skill_install_path",
+    "resolve_skill_pack_names",
     "routable_definitions",
     "routable_skill_names",
     "skill_exposure_payload",

@@ -458,7 +458,7 @@ class HermesPlanReviewedBodyTests(unittest.TestCase):
         import argparse
 
         from omh.commands.main import build_parser
-        from omh.skills.packaging import builtin_skill_templates
+        from omh.skills.packaging import builtin_skill_reference_templates, builtin_skill_templates
 
         def options_of(*names: str) -> set[str]:
             parser = build_parser()
@@ -468,9 +468,14 @@ class HermesPlanReviewedBodyTests(unittest.TestCase):
             return {option for action in parser._actions for option in action.option_strings}
 
         options = options_of("hermes", "plan")
-        skills = {t.name: t for t in builtin_skill_templates()}
+        full_contracts = {
+            ref.skill_name: ref.content
+            for ref in builtin_skill_reference_templates()
+            if ref.relative_path == "references/full-contract.md"
+        }
+        skills = {t.name: t.content + "\n" + full_contracts.get(t.name, "") for t in builtin_skill_templates()}
         self.assertIn("--allow-scaffold", options_of("hermes", "plan-accept"))
-        self.assertIn("--allow-scaffold", skills["ralplan"].content, "ralplan does not quote --allow-scaffold")
+        self.assertIn("--allow-scaffold", skills["ralplan"], "ralplan does not quote --allow-scaffold")
         for skill, flags in {
             "plan": ("--record", "--plan-file"),
             "ralplan": ("--record", "--plan-file"),
@@ -478,7 +483,7 @@ class HermesPlanReviewedBodyTests(unittest.TestCase):
         }.items():
             for flag in flags:
                 self.assertIn(flag, options)
-                self.assertIn(flag, skills[skill].content, f"{skill} does not quote {flag}")
+                self.assertIn(flag, skills[skill], f"{skill} does not quote {flag}")
 
 
 if __name__ == "__main__":

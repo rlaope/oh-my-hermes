@@ -1129,9 +1129,12 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 64019
 # preferred usage included) plus its separator (+4249); the operating-rhythm, wiki and frontend rows
 # did not move (their new lines sit past the first-four slice). Measured per row from the producer.
 # No headroom.
-# 554000 -> 558410: one `bot-template` capability row (4408) plus its separator
-# (+4410); dropping only that row reproduces 554000. Measured from the producer.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 558410
+# 554000 -> 554104 (2026-11-25): automation-blueprint keeps its scheduled-spend guardrail inline in
+# safety_rules under universal progressive disclosure (+104, only that row); measured from producer.
+# 554104 -> 558514: merged with the bot-template branch, one `bot-template` capability row (4408)
+# plus its separator (+4410); dropping only that row reproduces 554104. Measured from the producer.
+# No headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 558514
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -2346,10 +2349,16 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # 1499208 -> 1450927 (the ceiling 1650000 -> 1600000): every body's reply-voice paragraph becomes one line; the
 # record-term and turn-ending clauses it repeated live in the shared rail's Reply Language And Host Voice and Turn
 # Ending sections, which already held them. 1,450,927 plus 10%, rounded up to the next 50,000, is 1,600,000.
-FULL_PROFILE_SKILL_BODY_MEASURED_CHARS = 1450927
+# 1450927 -> 1348078 (the ceiling 1600000 -> 1500000): universal progressive disclosure across all non-bespoke
+# `omh-*` workflow skills moves heavy examples, sibling routing boundaries, and verbose input/output/artifact
+# lists into `references/full-contract.md` while keeping all actionable counter-default rules (`Quality bar`,
+# `Handoff policy`, `Safety rules`, `First Steps`, `Expert clarification questions`, upstream deferrals) inline
+# (-200,979 bytes from 1,549,057 pre-change; repeated bytes also fell 95,280 -> 94,401). 1,348,078 plus 10%,
+# rounded up to the next 50,000, is 1,500,000.
+FULL_PROFILE_SKILL_BODY_MEASURED_CHARS = 1348078
 FULL_PROFILE_SKILL_BODY_HEADROOM_PERCENT = 10
 FULL_PROFILE_SKILL_BODY_CEILING_STEP_CHARS = 50000
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 1600000
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 1500000
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 # Repeated bytes: characters of full-profile SKILL.md `##` sections that are
 # byte-identical to the same section in another skill -- the second and later

@@ -75,6 +75,7 @@ Quality bar:
 - Deploy as the gated runbook: docker's three load-bearing flags (`--ipc=host`, HF cache mount, `HF_TOKEN`) or the Kubernetes five-step (secret gate, existing-deployment gate, apply, rollout+readiness verify, summary+smoke); the port invariant touches four places or it did not change the port.
 - Troubleshoot from the symptom table first - slow TTFT to prefix caching/chunked prefill, OOM to gpu-memory-utilization/max-model-len/quantization - before inventing flags.
 - Measure with the protocol: TTFT/TPOT/ITL/E2EL as mean/median/P99, goodput against an explicit SLO, one load shape per run, results saved with metadata; the full contract is `omh-inference-serving/references/serving-bench.md`.
+- Run `toolkit/scripts/vram_kv_calc.py` (usage in `toolkit/README.md`: `skill_view(name='omh-inference-serving', file_path='toolkit/README.md')`) for offline weight, KV-cache, tensor-parallel divisibility, and max-concurrency arithmetic instead of estimating VRAM by hand.
 - Report observed-only: each runbook step is prepared until its command's exit status and output are seen.
 
 Required inputs:
@@ -96,6 +97,7 @@ Artifact expectations:
 - serving decision and runbook per `omh-inference-serving/references/serving-runbooks.md`
 - benchmark protocol per `omh-inference-serving/references/serving-bench.md`
 - result files with metadata only after observed runs
+- optional offline VRAM/KV-cache/TP budget via `toolkit/scripts/vram_kv_calc.py` (`vram_kv_budget/v1`, calculated estimate only)
 
 Safety rules:
 

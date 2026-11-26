@@ -14,7 +14,7 @@ import { readTermSettings } from "./settings";
 
 const BREAK = /\r\n|\r|\n/;
 /** How many lines of the paste the confirm shows, and how much of each. */
-export const PREVIEW_LINES = 3;
+export const PREVIEW_LINES = 6;
 export const PREVIEW_COLS = 80;
 
 /** Ask before sending `text`? Only when it holds a line break, the program has not turned bracketed paste on, and

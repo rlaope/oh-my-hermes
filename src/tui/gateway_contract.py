@@ -312,6 +312,9 @@ MOA_PHASE_AGGREGATOR = "aggregator"
 # `yolo` (bool) is this session's approvals off, `reasoning_effort` (str, "" when unset) its effort.
 SESSION_INFO_YOLO = "yolo"
 SESSION_INFO_REASONING_EFFORT = "reasoning_effort"
+# The level the session's route actually sends for that effort (`_session_info`'s `reasoning_effort_wire`, Hermes'
+# entry clamp: `ultra` sends `max` on a Claude or OpenAI-compatible route); "" for thinking off or an older Hermes.
+SESSION_INFO_REASONING_EFFORT_WIRE = "reasoning_effort_wire"
 # `config.get {key: "full"}` answers `{"config": _load_cfg()}` (`methods_config.py` `_CONFIG_GETTERS`): the user's
 # config.yaml as Hermes reads it. The effort lives at `agent.reasoning_effort` (str, `false`, or an `{enabled,
 # effort}` mapping), and `agent.reasoning_overrides` maps model names to their own (`resolve_reasoning_config`).

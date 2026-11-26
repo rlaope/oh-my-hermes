@@ -108,6 +108,7 @@ from ..installer import (
 )
 from ..local_store import atomic_write_text
 from ..install.installer import DEFAULT_SKILL_PROFILE, LEDGER_COPY_PARTIAL_KEY, PRUNE_SKIP_REASONS, SKILL_PROFILES
+from ..skill_pack import SKILL_PACK_NAMES
 from ..manifest import read_manifest
 from .update_change_note import record_update_change_note, update_change_note_lines
 from .update_file_changes import update_file_changes, update_file_changes_lines
@@ -502,6 +503,7 @@ def _install_result(args: argparse.Namespace) -> dict[str, object]:
     previous_manifest_sha256 = _previous_manifest_sha256(paths)
     previous_manifest = read_manifest(paths.manifest_path)
     skill_profile = _resolved_skill_profile(args, paths)
+    skill_packs = _resolved_skill_packs(args, paths, skill_profile=skill_profile)
     result = install_skill_pack(
         paths,
         source=source,
@@ -509,6 +511,7 @@ def _install_result(args: argparse.Namespace) -> dict[str, object]:
         force=args.force,
         dry_run=args.dry_run,
         profile=skill_profile,
+        packs=skill_packs,
     )
     result.update(
         {
@@ -2265,6 +2268,19 @@ def _resolved_skill_profile(args: argparse.Namespace, paths) -> str:
     return installed if installed in SKILL_PROFILES else DEFAULT_SKILL_PROFILE
 
 
+def _resolved_skill_packs(args: argparse.Namespace, paths, *, skill_profile: str) -> tuple[str, ...]:
+    """Resolve requested layered packs for `--core`, carrying forward recorded packs on update."""
+    if skill_profile == "full":
+        return ()
+    requested = getattr(args, "pack", None) or []
+    if requested:
+        return tuple(str(item) for item in requested if str(item).strip())
+    recorded = (read_manifest(paths.manifest_path) or {}).get("skill_packs", [])
+    if isinstance(recorded, list):
+        return tuple(str(item) for item in recorded if isinstance(item, str) and item in SKILL_PACK_NAMES)
+    return ()
+
+
 def _previous_manifest_sha256(paths) -> str:
     state, _ = read_state_result(paths)
     return _string_value((state or {}).get("manifest_sha256"))
@@ -3279,6 +3295,7 @@ def cmd_skill_profile_reconcile(args: argparse.Namespace) -> int:
     payload = reconcile_skill_profile(
         paths,
         target_profile=str(getattr(args, "to", "core")),
+        packs=tuple(getattr(args, "pack", None) or ()),
         dry_run=bool(getattr(args, "dry_run", False)),
     )
     if not payload.get("dry_run"):
@@ -7381,12 +7398,21 @@ def _add_common_install_options(p: argparse.ArgumentParser) -> None:
         "--core",
         action="store_true",
         help=(
-            "Install only the lightweight core profile (chat/plan/status/"
-            "handoff essentials plus the doctor health floor) instead of the "
-            "full default. Every installed skill adds an index line to every "
-            "request and about 8k chars per body load, which stays in history "
-            "until compaction; core keeps that footprint minimal at the cost "
-            "of the ULW engines and most workflow skills."
+            "Install only the lightweight core profile (12 high-lift daily "
+            "skills plus the doctor health floor) instead of the full default. "
+            "Combine with repeatable `--pack <name>` to add layered role packs. "
+            "Every installed skill adds an index line to every request and about "
+            "5-8k chars per body load, which stays in history until compaction."
+        ),
+    )
+    p.add_argument(
+        "--pack",
+        action="append",
+        default=[],
+        choices=SKILL_PACK_NAMES,
+        help=(
+            "Optional layered skill pack to install on top of `--core` "
+            f"({', '.join(SKILL_PACK_NAMES)}). Repeat for multiple packs."
         ),
     )
 
@@ -7650,6 +7676,16 @@ def _add_top_level_commands(sub) -> None:
         choices=("core",),
         default="core",
         help="Target profile to reconcile down to. Only core shrinks an install.",
+    )
+    skill_profile_reconcile.add_argument(
+        "--pack",
+        action="append",
+        default=[],
+        choices=SKILL_PACK_NAMES,
+        help=(
+            "Keep one or more layered skill packs alongside `core` during reconcile "
+            f"({', '.join(SKILL_PACK_NAMES)}). Repeat for multiple packs."
+        ),
     )
     skill_profile_reconcile.add_argument(
         "--dry-run",

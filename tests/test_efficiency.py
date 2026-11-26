@@ -246,7 +246,10 @@ class EfficiencyContractTests(unittest.TestCase):
         # +1,592 (cancel's stop commands and the checklists of the observability skills), host
         # readiness +419, coding core +311, memory and Jev +68, plan record +60, business +30.
         # Main measures 87,926 and the merged tree 90,406 (+2,480); the ceiling restores ~1.6k headroom.
-        self.assertLess(core["skill_body"]["bytes"], 92_000)
+        # 92,000 -> 115,000: `CORE_PROFILE_SKILLS` rebalanced from 10 (including 4 thin metadata/channel
+        # cards) to 12 high-lift daily skills (adding code-review, verification-gate, app-debugging,
+        # agent-debug, spend-gate, skill-eval). Measured 111,821; ceiling restores ~3k headroom.
+        self.assertLess(core["skill_body"]["bytes"], 115_000)
         # 815,000 -> 825,000: one new installable body (`web-research`) plus the
         # sentence that split `best-practice-research`'s boundary in two. Set to
         # restore the ~10k headroom this gate is meant to carry rather than to

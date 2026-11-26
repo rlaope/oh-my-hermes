@@ -28,7 +28,8 @@ This is a Hermes-native `maestro` workflow skill.
 - The user wants advice on which coding owner to pick -- ask, don't compose.
 - The user is asking whether an owner CAN run right now -- use `omh-executor-runtime-readiness` instead.
 - The request is lane-splitting or a full delivery cycle rather than one lane's handoff -- use `ulw-work`, which enters this engine for lanes with an external owner.
-- The user wants a coding task handed straight to the Claude Code, Codex, or opencode CLI in the terminal, with no prompt composed from that CLI's own installed skills -- load Hermes' bundled `claude-code`, `codex`, or `opencode` skill instead of this one.
+- The user wants a coding task handed straight to the Claude Code or Codex CLI in the terminal, with no prompt composed from that CLI's own installed skills -- load Hermes' bundled `claude-code` or `codex` skill instead of this one.
+- The user wants a coding task handed straight to the opencode CLI with no prompt composed from its installed skills -- load Hermes' optional `opencode` skill instead when it is installed.
 
 ## Examples
 

@@ -129,7 +129,7 @@ test("a terminal session that exits shows Ended with Restart, which starts the p
   expect(again).toMatchObject({ agent: "grok", cwd: first.cwd });
   expect(first.resume).toBeUndefined();
   expect(again.resume).toBeUndefined();
-  await expect(page.getByTestId("session-status")).toHaveText("Running");
+  await expect(page.getByTestId("session-status")).toHaveText(/^(Working|Ready)$/);
   await expect(page.getByTestId("terminal")).toBeVisible();
   // it ends again by `exit` and still offers a new conversation
   await page.locator(".term-host").click();

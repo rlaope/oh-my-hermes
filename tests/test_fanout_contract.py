@@ -38,7 +38,7 @@ from omh.coding.fanout_contracts import (  # noqa: E402
     FanoutContractError,
     MAX_SPAWN_PLAN_FIELD_CHARS,
     MAX_UNIT_REVIEW_FOCUS_BYTES,
-    MAX_UNIT_VERIFICATION_COMMAND_CHARS,
+    MAX_UNIT_VERIFICATION_COMMAND_BYTES,
     MAX_UNIT_VERIFICATION_COMMANDS,
     verification_command_argv,
 )
@@ -1614,6 +1614,23 @@ class FanoutVerificationCommandTests(unittest.TestCase):
         units[0]["verification_commands"] = commands
         return units
 
+    def test_a_lone_surrogate_in_a_byte_bounded_field_is_a_contract_error(self) -> None:
+        # #3210 carry: a JSON unit file may spell "\ud800"; json.loads accepts it, but it has no UTF-8 form.
+        # Measuring a byte bound on it raised a bare UnicodeEncodeError (a traceback from `fanout prepare`).
+        lone = json.loads('"echo \\ud800"')
+        repro = {"unit_id": "repro", "title": "Reproduce", "file_scope": ["src/core/"], "kind": "reproduction"}
+        cases = {
+            "verification_commands": self._with_commands([lone]),
+            "verification_checks": [{**_UNITS[0], "verification_checks": [{"command": lone}]}, *_UNITS[1:]],
+            "reproduction_command": [{**repro, "reproduction_command": lone}],
+            "task_linked_test_runner": [{**_UNITS[0], "task_linked_test_runner": lone}, *_UNITS[1:]],
+            "review_focus": [{**_UNITS[0], "review_focus": lone}, *_UNITS[1:]],
+        }
+        for field, units in cases.items():
+            with self.subTest(field=field), self.assertRaises(FanoutContractError) as raised:
+                build_fanout_contract("split work", units)
+            self.assertIn("valid UTF-8", str(raised.exception))
+
     def test_absent_field_leaves_the_contract_byte_identical(self) -> None:
         without = build_fanout_contract("split work", _UNITS)
         declared_empty = build_fanout_contract("split work", self._with_commands([]))
@@ -1662,10 +1679,29 @@ class FanoutVerificationCommandTests(unittest.TestCase):
             build_fanout_contract("split work", self._with_commands(too_many))
         self.assertIn(f"at most {MAX_UNIT_VERIFICATION_COMMANDS} commands", str(raised.exception))
 
-        too_long = ["python -c " + "a" * MAX_UNIT_VERIFICATION_COMMAND_CHARS]
+        too_long = ["python -c " + "a" * MAX_UNIT_VERIFICATION_COMMAND_BYTES]
         with self.assertRaises(FanoutContractError) as raised:
             build_fanout_contract("split work", self._with_commands(too_long))
-        self.assertIn(f"at most {MAX_UNIT_VERIFICATION_COMMAND_CHARS} chars", str(raised.exception))
+        self.assertIn(f"at most {MAX_UNIT_VERIFICATION_COMMAND_BYTES} UTF-8 bytes", str(raised.exception))
+
+        max_emoji = "echo " + "😀" * ((MAX_UNIT_VERIFICATION_COMMAND_BYTES - 5) // 4)
+        over_emoji = max_emoji + "😀"
+        build_fanout_contract("split work", self._with_commands([max_emoji]))
+        with self.assertRaises(FanoutContractError) as raised:
+            build_fanout_contract("split work", self._with_commands([over_emoji]))
+        self.assertIn(f"at most {MAX_UNIT_VERIFICATION_COMMAND_BYTES} UTF-8 bytes", str(raised.exception))
+
+        repro_unit = {
+            "unit_id": "repro",
+            "title": "Reproduce bug",
+            "file_scope": ["src/core/"],
+            "kind": "reproduction",
+            "reproduction_command": max_emoji,
+        }
+        build_fanout_contract("split work", [repro_unit])
+        with self.assertRaises(FanoutContractError) as raised:
+            build_fanout_contract("split work", [{**repro_unit, "reproduction_command": over_emoji}])
+        self.assertIn(f"at most {MAX_UNIT_VERIFICATION_COMMAND_BYTES} UTF-8 bytes", str(raised.exception))
 
         at_cap = [f"python -c 'print({index})'" for index in range(MAX_UNIT_VERIFICATION_COMMANDS)]
         contract = build_fanout_contract("split work", self._with_commands(at_cap))
@@ -1816,7 +1852,8 @@ class FanoutVerificationChecksContractTests(unittest.TestCase):
     def test_check_commands_follow_the_same_bounds_as_bare_commands(self) -> None:
         for bad in (
             [{"command": ""}],
-            [{"command": "python -c " + "a" * MAX_UNIT_VERIFICATION_COMMAND_CHARS}],
+            [{"command": "python -c " + "a" * MAX_UNIT_VERIFICATION_COMMAND_BYTES}],
+            [{"command": "echo " + "😀" * ((MAX_UNIT_VERIFICATION_COMMAND_BYTES - 5) // 4 + 1)}],
             [{"command": "python -c 'unbalanced"}],
             [{"command": f"python -c 'print({index})'"} for index in range(MAX_UNIT_VERIFICATION_COMMANDS + 1)],
             ["python -m unittest"],

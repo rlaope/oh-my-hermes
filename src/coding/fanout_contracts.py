@@ -81,18 +81,20 @@ FANOUT_SPAWN_PLAN_CLAIM_BOUNDARY = (
 
 # Optional per-unit executable verification. A unit may carry command strings
 # the dispatcher runs itself under `--run-verification`; the prose
-# `integration_checks` stay beside them, unchanged. Bounded like every other
-# operator-typed contract string: eight commands is more than one unit boundary
-# can justify, and 240 chars is a command line rather than a pasted script.
+# `integration_checks` stay beside them, unchanged. Bounded in UTF-8 bytes,
+# not characters: `reproduction_command` enters the unit prompt verbatim, and
+# the unit prompt has a byte ceiling (UNIT_PROMPT_MAX_BYTES). Eight commands
+# is more than one unit boundary can justify, and 240 UTF-8 bytes is a command
+# line rather than a pasted script.
 MAX_UNIT_VERIFICATION_COMMANDS = 8
-MAX_UNIT_VERIFICATION_COMMAND_CHARS = 240
+MAX_UNIT_VERIFICATION_COMMAND_BYTES = 240
 
 # Optional per-unit review focus: what the reviewer will look at when the
 # unit's work comes back (OpenAI "Prompting GPT-6.2 in Codex" guide: tell the
 # executor what you will look for in review). Prose beside
 # `integration_checks`, bounded like them: a few sentences, not a checklist.
 # Bounded in UTF-8 bytes, not characters: the unit prompt has a byte ceiling
-# (UNIT_PROMPT_MAX_BYTES). The live-shaped worst case with the longest ASCII
+# (UNIT_PROMPT_MAX_BYTES). The live-shaped worst case with the longest
 # reproduction command the contract accepts renders 7,800 B with no focus, and
 # the focus block costs its bytes plus a 46-byte label, so 150 bytes (one
 # sentence; about 50 Hangul characters) keeps that case at 7,996 B. Measured by
@@ -176,6 +178,20 @@ def is_verification_check_resource_class(value: str) -> bool:
 
 class FanoutContractError(ValueError):
     """Raised when a proposed fanout unit list cannot be frozen into a contract."""
+
+
+def contract_text_utf8_bytes(text: str, *, what: str) -> int:
+    """UTF-8 size of a byte-bounded contract string, refusing text with no UTF-8 form.
+
+    A JSON unit file may spell a lone surrogate (`"\\ud800"`); `json.loads`
+    accepts it, but it has no UTF-8 encoding, so measuring it raised a bare
+    UnicodeEncodeError (a traceback from `omh coding fanout prepare`) instead
+    of the contract error every other bad field gets.
+    """
+    try:
+        return len(text.encode("utf-8"))
+    except UnicodeEncodeError as exc:
+        raise FanoutContractError(f"{what} must be valid UTF-8 text (no lone surrogates)") from exc
 
 
 # Unquoted shell syntax in a command that no shell will ever read. Ordered so

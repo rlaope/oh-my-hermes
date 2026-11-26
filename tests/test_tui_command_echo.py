@@ -19,7 +19,8 @@ from omh.tui.transcript import AssistantBlock
 # The bare commands with nothing to attribute, and the ones that print and keep their echo.
 QUIET = ("keys", "history", "rewind", "sessions", "logs", "dag", "bots", "redraw", "model", "theme")
 ECHOED = ("help", "todos", "queue", "copy", "details", "export", "effort", "omh-model", "reload-skills", "image",
-          "paste", "new", "quit", "steer", "topup", "wallpaper", "whats-new", "gateway", "reasoning", "yolo")
+          "paste", "new", "quit", "steer", "topup", "wallpaper", "whats-new", "gateway", "reasoning", "yolo",
+          "timestamps")
 
 
 class EchoTests(unittest.TestCase):

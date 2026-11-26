@@ -551,7 +551,11 @@ class AwesomeHermesAgentCatalogTests(unittest.TestCase):
         statuses = {item.status for item in awesome_hermes_coverage()}
         self.assertEqual(statuses, {"covered", "partial"})
 
-        skill_scout = Path("skills/omh-skill-scout/SKILL.md").read_text(encoding="utf-8")
+        skill_scout = (
+            Path("skills/omh-skill-scout/SKILL.md").read_text(encoding="utf-8")
+            + "\n"
+            + Path("skills/omh-skill-scout/references/full-contract.md").read_text(encoding="utf-8")
+        )
         self.assertIn("covered, partial, or missing_candidate coverage statuses", skill_scout)
         self.assertNotIn("missing-candidate", skill_scout)
         self.assertNotIn("external-reference", skill_scout)

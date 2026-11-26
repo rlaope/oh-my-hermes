@@ -13,7 +13,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import type { AgentRun } from "../lib/runs";
 import { t } from "../i18n";
 import { AgentIcon, ModelIcon, PrIcon } from "../ui";
-import { boxText, durationOf, estimate, factsOf, GEOMETRY, layoutBoxes, movedLines, statusOf, titleOf, titleParts, waitRows, type BoxLayout, type Mark, type Measure, type Rect, type StatusIcon } from "./boxView";
+import { boxText, durationOf, estimate, factsOf, GEOMETRY, layoutBoxes, movedLines, statusOf, titleOf, titleParts, twoLineTitle, waitRows, type BoxLayout, type Mark, type Measure, type Rect, type StatusIcon } from "./boxView";
 import { reducedMotion } from "./format";
 import { openPr, prLabel, prLink, prState, prText } from "./pr";
 import type { NodePr } from "../lib/runs";
@@ -501,7 +501,7 @@ export function RunGraph({
           >
             <span className="bx-title" data-testid="node-title" data-lines={tx.titleLines} style={{ WebkitLineClamp: tx.titleLines, height: tx.titleLines * GEOMETRY.line }}>
               {tx.repair && <StatusGlyph icon="repair" label={t("graph.repairNode")} />}
-              {breakable(tx.title)}
+              {breakable(tx.titleLines === 2 ? twoLineTitle(tx.title, lay.inner, measureText, tx.repair ? GEOMETRY.icon + GEOMETRY.iconGap : 0) : tx.title)}
             </span>
             {tx.facts.length > 0 && (
               <span className="bx-facts" data-testid="node-facts" title={tx.factsText}>

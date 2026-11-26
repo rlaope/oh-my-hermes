@@ -15,42 +15,13 @@ metadata:
 
 # Ops Observability Card
 
-This is a Hermes-native `ops-observability-card` workflow skill.
+Required: user request, target context, delivery or status expectation, known missing evidence. Output: ops-observability-card/v1 card or guidance, external_metric_provider/v1 payload contract, external_metric_provider_adapter/v1 adapter contract, ops_service_quality_board/v1 service-quality board, typed service-quality downgrade gaps, next action, prepared-vs-observed boundary.
 
 ## Why This Exists
 
 `ops-observability-card` exists so service, loop, and automation operations get one board where each cost, latency, token, failure-mode, and metric-provider figure is marked observed or prepared, instead of an improvised dashboard.
 
-## Do Not Use When
-
-- The user asks what their own Hermes conversation has used or cost; Hermes' /usage shows this session's tokens and context, /insights estimates cost across recent sessions, and the omh_run_summary tool relays this conversation's recorded tokens and cost.
-- The user wants one run's timing and context-budget report; use `omh-run-efficiency`.
-- The user asks OMH to sign in to a metric provider, billing console, or dashboard and pull live figures; the card reads only supplied payloads and Hermes' own records.
-
-## Examples
-
-Good example:
-
-- Prompt: ops-observability-card show token, cost, latency, supplied Prometheus/Grafana metrics, and missing service-quality evidence for this loop.
-- Expected behavior: Produce `prepare_ops_observability_card` with required context, wrapper actions, and not-evidence boundaries.
-- Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
-
-Bad example:
-
-- Prompt: ops-observability-card claim exact provider billing, healthy SLO, incident closure, or remediation completion from local estimates.
-- Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
-- Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
-
-## Completion Checklist
-
-- The run or workflow scope, metric window, failure modes, and cost/latency boundary are named.
-- Local telemetry, provider truth, billing truth, and completion evidence are separate states.
-- Warnings name the next measurement or operator review action.
-
-## Recovery Notes
-
-- If the metric window is missing, keep supplied payloads, mark quality unresolved; hand back the next measure.
-- If a budget threshold is missing, keep the observed cost, mark advice tentative; hand back the gaps.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -86,30 +57,6 @@ Handoff policy:
 
 Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 
-Required inputs:
-
-- user request
-- target context
-- delivery or status expectation
-- known missing evidence
-
-Expected outputs:
-
-- ops-observability-card/v1 card or guidance
-- external_metric_provider/v1 payload contract
-- external_metric_provider_adapter/v1 adapter contract
-- ops_service_quality_board/v1 service-quality board
-- typed service-quality downgrade gaps
-- next action
-- prepared-vs-observed boundary
-
-Artifact expectations:
-
-- ops-observability-card/v1 metadata-only runtime or wrapper card when recorded
-- external_metric_provider/v1 supplied metric payload when available
-- external_metric_provider_adapter/v1 connector-ready adapter metadata when available
-- ops_service_quality_board/v1 evidence-gated service-quality board
-
 Artifact contracts:
 
 This label denotes the machine-enforcement level, not a skill quality score and not an observed evidence state.
@@ -120,6 +67,17 @@ Safety rules:
 
 - An ops observability card is not billing truth, provider quota truth, live metric-provider access, complete tracing, SLO pass, incident closure, root-cause proof, remediation completion, performance proof, or successful workflow completion evidence.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
+## Completion Checklist
+
+- The run or workflow scope, metric window, failure modes, and cost/latency boundary are named.
+- Local telemetry, provider truth, billing truth, and completion evidence are separate states.
+- Warnings name the next measurement or operator review action.
+
+## Recovery Notes
+
+- If the metric window is missing, keep supplied payloads, mark quality unresolved; hand back the next measure.
+- If a budget threshold is missing, keep the observed cost, mark advice tentative; hand back the gaps.
 
 ## Runtime Evidence
 

@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 import { prReason, prWho, stripText } from "./Needs";
 
 describe("needs strip line", () => {
-  it("names the newest ask's sender and its first words, cut with an ellipsis", () => {
-    expect(stripText(1, "Friren", "Allow `rm -rf build/`?")).toEqual({ count: "1 needs you", rest: " · Friren: Allow rm -rf build/?" });
-    const long = stripText(3, "web-app · Claude Code", "Which environment should I deploy the gateway to first?");
-    expect(long.count).toBe("3 need you");
-    expect(long.rest).toBe(" · web-app · Claude Code: Which environment should I depl…");
-    expect(long.rest.split(": ")[1]).toHaveLength(32);
-    expect(stripText(2, "Kami", "line one\n  line two").rest).toBe(" · Kami: line one line two");
+  it("names who waits, once each and in the list's order, never the ask's words", () => {
+    expect(stripText(1, ["Friren"])).toEqual({ count: "1 needs you", rest: " · Friren" });
+    expect(stripText(2, ["Friren", "Hermes"]).rest).toBe(" · Friren, Hermes");
+    expect(stripText(3, ["Kami", "Friren", "Kami"]).rest).toBe(" · Kami, Friren");
+    // past two names the rest is a count, so the line fits the sidebar
+    expect(stripText(5, ["Kami", "Friren", "Hermes", "web-app · Claude Code", "Kami"]).rest).toBe(" · Kami, Friren +2");
+    expect(stripText(1, [""])).toEqual({ count: "1 needs you", rest: "" });
   });
 });
 
@@ -19,6 +19,6 @@ describe("a failing pull request in the strip", () => {
     expect(prWho({ threads: { kami: [{ thread: "t1", title: "Docs dark mode" }] } }, f, "Kami")).toBe("Docs dark mode");
     expect(prWho({ threads: { kami: [{ thread: "t1", title: "" }] } }, f, "Kami")).toBe("Kami");
     expect(prWho({ threads: {} }, f, "Kami")).toBe("Kami");
-    expect(stripText(1, "Docs dark mode", prReason(f)).rest).toBe(" · Docs dark mode: checks failing on #12");
+    expect(stripText(1, [prWho({ threads: { kami: [{ thread: "t1", title: "Docs dark mode" }] } }, f, "Kami")]).rest).toBe(" · Docs dark mode");
   });
 });

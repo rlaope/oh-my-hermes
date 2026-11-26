@@ -14,45 +14,13 @@ metadata:
 
 # Websearch Setup
 
-This is a Hermes-native `websearch-setup` workflow skill.
+Required: the Hermes config `web` section (`backend`, `search_backend`, `extract_backend`, `provider_tier`, `keyless_fallback`) as non-secret metadata; an absent key is the Hermes default, the backend names `hermes tools` lists under Web Search & Extract, provider API key availability; value through secure entry or user-side setup only. Output: read-only diagnosis of which backend serves search and which serves extract, and why: its own per-capability key, a shared `web.backend` or managed-gateway selection, credential detection, the keyless free tier, or, when nothing else resolves, Hermes' default backend; on some releases any per-capability key counts as a selection, so the other capability skips detection and lands on Hermes' default backend, which verify reads rather than infers, a diff-approved `.env` write adding the provider API key, approved on its own, or the user's own key entry in `hermes tools`, a diff-approved `web` backend or tier change (`web.search_backend`, `web.extract_backend`, `web.provider_tier.<name>: free|paid`, `web.keyless_fallback`), approved separately from the key write, verification checklist reading back each written `web` key from the merged `web` section and the provider key name's presence.
 
 ## Why This Exists
 
 `websearch-setup` exists to make web search cost and backend choice configurable through two clearly separated, diff-approved steps against the `web` keys Hermes reads, instead of one opaque edit.
 
-## Do Not Use When
-
-- The user wants Hermes to run a web search now, not configure how web search is set up.
-- The request needs a repository code change rather than a local `.env` or Hermes config edit.
-
-## Examples
-
-Good example:
-
-- Prompt: make web search cheaper — I have a scraper account I want to use for reading pages, and search can stay free.
-- Expected behavior: Read the `web` section and `.env` key names, guide the provider API key setup as one diff approval, then set `web.extract_backend` to that provider and `web.search_backend` to a free backend the user picks from `hermes tools` as a second, separate diff approval, and read both keys back.
-- Why: The request needs the two independently-approved writes this skill exists to keep separate, aimed at keys Hermes consumes.
-
-Bad example:
-
-- Prompt: websearch-setup: search the web for the latest news.
-- Expected behavior: Run or route to the search request directly instead of starting a setup walkthrough.
-- Why: A live search request is not a configuration request.
-
-## Completion Checklist
-
-- If a prerequisite is unmet, mark that item "not applicable" and continue with the rest of the guide instead of blocking or guessing.
-- Success is applicable-only: verification passes when every applicable item is confirmed complete, not when every possible item exists.
-- The provider API key write and the `web` backend or tier change were verified as two separate, independently-approved changes, each read back from the key Hermes consumes.
-- Nothing was written to `auxiliary.web_extract`, and a leftover block there was reported as ignored rather than counted as configuration.
-- Verified needs every keyed backend or `paid` tier in the merged `web` section to have its key present.
-
-## Recovery Notes
-
-- If no provider account or key is available, mark the key step "not applicable" and continue with the backend and tier step alone, pick a keyless backend or a `provider_tier.<name>: free` tier, never a keyed or `paid` one without its key; offer to reverse an approved keyed backend as its own diff.
-- If nothing is named yet, run the read-only diagnosis first, then ask which paid provider, if any.
-- If either diff is rejected, keep the other step's state independent and do not roll both back together.
-- If the config still holds an `auxiliary.web_extract` block, report it as a leftover Hermes ignores and leave it in place unless the user asks to remove it as its own diff.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -91,28 +59,26 @@ Handoff policy:
 
 Run diagnosis and guidance directly in Hermes for web search setup. Diagnosis reads non-secret metadata only; no writes. Show redacted placeholders in the config or `.env` diff; apply only after the user explicitly approves. Never ask the user to paste secrets into chat. Use Hermes-native secure entry or user-side OAuth/token setup; if unavailable, stop credential application and guide user-side setup. Use only a user-authorized credential store or local configuration; disclose destination and scope first. Keep secrets out of chat, previews, logs and evidence. Do not promise chat or platform non-retention. Delegate to a selected coding executor only if the user needs a change outside chat-driven config or `.env` edits.
 
-Required inputs:
-
-- the Hermes config `web` section (`backend`, `search_backend`, `extract_backend`, `provider_tier`, `keyless_fallback`) as non-secret metadata; an absent key is the Hermes default
-- the backend names `hermes tools` lists under Web Search & Extract
-- provider API key availability; value through secure entry or user-side setup only
-
-Expected outputs:
-
-- read-only diagnosis of which backend serves search and which serves extract, and why: its own per-capability key, a shared `web.backend` or managed-gateway selection, credential detection, the keyless free tier, or, when nothing else resolves, Hermes' default backend; on some releases any per-capability key counts as a selection, so the other capability skips detection and lands on Hermes' default backend, which verify reads rather than infers
-- a diff-approved `.env` write adding the provider API key, approved on its own, or the user's own key entry in `hermes tools`
-- a diff-approved `web` backend or tier change (`web.search_backend`, `web.extract_backend`, `web.provider_tier.<name>: free|paid`, `web.keyless_fallback`), approved separately from the key write
-- verification checklist reading back each written `web` key from the merged `web` section and the provider key name's presence
-
-Artifact expectations:
-
-- setup verification note when the wrapper captures it
-
 Safety rules:
 
 - Never combine the provider API key `.env` write and the `web` backend or tier change into a single apply step; each gets its own diff and its own approval.
 - Never write or verify against `auxiliary.web_extract`: Hermes no longer reads that slot, so writing it changes nothing and reading it back proves nothing.
 - Do not name a specific web backend, vendor, free-tier quota, or price; take backend names from the user's `hermes tools` picker. A `web` key absent from `config.yaml` is at its default, not unsupported: read support and values from the merged `web` section (`hermes config get web`; never on a `.env` key, which prints its value) or the picker, never from a Hermes version number.
+
+## Completion Checklist
+
+- If a prerequisite is unmet, mark that item "not applicable" and continue with the rest of the guide instead of blocking or guessing.
+- Success is applicable-only: verification passes when every applicable item is confirmed complete, not when every possible item exists.
+- The provider API key write and the `web` backend or tier change were verified as two separate, independently-approved changes, each read back from the key Hermes consumes.
+- Nothing was written to `auxiliary.web_extract`, and a leftover block there was reported as ignored rather than counted as configuration.
+- Verified needs every keyed backend or `paid` tier in the merged `web` section to have its key present.
+
+## Recovery Notes
+
+- If no provider account or key is available, mark the key step "not applicable" and continue with the backend and tier step alone, pick a keyless backend or a `provider_tier.<name>: free` tier, never a keyed or `paid` one without its key; offer to reverse an approved keyed backend as its own diff.
+- If nothing is named yet, run the read-only diagnosis first, then ask which paid provider, if any.
+- If either diff is rejected, keep the other step's state independent and do not roll both back together.
+- If the config still holds an `auxiliary.web_extract` block, report it as a leftover Hermes ignores and leave it in place unless the user asks to remove it as its own diff.
 
 ## Runtime Evidence
 

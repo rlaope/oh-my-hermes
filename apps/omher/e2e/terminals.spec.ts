@@ -204,6 +204,10 @@ test("rows: grouped by folder with the branch; two-line cards (status, mark, tit
   await expect(groups.nth(0).getByTestId("term-group-head")).toContainText("omher");
   await expect(groups.nth(0).getByTestId("term-group-branch")).toHaveText("feat/terminal-sessions");
   await expect(groups.nth(1).getByTestId("term-group-branch")).toHaveText("feature/checkout-flow");
+  // the header's second line is the folder it sits in, then the branch: the name above is not said twice, and the
+  // branch is not cut by it
+  await expect(groups.nth(0).getByTestId("term-group-path")).toHaveText("~/code · feat/terminal-sessions");
+  await expect(groups.nth(1).getByTestId("term-group-path")).toHaveText("~/code · feature/checkout-flow");
   const row = page.getByTestId(`session-${ids.claude}`);
   await expect(row.getByTestId("term-row-mark")).toHaveAttribute("data-agent", "claude");
   // a two-line card (spacing, 2026-11-16): the age on line 1, the CLI (then what it last said) on line 2
@@ -224,9 +228,19 @@ test("rows: grouped by folder with the branch; two-line cards (status, mark, tit
   // could not start = x
   await expect(page.getByTestId(`session-${ids.done}`)).toHaveAttribute("data-term-status", "idle");
   await page.getByTestId(`session-${ids.codex}`).locator(".ss-open").click();
+  // the header says what the row says: Ready (a still dot) while it sits at its prompt, Working (the pulse) while it prints
+  const head = page.getByTestId("session-status");
+  const pulse = () => head.evaluate((e) => getComputedStyle(e, "::before").animationName);
+  await expect(page.getByTestId(`session-${ids.codex}`)).toHaveAttribute("data-term-status", "idle", { timeout: 6000 });
+  await expect(head).toHaveText("Ready");
+  expect(await pulse()).toBe("none");
   await typeIn(page, "hello");
   await expect(page.getByTestId(`session-${ids.codex}`)).toHaveAttribute("data-term-status", "busy");
+  await expect(head).toHaveText("Working");
+  expect(await pulse()).not.toBe("none");
   await expect(page.getByTestId(`session-${ids.codex}`)).toHaveAttribute("data-term-status", "idle", { timeout: 6000 });
+  await expect(head).toHaveText("Ready");
+  expect(await pulse()).toBe("none");
   await page.evaluate(() => ((window as unknown as Record<string, unknown>).__omherShellDie = { code: 1 }));
   await typeIn(page, "after 10 exit 3");
   await expect(page.getByTestId(`session-${ids.codex}`)).toHaveAttribute("data-term-status", "err");
@@ -366,6 +380,59 @@ test("⌘N / ⌘T open the TERMINALS + menu", async ({ page }) => {
   await page.keyboard.press(`${mod}+n`);
   await expect(page.getByTestId("session-menu")).toBeVisible();
   await expect(page.getByTestId("session-agent-shell")).toBeVisible();
+});
+
+/** TERMINALS' bottom edge while rows hide below it: the empty space between the last thing drawn (a whole row, or the
+ *  part of a cut row the clip leaves) and the chevron's band, the room left between the section and the footer, and
+ *  whether the chevron's band holds any row's text. */
+function termEdge(page: Page) {
+  return page.evaluate(() => {
+    const list = document.querySelector<HTMLElement>('[data-testid="session-list"]')!;
+    const box = list.getBoundingClientRect();
+    const v = (/inset\(([^)]*)\)/.exec(getComputedStyle(list).clipPath)?.[1] ?? "").trim().split(/\s+/).map(parseFloat).filter((n) => !Number.isNaN(n));
+    const end = box.bottom - (v.length ? (v[2] ?? v[0] ?? 0) : 0);
+    const rows = [...list.querySelectorAll<HTMLElement>(".tg-h, .ss-row")].map((r) => r.getBoundingClientRect()).filter((b) => b.height > 0 && b.top < end - 0.5 && b.bottom > box.top + 0.5);
+    const last = Math.max(box.top, ...rows.map((b) => Math.min(b.bottom, end)));
+    // text painted inside the chevron's 14 px band at the list's bottom: the part of it the clip leaves (above `end`)
+    // reaching into the band
+    const cue = box.bottom - 14;
+    const band = [...list.querySelectorAll<HTMLElement>(".tg-n, .tr-n, .tr-line, .tg-b")]
+      .filter((t) => {
+        const b = t.getBoundingClientRect();
+        return b.height > 0 && Math.min(b.bottom, end) > cue + 0.5 && b.top < end - 0.5;
+      })
+      .map((t) => `${t.className} "${t.textContent}" ${Math.round(t.getBoundingClientRect().top)}..${Math.round(t.getBoundingClientRect().bottom)}, painted to ${Math.round(end)}, band from ${Math.round(cue)}`);
+    // and below the list, down to the footer: the sidebar's room the regions left unused
+    const foot = document.querySelector(".side-foot")!.getBoundingClientRect().top;
+    const below = Math.round(foot - list.parentElement!.getBoundingClientRect().bottom);
+    return { more: list.dataset.more ?? null, gap: Math.round(box.bottom - 14 - last), below, band, hidden: list.scrollHeight - list.clientHeight - list.scrollTop };
+  });
+}
+
+test("while rows hide below TERMINALS no empty band stands over the chevron, and the chevron never sits on a row's text (1280x820, 900x600)", async ({ page }) => {
+  test.setTimeout(120_000);
+  await open(page);
+  const start = (cwd: string, a: string) => page.evaluate(([c, x]) => (window as unknown as { __omherSessions: { startTerminal(a: string, c: string): string } }).__omherSessions.startTerminal(x, c), [cwd, a] as const);
+  const first = await start("/home/you/web-app", "claude");
+  for (const [cwd, a] of [["/home/you/api-server", "claude"], ["/home/you/api-server", "codex"], ["/home/you/api-server", "shell"], ["/home/you/oh-my-hermes", "omh"], ["/home/you/web-app", "codex"], ["/home/you/notes", "shell"]] as const) await start(cwd, a);
+  await page.getByTestId(`session-${first}`).locator(".ss-open").click();
+  for (const [w, h] of [[1280, 820], [900, 600]] as const) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.mouse.move(w - 5, h - 5);
+    for (const f of [0, 0.5]) {
+      await page.evaluate((f) => {
+        const l = document.querySelector<HTMLElement>('[data-testid="session-list"]')!;
+        l.scrollTop = f * (l.scrollHeight - l.clientHeight);
+      }, f);
+      await page.waitForTimeout(400);
+      const e = await termEdge(page);
+      const at = JSON.stringify({ w, h, f, ...e });
+      expect(e.more, at).toMatch(/below|both/);
+      expect(e.gap, at).toBeLessThanOrEqual(12);
+      expect(e.below, at).toBeLessThanOrEqual(12);
+      expect(e.band, at).toEqual([]);
+    }
+  }
 });
 
 // tidy (2026-11-16): on Windows and Linux xterm took Ctrl+Shift+] / [ (as Ctrl+] / Ctrl+[) while a terminal had the

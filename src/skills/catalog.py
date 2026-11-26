@@ -1231,9 +1231,62 @@ def builtin_harnesses() -> list[HarnessDefinition]:
     return list(_builtin_harnesses_cached())
 
 
+# Skills whose Hermes SKILL.md body has a bespoke hand-authored renderer in
+# `skill_record._BESPOKE_BODIES` rather than the generic workflow renderer.
+BESPOKE_SKILL_BODY_NAMES: frozenset[str] = frozenset(
+    {
+        "oh-my-hermes",
+        "context",
+        "deep-interview",
+        "product-docs",
+        "jit-learn",
+        "loop",
+        "long-document-reading",
+        "memory-new",
+        "memory-sync",
+        "wiki",
+        "buzz",
+        "codebase-onboarding",
+        "codegraph-refresh",
+        "ultrawork",
+    }
+)
+
+
 @lru_cache(maxsize=1)
 def _builtin_definitions_cached() -> tuple[SkillDefinition, ...]:
-    return _with_shipped_trigger_packs(tuple(_DEFINITIONS))
+    return _with_universal_progressive_disclosure(_with_shipped_trigger_packs(tuple(_DEFINITIONS)))
+
+
+def _with_universal_progressive_disclosure(
+    definitions: tuple[SkillDefinition, ...],
+) -> tuple[SkillDefinition, ...]:
+    """Enable progressive disclosure for all installable non-bespoke `omh-*` workflow skills.
+
+    Every non-bespoke `omh-*` skill renders a compact `SKILL.md` (trigger/deferral
+    boundary, opening steps, reference/toolkit pointers, safety rules, checklist,
+    recovery notes, runtime rail) and moves heavy examples, full catalog metadata,
+    sibling boundaries, and artifact contract prose to `references/full-contract.md`.
+    ULW/DAG engines and bespoke hand-authored skills keep their dedicated bodies.
+    """
+    exposures = _surface_exposure_by_name()
+    updated: list[SkillDefinition] = []
+    for definition in definitions:
+        if definition.progressive_disclosure:
+            updated.append(definition)
+            continue
+        exposure = exposures.get(definition.name) or _default_surface_exposure(definition.name)
+        if (
+            "installable" in exposure.projections
+            and omh_skill_display_name(definition.name).startswith(OMH_SKILL_NAME_PREFIX)
+            and definition.name not in BESPOKE_SKILL_BODY_NAMES
+        ):
+            compact = copy(definition)
+            object.__setattr__(compact, "progressive_disclosure", True)
+            updated.append(compact)
+            continue
+        updated.append(definition)
+    return tuple(updated)
 
 
 def _with_shipped_trigger_packs(definitions: tuple[SkillDefinition, ...]) -> tuple[SkillDefinition, ...]:
@@ -1475,23 +1528,189 @@ CORE_SKILLS = (
     "agent-ops-review",
 )
 
-# The default install profile: the doctor health floor above, plus the workflow
-# skills a messenger-first user needs for the chat/plan/status/handoff flows that
-# make up a first session (planning with a coding handoff, gateway status-update
-# and delivery policy for chat channels, executor runtime readiness before a
-# handoff, and an ops observability card for status questions). Everything else
-# in the catalog is opt-in via a `full` install so a default install does not add
-# every packaged skill's context weight to every turn.
+# The lightweight `core` install profile: the 5-skill doctor/control floor above
+# plus 7 high-lift daily workflow skills (planning, bug-first code review,
+# verification gating, app/agent debugging, spend gating, and skill evaluation).
+# Thin metadata/channel cards live in opt-in role packs or `full` so a `--core`
+# install maximizes value per index line.
 CORE_PROFILE_SKILLS = tuple(
     dict.fromkeys(
         CORE_SKILLS
         + (
             "plan",
-            "gateway-intent-card",
-            "buzz",
-            "executor-runtime-readiness",
-            "ops-observability-card",
+            "code-review",
+            "verification-gate",
+            "app-debugging",
+            "agent-debug",
+            "spend-gate",
+            "skill-eval",
         )
     )
 )
+
+# Opt-in layered role packs that compose on top of `CORE_PROFILE_SKILLS`
+# (`omh setup --core --pack <name>`, `omh install --core --pack <name>`, or
+# `omh skill-profile reconcile --to core --pack <name>`). `DEFAULT_SKILL_PROFILE`
+# remains `full`; packs give operators bounded subsets without deleting skills on
+# plain `omh update`.
+SKILL_PACKS: dict[str, tuple[str, ...]] = {
+    "engineering": (
+        "ultrawork",
+        "ralplan",
+        "dag-ulw",
+        "ultraqa",
+        "loop",
+        "context",
+        "deep-interview",
+        "maestro",
+        "ultraperf",
+        "backend",
+        "frontend",
+        "frontend-refactor",
+        "rust",
+        "native-debugging",
+        "build-failure-triage",
+        "git-workflow",
+        "commit-pr-authoring",
+        "refactor-plan",
+        "tech-debt-audit",
+        "relational-db",
+        "data-pipelines",
+        "iac-change",
+        "deploy-and-monitor",
+        "release-cut",
+        "mobile-release",
+        "llm-app-dev",
+        "inference-serving",
+        "model-finetuning",
+        "model-compression",
+        "application-threat-model",
+        "security-safety-review",
+        "security-event-response",
+        "live-incident-response",
+        "reliability-review",
+        "failure-signal-audit",
+        "production-audit",
+        "accessibility-audit",
+        "visual-qa",
+        "agent-instructions",
+        "codebase-onboarding",
+        "codebase-uml",
+        "codegraph-refresh",
+        "ai-slop-cleaner",
+        "decision-prototype",
+        "adversarial-consensus",
+        "github-event-ops",
+        "github-issue-intake",
+        "app-work-intake",
+        "agent-board",
+        "running-work-board",
+        "todo-checklist",
+        "executor-runtime-readiness",
+    ),
+    "research-science": (
+        "research",
+        "web-research",
+        "source-finder",
+        "research-brief",
+        "market-research",
+        "research-department",
+        "paper-learning",
+        "long-document-reading",
+        "systematic-review",
+        "repro-audit",
+        "data-analysis",
+        "geospatial-analysis",
+        "biomedical-evidence",
+        "molecular-docking",
+        "wiki",
+        "jit-learn",
+        "memory-new",
+        "memory-sync",
+        "decision-recall",
+        "instinct-ledger",
+        "rules-distill",
+        "ask",
+    ),
+    "business-ops": (
+        "product-brief",
+        "product-discovery-validation",
+        "idea-to-deploy",
+        "cto-loop",
+        "strategy-brief",
+        "ops-review",
+        "ops-observability-card",
+        "operating-rhythm",
+        "meeting-brief",
+        "report-package",
+        "materials-package",
+        "deliverable-package",
+        "data-share-review",
+        "legal-compliance-review",
+        "internal-audit",
+        "finance-analysis",
+        "people-ops",
+        "sales-development",
+        "sales-pipeline-review",
+        "lifecycle-growth",
+        "support-operations",
+        "feedback-triage",
+        "curriculum-design",
+        "ai-job-search",
+        "localization-review",
+        "content-operator",
+        "run-efficiency",
+        "context-budget-review",
+        "gateway-intent-card",
+        "buzz",
+    ),
+    "creative-media": (
+        "design-orchestration",
+        "design-quality-gate",
+        "apple-design",
+        "award-bar-score",
+        "show-reel",
+        "sprite-forge",
+        "img-summary",
+        "media-input-operator",
+        "voice-operator",
+        "product-docs",
+    ),
+    "jev": (
+        "jev-ask",
+        "jev-route",
+        "jev-failure-triage",
+        "jev-review-gate",
+        "jev-action-check",
+        "jev-done-check",
+    ),
+}
+
+SKILL_PACK_NAMES: tuple[str, ...] = tuple(SKILL_PACKS)
+
+
+def resolve_skill_pack_names(packs: tuple[str, ...] | list[str] | set[str]) -> tuple[str, ...]:
+    """Validate and deduplicate requested layered skill pack names in stable order."""
+    resolved: list[str] = []
+    for raw in packs:
+        pack = str(raw).strip()
+        if not pack:
+            continue
+        if pack not in SKILL_PACKS:
+            raise ValueError(f"unknown skill pack {pack!r}; choose from {', '.join(SKILL_PACK_NAMES)}")
+        if pack not in resolved:
+            resolved.append(pack)
+    return tuple(resolved)
+
+
+def core_with_packs_skill_names(packs: tuple[str, ...] | list[str] | set[str] = ()) -> tuple[str, ...]:
+    """Return canonical skill names for `core` plus any validated layered packs."""
+    selected = list(CORE_PROFILE_SKILLS)
+    for pack in resolve_skill_pack_names(packs):
+        for skill in SKILL_PACKS[pack]:
+            if skill not in selected:
+                selected.append(skill)
+    return tuple(selected)
+
+
 DESCRIPTIONS = {definition.name: definition.description for definition in _DEFINITIONS}

@@ -15,46 +15,13 @@ metadata:
 
 # Security Safety Review
 
-This is a Hermes-native `security-safety-review` workflow skill.
+Required: target workflow, code change, prompt, tool, dependency, or release surface, available evidence: diff, config, package metadata, command plan, or runtime permissions, risk tolerance and allowed actions, known secrets, credentials, external services, or destructive operations to avoid. Output: security_safety_review_plan/v1, threat_surface_map/v1, permission_and_secret_risk_matrix/v1, prompt_injection_risk_review/v1, safe_action_policy/v1, plugin_risk_audit/v1 for one explicitly named local plugin directory, remediation_handoff/v1 when needed, credential_rotation_sequence/v1 when a live credential must be replaced, proposed_approval_deny_list/v1 when a blocked action is a terminal command, not-evidence boundary.
 
 ## Why This Exists
 
 `security-safety-review` adapts ECC's AgentShield and safety-review posture into OMH as a review-first gate for agentic coding and operator workflows without adding hidden scanners or external dependencies, because an agent that runs commands and reads untrusted text can be steered into running them.
 
-## Do Not Use When
-
-- The user asks for production readiness across release, rollback, and observability; use `omh-production-audit`.
-- The user asks for merge verification commands; use `omh-verification-gate`.
-- The user asks for a normal code review focused on bugs; use `omh-code-review`.
-- The request is a vulnerability review of application code (injection, authorization, SSRF); use `omh-code-review`.
-- The subject is an application or service rather than the agent's own runtime -- its assets, trust boundaries, attack scenarios, and the controls that defend them; use `omh-application-threat-model`.
-- Something already happened to shipped code -- a CVE published against a dependency, a credential pushed to a repository, a license question about a package; use `omh-security-event-response`, which orders containment and closes only on an observed rotation or fix.
-
-## Examples
-
-Good example:
-
-- Prompt: security-safety-review 이 자동화가 프롬프트 인젝션, 시크릿, 파괴적 명령 위험이 있는지 봐줘.
-- Expected behavior: Prepare threat_surface_map/v1, permission/secret risk matrix, prompt injection review, safe action policy, and remediation handoff if needed.
-- Why: The request is a safety review before agentic execution.
-
-Bad example:
-
-- Prompt: security-safety-review 시크릿 값을 출력하고 바로 권한을 바꿔줘.
-- Expected behavior: Refuse secret disclosure and permission mutation, then prepare a redacted risk matrix and explicit remediation handoff.
-- Why: Security safety review is redacted review and routing, not unsafe mutation.
-
-## Completion Checklist
-
-- Findings are grounded in concrete file, command, or source evidence.
-- The verdict is PASS, HOLD, or BLOCK with the missing evidence and confirmation required.
-- Residual risk and missing verification are named; fixes are separate handoffs; a credential replacement states compromised (revoke first) or planned.
-
-## Recovery Notes
-
-- If verify-new lacks an observed credential check, retain the redacted risk matrix and credential_rotation_sequence/v1, mark replacement unresolved, and hand back the verify-new evidence requirement before the operator revokes the old credential.
-- If no single local plugin directory is explicitly named, no plugin audit finding stands; mark plugin_risk_audit/v1 not_observed and hand back the directory question without importing, registering, or activating any plugin.
-- If a proposed deny glob also blocks commands the workflow needs, retain safe_action_policy/v1, mark proposed_approval_deny_list/v1 unresolved, and hand back the conflicting globs and needed commands for user revision without changing config.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -90,36 +57,6 @@ Handoff policy:
 
 Keep safety review in Hermes. Scans, dependency updates, sandbox changes, credential checks, external security tools, and code fixes require explicit observed executor or operator evidence.
 
-Required inputs:
-
-- target workflow, code change, prompt, tool, dependency, or release surface
-- available evidence: diff, config, package metadata, command plan, or runtime permissions
-- risk tolerance and allowed actions
-- known secrets, credentials, external services, or destructive operations to avoid
-
-Expected outputs:
-
-- security_safety_review_plan/v1
-- threat_surface_map/v1
-- permission_and_secret_risk_matrix/v1
-- prompt_injection_risk_review/v1
-- safe_action_policy/v1
-- plugin_risk_audit/v1 for one explicitly named local plugin directory
-- remediation_handoff/v1 when needed
-- credential_rotation_sequence/v1 when a live credential must be replaced
-- proposed_approval_deny_list/v1 when a blocked action is a terminal command
-- not-evidence boundary
-
-Artifact expectations:
-
-- threat_surface_map/v1 with prompts, tools, files, dependencies, credentials, network, destructive actions, and external services
-- permission_and_secret_risk_matrix/v1 with redacted findings, allowed actions, missing evidence, and escalation gates
-- prompt_injection_risk_review/v1 with untrusted input boundaries and tool-use constraints
-- safe_action_policy/v1 with allowed, confirmation-gated, blocked, and observed-only actions
-- plugin_risk_audit/v1 with bounded aggregate local risk categories and no source disclosure
-- credential_rotation_sequence/v1 attached to remediation_handoff/v1, ordering issue-new, deploy-new, verify-new, revoke-old, verify-revoked, with the overlap window and the operator who runs each step
-- proposed_approval_deny_list/v1 with one `approvals.deny` glob per blocked terminal-command row of safe_action_policy/v1, quoted in YAML when it starts with an asterisk or holds a brace, an exclamation mark, or a colon; Hermes matches each glob case-insensitively against the terminal command and blocks a match even under yolo or `approvals.mode: off`, so each glob is checked against the commands the workflow still needs
-
 Artifact contracts:
 
 This label denotes the machine-enforcement level, not a skill quality score and not an observed evidence state.
@@ -135,6 +72,18 @@ Safety rules:
 - An explicit local plugin risk audit reads bounded source metadata only; it must not import, register, execute, install, or activate a plugin.
 - A rotation sequence is the operator's to run: OMH issues, deploys, and revokes nothing, and a delivered sequence is never a rotation that happened.
 - A deny list is a proposed diff the user applies: OMH writes no Hermes config, and the list is a policy in force only once the user's own config shows it.
+
+## Completion Checklist
+
+- Findings are grounded in concrete file, command, or source evidence.
+- The verdict is PASS, HOLD, or BLOCK with the missing evidence and confirmation required.
+- Residual risk and missing verification are named; fixes are separate handoffs; a credential replacement states compromised (revoke first) or planned.
+
+## Recovery Notes
+
+- If verify-new lacks an observed credential check, retain the redacted risk matrix and credential_rotation_sequence/v1, mark replacement unresolved, and hand back the verify-new evidence requirement before the operator revokes the old credential.
+- If no single local plugin directory is explicitly named, no plugin audit finding stands; mark plugin_risk_audit/v1 not_observed and hand back the directory question without importing, registering, or activating any plugin.
+- If a proposed deny glob also blocks commands the workflow needs, retain safe_action_policy/v1, mark proposed_approval_deny_list/v1 unresolved, and hand back the conflicting globs and needed commands for user revision without changing config.
 
 ## Runtime Evidence
 

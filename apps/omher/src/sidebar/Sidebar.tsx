@@ -24,7 +24,7 @@ import { t } from "../i18n";
 import { ThreadTree } from "../threads/ThreadTree";
 import { Dock } from "./Dock";
 import { useBotsAbove } from "./dockState";
-import { revealBotTop, revealPending } from "./revealBot";
+import { revealBotTop, revealPending, wholeTopOf } from "./revealBot";
 import { useEdgeFade } from "./edgeFade";
 import { SplitDivider, useSideSplit } from "./SideSplit";
 import { useAutoSplit } from "./autoSplit";
@@ -42,6 +42,18 @@ function useRevealBot(bot: string | null, thread: string | null, inChat: boolean
     if (!thread && revealPending(bot)) return;
     const sel = thread ? `[data-testid="thread-row-${CSS.escape(thread)}"]` : `[data-testid="bot-${CSS.escape(bot)}"]`;
     document.querySelector(sel)?.scrollIntoView({ block: "nearest" });
+    // then the top edge on a whole row, once the list has its final size (a jump from the Needs strip closes the
+    // strip's list above it): a jump to an ask lands the row at the bottom edge, which cut the row at the top
+    let raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(() => {
+        const row = document.querySelector<HTMLElement>(sel);
+        const list = row?.closest<HTMLElement>(".bot-list");
+        if (!row || !list) return;
+        row.scrollIntoView({ block: "nearest" });
+        list.scrollTop = wholeTopOf(list, row, list.scrollTop);
+      });
+    });
+    return () => cancelAnimationFrame(raf);
   }, [bot, thread, inChat]);
 }
 

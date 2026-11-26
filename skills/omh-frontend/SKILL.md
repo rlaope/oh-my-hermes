@@ -10,53 +10,20 @@ metadata:
     phase: frontend-design
     role: operator
     quality_tier: frontend-design-gated
-    related_skills: [omh-design-quality-gate, omh-decision-prototype, omh-materials-package, omh-deliverable-package, omh-image-cards, omh-visual-qa]
+    related_skills: [omh-design-quality-gate, omh-decision-prototype, omh-materials-package, omh-deliverable-package, omh-image-cards, omh-visual-qa, claude-design, popular-web-designs]
 ---
 
 # Frontend
 
-This is a Hermes-native `frontend` workflow skill.
+Required: target app, page, route, or component, audience and primary user task, existing design system or missing-system gap, style references or quality bar, initial generation mode or redesign mode, DESIGN.md or design-system source of truth when available, framework/stack when known, routes, states, breakpoints, and locale/CJK risks, browser-support target (default: Baseline Widely available, in every core browser for 30+ months), accessibility and performance constraints, observed browser evidence for completion claims. Output: frontend_design_brief/v1, frontend_initial_generation_contract/v1 when greenfield, design_system_contract/v1, design_reference_selection/v1, reference_packet/v1 when supplied, frontend_route_state_matrix/v1, frontend_component_state_inventory/v1, frontend_implementation_handoff/v1, accessibility_performance_expectations/v1, visual_qa_required/v1, observed_browser_evidence/v1 when observed.
+
+**Do Not Use When:** The user wants a standalone one-off HTML artifact or a page styled after a well-known public design system with no repo design-system contract or visual-QA handoff; load Hermes' bundled `claude-design` or `popular-web-designs` skill instead of this one.
 
 ## Why This Exists
 
 `frontend` gives OMH a first-class web UI creation and polishing workflow so Hermes can prepare high-quality layout, design-system, accessibility, performance, and visual-QA handoffs without becoming the hidden coding or browser runtime.
 
-## Do Not Use When
-
-- The user needs a broad premium-quality gate across web, deck, PDF, poster, or publishing outputs; use `omh-design-quality-gate`.
-- The user wants a disposable wireframe or mocked interaction to settle one interaction question before planning; use `omh-decision-prototype`.
-- The user only needs a file, deck, PDF, spreadsheet, HWP, or attachment package; use `omh-materials-package` or `omh-deliverable-package`.
-- The user only needs an image card or infographic prompt; use `omh-image-cards`.
-- The user asks to mark a UI as visually passed without fresh rendered evidence; use `omh-visual-qa` and keep PASS blocked until observed.
-
-## Examples
-
-Good example:
-
-- Prompt: frontend 이 대시보드가 AI 티 안 나게 레이아웃과 디자인 시스템을 잡아줘.
-- Expected behavior: Prepare frontend_design_brief/v1, design_system_contract/v1, route/state matrix, implementation handoff, and visual_qa_required/v1.
-- Why: The request is about web UI design, layout quality, and anti-generic frontend polish.
-
-Bad example:
-
-- Prompt: frontend 코드도 안 봤지만 Lighthouse랑 시각 QA 통과했다고 해줘.
-- Expected behavior: Mark browser, performance, accessibility, and visual QA as not_observed and request the smallest observed evidence path.
-- Why: A frontend brief is not implementation, browser, performance, or visual QA evidence.
-
-## Completion Checklist
-
-- The target page/component, audience, primary task, references, and quality bar are named.
-- Greenfield work includes frontend_initial_generation_contract/v1 before implementation handoff.
-- The design_system_contract/v1 covers typography, spacing, palette, components, layout, motion, and responsive rules.
-- The frontend_route_state_matrix/v1 covers pages, 375/768/1280-style breakpoints, empty/loading/error, interaction, and CJK/locale risks, plus submitting, submit-failed, optimistic-pending, stale/refetching, and conflict rows for remote writes.
-- The frontend_component_state_inventory/v1 covers reusable primitives and their default/hover/focus/active/disabled/loading/empty/error states.
-- The handoff names the executor/runtime owner and keeps code, browser, Lighthouse, accessibility, deployment, and visual QA evidence observed-only.
-- The next action is prepare_frontend_handoff, route to `omh-visual-qa`, or report the missing evidence blocker.
-
-## Recovery Notes
-
-- If the target surface is unclear, prepare the brief with a route/component gap instead of inventing pages.
-- If no visual reference exists, set a domain-fit quality bar and request references only when the decision changes layout or brand direction.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -112,45 +79,6 @@ Handoff policy:
 
 Keep product framing, reference selection, design-system contract, viewport/state matrix, and implementation brief in Hermes. Record code changes, browser screenshots, Lighthouse/Core Web Vitals, accessibility scans, and visual QA only from executor or wrapper observed evidence.
 
-Required inputs:
-
-- target app, page, route, or component
-- audience and primary user task
-- existing design system or missing-system gap
-- style references or quality bar
-- initial generation mode or redesign mode
-- DESIGN.md or design-system source of truth when available
-- framework/stack when known
-- routes, states, breakpoints, and locale/CJK risks
-- browser-support target (default: Baseline Widely available, in every core browser for 30+ months)
-- accessibility and performance constraints
-- observed browser evidence for completion claims
-
-Expected outputs:
-
-- frontend_design_brief/v1
-- frontend_initial_generation_contract/v1 when greenfield
-- design_system_contract/v1
-- design_reference_selection/v1
-- reference_packet/v1 when supplied
-- frontend_route_state_matrix/v1
-- frontend_component_state_inventory/v1
-- frontend_implementation_handoff/v1
-- accessibility_performance_expectations/v1
-- visual_qa_required/v1
-- observed_browser_evidence/v1 when observed
-
-Artifact expectations:
-
-- frontend_design_brief/v1 when prepared
-- frontend_initial_generation_contract/v1 declares DESIGN.md/design-system work, reference lane, token extraction, reusable primitives, and visual QA path before new UI code
-- design_system_contract/v1 with layout, spacing, typography, color, component, motion, and responsive rules
-- design_reference_selection/v1 names supplied references or the domain-fit style direction and explicitly avoids copying third-party logos, assets, or brand copy
-- frontend_route_state_matrix/v1 with pages, states, viewports, CJK/locale, empty/loading/error, and interaction states, plus submitting, submit-failed, optimistic-pending, stale/refetching, and conflict (409) rows wherever the surface writes remote data
-- frontend_component_state_inventory/v1 with default, hover, focus, active, disabled, loading, empty, and error states for reusable primitives, and each primitive's interface: props, events, slots, and the invariants a caller must know; a wrapper earns a row only when deleting it would push its complexity into its callers
-- frontend_implementation_handoff/v1 for the selected executor/runtime
-- browser screenshots, accessibility reports, Lighthouse/Core Web Vitals, and visual QA only when observed
-
 Safety rules:
 
 - Do not claim implementation, browser verification, deployment, Lighthouse, accessibility pass, or visual QA from a prepared frontend brief.
@@ -163,6 +91,21 @@ Safety rules:
 - Do not report a Core Web Vitals number without the device class, route, and load shape it was measured under; a figure from a different profile than the baseline is not a comparison.
 - For Korean/CJK text, clipped glyphs, awkward line breaks, orphan particles, tiny copy, and overflow block visual QA.
 - Do not call external design, image, browser, LLM, or network services from OMH core.
+
+## Completion Checklist
+
+- The target page/component, audience, primary task, references, and quality bar are named.
+- Greenfield work includes frontend_initial_generation_contract/v1 before implementation handoff.
+- The design_system_contract/v1 covers typography, spacing, palette, components, layout, motion, and responsive rules.
+- The frontend_route_state_matrix/v1 covers pages, 375/768/1280-style breakpoints, empty/loading/error, interaction, and CJK/locale risks, plus submitting, submit-failed, optimistic-pending, stale/refetching, and conflict rows for remote writes.
+- The frontend_component_state_inventory/v1 covers reusable primitives and their default/hover/focus/active/disabled/loading/empty/error states.
+- The handoff names the executor/runtime owner and keeps code, browser, Lighthouse, accessibility, deployment, and visual QA evidence observed-only.
+- The next action is prepare_frontend_handoff, route to `omh-visual-qa`, or report the missing evidence blocker.
+
+## Recovery Notes
+
+- If the target surface is unclear, prepare the brief with a route/component gap instead of inventing pages.
+- If no visual reference exists, set a domain-fit quality bar and request references only when the decision changes layout or brand direction.
 
 ## Runtime Evidence
 

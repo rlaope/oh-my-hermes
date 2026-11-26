@@ -175,11 +175,11 @@ export function TermImport({
                   <span className="tm-imp-font" data-testid="term-import-font">
                     {picked ? fontNote(pickedFont) : ""}
                   </span>
-                  <button type="button" className="st-btn" onClick={close} data-testid="term-import-cancel">
-                    {t("term.importCancel")}
-                  </button>
                   <button type="button" className="st-btn tm-imp-use" disabled={!pickedTheme} onClick={use} data-testid="term-import-use">
                     {t("term.importUse")}
+                  </button>
+                  <button type="button" className="st-btn" onClick={close} data-testid="term-import-cancel">
+                    {t("term.importCancel")}
                   </button>
                 </div>
               </div>

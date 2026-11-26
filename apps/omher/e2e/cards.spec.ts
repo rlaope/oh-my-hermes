@@ -285,6 +285,19 @@ test("a card left open when the turn is stopped collapses to one line", async ({
   expect(await calls("approval.respond")).toEqual([]);
 });
 
+test("in Korean the approval card's title is Korean too: Hermes' English title stays in its tooltip", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("omher.lang", "ko"));
+  await open(page);
+  await mock("mock.ask", { bot: "kami", kind: "approval" });
+  const card = page.getByTestId("timeline").getByTestId("card-approval");
+  await expect(card.locator(".card-title")).toHaveText("승인이 필요해요");
+  await expect(card.locator(".card-title")).toHaveAttribute("title", "Run shell command");
+  await expect(card).not.toContainText("Run shell command");
+  // the bridge's own fallback title is known, and reads in Korean as itself
+  await mock("mock.emit", { events: [{ event: "approval.request", bot: "kami", request_id: "ko-2", title: "Allow this command?", command: "ls", choices: ["once", "deny"] }] });
+  await expect(page.getByTestId("timeline").getByTestId("card-approval").last().locator(".card-title")).toHaveText("이 명령을 허용할까요?");
+});
+
 test("light theme: card stays neutral", async ({ page }) => {
   await open(page);
   await page.evaluate(async () => {

@@ -269,8 +269,13 @@ class BotTemplateSkillTests(unittest.TestCase):
         self.assertIn("omher's apply message is a request, not that yes", body)
         self.assertIn("No persona write and no job before the person's yes to the shown plan", body)
         self.assertIn("This skill removes nothing.", body)
-        # no example reads as apply-immediately: each one that applies shows the plan first
-        examples = body.split("## Examples", 1)[1].split("\n## ", 1)[0]
+        # no example reads as apply-immediately: each one that applies shows the plan first. Under universal
+        # progressive disclosure the examples live in the skill's full contract, which the body points at.
+        self.assertIn("references/full-contract.md", body)
+        full_contract = _reference(SKILL, "references/full-contract.md")
+        self.assertIsNotNone(full_contract)
+        examples = full_contract.split("## Examples", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("- Expected behavior:", examples)
         for line in examples.split("\n"):
             if line.startswith("- Expected behavior:") and "apply" in line.lower():
                 self.assertRegex(line, r"(?i)plan", line)

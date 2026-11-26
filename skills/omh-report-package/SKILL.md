@@ -15,43 +15,13 @@ metadata:
 
 # Report Package
 
-This is a Hermes-native `report-package` workflow skill.
+Required: audience, reporting period or scope, supplied facts with targets or prior-period figures, missing data or assumptions. Output: report package, PPT-ready Markdown or JSON outline, assumptions and missing-input list, optional achievements badge section sourced from `omh achievements export --format md` when requested.
 
 ## Why This Exists
 
 `report-package` exists to make reporting a first-class operations surface: Hermes can produce clean report and slide outlines while keeping approvals, delivery, and binary deck export as separate evidence.
 
-## Do Not Use When
-
-- The user needs SLO, incident, or error-budget review; use `omh-reliability-review`.
-- The user asks only for a designed `.pptx` file; use `omh-materials-package`.
-- The request is meeting minutes, scrum history, or action-item tracking.
-
-## Examples
-
-Good example:
-
-- Prompt: report-package 월간 리더십 보고서 PPT outline 만들어줘.
-- Expected behavior: Prepare a report package with sections, assumptions, missing inputs, and Markdown/JSON outline scope.
-- Why: The request is packaging known information for reporting, not reliability validation or code work.
-
-Bad example:
-
-- Prompt: report-package prove our SLO passed and close the incident.
-- Expected behavior: Route to `omh-reliability-review` and require metric or incident evidence.
-- Why: Report packaging cannot satisfy reliability closure evidence.
-
-## Completion Checklist
-
-- The reporting window, inputs, audience, narrative, and evidence gaps are named.
-- Draft report, generated package, approval, and delivery are separate states.
-- The next action says whether to gather evidence, generate, revise, approve, or deliver.
-
-## Recovery Notes
-
-- If no presentation tool can produce a binary deck, retain the PPT-ready Markdown or JSON outline, mark binary export not_observed, and hand back the outline, assumptions, and missing-input list for separate deck generation.
-- If the tool returns "rendered": false (it still exits 0) or its image count differs from slide_count, keep the deck's outline read-back, leave render QA not observed, and hand back the missing-tool or image-count gap for that file.
-- If the requested achievements export fails, retain the rest of the report package, mark the badge section not_observed, and hand back the missing output from omh achievements export --format md instead of inventing badges.
+Contract: `references/full-contract.md` (examples, sibling boundaries, full artifact details).
 
 ## Workflow Lane
 
@@ -87,29 +57,23 @@ Handoff policy:
 
 Keep report narrative, sectioning, and Markdown/JSON outline packaging in Hermes; do not require reliability evidence unless the user asks for a reliability review.
 
-Required inputs:
-
-- audience
-- reporting period or scope
-- supplied facts with targets or prior-period figures
-- missing data or assumptions
-
-Expected outputs:
-
-- report package
-- PPT-ready Markdown or JSON outline
-- assumptions and missing-input list
-- optional achievements badge section sourced from `omh achievements export --format md` when requested
-
-Artifact expectations:
-
-- operation_artifact/v1 report-package artifact when a wrapper or CLI records it
-
 Safety rules:
 
 - Do not claim source review completion from a prepared report package.
 - Do not claim stakeholder approval or presentation delivery without observed evidence.
 - Do not couple report packages to SLO, incident, or error-budget evidence by default.
+
+## Completion Checklist
+
+- The reporting window, inputs, audience, narrative, and evidence gaps are named.
+- Draft report, generated package, approval, and delivery are separate states.
+- The next action says whether to gather evidence, generate, revise, approve, or deliver.
+
+## Recovery Notes
+
+- If no presentation tool can produce a binary deck, retain the PPT-ready Markdown or JSON outline, mark binary export not_observed, and hand back the outline, assumptions, and missing-input list for separate deck generation.
+- If the tool returns "rendered": false (it still exits 0) or its image count differs from slide_count, keep the deck's outline read-back, leave render QA not observed, and hand back the missing-tool or image-count gap for that file.
+- If the requested achievements export fails, retain the rest of the report package, mark the badge section not_observed, and hand back the missing output from omh achievements export --format md instead of inventing badges.
 
 ## Runtime Evidence
 
