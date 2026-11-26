@@ -29,17 +29,32 @@ function readBase64(file: File): Promise<string> {
   });
 }
 
+/** Extract files from drag/paste events, falling back to `DataTransferItemList` for messengers/webviews
+ * that expose dragged or pasted image blobs via `items` when `files` is empty. */
+export function filesFromTransfer(dt: DataTransfer | null | undefined): File[] {
+  if (!dt) return [];
+  const direct = [...(dt.files ?? [])];
+  if (direct.length) return direct;
+  return [...(dt.items ?? [])]
+    .filter((item) => item.kind === "file")
+    .map((item) => item.getAsFile())
+    .filter((f): f is File => !!f);
+}
+
 /** New chips for `files`, after the `have` already there (limits count from that position). */
-export function chipsFor(files: File[], have: number): Chip[] {
+export function chipsFor(files: File[], have: number, haveImages = 0): Chip[] {
+  let imgIdx = haveImages;
   return files.map((f, i) => {
     const kind = previewKind(f.name, f.type);
-    const reason = limitReason(f.size, have + i);
+    const attach = attachKind(f.name, f.type);
+    const reason = limitReason(f.size, have + i, attach === "image" ? imgIdx : 0);
+    if (!reason && attach === "image") imgIdx += 1;
     return {
       id: `chip-${++chipSeq}`,
       name: f.name || "pasted",
       size: f.size,
       kind,
-      attach: attachKind(f.name, f.type),
+      attach,
       url: !reason && kind !== "file" ? URL.createObjectURL(f) : null,
       read: () => readBase64(f),
       reason,
@@ -341,7 +356,9 @@ export function useDropZone(anchor: React.RefObject<HTMLElement | null>, enabled
     setZone(pane);
     if (!pane || !enabled) return;
     let depth = 0;
-    const hasFiles = (e: DragEvent) => !!e.dataTransfer && [...e.dataTransfer.types].includes("Files");
+    const hasFiles = (e: DragEvent) =>
+      !!e.dataTransfer &&
+      ([...e.dataTransfer.types].includes("Files") || [...(e.dataTransfer.items ?? [])].some((i) => i.kind === "file"));
     const enter = (e: DragEvent) => {
       if (!hasFiles(e)) return;
       e.preventDefault();
@@ -363,7 +380,7 @@ export function useDropZone(anchor: React.RefObject<HTMLElement | null>, enabled
       e.preventDefault();
       depth = 0;
       setOver(false);
-      const files = [...(e.dataTransfer?.files ?? [])];
+      const files = filesFromTransfer(e.dataTransfer);
       if (files.length) cb.current(files);
     };
     pane.addEventListener("dragenter", enter);

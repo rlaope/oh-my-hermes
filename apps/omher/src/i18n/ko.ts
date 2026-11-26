@@ -1051,6 +1051,7 @@ export const ko: Record<Key, string> = {
   "att.removeOf": "{name} 빼기",
   "att.drop": "놓으면 첨부",
   "att.tooMany": "{n}개 초과",
+  "att.tooManyImages": "이미지 {n}개 초과",
   "att.tooBig": "100 MB 초과",
   "att.failed": "{name} 첨부 실패 · {error}",
   "bub.replyTarget": "답장 대상",
