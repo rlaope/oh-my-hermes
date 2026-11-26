@@ -4464,7 +4464,7 @@ class RouterContentTests(unittest.TestCase):
         # once per platform/version -- while matching the sharded workflow;
         # the monolithic discover command must not return as a silent
         # replacement that bypasses exact-once accounting.
-        self.assertIn("python tools/test_sharding/plan.py --shards 2", ci)
+        self.assertIn("python tools/test_sharding/plan.py --shards 3", ci)
         self.assertIn("--durations timings-history/timings.json", ci)
         self.assertIn("actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", ci)
         self.assertIn("actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", ci)
