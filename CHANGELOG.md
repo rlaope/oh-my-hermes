@@ -4,6 +4,17 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: after a reconnect or a restart, bots and threads show what Hermes is really doing.** When the link to the
+  bridge dropped (sleep/wake, a bridge restart), an approval Hermes still waited on read "Not answered" for good: the
+  outage ended the turn here, and the bridge's replay of the same ask was dropped as a duplicate. A replayed ask in a
+  turn Hermes says still runs now comes back answerable, in Needs you. A thread that finished during the outage now
+  reads done instead of a red "Connection to Hermes lost" when its re-read shows the answer, and a thread's held
+  message waits for that thread's re-read (it went out before `thread.list` and failed "no such folder chat"). After
+  omher itself starts again, a thread Hermes runs or that waits on an approval was shown idle until clicked:
+  `thread.list` now reads such a thread's live status from Hermes' `session.active_list`, and the app opens those
+  threads at once so their rows run and their asks reach Needs you. (`apps/omher/src/state/store.ts`,
+  `apps/omher/bridge/omher_bridge.py`)
+
 - **omher terminal: an address a table cell breaks across rows opens whole.** Claude Code's markdown tables put
   real newlines inside a cell, so `https://github.com/` sat on one row and `sgl-project/sglang/pull/…` under it; the
   web-links add-on joins only rows xterm itself wrapped, linked the first piece alone, and Cmd+click opened
