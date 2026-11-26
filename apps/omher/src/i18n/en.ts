@@ -1775,9 +1775,11 @@ export const en = {
   "term.folderEmpty": "No terminals · right-click to add",
   "term.folderGone": "This folder no longer exists",
   "term.folderGoneRan": "{folder} no longer exists, opened {at} instead",
-  // spacing: the BOTS | TERMINALS divider
+  // spacing: the BOTS | TERMINALS divider and the sidebar's right edge
   "side.split": "Resize bots and terminals",
   "side.splitTip": "Drag to give bots or terminals more room. Double-click: back to automatic.",
+  "side.resize": "Resize the sidebar",
+  "side.resizeTip": "Drag to resize · double-click for the usual width",
   // tidy: a thread row's second line
   "thread.said": "{name}: {text}",
   "thread.you": "You",

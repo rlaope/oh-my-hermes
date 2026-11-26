@@ -232,7 +232,7 @@ const partly = (page: Page) =>
       (e) => e.matches(".search, .bot-list > *, .ss-list > *, .side-sec > .side-sh, .side-foot > *") || e.children.length === 0 || e.matches(".ui-ring, svg"),
     );
     for (const e of painted) {
-      if (e.closest(".omh-note") || e.closest("svg") !== e && e.closest("svg")) continue;
+      if (e.closest(".omh-note") || e.matches(".side-resizer") || e.closest("svg") !== e && e.closest("svg")) continue;
       const r = e.getBoundingClientRect();
       if (r.width < 1 || r.height < 1) continue;
       if (r.bottom <= pop.top + 0.5 || r.top >= pop.bottom - 0.5) continue;

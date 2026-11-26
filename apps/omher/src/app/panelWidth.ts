@@ -13,15 +13,49 @@ export function panelKind(tab: string | undefined): PanelKind {
 }
 
 /** The widest the panel may be in a window this wide with a sidebar this wide. Under 1100px the panel slides over
- *  the chat instead of taking a column (app.css), so there it leaves 300px: the sidebar and a strip of chat. */
+ *  the chat instead of taking a column (app.css), so there it leaves at least 300px (and never covers the sidebar). */
 export function panelMax(windowW: number, sideW: number): number {
-  const keep = windowW < OVERLAY_BELOW ? OVERLAY_GAP : sideW + CHAT_MIN;
+  const keep = windowW < OVERLAY_BELOW ? Math.max(OVERLAY_GAP, sideW + OVERLAY_STRIP) : sideW + CHAT_MIN;
   return Math.max(PANEL_MIN, windowW - keep);
 }
 
 /** app.css: `@media (max-width: 1099px)` turns the panel into an overlay. */
 export const OVERLAY_BELOW = 1100;
 const OVERLAY_GAP = 300;
+/** Minimum strip of chat kept clear between the sidebar and an overlay panel under 1100px (248 + 52 = 300). */
+export const OVERLAY_STRIP = 52;
+
+/** The stylesheet's default width for a panel tab when the person has not dragged one. */
+export function panelDefaultWidth(kind: PanelKind, windowW: number, sideW: number): number {
+  if (kind === "details") return 300;
+  if (kind === "tools") return 400;
+  return Math.round(Math.min(560, Math.max(460, windowW - sideW - 480)));
+}
+
+export interface LivePanel {
+  open: boolean;
+  max: boolean;
+  width: number;
+}
+
+let livePanel: LivePanel = { open: false, max: false, width: 0 };
+const panelListeners = new Set<() => void>();
+
+export function getLivePanel(): LivePanel {
+  return livePanel;
+}
+
+export function setLivePanel(next: LivePanel): void {
+  const width = Math.round(next.width);
+  if (livePanel.open === next.open && livePanel.max === next.max && livePanel.width === width) return;
+  livePanel = { open: next.open, max: next.max, width };
+  for (const fn of panelListeners) fn();
+}
+
+export function onPanelLayout(fn: () => void): () => void {
+  panelListeners.add(fn);
+  return () => panelListeners.delete(fn);
+}
 
 export function clampPanel(w: number, windowW: number, sideW: number): number {
   return Math.round(Math.min(panelMax(windowW, sideW), Math.max(PANEL_MIN, w)));

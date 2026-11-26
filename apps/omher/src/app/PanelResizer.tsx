@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
-import { clampPanel, panelKind, readPanelWidths, savePanelWidth, shownPanelWidth, type PanelKind } from "./panelWidth";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent } from "react";
+import { clampPanel, panelDefaultWidth, panelKind, panelMax, readPanelWidths, savePanelWidth, setLivePanel, shownPanelWidth, type PanelKind } from "./panelWidth";
+import { getLiveSideWidth, onSideWidth } from "../sidebar/sidebarWidth";
 import { t } from "../i18n";
 
 const STEP = 16;
@@ -14,13 +15,17 @@ export function PanelResizer({ open, tab, max = false }: { open: boolean; tab: s
   const [widths, setWidths] = useState(readPanelWidths);
   const [drag, setDrag] = useState<number | null>(null);
   const [winW, setWinW] = useState(() => window.innerWidth);
+  const sideW = useSyncExternalStore(onSideWidth, getLiveSideWidth, getLiveSideWidth);
   const start = useRef<{ x: number; w: number; kind: PanelKind } | null>(null);
   const kind = panelKind(tab);
-  const sideW = () => el("sidebar")?.getBoundingClientRect().width ?? 248;
-  const fit = (w: number) => clampPanel(w, window.innerWidth, sideW());
+  const fit = (w: number) => clampPanel(w, window.innerWidth, getLiveSideWidth());
   const saved = widths[kind];
   // maximised: everything right of the sidebar, and no handle; restoring goes back to the tab's own width
-  const width = drag ?? shownPanelWidth(max, saved, window.innerWidth, sideW());
+  const shown = drag ?? shownPanelWidth(max, saved, winW, sideW);
+  const defaultW = panelDefaultWidth(kind, winW, sideW);
+  // even an unsaved stylesheet default must yield when a wide sidebar leaves less than panelMax
+  const width = shown ?? (open && !max && defaultW > panelMax(winW, sideW) ? clampPanel(defaultW, winW, sideW) : null);
+  const effectiveW = open ? (width ?? defaultW) : 0;
 
   useEffect(() => {
     const on = () => setWinW(window.innerWidth);
@@ -28,14 +33,18 @@ export function PanelResizer({ open, tab, max = false }: { open: boolean; tab: s
     return () => window.removeEventListener("resize", on);
   }, []);
 
-  useEffect(() => {
+  useEffect(() => () => setLivePanel({ open: false, max: false, width: 0 }), []);
+
+  useLayoutEffect(() => {
     const win = el("window");
-    if (!win) return;
-    if (width === null || !open) win.style.removeProperty("--panel-w");
-    else win.style.setProperty("--panel-w", `${width}px`);
-    // while dragging the grid follows the pointer with no easing, and nothing under it selects
-    win.classList.toggle("panel-dragging", drag !== null);
-  }, [width, open, drag, winW, max]);
+    if (win) {
+      if (width === null || !open) win.style.removeProperty("--panel-w");
+      else win.style.setProperty("--panel-w", `${width}px`);
+      // while dragging the grid follows the pointer with no easing, and nothing under it selects
+      win.classList.toggle("panel-dragging", drag !== null);
+    }
+    setLivePanel({ open, max, width: effectiveW });
+  }, [width, effectiveW, open, drag, winW, sideW, max]);
 
   // maximise and restore ease in 180ms (app.css .panel-maxing); a window resize while maximised follows at once
   const first = useRef(true);
@@ -51,7 +60,7 @@ export function PanelResizer({ open, tab, max = false }: { open: boolean; tab: s
     return () => clearTimeout(h);
   }, [max]);
 
-  const panelW = () => el("details")?.getBoundingClientRect().width ?? 300;
+  const panelW = () => el("details")?.getBoundingClientRect().width ?? defaultW;
   const set = (k: PanelKind, w: number | null) => setWidths(savePanelWidth(k, w));
 
   const end = () => {
@@ -68,7 +77,7 @@ export function PanelResizer({ open, tab, max = false }: { open: boolean; tab: s
       role="separator"
       aria-orientation="vertical"
       aria-label={t("pn.resize")}
-      aria-valuenow={Math.round(width ?? panelW())}
+      aria-valuenow={Math.round(width ?? defaultW)}
       title={t("pn.resizeTip")}
       tabIndex={0}
       data-testid="panel-resizer"
