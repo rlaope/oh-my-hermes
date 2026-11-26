@@ -15,6 +15,7 @@ Keys: Up/Down move one session, PageUp/PageDown one page, past the headings;
 printable text filters (by title, first prompt or id, ignoring case), keeping
 the headings of the groups with a match, and Backspace takes a filter
 character back; Enter picks the highlighted row; Esc or Ctrl+C closes.
+Ctrl+G loads older conversations when offered; the filter applies to all loaded rows.
 
 Ctrl+R renames the highlighted session: the filter row becomes its title,
 prefilled with the one it has, Enter asks for the rename (`RENAME`, an empty
@@ -57,6 +58,7 @@ from .width import cell_width, truncate, truncate_line, wrap
 
 PICK = "pick"
 CLOSE = "close"
+LOAD_OLDER = "load_older"
 RENAME = "rename"  # with the session's stored id and the title typed for it
 DELETE = "delete"  # with the session's stored id, once a second Ctrl+D confirmed it
 CURRENT_MARK = "●"
@@ -146,7 +148,7 @@ class SessionRow:
 
 @dataclass(frozen=True)
 class PickerAction:
-    kind: str  # PICK, CLOSE, RENAME or DELETE
+    kind: str  # PICK, CLOSE, LOAD_OLDER, RENAME or DELETE
     session_id: str = ""
     title: str = ""  # RENAME's new title
 
@@ -352,6 +354,28 @@ class SessionPicker:
     notes: dict[str, str] = field(default_factory=dict)  # id -> what its row says until the next key
     out: dict[str, str] = field(default_factory=dict)  # id -> RENAMING or DELETING while its call is out
     card_height: int = 0  # the tallest the cards have been drawn (`card_lines`), which they keep while open
+    next_page: str = ""  # the shared-gateway child's opaque continuation, not the owner's cursor
+    loading_older: bool = False
+    older_problem: str = ""
+
+    def add_older(self, rows: list[SessionRow], next_page: str) -> None:
+        """Extend the existing filter without moving its highlight to a different session."""
+        shown = self.visible()
+        selected = shown[min(self.index, len(shown) - 1)].id if shown else ""
+        existing = {row.id for row in self.rows}
+        for row in rows:
+            if row.id not in existing:
+                existing.add(row.id)
+                self.rows.append(row)
+        self.next_page, self.loading_older, self.older_problem = next_page, False, ""
+        self.index = next((i for i, row in enumerate(self.visible()) if row.id == selected), 0)
+
+    def _older_hint(self) -> str:
+        if self.loading_older:
+            return "Loading older sessions…"
+        if self.older_problem:
+            return self.older_problem
+        return "Ctrl+G loads older" if self.next_page else ""
 
     def visible(self) -> list[SessionRow]:
         """The rows the filter keeps: the current session first, then a day group after another (`day_group`), in
@@ -379,6 +403,8 @@ class SessionPicker:
             return None
         if event.name == ESCAPE or _ctrl(event, "c"):
             return PickerAction(CLOSE)
+        if _ctrl(event, "g") and self.next_page and not self.loading_older:
+            return PickerAction(LOAD_OLDER)
         shown = self.visible()
         if (_ctrl(event, "r") or _ctrl(event, "d")) and shown:
             self._edit(shown[min(self.index, len(shown) - 1)], rename=_ctrl(event, "r"))
@@ -436,7 +462,10 @@ class SessionPicker:
 
     def keys(self) -> tuple[str, ...]:
         """What the info line says its keys are: `RENAME_KEYS` while the filter row is a title, else `KEYS`."""
-        return RENAME_KEYS if self.renaming else KEYS
+        if self.renaming:
+            return RENAME_KEYS
+        hint = self._older_hint()
+        return (f"{KEYS[0]} · {hint}", f"↑↓ move · {hint} · esc closes", hint, *KEYS) if hint else KEYS
 
     def asked(self, action: PickerAction) -> None:
         """`action`'s call went out: its row says so until the answer (`renamed`, `deleted`, `refused`)."""
@@ -533,7 +562,9 @@ class SessionPicker:
         between two keys; a key wider than a row is cut."""
         room = _card_room(width)
         rows: list[str] = []
-        for key in CARD_RENAME_KEYS if self.renaming else CARD_KEYS:
+        hint = self._older_hint()
+        keys = CARD_RENAME_KEYS if self.renaming else (*CARD_KEYS, *((hint,) if hint else ()))
+        for key in keys:
             joined = f"{rows[-1]}{META_SEPARATOR}{key}" if rows else key
             if rows and cell_width(joined) <= room:
                 rows[-1] = joined

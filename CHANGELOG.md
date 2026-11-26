@@ -4,6 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **TUI: session picker shows conversations rather than background runs.** On a shared Hermes gateway, `/sessions` and
+  `/resume` skip cron, subagent and other internal sources and empty stored runs, while keeping genuine `local-*` chats.
+  The picker starts with up to 100 conversations; **Ctrl+G** loads older authorized history into the same filter on
+  cursor-capable gateways. Older gateways still return a single page. No sessions are deleted or moved.
+
 - **omher: the reasoning picker offers only the levels the bot's route sends.** On a Claude route the picker listed
   `max` and `ultra` side by side, and picking `ultra` read `ultra · sends max`, because the bridge offered Hermes'
   whole ladder for every model. `models.options` and `chat.set_model` now answer `reasoning_levels` from Hermes' own

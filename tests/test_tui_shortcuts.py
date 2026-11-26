@@ -19,7 +19,7 @@ from unittest.mock import patch
 from _tui_lines import line_text
 from test_tui_app import FakePoller, ScriptedTerminal
 from test_tui_modes import RecordingClient, drawn, make_app, type_text
-from omh.tui.app import App
+from omh.tui.app import App, SESSION_LIST_LIMIT
 from omh.tui.gateway import ServerRequest
 from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, LEFT, TAB, UP, Key, Paste, list_nav_step
 from omh.tui.pager import ALT_SCREEN_OFF, ALT_SCREEN_ON
@@ -1088,7 +1088,7 @@ class LeaderShortcutTests(unittest.TestCase):
         app, client = self.normal_app()
         self.arm(app)
         app._on_input(Key(CHAR, "s"))
-        self.assertEqual(client.named("session.list"), [{"limit": 50}])
+        self.assertEqual(client.named("session.list"), [{"limit": SESSION_LIST_LIMIT}])
         self.assertFalse(app.composer.leader)
         self.assertEqual(app.composer.text, "draft")
 
@@ -1244,7 +1244,7 @@ class LeaderShortcutTests(unittest.TestCase):
         self.assertFalse(app.composer.pending)
         self.assertEqual((app.composer.text, app.composer.caret, app.composer.normal), before)
         self.assert_fresh_mode_chord(app, client)
-        self.assertEqual(client.named("session.list"), [{"limit": 50}])
+        self.assertEqual(client.named("session.list"), [{"limit": SESSION_LIST_LIMIT}])
 
     def test_all_front_pickers_clear_every_pending_normal_command(self) -> None:
         for kind in ("launch_picker", "picker", "search", "rewind_picker", "model_picker"):

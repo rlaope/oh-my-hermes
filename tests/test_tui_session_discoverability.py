@@ -104,6 +104,104 @@ class ListingTests(unittest.TestCase):
         self.assertEqual([row.get("activity_at") or row.get("started_at") for row in sessions],
                          [900.0, 500.0, 100.0])
 
+    def test_list_waits_for_gateway_capabilities(self):
+        adapter = Adapter({}, files=None, new_id=_ids())  # type: ignore[arg-type]
+        [(_, describe)] = adapter.describe()
+        self.assertEqual(adapter.from_client(_call(7, "session.list", {"limit": 200})), [])
+        [(target, live)] = adapter.from_owner(_answer(describe["id"], {
+            "session_create": {"sources": ["tui"], "parameters": []},
+            "capabilities": ["session-list-picker-v1", "session-list-cursor-v1"],
+        }))
+        self.assertEqual((target, live["method"], live["params"]),
+                         (TO_OWNER, "session.list", {"limit": 200, "picker": True}))
+
+    def test_cursor_pages_past_noisy_runs_and_keeps_local_chats(self):
+        adapter = _adapter(["session-list-picker-v1", "session-list-cursor-v1"])
+        live, _ = _list(adapter, {"limit": 3})
+        [(_, stored)] = adapter.from_owner(_answer(live["id"], {"sessions": [
+            {"id": "current", "source": "tui", "message_count": 0, "started_at": 400},
+            {"id": "cron-live", "source": "cron", "message_count": 3, "started_at": 500},
+        ]}))
+        self.assertNotIn("cursor", stored["params"])
+        [(_, second)] = adapter.from_owner(_answer(stored["id"], {"sessions": [
+            {"id": "local-cron", "source": "cron", "message_count": 10, "started_at": 999},
+            {"id": "empty", "source": "desktop", "message_count": 0, "started_at": 998},
+            {"id": "sub", "source": "subagent", "message_count": 2, "started_at": 997},
+        ], "next_cursor": "page-2"}))
+        self.assertEqual(second["params"], {"limit": 200, "picker": True, "scope": "stored",
+                                             "cursor": "page-2"})
+        [(_, third)] = adapter.from_owner(_answer(second["id"], {"sessions": [
+            {"id": "local-abc", "source": "local", "message_count": 2, "started_at": 300},
+            {"id": "older", "source": "desktop", "message_count": 1, "started_at": 200},
+        ], "next_cursor": "page-3"}))
+        self.assertEqual([row["id"] for row in third["result"]["sessions"]],
+                         ["current", "local-abc", "older"])
+
+    def test_cursor_pages_merge_lineage_and_stop_at_exhaustion(self):
+        adapter = _adapter(["session-list-cursor-v1"])
+        live, _ = _list(adapter, {"limit": 3})
+        [(_, stored)] = adapter.from_owner(_answer(live["id"], {"sessions": [
+            {"id": "tip", "source": "tui", "message_count": 1, "started_at": 100},
+        ]}))
+        [(_, second)] = adapter.from_owner(_answer(stored["id"], {"sessions": [
+            {"id": "root", "resolved_id": "tip", "source": "tui", "message_count": 2,
+             "last_active_at": 400, "title": "Named"},
+        ], "next_cursor": "more"}))
+        [(_, answer)] = adapter.from_owner(_answer(second["id"], {"sessions": [
+            {"id": "a", "source": "desktop", "message_count": 2, "started_at": 300},
+            {"id": "b", "source": "desktop", "message_count": 2, "started_at": 200},
+        ], "next_cursor": None}))
+        self.assertEqual([row["id"] for row in answer["result"]["sessions"]], ["tip", "a", "b"])
+        self.assertEqual(answer["result"]["sessions"][0]["title"], "Named")
+
+    def test_older_pages_reuse_overflow_and_deduplicate_across_the_boundary(self):
+        adapter = _adapter(["session-list-cursor-v1"])
+        live, _ = _list(adapter, {"limit": 2})
+        [(_, stored)] = adapter.from_owner(_answer(live["id"], {"sessions": [
+            {"id": "tip", "started_at": 500},
+        ]}))
+        [(_, first)] = adapter.from_owner(_answer(stored["id"], {"sessions": [
+            {"id": "recent", "started_at": 400}, {"id": "overflow", "started_at": 300},
+        ], "next_cursor": "owner-page"}))
+        self.assertEqual([r["id"] for r in first["result"]["sessions"]], ["tip", "recent"])
+        token = first["result"]["next_page"]
+        self.assertNotEqual(token, "owner-page")
+        [(target, more)] = adapter.from_client(_call(8, "session.list", {"page": token}))
+        self.assertEqual(target, TO_OWNER)
+        self.assertEqual(more["params"], {"limit": 200, "scope": "stored", "cursor": "owner-page"})
+        [(target, second)] = adapter.from_owner(_answer(more["id"], {"sessions": [
+            {"id": "root", "resolved_id": "tip", "started_at": 250},
+            {"id": "older", "started_at": 200}, {"id": "oldest", "started_at": 100},
+        ], "next_cursor": "owner-page"}))  # a broken repeat must not loop
+        self.assertEqual((target, second["id"]), (TO_CLIENT, 8))
+        self.assertEqual([r["id"] for r in second["result"]["sessions"]], ["overflow", "older"])
+        [(target, retry)] = adapter.from_client(_call(9, "session.list", {"page": token}))
+        self.assertEqual((target, retry["id"], retry["result"]), (TO_CLIENT, 9, second["result"]))
+        [(target, last)] = adapter.from_client(_call(10, "session.list", {"page": second["result"]["next_page"]}))
+        self.assertEqual((target, last["id"]), (TO_CLIENT, 10))
+        self.assertEqual(last["result"], {"sessions": [{"id": "oldest", "started_at": 100}]})
+
+    def test_cursor_failure_is_not_silently_returned_as_a_partial_list(self):
+        adapter = _adapter(["session-list-cursor-v1"])
+        live, _ = _list(adapter, {"limit": 10})
+        [(_, stored)] = adapter.from_owner(_answer(live["id"], {"sessions": []}))
+        [(_, second)] = adapter.from_owner(_answer(stored["id"], {"sessions": [], "next_cursor": "next"}))
+        [(target, answer)] = adapter.from_owner({"jsonrpc": "2.0", "id": second["id"],
+                                                  "error": {"code": 5006, "message": "unavailable"}})
+        self.assertEqual(target, TO_CLIENT)
+        self.assertEqual(answer["id"], 7)
+        self.assertEqual(answer["error"]["message"], "unavailable")
+
+    def test_old_owner_without_cursor_still_finishes_on_its_one_stored_page(self):
+        adapter = _adapter([])
+        live, _ = _list(adapter, {"limit": 500})
+        [(_, stored)] = adapter.from_owner(_answer(live["id"], {"sessions": []}))
+        [(_, answer)] = adapter.from_owner(_answer(stored["id"], {"sessions": [
+            {"id": "local-abc", "source": "local", "message_count": 1},
+        ], "next_cursor": "ignored"}))
+        self.assertEqual([r["id"] for r in answer["result"]["sessions"]], ["local-abc"])
+        self.assertNotIn("next_page", answer["result"])
+
     def test_a_row_either_half_calls_not_resumable_is_listed_read_only(self) -> None:
         adapter = _adapter([])
         live, _ = _list(adapter, {"limit": 9})
@@ -161,7 +259,9 @@ class StockHermesTests(unittest.TestCase):
         from omh.tui import gateway_contract as contract
 
         self.assertEqual(contract.call_problem("session.list", {"limit": 50}), "")
-        for key in ("scope", "picker"):
+        self.assertEqual(contract.call_problem("session.list", {"page": "token"}), "")
+        self.assertTrue(contract.call_problem("session.list", {"page": "token", "title": "title"}))
+        for key in ("scope", "picker", "cursor"):
             with self.subTest(key=key):
                 self.assertIn(key, contract.call_problem("session.list", {"limit": 50, key: "stored"}))
 
