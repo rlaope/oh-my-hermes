@@ -1054,6 +1054,7 @@ export const en = {
   "att.removeOf": "Remove {name}",
   "att.drop": "Drop to attach",
   "att.tooMany": "Over {n} files",
+  "att.tooManyImages": "Over {n} images",
   "att.tooBig": "Over 100 MB",
   "att.failed": "Couldn't attach {name} · {error}",
   "bub.replyTarget": "Reply target",

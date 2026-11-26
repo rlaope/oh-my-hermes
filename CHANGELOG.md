@@ -10,6 +10,11 @@ All notable changes will be documented here.
   three 50 ms polls and the lock failed at once, so the tick exited 6 and Hermes delivered an alert. The replace now
   retries for up to 2 seconds and the lock retries within its existing 20-second wait; a denial that outlasts either
   still fails the tick. (`src/skills/pr_watch_toolkit/scripts/pr_watch.py`)
+- **OMH TUI: Up/Down walks the input history past slash commands.** Recalling an earlier `/model` or `/config`
+  with Up opened the `/` menu over it, and the next Up or Down moved the menu's highlight instead of the history, so
+  history stalled at the first slash command. A recalled entry (Up/Down, vim NORMAL `j`/`k`, a Ctrl+R pick) now keeps
+  the menu closed over that text: Up/Down walk on, and Enter sends the command exactly as it was. Typing or Backspace
+  on it opens the menu again. (#3236, thanks @brixtonpham)
 
 - **omher: `/goal` starts the goal, and Stop ends a goal run.** Typing `/goal <text>` in a bot's chat answered "Goal
   set (20-turn budget)" but never started a turn, so `/goal status` stayed at 0 turns. omher sent the command as a

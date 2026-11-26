@@ -633,6 +633,7 @@ const providersOf = (bot) => (codexRuntime.has(bot) ? [...PROVIDERS, SIGN_IN_MOD
 let calls = [];
 // What the bridge would hand Hermes' prompt.submit (the text after the reply-target block is added).
 let submits = [];
+let stagedAttachments = new Map(); // attachment_id -> bot name (single-use, main chat only)
 let bots, history, models, turns, pending, idSeq, queues, avatars, folders, runs, cliRuns, cliTitles, peers, peerBots;
 // Automations and plugins: what the pages read and change (reset with everything else).
 let automations, plugins, inspected, offlineWrites;
@@ -971,6 +972,7 @@ function reset() {
   idSeq = 0;
   calls = [];
   submits = [];
+  stagedAttachments = new Map();
   peers = new Map(); // SSH peer id -> { label, host }
   peerBots = null; // the mock other computer's bots (null: PEER_BOTS_SEED)
 }
@@ -1501,6 +1503,18 @@ const OPS = {
   "chat.send": (p) => {
     const b = needBot(p);
     const text = needStr(p, "text");
+    if (p.attachment_ids !== undefined) {
+      if (text.trimStart().startsWith("/")) throw new OpError("bad_request", "a slash command takes no attachments");
+      if (!Array.isArray(p.attachment_ids) || p.attachment_ids.some((x) => typeof x !== "string" || !x))
+        throw new OpError("bad_request", "attachment_ids must be a list of non-empty strings");
+      if (p.attachment_ids.length > 10) throw new OpError("bad_request", "at most 10 image attachments per message");
+      if (new Set(p.attachment_ids).size !== p.attachment_ids.length) throw new OpError("bad_request", "duplicate attachment_id");
+      if (p.session !== undefined && p.attachment_ids.length) throw new OpError("bad_request", "unknown or expired attachment_id");
+      for (const aid of p.attachment_ids) {
+        if (stagedAttachments.get(aid) !== b.name) throw new OpError("bad_request", "unknown or expired attachment_id");
+      }
+      for (const aid of p.attachment_ids) stagedAttachments.delete(aid);
+    }
     // Same as the real bridge: a reply_to session adds one context block for the bot. Nothing is posted.
     let submitted = text;
     let reply_to = null;
@@ -1744,14 +1758,18 @@ const OPS = {
   // Stages a file for the next chat.send, like Hermes' image.attach_bytes / pdf.attach / file.attach.
   // A name starting with "fail" is refused, so the e2e can check that nothing is sent after a failed attach.
   "chat.attach": (p) => {
-    needBot(p);
+    const b = needBot(p);
     const kind = needStr(p, "kind");
     const name = needStr(p, "name");
     const data = needStr(p, "data_base64");
     if (!["image", "pdf", "file"].includes(kind)) throw new OpError("bad_request", "need kind image|pdf|file");
     if (name.startsWith("fail")) throw new OpError("attach_failed", `unsupported ${kind}`);
     const bytes = Buffer.from(data, "base64").length;
-    if (kind === "image") return { kind, name, text: `[User attached image: ${name}]`, ref_text: "", bytes };
+    if (kind === "image") {
+      const attachment_id = `att-${++idSeq}`;
+      stagedAttachments.set(attachment_id, b.name);
+      return { kind, name, text: `[User attached image: ${name}]`, ref_text: "", bytes, attachment_id };
+    }
     if (kind === "pdf") return { kind, name, text: `[User attached PDF: ${name} (1 page(s))]`, ref_text: "", bytes };
     return { kind, name, text: "", ref_text: `@file:.hermes/attachments/${name}`, bytes };
   },
