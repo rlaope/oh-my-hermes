@@ -83,7 +83,8 @@ export function Composer({
    *  opens as a terminal). */
   heldNote?: string;
   /** `./thread [text]`: a new thread of this bot, `text` its first message (absent: `./thread` goes out as typed). */
-  onNewThread?: (first: string) => void;
+  /** Resolves null when the thread was not made: the typed text comes back. */
+  onNewThread?: (first: string) => void | Promise<unknown>;
   /** The person's earlier prompts of this chat, oldest first (promptHistory.ts): ArrowUp/ArrowDown recall them. */
   history?: string[];
 }) {
@@ -330,8 +331,11 @@ export function Composer({
     if (!has || offline || sending) return;
     if (threadCmd && onNewThread) {
       if (good.length) return setErr(t("thread.cmdFiles"));
+      const typed = text;
       edit("");
-      onNewThread(threadCmd.first);
+      void Promise.resolve(onNewThread(threadCmd.first)).then((made) => {
+        if (made === null) setText((cur) => (cur ? cur : typed)); // refused: the task is not lost (unless new text is already typed)
+      });
       return;
     }
     if (!good.length || !onSendFiles) {
