@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { answerSlot, answerSoFar, activityText, chatRoute, createStore, folderKey, setChatRoute, initialState, reduce, replyChipFor, selectTimeline, type Action, type AppState, type BridgeLike, type MessageItem } from "./store";
+import { answerSlot, answerSoFar, activityText, chatRoute, chatTarget, createStore, folderKey, setChatRoute, initialState, reduce, replyChipFor, selectTimeline, type Action, type AppState, type BridgeLike, type MessageItem } from "./store";
 import type { Away, BridgeEvent, ChatOpenResult } from "../lib/protocol";
 import { setDraft } from "../app/drafts";
 import type { BridgeStatus } from "../lib/bridge";
@@ -1258,5 +1258,22 @@ describe("the answered-interview line", () => {
       expect(line).toContain("3");
       if (l !== "en") expect(line).not.toContain(" of ");
     }
+  });
+});
+
+describe("chatTarget: where a chat key's words go", () => {
+  it("a main chat, a local bot's thread, and an SSH bot's thread (`<peer>:<name>`) by the known bot names", () => {
+    const known = ["kami", "p1:kami", "p1"];
+    expect(chatTarget("kami", known)).toEqual({ bot: "kami" });
+    expect(chatTarget("p1:kami", known)).toEqual({ bot: "p1:kami" });
+    expect(chatTarget("fold:kami:t1", known)).toEqual({ bot: "kami", session: "t1" });
+    expect(chatTarget("fold:p1:kami:t1", known)).toEqual({ bot: "p1:kami", session: "t1" });
+  });
+
+  it("a session id may hold colons; an unknown bot falls back to a local name (no colon)", () => {
+    expect(chatTarget("fold:p1:kami:a:b", ["p1:kami"])).toEqual({ bot: "p1:kami", session: "a:b" });
+    expect(chatTarget("fold:kami:a:b", ["kami"])).toEqual({ bot: "kami", session: "a:b" });
+    expect(chatTarget("fold:kami:t1")).toEqual({ bot: "kami", session: "t1" });
+    expect(chatTarget(folderKey("p1:kami", "t1"), ["p1:kami"])).toEqual({ bot: "p1:kami", session: "t1" });
   });
 });

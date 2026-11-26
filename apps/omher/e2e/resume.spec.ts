@@ -323,29 +323,6 @@ test("a terminal session that was running comes back paused and starts only on R
   expect((await sessionCalls(page)).filter((c) => c.op === "start")).toEqual([expect.objectContaining({ agent: "grok", cwd: "/home/you/code/g" })]);
 });
 
-// terminals were kept, but this flow is gone: a CLI that ends (`exit`, `/exit`) now goes on as the login shell in the same row
-// (term-exit.spec.ts, 2) and a shell that ends closes its row, so no ended terminal session is left to Restart; Restart's
-// resume path is covered by term-resume-fail.spec.ts
-test.skip("an ended terminal session comes back with Restart, which starts it again in its folder", async ({ page }) => {
-  await setup(page, ["/home/you/code/g"]);
-  await startTerminal(page, "grok");
-  await expect(page.locator(".xterm-rows")).toContainText("(mock)");
-  await page.locator(".xterm-helper-textarea").focus();
-  await page.keyboard.type("exit");
-  await page.keyboard.press("Enter");
-  await expect(page.getByTestId("session-ended")).toBeVisible();
-  await expect.poll(async () => (await saved(page))?.sessions?.[0]?.running).toBe(false);
-  await page.evaluate(() => sessionStorage.setItem("__kept", "1"));
-  await page.reload();
-  await expect(page.getByTestId("session-agent")).toHaveText("Grok");
-  await expect(page.getByTestId("session-idle")).toContainText("Grok ended");
-  expect((await sessionCalls(page)).filter((c) => c.op === "start")).toEqual([]);
-  await page.getByTestId("session-restart").click();
-  await expect(page.locator(".xterm-rows")).toContainText("(mock)");
-  await expect(page.getByTestId("session-ended")).toHaveCount(0);
-  expect((await sessionCalls(page)).filter((c) => c.op === "start")).toEqual([expect.objectContaining({ agent: "grok", cwd: "/home/you/code/g" })]);
-});
-
 // chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
 test.skip("a New session chat that never started comes back as a draft after a restart, and nothing starts", async ({ page }) => {
   await setup(page, ["/home/you/code/web-app"]);

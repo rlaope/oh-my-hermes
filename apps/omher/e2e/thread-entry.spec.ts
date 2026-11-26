@@ -128,6 +128,22 @@ test("inside a thread, ./thread opens a sibling thread under the same bot", asyn
   await expect(page.getByTestId("threads-kami").locator("[data-thread]")).toHaveCount(2);
 });
 
+test("inside a thread, a refused ./thread <task> keeps the typed task", async ({ page }) => {
+  await setup(page);
+  await page.getByTestId("bot-kami").click({ button: "right" });
+  await page.getByTestId("row-new-thread").click();
+  await created(page);
+  await mock("mock.threadCreate", { line: "Too many threads are open (48)" });
+  const box = page.getByTestId("thread-chat").getByTestId("composer");
+  await box.click();
+  await page.keyboard.type("./thread 다음 일");
+  await page.keyboard.press("Enter");
+  await expect.poll(async () => (await calls("thread.create")).length).toBe(2);
+  await expect(page.getByText("Too many threads are open (48)")).toBeVisible();
+  await expect(box).toHaveValue("./thread 다음 일");
+  expect(await calls("chat.send")).toEqual([]);
+});
+
 test("no New thread line under a bot: the tree holds only its threads; the row's + is the way in", async ({ page }) => {
   await setup(page);
   // demo (2026-11-19): a "+ New thread" line always under the bot is too much. Kami is open with no threads: nothing

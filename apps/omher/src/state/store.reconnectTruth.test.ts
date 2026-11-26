@@ -10,7 +10,13 @@ import type { BridgeEvent } from "../lib/protocol";
 import type { BridgeStatus } from "../lib/bridge";
 
 type Thread = { running: boolean; needs: boolean };
-type Opts = { thread?: Thread; /** how many listed threads (th1, th2, ...) */ threads?: number; /** thread.open takes this long */ openMs?: number };
+type Opts = {
+  thread?: Thread;
+  /** how many listed threads (th1, th2, ...) */ threads?: number;
+  /** thread.open takes this long */ openMs?: number;
+  /** the bot's name: an SSH bot's is `<peer>:<name>` */ bot?: string;
+  /** thread.open is refused this many times first (the 48-open cap, a gateway timeout) */ openFails?: number;
+};
 type Held = {
   running: boolean;
   messages: { id: string; role: "user" | "assistant"; text: string; ts: number }[];
@@ -24,7 +30,9 @@ function fixture(o: Opts = {}) {
   let event!: (e: BridgeEvent) => void;
   const calls: { op: string; params: any }[] = [];
   // what Hermes holds now: per chat ("kami" or a thread id), whether its turn runs, its rows and a waiting ask
-  const hermes: Record<string, Held> = { kami: { running: false, messages: [] } };
+  const B = o.bot ?? "kami";
+  let openFails = o.openFails ?? 0;
+  const hermes: Record<string, Held> = { [B]: { running: false, messages: [] } };
   const ids = Array.from({ length: o.threads ?? 1 }, (_, n) => `th${n + 1}`);
   for (const t of ids) hermes[t] = { running: false, messages: [] };
   const opens = { now: 0, most: 0 }; // thread.open in flight now, and the most at once
@@ -58,10 +66,10 @@ function fixture(o: Opts = {}) {
       calls.push({ op, params });
       if (op === "hello") return { bridge: "mock", version: "test", hermes: { home: "/scratch" } };
       if (op === "bots.list")
-        return { bots: [{ name: "kami", display_name: "Kami", is_default: true, model: "m", provider: "p", description: "", status: "online", running: false }] };
+        return { bots: [{ name: B, display_name: "Kami", is_default: true, model: "m", provider: "p", description: "", status: "online", running: false }] };
       if (op === "chat.open") {
-        replay("kami");
-        return { session_id: "s-kami", messages: hermes.kami.messages, running: hermes.kami.running, lost: hermes.kami.lost ?? [], model: "m", provider: "p", reasoning: "high" };
+        replay(B);
+        return { session_id: "s-kami", messages: hermes[B].messages, running: hermes[B].running, lost: hermes[B].lost ?? [], model: "m", provider: "p", reasoning: "high" };
       }
       if (op === "thread.list") {
         await new Promise((r) => setTimeout(r, 20)); // Hermes' session.list takes a moment
@@ -70,12 +78,16 @@ function fixture(o: Opts = {}) {
       }
       if (op === "thread.open") {
         if (!listed) throw { code: "not_found", message: "no such thread" };
+        if (openFails > 0) {
+          openFails -= 1;
+          throw { code: "busy", message: "Too many threads are open (48)" };
+        }
         const t = params.thread as string;
         opens.now += 1;
         opens.most = Math.max(opens.most, opens.now);
         await new Promise((r) => setTimeout(r, o.openMs ?? 0));
         opens.now -= 1;
-        replay("kami", t);
+        replay(B, t);
         const h = hermes[t];
         return { thread: t, session_id: t, title: "Build", cwd: "/w", messages: h.messages, running: h.running, lost: h.lost ?? [], model: "m", provider: "p", reasoning: "" };
       }
@@ -327,4 +339,68 @@ it("busy threads are opened at most three at a time", async () => {
   await settle(300);
   expect(f.calls.filter((c) => c.op === "thread.open")).toHaveLength(7);
   expect(f.opens.most).toBe(3);
+});
+
+// An SSH bot is `<peer>:<name>` (bridge _peer_bots), so its thread's key is `fold:<peer>:<name>:<thread>`
+const SSH = "p1:kami";
+const SSH_TH = `fold:${SSH}:th1`;
+
+it("an SSH bot's thread chat is read again after a reconnect, its held message after that read", async () => {
+  const f = await started({ bot: SSH });
+  await f.store.actions.openThread(SSH, "th1");
+  await f.store.actions.threadSend(SSH, "th1", "build it");
+  f.event({ event: "turn.start", bot: SSH, session: "th1" } as BridgeEvent);
+  await f.store.actions.threadSend(SSH, "th1", "and the tests");
+  expect(f.store.getState().chats[SSH_TH].queue).toHaveLength(1);
+  f.restartBridge();
+  f.status("connecting");
+  expect(f.store.getState().chats[SSH_TH].stale).toBe(true);
+  f.status("open");
+  await settle();
+  const after = f.calls.slice(f.calls.map((c) => c.op).lastIndexOf("bots.list"));
+  const open = after.findIndex((c) => c.op === "thread.open" && c.params.bot === SSH && c.params.thread === "th1");
+  expect(open).toBeGreaterThan(-1);
+  expect(after.findIndex((c) => c.op === "chat.send" && c.params.session === "th1")).toBeGreaterThan(open);
+  expect(f.store.getState().chats[SSH_TH].queue ?? []).toEqual([]);
+});
+
+it("an SSH bot's held thread message goes out when the turn ends, and Send now stops that thread", async () => {
+  const f = await started({ bot: SSH });
+  await f.store.actions.openThread(SSH, "th1");
+  await f.store.actions.threadSend(SSH, "th1", "build it");
+  f.event({ event: "turn.start", bot: SSH, session: "th1" } as BridgeEvent);
+  await f.store.actions.threadSend(SSH, "th1", "and the tests");
+  const id = f.store.getState().chats[SSH_TH].queue![0];
+  await f.store.actions.queueSendNow(id, SSH_TH);
+  expect(f.calls.filter((c) => c.op === "chat.interrupt").map((c) => c.params)).toEqual([{ bot: SSH, session: "th1" }]);
+  f.event({ event: "turn.end", bot: SSH, session: "th1", outcome: "interrupted" } as BridgeEvent);
+  await settle();
+  expect(f.calls.filter((c) => c.op === "chat.send").map((c) => [c.params.bot, c.params.session, c.params.text])).toEqual([
+    [SSH, "th1", "build it"],
+    [SSH, "th1", "and the tests"],
+  ]);
+});
+
+it("a thread whose automatic open failed opens again on a click", async () => {
+  const f = fixture({ thread: { running: true, needs: false }, openFails: 1 });
+  f.hermes.th1 = { running: true, messages: [{ id: "u1", role: "user", text: "build it", ts: 1 }] };
+  await f.store.actions.init();
+  await settle();
+  expect(f.store.getState().chats[TH].openError).toBeTruthy();
+  await f.store.actions.openThread("kami", "th1");
+  expect(f.calls.filter((c) => c.op === "thread.open")).toHaveLength(2);
+  const chat = f.store.getState().chats[TH];
+  expect(chat.openError).toBeNull();
+  expect(chat.turn).not.toBeNull();
+});
+
+it("two re-reads of a bot's threads at once open each read thread once", async () => {
+  const f = await started({ openMs: 60 });
+  await f.store.actions.openThread("kami", "th1");
+  const before = f.calls.filter((c) => c.op === "thread.open").length;
+  f.event({ event: "bot.restarted", bot: "kami", ok: true } as BridgeEvent);
+  f.event({ event: "bot.restarted", bot: "kami", ok: true } as BridgeEvent);
+  await settle(200);
+  expect(f.calls.filter((c) => c.op === "thread.list").length).toBeGreaterThanOrEqual(3);
+  expect(f.calls.filter((c) => c.op === "thread.open").length - before).toBe(1);
 });

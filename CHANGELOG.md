@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: SSH bots' threads reconnect, a failed thread open retries, and refusals say why.** An SSH bot's thread
+  key `fold:<peer>:<name>:<thread>` was split at its first colon, so the bot read as `<peer>`: after a reconnect its
+  thread was not held stale, a held message never went out, and Send now / Steer reached the wrong bot. The key is
+  now read against the known bot names. A thread whose automatic open failed (the 48-open cap, a gateway timeout)
+  read unreachable until the next reconnect; a click opens it again. Two re-reads of a bot's threads at once (a
+  resync and a restart) no longer send two `thread.open` for one thread. A refused `./thread` typed inside a thread
+  now keeps the typed text, as in the main chat. New bot names a reserved name or `omh-tui` instead of the name rule,
+  boundary rule 41 defers to rule 48 for the Windows stop, a task's thread starts through the same create as `+`,
+  and a skipped resume spec is gone. (`apps/omher/src/state/store.ts`)
 - **omher: after a reconnect or a restart, bots and threads show what Hermes is really doing.** When the link to the
   bridge dropped (sleep/wake, a bridge restart), an approval Hermes still waited on read "Not answered" for good: the
   outage ended the turn here, and the bridge's replay of the same ask was dropped as a duplicate. A replayed ask in a

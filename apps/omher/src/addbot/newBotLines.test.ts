@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { setLang } from "../i18n";
+import { setLang, t } from "../i18n";
 import { createLine, refusalLine } from "./NewBot";
 
 afterEach(() => setLang("en"));
@@ -19,6 +19,12 @@ describe("the New bot card's refusals read in the UI language", () => {
       for (const line of lines) expect(line).not.toMatch(/could not confirm|not on this computer|still making|already under|exited with/);
     });
   }
+
+  it("a bad_request refusal names the rule the name broke: reserved, omh-tui, or the name rule", () => {
+    expect(refusalLine({ code: "bad_request", message: "root is a name Hermes keeps for itself." }, "root")).toBe(t("ab.nameReserved", { name: "root" }));
+    expect(refusalLine({ code: "bad_request", message: "omh-tui is oh-my-hermes' own TUI profile." }, "omh-tui")).toBe(t("ab.nameOmh", { name: "omh-tui" }));
+    expect(refusalLine({ code: "bad_request", message: "Use lowercase letters" }, "a b")).toBe(t("ab.nameRule"));
+  });
 
   it("Hermes' own words and unknown errors pass through", () => {
     expect(createLine({ outcome: "failed", reason: "hermes", line: "Error: boom" }, "x")).toBe("Error: boom");

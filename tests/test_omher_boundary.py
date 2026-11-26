@@ -557,8 +557,9 @@ RULES = (
     "This follows the owner's answer that omher may run a fixed Hermes command on a button press.",
     "each is a fixed argv with no shell and nothing on stdin, the Hermes root as `HERMES_HOME`, stopped after 300, 330"
     " and 60 seconds, one run at a time per bot.",
-    "a run past its time is stopped with that group (on Windows the process itself), then waited for at most 5 seconds:"
-    " that stop is the one signal omher sends, only to its own run.",
+    # rule 48 changed the Windows stop from the process itself to its whole tree (taskkill /T /F); rule 41 defers to it
+    "a run past its time is stopped with that group (on Windows the process tree, rule 48), then waited for at most 5"
+    " seconds: that stop is the one signal omher sends, only to its own run.",
     "and Connect needs it not to be there: Hermes' install replaces a server's whole block and turns it on, so a server"
     " that is already there (on, off or set up by hand), or a config omher cannot read, is never installed over.",
     "Sign in again first asks the person, since Hermes drops the current sign-in before the new one;",
@@ -3102,8 +3103,12 @@ class TasksReadOnly(unittest.TestCase):
         self.assertNotIn("bridge.request", page)
         store = (UI_SRC / "state" / "store.ts").read_text(encoding="utf-8")
         start = store.split("async startTaskThread(", 1)[1].split("\n    },\n", 1)[0]
-        self.assertEqual(re.findall(r'(threadReq|bridge\.request)\("([a-z.]+)"', start), [("threadReq", "thread.create")])
-        self.assertIn("await actions.threadSend(bot, row.thread, text);", start)
+        # the task's thread starts through the store's one createThread (the + press's), its only request thread.create
+        self.assertEqual(re.findall(r'(threadReq|bridge\.request)\("([a-z.]+)"', start), [])
+        self.assertIn("const thread = await createThread(bot, title);", start)
+        self.assertIn("await actions.threadSend(bot, thread, text);", start)
+        create = store.split("const createThread = async (", 1)[1].split("\n  };\n", 1)[0]
+        self.assertEqual(re.findall(r'(threadReq|bridge\.request)\("([a-z.]+)"', create), [("threadReq", "thread.create")])
         host = (UI_SRC / "tasks" / "host.ts").read_text(encoding="utf-8")
         self.assertEqual(sorted(set(re.findall(r'invoke<[^>]+>\("([a-z_]+)"', host))), ["gh_accounts", "tasks_list", "tasks_me", "tasks_remote", "tasks_status", "tasks_view"])
 

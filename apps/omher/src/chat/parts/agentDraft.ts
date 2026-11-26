@@ -5,6 +5,7 @@
 // that card's Add. Drafts are read only from bot replies in a bot's main chat and in Hermes folder chats, never from
 // tool output, Slack/Discord mirrors (elsewhere lines) or a CLI agent's session chat.
 import { botRefusal, mockCheck, type CustomWhy } from "../../sessions/custom";
+import { chatTarget } from "../../state/store";
 
 /** One draft as the bot wrote it: the fields the confirm card takes, nothing else. */
 export interface AgentDraft {
@@ -62,4 +63,4 @@ export function stripDrafts(text: string, streaming = false): string {
 export const draftsAllowed = (chatKey: string): boolean => chatKey.startsWith("fold:") || !chatKey.includes(":");
 
 /** The bot a chat belongs to (its main chat, or the bot a folder chat runs on), for the card's "Proposed by" line. */
-export const draftBot = (chatKey: string): string => (chatKey.startsWith("fold:") ? chatKey.slice(5).split(":")[0] : chatKey);
+export const draftBot = (chatKey: string, known: Iterable<string> = []): string => chatTarget(chatKey, known).bot;

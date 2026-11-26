@@ -6,7 +6,7 @@
 // the bot click: its chat opens and its row slides to the top of BOTS (revealBotTop), and the tiles follow. Tiles
 // are one roving-tabindex group (arrow keys move, Enter opens).
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
-import { selectAsks, selectSidebarBots, useStore } from "../state/store";
+import { botNames, chatTarget, selectAsks, selectSidebarBots, useStore } from "../state/store";
 import { Avatar } from "../ui";
 import { t } from "../i18n";
 import { DOCK_MAX } from "./dockState";
@@ -77,9 +77,11 @@ export function Dock({ above }: { above: string[] }) {
   }, [focus, n]);
   if (!n) return null;
   const cols = dockCols(n);
+  const known = botNames(s);
   const tiles = names.map((name) => {
     const b = bots.find((x) => x.name === name)!;
-    const mine = (k: string) => k === name || k.startsWith(`fold:${name}:`);
+    // an SSH bot's thread `fold:<peer>:<name>:<thread>` is that bot's, never a local bot named <peer>
+    const mine = (k: string) => chatTarget(k, known).bot === name;
     const needs = asks.some((a) => mine(a.bot));
     const chats = Object.entries(s.chats).filter(([k]) => mine(k));
     const running = b.running || chats.some(([, c]) => !!c.turn);
