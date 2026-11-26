@@ -10,6 +10,15 @@ All notable changes will be documented here.
   `taskkill /T /F /PID <pid>` (boundary rule 48) and then the child; macOS and Linux still stop the run's process
   group. The bot-draft Add test and two terminal resume specs run again against the current UI, and the README says the
   bridge tests need websockets, pyyaml and ruamel.yaml. (`apps/omher/bridge/omher_bridge.py`)
+- **omher bot management: Remove from list, rename and the row menu behave, with the keyboard too.** Remove from
+  list on the open bot switched the view to the chat and threw the person out of Settings or Automations; the chat
+  behind now follows the next bot and the view stays. A renamed bot's threads kept the old name in Needs you and in
+  system notifications (their route label was fixed when the list loaded); renaming rebuilds them. The rename
+  editor's Cancel left a failed save's error for the next pencil press. Closing a bot row's menu (Escape or a pick)
+  dropped the keyboard to the page; it returns to the row's ⋯. The ContextMenu key (or Shift+F10) opened the menu at
+  the window's top-left; it opens under the row. The handover card opened from a Worktrees row gave no way back, so
+  focus was lost on close; it returns to that row. Main files: `apps/omher/src/state/store.ts`,
+  `apps/omher/src/sidebar/BotRow.tsx`.
 - **omher bots page: platform status and bot templates read the live omh.** Dock-launched omher (short PATH), and
   Windows (where `which` finds `omh.cmd` and it is rejected), fell back to `<data>/omh/venv`, the pre-generation env
   an update leaves behind (omh 2.0.0 here), so `platforms` and `bot-templates` failed with "invalid choice".
@@ -64,6 +73,14 @@ All notable changes will be documented here.
   - **Model picker:** models read by name ("Opus 5.5"), the current one is found and scrolled to, and the maker chips
     stay on one row (#3231).
   - **Sidebar:** drag its right edge to make it wider or narrower; the width is kept (#3235).
+
+- **A small dag-ulw job can run fast: the parent settles its verify node itself, and several nodes settle in one call.**
+  `omh_dag define fast=true` accepts a graph of at most 3 build nodes and 6 nodes in all, with one verify node that
+  runs no full suite and names no identity, not `local`, and no baseline or `owner` node; the verify node is handed out
+  under `for_parent` on the parent lane and never reaches a `delegate_task` call. An ineligible graph is defined as a
+  normal run with `fast_ineligible:<reasons>` in its lint, and a non-fast graph that qualifies gets `fast_eligible`.
+  `settle settles=[...]` closes accepted, failed or blocked nodes together, all-or-nothing: an item refused writes nothing.
+  (`src/plugin_bundle/omh/dag_run.py`, `src/plugin_bundle/omh/tools/dag_tool.py`, `src/skills/dag_ulw_skill.py`)
 
 ## 5.0.1 - 2026-11-26
 
