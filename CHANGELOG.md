@@ -4,14 +4,6 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **omher: Shift+Enter makes a new line in Claude Code, Codex and the other agents, on Windows too.** A terminal sent
-  Shift+Enter as Enter's own byte unless the program turned the Kitty keyboard protocol on. On Windows ConPTY never
-  lets Claude Code turn it on, so Shift+Enter sent the prompt there every time; on macOS the same happened in omh,
-  Hermes and Claude Code before 2.1.269. A terminal with a coding agent in front now sends `ESC CR` (a new line in
-  Claude Code, Codex, Antigravity, omh and Hermes, measured against the real CLIs, and what Claude Code's own
-  `/terminal-setup` binds), `CSI 13;2 u` to pi, oh-my-pi and Droid, and the protocol's own code when the agent asked for
-  it. A plain shell keeps Enter's byte, so PowerShell, zsh and bash are unchanged.
-
 - **TUI: session picker shows conversations rather than background runs.** On a shared Hermes gateway, `/sessions` and
   `/resume` skip cron, subagent and other internal sources and empty stored runs, while keeping genuine `local-*` chats.
   The picker starts with up to 100 conversations; **Ctrl+G** loads older authorized history into the same filter on
@@ -21,55 +13,6 @@ All notable changes will be documented here.
   Solar Pro 4 at 70% off its list (0.09/0.36 per MTok, cached input 0.018), in exchange for Upstage storing and
   training on every request and response. A run that names the id now gets an approximate cost; it joins no chain
   and carries no provider row. (`src/plugin_bundle/omh/hermes_delegation.py`)
-- **omher: the reasoning picker offers only the levels the bot's route sends.** On a Claude route the picker listed
-  `max` and `ultra` side by side, and picking `ultra` read `ultra · sends max`, because the bridge offered Hermes'
-  whole ladder for every model. `models.options` and `chat.set_model` now answer `reasoning_levels` from Hermes' own
-  `agent.reasoning_effort.route_supported_efforts` for the chat's live provider and model (the codex app-server
-  runtime from the profile's `model.openai_runtime`, and its `base_url`), so a Claude or OpenAI-compatible route offers
-  `none` to `max`, a codex model on the app-server runtime keeps `ultra`, and a legacy codex model stops at `xhigh`; a
-  model switch in the picker updates the levels at once. A saved level the route clamps (an `ultra` set elsewhere)
-  reads and is selected as the level sent, in the pill, the picker and the bot's Settings page; the "sends max" texts
-  are gone. A Hermes without the per-route function keeps the old ladder. The OMH TUI's info line and `/effort` reply
-  name the level the route sends when Hermes reports it clamps one. (`apps/omher/bridge/omher_bridge.py`,
-  `apps/omher/src/chat/model/`, `src/tui/modes.py`)
-- **omher: short labels no longer break inside a word, in every UI language.** In Settings › Bots a card's status
-  read "연결" on one line and "됨" on the next, beside the `default` chip. The Korean rule (`overflow-wrap: anywhere`)
-  let any label in a tight row shrink to one syllable wide, and Japanese and Chinese break between any two
-  characters, so "接続中" and "已连接" split the same way. The Korean rule now uses `break-word`: Korean still breaks
-  only between words and long paths or URLs still wrap, but a label is never narrower than its longest word. A card's
-  status word sits on one line and its profile chip ends in "…" first when the row is tight. The "In list" / "Add to
-  list" corner label clears the name, and the status line under it gets the card's full width. The bot page's stat
-  captions ("ほかの場所のセッション") stay on one line. Status, tier and state chips, badges and counts on the agents,
-  plugins, apps, platforms, accounts and bot pages, and the sidebar's row times, keep one line too. Only Korean keeps
-  words whole now (`word-break: keep-all`). Chat bubbles, card titles, the Automations and Plugins pages, the plugin
-  sheet, a bot-made card and a new thread's empty line used to set it in every language. In Japanese and Chinese a
-  sentence there broke only at its punctuation, leaving ragged short lines; now it fills each line as those
-  languages do. A Korean reply or card question keeps its words whole in any UI language: its element is marked
-  `lang="ko"`. Long URLs and paths still wrap. A new e2e spec (`e2e/text-wrap.spec.ts`) checks all four languages
-  from the 900px minimum width up. `e2e/site-preview-header.spec.ts` now checks the film-only hero (d17fb8dfb): the
-  hero's film keeps playing and no live preview is mounted. It also checks the preview page on its own, which had
-  failed every omher PR's e2e since that change.
-- **omher: a UI review pass across the sidebar, chat, Plans, Settings, Tasks, Automations, Plugins and TERMINALS.**
-  A review of every screen at 1280x820 and the 900x600 minimum, dark and light, English and Korean, found cards left
-  alone on a row, mixed alignments, cut text, empty bands, states that looked stuck and Korean particle fallbacks.
-  - Grids never leave a card alone beside empty slots (All bots, Plugins › Browse, Apps): an odd count's last card
-    spans the row. Card actions sit on one line per row; the bot page's places sit on the stats' columns.
-  - TERMINALS split cards lay every cell out one way, on the rows' icon column, with "Claude Code" whole at the default
-    height. A working cell shows a faint ring with one bright head going round it, never a half-filled bar. A shell's
-    own prompt is never a cell's last line. Folder headers show the parent folder, then the branch.
-  - A terminal idle at its prompt reads Ready with a still dot, as its sidebar row shows it. While an approval or a
-    question waits, the chat stops its spinner and the bot's ring and shows the amber needs dot.
-  - No empty band above the sidebar's "more" chevron, and the chevron never sits on text. An empty chat greets in the
-    middle of the column.
-  - The Claude Code block mascot draws without seams on the GPU terminal renderer.
-  - Plans rows and subagent cards name a plan by its title; times follow the UI language ("15분 09초"); the needs strip
-    names who waits.
-  - Contrast: dark secondary text 5.1:1, light waiting amber 5.3:1, the light waiting triangle on TERMINALS rows.
-  - Korean: polite endings throughout (a test fails on 습니다), no 이(가)/을(를)/(으)로 after a name, "셸" for shell,
-    the approval card's title translated.
-  - Every inline confirm puts its action first and Cancel second.
-  Each fix is pinned by an e2e or vitest check that fails on the old layout (`apps/omher/e2e/settings-pages-fit.spec.ts`,
-  `apps/omher/e2e/tasks-fit.spec.ts`, `apps/omher/e2e/term-blocks.spec.ts` and the screens' own specs).
 
 - **Fanout command fields are bounded in UTF-8 bytes, so a legal non-ASCII command can no longer push a unit prompt
   over its 8,000-byte ceiling.** `verification_commands`, `verification_checks[].command` and `reproduction_command`
@@ -101,19 +44,6 @@ All notable changes will be documented here.
   (`omh model-chains provider set claude-subscription-directsdk-experimental anthropic`), route the alias to it, or
   clear the other provider. `omh setup` labels the plugin's row.
   (#3186, carried; thanks @jaehyeokl; `docs/INSTALLATION.md`)
-- **omher: a TERMINALS Shell row where you ran Claude Code, Codex or `omh` puts it back after omher restarts.** Such a
-  row used to come back as a plain shell (paused), with the CLI and its conversation gone; only rows started directly
-  as Claude Code, Codex or oh-my-hermes came back. A Shell row now keeps which of those three CLIs is in its
-  foreground and, for Claude Code and Codex, that CLI's conversation id once the shell can name it (Codex from the
-  rollout it holds open, as a Codex row already did; Claude Code from its own `~/.claude/sessions/<pid>.json` record of
-  that running process, the foreground one's own record first), asked again every 15 s so a `/resume` or `/new` inside
-  the same CLI is followed. After a restart the row starts a fresh shell by itself and, once the shell is ready (its
-  output quiet for 3 s, or for 1 s after an OSC 133 prompt mark) and a fresh look finds the shell itself in front,
-  types one line, once: `claude --resume <id>`, `codex resume <id>` or `omh`. A key you press first, or a program your
-  rc started at the first prompt (OMH's own auto-resume, say), cancels it. A CLI that went back to the shell before the
-  restart is forgotten, and a Claude Code or Codex whose id was not known yet comes back paused, as before. Shell rows also get
-  their row's `OMHER_TERMINAL_LINK` now, so an `omh` typed in one reopens the session it dropped there. Windows keeps
-  `omh` but learns no Claude Code or Codex id. (`docs/OMHER-BOUNDARY.md` rule 11)
 - **TUI: `/dag` shows the highlighted node's handoff with `e`.** In the delegation graph pager, `e` opens the
   selected DAG node's evidence (title, status, role and up to 8 KiB of its local handoff), `r` rereads it and `e`
   returns to the same graph position. It reads only that node's handoff from the current stored session's DAG
@@ -372,6 +302,15 @@ All notable changes will be documented here.
   reported as a stray that has not exited. The
   `--json` report gains `idle_exit` and `overdue` per gateway. (`src/maintenance/gateway_health.py` `_unrecorded_line`,
   `IDLE_EXIT_STALE_SECONDS`, `src/system/process_listing.py` `IDLE_EXIT_FLAG`)
+- **omher 1.2.2.** Shift+Enter makes a new line in terminal agents, Windows included, new bots start from templates,
+  and a UI review pass.
+  - **Terminals:** Shift+Enter is a new line in Claude Code, Codex, omh and the other agents, on Windows too (#3224);
+    a Shell row where you ran Claude Code, Codex or `omh` puts it back after omher restarts (#3178).
+  - **Bots:** make a new bot from the sidebar `+`, from a bot template or empty, and a bot waiting for its template
+    names `omh apply --profile <name>`; a bot on another computer shows a disconnected messaging platform too (#3208).
+  - **Chat:** the reasoning picker offers only the levels the bot's route sends (#3204).
+  - **Look:** a UI review pass across every screen (#3214), and short labels no longer break inside a word in any
+    language (#3211).
 - **omher 1.2.1.** TERMINALS folders say where they are, bots on another computer get threads, and Antigravity's
   signed-in turns read cleanly.
   - **Folders:** a folder header shows its path from home and its branch; a split's card sits at the top of its own
@@ -789,27 +728,6 @@ All notable changes will be documented here.
   there by its own bridge, over the same SSH link. Picture and name editing stay where they were.
   (`apps/omher/bridge/omher_bridge.py` `read_bot_page`, `apps/omher/src/settings/BotSections.tsx`;
   `docs/OMHER-BOUNDARY.md` rule 42)
-- **omher: make a new bot from the sidebar `+`, from a bot template or empty.** Add a bot used to list only profiles
-  that already existed and name `hermes profile create`. New bot now shows oh-my-hermes' bot templates beside No
-  template; you pick one, type a name and press Create. omher checks the name against Hermes' own rule (lowercase
-  letters, numbers, `-` or `_`, up to 64, not a name Hermes keeps such as `default`) and refuses one that is already on
-  this computer, then runs Hermes' own `hermes -p default profile create <name> --no-alias` (no shell, nothing on stdin,
-  at most 330 seconds, Hermes' own 300 for a create through its gateway plus 30) and counts it done only when Hermes
-  said it finished and the new profile's folder is there. A stopped run, or one that left a folder without that
-  finish, is shown as not confirmed, with what may exist and `hermes profile list` to check, and nothing is listed or
-  sent; otherwise Hermes' own words show. The page says before Create that the new bot copies the main profile's API
-  keys and model and shares its logins, as Hermes does by default; no alias is written, and the page shows
-  `hermes profile alias <name>` for one. With a template, the new bot's main chat gets one
-  message, ``/omh-bot-template Apply the bot template `<id>` to this bot.``; the bot shows its plan, changes nothing
-  until you say yes, then applies it with its own approvals, every schedule paused. A new profile gets oh-my-hermes' skills on the next `omh update`, so until then
-  the gallery says so and sends nothing until you press Apply template, there or later on the bot's page. The
-  templates come from `omh --hermes-home <root> profile bot-templates --json` through the same `omh` runner as the
-  messaging platforms; without `omh`, or with one from before bot templates, the gallery says so and an empty bot still
-  works. (`apps/omher/src/addbot/NewBot.tsx`, `apps/omher/bridge/omher_bridge.py` `op_bots_create`;
-  `docs/OMHER-BOUNDARY.md` rule 44)
-- **omher: a new bot waiting for its template names the command for that bot.** The New bot gallery's waiting step
-  and the bot page's pending-template line used to say `omh update`; they now show `omh apply --profile <name>` for
-  the bot, which sets up only that bot and needs no Hermes restart. omher shows the command and does not run it.
 - **A bot whose Discord or Slack stopped connecting now says so in omher and on the OMH TUI bot board.** A Discord
   bot whose profile gained a role allowlist can be refused at its next reconnect (Discord's Server Members privileged
   intent) and stay offline, with only Hermes' gateway log saying why; `omh doctor` now reads it, but nothing showed
@@ -835,15 +753,6 @@ All notable changes will be documented here.
   names the gateway's profile in every restart command (`hermes -p default gateway restart`; a bare `hermes gateway
   restart` follows Hermes' sticky active profile). (`src/maintenance/gateway_health.py` `bot_platforms`,
   `src/tui/bot_board.py`, `apps/omher/src/platforms/`; `docs/OMHER-BOUNDARY.md` rule 43)
-- **omher shows a bot's disconnected messaging platform for a bot on another computer too.** A bot reached over SSH
-  now gets the same sidebar marker and the same Messaging section on its page as a bot here, with the same 10-minute
-  threshold for a reconnect. The other computer's own omher bridge reads it there with its own `omh hermes
-  platforms`: this computer asks it over the existing SSH link once per poll interval with the bare op and nothing in
-  it, and checks every field of the answer again (types, states, lengths, control and bidi characters; no fix text,
-  no link). The page names the computer it was read on and says where to run Hermes' restart command. A computer
-  that is offline, gave no usable answer or has no `omh` reads as cannot tell, never as connected or not.
-  (`apps/omher/bridge/omher_bridge.py` `peer_platform_rows`, `apps/omher/src/platforms/`; `docs/OMHER-BOUNDARY.md`
-  rule 45)
 - The OMH TUI no longer asks for kitty image previews in an omher terminal that cannot paint them. omher 1.1.3
   and earlier set `TERM_PROGRAM=omher` but draw no kitty Unicode placeholders, so pasting an image showed a block of
   tofu boxes in the transcript and the picture itself over the composer. omher now also sets
