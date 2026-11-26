@@ -71,7 +71,7 @@ export function Chat() {
           onStop={() => void s.interrupt()}
           reply={s.replyTo[bot.name] ?? null}
           onClearReply={() => s.setReplyTo(null, bot.name)}
-          onNewThread={bot.status === "offline" ? undefined : (first) => void s.newThreadWith(bot.name, first)}
+          onNewThread={bot.status === "offline" ? undefined : (first) => s.newThreadWith(bot.name, first)}
         />
       </div>
     </>

@@ -1598,6 +1598,8 @@ export const zh: Record<Key, string> = {
   "thread.stopRemove": "停止并移除",
   "thread.cancel": "取消",
   "thread.removeFailed": "无法移除线程:{error}",
+  "thread.newFailed": "无法开始线程:{error}",
+  "thread.stopFailed": "无法停止线程:{error}",
   "thread.st.running": "工作中",
   "thread.st.needs": "需要你处理",
   "thread.st.done": "完成",

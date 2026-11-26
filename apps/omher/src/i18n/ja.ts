@@ -1598,6 +1598,8 @@ export const ja: Record<Key, string> = {
   "thread.stopRemove": "止めて外す",
   "thread.cancel": "キャンセル",
   "thread.removeFailed": "スレッドを外せませんでした: {error}",
+  "thread.newFailed": "スレッドを始められませんでした: {error}",
+  "thread.stopFailed": "スレッドを止められませんでした: {error}",
   "thread.st.running": "作業中",
   "thread.st.needs": "対応が必要",
   "thread.st.done": "完了",
