@@ -27,6 +27,7 @@ import type { ITerminalInitOnlyOptions, ITerminalOptions, Terminal } from "@xter
 import type { FitAddon } from "@xterm/addon-fit";
 import { afterOpen, bracketedPaste, CELLS_EVENT, feed, gpuComing, isParked, live, onVisible, PARKING_EVENT, type Remake } from "./term/engine";
 import { TERM_INPUT_EVENT } from "./term/paste-guard";
+import { setTermAgent } from "./term/engine-input";
 import { onCwd, onProgress, onPrompt } from "./term/engine-marks";
 import { applyLook, termOptions } from "./term/look";
 import { termFontsReady } from "./term/fonts";
@@ -1805,6 +1806,12 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       };
       terms.set(id, t);
       const tt = t;
+      // Shift+Enter makes a new line in the agent in front: the row's own CLI, or the one its shell runs
+      // (engine-input.ts shiftEnterBytes)
+      setTermAgent(el, () => {
+        const r = rec(id);
+        return r && !tt.closed ? termMarkAgent(r) : null;
+      });
       // the person's own keys or paste reached the program (engine-input.ts, paste-guard.ts); the terminal's replies to
       // a program's queries also go out through onData and are not input
       // (keys while nothing runs there, or while its row waits to be undone, reach no program and do not count)

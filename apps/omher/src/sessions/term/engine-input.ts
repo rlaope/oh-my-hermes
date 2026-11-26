@@ -111,6 +111,36 @@ export function lineEditBytes(e: KeyLike, mac: boolean, kitty: boolean): string 
   return null;
 }
 
+/** Agents that read Shift+Enter only as the Kitty code even when they did not turn the protocol on (pi and the TUIs
+ *  built on its reader: oh-my-pi, Droid). They take `ESC CR` as Enter and send, so they get `CSI 13;2 u`. Orca keeps
+ *  the same list (`windowsShiftEnterEncoding: 'csi-u'`, MIT, stablyai/orca tui-agent-config.ts). */
+const CSI_U_AGENTS = new Set(["pi", "omp", "droid"]);
+export const SHIFT_ENTER_CSI_U = "\x1b[13;2u";
+export const SHIFT_ENTER_ESC_CR = "\x1b\r";
+
+/** What Shift+Enter sends instead of xterm's `\r`, or null to leave it to xterm. `kitty`: the program turned the Kitty
+ *  keyboard protocol on (xterm then sends `CSI 13;2 u` itself). `agent`: the coding agent in the terminal's foreground
+ *  (null: a shell or any other program).
+ *
+ *  Without the Kitty protocol xterm sends Shift+Enter as `\r`, the same byte as Enter, so an agent sends the prompt
+ *  where the person wanted a new line. That is every agent on Windows (ConPTY does not pass the protocol's request
+ *  through, so Claude Code never turns it on there; anthropics/claude-code#92771) and the agents that never ask for it
+ *  on any OS (omh, Hermes, Claude Code before 2.1.269). `ESC CR` (Alt+Enter) is a new line in every agent measured:
+ *  Claude Code, Codex, Antigravity, omh, Hermes, and it is what Claude Code's own /terminal-setup binds Shift+Enter
+ *  to. A shell keeps `\r`: zsh and bash run the line on it, and `ESC CR` would insert a raw CR there instead. */
+export function shiftEnterBytes(e: KeyLike, kitty: boolean, agent: string | null): string | null {
+  if (e.key !== "Enter" || !e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return null;
+  if (kitty || !agent) return null;
+  return CSI_U_AGENTS.has(agent) ? SHIFT_ENTER_CSI_U : SHIFT_ENTER_ESC_CR;
+}
+
+/** The coding agent in each terminal's foreground, by the terminal's element (it outlives a parked terminal). The
+ *  owner (sessions.ts for TERMINALS, terminal/terms.ts for the bottom panel) says how to find it. */
+const agentOf = new WeakMap<HTMLElement, () => string | null>();
+export function setTermAgent(host: HTMLElement, find: () => string | null): void {
+  agentOf.set(host, find);
+}
+
 /** Cmd+K on macOS, Ctrl+Shift+K elsewhere: clear the screen and the scrollback. Off macOS Ctrl+K is the program's (it
  *  kills to the line end). */
 export function isClearKey(e: KeyLike, mac: boolean): boolean {
@@ -199,6 +229,16 @@ export function attachInput(term: Terminal, host: HTMLElement, onFind: () => voi
         e.preventDefault();
         saidInto(host);
         term.input(bytes, true);
+      }
+      return false;
+    }
+    // Shift+Enter is a new line in an agent, not a send (shiftEnterBytes)
+    const newline = shiftEnterBytes(e, kittyKeysOn(term), agentOf.get(host)?.() ?? null);
+    if (newline !== null) {
+      if (e.type === "keydown") {
+        e.preventDefault();
+        saidInto(host);
+        term.input(newline, true);
       }
       return false;
     }

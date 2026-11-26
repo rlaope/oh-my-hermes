@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findOptionKey, fontKey, isAppKey, isClearKey, isSelectAllKey, optionTyped, isFindKey, lineEditBytes, nextFontSize, scrollKey, clipboardKey } from "./engine-input";
+import { findOptionKey, fontKey, isAppKey, isClearKey, isSelectAllKey, optionTyped, isFindKey, lineEditBytes, nextFontSize, scrollKey, clipboardKey, shiftEnterBytes } from "./engine-input";
 import { validPattern } from "./engine-find";
 
 const key = (o: Partial<{ key: string; code: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }>) => ({ key: "f", code: "KeyF", metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...o });
@@ -269,5 +269,35 @@ describe("Cmd+A (macOS) or Ctrl+Shift+A (Windows, Linux) selects the terminal", 
     expect(optionTyped(k("@", "KeyL", { altKey: true, ctrlKey: true }), true)).toBeNull();
     expect(optionTyped(k("@", "KeyL", {}), true)).toBeNull();
     expect(optionTyped(k("@", "KeyQ", opt), false)).toBeNull();
+  });
+});
+
+describe("Shift+Enter in an agent is a new line, not a send", () => {
+  const k = (o: Partial<{ key: string; code: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }>) => key({ key: "Enter", code: "Enter", ...o });
+  const shift = k({ shiftKey: true });
+
+  it("an agent without the Kitty protocol gets ESC CR (Claude Code on Windows, omh, Hermes, Codex)", () => {
+    for (const agent of ["claude", "codex", "omh", "hermes", "agy", "gemini", "grok", "opencode"]) expect(shiftEnterBytes(shift, false, agent)).toBe("\x1b\r");
+  });
+
+  it("pi, oh-my-pi and Droid read only the Kitty code (ESC CR sends there): CSI 13;2 u", () => {
+    for (const agent of ["pi", "omp", "droid"]) expect(shiftEnterBytes(shift, false, agent)).toBe("\x1b[13;2u");
+  });
+
+  it("a program with the Kitty protocol on keeps xterm's own CSI 13;2 u", () => {
+    expect(shiftEnterBytes(shift, true, "claude")).toBeNull();
+    expect(shiftEnterBytes(shift, true, "pi")).toBeNull();
+  });
+
+  it("a shell (no agent in front) keeps \\r: zsh, bash and PowerShell run the line", () => {
+    expect(shiftEnterBytes(shift, false, null)).toBeNull();
+  });
+
+  it("only Shift+Enter: Enter, Ctrl/Alt/Cmd+Shift+Enter (pane zoom) and other keys are left alone", () => {
+    expect(shiftEnterBytes(k({}), false, "claude")).toBeNull();
+    expect(shiftEnterBytes(k({ shiftKey: true, ctrlKey: true }), false, "claude")).toBeNull();
+    expect(shiftEnterBytes(k({ shiftKey: true, metaKey: true }), false, "claude")).toBeNull();
+    expect(shiftEnterBytes(k({ shiftKey: true, altKey: true }), false, "claude")).toBeNull();
+    expect(shiftEnterBytes(k({ shiftKey: true, key: "a", code: "KeyA" }), false, "claude")).toBeNull();
   });
 });
