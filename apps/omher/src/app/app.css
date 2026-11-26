@@ -66,7 +66,39 @@
   outline: none;
 }
 /* while dragging the columns follow the pointer at once, and the drag selects no text */
-.window.panel-dragging {
+.side-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -3px;
+  width: 7px;
+  z-index: 6;
+  cursor: col-resize;
+  touch-action: none;
+  -webkit-app-region: no-drag;
+}
+.side-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: transparent;
+  transition: background 0.12s;
+}
+.side-resizer:hover::after,
+.side-resizer:focus-visible::after,
+.side-resizer.on::after {
+  left: 2px;
+  width: 3px;
+  background: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.side-resizer:focus-visible {
+  outline: none;
+}
+.window.panel-dragging,
+.window.side-dragging {
   transition: none;
   user-select: none;
   cursor: col-resize;

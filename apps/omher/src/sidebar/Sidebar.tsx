@@ -27,6 +27,7 @@ import { useBotsAbove } from "./dockState";
 import { revealBotTop, revealPending, wholeTopOf } from "./revealBot";
 import { useEdgeFade } from "./edgeFade";
 import { SplitDivider, useSideSplit } from "./SideSplit";
+import { SidebarResizer } from "./SidebarResizer";
 import { useAutoSplit } from "./autoSplit";
 import { TasksBar } from "../tasks/TasksBar";
 import { DiskChip } from "./DiskChip";
@@ -268,6 +269,7 @@ export function Sidebar() {
           <UpdateButton />
         </div>
       </div>
+      <SidebarResizer />
     </aside>
   );
 }

@@ -1771,9 +1771,11 @@ export const ja: Record<Key, string> = {
   "term.folderEmpty": "ターミナルなし · 右クリックで追加",
   "term.folderGone": "このフォルダはもうありません",
   "term.folderGoneRan": "{folder} はもうないため、{at} で開きました",
-  // spacing: the BOTS | TERMINALS divider
+  // spacing: the BOTS | TERMINALS divider and the sidebar's right edge
   "side.split": "ボットとターミナルの高さを変える",
   "side.splitTip": "ドラッグでボットかターミナルを広げます。ダブルクリックで自動に戻ります。",
+  "side.resize": "サイドバーの幅を変える",
+  "side.resizeTip": "ドラッグで幅を変更 · ダブルクリックで標準の幅",
   // tidy: a thread row's second line
   "thread.said": "{name}: {text}",
   "thread.you": "あなた",

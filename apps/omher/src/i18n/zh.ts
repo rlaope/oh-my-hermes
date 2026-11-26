@@ -1771,9 +1771,11 @@ export const zh: Record<Key, string> = {
   "term.folderEmpty": "暂无终端 · 右键新建",
   "term.folderGone": "此文件夹已不存在",
   "term.folderGoneRan": "{folder} 已不存在，已在 {at} 中打开",
-  // spacing: the BOTS | TERMINALS divider
+  // spacing: the BOTS | TERMINALS divider and the sidebar's right edge
   "side.split": "调整机器人和终端的高度",
   "side.splitTip": "拖动为机器人或终端留出更多空间。双击恢复自动。",
+  "side.resize": "调整侧栏宽度",
+  "side.resizeTip": "拖动调整宽度 · 双击恢复默认宽度",
   // tidy: a thread row's second line
   "thread.said": "{name}: {text}",
   "thread.you": "你",

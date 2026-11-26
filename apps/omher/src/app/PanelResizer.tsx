@@ -14,6 +14,7 @@ export function PanelResizer({ open, tab, max = false }: { open: boolean; tab: s
   const [widths, setWidths] = useState(readPanelWidths);
   const [drag, setDrag] = useState<number | null>(null);
   const [winW, setWinW] = useState(() => window.innerWidth);
+  const [sideTick, setSideTick] = useState(0);
   const start = useRef<{ x: number; w: number; kind: PanelKind } | null>(null);
   const kind = panelKind(tab);
   const sideW = () => el("sidebar")?.getBoundingClientRect().width ?? 248;
@@ -24,8 +25,13 @@ export function PanelResizer({ open, tab, max = false }: { open: boolean; tab: s
 
   useEffect(() => {
     const on = () => setWinW(window.innerWidth);
+    const onSide = () => setSideTick((n) => n + 1);
     window.addEventListener("resize", on);
-    return () => window.removeEventListener("resize", on);
+    window.addEventListener("omher:side-width", onSide);
+    return () => {
+      window.removeEventListener("resize", on);
+      window.removeEventListener("omher:side-width", onSide);
+    };
   }, []);
 
   useEffect(() => {
@@ -35,7 +41,7 @@ export function PanelResizer({ open, tab, max = false }: { open: boolean; tab: s
     else win.style.setProperty("--panel-w", `${width}px`);
     // while dragging the grid follows the pointer with no easing, and nothing under it selects
     win.classList.toggle("panel-dragging", drag !== null);
-  }, [width, open, drag, winW, max]);
+  }, [width, open, drag, winW, sideTick, max]);
 
   // maximise and restore ease in 180ms (app.css .panel-maxing); a window resize while maximised follows at once
   const first = useRef(true);

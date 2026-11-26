@@ -49,6 +49,13 @@ export function useSideSplit(bots: Sec, terms: Sec) {
     (e: PointerEvent<HTMLElement>) => {
       if (e.button !== 0) return;
       e.preventDefault();
+      const target = e.currentTarget;
+      const pid = e.pointerId;
+      try {
+        target.setPointerCapture?.(pid);
+      } catch {
+        /* synthetic or detached pointer */
+      }
       const [hb, ht] = heights();
       const y0 = e.clientY;
       const total = hb + ht;
@@ -60,12 +67,19 @@ export function useSideSplit(bots: Sec, terms: Sec) {
       const up = () => {
         removeEventListener("pointermove", move);
         removeEventListener("pointerup", up);
+        removeEventListener("pointercancel", up);
+        try {
+          if (target.hasPointerCapture?.(pid)) target.releasePointerCapture(pid);
+        } catch {
+          /* already released */
+        }
         document.body.classList.remove("side-resizing");
         if (last !== null) save(last);
       };
       document.body.classList.add("side-resizing");
       addEventListener("pointermove", move);
       addEventListener("pointerup", up);
+      addEventListener("pointercancel", up);
     },
     [],
   );
