@@ -54,6 +54,14 @@ All notable changes will be documented here.
   and connecting screens. Closes #3229. (`apps/omher/src-tauri/src/remote.rs`, `apps/omher/src/app/RemoteConnect.tsx`,
   BOUNDARY rule 47)
 
+- **A small dag-ulw job can run fast: the parent settles its verify node itself, and several nodes settle in one call.**
+  `omh_dag define fast=true` accepts a graph of at most 3 build nodes and 6 nodes in all, with one verify node that
+  runs no full suite and names no identity, not `local`, and no baseline or `owner` node; the verify node is handed out
+  under `for_parent` on the parent lane and never reaches a `delegate_task` call. An ineligible graph is defined as a
+  normal run with `fast_ineligible:<reasons>` in its lint, and a non-fast graph that qualifies gets `fast_eligible`.
+  `settle settles=[...]` closes accepted, failed or blocked nodes together, all-or-nothing: an item refused writes nothing.
+  (`src/plugin_bundle/omh/dag_run.py`, `src/plugin_bundle/omh/tools/dag_tool.py`, `src/skills/dag_ulw_skill.py`)
+
 ## 5.0.1 - 2026-11-26
 
 - **TUI: session picker shows conversations rather than background runs.** On a shared Hermes gateway, `/sessions` and
