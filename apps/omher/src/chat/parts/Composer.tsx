@@ -3,7 +3,7 @@ import type { Bot, Skill } from "../../lib/protocol";
 import { useStore, type OutFile, type ReplyChip } from "../../state/store";
 import type { PluginRow } from "../../lib/protocol";
 import { ArrowUp, CloseIcon, SourceIcon, StopIcon } from "../../ui";
-import { AttachButton, Chips, chipsFor, pluginName, useDropZone, type Chip } from "./Attach";
+import { AttachButton, Chips, chipsFor, filesFromTransfer, pluginName, useDropZone, type Chip } from "./Attach";
 import "./attach.css";
 import { CommandPicker, SkillPicker, mirrorText } from "./Skills";
 import { SIGIL, findTokens, fragmentAt, leadRow, matchSkills } from "./skillTokens";
@@ -304,7 +304,11 @@ export function Composer({
 
   const add = useCallback((files: File[]) => {
     setErr(null);
-    setChips((cur) => [...cur, ...chipsFor(files, cur.filter((c) => !c.reason).length)]);
+    setChips((cur) => {
+      const valid = cur.filter((c) => !c.reason);
+      const imgs = valid.filter((c) => c.attach === "image").length;
+      return [...cur, ...chipsFor(files, valid.length, imgs)];
+    });
     ref.current?.focus();
   }, []);
 
@@ -446,7 +450,7 @@ export function Composer({
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
               onPaste={(e) => {
-                const files = [...e.clipboardData.files];
+                const files = filesFromTransfer(e.clipboardData);
                 if (!files.length || !onSendFiles) return;
                 e.preventDefault();
                 add(files);

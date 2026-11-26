@@ -229,6 +229,8 @@ test("send attaches each chip in order, then sends; the bubble shows the files",
   expect(ops.every((c: any) => c.params.bot === "friren")).toBe(true);
   expect(Buffer.from(ops[0].params.data_base64, "base64").equals(PNG)).toBe(true);
   expect(ops[4].params.text).toBe("@file:.hermes/attachments/notes.txt\n\nLook at these");
+  expect(ops[4].params.attachment_ids).toHaveLength(2);
+  expect(ops[4].params.attachment_ids.every((id: unknown) => typeof id === "string" && id.startsWith("att-"))).toBe(true);
 
   const mine = page.getByTestId("timeline").getByTestId("bubble-user").last();
   await expect(mine.locator(".b")).toHaveText("Look at these"); // the @file ref is not shown
@@ -286,6 +288,27 @@ test("over-limit files show a red chip and are not sent; a failed attach sends n
   await expect(page.getByTestId("composer")).toHaveValue("try this"); // text kept
   ops = await sendOps();
   expect(ops.map((c: any) => c.op)).toEqual(["chat.attach", "chat.attach"]); // no chat.send
+});
+
+test("messenger-style dragged images (extensionless MIME or .jfif) attach as image and forward attachment_ids", async ({ page }) => {
+  await openFriren(page);
+  await dropFiles(page, [
+    { name: "", type: "image/png", text: "png" },
+    { name: "table.jfif", type: "image/jpeg", text: "jpg" },
+  ]);
+  const chips = page.getByTestId("attach-chip");
+  await expect(chips).toHaveCount(2);
+  await expect(chips.nth(0)).toHaveAttribute("data-tile", "true");
+  await expect(chips.nth(1)).toHaveAttribute("data-tile", "true");
+  await page.getByTestId("send").click();
+  await expect(chips).toHaveCount(0);
+  const ops = await sendOps();
+  expect(ops.map((c: any) => [c.op, c.params.kind ?? null, c.params.name ?? null])).toEqual([
+    ["chat.attach", "image", "pasted"],
+    ["chat.attach", "image", "table.jfif"],
+    ["chat.send", null, null],
+  ]);
+  expect(ops[2].params.attachment_ids).toHaveLength(2);
 });
 
 test("screenshots: chips and the + menu, dark and light", async ({ page }) => {

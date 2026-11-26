@@ -1820,7 +1820,7 @@ class ReadOnlyRule(BridgeCase):
         src = (HERE.parent / "omher_bridge.py").read_text(encoding="utf-8")
         self.assertEqual(len(re.findall(r"prompt\.submit", src)), 1)
         sites = re.findall(r"self\._submit\(([^)]*)\)", src)
-        self.assertEqual(sites, ["conn, main, text, input_id, queued"])
+        self.assertEqual(sites, ["conn, main, text, input_id, queued, attachments=attachments"])
 
     def test_bridge_makes_no_model_or_http_call(self):
         src = (HERE.parent / "omher_bridge.py").read_text(encoding="utf-8")
@@ -2070,6 +2070,109 @@ class Attach(BridgeCase):
             self.assertEqual(big["error"]["code"], "too_big")
             # only the well-formed one reached Hermes
             self.assertEqual([m for m, _ in env.clients["kami"].calls if "attach" in m], ["image.attach_bytes"])
+
+    async def test_canonical_image_attachments_are_forwarded_on_prompt_submit(self):
+        """Canonical Hermes image.attach_bytes is staging-only ({path, mime}); chat.attach returns an
+        opaque attachment_id and chat.send resolves it into prompt.submit's attachments list."""
+        import base64
+        png_b64 = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"\x00" * 16).decode()
+        jpg_b64 = base64.b64encode(b"\xff\xd8\xff\xe0" + b"\x00" * 16).decode()
+        webp_b64 = base64.b64encode(b"RIFF\x10\x00\x00\x00WEBP" + b"\x00" * 8).decode()
+        data_url_png = f"  data:image/png;base64,{png_b64}"
+        with tempfile.TemporaryDirectory() as folder:
+            async with Env() as env:
+                s = await self.open(env)
+                # warm the connection so env.clients["kami"] exists before installing the canonical RPC hook
+                self.assertTrue((await s.req("chat.open", bot="kami"))["ok"])
+                c = env.clients["kami"]
+                orig_rpc = c.rpc
+                staged_n = 0
+
+                async def canonical_rpc(method, **params):
+                    nonlocal staged_n
+                    if method == "image.attach_bytes":
+                        c.calls.append((method, params))
+                        staged_n += 1
+                        ext = Path(params.get("filename") or "x.png").suffix.lower()
+                        mime = {".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp"}[ext]
+                        return {"attached": True, "path": f"/h/cache/images/upload_{staged_n}{ext}",
+                                "mime": mime, "text": f"[User attached image: upload_{staged_n}{ext}]"}
+                    return await orig_rpc(method, **params)
+
+                c.rpc = canonical_rpc
+                # messenger drags: extensionless PNG, Windows .jfif JPEG, WebP misnamed as .png, data-URL PNG
+                a1 = await s.req("chat.attach", bot="kami", kind="image", name="pasted", data_base64=png_b64)
+                a2 = await s.req("chat.attach", bot="kami", kind="image", name="table.jfif", data_base64=jpg_b64)
+                a3 = await s.req("chat.attach", bot="kami", kind="image", name="discord.png", data_base64=webp_b64)
+                a4 = await s.req("chat.attach", bot="kami", kind="image", name="clip", data_base64=data_url_png)
+                # filenames sent to Hermes match actual magic bytes
+                self.assertEqual([p["filename"] for p in c.find("image.attach_bytes")],
+                                 ["pasted.png", "table.jpg", "discord.webp", "clip.png"])
+                ids = [r["result"]["attachment_id"] for r in (a1, a2, a3, a4)]
+                self.assertTrue(all(isinstance(x, str) and x for x in ids))
+                # host paths are never exposed back to the page
+                for r in (a1, a2, a3, a4):
+                    self.assertNotIn("path", r["result"])
+
+                # duplicate attachment_id is refused without consuming the token
+                dup = await s.req("chat.send", bot="kami", text="dup", attachment_ids=[ids[0], ids[0]])
+                self.assertEqual(dup["error"]["code"], "bad_request")
+
+                # cross-session replay: an image staged on main is refused on a folder chat
+                fid = (await s.req("folder.open", bot="kami", cwd=folder))["result"]["session"]
+                cross = await s.req("chat.send", bot="kami", session=fid, text="steal", attachment_ids=[ids[0]])
+                self.assertEqual(cross["error"]["code"], "bad_request")
+
+                # send a1 + a2; leave a3 + a4 unused to verify abandoned attaches never leak to later sends
+                sent = await s.req("chat.send", bot="kami", text="[User attached image: upload_1.png]",
+                                   attachment_ids=ids[:2])
+                self.assertTrue(sent["ok"])
+                submits = c.find("prompt.submit")
+                self.assertEqual(submits[-1]["attachments"], [
+                    {"path": "/h/cache/images/upload_1.png", "mime": "image/png"},
+                    {"path": "/h/cache/images/upload_2.jpg", "mime": "image/jpeg"},
+                ])
+
+                # single-use: re-sending a consumed id is refused
+                reused = await s.req("chat.send", bot="kami", text="again", attachment_ids=[ids[0]])
+                self.assertEqual(reused["error"]["code"], "bad_request")
+
+                # plain message afterwards does not pick up abandoned a3/a4
+                plain = await s.req("chat.send", bot="kami", text="plain text")
+                self.assertTrue(plain["ok"])
+                self.assertNotIn("attachments", c.find("prompt.submit")[-1])
+
+                # >10 image attachments per message is refused without burning the staged tokens
+                many = []
+                for i in range(ob.MAX_PROMPT_ATTACHMENTS + 1):
+                    r = await s.req("chat.attach", bot="kami", kind="image", name=f"m{i}.png", data_base64=png_b64)
+                    many.append(r["result"]["attachment_id"])
+                over = await s.req("chat.send", bot="kami", text="too many", attachment_ids=many)
+                self.assertEqual(over["error"]["code"], "bad_request")
+                ok10 = await s.req("chat.send", bot="kami", text="exact 10", attachment_ids=many[:ob.MAX_PROMPT_ATTACHMENTS])
+                self.assertTrue(ok10["ok"])
+                self.assertEqual(len(c.find("prompt.submit")[-1]["attachments"]), ob.MAX_PROMPT_ATTACHMENTS)
+
+                # FIFO eviction beyond MAX_STAGED_ATTACHMENTS (64)
+                evict_first = (await s.req("chat.attach", bot="kami", kind="image", name="old.png", data_base64=png_b64))["result"]["attachment_id"]
+                for i in range(ob.MAX_STAGED_ATTACHMENTS):
+                    await s.req("chat.attach", bot="kami", kind="image", name=f"f{i}.png", data_base64=png_b64)
+                evicted = await s.req("chat.send", bot="kami", text="old", attachment_ids=[evict_first])
+                self.assertEqual(evicted["error"]["code"], "bad_request")
+
+                # disconnect (_drop) clears staged_attachments so pre-disconnect tokens are rejected after reconnect
+                pre_drop = (await s.req("chat.attach", bot="kami", kind="image", name="drop.png", data_base64=png_b64))["result"]["attachment_id"]
+                await env.bridge._drop(env.bridge.conns["kami"], emit=False)
+                self.assertEqual(env.bridge.conns["kami"].staged_attachments, {})
+                after_drop = await s.req("chat.send", bot="kami", text="stale", attachment_ids=[pre_drop])
+                self.assertEqual(after_drop["error"]["code"], "bad_request")
+
+                # a client-supplied path/unknown id is refused and never reaches prompt.submit
+                bogus = await s.req("chat.send", bot="kami", text="hi", attachment_ids=["/etc/passwd"])
+                self.assertEqual(bogus["error"]["code"], "bad_request")
+                # slash commands cannot carry attachments
+                slash = await s.req("chat.send", bot="kami", text="/help", attachment_ids=[ids[2]])
+                self.assertEqual(slash["error"]["code"], "bad_request")
 
 
 class Discovery(unittest.TestCase):

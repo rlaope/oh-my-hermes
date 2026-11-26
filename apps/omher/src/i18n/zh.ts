@@ -1051,6 +1051,7 @@ export const zh: Record<Key, string> = {
   "att.removeOf": "移除 {name}",
   "att.drop": "拖放到此处添加附件",
   "att.tooMany": "超过 {n} 个文件",
+  "att.tooManyImages": "超过 {n} 张图片",
   "att.tooBig": "超过 100 MB",
   "att.failed": "无法添加 {name} · {error}",
   "bub.replyTarget": "回复目标",

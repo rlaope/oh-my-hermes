@@ -490,7 +490,7 @@ export interface OpMap {
    *  omher posts nothing. */
   /** `queued`: a held message (steer queue); a still-busy Hermes runs it after its current work, never steers it. */
   /** `paused`: Hermes keeps the message in its queue behind a turn it lost, and runs it once that turn is discarded. */
-  "chat.send": { params: { bot: string; text: string; session?: string; reply_to?: string; queued?: boolean }; result: { input_id: string; paused?: boolean } };
+  "chat.send": { params: { bot: string; text: string; session?: string; reply_to?: string; queued?: boolean; attachment_ids?: string[] }; result: { input_id: string; paused?: boolean } };
   "chat.interrupt": { params: { bot: string; session?: string }; result: Record<string, never> };
   /** Acknowledge the chat's lost turns (Hermes' `prompt.resolve_unknown`): never re-run, and what waits behind runs. */
   "chat.discard": { params: { bot: string; session?: string }; result: { discarded: number } };
@@ -643,6 +643,8 @@ export interface AttachResult {
   text: string;
   /** `@file:…` for a staged file; the prompt must carry it. Empty for images and PDFs. */
   ref_text: string;
+  /** Opaque id for a staged canonical-gateway image, passed back on the next `chat.send`. */
+  attachment_id?: string;
 }
 
 export interface MediaFile {

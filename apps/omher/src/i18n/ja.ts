@@ -1051,6 +1051,7 @@ export const ja: Record<Key, string> = {
   "att.removeOf": "{name} を外す",
   "att.drop": "ドロップして添付",
   "att.tooMany": "{n} 個を超えています",
+  "att.tooManyImages": "画像が {n} 枚を超えています",
   "att.tooBig": "100 MB を超えています",
   "att.failed": "{name} を添付できませんでした · {error}",
   "bub.replyTarget": "返信先",
