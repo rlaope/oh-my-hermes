@@ -1,6 +1,6 @@
 // A bot drafts an agent, the person confirms it (mock bridge + mock host): a bot reply with an ```omher-agent block
 // keeps its code block and gets one "Add agent" chip; the chip opens Settings › Agents' own confirm card, filled from
-// the draft, checked again and naming the bot; Add writes it and it appears in the SESSIONS + menu; Cancel writes
+// the draft, checked again and naming the bot; Add writes it and Settings › Agents lists it; Cancel writes
 // nothing; a refused draft's chip is disabled with the reason; a SESSIONS agent's reply with a draft shows no chip;
 // "Ask the bot" fills the composer and sends nothing. Shots with OMHER_SHOTS=<dir> (OMHER_SHOT_TAG=after by default).
 import { expect, test, type Page } from "@playwright/test";
@@ -57,14 +57,7 @@ async function reply(text: string, id = "bc-draft") {
   await mock("mock.emit", { events: [{ event: "message", bot: "kami", id, text }] });
 }
 
-async function plus(page: Page) {
-  await page.getByTestId("session-new").click();
-  await expect(page.getByTestId("session-agent-claude")).toBeVisible();
-  await page.waitForFunction(() => document.querySelector(".ss-pop")?.getAnimations().every((a) => a.playState !== "running"));
-}
-
-// chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
-test.skip("a bot reply with a draft: chip -> the same card, filled and naming the bot -> Add -> the agent is in the + menu", async ({ page }) => {
+test("a bot reply with a draft: chip -> the same card, filled and naming the bot -> Add -> the agent is listed in Settings > Agents", async ({ page }) => {
   await open(page);
   await reply(`Here is the agent you asked for:\n\n${fence(STUB)}\n\nPress Add agent to see the exact command.`);
   const bubble = page.getByTestId("bubble-bot").last();
@@ -85,7 +78,7 @@ test.skip("a bot reply with a draft: chip -> the same card, filled and naming th
   await expect(card).toContainText("Add Stub ACP?");
   await expect(page.getByTestId("agent-confirm-by")).toHaveText("Proposed by Kami");
   await expect(page.getByTestId("agent-confirm-command")).toHaveText("/usr/local/bin/stub-acp acp");
-  expect(await card.locator("button").allTextContents()).toEqual(["Cancel", "Add"]);
+  expect(await card.locator("button").allTextContents()).toEqual(["Add", "Cancel"]);
   // the shell checked the draft again (the bot's stricter preview); nothing written yet
   expect((await calls(page)).filter((c) => c.op === "custom.botPreview")).toHaveLength(1);
   expect(await file(page)).toBeNull();
@@ -95,9 +88,10 @@ test.skip("a bot reply with a draft: chip -> the same card, filled and naming th
   expect(await file(page)).toEqual([{ id: "stub-acp", label: "Stub ACP", program: "stub-acp", args: ["acp"], install: "npm install -g stub-acp" }]);
   await expect(chip).toContainText("Added");
   await expect(chip).toBeDisabled();
-  await plus(page);
-  const items = await page.locator("[data-testid=session-menu-list] > [data-testid^=session-agent-]").evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")));
-  expect(items.indexOf("session-agent-stub-acp")).toBe(items.indexOf("session-agent-gemini") + 1);
+  // chat-mode agents are no longer in the SESSIONS + menu (terminals only); the agent is listed under Settings > Agents
+  await page.getByTestId("nav-settings").click();
+  await page.getByTestId("settings-nav-agents").click();
+  await expect(page.getByTestId("agents-mine-stub-acp")).toContainText("Stub ACP");
 });
 
 test("a draft whose program is not installed yet: the card still shows every argument, and says it is missing", async ({ page }) => {

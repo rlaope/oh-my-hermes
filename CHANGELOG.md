@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher on Windows: stopping a long Hermes run stops all of it.** A `hermes profile create` past its 330 s limit, or a
+  `hermes mcp install`/`login` or `omh` read past its time, was stopped by killing only `cmd.exe` (Hermes starts through
+  `hermes.cmd`), so Hermes kept running. The bridge now ends the whole process tree with one fixed
+  `taskkill /T /F /PID <pid>` (boundary rule 48) and then the child; macOS and Linux still stop the run's process
+  group. The bot-draft Add test and two terminal resume specs run again against the current UI, and the README says the
+  bridge tests need websockets, pyyaml and ruamel.yaml. (`apps/omher/bridge/omher_bridge.py`)
+
 - **omher terminal: an address a table cell breaks across rows opens whole.** Claude Code's markdown tables put
   real newlines inside a cell, so `https://github.com/` sat on one row and `sgl-project/sglang/pull/…` under it; the
   web-links add-on joins only rows xterm itself wrapped, linked the first piece alone, and Cmd+click opened
