@@ -7,7 +7,8 @@
 //   ⌘N ⌘T  the TERMINALS + menu (Shell or a CLI, in a terminal)
 //   ⌘⇧]    the next terminal session (sidebar order, wrapping)  ⌘⇧[  the previous one
 //   ⌘W     (the menu's Close Window) closes the focused split pane while a split has the keyboard, else the window
-//   Esc    stop the running answer (only when no popover, field or dialog wants Esc first)
+//   Esc    stop the running answer of the chat on screen (an open thread's, not its bot's main chat; only when no
+//          popover, field or dialog wants Esc first)
 //   Ctrl+` the bottom terminal panel, show or hide, on every OS (Ctrl on macOS too, as in VS Code; a maximised side
 //          panel goes back to its own width first, so the terminal shows); taken before a
 //          terminal sees it, so it works with the keyboard inside a terminal (it is omher's, not the program's)
@@ -23,6 +24,7 @@ import { isTerminalRec } from "../sessions/agents";
 import { composing } from "../lib/ime";
 import { getTermPanel, toggleTerminal } from "../terminal/state";
 import { listenMenuClose } from "./menuClose";
+import { threadKey } from "../threads/types";
 
 export const isMac = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
@@ -137,7 +139,14 @@ export function useShortcuts(): void {
           return;
         }
         const bot = s.selectedBot;
-        if (s.ui.view === "chat" && bot && s.chats[bot]?.turn) {
+        const thread = s.ui.thread;
+        if (s.ui.view === "chat" && bot && thread) {
+          // an open thread: Esc stops that thread's turn, never the bot's main chat (ThreadChat's Stop)
+          if (s.chats[threadKey(bot, thread)]?.turn) {
+            e.preventDefault();
+            void a.threadInterrupt(bot, thread);
+          }
+        } else if (s.ui.view === "chat" && bot && s.chats[bot]?.turn) {
           e.preventDefault();
           void a.interrupt();
         } else if (s.ui.view === "session" && s.ui.session) {

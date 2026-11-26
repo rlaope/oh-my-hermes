@@ -42,8 +42,8 @@ export function dropIndex(mids: readonly number[], from: number, range: readonly
 }
 
 /** Hold a bot row to pick it up, drag it up or down, let go to drop it (`onMove(bot, index)`); Escape puts it back.
- *  ⌥↑ / ⌥↓ on a focused row moves it one place. Off while the list is filtered by search, where a row's index is
- *  not its sidebar index. */
+ *  ⌥↑ / ⌥↓ on a focused row moves it one place. Its thread rows (`.th-tree`, inside the row) start neither. Off while
+ *  the list is filtered by search, where a row's index is not its sidebar index. */
 export function useRowDrag(order: readonly string[], pinned: readonly string[], on: boolean, onMove: (bot: string, to: number) => void) {
   const [lift, setLift] = useState<Lift | null>(null);
   const liftRef = useRef<Lift | null>(null);
@@ -114,8 +114,9 @@ export function useRowDrag(order: readonly string[], pinned: readonly string[], 
       dy,
       active: !!l,
       onPointerDown(e) {
-        // the primary button only, and not on the ⋯ button or an open menu
-        if (e.button !== 0 || liftRef.current || (e.target as Element).closest(".bot-more, .bot-new, [role=menu]")) return;
+        // the primary button only, and not on the ⋯ button, an open menu or the bot's thread rows (inside this row's
+        // element, but a press there is the thread's)
+        if (e.button !== 0 || liftRef.current || (e.target as Element).closest(".bot-more, .bot-new, [role=menu], .th-tree")) return;
         const range = moveRange(order, pinned, bot);
         if (!range || range[0] === range[1]) return;
         const el = e.currentTarget;
@@ -150,6 +151,8 @@ export function useRowDrag(order: readonly string[], pinned: readonly string[], 
       },
       onKeyDown(e) {
         if (!e.altKey || e.metaKey || e.ctrlKey || e.shiftKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+        // ⌥↑ / ⌥↓ on a focused thread row is not the bot's
+        if ((e.target as Element).closest(".th-tree")) return;
         e.preventDefault();
         moveRef.current(bot, index + (e.key === "ArrowUp" ? -1 : 1));
       },
