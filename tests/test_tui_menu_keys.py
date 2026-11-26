@@ -14,7 +14,7 @@ import unittest
 from test_tui_catalog import CATALOG, catalog_app
 from test_tui_modes import SID, make_app, notices, type_text
 from omh.tui.app import App, PathItem
-from omh.tui.keys import BACKSPACE, DOWN, ENTER, ESCAPE, LEFT, TAB, UP, Key, Paste
+from omh.tui.keys import BACKSPACE, CHAR, DOWN, ENTER, ESCAPE, LEFT, TAB, UP, Key, Paste
 
 PATHS = [PathItem("@src/foo.py", "foo.py", ""), PathItem("@src/fold/", "fold/", "dir")]
 
@@ -349,6 +349,101 @@ class LeadingSlashMenuUnchangedTests(unittest.TestCase):
         self.assertEqual(app.menu_index, 0)
         app._on_input(Key(DOWN))
         self.assertEqual(app.menu_index, 1)
+
+
+class HistoryRecallSlashMenuTests(unittest.TestCase):
+    """Recalling a leading slash command from history never opens the `/` menu or steals Up/Down."""
+
+    def test_up_and_down_walk_history_across_leading_slash_commands(self) -> None:
+        app, _client = catalog_app()
+        app.composer.history = ["old prompt", "/config", "/model", "/theme "]
+        seen_up = []
+        for _ in range(4):
+            app._on_input(Key(UP))
+            seen_up.append(app.composer.text)
+            self.assertEqual(app._menu_rows(), [])
+        self.assertEqual(seen_up, ["/theme ", "/model", "/config", "old prompt"])
+        seen_down = []
+        for _ in range(4):
+            app._on_input(Key(DOWN))
+            seen_down.append(app.composer.text)
+            self.assertEqual(app._menu_rows(), [])
+        self.assertEqual(seen_down, ["/config", "/model", "/theme ", ""])
+
+    def test_enter_on_recalled_slash_command_submits_it_without_rewriting(self) -> None:
+        app, client = catalog_app()
+        app.composer.history = ["old prompt", "/config"]
+        app._on_input(Key(UP))
+        self.assertEqual(app.composer.text, "/config")
+        self.assertEqual(app._menu_rows(), [])
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.calls, [("slash.exec", {"command": "config", "session_id": SID})])
+
+        # Even a partial recalled slash entry sends as recalled rather than accepting a completion.
+        partial, partial_client = catalog_app()
+        partial.composer.history = ["old prompt", "/mo"]
+        partial._on_input(Key(UP))
+        self.assertEqual(partial.composer.text, "/mo")
+        self.assertEqual(partial._menu_rows(), [])
+        partial._on_input(Key(ENTER))
+        self.assertEqual(partial_client.calls, [("slash.exec", {"command": "mo", "session_id": SID})])
+
+    def test_editing_a_recalled_slash_command_reopens_the_menu(self) -> None:
+        app, _client = catalog_app()
+        app.composer.history = ["old prompt", "/model"]
+        app._on_input(Key(UP))
+        self.assertEqual(app._menu_rows(), [])
+        app._on_input(Key(BACKSPACE))
+        self.assertEqual(app.composer.text, "/mode")
+        self.assertEqual(app._menu_rows()[0][0], "/model")
+
+        # Typing into a recalled slash prefix opens the menu and arrows move its highlight again.
+        app2, _client2 = catalog_app()
+        app2.composer.history = ["old prompt", "/"]
+        app2._on_input(Key(UP))
+        self.assertEqual(app2._menu_rows(), [])
+        type_text(app2, "t")
+        self.assertGreater(len(app2._menu_rows()), 1)
+        app2._on_input(Key(DOWN))
+        self.assertEqual(app2.menu_index, 1)
+        app2._on_input(Key(UP))
+        self.assertEqual(app2.menu_index, 0)
+
+    def test_down_returning_to_esc_closed_slash_draft_keeps_menu_closed(self) -> None:
+        app, _client = catalog_app()
+        app.composer.history = ["old prompt", "/config"]
+        type_text(app, "/mo")
+        self.assertTrue(app._menu_rows())
+        app._on_input(Key(ESCAPE))
+        self.assertEqual(app._menu_rows(), [])
+        app._on_input(Key(UP))
+        self.assertEqual((app.composer.text, app._menu_rows()), ("/config", []))
+        app._on_input(Key(DOWN))
+        self.assertEqual((app.composer.text, app._menu_rows()), ("/mo", []))
+        app._on_input(Key(UP))  # Up still walks history rather than moving a reopened menu
+        self.assertEqual(app.composer.text, "/config")
+
+    def test_ctrl_r_accepted_slash_command_keeps_menu_closed_until_edited(self) -> None:
+        app, _client = catalog_app()
+        app.composer.history = ["old prompt", "/config", "/model"]
+        app._on_input(Key(CHAR, "r", ctrl=True))
+        type_text(app, "con")
+        app._on_input(Key(ENTER))
+        self.assertEqual((app.composer.text, app._menu_rows()), ("/config", []))
+        app._on_input(Key(BACKSPACE))
+        self.assertEqual(app._menu_rows()[0][0], "/config")
+
+    def test_vim_normal_history_recall_keeps_menu_closed_on_entering_insert(self) -> None:
+        app, _client = catalog_app()
+        app.composer.set_vim(True)
+        app.composer.history = ["old prompt", "/model"]
+        app._on_input(Key(ESCAPE))  # INSERT -> NORMAL
+        type_text(app, "k")
+        self.assertEqual(app.composer.text, "/model")
+        type_text(app, "a")  # NORMAL -> INSERT
+        self.assertEqual(app._menu_rows(), [])
+        app._on_input(Key(BACKSPACE))
+        self.assertEqual(app._menu_rows()[0][0], "/model")
 
 
 class MenuEndsTests(unittest.TestCase):
