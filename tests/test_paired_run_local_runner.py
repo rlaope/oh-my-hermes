@@ -13,6 +13,7 @@ from _cli_harness import run_cli
 from _local_package import load_local_package
 from _paired_run_local_support import FAKE_HERMES as _FAKE_HERMES
 from _paired_run_local_support import git as _git
+from _paired_run_local_support import read_calls as _read_calls
 
 load_local_package()
 
@@ -114,7 +115,7 @@ class PairedRunLocalRunnerTests(unittest.TestCase):
 
                     self.assertEqual((status, stdout), (2, ""))
                     self.assertIn(expected, stderr)
-                    self.assertFalse((root / "calls.jsonl").exists())
+                    self.assertEqual(_read_calls(root), [])
 
     def test_confirmed_cli_runs_hermes_cells_with_receipts_and_cleanup(self) -> None:
         calls = self._confirmed_run(())
@@ -262,12 +263,7 @@ class PairedRunLocalRunnerTests(unittest.TestCase):
             )
             self.assertNotIn(task_content.strip(), stdout)
             self.assertNotIn(task_content.strip(), persisted)
-            calls = [
-                json.loads(line)
-                for line in (root / "calls.jsonl").read_text(
-                    encoding="utf-8"
-                ).splitlines()
-            ]
+            calls = _read_calls(root)
             cell_calls = [call for call in calls if call["prompt"] == task_content]
             self.assertEqual(len(cell_calls), 2)
             self.assertEqual(len(calls), 4, "one untimed warm-up chat per arm, then the cells")

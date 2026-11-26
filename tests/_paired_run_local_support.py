@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import subprocess
 
@@ -33,11 +34,24 @@ elif "--oneshot" in args:
     prompt = args[args.index("--oneshot") + 1]
 else:
     raise SystemExit("no Hermes query transport in argv")
-with (root / "calls.jsonl").open("a", encoding="utf-8") as handle:
-    handle.write(json.dumps({"argv": args, "prompt": prompt,
-                             "hermes_home": os.environ.get("HERMES_HOME", "")}) + "\n")
+# One file per call: the arms run at the same time, and on Windows two processes appending to one
+# file can lose a line (the C runtime seeks to the end and then writes; it is not an atomic append).
+calls = root / "calls"
+calls.mkdir(exist_ok=True)
+(calls / f"{time.time_ns()}-{os.getpid()}.json").write_text(
+    json.dumps({"argv": args, "prompt": prompt, "hermes_home": os.environ.get("HERMES_HOME", "")}),
+    encoding="utf-8")
 print("completed")
 """
+
+
+def read_calls(root: Path) -> list[dict[str, object]]:
+    """The fake Hermes' chat calls, oldest first (one JSON file per call)."""
+    folder = root / "calls"
+    if not folder.is_dir():
+        return []
+    files = sorted(folder.glob("*.json"), key=lambda f: tuple(int(n) for n in f.stem.split("-")))
+    return [json.loads(f.read_text(encoding="utf-8")) for f in files]
 
 
 def git(repo: Path, *argv: str) -> str:
