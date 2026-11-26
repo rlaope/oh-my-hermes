@@ -21,11 +21,11 @@ import subprocess
 import sys
 import time
 import unittest
-import unittest.mock
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 from urllib.parse import urlencode
 
 from _platform_support import requires_posix
@@ -718,7 +718,7 @@ class WatchWindowsDenialTest(unittest.TestCase):
         # 3 x 50 ms used to be all it got: on a busy runner a lockless read outlasted that and the tick exited 6.
         path = self.root / "pr-42.json"
         flaky, calls = self.denied(os.replace, 8)
-        with unittest.mock.patch.object(self.mod.os, "replace", flaky):
+        with mock.patch.object(self.mod.os, "replace", flaky):
             self.mod.write_state(path, {"rounds_floor": 1})
         self.assertEqual(len(calls), 9)
         self.assertEqual(json.loads(path.read_text(encoding="utf-8")), {"rounds_floor": 1})
@@ -727,23 +727,23 @@ class WatchWindowsDenialTest(unittest.TestCase):
     def test_a_replace_denied_past_the_wait_still_fails(self):
         path = self.root / "pr-42.json"
         flaky, _ = self.denied(os.replace, 10**6)
-        with unittest.mock.patch.object(self.mod, "REPLACE_WAIT_S", 0.2), \
-                unittest.mock.patch.object(self.mod.os, "replace", flaky), self.assertRaises(PermissionError):
+        with mock.patch.object(self.mod, "REPLACE_WAIT_S", 0.2), \
+                mock.patch.object(self.mod.os, "replace", flaky), self.assertRaises(PermissionError):
             self.mod.write_state(path, {"rounds_floor": 1})
         self.assertEqual(list(self.root.iterdir()), [])
 
     def test_a_lock_denied_while_another_tick_releases_it_is_taken(self):
         lock = self.root / "pr-42.json.lock"
         flaky, calls = self.denied(os.open, 3)
-        with unittest.mock.patch.object(self.mod.os, "open", flaky):
+        with mock.patch.object(self.mod.os, "open", flaky):
             self.assertTrue(self.mod.take_lock(lock))
         self.assertEqual(len(calls), 4)
         self.assertTrue(lock.exists())
 
     def test_a_lock_denied_past_the_wait_still_fails(self):
         flaky, _ = self.denied(os.open, 10**6)
-        with unittest.mock.patch.object(self.mod, "LOCK_WAIT_S", 0.2), \
-                unittest.mock.patch.object(self.mod.os, "open", flaky), self.assertRaises(PermissionError):
+        with mock.patch.object(self.mod, "LOCK_WAIT_S", 0.2), \
+                mock.patch.object(self.mod.os, "open", flaky), self.assertRaises(PermissionError):
             self.mod.take_lock(self.root / "pr-42.json.lock")
 
 
