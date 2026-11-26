@@ -4,6 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: starting a thread makes one thread, or says why not.** A double press on a bot's hover + made two
+  "Untitled" threads (a fresh key per press), and a refused `thread.create` (a gateway error, the 48-open-thread cap),
+  a refused Task / Hand to bot start or a failed thread Stop showed nothing: the error only reached cards and the
+  model picker. A second press now reuses the create in flight, each failure puts a line where the person acted, and
+  `./thread <task>` gives the typed task back when the create is refused. `apps/omher/src/state/store.ts`.
 - **omher terminal: an address a table cell breaks across rows opens whole.** Claude Code's markdown tables put
   real newlines inside a cell, so `https://github.com/` sat on one row and `sgl-project/sglang/pull/…` under it; the
   web-links add-on joins only rows xterm itself wrapped, linked the first piece alone, and Cmd+click opened

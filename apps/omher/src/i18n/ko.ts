@@ -1590,6 +1590,8 @@ export const ko: Record<Key, string> = {
   "thread.stopRemove": "멈추고 빼기",
   "thread.cancel": "취소",
   "thread.removeFailed": "스레드를 빼지 못했어요: {error}",
+  "thread.newFailed": "스레드를 시작하지 못했어요: {error}",
+  "thread.stopFailed": "스레드를 멈추지 못했어요: {error}",
   "thread.st.running": "작업 중",
   "thread.st.needs": "확인 필요",
   "thread.st.done": "완료",

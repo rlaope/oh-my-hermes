@@ -1593,6 +1593,8 @@ export const en = {
   "thread.stopRemove": "Stop and remove",
   "thread.cancel": "Cancel",
   "thread.removeFailed": "Could not remove the thread: {error}",
+  "thread.newFailed": "Could not start a thread: {error}",
+  "thread.stopFailed": "Could not stop the thread: {error}",
   "thread.st.running": "Working",
   "thread.st.needs": "Needs you",
   "thread.st.done": "Done",
