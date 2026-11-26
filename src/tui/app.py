@@ -1227,8 +1227,7 @@ COPY_DROPPED_NOTE = "not copied ({why})"  # a copy herdr drops (`clipboard.HERDR
 # `omh-*` and `ulw-*` slugs) up to half the terminal; a name longer than that pushes only its own summary.
 MENU_NAME_CELLS = 16
 SESSION_LIST_LIMIT = 100  # visible rows per picker page; Ctrl+G extends the search to older pages
-# Bare `/resume` (or Ctrl+X) has no echo, so until Hermes answers the list this row stands where the
-# picker will open, under the queued prompts; keys still go to the composer, and the picker opens with an empty filter.
+# The launcher resume picker has no echo; until Hermes answers, its loading row stands where the picker opens.
 SESSIONS_LOADING_LINE = "Loading sessions…"
 # Hermes lists the gateway profile's own store, newest first, and leaves archived, hidden (Bot Mode) and internal
 # (kanban, one-shot, tool) sessions out (`tui_gateway/methods_session.py` `_listing_rows`).
@@ -8067,7 +8066,7 @@ class App(ModesMixin, AgentViewMixin):
             return
         if command is not None and command.route in (LOCAL, HERMES, DROPPED) or not self.sid:
             if command is not None and command.route == LOCAL:
-                if command.name == "sessions" and invocation.name.lower() != "resume" and not invocation.arg:
+                if command.name == "sessions" and not invocation.arg:
                     self._profile_sessions()
                 else:
                     self._local_handlers()[command.name](invocation.arg)

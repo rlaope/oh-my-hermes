@@ -194,8 +194,8 @@ newest user and assistant messages of its listed segment into a read-only
 pager. The picker supplies an in-memory handle, and the reader checks the
 registered profile, store identity and row eligibility again. It sends no
 RPC, writes no transcript, and cannot resume or change that session. Bare
-`/resume` and the launcher's resume picker keep their gateway-only scope;
-exact-title lookups still go through the gateway.
+`/resume` and Ctrl+X use this table; the launcher's resume picker keeps its
+gateway-only scope. Exact-title lookups still go through the gateway.
 
 Leaving a session (`/new`, a switch) declines that session's open requests and
 says so in the new transcript. Shift+Tab is the one key that changes what

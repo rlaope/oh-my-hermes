@@ -144,12 +144,14 @@ class CtrlXTests(unittest.TestCase):
         self.assertIsNotNone(app.picker.profiles)
         self.assertEqual(client.calls[0], ("session.list", {"limit": SESSION_LIST_LIMIT}))
 
-    def test_resume_keeps_the_gateway_only_picker(self) -> None:
+    def test_resume_opens_the_all_profile_table(self) -> None:
         app, client = make_app()
         type_text(app, "/resume")
         app._on_input(Key(ENTER))
-        self.assertIsNone(app.picker)
+        self.assertIsNotNone(app.picker)
+        self.assertIsNotNone(app.picker.profiles)
         self.assertEqual(client.calls[0], ("session.list", {"limit": SESSION_LIST_LIMIT}))
+        self.assertEqual(app.composer.text, "")
 
     def test_ctrl_x_keeps_the_draft_underneath(self) -> None:
         app, client = make_app()

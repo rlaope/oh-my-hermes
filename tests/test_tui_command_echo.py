@@ -12,7 +12,7 @@ import unittest
 
 from test_tui_modes import answer, make_app, notices
 from test_tui_muscle_memory import commands, send
-from omh.tui.app import REWIND_BUSY_NOTICE, SESSIONS_EMPTY_NOTICE
+from omh.tui.app import REWIND_BUSY_NOTICE
 from omh.tui.slash import COMMANDS, LOCAL
 from omh.tui.transcript import AssistantBlock
 
@@ -52,16 +52,15 @@ class EchoTests(unittest.TestCase):
         self.assertEqual(commands(app), ["/usage"])
 
     def test_what_a_quiet_command_says_during_a_turn_waits_under_what_runs(self) -> None:
-        # With no echo to hold it, a notice from /rewind, /logs or /resume must not close the streaming reply;
-        # it is written once the turn's next boundary comes. For /rewind and /resume, a turn starts while the list is out.
+        # With no echo to hold it, a notice from /rewind or /logs must not close the streaming reply;
+        # it is written once the turn's next boundary comes. /rewind may answer after a turn starts.
         said = {
             "rewind": REWIND_BUSY_NOTICE,
             "logs": "The gateway has written nothing to stderr.",
-            "resume": SESSIONS_EMPTY_NOTICE,
         }
         for name, notice in said.items():
             with self.subTest(name=name):
-                listed = name in ("rewind", "resume")
+                listed = name == "rewind"
                 app, client = make_app(busy=not listed)
                 client.stderr_tail = lambda: []  # type: ignore[attr-defined]
                 if listed:

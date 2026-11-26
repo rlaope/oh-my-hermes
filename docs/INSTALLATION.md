@@ -1451,17 +1451,16 @@ wake pipe on real Windows pipes.
   rewind goes once that is settled.
   Esc twice with text clears it, keeping it in this session's input history
   (not in Hermes' history file, since it was never sent).
-- `/sessions` (also `/switch`, `/session`, or Ctrl+X) opens a compact table of
+- `/sessions` (also `/resume`, `/switch`, `/session`, or Ctrl+X) opens a compact table of
   sessions across **All local profiles**, with title or preview, profile,
   source and last activity as room allows. Type to filter; Tab and Shift+Tab
   cycle profiles without clearing the filter. Ctrl+G loads older gateway
   sessions when available. The footer tells you whether Enter switches to the
   selected session or opens its read-only history. Only sessions authorized
   by the connected gateway can be switched to, renamed or deleted.
-- Bare `/resume` lists the connected gateway's
-  sessions, most recently active first, as Claude Code's resume picker
-  does: it takes most of the screen, headed `Resume session (2 of 12)`
-  with a rounded search box under it, and shows each session as a card,
+- Bare `/resume` uses the all-profile table too. The launcher's `omh --resume`
+  session picker retains the connected gateway's card-style picker, with a
+  rounded search box above its cards. Each session has a card,
   its name on one row and `2 days ago · 14 messages · tui` under it. The
   one you are in heads the list under `Current` (`this session` until it
   has a title, and `● this session` on its card), and the rest sit under a
