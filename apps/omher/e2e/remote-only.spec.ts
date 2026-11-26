@@ -354,3 +354,155 @@ test("a Check that answers after its form is gone closes its link", async ({ pag
   // nothing reads the server through the closed check
   expect(ops.filter((o) => o.op === "hello" || o.op === "bots.list")).toEqual([]);
 });
+
+// ---- round 2: the page's one outgoing filter and the shell's local-Hermes refusal (rule 46) ----
+
+/** A control op to the mock bridge on its own socket (not the page's). */
+async function mockOp(op: string, params: Record<string, unknown> = {}): Promise<void> {
+  const ws = new WebSocket(`ws://127.0.0.1:${MOCK}/?token=e2e`);
+  await new Promise<void>((res, rej) => {
+    ws.onopen = () => res();
+    ws.onerror = () => rej(new Error("mock websocket error"));
+  });
+  await new Promise<void>((res) => {
+    ws.onmessage = () => res();
+    ws.send(JSON.stringify({ id: "m1", op, ...params }));
+  });
+  ws.close();
+}
+
+type HostCall = { op: string; agent?: string; id?: number; data?: string; cwd?: string };
+const sessionCalls = (page: Page) => page.evaluate(() => ((window as unknown as { __omherSessionCalls?: HostCall[] }).__omherSessionCalls ?? []));
+const shellCalls = (page: Page) => page.evaluate(() => ((window as unknown as { __omherShellCalls?: HostCall[] }).__omherShellCalls ?? []));
+
+/** Seed `omher.resume` once (a reload keeps what the page made of it). */
+async function seedResume(page: Page, resume: Record<string, unknown>, agents: string[]) {
+  await page.addInitScript(
+    ({ resume, agents }) => {
+      const w = window as unknown as Record<string, unknown>;
+      w.__omherMockAgents = agents;
+      if (sessionStorage.getItem("e2e.r2Seeded")) return;
+      sessionStorage.setItem("e2e.r2Seeded", "1");
+      for (const k of ["omher.sessions.recent", "omher.sessions.open", "__omherMockHistory", "__omherMockClaudeConvs"]) localStorage.removeItem(k);
+      localStorage.setItem("omher.resume", JSON.stringify({ v: 1, at: Date.now(), drafts: {}, ...resume }));
+    },
+    { resume, agents },
+  );
+}
+
+test("on a server a saved local terminal's Plans panel reads nothing: no runs.cli, no cwd of this computer on the wire", async ({ page }) => {
+  await stub(page, { mode: "remote", host: "demo@vps", label: "VPS" });
+  const ops = sentOps(page);
+  // verify.md finding 1: the last bot is also on the server, a Claude Code terminal is selected with Plans open
+  await seedResume(
+    page,
+    {
+      bot: "friren",
+      view: "session",
+      session: "s83",
+      panelOpen: true,
+      panelTab: "runs",
+      sessions: [{ id: "s83", agent: "claude", open: "terminal", view: "terminal", running: true, agentSession: "11111111-2222-4333-8444-555555555555", cwd: "/fixture/local/private-worktree", startedAt: 100000 }],
+    },
+    ["claude", "codex"],
+  );
+  await page.goto("/");
+  await expect(page.getByTestId("session-s83")).toBeVisible();
+  await expect(page.getByTestId("terminal")).toBeVisible();
+  await page.waitForTimeout(1_500);
+  // no Plans panel or its button for a session of this computer
+  await expect(page.getByTestId("details-panel")).toHaveCount(0);
+  await expect(page.getByTestId("panel-button")).toHaveCount(0);
+  expect(ops.filter((o) => o.op === "runs.cli" || o.op === "cli.title")).toEqual([]);
+  expect(JSON.stringify(ops)).not.toContain("/fixture/local/private-worktree");
+  // the page was talking to the server all along
+  expect(ops.some((o) => o.op === "bots.list")).toBe(true);
+});
+
+test("on a server a bot's picture is not changed from this computer: no picker, no drop, no bots.set_avatar", async ({ page }) => {
+  await stub(page, { mode: "remote", host: "demo@vps", label: "VPS" });
+  const ops = sentOps(page);
+  await page.goto("/");
+  await page.getByTestId("nav-settings").click();
+  await page.getByTestId("settings-nav-bot-kami").click();
+  await expect(page.getByTestId("bot-head")).toBeVisible();
+  // verify.md finding 2: Change picture, the clickable/droppable picture and its file input are all gone
+  await expect(page.getByTestId("avatar-view")).toBeVisible();
+  await expect(page.getByTestId("avatar-change")).toHaveCount(0);
+  await expect(page.getByTestId("avatar-edit")).toHaveCount(0);
+  await expect(page.getByTestId("avatar-file")).toHaveCount(0);
+  const dt = await page.evaluateHandle(() => {
+    const d = new DataTransfer();
+    d.items.add(new File([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], "this-computer.png", { type: "image/png" }));
+    return d;
+  });
+  await page.getByTestId("avatar-view").dispatchEvent("drop", { dataTransfer: dt });
+  await page.waitForTimeout(500);
+  expect(ops.filter((o) => o.op === "bots.set_avatar")).toEqual([]);
+  // the rest of the bot page still reads from the server
+  expect(ops.some((o) => o.op === "bots.info" || o.op === "models.options")).toBe(true);
+});
+
+test("on a server provider sign-in is the server's: no Add key or Nous button, this computer's hermes is never asked", async ({ page }) => {
+  await stub(page, { mode: "remote", host: "demo@vps", label: "VPS" });
+  await page.addInitScript(() => {
+    const w = window as unknown as Record<string, unknown>;
+    const hostCalls: string[][] = [];
+    w.__authCalls = hostCalls;
+    w.__omherAuthHost = { open: async (p: string) => void hostCalls.push(["open_hermes_auth", p]) };
+    w.__omherSignInHost = { open: async (p: string) => void hostCalls.push(["open_hermes_sign_in", p]) };
+  });
+  await mockOp("mock.reset");
+  try {
+    // verify.md finding 3: a remote bot that reports not ready
+    await mockOp("mock.ready", { bot: "friren", ok: false });
+    await page.goto("/");
+    await page.getByTestId("bot-friren").click();
+    const block = page.getByTestId("connect-block");
+    await expect(block).toBeVisible();
+    await expect(block.getByTestId("connect-on-server")).toContainText("hermes auth add nous");
+    await expect(block.getByTestId("connect-nous")).toHaveCount(0);
+    await expect(block.getByTestId("connect-openai-codex")).toHaveCount(0);
+    // Settings › Providers: the line says where to sign in; there is no Add key anywhere
+    await page.getByTestId("nav-settings").click();
+    await page.getByTestId("settings-nav-providers").click();
+    await expect(page.getByTestId("providers-on-server")).toContainText("hermes auth add <provider>");
+    await expect(page.getByTestId("providers-add-key")).toHaveCount(0);
+    await expect(page.locator('[data-testid^="provider-key-"]')).toHaveCount(0);
+    expect(await page.evaluate(() => (window as unknown as { __authCalls: string[][] }).__authCalls)).toEqual([]);
+  } finally {
+    await mockOp("mock.reset");
+  }
+});
+
+test("on a server a saved oh-my-hermes terminal is not started, by itself or by Resume; a Shell row never types omh", async ({ page }) => {
+  await stub(page, { mode: "remote", host: "demo@vps", label: "VPS" });
+  // verify.md finding 4: OMH installed here, a running TERMINALS omh row, and a Shell row that had omh in front
+  await seedResume(
+    page,
+    {
+      bot: "kami",
+      view: "session",
+      session: "s91",
+      sessions: [
+        { id: "s91", agent: "omh", open: "terminal", view: "terminal", running: true, cwd: "/fixture/local/omh-work", startedAt: 100000, linkId: "abcdefgh23" },
+        { id: "s92", agent: "shell", view: "terminal", running: true, cwd: "/fixture/local/shell-work", startedAt: 100001, fgCli: "omh", linkId: "abcdefgh24" },
+      ],
+    },
+    ["claude", "codex", "omh"],
+  );
+  await page.goto("/");
+  await expect(page.getByTestId("session-s91")).toBeVisible();
+  // the omh row is paused, saying why
+  await expect(page.getByTestId("session-paused")).toContainText("oh-my-hermes on this computer isn’t started");
+  await page.getByTestId("session-resume").click();
+  await expect(page.getByTestId("session-paused")).toBeVisible();
+  // the Shell row's own shell is this computer's terminal and starts; nothing is typed into it
+  await expect.poll(async () => (await shellCalls(page)).filter((c) => c.op === "start").length, { timeout: 10_000 }).toBe(1);
+  await page.waitForTimeout(4_000);
+  expect((await sessionCalls(page)).filter((c) => c.op === "start")).toEqual([]);
+  expect((await shellCalls(page)).filter((c) => c.op === "write")).toEqual([]);
+  // the rows are kept as saved, for when this computer is used again
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("omher.resume") || "null"));
+  expect(saved.sessions.find((x: { id: string }) => x.id === "s91")).toMatchObject({ agent: "omh", cwd: "/fixture/local/omh-work" });
+});

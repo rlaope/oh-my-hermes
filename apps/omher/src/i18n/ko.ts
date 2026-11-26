@@ -1916,4 +1916,7 @@ export const ko: Record<Key, string> = {
   "remote.noFolderChat": "omher가 서버를 쓰는 중이라 그 봇들은 이 컴퓨터의 폴더에서 일할 수 없어요.",
   "remote.noFiles": "omher가 서버를 쓰는 중이라 이 컴퓨터의 파일은 그 봇들에게 보낼 수 없어요.",
   "remote.noInstall": "omher가 서버를 쓰는 중이라 이 컴퓨터에는 아무것도 설치하지 않아요.",
+  "remote.notHere": "omher가 서버를 쓰는 중이라, 그 봇들이 볼 수 없는 이 컴퓨터의 폴더나 세션은 읽지 않아요.",
+  "remote.authOnServer": "omher가 서버를 쓰는 중이에요: 로그인이나 키 추가는 서버의 터미널에서 {cmd}로 해 주세요.",
+  "remote.noLocalHermes": "omher가 서버를 쓰는 중이라 이 컴퓨터의 oh-my-hermes는 시작하지 않아요. 다시 쓰려면 이 컴퓨터 사용으로 돌아가세요.",
 };

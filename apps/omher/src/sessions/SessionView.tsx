@@ -50,6 +50,7 @@ import { getSplit, groupOf } from "./splitState";
 import { mergePartner, mergeTargetAt, pressToSplit } from "./splitDrag";
 import { isCopyLinkKey, LINK_COPIED_EVENT } from "./termLink";
 import { TermShareCards } from "./TermShareCard";
+import { useServerMode } from "../app/remote";
 
 const STATUS: Record<string, Key> = { starting: "ss.starting", running: "ss.running", exited: "ss.ended", failed: "ss.couldNotStart" };
 
@@ -860,6 +861,8 @@ function TermHeadState({ rec, unseen }: { rec: SessionRec; unseen: Unseen | unde
 }
 
 export function SessionView() {
+  // on a server (rule 46) a session of this computer has no Plans panel (SessionPanel)
+  const remote = useServerMode().mode === "remote";
   const s = useStore();
   const ss = useSessions();
   const sp = useSplit();
@@ -1052,7 +1055,7 @@ export function SessionView() {
               </button>
             )}
             {showChat && <SessionModel rec={rec} options={ss.models[rec.id]} note={ss.notes[rec.id]} />}
-            {showChat && <PanelToggle working={workingSubagents(c)} />}
+            {showChat && !remote && <PanelToggle working={workingSubagents(c)} />}
           </div>
         )}
         {termHead && (

@@ -1920,4 +1920,7 @@ export const en = {
   "remote.noFolderChat": "omher uses a server: its bots can’t work in a folder of this computer.",
   "remote.noFiles": "omher uses a server: files from this computer can’t be sent to its bots.",
   "remote.noInstall": "omher uses a server: nothing is installed on this computer.",
+  "remote.notHere": "omher uses a server: this reads a folder or session of this computer, which its bots can’t see.",
+  "remote.authOnServer": "omher uses a server: sign in or add keys there, with {cmd} in a terminal on the server.",
+  "remote.noLocalHermes": "omher uses a server: oh-my-hermes on this computer isn’t started. Use this computer to run it again.",
 };

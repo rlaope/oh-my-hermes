@@ -1,4 +1,7 @@
 import type { BridgeError, BridgeEvent, EventName, EventOf, Op, OpParams, OpResult } from "./protocol";
+import { modeIsKnown, modeKnown, remoteOnly } from "../app/remote";
+import { t } from "../i18n";
+import { mayRefuse, remoteRefusal } from "./remoteOps";
 
 export type BridgeStatus = "connecting" | "open" | "closed";
 
@@ -70,6 +73,13 @@ export class BridgeClient {
   }
 
   request<K extends Op>(op: K, params?: OpParams<K>): Promise<OpResult<K>> {
+    // Remote-only mode's one outgoing filter (rule 46, remoteOps.ts): an op that could carry this computer's folder,
+    // path or file bytes waits until the mode is known, and on a server it is refused here, before the socket
+    if (mayRefuse(op) && !modeIsKnown()) return modeKnown().then(() => this.request(op, params));
+    if (remoteOnly()) {
+      const why = remoteRefusal(op, params as Record<string, unknown> | undefined);
+      if (why) return Promise.reject<OpResult<K>>({ code: "remote_only", message: t(why) });
+    }
     const ws = this.ws;
     if (!ws || ws.readyState !== 1) {
       return Promise.reject<OpResult<K>>({ code: "disconnected", message: "bridge is not connected" });

@@ -1916,4 +1916,7 @@ export const ja: Record<Key, string> = {
   "remote.noFolderChat": "omher はサーバーを使用中のため、そのボットはこのコンピューターのフォルダーでは作業できません。",
   "remote.noFiles": "omher はサーバーを使用中のため、このコンピューターのファイルはそのボットに送れません。",
   "remote.noInstall": "omher はサーバーを使用中のため、このコンピューターには何もインストールしません。",
+  "remote.notHere": "omher はサーバーを使用中のため、そのボットから見えないこのコンピューターのフォルダーやセッションは読みません。",
+  "remote.authOnServer": "omher はサーバーを使用中です。サインインやキーの追加は、サーバーのターミナルで {cmd} を実行してください。",
+  "remote.noLocalHermes": "omher はサーバーを使用中のため、このコンピューターの oh-my-hermes は起動しません。再び使うには、このコンピューターを使うに戻してください。",
 };

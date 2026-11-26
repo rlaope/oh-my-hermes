@@ -1916,4 +1916,7 @@ export const zh: Record<Key, string> = {
   "remote.noFolderChat": "omher 正在使用服务器：那里的机器人无法在这台电脑的文件夹里工作。",
   "remote.noFiles": "omher 正在使用服务器：这台电脑上的文件无法发送给那里的机器人。",
   "remote.noInstall": "omher 正在使用服务器：不会在这台电脑上安装任何东西。",
+  "remote.notHere": "omher 正在使用服务器：不会读取这台电脑上那里的机器人看不到的文件夹或会话。",
+  "remote.authOnServer": "omher 正在使用服务器：请在服务器的终端中运行 {cmd} 来登录或添加密钥。",
+  "remote.noLocalHermes": "omher 正在使用服务器：不会启动这台电脑上的 oh-my-hermes。要再次运行，请改回使用这台电脑。",
 };

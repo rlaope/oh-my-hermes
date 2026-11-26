@@ -10,6 +10,7 @@ import { ProviderMark } from "./ProviderMark";
 import { PROVIDER_ID, authCommand, authHost, keyProviders } from "./authHost";
 import { countLabel, filterGroups, groupModels } from "./group";
 import { t, tx } from "../../i18n";
+import { useServerMode } from "../../app/remote";
 
 /** More models than this get a filter box. */
 const FILTER_AT = 20;
@@ -20,6 +21,8 @@ export function ProvidersPage() {
   const name = s.selectedBot ?? s.bots[0]?.name ?? null;
   const opts = name ? s.models[name] : undefined;
   const bot = s.bots.find((b) => b.name === name);
+  // on a server (rule 46) Hermes' sign-in runs there: no Add key here (it would run this computer's `hermes`)
+  const remote = useServerMode().mode === "remote";
   // explicit open/closed per slug; unset = open only for the provider in use
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [key, setKey] = useState<{ provider: string; state: "opened" | "manual" | "error"; error?: string } | null>(null);
@@ -56,7 +59,13 @@ export function ProvidersPage() {
   return (
     <div className="st-page">
       <div className="st-gh st-gh0">{t("set.providers")}</div>
-      <SetupLine />
+      {remote ? (
+        <p className="st-note pv-setup" data-testid="providers-on-server">
+          {tx("remote.authOnServer", { cmd: <code>{SETUP_CMD}</code> })}
+        </p>
+      ) : (
+        <SetupLine />
+      )}
       <div className="st-grp pv-list" data-testid="providers-list">
         {!opts ? (
           <div className="pv-empty">{bot?.status === "offline" ? t("bot.offline") : t("pv.loading")}</div>
@@ -68,12 +77,12 @@ export function ProvidersPage() {
               opts={opts}
               open={open[p.slug] ?? p.slug === opts.current.provider}
               onToggle={(v) => setOpen((o) => ({ ...o, [p.slug]: v }))}
-              onAddKey={addKey}
+              onAddKey={remote ? undefined : addKey}
             />
           ))
         )}
       </div>
-      <AddKey slugs={opts?.providers.map((p) => p.slug) ?? []} onPick={addKey} />
+      {!remote && <AddKey slugs={opts?.providers.map((p) => p.slug) ?? []} onPick={addKey} />}
       {key && (
         <p className="st-note pv-keynote" data-testid="providers-key-note" role="status">
           {key.state === "opened"
@@ -159,7 +168,8 @@ function ProviderItem({
   opts: ModelOptions;
   open: boolean;
   onToggle: (open: boolean) => void;
-  onAddKey: (provider: string) => void;
+  /** Absent on a server: no Add key on a provider row. */
+  onAddKey?: (provider: string) => void;
 }) {
   const inUse = p.slug === opts.current.provider;
   const bodyId = `pv-models-${p.slug}`;
@@ -189,7 +199,7 @@ function ProviderItem({
             <ChevronRight size={9} />
           </span>
         </button>
-        {PROVIDER_ID.test(p.slug) && (
+        {onAddKey && PROVIDER_ID.test(p.slug) && (
           <button
             type="button"
             className="pv-key"

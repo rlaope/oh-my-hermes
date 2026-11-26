@@ -13,13 +13,16 @@ export interface ServerMode {
 let current: ServerMode = { mode: "local" };
 const subs = new Set<() => void>();
 let markKnown: () => void = () => {};
-const known = new Promise<void>((r) => (markKnown = r));
+let isKnown = false;
+const known = new Promise<void>((r) => (markKnown = () => ((isKnown = true), r())));
 // no shell to ask (browser dev, e2e without the gate stand-in, unit tests): local mode, as before rule 46
 if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window || "__OMHER_GATE__" in window)) markKnown();
 
 /** Settles once the mode is known: the gate's first `bridge_status` answer, or at once when there is no shell to ask.
  *  What would send a folder of this computer on its own (a restart's folder chats) waits for it. */
 export const modeKnown = (): Promise<void> => known;
+/** Whether `modeKnown()` has settled (the bridge client decides at once then, else it waits for it). */
+export const modeIsKnown = (): boolean => isKnown;
 
 /** The gate's latest `bridge_status`: the mode it names (a status without one is local, as before rule 46). */
 export function noteServerMode(s: { mode?: string; host?: string; label?: string } | null | undefined): void {

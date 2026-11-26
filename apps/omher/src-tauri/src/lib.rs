@@ -172,6 +172,20 @@ pub(crate) fn web_link(url: &str) -> bool {
     !host.is_empty() && !host.contains('@') && !host.contains('\\')
 }
 
+/// Remote-only mode's one shell refusal (BOUNDARY rule 46): while omher uses a server, nothing resolves or runs this
+/// computer's Hermes, oh-my-hermes or Hermes' Python. Every command in [`LOCAL_HERMES_COMMANDS`] calls it first (a test
+/// reads each one's body), and `sessions_agents` asks it before looking for Hermes here.
+fn refuse_local_hermes_in_remote(remote: &remote::Remote) -> Result<(), String> {
+    if remote.active() {
+        return Err("omher uses a server: Hermes and oh-my-hermes on this computer are not run; use this computer first".into());
+    }
+    Ok(())
+}
+
+/// The commands that resolve or run this computer's `hermes`, `omh` or Hermes' Python, each refused in remote-only mode
+/// by [`refuse_local_hermes_in_remote`] before anything else (`session_start` for an oh-my-hermes agent only).
+const LOCAL_HERMES_COMMANDS: [&str; 4] = ["install_engine", "open_hermes_auth", "open_hermes_sign_in", "session_start"];
+
 /// The line the first-run screen shows as what Install will run.
 #[tauri::command]
 async fn install_engine_command() -> Result<String, String> {
@@ -184,7 +198,7 @@ async fn install_engine_command() -> Result<String, String> {
 /// runs means its end starts no local bridge (`remote::after_install`).
 #[tauri::command]
 async fn install_engine(shell: State<'_, Shell>, on_event: Channel<InstallEvent>) -> Result<Option<i32>, String> {
-    remote::no_install_in_remote_mode(&shell.remote)?;
+    refuse_local_hermes_in_remote(&shell.remote)?;
     if shell.installing.swap(true, Ordering::SeqCst) {
         return Err("the installer is already running".into());
     }
@@ -276,10 +290,12 @@ enum AnyAgent {
     Custom(custom_agents::CustomInfo),
 }
 
+/// In remote-only mode Hermes is not looked for here: the oh-my-hermes row reads as not on this computer.
 #[tauri::command]
-async fn sessions_agents() -> Result<Vec<AnyAgent>, String> {
-    tauri::async_runtime::spawn_blocking(|| {
-        let mut all: Vec<AnyAgent> = sessions::agents_on_this_machine().into_iter().map(AnyAgent::Listed).collect();
+async fn sessions_agents(shell: State<'_, Shell>) -> Result<Vec<AnyAgent>, String> {
+    let local_hermes = refuse_local_hermes_in_remote(&shell.remote).is_ok();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut all: Vec<AnyAgent> = sessions::agents_on_this_machine(local_hermes).into_iter().map(AnyAgent::Listed).collect();
         // then the person's own agents, each checked as the file is read now (a broken entry is not listed here)
         all.extend(custom_agents::list_here().agents.into_iter().map(AnyAgent::Custom));
         all
@@ -359,6 +375,9 @@ async fn session_start(
     on_data: Channel<InvokeResponseBody>,
     on_exit: Channel<Option<u32>>,
 ) -> Result<u32, String> {
+    if sessions::runs_local_hermes(&agent) {
+        refuse_local_hermes_in_remote(&shell.remote)?;
+    }
     let sessions = shell.sessions.clone();
     tauri::async_runtime::spawn_blocking(move || {
         // The account Settings › Accounts picked for new sessions of this agent's CLI (or, for a session started
@@ -813,7 +832,8 @@ pub(crate) fn media_target<S: Fn(&str) -> bool>(path: &str, served: S) -> Result
 /// `hermes auth add <provider> --type api-key` (rule 23). Hermes asks for the key there and stores it; omher
 /// takes only the provider id, checked by `hermes_auth::valid_provider`, and never sees the key.
 #[tauri::command]
-async fn open_hermes_auth(provider: String) -> Result<(), String> {
+async fn open_hermes_auth(shell: State<'_, Shell>, provider: String) -> Result<(), String> {
+    refuse_local_hermes_in_remote(&shell.remote)?;
     tauri::async_runtime::spawn_blocking(move || hermes_auth::open(hermes_auth::Form::ApiKey, &provider)).await.map_err(|e| e.to_string())?
 }
 
@@ -821,7 +841,8 @@ async fn open_hermes_auth(provider: String) -> Result<(), String> {
 /// 23), Hermes' own sign-in for that provider. Only `openai-codex` and `nous` pass
 /// (`hermes_auth::SIGN_IN`); omher never sees what the person types there.
 #[tauri::command]
-async fn open_hermes_sign_in(provider: String) -> Result<(), String> {
+async fn open_hermes_sign_in(shell: State<'_, Shell>, provider: String) -> Result<(), String> {
+    refuse_local_hermes_in_remote(&shell.remote)?;
     tauri::async_runtime::spawn_blocking(move || hermes_auth::open(hermes_auth::Form::SignIn, &provider)).await.map_err(|e| e.to_string())?
 }
 
@@ -1309,7 +1330,32 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{allowed_external, media_target, past_home_in};
+    use super::{allowed_external, media_target, past_home_in, LOCAL_HERMES_COMMANDS};
+
+    /// Rule 46's shell audit: each command that resolves or runs this computer's Hermes, oh-my-hermes or Hermes' Python
+    /// asks `refuse_local_hermes_in_remote` before it does anything else, and nothing else calls the local install,
+    /// sign-in or Hermes look-up. (Its refusal itself: `remote::tests`.)
+    #[test]
+    fn every_local_hermes_command_refuses_first_in_remote_mode() {
+        let src = include_str!("lib.rs");
+        let src = &src[..src.find("#[cfg(test)]").unwrap()];
+        for name in LOCAL_HERMES_COMMANDS {
+            let at = src.find(&format!("async fn {name}(")).unwrap_or_else(|| panic!("{name} is not a command here"));
+            let body = &src[at..];
+            let body = &body[body.find(") -> Result<").unwrap()..];
+            let body = &body[..body.find("\n}\n").unwrap()];
+            let guard = body.find("refuse_local_hermes_in_remote(&shell.remote)?;").unwrap_or_else(|| panic!("{name} has no refusal"));
+            let first_work = ["spawn_blocking", "shell.installing", "shell.sessions"].iter().filter_map(|w| body.find(w)).min().unwrap();
+            assert!(guard < first_work, "{name} refuses only after it started work");
+        }
+        // the calls that reach this computer's Hermes are only in those commands (and the guarded inventory)
+        // (each call is named in pieces here, so this test does not count itself; setup.rs counts the installer's)
+        for (call, owners) in [("hermes_auth::open", 2), ("setup::run_install", 1), ("sessions.start_agent", 1), ("agents_on_this_machine(local_hermes)", 1)] {
+            let call = if call.ends_with(')') { call.to_string() } else { format!("{call}(") };
+            assert_eq!(src.matches(call.as_str()).count(), owners, "{call}");
+        }
+        assert!(src.contains("let local_hermes = refuse_local_hermes_in_remote(&shell.remote).is_ok();"));
+    }
 
     #[test]
     fn a_session_account_whose_folder_is_gone_is_not_read_elsewhere() {

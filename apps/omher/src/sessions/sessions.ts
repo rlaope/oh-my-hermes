@@ -37,7 +37,7 @@ import { savedPanelKeys } from "../terminal/state";
 import { termTheme } from "./term/themes";
 import { getShellHost, learnThisHost } from "../terminal/host";
 import { onSessionFg } from "./fg";
-import { fgHasId, isFgCli, isUuid, restoreLine } from "./fgResume";
+import { fgHasId, fgLine, isFgCli, isUuid, restoreLine } from "./fgResume";
 import { nextBusySince, termActs } from "./termActivity";
 import { isLinkId, LINK_COPIED_EVENT, newLinkId, termLinkUrl } from "./termLink";
 import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, idInUse, installLine, isBuiltin, isGone, isShell, isTerminalRec, LAST_LINE_MAX, refusedResume, SHELL, termEnd, termMarkAgent, lastPrintedLine, OPEN_KEY, setsUpScreen, UI_BYTES, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, termGroups, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
@@ -1458,6 +1458,18 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     t.told = null;
     // the terminal view of a chat session does not decide the session's status; the chat does
     const ofChat = sessionMode(state.agents, r) !== "terminal";
+    // oh-my-hermes on a server (rule 46): this computer's `omh` (a Hermes Python launcher) is not started, not after a
+    // restart and not on sight; the row stays paused with why, as a folder chat does (the shell refuses it too)
+    if (!shell && !ofChat && r.agent === "omh") {
+      await modeKnown();
+      if (t.run !== run) return;
+      if (remoteOnly()) {
+        termAgain.delete(id);
+        t.closed = true;
+        patchRec(id, { status: "exited", exitCode: null, paused: true, error: tr("remote.noLocalHermes") });
+        return;
+      }
+    }
     // a TERMINALS Claude Code or Codex session that has its own conversation continues it: put back after a restart
     // (by itself, once) and on Restart; Claude Code's terminal view of a chat continues the chat's conversation
     if (!ofChat) termAgain.delete(id);
@@ -2020,6 +2032,12 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const pty = t.hostId;
     const still = () => terms.get(id) === t && t.run === run && t.restore === line && !t.closed && !t.held && t.hostId === pty && !rec(id)?.fgAgent;
     if (pty === null || !still()) return dropRestore(id, t);
+    // on a server (rule 46) the `omh` line is never typed: it would start this computer's oh-my-hermes
+    if (line === fgLine("omh")) {
+      await modeKnown();
+      if (remoteOnly()) return dropRestore(id, t);
+      if (!still()) return dropRestore(id, t);
+    }
     const front = await getShellHost().shellInFront(pty).catch(() => false);
     if (terms.get(id) !== t || t.run !== run) return;
     if (!front || !still()) return dropRestore(id, t);
@@ -2150,6 +2168,11 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const mode = sessionMode(state.agents, r);
     if (mode === "chat") return restart(id);
     if (mode === "terminal") {
+      // oh-my-hermes on a server: this computer's `omh` is not started (rule 46); the row stays paused with why
+      if (r.agent === "omh" && remoteOnly()) {
+        patchRec(id, { error: tr("remote.noLocalHermes") });
+        return;
+      }
       // the terminal view starts the program when it mounts
       patchRec(id, { paused: undefined, status: "starting", error: undefined, exitCode: null });
       return;

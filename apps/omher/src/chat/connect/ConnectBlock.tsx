@@ -11,6 +11,7 @@ import type { Bot } from "../../lib/protocol";
 import { getStore } from "../../state/store";
 import { t, tx } from "../../i18n";
 import { signInHost } from "../../settings/providers/authHost";
+import { useServerMode } from "../../app/remote";
 import { SIGN_IN, getReady, useBotReady, type SignIn } from "./ready";
 import "./connect.css";
 
@@ -25,6 +26,8 @@ export function ConnectBlock({ bot }: { bot: Bot }) {
   const r = useBotReady(bot.name);
   const [problem, setProblem] = useState<{ provider: SignIn; error?: string } | null>(null);
   const was = useRef(r.status);
+  // on a server (rule 46) the sign-in runs there: the block says so instead of offering this computer's `hermes`
+  const remote = useServerMode().mode === "remote";
   useEffect(() => {
     if (bot.status !== "offline") void getReady().ensure(bot.name);
   }, [bot.name, bot.status, r.stale]);
@@ -55,6 +58,11 @@ export function ConnectBlock({ bot }: { bot: Bot }) {
       <div className="cn-t" data-testid="connect-text">
         {r.waiting ? t("cn.finish") : t("cn.needs", { bot: bot.display_name })}
       </div>
+      {remote ? (
+        <div className="cn-t cn-sub" data-testid="connect-on-server">
+          {tx("remote.authOnServer", { cmd: <code>{signInCommand("nous")}</code> })}
+        </div>
+      ) : (
       <div className="cn-row">
         {SIGN_IN.map((p) => (
           <button
@@ -72,6 +80,7 @@ export function ConnectBlock({ bot }: { bot: Bot }) {
           {t("cn.key")}
         </button>
       </div>
+      )}
       {problem && (
         <div className="cn-t cn-sub" role="status" data-testid="connect-problem">
           {problem.error

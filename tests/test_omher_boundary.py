@@ -2197,7 +2197,8 @@ class AddKeyOpensOnlyHermesAuthAdd(unittest.TestCase):
         self.assertIn('["auth".into(), "add".into(), provider.into()]', args)
         sig = re.search(r"async fn open_hermes_sign_in\((.*?)\) -> ", self.lib, re.S)
         self.assertIsNotNone(sig)
-        self.assertEqual(sig.group(1).strip(), "provider: String")
+        # the page passes a provider id only; the shell's own state is for rule 46's refusal on a server
+        self.assertEqual(sig.group(1).strip(), "shell: State<'_, Shell>, provider: String")
         self.assertIn("hermes_auth::open(hermes_auth::Form::SignIn, &provider)", self.lib)
         # the page's list is the shell's list, and its stand-in in a browser is e2e's only
         ready = (UI_SRC / "chat" / "connect" / "ready.ts").read_text(encoding="utf-8")
@@ -2238,7 +2239,8 @@ class AddKeyOpensOnlyHermesAuthAdd(unittest.TestCase):
         self.assertIn(".stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null())", self.prod)
         sig = re.search(r"async fn open_hermes_auth\((.*?)\) -> ", self.lib, re.S)
         self.assertIsNotNone(sig)
-        self.assertEqual(sig.group(1).strip(), "provider: String")
+        # the page passes a provider id only; the shell's own state is for rule 46's refusal on a server
+        self.assertEqual(sig.group(1).strip(), "shell: State<'_, Shell>, provider: String")
         self.assertIn("hermes_auth::open(hermes_auth::Form::ApiKey, &provider)", self.lib)
 
     def test_the_page_never_takes_a_key(self) -> None:
@@ -3595,7 +3597,8 @@ class BotPageReadsPersonaAndMemoryOnly(unittest.TestCase):
         # nowhere else in the app names the op or keeps what it answered (unit tests may name it)
         hits = [p.relative_to(UI_SRC).as_posix() for p in UI_SRC.rglob("*.ts*")
                 if ".test." not in p.name and '"bots.page"' in p.read_text(encoding="utf-8")]
-        self.assertEqual(sorted(hits), ["lib/protocol.ts", "state/store.ts"])
+        # lib/remoteOps.ts is rule 46's audit table: it names every op and sends none, keeping no answer
+        self.assertEqual(sorted(hits), ["lib/protocol.ts", "lib/remoteOps.ts", "state/store.ts"])
 
 
 class MessagingPlatformsThroughOmh(unittest.TestCase):
@@ -3744,7 +3747,8 @@ class MessagingPlatformsThroughOmh(unittest.TestCase):
                 self.assertNotIn(bad, text, bad)
         hits = [p.relative_to(UI_SRC).as_posix() for p in UI_SRC.rglob("*.ts*")
                 if ".test." not in p.name and '"bots.platforms"' in p.read_text(encoding="utf-8")]
-        self.assertEqual(sorted(hits), ["lib/protocol.ts", "state/store.ts"])
+        # lib/remoteOps.ts is rule 46's audit table: it names every op and sends none, keeping no answer
+        self.assertEqual(sorted(hits), ["lib/protocol.ts", "lib/remoteOps.ts", "state/store.ts"])
 
 
 class RemoteOnlyMode(unittest.TestCase):
@@ -3766,6 +3770,14 @@ class RemoteOnlyMode(unittest.TestCase):
         "no file of this computer is attached (the chat has no +, drop or paste, and the store refuses `chat.attach`);",
         "the oh-my-hermes offer is hidden, `install_engine` refuses, and an install already running when Connect is pressed"
         " starts no local bridge when it ends;",
+        "Two choke points hold this, each with its own audit.",
+        "On the page, every op goes out through one filter: `BridgeClient.request` asks `remoteRefusal`"
+        " (`src/lib/remoteOps.ts`), whose table `REMOTE_OPS` names every op the page sends;",
+        "and any op the table does not name, and an op it could refuse waits for the shell's mode first.",
+        "In the shell, one helper, `refuse_local_hermes_in_remote`, is called first by every command that resolves or runs"
+        " this computer's Hermes, oh-my-hermes or Hermes' Python (`install_engine`, `open_hermes_auth`,"
+        " `open_hermes_sign_in`, and `session_start` for oh-my-hermes), and `sessions_agents` looks for no Hermes here in"
+        " that mode.",
         "Use this computer (Disconnect) deletes the file, stops the link and starts the local bridge and peer links again.",
     )
 
@@ -3788,7 +3800,7 @@ class RemoteOnlyMode(unittest.TestCase):
     def test_the_installer_refuses_and_starts_nothing_in_remote_mode(self) -> None:
         fn = self.lib[self.lib.index("async fn install_engine("):]
         fn = fn[: fn.index("\n}\n")]
-        self.assertLess(fn.index("remote::no_install_in_remote_mode(&shell.remote)?;"), fn.index("setup::run_install("))
+        self.assertLess(fn.index("refuse_local_hermes_in_remote(&shell.remote)?;"), fn.index("setup::run_install("))
         # the end of an install decides under the link's lock whether the local bridge starts
         self.assertIn("remote::after_install(&shell.remote, &shell.bridge,", fn)
         self.assertNotIn("shell.bridge.start(", fn)
@@ -3808,6 +3820,31 @@ class RemoteOnlyMode(unittest.TestCase):
         self.assertIn("Promise.all([store().resumed, modeKnown()])", sessions)
         chat = (UI_SRC / "chat" / "Chat.tsx").read_text(encoding="utf-8")
         self.assertIn("onSendFiles={remote ? undefined :", chat)
+
+    def test_the_shell_choke_point_guards_every_local_hermes_command(self) -> None:
+        self.assertIn('const LOCAL_HERMES_COMMANDS: [&str; 4] = ["install_engine", "open_hermes_auth", "open_hermes_sign_in", "session_start"];', self.lib)
+        for name in ("install_engine", "open_hermes_auth", "open_hermes_sign_in", "session_start"):
+            fn = self.lib[self.lib.index(f"async fn {name}("):]
+            fn = fn[: fn.index("\n}\n")]
+            self.assertIn("refuse_local_hermes_in_remote(&shell.remote)?;", fn, name)
+        self.assertIn("let local_hermes = refuse_local_hermes_in_remote(&shell.remote).is_ok();", self.lib)
+        self.assertNotIn("no_install_in_remote_mode", self.remote)
+
+    def test_the_page_choke_point_is_the_one_send(self) -> None:
+        bridge = (UI_SRC / "lib" / "bridge.ts").read_text(encoding="utf-8")
+        req = bridge[bridge.index("  request<K extends Op>("):]
+        req = req[: req.index("\n  }\n")]
+        self.assertLess(req.index("remoteRefusal(op,"), req.index("ws.send("))
+        ops = (UI_SRC / "lib" / "remoteOps.ts").read_text(encoding="utf-8")
+        self.assertIn("export const REMOTE_OPS: Record<PageOp, OpRule> = {", ops)
+        for op, rule in (("folder.open", "never"), ("folder.resume", "never"), ("chat.attach", "never"), ("cli.title", "never")):
+            self.assertIn(f'"{op}": {{ send: "{rule}"', ops)
+        for op, field in (("bots.set_avatar", "data"), ("runs.cli", "cwd"), ("thread.create", "cwd")):
+            self.assertIn(f'"{op}": {{ send: "without", field: "{field}"', ops)
+        # the page writes to a bridge socket in one place only
+        sends = [p.relative_to(UI_SRC).as_posix() for p in UI_SRC.rglob("*.ts*")
+                 if ".test." not in p.name and ".send(JSON.stringify(" in p.read_text(encoding="utf-8")]
+        self.assertEqual(sends, ["lib/bridge.ts"])
 
     def test_startup_in_remote_mode_starts_no_bridge_and_no_peers(self) -> None:
         start = self.lib.index("match remote::read_mode(&home) {")
