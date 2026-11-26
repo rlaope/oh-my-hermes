@@ -4,6 +4,18 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A Devin unit now runs inside the filesystem fence and can commit.** On Linux a `devin` unit never completed:
+  the fence had no write root for the CLI's own state, so `devin -p` died at session start with `Failed to lock
+  session ... Read-only file system`. Devin's state tree (`~/.local/share/devin`) is now an owner write root, with
+  the installed program inside it (`cli/_versions`) mounted read-only (a new optional `protected_paths` on the
+  sandbox command: `--ro-bind-try` on bwrap, a `file-write*` deny on sandbox-exec), and the state home follows the
+  preset instead of the free-form executor id. The preset's `accept-edits` mode also rejected `git add` /
+  `git commit` headlessly (`rejected a tool call that requires confirmation`), so a unit could edit but never leave
+  the commit it needs; inside an enforced fence Devin now runs `--permission-mode dangerous`, the way Codex's own
+  sandbox is already turned off there. Without a fence the preset runs as written. Measured end to end on Linux
+  with devin 3000.15.14: a unit edits, commits, passes its verification and is `integration_ready`.
+  (`src/coding/fanout_confinement.py`, `src/coding/fanout_dispatch.py`, `src/quality/cross_harness_adapter_sandbox.py`)
+
 - **omher terminal: an address a table cell breaks across rows opens whole.** Claude Code's markdown tables put
   real newlines inside a cell, so `https://github.com/` sat on one row and `sgl-project/sglang/pull/…` under it; the
   web-links add-on joins only rows xterm itself wrapped, linked the first piece alone, and Cmd+click opened

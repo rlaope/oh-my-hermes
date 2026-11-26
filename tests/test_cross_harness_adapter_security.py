@@ -303,6 +303,19 @@ class AdapterSandboxSecurityTests(_RunnerMixin, unittest.TestCase):
         self.assertEqual(command, expected)
         self.assertFalse(any("try" in part or part in {str(Path.home()), "--share-net"} for part in command))
 
+    def test_linux_protected_path_inside_a_write_root_is_mounted_read_only_last(self) -> None:
+        child = ChildContext(Path("/tmp/scratch"), Path("/tmp/scratch/home"), Path("/tmp/scratch/work"), Path("/tmp/scratch/tmp"), Path("/tmp/scratch/output"), Path("/tmp/scratch/request.json"), Path("/tmp/scratch/output/result.json"), "f" * 64)
+        environment = {"HOME": "/tmp/scratch/home", "PATH": "/usr/bin:/bin", "PYTHONNOUSERSITE": "1"}
+        state = Path("/home/operator/.local/share/devin")
+        program = state / "cli" / "_versions"
+        with patch("src.quality.cross_harness_adapter_sandbox._trusted_bwrap", return_value="/usr/bin/bwrap"):
+            command = sandbox_command(
+                ("/opt/runtime/bin/tool", "run"), "bwrap", (Path("/opt/fixtures"),), child, False, environment,
+                write_roots=(state,), protected_paths=(program,),
+            )
+        self.assertLess(command.index("--bind-try"), command.index("--ro-bind-try"))
+        self.assertEqual(command[command.index("--ro-bind-try"):][:3], ("--ro-bind-try", str(program.resolve()), str(program.resolve())))
+
     def test_linux_owner_state_write_root_is_writable_without_broadening_reads(self) -> None:
         child = ChildContext(Path("/tmp/scratch"), Path("/tmp/scratch/home"), Path("/tmp/scratch/work"), Path("/tmp/scratch/tmp"), Path("/tmp/scratch/output"), Path("/tmp/scratch/request.json"), Path("/tmp/scratch/output/result.json"), "f" * 64)
         environment = {"HOME": "/tmp/scratch/home", "PATH": "/usr/bin:/bin", "PYTHONNOUSERSITE": "1"}

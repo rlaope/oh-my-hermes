@@ -20,6 +20,7 @@ from omh.coding.fanout_confinement import (  # noqa: E402
     _probe,
     git_roots_skip_reason,
     owner_state_directories,
+    owner_state_protected_paths,
     owner_state_files,
     prepare_fanout_filesystem_confinement,
 )
@@ -327,6 +328,16 @@ class _ConfinedSpawnContract:
 @requires_posix
 class FanoutConfinementPolicyTests(unittest.TestCase):
     """Backend-independent policy; nothing here needs a working sandbox."""
+
+    def test_devin_state_is_writable_but_its_installed_program_stays_read_only(self) -> None:
+        home = Path("/tmp/fanout-owner-home").resolve()
+        with mock.patch("omh.coding.fanout_confinement.Path.home", return_value=home):
+            self.assertEqual(owner_state_directories("devin", {}), (home / ".local" / "share" / "devin",))
+            self.assertEqual(
+                owner_state_protected_paths("devin", {}),
+                (home / ".local" / "share" / "devin" / "cli" / "_versions",),
+            )
+            self.assertEqual(owner_state_protected_paths("codex", {}), ())
 
     def test_owner_state_directories_allow_only_the_selected_owner_state(self) -> None:
         home = Path("/tmp/fanout-owner-home").resolve()
