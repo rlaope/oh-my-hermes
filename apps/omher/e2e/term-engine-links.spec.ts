@@ -179,3 +179,43 @@ test("the bell and OSC 9 / OSC 777 still reach xterm's parser with the link and 
   });
   expect(seen).toEqual(["9:build done", "777:notify;title;body"]);
 });
+
+test("an address the program broke across the rows of a table cell opens whole from any of its rows", async ({ page }) => {
+  // Claude Code's markdown table puts real newlines inside a cell: xterm sees three separate rows, and the web-links
+  // add-on alone linked `https://github.com/` (Cmd+click opened github.com)
+  const PR = "https://github.com/sgl-project/sglang/pull/53061";
+  await openApp(page);
+  await newTerminal(page);
+  await feed(
+    page,
+    [
+      "",
+      "│ sglang #53061        │ next cell  │",
+      "│ (https://github.com/ │ Deep       │",
+      "│ sgl-project/sglang/  │ Nemo       │",
+      "│ pull/53061) (extra)  │ GLM        │",
+      "",
+    ].join("\r\n"),
+  );
+  const key = await modKey(page);
+  const urls: string[] = [];
+  for (const text of ["https://github.com/", "sgl-project/sglang/", "pull/53061"]) {
+    await page.mouse.move(5, 400);
+    const p = await hover(page, text);
+    await expect(page.locator(".term-linktip")).toBeVisible();
+    await page.keyboard.down(key);
+    await page.mouse.click(p.x, p.y);
+    await page.keyboard.up(key);
+    urls.push(PR);
+    await expect.poll(() => opened(page)).toEqual(urls);
+  }
+  // the words around it are not links
+  await page.mouse.move(5, 400);
+  const q = await pointAt(page, "(extra)", 0, 6);
+  await page.mouse.move(q.x, q.y);
+  await page.keyboard.down(key);
+  await page.mouse.click(q.x, q.y);
+  await page.keyboard.up(key);
+  await settle(page);
+  expect(await opened(page)).toEqual(urls);
+});
