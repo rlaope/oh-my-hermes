@@ -1417,6 +1417,61 @@ class GoalVerdictTests(unittest.TestCase):
         settled(record, "check", "accepted")
         self.assertEqual(finished(record), ("done", "verified", []))
 
+    def test_a_root_settled_again_after_a_group_for_its_members_failure_is_not_handed_out_again(self) -> None:
+        # The subview run (2026-11-23): verify failed; its group's re-review failed, and that repair became the root's
+        # second group. The root ran again once the second group passed and the parent settled it blocked. Counting
+        # one more group than failures handed the root out again with no repair left: open 40 hours, no child.
+        record = dag_run.new_record(PARENT, "feat", "", "", [
+            node("api", scope=("a.py",)), node("verify", depends_on=("api",), role="verify"),
+        ], time.time())
+        settled(record, "api", "accepted")
+        settled(record, "verify", "failed")
+        dag_run.repair(record, dag_run.derive(record, [], time.time()), "verify", [
+            node("fix1", depends_on=("api",), scope=("a.py",)), node("review2", depends_on=("fix1",), role="review")],
+            time.time())
+        settled(record, "fix1", "accepted")
+        settled(record, "review2", "failed")
+        dag_run.repair(record, dag_run.derive(record, [], time.time()), "review2", [
+            node("fix2", depends_on=("fix1",), scope=("a.py",)), node("verify3", depends_on=("fix2",), role="verify")],
+            time.time())
+        self.assertEqual({item.get("answers") for item in record["nodes"] if item.get("repairs")}, {1})
+        settled(record, "fix2", "accepted")
+        settled(record, "verify3", "accepted")
+        # The second group answers the root's first failure: the root runs again once.
+        derived = dag_run.derive(record, [], time.time())
+        self.assertEqual(derived["verify"]["state"], "ready")
+        settled(record, "verify", "blocked")
+        derived = dag_run.derive(record, [], time.time())
+        self.assertEqual(derived["verify"]["state"], "blocked")
+        self.assertEqual(dag_run.offerable(record, derived, time.time()), [])
+        self.assertEqual(finished(record), ("stopped", "verify_failed", ["verify_failed:verify"]))
+
+    def test_a_group_stored_without_its_answer_is_dated_by_when_it_went_out(self) -> None:
+        # Records written before `repair` stamped ``answers`` (the subview and omher-term-parity runs on disk).
+        record = dag_run.new_record(PARENT, "feat", "", "", [
+            node("api", scope=("a.py",)), node("verify", depends_on=("api",), role="verify"),
+        ], time.time())
+        settled(record, "api", "accepted")
+        settled(record, "verify", "failed")
+        dag_run.repair(record, dag_run.derive(record, [], time.time()), "verify",
+                       [node("fix1", depends_on=("api",), scope=("a.py",)), node("re1", depends_on=("fix1",),
+                                                                                  role="review")], time.time())
+        settled(record, "fix1", "accepted")
+        settled(record, "re1", "failed")
+        dag_run.repair(record, dag_run.derive(record, [], time.time()), "re1",
+                       [node("fix2", depends_on=("fix1",), scope=("a.py",))], time.time())
+        for item in record["nodes"]:
+            item.pop("answers", None)
+        settled(record, "fix2", "accepted")
+        # Times as a real run has them, seconds apart: a coarse clock (Windows) can stamp these calls alike.
+        nodes = {item["id"]: item for item in record["nodes"]}
+        nodes["verify"]["attempts"][0]["settled_at"] = 100.0
+        nodes["fix2"]["attempts"][0]["handed_out_at"] = 200.0
+        self.assertEqual(dag_run.derive(record, [], time.time())["verify"]["state"], "ready")
+        settled(record, "verify", "blocked")
+        nodes["verify"]["attempts"][-1]["settled_at"] = 300.0
+        self.assertEqual(finished(record)[0], "stopped")
+
     def test_a_verify_node_failing_past_its_repair_cycles_is_verify_failed(self) -> None:
         record = dag_run.new_record(PARENT, "feat", "", "", [
             node("api", scope=("a.py",)), node("check", depends_on=("api",), role="verify"),
