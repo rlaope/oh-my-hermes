@@ -8332,6 +8332,21 @@ class Bridge:
         for chat in conn.folders.values():
             if chat.kind == "thread" and chat.id not in out:
                 out[chat.id] = self._thread_row(chat)
+        # a thread not attached in this run (omher started again while Hermes ran on): what Hermes' gateway says that
+        # session is doing now (session.active_list, read only), so its row runs or waits on the person before any
+        # click; the app then opens it (thread.open), which replays its asks. A gateway that cannot tell: idle rows.
+        if any(sid not in conn.folders for sid in out):
+            try:
+                active = (await self._call(conn, "session.active_list")).get("sessions") or []
+            except Exception as e:
+                log.debug("thread.list active_list %s: %s", conn.name, e)
+                active = []
+            for r in active:
+                row = out.get(str(r.get("session_key") or "")) if isinstance(r, dict) else None
+                if row is None or row["thread"] in conn.folders:
+                    continue
+                row["running"] = r.get("status") in ("starting", "working", "waiting", "streaming")
+                row["needs"] = r.get("status") == "waiting"
         # a thread not attached in this run: the folder Hermes saved it with, so its terminal starts there
         bare = [t["thread"] for t in out.values() if not t["cwd"]]
         for sid, cwd in (await asyncio.to_thread(read_session_cwds, conn.bot["path"], bare)).items():
