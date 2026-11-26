@@ -362,7 +362,15 @@ export interface BotTemplates {
 export interface BotCreate {
   outcome: "ok" | "unconfirmed" | "failed";
   bot?: string;
+  /** Logs and old callers only: the page words each outcome itself from `reason` and the parts below. */
   line?: string;
+  /** `failed`: `no_hermes` (not installed), `hermes` (Hermes' own words in `line`), `exit` (stopped with `code`).
+   *  `unconfirmed`: `left` (the folders in `leftovers`) or `running` (the gateway may still be making it). */
+  reason?: "no_hermes" | "hermes" | "exit" | "left" | "running";
+  code?: number | null;
+  leftovers?: string[];
+  /** `unconfirmed`: Hermes' own words, if it said any. */
+  said?: string;
   /** `ok` only: Hermes' own `⚠` lines of the create, and whether one says skills, keys or model were not set up
    *  (the page then holds the template back). */
   notes?: string[];
