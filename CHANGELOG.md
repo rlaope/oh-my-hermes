@@ -10,6 +10,14 @@ All notable changes will be documented here.
   `taskkill /T /F /PID <pid>` (boundary rule 48) and then the child; macOS and Linux still stop the run's process
   group. The bot-draft Add test and two terminal resume specs run again against the current UI, and the README says the
   bridge tests need websockets, pyyaml and ruamel.yaml. (`apps/omher/bridge/omher_bridge.py`)
+- **omher threads: what you do in an open thread acts on that thread.** Esc with a thread open interrupted the
+  bot's main chat (and did nothing when only the thread ran); it now stops the open thread's turn and leaves the main
+  chat alone. Thread rows sit inside their bot's sidebar row, so a slow press on a thread or its × lifted the bot for
+  a drag, and ⌥↑/⌥↓ on a focused thread reordered the bots; presses and keys inside the thread list no longer start
+  either. The open thread counted as off screen: its answers still rang and notified, while the main chat's answers
+  drew no unread, sound or notification. A thread's or folder chat's unread (`fold:` keys, summed into the Dock
+  count) was never cleared, so the Dock count only went up; it now clears when that chat is opened or removed.
+  (`apps/omher/src/state/store.ts`, `apps/omher/src/app/shortcuts.ts`, `apps/omher/src/sidebar/useRowDrag.ts`)
 - **omher: starting a thread makes one thread, or says why not.** A double press on a bot's hover + made two
   "Untitled" threads (a fresh key per press), and a refused `thread.create` (a gateway error, the 48-open-thread cap),
   a refused Task / Hand to bot start or a failed thread Stop showed nothing: the error only reached cards and the
