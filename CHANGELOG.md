@@ -4,6 +4,16 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher terminal: an address a table cell breaks across rows opens whole.** Claude Code's markdown tables put
+  real newlines inside a cell, so `https://github.com/` sat on one row and `sgl-project/sglang/pull/…` under it; the
+  web-links add-on joins only rows xterm itself wrapped, linked the first piece alone, and Cmd+click opened
+  github.com. A second link finder now reads such a cell (or a hard-wrapped paragraph) back together and links every
+  piece to the whole address, through the same opener and rule. Two rows join only when the piece above ends where
+  an address can break or fills its row, the piece below starts at the same left edge, looks like part of an address
+  (a plain word a sentence wrapped is not), and could not have fit on the row above. An address also ends at Hangul, CJK or full-width punctuation now, in both
+  finders: `https://github.com/만` underlined and opened the particle with it.
+  (`apps/omher/src/sessions/term/engine-cell-links.ts`)
+
 - **PR watch: concurrent watches on one PR no longer fail a tick on Windows.** When several watches on the same PR
   ticked at once, Windows answered "access denied" to the lock holder's state replace while another tick was still
   reading the file, or to a new lock while the last holder's was still being deleted. The replace gave up after
@@ -19,40 +29,22 @@ All notable changes will be documented here.
   by none and the run asks for a repair or stops; a group stored before the stamp is dated by when its first node went
   out. (`src/plugin_bundle/omh/dag_run.py`)
 
-- **omher's model picker reads model names, finds the current model, and keeps its maker chips on one row.** The
-  rows and the model button name a model as people say it ("Opus 5.5", "GPT-6.1 Terra"; the id is the title), and Nous
-  Portal's `claude-opus-5.5` spelling now names too; two of a provider's models that would read the same keep their ids.
-  The current row is found by name as well as by id, so a long catalog checks it and scrolls to it on open. The maker
-  chips are one row that scrolls sideways and fades on the side with more (nine chips used to wrap 4 / 4 / 1, "Other"
-  alone), and the list fades where it has more rows instead of cutting a row against the Reasoning heading. With no
-  model listed, the popover is the sentence and "Add one in Bot settings" only, without the search, chips and Reasoning
-  that had nothing to work on. (`apps/omher/src/chat/model/`, `apps/omher/src/runs/format.ts`)
-
 - **OMH TUI: Up/Down walks the input history past slash commands.** Recalling an earlier `/model` or `/config`
   with Up opened the `/` menu over it, and the next Up or Down moved the menu's highlight instead of the history, so
   history stalled at the first slash command. A recalled entry (Up/Down, vim NORMAL `j`/`k`, a Ctrl+R pick) now keeps
   the menu closed over that text: Up/Down walk on, and Enter sends the command exactly as it was. Typing or Backspace
   on it opens the menu again. (#3236, thanks @brixtonpham)
 
-- **omher: `/goal` starts the goal, and Stop ends a goal run.** Typing `/goal <text>` in a bot's chat answered "Goal
-  set (20-turn budget)" but never started a turn, so `/goal status` stayed at 0 turns. omher sent the command as a
-  prompt; Hermes ran it as an admitted turn and queued the goal's first turn where nothing reads it. omher now sends
-  `/goal` through Hermes' own `slash.exec`, as Hermes' TUI and Desktop do, and submits the first turn Hermes hands
-  back. Pressing Stop while a goal was working (`↻ Continuing toward goal (4/20)`) stopped that turn, but Hermes'
-  judge then started the next one, so Stop looked dead. Stop now pauses an active goal before it interrupts, as
-  Ctrl+C does in Hermes' CLI, and the chat says `⏸ Goal paused`; `/goal resume` continues it. A goal that is already
-  paused or done is left alone. (`docs/OMHER-BOUNDARY.md` rule 46)
-
-- **omher: connect to a Hermes on your server over SSH, nothing installed on this computer.** When this computer has no
-  Hermes, the first screen now offers Connect to a server (SSH) next to Install: pick a host from `~/.ssh/config` or
-  type `user@host` (and a port), Check lists the server's bots through the same `ssh` link Remote machines uses (key or
-  ssh agent only; a host that wants a password is told to run `ssh-copy-id`), and Connect saves `~/.omher/remote.json`.
-  From then on omher starts no local bridge and no Python, keeps one link to that server, reconnects it when it drops
-  ("Connection to <name> lost, reconnecting") and talks only to the server's bridge. Settings › General shows the
-  server with Change server and Use this computer. Handing a bot a folder here, folder chats with a local folder and
-  remote machines are off in this mode; terminals stay this computer's own. The update button also shows on the setup
-  and connecting screens. Closes #3229. (`apps/omher/src-tauri/src/remote.rs`, `apps/omher/src/app/RemoteConnect.tsx`,
-  BOUNDARY rule 47)
+- **omher 1.2.3.** Use omher with a Hermes on your server and nothing installed here, `/goal` that runs, a model
+  picker that reads names, pictures that reach the bot, and a sidebar you can widen.
+  - **Remote-only mode:** with no Hermes on this computer, the first screen offers Connect to a server (SSH) next to
+    Install; Check lists the server's bots, Connect runs omher against that Hermes with no local bridge or Python, and
+    nothing of this computer's folders or files goes to the server (#3233, closes #3229; BOUNDARY rule 47).
+  - **Chat:** `/goal` starts the goal and Stop pauses an active goal (#3234); pictures you attach reach the bot, Windows
+    `.jfif` and files with no extension included (#3240).
+  - **Model picker:** models read by name ("Opus 5.5"), the current one is found and scrolled to, and the maker chips
+    stay on one row (#3231).
+  - **Sidebar:** drag its right edge to make it wider or narrower; the width is kept (#3235).
 
 - **A small dag-ulw job can run fast: the parent settles its verify node itself, and several nodes settle in one call.**
   `omh_dag define fast=true` accepts a graph of at most 3 build nodes and 6 nodes in all, with one verify node that
