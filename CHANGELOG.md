@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher bot management: Remove from list, rename and the row menu behave, with the keyboard too.** Remove from
+  list on the open bot switched the view to the chat and threw the person out of Settings or Automations; the chat
+  behind now follows the next bot and the view stays. A renamed bot's threads kept the old name in Needs you and in
+  system notifications (their route label was fixed when the list loaded); renaming rebuilds them. The rename
+  editor's Cancel left a failed save's error for the next pencil press. Closing a bot row's menu (Escape or a pick)
+  dropped the keyboard to the page; it returns to the row's ⋯. The ContextMenu key (or Shift+F10) opened the menu at
+  the window's top-left; it opens under the row. The handover card opened from a Worktrees row gave no way back, so
+  focus was lost on close; it returns to that row. Main files: `apps/omher/src/state/store.ts`,
+  `apps/omher/src/sidebar/BotRow.tsx`.
 - **omher bots page: platform status and bot templates read the live omh.** Dock-launched omher (short PATH), and
   Windows (where `which` finds `omh.cmd` and it is rejected), fell back to `<data>/omh/venv`, the pre-generation env
   an update leaves behind (omh 2.0.0 here), so `platforms` and `bot-templates` failed with "invalid choice".
