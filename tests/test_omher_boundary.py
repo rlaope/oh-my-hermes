@@ -720,10 +720,11 @@ class DocPins(unittest.TestCase):
         # the name by Hermes' rule, the outcome from the folder Hermes made; one more `OMH_READS` entry for the
         # gallery's `profile bot-templates --json`; one apply message once the bot has the template skill); 45: rule 45
         # (a bot on another computer: its platforms read there by that computer's own bridge, asked over the link with
-        # the bare op and nothing in it, once per interval, checked again here, kept in memory only). The rules stay
-        # numbered 1..n with no gap or repeat.
+        # the bare op and nothing in it, once per interval, checked again here, kept in memory only); 46: rule 46
+        # (remote-only mode: one shell-written ~/.omher/remote.json, no local bridge, Python or peer links, one rule 31
+        # link to the server and the page talking only to that bridge). The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 45, len(rules))
+        self.assertTrue(6 <= len(rules) <= 46, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -3101,7 +3102,8 @@ class HandToBotAddsNoRead(unittest.TestCase):
         panel = (UI_SRC / "elsewhere" / "PanelTabs.tsx").read_text(encoding="utf-8")
         self.assertIn("const canHand = () => !bot.host && handBots(getStore().getSnapshot().bots).length > 0;", panel)
         self.assertIn("if (!canHand()) return;", panel)
-        self.assertIn('export const handBots = (bots: Bot[]) => bots.filter((b) => !b.host && b.status !== "offline");', self.card)
+        # none at all in remote-only mode (rule 46): every bot runs on the server, which cannot read a folder here
+        self.assertIn('export const handBots = (bots: Bot[]) => (remoteOnly() ? [] : bots.filter((b) => !b.host && b.status !== "offline"));', self.card)
         rows = (UI_SRC / "sessions" / "SessionsSection.tsx").read_text(encoding="utf-8")
         self.assertIn("termMenuItems(rec, handBots(getStore().getSnapshot().bots).length > 0)", rows)
         # a split card's cell offers it through the row's own items and card, never a Hand path of its own
@@ -3743,6 +3745,55 @@ class MessagingPlatformsThroughOmh(unittest.TestCase):
         hits = [p.relative_to(UI_SRC).as_posix() for p in UI_SRC.rglob("*.ts*")
                 if ".test." not in p.name and '"bots.platforms"' in p.read_text(encoding="utf-8")]
         self.assertEqual(sorted(hits), ["lib/protocol.ts", "state/store.ts"])
+
+
+class RemoteOnlyMode(unittest.TestCase):
+    """Rule 46: remote-only mode is one shell-written mode file; in it the shell starts no local bridge, no Python and no
+    peer links, keeps one link made by rule 31's `peers::connect`, and the peer commands refuse."""
+
+    RULE_46 = (
+        "46. omher can run with nothing installed on this computer, using the Hermes on a server the person reaches over"
+        " `ssh` (remote-only mode, issue #3229).",
+        "The mode is one file, `~/.omher/remote.json` (`{\"v\":1,\"host\":\"user@host\",\"port\":22|null,\"label\":\"...\"}`),"
+        " which only the desktop shell writes, and only when the person presses Connect",
+        "While the file is valid the shell starts no local bridge and no Python (no Hermes discovery, no install screen)"
+        " and runs no rule 31 peer links: `peers_check`, `peers_add` and `peers_retry` refuse,",
+        "It keeps one link to the server, made by rule 31's `peers::connect` with rule 31's fixed `ssh` argv,",
+        "the shell starts no other process for this mode.",
+        "The page talks only to that server's omher bridge, through the forwarded loopback port and its token,",
+        "Nothing about this computer is sent to the server beyond what rule 31 already sends:",
+        "Use this computer (Disconnect) deletes the file, stops the link and starts the local bridge and peer links again.",
+    )
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.remote = (SHELL / "remote.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
+        cls.lib = (SHELL / "lib.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
+
+    def test_the_doc_states_rule_46(self) -> None:
+        text = _flat(DOC.read_text(encoding="utf-8"))
+        for sentence in self.RULE_46:
+            self.assertIn(_flat(sentence), text)
+
+    def test_the_one_link_is_rule_31s_connect_and_nothing_else_spawns(self) -> None:
+        for banned in ("Command::new", "spawn_command", "TcpStream"):
+            self.assertNotIn(banned, self.remote)
+        self.assertIn("peers::connect(host, port, &script)", self.remote)
+        self.assertIn('".omher").join("remote.json")', self.remote)
+
+    def test_startup_in_remote_mode_starts_no_bridge_and_no_peers(self) -> None:
+        start = self.lib.index("match remote::read_mode(&home) {")
+        arm = self.lib[start: self.lib.index("None =>", start)]
+        self.assertIn("bridge.stop();", arm)
+        self.assertIn("remote.start(mode, None);", arm)
+        self.assertNotIn("bridge.start(", arm)
+        self.assertNotIn("start_all", arm)
+
+    def test_peer_link_commands_refuse_in_remote_mode(self) -> None:
+        for cmd in ("async fn peers_check(", "async fn peers_add(", "async fn peers_retry("):
+            body = self.lib[self.lib.index(cmd):]
+            body = body[: body.index("\n}\n")]
+            self.assertIn("no_peer_links_in_remote_mode(&shell.remote)", body, cmd)
 
 
 class PeerPlatformsThroughTheirOwnBridge(unittest.TestCase):
