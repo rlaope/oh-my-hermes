@@ -259,6 +259,9 @@ describe("text", () => {
     expect(modelName("Opus 5.5")).toBe("Opus 5.5");
     expect(modelName("gpt-6.1-sol-codex")).toBe("GPT-6.1 Sol Codex");
     expect(modelName("claude-opus-5-5-thinking")).toBe("Opus 5.5 Thinking");
+    // Nous Portal writes the minor version with a dot
+    expect(modelName("anthropic/claude-opus-5.5")).toBe("Opus 5.5");
+    expect(modelName("anthropic/claude-fable-5.1")).toBe("Fable 5.1");
   });
 
   it("names the open models of a demo plan: GLM, Kimi and DeepSeek, without the provider or the speed tier", () => {

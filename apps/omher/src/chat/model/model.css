@@ -122,12 +122,33 @@
 .mp-search input::-webkit-search-cancel-button {
   display: none;
 }
-/* vendor chips: All plus one per company that has a model; the chosen one is gray */
+/* vendor chips: All plus one per company that has a model; the chosen one is gray. One row that scrolls sideways
+   (wheel, trackpad, Tab): nine chips wrapped 4 / 4 / 1 with "Other" alone on a third row. The edge with more chips past
+   it fades (`data-more`, set by the picker); the 4px side padding keeps a focused chip's ring inside the scroll box. */
 .mp-chips {
   display: flex;
-  flex-wrap: wrap;
   gap: 4px;
-  padding: 7px 0 3px;
+  padding: 7px 4px 5px;
+  margin: 0 -4px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.mp-chips::-webkit-scrollbar {
+  display: none;
+}
+.mp-chips > .mp-chip {
+  flex: none;
+}
+/* the fade covers most of a chip, so a chip cut at the edge reads as "more this way", not as a broken chip */
+.mp-chips[data-more="end"] {
+  mask-image: linear-gradient(to right, #000 calc(100% - 56px), transparent calc(100% - 4px));
+}
+.mp-chips[data-more="start"] {
+  mask-image: linear-gradient(to left, #000 calc(100% - 56px), transparent calc(100% - 4px));
+}
+.mp-chips[data-more="both"] {
+  mask-image: linear-gradient(to right, transparent 4px, #000 56px, #000 calc(100% - 56px), transparent calc(100% - 4px));
 }
 .mp-chip {
   height: 22px;
@@ -151,14 +172,26 @@
   border-color: transparent;
 }
 .mp-h2 {
-  margin-top: 6px;
+  margin-top: 8px;
 }
 .mp-list {
   max-height: 300px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   /* room for a row's focus ring inside the scroll box */
   padding: 4px;
   margin: 0 -4px;
+}
+/* a list with more rows past an edge fades there (`data-more`, set by the picker): the row the box cuts never sits
+   in full ink against the Reasoning heading or the search field */
+.mp-list[data-more="below"] {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent);
+}
+.mp-list[data-more="above"] {
+  mask-image: linear-gradient(to top, #000 calc(100% - 20px), transparent);
+}
+.mp-list[data-more="both"] {
+  mask-image: linear-gradient(to bottom, transparent, #000 20px, #000 calc(100% - 32px), transparent);
 }
 .mp-g {
   font-size: 11px;
@@ -169,6 +202,16 @@
   font-size: 12px;
   color: var(--muted);
   padding: 6px;
+}
+/* nothing to pick: the sentence and its "Add one in Bot settings" line read as one note, not two blocks */
+.mp-pop [data-empty] .mp-list {
+  padding-bottom: 0;
+}
+.mp-pop [data-empty] .mp-f {
+  border-top: 0;
+  margin-top: 0;
+  /* 6px popover + 4px list + 6px line above the sentence: the same 16px under the link */
+  padding: 0 6px 9px;
 }
 .mp-opt {
   display: flex;
