@@ -395,8 +395,9 @@ struct Inner {
     python: Option<PathBuf>,
 }
 
-/// `{state: "ready"|"starting"|"failed", error?, missing?}`, the shape the UI reads. `missing:
-/// "hermes"` marks the one failure the first-run screen can fix by installing Hermes.
+/// `{state: "ready"|"starting"|"failed", error?, missing?, mode: "local"|"remote", host?}`, the shape the UI reads.
+/// `missing: "hermes"` marks the one failure the first-run screen can fix by installing Hermes (local mode only).
+/// `mode: "remote"` is remote-only mode (remote.rs): the state is the `ssh` link's and `host` names the server.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct BridgeStatus {
     pub state: &'static str,
@@ -404,6 +405,9 @@ pub struct BridgeStatus {
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub missing: Option<&'static str>,
+    pub mode: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub host: Option<String>,
 }
 
 impl BridgeStatus {
@@ -412,7 +416,12 @@ impl BridgeStatus {
             Some(HERMES_NOT_FOUND) => Some("hermes"),
             _ => None,
         };
-        BridgeStatus { state, error, missing }
+        BridgeStatus { state, error, missing, mode: "local", host: None }
+    }
+
+    /// The remote link's status: never `missing` (nothing is installed here to fix it).
+    pub fn remote(state: &'static str, error: Option<String>, host: String) -> BridgeStatus {
+        BridgeStatus { state, error, missing: None, mode: "remote", host: Some(host) }
     }
 }
 
@@ -781,7 +790,7 @@ impl Bridge {
     }
 
     #[cfg(test)]
-    fn set_ready_for_test(&self, port: u16, token: &str) {
+    pub(crate) fn set_ready_for_test(&self, port: u16, token: &str) {
         let mut g = self.inner.lock().unwrap();
         g.phase = Phase::Ready { port };
         g.token = token.into();
@@ -1209,12 +1218,12 @@ mod tests {
     #[test]
     fn status_serialises_as_the_ui_expects() {
         let ready = serde_json::to_string(&BridgeStatus::of("ready", None)).unwrap();
-        assert_eq!(ready, r#"{"state":"ready"}"#);
+        assert_eq!(ready, r#"{"state":"ready","mode":"local"}"#);
         let failed = serde_json::to_string(&BridgeStatus::of("failed", Some("x".into()))).unwrap();
-        assert_eq!(failed, r#"{"state":"failed","error":"x"}"#);
+        assert_eq!(failed, r#"{"state":"failed","error":"x","mode":"local"}"#);
         // Only "Hermes not found" offers the installer; any other failure keeps Retry alone.
         let missing = serde_json::to_string(&BridgeStatus::of("failed", Some(HERMES_NOT_FOUND.into()))).unwrap();
-        assert_eq!(missing, r#"{"state":"failed","error":"Hermes not found: install Hermes Agent first","missing":"hermes"}"#);
+        assert_eq!(missing, r#"{"state":"failed","error":"Hermes not found: install Hermes Agent first","missing":"hermes","mode":"local"}"#);
     }
 
     #[test]

@@ -19,6 +19,7 @@ mod peers;
 mod power;
 #[cfg(all(test, unix))]
 mod pty_bench;
+mod remote;
 mod session_files;
 mod sessions;
 mod setup;
@@ -45,6 +46,8 @@ use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
 struct Shell {
     bridge: Arc<Bridge>,
     peers: Arc<peers::Peers>,
+    /// Remote-only mode's one link (remote.rs); idle in local mode.
+    remote: Arc<remote::Remote>,
     resource_dir: Option<PathBuf>,
     installing: Arc<AtomicBool>,
     logins: Arc<accounts::Logins>,
@@ -52,18 +55,19 @@ struct Shell {
     chats: Arc<ChatSessions>,
 }
 
-/// `ws://127.0.0.1:<port>/?token=<token>` once the bridge is ready. The wait for a starting bridge blocks, so it runs
-/// on the blocking pool: every client re-dials while a bridge comes back, and none may park an async worker.
+/// `ws://127.0.0.1:<port>/?token=<token>` once the bridge is ready: the local bridge's, or in remote-only mode the
+/// `ssh` link's loopback forward to the server's bridge. The wait for a starting bridge blocks, so it runs on the
+/// blocking pool: every client re-dials while a bridge comes back, and none may park an async worker.
 #[tauri::command]
 async fn bridge_url(shell: State<'_, Shell>) -> Result<String, String> {
-    let bridge = Arc::clone(&shell.bridge);
-    tauri::async_runtime::spawn_blocking(move || bridge.url(Duration::from_secs(2))).await.map_err(|e| e.to_string())?
+    let (bridge, remote) = (Arc::clone(&shell.bridge), Arc::clone(&shell.remote));
+    tauri::async_runtime::spawn_blocking(move || remote::bridge_url(&remote, &bridge, Duration::from_secs(2))).await.map_err(|e| e.to_string())?
 }
 
-/// `{state: "ready" | "starting" | "failed", error?}`.
+/// `{state: "ready" | "starting" | "failed", error?, missing?, mode: "local" | "remote", host?}`.
 #[tauri::command]
 async fn bridge_status(shell: State<'_, Shell>) -> Result<BridgeStatus, String> {
-    Ok(shell.bridge.status())
+    Ok(remote::bridge_status(&shell.remote, &shell.bridge))
 }
 
 /// Open a link the person clicked: a thread in its own app (Slack / Discord / Telegram), a plan node's GitHub
@@ -1026,11 +1030,55 @@ async fn peers_retry(shell: State<'_, Shell>, id: String) -> Result<(), String> 
     shell.peers.retry(&id)
 }
 
-/// Start the bridge again (the Retry button on the failed screen).
+/// Start the bridge again (the Retry button on the failed screen); in remote-only mode, the link to the server.
 #[tauri::command]
 async fn bridge_retry(shell: State<'_, Shell>) -> Result<(), String> {
-    shell.bridge.start(shell.resource_dir.clone());
+    if !shell.remote.retry() {
+        shell.bridge.start(shell.resource_dir.clone());
+    }
     Ok(())
+}
+
+/// Remote-only mode's Check (the gate's connect form): the same link as `peers_check`, returned as `{check, url,
+/// found}` so the gate can list the server's bots before anything is saved. `peers_check_close` closes it.
+#[tauri::command]
+async fn remote_check(shell: State<'_, Shell>, host: String, port: Option<u16>) -> Result<serde_json::Value, peers::Failure> {
+    let p = shell.peers.clone();
+    tauri::async_runtime::spawn_blocking(move || p.check(&host, port))
+        .await
+        .map_err(|e| peers::Failure { kind: peers::FailKind::Bridge, line: e.to_string() })?
+        .map(|(check, url, found)| serde_json::json!({"check": check, "url": url, "found": found}))
+}
+
+/// The gate's Connect: the one write of `~/.omher/remote.json`. Stops the local bridge and any peer links and brings
+/// the server link up now (no restart), keeping the Check's link when `check` names one for the same host.
+#[tauri::command]
+async fn remote_use(shell: State<'_, Shell>, label: String, host: String, port: Option<u16>, check: Option<String>) -> Result<remote::RemoteStatus, String> {
+    let (bridge, peers, link) = (Arc::clone(&shell.bridge), Arc::clone(&shell.peers), Arc::clone(&shell.remote));
+    tauri::async_runtime::spawn_blocking(move || {
+        let mode = remote::RemoteMode::new(&label, &host, port)?;
+        let home = user_home()?;
+        let adopt = check.and_then(|c| peers.take_check(&c, &mode.host, mode.port)).map(|up| Box::new(up) as Box<dyn remote::Link>);
+        remote::use_remote(&home, &link, &bridge, &peers, mode, adopt)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Disconnect / Use this computer: deletes the mode file, stops the link, and starts the local bridge again (the
+/// gate shows Install when Hermes is missing here).
+#[tauri::command]
+async fn remote_leave(shell: State<'_, Shell>) -> Result<remote::RemoteStatus, String> {
+    let (bridge, peers, link, resource_dir) = (Arc::clone(&shell.bridge), Arc::clone(&shell.peers), Arc::clone(&shell.remote), shell.resource_dir.clone());
+    tauri::async_runtime::spawn_blocking(move || remote::leave_remote(&user_home()?, &link, &bridge, &peers, resource_dir))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// `{mode: "local"}` or `{mode: "remote", host, port?, label, state, kind?, reason?, attempt?}`.
+#[tauri::command]
+async fn remote_status(shell: State<'_, Shell>) -> Result<remote::RemoteStatus, String> {
+    Ok(shell.remote.status())
 }
 
 /// `omher --statusline-relay <account>` (a TERMINALS Claude Code's status line, `claude_usage.rs`): records the usage
@@ -1077,6 +1125,10 @@ pub fn run() {
             bridge_url,
             bridge_status,
             bridge_retry,
+            remote_check,
+            remote_use,
+            remote_leave,
+            remote_status,
             open_external,
             install_engine,
             install_engine_command,
@@ -1157,13 +1209,24 @@ pub fn run() {
         .setup(|app| {
             let bridge = Bridge::new();
             let resource_dir = app.path().resource_dir().ok();
-            bridge.start(resource_dir.clone());
             let manifest = if cfg!(debug_assertions) { Some(std::path::Path::new(env!("CARGO_MANIFEST_DIR"))) } else { None };
-            let peers = peers::Peers::new(user_home().unwrap_or_default());
+            let home = user_home().unwrap_or_default();
+            let peers = peers::Peers::new(home.clone());
             if let Ok(script) = bridge::resolve_script(resource_dir.as_deref(), manifest, |p| p.is_file()) {
                 peers.set_script(script);
             }
-            peers.start_all();
+            let remote = remote::Remote::new(remote::ssh_connector(Arc::clone(&peers)));
+            match remote::read_mode(&home) {
+                // remote-only mode (rule 46): no local bridge, no Python, no peer links; one link to the server
+                Some(mode) => {
+                    bridge.stop();
+                    remote.start(mode, None);
+                }
+                None => {
+                    bridge.start(resource_dir.clone());
+                    peers.start_all();
+                }
+            }
             app.manage(Arc::new(tasks::Tasks::default()));
             app.manage(Arc::new(gh_me::Me::default()));
             // free space on the home folder's volume, read once a minute (disk.rs)
@@ -1196,6 +1259,7 @@ pub fn run() {
             app.manage(Shell {
                 bridge,
                 peers,
+                remote,
                 resource_dir,
                 installing: Arc::new(AtomicBool::new(false)),
                 logins: accounts::Logins::new(),
@@ -1222,6 +1286,7 @@ pub fn run() {
                 shell.chats.close_all();
                 shell.logins.cancel_all();
                 shell.peers.stop_all();
+                shell.remote.stop();
                 shell.bridge.stop();
             }
             // the sessions are gone: so are the status files bots read
