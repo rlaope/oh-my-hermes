@@ -145,8 +145,8 @@ class PlanDeterminismTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             make_fixture(root)
-            # CI plans the Linux lanes at 2 shards and Windows at 4.
-            for shards in (2, 4):
+            # CI plans the Linux lanes at 3 shards and Windows at 6.
+            for shards in (3, 6):
                 with self.subTest(shards=shards):
                     first = root / f"plan-{shards}-a.json"
                     second = root / f"plan-{shards}-b.json"

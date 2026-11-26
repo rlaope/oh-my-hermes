@@ -71,16 +71,16 @@ plan.
 The Windows lane runs the same suite more than twice as slowly as the Linux
 lanes, so it gets its own plan. The `plan` job writes two files into the
 `shard-plan` artifact from the same inventory, timing history, and quarantine:
-`plan.json` with 2 shards for each Linux lane, and `plan-windows.json` with
-4 shards for `windows-3.12`. Both are deterministic, so identical inputs give
+`plan.json` with 3 shards for each Linux lane, and `plan-windows.json` with
+6 shards for `windows-3.12`. Both are deterministic, so identical inputs give
 byte-identical plans.
 
 `aggregate.py` binds each lane to the plan it ran (`--lane-plan
 windows-3.12=shard-plan/plan-windows.json`; every other lane uses `--plan`).
 It refuses a lane plan that does not assign the same discovered tests and the
 same quarantine as the default plan, and then requires every shard of each
-lane's own plan to be reported, so a missing Windows shard 3 is red even though
-the Linux lanes have no shard 3.
+lane's own plan to be reported, so a missing Windows shard 5 is red even though
+the Linux lanes have no shard 5.
 
 Two loads besides the shard list are seeded into the plan before balancing,
 so the LPT partition accounts for them:
@@ -94,8 +94,8 @@ so the LPT partition accounts for them:
   measured at plan time, so re-read it when those gates change.
 - **Serial quarantine.** The quarantined tests no longer have their own
   `test-quarantine` jobs. Each lane runs them in a separate `run.py
-  --quarantine` process, serially, after its last shard's tests: shard 1 on
-  Linux, shard 3 on Windows. That job uses the same OS and Python as the rest
+  --quarantine` process, serially, after its last shard's tests: shard 2 on
+  Linux, shard 5 on Windows. That job uses the same OS and Python as the rest
   of the lane. The planner seeds the quarantine's duration onto the last
   shard, which leaves that shard the lightest share of parallel tests. The
   aggregate still requires each lane's quarantine result to account for every
@@ -110,8 +110,8 @@ Which Linux lanes run depends on the event that started the workflow:
 
 | event | lanes |
 | --- | --- |
-| `pull_request` | `linux-3.11` (2 shards), `windows-3.12` (4 shards) |
-| `push` to `main`, `workflow_dispatch` | `linux-3.11`, `linux-3.13` (2 shards each), `windows-3.12` (4 shards) |
+| `pull_request` | `linux-3.11` (3 shards), `windows-3.12` (6 shards) |
+| `push` to `main`, `workflow_dispatch` | `linux-3.11`, `linux-3.13` (3 shards each), `windows-3.12` (6 shards) |
 
 A pull request runs the supported floor, 3.11, on Linux. A main push adds 3.13,
 the newest supported interpreter, where 3.12 used to run; Windows keeps 3.12 on
