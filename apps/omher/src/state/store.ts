@@ -2527,6 +2527,11 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const r = await bridge.request("bots.list", {});
       dispatch({ type: "bots", bots: r.bots });
       ensureRoster();
+      // the open bot is gone (its computer was removed): the first listed bot takes its place. A chat or thread of
+      // the gone bot moves to the new bot's chat; any other view stays.
+      const gone = state.selectedBot;
+      const next = gone && !state.bots.some((b) => b.name === gone) ? (selectSidebarBots(state)[0] ?? state.bots[0]) : undefined;
+      if (next) void selectBot(next.name, state.ui.view !== "chat");
       // a reconnect whose bots.list failed left chats unread (stale): read them now, so their held rows go out
       const names = new Set(state.bots.map((b) => b.name));
       // a computer attached since, or whose link just went down (rule 45): its bots' platforms now, not at the next

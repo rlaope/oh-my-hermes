@@ -329,3 +329,51 @@ test("a saved computer comes back on the next start without changing the list th
   await page.getByRole("button", { name: "Add a bot" }).click();
   await expect(page.getByTestId("addbot-mac-mini:mini")).toContainText("SSH");
 });
+
+test("a remote bot's row menu has no Restart; a local bot's keeps it", async ({ page }) => {
+  await open(page);
+  await attachMini(page);
+  await page.getByTestId("bot-mac-mini:mini").click({ button: "right" });
+  const menu = page.getByTestId("row-menu");
+  await expect(menu).toBeVisible();
+  await expect(menu.getByTestId("row-restart")).toHaveCount(0);
+  await expect(menu.getByTestId("row-remove")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.getByTestId("bot-kami").click({ button: "right" });
+  await expect(page.getByTestId("row-menu").getByTestId("row-restart")).toBeVisible();
+});
+
+test("removing the computer whose bot is open leaves a bot open, not Pick a bot", async ({ page }) => {
+  await open(page);
+  await attachMini(page);
+  await page.getByTestId("bot-mac-mini:mini").click();
+  await page.keyboard.press(process.platform === "darwin" ? "Meta+," : "Control+,");
+  await page.getByTestId("settings-nav-general").click();
+  const section = page.getByTestId("remote-machines");
+  await section.getByTestId("remote-remove-mac-mini").click();
+  await section.getByTestId("remote-remove-yes-mac-mini").click();
+  await expect(page.getByTestId("bot-mac-mini:mini")).toHaveCount(0);
+  await page.keyboard.press(process.platform === "darwin" ? "Meta+," : "Control+,");
+  await expect(page.getByTestId("chat-empty")).toHaveCount(0);
+  await expect(page.getByTestId("composer")).toBeVisible();
+});
+
+test("cancelling the card while Check runs closes the tunnel the check opened", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => {
+    const h = (window as unknown as { __omherPeers: { checkClose: (id: string) => Promise<void> } }).__omherPeers;
+    const closed: string[] = [];
+    (window as unknown as { __closed: string[] }).__closed = closed;
+    const orig = h.checkClose.bind(h);
+    h.checkClose = (id: string) => (closed.push(id), orig(id));
+  });
+  await page.getByRole("button", { name: "Add a bot" }).click();
+  await page.getByTestId("addbot-ssh").click();
+  const card = page.getByTestId("peer-card");
+  await card.getByTestId("peer-host").fill("demo@host.example");
+  await card.getByTestId("peer-label").fill("Mac mini");
+  await card.getByTestId("peer-check").click();
+  await card.getByTestId("peer-cancel").click();
+  await expect(card).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __closed: string[] }).__closed.length)).toBe(1);
+});
