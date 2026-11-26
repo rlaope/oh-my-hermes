@@ -12,6 +12,11 @@ All notable changes will be documented here.
   drew no unread, sound or notification. A thread's or folder chat's unread (`fold:` keys, summed into the Dock
   count) was never cleared, so the Dock count only went up; it now clears when that chat is opened or removed.
   (`apps/omher/src/state/store.ts`, `apps/omher/src/app/shortcuts.ts`, `apps/omher/src/sidebar/useRowDrag.ts`)
+- **omher: starting a thread makes one thread, or says why not.** A double press on a bot's hover + made two
+  "Untitled" threads (a fresh key per press), and a refused `thread.create` (a gateway error, the 48-open-thread cap),
+  a refused Task / Hand to bot start or a failed thread Stop showed nothing: the error only reached cards and the
+  model picker. A second press now reuses the create in flight, each failure puts a line where the person acted, and
+  `./thread <task>` gives the typed task back when the create is refused. `apps/omher/src/state/store.ts`.
 - **omher bot management: Remove from list, rename and the row menu behave, with the keyboard too.** Remove from
   list on the open bot switched the view to the chat and threw the person out of Settings or Automations; the chat
   behind now follows the next bot and the view stays. A renamed bot's threads kept the old name in Needs you and in
