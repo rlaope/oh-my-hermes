@@ -1686,8 +1686,8 @@ const OPS = {
     if (bots[name]) throw new OpError("exists", `A folder named ${name} is already under Hermes' profiles.`);
     const next = createNext;
     createNext = null;
-    if (next?.unconfirmed) return { outcome: "unconfirmed", line: next.line };
-    if (next && !next.incomplete) return { outcome: "failed", line: next.line };
+    if (next?.unconfirmed) return { outcome: "unconfirmed", reason: "left", leftovers: [`profiles/${name}`], said: "", line: next.line };
+    if (next && !next.incomplete) return { outcome: "failed", reason: "hermes", line: next.line };
     bots[name] = { name, display_name: name.charAt(0).toUpperCase() + name.slice(1), is_default: false, model: "Haiku 5",
       provider: "claude-proxy", description: "", status: "online", running: false, reasoning: "low" };
     models[name] = { model: "Haiku 5", provider: "claude-proxy", reasoning: "low" };
