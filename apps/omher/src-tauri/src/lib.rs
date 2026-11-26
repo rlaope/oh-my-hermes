@@ -172,7 +172,7 @@ pub(crate) fn web_link(url: &str) -> bool {
     !host.is_empty() && !host.contains('@') && !host.contains('\\')
 }
 
-/// Remote-only mode's one shell refusal (BOUNDARY rule 46): while omher uses a server, nothing resolves or runs this
+/// Remote-only mode's one shell refusal (BOUNDARY rule 47): while omher uses a server, nothing resolves or runs this
 /// computer's Hermes, oh-my-hermes or Hermes' Python. Every command in [`LOCAL_HERMES_COMMANDS`] calls it first (a test
 /// reads each one's body), and `sessions_agents` asks it before looking for Hermes here.
 fn refuse_local_hermes_in_remote(remote: &remote::Remote) -> Result<(), String> {
@@ -194,7 +194,7 @@ async fn install_engine_command() -> Result<String, String> {
 
 /// Install Hermes and oh-my-hermes with OMH's fixed one-line installer (the first-run screen's Install
 /// button), streaming its output to the screen, then start the bridge again. Takes nothing from the
-/// page but the output channel; one run at a time. Refused in remote-only mode (rule 46), and a Connect while it
+/// page but the output channel; one run at a time. Refused in remote-only mode (rule 47), and a Connect while it
 /// runs means its end starts no local bridge (`remote::after_install`).
 #[tauri::command]
 async fn install_engine(shell: State<'_, Shell>, on_event: Channel<InstallEvent>) -> Result<Option<i32>, String> {
@@ -1004,7 +1004,7 @@ async fn peers_watch(shell: State<'_, Shell>, on_event: Channel<peers::PeerStatu
     Ok(())
 }
 
-/// Remote-only mode (rule 46) runs no peer links, so the commands that would start one (`peers_check`, `peers_add`,
+/// Remote-only mode (rule 47) runs no peer links, so the commands that would start one (`peers_check`, `peers_add`,
 /// `peers_retry`) refuse there, whatever the page shows. `remote_check` stays open: Change server uses it.
 fn no_peer_links_in_remote_mode(remote: &remote::Remote) -> Result<(), String> {
     if remote.active() {
@@ -1248,7 +1248,7 @@ pub fn run() {
             }
             let remote = remote::Remote::new(remote::ssh_connector(Arc::clone(&peers)));
             match remote::read_mode(&home) {
-                // remote-only mode (rule 46): no local bridge, no Python, no peer links; one link to the server
+                // remote-only mode (rule 47): no local bridge, no Python, no peer links; one link to the server
                 Some(mode) => {
                     bridge.stop();
                     remote.start(mode, None);
@@ -1332,7 +1332,7 @@ pub fn run() {
 mod tests {
     use super::{allowed_external, media_target, past_home_in, LOCAL_HERMES_COMMANDS};
 
-    /// Rule 46's shell audit: each command that resolves or runs this computer's Hermes, oh-my-hermes or Hermes' Python
+    /// Rule 47's shell audit: each command that resolves or runs this computer's Hermes, oh-my-hermes or Hermes' Python
     /// asks `refuse_local_hermes_in_remote` before it does anything else, and nothing else calls the local install,
     /// sign-in or Hermes look-up. (Its refusal itself: `remote::tests`.)
     #[test]

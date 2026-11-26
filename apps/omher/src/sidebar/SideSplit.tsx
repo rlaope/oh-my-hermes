@@ -2,7 +2,7 @@
 // sidebar's own layout: each region takes what its rows need and they share the rest. Dragging sets BOTS' share of
 // the two regions' height, kept on this computer (`omher.side.split`); each region keeps at least SPLIT_MIN px.
 // Double-click goes back to auto. Arrow keys move it by SPLIT_STEP px.
-import { useCallback, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type RefObject } from "react";
 import { t } from "../i18n";
 
 export const SPLIT_KEY = "omher.side.split";
@@ -44,28 +44,66 @@ type Sec = RefObject<HTMLElement | null>;
 /** The two regions' styles for the saved share (none in auto) and the handle's actions. */
 export function useSideSplit(bots: Sec, terms: Sec) {
   const [share, setShare] = useState<number | null>(load);
+  const stopDrag = useRef<(() => void) | null>(null);
+  useEffect(() => () => stopDrag.current?.(), []);
   const heights = () => [bots.current?.getBoundingClientRect().height ?? 0, terms.current?.getBoundingClientRect().height ?? 0] as const;
   const onDrag = useCallback(
     (e: PointerEvent<HTMLElement>) => {
       if (e.button !== 0) return;
       e.preventDefault();
+      stopDrag.current?.();
+      const target = e.currentTarget;
+      const pid = e.pointerId;
+      try {
+        target.setPointerCapture?.(pid);
+      } catch {
+        /* synthetic or detached pointer */
+      }
       const [hb, ht] = heights();
       const y0 = e.clientY;
       const total = hb + ht;
       let last: number | null = null;
+      const finish = (commit: boolean) => {
+        removeEventListener("pointermove", move);
+        removeEventListener("pointerup", onUp);
+        removeEventListener("pointercancel", onCancel);
+        removeEventListener("blur", onBlur);
+        target.removeEventListener("lostpointercapture", onLost);
+        try {
+          if (target.hasPointerCapture?.(pid)) target.releasePointerCapture(pid);
+        } catch {
+          /* already released */
+        }
+        document.body.classList.remove("side-resizing");
+        stopDrag.current = null;
+        if (commit && last !== null) save(last);
+      };
       const move = (ev: globalThis.PointerEvent) => {
+        if (ev.pointerId !== pid) return;
+        if (ev.pointerType === "mouse" && (ev.buttons & 1) === 0) {
+          finish(true);
+          return;
+        }
         last = clampSplit(total, hb + ev.clientY - y0);
         setShare(last);
       };
-      const up = () => {
-        removeEventListener("pointermove", move);
-        removeEventListener("pointerup", up);
-        document.body.classList.remove("side-resizing");
-        if (last !== null) save(last);
+      const onUp = (ev: globalThis.PointerEvent) => {
+        if (ev.pointerId === pid) finish(true);
       };
+      const onCancel = (ev: globalThis.PointerEvent) => {
+        if (ev.pointerId === pid) finish(false);
+      };
+      const onBlur = () => finish(true);
+      const onLost = (ev: globalThis.PointerEvent) => {
+        if (ev.pointerId === pid) finish(true);
+      };
+      stopDrag.current = () => finish(false);
       document.body.classList.add("side-resizing");
       addEventListener("pointermove", move);
-      addEventListener("pointerup", up);
+      addEventListener("pointerup", onUp);
+      addEventListener("pointercancel", onCancel);
+      addEventListener("blur", onBlur);
+      target.addEventListener("lostpointercapture", onLost);
     },
     [],
   );

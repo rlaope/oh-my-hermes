@@ -861,7 +861,7 @@ function TermHeadState({ rec, unseen }: { rec: SessionRec; unseen: Unseen | unde
 }
 
 export function SessionView() {
-  // on a server (rule 46) a session of this computer has no Plans panel (SessionPanel)
+  // on a server (rule 47) a session of this computer has no Plans panel (SessionPanel)
   const remote = useServerMode().mode === "remote";
   const s = useStore();
   const ss = useSessions();

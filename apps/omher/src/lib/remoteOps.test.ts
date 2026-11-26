@@ -1,4 +1,4 @@
-// Rule 46's page choke point: every op the page can send passes `BridgeClient.request`, which asks remoteOps.ts first.
+// Rule 47's page choke point: every op the page can send passes `BridgeClient.request`, which asks remoteOps.ts first.
 // Each audited op goes through a real client over a stand-in socket: on a server the refused ones never reach the
 // socket (and the allowed ones do), in local mode every one is sent as before.
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -50,7 +50,7 @@ const ops = Object.entries(REMOTE_OPS) as [PageOp, OpRule][];
 
 afterEach(() => noteServerMode({ mode: "local" }));
 
-describe("the page's one outgoing filter (rule 46)", () => {
+describe("the page's one outgoing filter (rule 47)", () => {
   it("on a server: every op that carries this computer is refused before the socket; the rest are sent", async () => {
     noteServerMode({ mode: "remote", host: "demo@vps" });
     const { b, sock } = await client();

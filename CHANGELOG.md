@@ -4,6 +4,21 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **OMH TUI: Up/Down walks the input history past slash commands.** Recalling an earlier `/model` or `/config`
+  with Up opened the `/` menu over it, and the next Up or Down moved the menu's highlight instead of the history, so
+  history stalled at the first slash command. A recalled entry (Up/Down, vim NORMAL `j`/`k`, a Ctrl+R pick) now keeps
+  the menu closed over that text: Up/Down walk on, and Enter sends the command exactly as it was. Typing or Backspace
+  on it opens the menu again. (#3236, thanks @brixtonpham)
+
+- **omher: `/goal` starts the goal, and Stop ends a goal run.** Typing `/goal <text>` in a bot's chat answered "Goal
+  set (20-turn budget)" but never started a turn, so `/goal status` stayed at 0 turns. omher sent the command as a
+  prompt; Hermes ran it as an admitted turn and queued the goal's first turn where nothing reads it. omher now sends
+  `/goal` through Hermes' own `slash.exec`, as Hermes' TUI and Desktop do, and submits the first turn Hermes hands
+  back. Pressing Stop while a goal was working (`↻ Continuing toward goal (4/20)`) stopped that turn, but Hermes'
+  judge then started the next one, so Stop looked dead. Stop now pauses an active goal before it interrupts, as
+  Ctrl+C does in Hermes' CLI, and the chat says `⏸ Goal paused`; `/goal resume` continues it. A goal that is already
+  paused or done is left alone. (`docs/OMHER-BOUNDARY.md` rule 46)
+
 - **omher: connect to a Hermes on your server over SSH, nothing installed on this computer.** When this computer has no
   Hermes, the first screen now offers Connect to a server (SSH) next to Install: pick a host from `~/.ssh/config` or
   type `user@host` (and a port), Check lists the server's bots through the same `ssh` link Remote machines uses (key or
@@ -13,7 +28,7 @@ All notable changes will be documented here.
   server with Change server and Use this computer. Handing a bot a folder here, folder chats with a local folder and
   remote machines are off in this mode; terminals stay this computer's own. The update button also shows on the setup
   and connecting screens. Closes #3229. (`apps/omher/src-tauri/src/remote.rs`, `apps/omher/src/app/RemoteConnect.tsx`,
-  BOUNDARY rule 46)
+  BOUNDARY rule 47)
 
 ## 5.0.1 - 2026-11-26
 

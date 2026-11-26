@@ -1,5 +1,6 @@
 /* Sidebar: one icon column and one text column starting at --side-x. */
 .side {
+  position: relative;
   background: var(--side);
   display: flex;
   flex-direction: column;

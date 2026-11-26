@@ -90,7 +90,7 @@ export function usePictureEditor(bot: Bot) {
 export function AvatarEditor({ bot, ed }: { bot: Bot; ed: ReturnType<typeof usePictureEditor> }) {
   const [over, setOver] = useState(false);
   const { busy, apply, pick } = ed;
-  // on a server (rule 46) a picture of this computer is not sent: the picture shows, with no click or drop on it
+  // on a server (rule 47) a picture of this computer is not sent: the picture shows, with no click or drop on it
   const remote = useServerMode().mode === "remote";
   if (remote)
     return (
@@ -133,7 +133,7 @@ export function AvatarEditor({ bot, ed }: { bot: Bot; ed: ReturnType<typeof useP
 
 /** Inline picture actions next to Open chat, plus the error line when a picture was refused. */
 export function PictureActions({ ed }: { ed: ReturnType<typeof usePictureEditor> }) {
-  // on a server (rule 46) no picture of this computer is chosen; going back to the default face sends none
+  // on a server (rule 47) no picture of this computer is chosen; going back to the default face sends none
   const remote = useServerMode().mode === "remote";
   return (
     <>

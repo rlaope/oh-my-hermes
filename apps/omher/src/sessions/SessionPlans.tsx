@@ -214,7 +214,7 @@ function SplitMap({ rec }: { rec: SessionRec }) {
 export function SessionPanel({ onClose }: { onClose: () => void }) {
   const s = useStore();
   const ss = useSessions();
-  // on a server (rule 46) a session of this computer has no Plans: the server cannot read its agent's records here
+  // on a server (rule 47) a session of this computer has no Plans: the server cannot read its agent's records here
   const remote = useServerMode().mode === "remote";
   const rec = ss.list.find((r) => r.id === s.ui.session) ?? null;
   if (!rec || remote) return null;

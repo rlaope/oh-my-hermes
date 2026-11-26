@@ -1,4 +1,4 @@
-// Remote-only mode (rule 46): nothing of this computer goes to the server by itself or on a click. A restart's saved
+// Remote-only mode (rule 47): nothing of this computer goes to the server by itself or on a click. A restart's saved
 // oh-my-hermes folder chat is not resumed (auto or Resume), no file is attached, and the oh-my-hermes installer is not
 // run; the saved rows stay as they were for when this computer is used again. Local mode is unchanged.
 import { afterEach, describe, expect, it, vi } from "vitest";

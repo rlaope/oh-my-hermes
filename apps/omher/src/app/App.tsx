@@ -67,7 +67,7 @@ export function App() {
     };
   }, [s.bots, current]);
   // a bot's chat shows its Details and Plans; a SESSIONS chat shows Plans for that session alone
-  // on a server (rule 46) a session of this computer has no Plans panel: its agent's records are here, not there
+  // on a server (rule 47) a session of this computer has no Plans panel: its agent's records are here, not there
   const onSession = s.ui.view === "session" && !!s.ui.session;
   const panelOpen = s.ui.panelOpen && ((s.ui.view === "chat" && !!bot) || (onSession && !remote));
   // maximised in place: the panel takes the chat column's room; the chat stays mounted (draft, scroll, stream)

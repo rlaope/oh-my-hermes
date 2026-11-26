@@ -1,8 +1,8 @@
-// Remote-only mode's one outgoing filter (BOUNDARY rule 46). Every op the page sends goes through
+// Remote-only mode's one outgoing filter (BOUNDARY rule 47). Every op the page sends goes through
 // `BridgeClient.request`, which asks `remoteRefusal` first: while omher uses a server, an op that would carry this
 // computer's folder, path or file bytes there is refused and never written to the socket. The table names every op the
 // page can send (the type makes a new op fail to compile until it is placed here), and anything not in it is refused
-// on a server too. In local mode nothing is refused: the page behaves as before rule 46.
+// on a server too. In local mode nothing is refused: the page behaves as before rule 47.
 import type { Key } from "../i18n";
 import type { Op } from "./protocol";
 import type { ThreadOps } from "../threads/types";

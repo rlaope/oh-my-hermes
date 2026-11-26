@@ -689,7 +689,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     procs.set(id, proc);
     try {
       if (!bot) throw new Error(tr("ss.noBot"));
-      // a folder of this computer is not one a bot on the server can work in (rule 46)
+      // a folder of this computer is not one a bot on the server can work in (rule 47)
       if (remoteOnly()) throw new Error(tr("remote.noFolderChat"));
       const res = await store().actions.folderOpen(bot, r.cwd);
       proc.fid = res.session;
@@ -1458,7 +1458,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     t.told = null;
     // the terminal view of a chat session does not decide the session's status; the chat does
     const ofChat = sessionMode(state.agents, r) !== "terminal";
-    // oh-my-hermes on a server (rule 46): this computer's `omh` (a Hermes Python launcher) is not started, not after a
+    // oh-my-hermes on a server (rule 47): this computer's `omh` (a Hermes Python launcher) is not started, not after a
     // restart and not on sight; the row stays paused with why, as a folder chat does (the shell refuses it too)
     if (!shell && !ofChat && r.agent === "omh") {
       await modeKnown();
@@ -2032,7 +2032,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const pty = t.hostId;
     const still = () => terms.get(id) === t && t.run === run && t.restore === line && !t.closed && !t.held && t.hostId === pty && !rec(id)?.fgAgent;
     if (pty === null || !still()) return dropRestore(id, t);
-    // on a server (rule 46) the `omh` line is never typed: it would start this computer's oh-my-hermes
+    // on a server (rule 47) the `omh` line is never typed: it would start this computer's oh-my-hermes
     if (line === fgLine("omh")) {
       await modeKnown();
       if (remoteOnly()) return dropRestore(id, t);
@@ -2168,7 +2168,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const mode = sessionMode(state.agents, r);
     if (mode === "chat") return restart(id);
     if (mode === "terminal") {
-      // oh-my-hermes on a server: this computer's `omh` is not started (rule 46); the row stays paused with why
+      // oh-my-hermes on a server: this computer's `omh` is not started (rule 47); the row stays paused with why
       if (r.agent === "omh" && remoteOnly()) {
         patchRec(id, { error: tr("remote.noLocalHermes") });
         return;
@@ -2177,7 +2177,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       patchRec(id, { paused: undefined, status: "starting", error: undefined, exitCode: null });
       return;
     }
-    // oh-my-hermes on a server: nothing of this folder is sent; the row stays paused with why (rule 46)
+    // oh-my-hermes on a server: nothing of this folder is sent; the row stays paused with why (rule 47)
     if (remoteOnly()) {
       patchRec(id, { error: tr("remote.noFolderChat") });
       return;

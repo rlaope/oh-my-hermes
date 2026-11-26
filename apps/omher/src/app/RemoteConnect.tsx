@@ -1,4 +1,4 @@
-// Connect to a server over SSH (remote-only mode, BOUNDARY rule 46): the gate's second choice, and Settings › Server ›
+// Connect to a server over SSH (remote-only mode, BOUNDARY rule 47): the gate's second choice, and Settings › Server ›
 // Change server. host (with ~/.ssh/config names) + port + name -> Check -> what the server has (the exact command, its
 // Hermes, its bots: read straight through the link Check opened, since this computer has no bridge of its own) ->
 // Connect. Only Connect writes ~/.omher/remote.json (the shell's `remote_use`). Failures read as a peer's do; a key

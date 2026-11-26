@@ -824,6 +824,63 @@ describe("store", () => {
     expect(store.getState().chats.kami.items.at(-1)).toBe(row); // no new bubble
   });
 
+  it("sendWithFiles forwards canonical attachment_ids on chat.send (immediate and held queue)", async () => {
+    const f = fakeBridge();
+    const orig = f.bridge.request;
+    let seq = 0;
+    f.bridge.request = (async (op: string, params: Record<string, unknown>) => {
+      if (op === "chat.attach") {
+        f.calls.push({ op, params });
+        if (params.kind === "image") {
+          return { kind: "image", name: params.name, text: `[User attached image: ${params.name}]`, ref_text: "", attachment_id: `att-${++seq}` };
+        }
+        return { kind: params.kind, name: params.name, text: "", ref_text: `@file:attachments/${params.name}` };
+      }
+      return orig(op as never, params as never);
+    }) as typeof f.bridge.request;
+    const store = createStore(f.bridge, { now: () => T0 });
+    await store.actions.init();
+    const file = (name: string, attach: "image" | "pdf" | "file") =>
+      ({ name, size: 3, kind: attach === "image" ? ("image" as const) : ("file" as const), url: null, attach, read: async () => "QUJD" });
+
+    // immediate send: image attachment_ids go on chat.send
+    await store.actions.sendWithFiles("", [file("table.png", "image"), file("notes.txt", "file")]);
+    const send1 = f.calls.filter((c) => c.op === "chat.send").at(-1)!;
+    expect(send1.params).toEqual({
+      bot: "kami",
+      text: "@file:attachments/notes.txt\n\n[User attached image: table.png]",
+      attachment_ids: ["att-1"],
+    });
+
+    // immediate send with replyTo chip preserves reply_to and clears the chip
+    store.actions.setReplyTo({ session_id: "away-2", source: "slack", place: "#ops", kind: "thread" });
+    await store.actions.sendWithFiles("see table", [file("third.png", "image")]);
+    expect(store.getState().replyTo.kami).toBeNull();
+    const send2 = f.calls.filter((c) => c.op === "chat.send").at(-1)!;
+    expect(send2.params).toEqual({
+      bot: "kami",
+      text: "see table",
+      reply_to: "away-2",
+      attachment_ids: ["att-2"],
+    });
+
+    // held while a turn is running: flushed sendHeld attaches and forwards attachment_ids + reply_to too
+    store.actions.setReplyTo({ session_id: "away-1", source: "discord", place: "#eng", kind: "channel" });
+    f.emit({ event: "turn.start", bot: "kami" });
+    await store.actions.sendWithFiles("follow up", [file("second.png", "image")]);
+    expect(store.getState().replyTo.kami).toBeNull();
+    f.emit({ event: "turn.end", bot: "kami", outcome: "done" });
+    await new Promise((r) => setTimeout(r, 0));
+    const send3 = f.calls.filter((c) => c.op === "chat.send").at(-1)!;
+    expect(send3.params).toEqual({
+      bot: "kami",
+      text: "follow up",
+      reply_to: "away-1",
+      attachment_ids: ["att-3"],
+      queued: true,
+    });
+  });
+
   it("reconnect keeps state and re-reads the chat without duplicating it", async () => {
     const f = fakeBridge();
     const store = createStore(f.bridge, { now: () => T0 });

@@ -1054,6 +1054,7 @@ export const en = {
   "att.removeOf": "Remove {name}",
   "att.drop": "Drop to attach",
   "att.tooMany": "Over {n} files",
+  "att.tooManyImages": "Over {n} images",
   "att.tooBig": "Over 100 MB",
   "att.failed": "Couldn't attach {name} · {error}",
   "bub.replyTarget": "Reply target",
@@ -1775,9 +1776,11 @@ export const en = {
   "term.folderEmpty": "No terminals · right-click to add",
   "term.folderGone": "This folder no longer exists",
   "term.folderGoneRan": "{folder} no longer exists, opened {at} instead",
-  // spacing: the BOTS | TERMINALS divider
+  // spacing: the BOTS | TERMINALS divider and the sidebar's right edge
   "side.split": "Resize bots and terminals",
   "side.splitTip": "Drag to give bots or terminals more room. Double-click: back to automatic.",
+  "side.resize": "Resize the sidebar",
+  "side.resizeTip": "Drag to resize · double-click for the usual width",
   // tidy: a thread row's second line
   "thread.said": "{name}: {text}",
   "thread.you": "You",

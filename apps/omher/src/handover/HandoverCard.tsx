@@ -21,7 +21,7 @@ import "./handover.css";
 export type HandoverFrom = { kind: "terminal"; folder: string } | { kind: "worktree"; bot: string; worktree: Worktree };
 
 /** The bots a folder can be handed to: this computer's, not offline (as the Tasks page's bot chip). None while omher
- *  uses a server (rule 46): every bot then runs there, and a folder here is not one it can read. */
+ *  uses a server (rule 47): every bot then runs there, and a folder here is not one it can read. */
 export const handBots = (bots: Bot[]) => (remoteOnly() ? [] : bots.filter((b) => !b.host && b.status !== "offline"));
 
 /** The menu item: "Hand to <bot>…" with one bot to hand to, else "Hand to a bot…" (the card has the picker). */

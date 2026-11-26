@@ -1,5 +1,5 @@
 //! Remote-only mode: omher with nothing installed on this computer, talking to the Hermes on a server over the
-//! person's own `ssh` (BOUNDARY rule 46, built on rule 31's peer link).
+//! person's own `ssh` (BOUNDARY rule 47, built on rule 31's peer link).
 //!
 //! The mode is one file, `~/.omher/remote.json` (`{"v":1,"host":"user@host","port":22|null,"label":"..."}`), which
 //! only the shell writes (the gate's Connect) and which is checked on every read: a symlink, a file over 4 KiB, bad

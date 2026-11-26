@@ -1,4 +1,4 @@
-// Remote-only mode (BOUNDARY rule 46): the shell keeps one `ssh` link to a Hermes on a server and the page talks only
+// Remote-only mode (BOUNDARY rule 47): the shell keeps one `ssh` link to a Hermes on a server and the page talks only
 // to that server's bridge. The page learns the mode from `bridge_status` (`mode: "remote"`, `host`, `label`), which the
 // gate polls; this module keeps the last answer so any gate that would hand THIS computer's folders or files to a bot
 // can ask `remoteOnly()` (a bot there cannot read a folder here, the same reason a peer bot is never offered one).
@@ -15,7 +15,7 @@ const subs = new Set<() => void>();
 let markKnown: () => void = () => {};
 let isKnown = false;
 const known = new Promise<void>((r) => (markKnown = () => ((isKnown = true), r())));
-// no shell to ask (browser dev, e2e without the gate stand-in, unit tests): local mode, as before rule 46
+// no shell to ask (browser dev, e2e without the gate stand-in, unit tests): local mode, as before rule 47
 if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window || "__OMHER_GATE__" in window)) markKnown();
 
 /** Settles once the mode is known: the gate's first `bridge_status` answer, or at once when there is no shell to ask.
@@ -24,7 +24,7 @@ export const modeKnown = (): Promise<void> => known;
 /** Whether `modeKnown()` has settled (the bridge client decides at once then, else it waits for it). */
 export const modeIsKnown = (): boolean => isKnown;
 
-/** The gate's latest `bridge_status`: the mode it names (a status without one is local, as before rule 46). */
+/** The gate's latest `bridge_status`: the mode it names (a status without one is local, as before rule 47). */
 export function noteServerMode(s: { mode?: string; host?: string; label?: string } | null | undefined): void {
   const next: ServerMode = s?.mode === "remote" ? { mode: "remote", host: s.host, label: s.label } : { mode: "local" };
   markKnown();

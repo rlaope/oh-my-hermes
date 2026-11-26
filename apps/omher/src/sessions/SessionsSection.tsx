@@ -253,7 +253,7 @@ function NewSessionMenu({ onClose, trigger, initialFolder }: { onClose: () => vo
   useEffect(() => {
     if (ss.agents === null) void getSessions().loadAgents();
   }, [ss.agents]);
-  // on a server (rule 46) no Hermes chat starts in a folder of this computer: its bots cannot read it
+  // on a server (rule 47) no Hermes chat starts in a folder of this computer: its bots cannot read it
   const remote = useServerMode().mode === "remote";
   const all = ss.agents ? terminalAgents(ss.agents, ss.recent) : null;
   const here = (a: { id: string }) => !remote || agentDef(a.id).mode !== "hermes";

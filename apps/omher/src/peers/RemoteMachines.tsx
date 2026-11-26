@@ -13,7 +13,7 @@ export function RemoteMachines() {
   const [asking, setAsking] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [err, setErr] = useState("");
-  // on a server (rule 46) other computers are that server's to reach: no peer link starts from here
+  // on a server (rule 47) other computers are that server's to reach: no peer link starts from here
   const remote = useServerMode().mode === "remote";
   return (
     <div className="peer-set" data-testid="remote-machines">

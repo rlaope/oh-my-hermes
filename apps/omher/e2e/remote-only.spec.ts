@@ -1,4 +1,4 @@
-// Remote-only mode (BOUNDARY rule 46), the page side: the first screen's two choices, Check that lists the server's bots
+// Remote-only mode (BOUNDARY rule 47), the page side: the first screen's two choices, Check that lists the server's bots
 // before anything is saved, a refused key that names ssh-copy-id, Connect landing in the app with the server's bots,
 // Settings › Server (Use this computer goes back to the first screen), a lost link said in the bar, no Hand to <bot>
 // on a server, and the update button on the gate. On a server nothing of this computer goes out: no saved folder chat
@@ -355,7 +355,7 @@ test("a Check that answers after its form is gone closes its link", async ({ pag
   expect(ops.filter((o) => o.op === "hello" || o.op === "bots.list")).toEqual([]);
 });
 
-// ---- round 2: the page's one outgoing filter and the shell's local-Hermes refusal (rule 46) ----
+// ---- round 2: the page's one outgoing filter and the shell's local-Hermes refusal (rule 47) ----
 
 /** A control op to the mock bridge on its own socket (not the page's). */
 async function mockOp(op: string, params: Record<string, unknown> = {}): Promise<void> {

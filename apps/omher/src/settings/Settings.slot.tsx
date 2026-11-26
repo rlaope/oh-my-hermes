@@ -606,7 +606,7 @@ function GeneralPage() {
   );
 }
 
-/** Remote-only mode (rule 46): the server omher uses, Change server (the gate's Connect form) and Use this computer. */
+/** Remote-only mode (rule 47): the server omher uses, Change server (the gate's Connect form) and Use this computer. */
 function ServerBlock() {
   const m = useServerMode();
   const [leaving, setLeaving] = useState(false);

@@ -103,7 +103,7 @@ If Hermes runs on a server you reach over SSH, nothing needs to be installed on 
 press Check to see the server's bots, then Connect. omher saves `~/.omher/remote.json`, starts no local bridge or
 Python, and keeps one `ssh` link (the same one Remote machines uses) to that server's own omher bridge, reconnecting
 when it drops. Settings › General › Server has Change server and Use this computer, which deletes the file.
-Terminals stay this computer's own; handing a bot a folder here and remote machines are off. `BOUNDARY.md` rule 46.
+Terminals stay this computer's own; handing a bot a folder here and remote machines are off. `BOUNDARY.md` rule 47.
 
 ## Architecture
 

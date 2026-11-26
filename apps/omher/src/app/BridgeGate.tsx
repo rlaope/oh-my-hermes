@@ -16,7 +16,7 @@ import "../sidebar/sidebar.css";
 import { CHANGE_SERVER_EVENT, noteServerMode, serverLabel } from "./remote";
 import { RemoteConnect } from "./RemoteConnect";
 
-/** `bridge_status`. Local mode may name `missing: "hermes"`; remote-only mode (rule 46) names the server's `host` and
+/** `bridge_status`. Local mode may name `missing: "hermes"`; remote-only mode (rule 47) names the server's `host` and
  *  never `missing` (connecting and reconnecting both read `starting`, with the last failure line in `error`). */
 export type BridgeState = { state: "ready" | "starting" | "failed"; error?: string; missing?: "hermes"; mode?: "local" | "remote"; host?: string };
 export type InstallEvent = { kind: "line"; text: string } | { kind: "exit"; code: number | null };

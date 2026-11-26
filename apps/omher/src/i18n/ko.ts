@@ -1051,6 +1051,7 @@ export const ko: Record<Key, string> = {
   "att.removeOf": "{name} 빼기",
   "att.drop": "놓으면 첨부",
   "att.tooMany": "{n}개 초과",
+  "att.tooManyImages": "이미지 {n}개 초과",
   "att.tooBig": "100 MB 초과",
   "att.failed": "{name} 첨부 실패 · {error}",
   "bub.replyTarget": "답장 대상",
@@ -1771,9 +1772,11 @@ export const ko: Record<Key, string> = {
   "term.folderEmpty": "터미널이 없어요 · 우클릭해서 열어요",
   "term.folderGone": "이 폴더가 더 이상 없어요",
   "term.folderGoneRan": "{folder} 폴더가 더 이상 없어서 {at}에서 열었어요",
-  // spacing: the BOTS | TERMINALS divider
+  // spacing: the BOTS | TERMINALS divider and the sidebar's right edge
   "side.split": "봇과 터미널 높이 조절",
   "side.splitTip": "끌어서 봇이나 터미널 영역을 넓혀요. 더블클릭하면 자동 크기로 돌아가요.",
+  "side.resize": "사이드바 너비 조절",
+  "side.resizeTip": "끌어서 너비 조절 · 더블클릭하면 기본 너비",
   // tidy: a thread row's second line
   "thread.said": "{name}: {text}",
   "thread.you": "나",

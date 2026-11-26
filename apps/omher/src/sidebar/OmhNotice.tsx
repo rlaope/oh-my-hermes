@@ -38,7 +38,7 @@ export function OmhNotice() {
   useEffect(() => {
     if (ss.agents === null) void getSessions().loadAgents();
   }, [ss.agents]);
-  // on a server (rule 46) nothing is installed on this computer: no offer at all
+  // on a server (rule 47) nothing is installed on this computer: no offer at all
   const remote = useServerMode().mode === "remote";
   const shown = !remote && hermesOnly(ss.agents) && !(add.hidden && !add.open);
   useLayoutEffect(() => {

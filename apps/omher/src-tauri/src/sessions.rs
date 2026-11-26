@@ -612,7 +612,7 @@ pub fn omh_row(local_hermes: bool, look: impl FnOnce() -> (Option<PathBuf>, Opti
 }
 
 /// Whether starting agent `id` runs this computer's oh-my-hermes (`omh`, a Hermes Python launcher): refused in
-/// remote-only mode (rule 46). Plain shells and the other CLIs are this computer's own programs and stay.
+/// remote-only mode (rule 47). Plain shells and the other CLIs are this computer's own programs and stay.
 pub fn runs_local_hermes(id: &str) -> bool {
     agent(id).is_some_and(|a| a.mode == Mode::Hermes)
 }
@@ -621,7 +621,7 @@ pub fn runs_local_hermes(id: &str) -> bool {
 pub const HERMES_LABEL: &str = "Hermes";
 
 /// Every allow-listed agent with where it was found on this machine: the built-ins, then the generic ACP agents,
-/// each with its list row. `local_hermes` false (remote-only mode, rule 46): the oh-my-hermes row is not looked for
+/// each with its list row. `local_hermes` false (remote-only mode, rule 47): the oh-my-hermes row is not looked for
 /// at all (no `omh`, no Hermes discovery) and reads as not on this computer.
 pub fn agents_on_this_machine(local_hermes: bool) -> Vec<AgentInfo> {
     let dirs = host_dirs();

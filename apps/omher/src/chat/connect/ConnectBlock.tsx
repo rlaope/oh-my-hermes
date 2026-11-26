@@ -26,7 +26,7 @@ export function ConnectBlock({ bot }: { bot: Bot }) {
   const r = useBotReady(bot.name);
   const [problem, setProblem] = useState<{ provider: SignIn; error?: string } | null>(null);
   const was = useRef(r.status);
-  // on a server (rule 46) the sign-in runs there: the block says so instead of offering this computer's `hermes`
+  // on a server (rule 47) the sign-in runs there: the block says so instead of offering this computer's `hermes`
   const remote = useServerMode().mode === "remote";
   useEffect(() => {
     if (bot.status !== "offline") void getReady().ensure(bot.name);

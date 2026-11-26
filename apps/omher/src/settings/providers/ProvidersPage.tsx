@@ -21,7 +21,7 @@ export function ProvidersPage() {
   const name = s.selectedBot ?? s.bots[0]?.name ?? null;
   const opts = name ? s.models[name] : undefined;
   const bot = s.bots.find((b) => b.name === name);
-  // on a server (rule 46) Hermes' sign-in runs there: no Add key here (it would run this computer's `hermes`)
+  // on a server (rule 47) Hermes' sign-in runs there: no Add key here (it would run this computer's `hermes`)
   const remote = useServerMode().mode === "remote";
   // explicit open/closed per slug; unset = open only for the provider in use
   const [open, setOpen] = useState<Record<string, boolean>>({});

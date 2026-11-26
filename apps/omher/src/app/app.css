@@ -66,7 +66,40 @@
   outline: none;
 }
 /* while dragging the columns follow the pointer at once, and the drag selects no text */
-.window.panel-dragging {
+.side-resizer {
+  /* flush inside .side's right padding so stacking contexts in .main never clip or block hits */
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 6px;
+  z-index: 6;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-app-region: no-drag;
+}
+.side-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 1px;
+  background: transparent;
+  transition: background 0.12s;
+}
+.side-resizer:hover::after,
+.side-resizer:focus-visible::after,
+.side-resizer.on::after {
+  width: 3px;
+  background: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.side-resizer:focus-visible {
+  outline: none;
+}
+.window.panel-dragging,
+.window.side-dragging {
   transition: none;
   user-select: none;
   cursor: col-resize;

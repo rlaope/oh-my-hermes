@@ -73,7 +73,7 @@ export class BridgeClient {
   }
 
   request<K extends Op>(op: K, params?: OpParams<K>): Promise<OpResult<K>> {
-    // Remote-only mode's one outgoing filter (rule 46, remoteOps.ts): an op that could carry this computer's folder,
+    // Remote-only mode's one outgoing filter (rule 47, remoteOps.ts): an op that could carry this computer's folder,
     // path or file bytes waits until the mode is known, and on a server it is refused here, before the socket
     if (mayRefuse(op) && !modeIsKnown()) return modeKnown().then(() => this.request(op, params));
     if (remoteOnly()) {

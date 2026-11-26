@@ -273,7 +273,13 @@ class GatewayStartupTests(ReplayTestCase):
         # Far more than a pipe buffer: an undrained stderr would block the fake before ready.
         flood = tuple(f"warning {index}" for index in range(5000))
         client = self.started(Scenario("session", spans("session", "startup"), stderr=flood))
+        # Ready only proves the pipe never filled; the drain thread can still be a few
+        # thousand lines behind the fake's last write, so wait for it to catch up.
+        deadline = time.monotonic() + 10.0
         tail = client.stderr_tail()
+        while tail[-1:] != ["warning 4999"] and time.monotonic() < deadline:
+            time.sleep(0.02)
+            tail = client.stderr_tail()
         self.assertEqual(len(tail), STDERR_TAIL_LINES)
         self.assertEqual(tail[-1], "warning 4999")
 

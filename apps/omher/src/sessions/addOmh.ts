@@ -55,7 +55,7 @@ export function createAddOmh(shell: () => Promise<GateShell | null>, reload: () 
   /** Run the installer once; a second press while it runs does nothing. */
   const run = async (): Promise<void> => {
     if (state.phase === "running") return;
-    // on a server (rule 46) the installer is this computer's: refused before the shell is asked (which refuses too)
+    // on a server (rule 47) the installer is this computer's: refused before the shell is asked (which refuses too)
     if (remoteOnly()) return set({ phase: "failed", lines: [], error: t("remote.noInstall") });
     set({ phase: "running", lines: [], error: null });
     let code: number | null = null;

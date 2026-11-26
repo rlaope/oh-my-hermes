@@ -2242,15 +2242,23 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const to = chatTarget(bot);
       try {
         let wire = p.wire;
+        let attachment_ids: string[] = [];
         if (p.files?.length) {
           if (remoteOnly()) throw new Error(tr("remote.noFiles"));
           const results: AttachResult[] = [];
           for (const f of p.files) results.push(await bridge.request("chat.attach", { bot: to.bot, kind: f.attach, name: f.name, data_base64: await f.read() }));
+          attachment_ids = results.map((r) => r.attachment_id).filter((aid): aid is string => !!aid);
           wire = toWire(promptText(p.text, results), skillNames.get(bot) ?? []);
         }
         // queued: when Hermes is still busy (its own next turn: a steer it took during the final answer, or one held
         // through a compression), this waits behind it in Hermes' FIFO instead of steering or interrupting it
-        const r = await bridge.request("chat.send", p.reply_to ? { ...to, text: wire, reply_to: p.reply_to, queued: true } : { ...to, text: wire, queued: true });
+        const r = await bridge.request("chat.send", {
+          ...to,
+          text: wire,
+          ...(p.reply_to ? { reply_to: p.reply_to } : {}),
+          ...(attachment_ids.length ? { attachment_ids } : {}),
+          queued: true,
+        });
         dispatch({ type: "send.ok", bot, id, now: now(), paused: r?.paused });
         idleLater(bot, id);
       } catch (e) {
@@ -2701,14 +2709,23 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const bot = state.selectedBot;
       if (!bot) return;
       if (!files.length) return actions.send(text);
-      // a file of this computer never goes to a bot on the server (rule 46); the composer offers none there either
+      // a file of this computer never goes to a bot on the server (rule 47); the composer offers none there either
       if (remoteOnly()) throw new Error(tr("remote.noFiles"));
+      const chip = state.replyTo[bot] ?? null;
+      const reply = chip ? { source: chip.source, label: chip.place } : undefined;
       if (mustHold(state, bot)) {
         // held with its files: they are attached when it goes out (an attach stages for the very next send)
         const id = `local-${++localSeq}`;
         const t = text.trim();
+        const wire = toWire(t, skillNames.get(bot) ?? []);
         const shown: SentFile[] = files.map(({ name, size, kind, url }) => ({ name, size, kind, url }));
-        holdIfBusy(bot, id, { text, wire: toWire(t, skillNames.get(bot) ?? []), files }, { type: "local.user", bot, id, text: t, now: now(), files: shown, skills: tokenNames(t, bot) });
+        holdIfBusy(
+          bot,
+          id,
+          { text, wire, files, ...(chip ? { reply_to: chip.session_id } : {}) },
+          { type: "local.user", bot, id, text: t, now: now(), reply, files: shown, sent: wire, skills: tokenNames(t, bot) },
+        );
+        if (chip) dispatch({ type: "reply.set", bot, chip: null });
         return;
       }
       const results: AttachResult[] = [];
@@ -2719,12 +2736,19 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
           throw new Error(tr("att.failed", { name: f.name, error: errText(e) }));
         }
       }
+      const attachment_ids = results.map((r) => r.attachment_id).filter((aid): aid is string => !!aid);
       const sent = toWire(promptText(text, results), skillNames.get(bot) ?? []);
       const id = `local-${++localSeq}`;
       const shown: SentFile[] = files.map(({ name, size, kind, url }) => ({ name, size, kind, url }));
-      dispatch({ type: "local.user", bot, id, text: text.trim(), now: now(), files: shown, sent, skills: tokenNames(text.trim(), bot) });
+      dispatch({ type: "local.user", bot, id, text: text.trim(), now: now(), reply, files: shown, sent, skills: tokenNames(text.trim(), bot) });
+      if (chip) dispatch({ type: "reply.set", bot, chip: null });
       try {
-        const r = await bridge.request("chat.send", { bot, text: sent });
+        const r = await bridge.request("chat.send", {
+          bot,
+          text: sent,
+          ...(chip ? { reply_to: chip.session_id } : {}),
+          ...(attachment_ids.length ? { attachment_ids } : {}),
+        });
         dispatch({ type: "send.ok", bot, id, now: now(), paused: r?.paused });
       } catch (e) {
         dispatch({ type: "send.failed", bot, id, error: errText(e) });
@@ -2976,7 +3000,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       else if (state.selectedBot !== bot || state.ui.view !== "chat") await selectBot(bot);
     },
     openSession: (id) => dispatch({ type: "ui.session", id }),
-    // a folder of this computer is never sent to a bot on the server (rule 46), however the chat was asked for
+    // a folder of this computer is never sent to a bot on the server (rule 47), however the chat was asked for
     folderOpen: async (bot, cwd) => {
       if (remoteOnly()) throw new Error(tr("remote.noFolderChat"));
       return bridge.request("folder.open", { bot, cwd });

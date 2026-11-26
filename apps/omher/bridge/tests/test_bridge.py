@@ -47,8 +47,10 @@ class FakeClient:
     """The slice of ``GatewayClient`` the bridge uses: ``rpc`` and ``events``."""
 
     def __init__(self, name: str, *, bot_chat: bool = True, sessions=None, history=None, caps=None, lacks=(), ready=None,
-                 model_replies=None, resume_bumps=False, legacy=False, slow=(), keeps_created=False):
+                 model_replies=None, resume_bumps=False, legacy=False, slow=(), keeps_created=False, answers=None):
         self.name = name
+        # method -> its answer (a dict, a callable of the params, or an exception to raise), before the defaults below
+        self.answers = dict(answers or {})
         self.slow = frozenset(slow)  # methods that answer after a short wait, so two requests overlap in them
         self.keeps_created = keeps_created  # a main-chat session.create makes a Bot Chat the next session.list finds
         self.legacy = legacy  # True: the older tui gateway (session.title/archive/close, idempotency_key)
@@ -90,6 +92,12 @@ class FakeClient:
         if method in self.slow:
             await asyncio.sleep(0.05)
         self.refuse(method, params)
+        if method in self.answers:
+            answer = self.answers[method]
+            answer = answer(params) if callable(answer) else answer
+            if isinstance(answer, Exception):
+                raise answer
+            return answer
         if method == "session.list":
             if params.get("title") == ob.BOT_CHAT_TITLE:
                 rows = [{"id": MAIN_STORED, "title": ob.BOT_CHAT_TITLE, "source": "tui"}] if self.bot_chat else []
@@ -1663,12 +1671,122 @@ class Plugins(BridgeCase):
             self.assertEqual(await env.bridge.poll_plugins_once(), 0)
 
 
+# What Hermes' gateway answers (caafe5389a, read from a real daemon): `/goal <text>` and `/goal status` through
+# `slash.exec`, the goal through `session.control.read`, and `goal.pause` through `session.control`.
+GOAL_SET = {"type": "send", "message": "search spacex", "display": "/goal search spacex",
+            "notice": "\u2299 Goal set (20-turn budget): search spacex\nI'll keep working until the goal is done."}
+GOAL_STATUS = {"type": "exec", "output": "\u2299 Goal (active, 0/20 turns): search spacex"}
+
+
+def goal_control(status):
+    goal = None if status is None else {"title": "search spacex", "status": status, "turns_used": 4, "max_turns": 20}
+    return {"control": {"goal": goal, "loop": None, "heartbeat": None, "revision": "r1"}}
+
+
+GOAL_PAUSED = {**goal_control("paused"), "dispatch": {"type": "exec", "output": "\u23f8 Goal paused: search spacex",
+                                                      "notice": None, "message": None, "display": None}}
+
+
+class GoalCommand(BridgeCase):
+    """`/goal` goes through Hermes' own `slash.exec` (sent as a prompt, Hermes answered "Goal set" and never started
+    the goal), and Stop during an active goal pauses it before the interrupt (else Hermes' judge starts the next
+    turn)."""
+
+    async def test_goal_set_answers_then_submits_the_turn_hermes_hands_back(self):
+        async with Env(answers={"slash.exec": GOAL_SET}) as env:
+            s = await self.open(env)
+            await s.req("chat.open", bot="kami")
+            r = await s.req("chat.send", bot="kami", text="/goal search spacex")
+            self.assertTrue(r["ok"], r)
+            c = env.clients["kami"]
+            self.assertEqual(c.find("slash.exec"), [{"session_id": MAIN_RUNTIME, "command": "goal search spacex"}])
+            [sub] = c.find("prompt.submit")
+            self.assertEqual((sub["session_id"], sub["text"]), (MAIN_RUNTIME, "search spacex"))  # the goal's first turn
+            self.assertEqual(r["result"], {"input_id": sub["input_id"]})
+            await s.until(lambda ev: any(e["event"] == "turn.end" for e in ev))
+            self.assertEqual(s.kinds(), ["turn.start", "message", "turn.end"])
+            note = [e for e in s.events if e["event"] == "message"][0]
+            self.assertTrue(note["text"].startswith("\u2299 Goal set (20-turn budget): search spacex"), note)
+            self.assertLess([m for m, _ in c.calls].index("slash.exec"), [m for m, _ in c.calls].index("prompt.submit"))
+
+    async def test_goal_status_answers_and_starts_no_turn(self):
+        async with Env(answers={"slash.exec": GOAL_STATUS}) as env:
+            s = await self.open(env)
+            r = await s.req("chat.send", bot="kami", text="  /GOAL status")
+            self.assertTrue(r["ok"], r)
+            c = env.clients["kami"]
+            self.assertEqual(c.find("slash.exec")[0]["command"], "GOAL status")
+            self.assertEqual(c.find("prompt.submit"), [])
+            await s.until(lambda ev: any(e["event"] == "turn.end" for e in ev))
+            self.assertEqual([e["text"] for e in s.events if e["event"] == "message"], [GOAL_STATUS["output"]])
+
+    async def test_a_gateway_without_slash_exec_gets_the_text_as_typed(self):
+        async with Env(lacks=("slash.exec",)) as env:
+            s = await self.open(env)
+            self.assertTrue((await s.req("chat.send", bot="kami", text="/goal search spacex"))["ok"])
+            self.assertEqual([p["text"] for p in env.clients["kami"].find("prompt.submit")], ["/goal search spacex"])
+
+    async def test_other_commands_still_go_as_typed(self):
+        async with Env(answers={"slash.exec": GOAL_SET}) as env:
+            s = await self.open(env)
+            for text in ("/goals", "/usage", "/subgoal add x", "goal search spacex"):
+                self.assertTrue((await s.req("chat.send", bot="kami", text=text))["ok"])
+            c = env.clients["kami"]
+            self.assertEqual(c.find("slash.exec"), [])
+            self.assertEqual([p["text"] for p in c.find("prompt.submit")][:3], ["/goals", "/usage", "/subgoal add x"])
+
+    async def test_a_refused_goal_command_fails_the_send_and_submits_nothing(self):
+        async with Env(answers={"slash.exec": GatewayRPCError("unsupported_command")}) as env:
+            s = await self.open(env)
+            r = await s.req("chat.send", bot="kami", text="/goal search spacex")
+            self.assertFalse(r["ok"], r)
+            self.assertEqual(env.clients["kami"].find("prompt.submit"), [])
+
+    async def test_stop_pauses_an_active_goal_before_the_interrupt(self):
+        async with Env(answers={"session.control.read": goal_control("active"), "session.control": GOAL_PAUSED}) as env:
+            s = await self.open(env)
+            await s.req("chat.open", bot="kami")
+            c = env.clients["kami"]
+            c.push("message.start", {}, execution_generation=9)
+            await s.until(lambda ev: any(e["event"] == "turn.start" for e in ev))
+            self.assertTrue((await s.req("chat.interrupt", bot="kami"))["ok"])
+            calls = [m for m, _ in c.calls if m.startswith("session.control") or m == "session.interrupt"]
+            self.assertEqual(calls, ["session.control.read", "session.control", "session.interrupt"])
+            self.assertEqual(c.find("session.control"), [{"session_id": MAIN_RUNTIME, "action": "goal.pause"}])
+            self.assertEqual(c.find("session.interrupt"), [{"session_id": MAIN_RUNTIME, "execution_generation": 9}])
+            await s.until(lambda ev: any(e["event"] == "message" for e in ev))
+            notes = [e["text"] for e in s.events if e["event"] == "message"]
+            self.assertEqual(notes, ["\u23f8 Goal paused: search spacex"])
+            self.assertNotIn("turn.end", s.kinds())  # the note joins the running turn; Hermes ends that turn itself
+
+    async def test_stop_leaves_a_goal_that_is_not_active_and_still_interrupts(self):
+        for read in (goal_control("paused"), goal_control("done"), goal_control(None), {},
+                     GatewayRPCError("unknown_method", {"reason": "unknown_method"})):
+            with self.subTest(read=read):
+                async with Env(answers={"session.control.read": read, "session.control": GOAL_PAUSED}) as env:
+                    s = await self.open(env)
+                    self.assertTrue((await s.req("chat.interrupt", bot="kami"))["ok"])
+                    c = env.clients["kami"]
+                    self.assertEqual(c.find("session.control"), [])
+                    self.assertEqual(len(c.find("session.interrupt")), 1)
+
+    async def test_a_refused_pause_still_interrupts(self):
+        async with Env(answers={"session.control.read": goal_control("active"),
+                                "session.control": GatewayRPCError("busy")}) as env:
+            s = await self.open(env)
+            self.assertTrue((await s.req("chat.interrupt", bot="kami"))["ok"])
+            c = env.clients["kami"]
+            self.assertEqual(len(c.find("session.interrupt")), 1)
+            self.assertFalse(any(e["event"] == "message" for e in s.events))
+
+
 class ReadOnlyRule(BridgeCase):
     """No Hermes call that attaches to or writes a session may carry any id but the bot's main chat."""
 
     GUARDED = ("prompt.submit", "session.resume", "session.interrupt", "approval.respond", "clarify.respond",
                "session.mutate", "session.title", "session.steer", "session.redirect", "session.activate",
-               "image.attach_bytes", "pdf.attach", "file.attach")
+               "image.attach_bytes", "pdf.attach", "file.attach", "slash.exec", "session.control",
+               "session.control.read")
 
     async def test_no_guarded_call_carries_a_foreign_session_id(self):
         foreign = "20261108_235229_aaaf70c4"
@@ -1702,7 +1820,7 @@ class ReadOnlyRule(BridgeCase):
         src = (HERE.parent / "omher_bridge.py").read_text(encoding="utf-8")
         self.assertEqual(len(re.findall(r"prompt\.submit", src)), 1)
         sites = re.findall(r"self\._submit\(([^)]*)\)", src)
-        self.assertEqual(sites, ["conn, main, text, input_id, queued"])
+        self.assertEqual(sites, ["conn, main, text, input_id, queued, attachments=attachments"])
 
     def test_bridge_makes_no_model_or_http_call(self):
         src = (HERE.parent / "omher_bridge.py").read_text(encoding="utf-8")
@@ -1952,6 +2070,109 @@ class Attach(BridgeCase):
             self.assertEqual(big["error"]["code"], "too_big")
             # only the well-formed one reached Hermes
             self.assertEqual([m for m, _ in env.clients["kami"].calls if "attach" in m], ["image.attach_bytes"])
+
+    async def test_canonical_image_attachments_are_forwarded_on_prompt_submit(self):
+        """Canonical Hermes image.attach_bytes is staging-only ({path, mime}); chat.attach returns an
+        opaque attachment_id and chat.send resolves it into prompt.submit's attachments list."""
+        import base64
+        png_b64 = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"\x00" * 16).decode()
+        jpg_b64 = base64.b64encode(b"\xff\xd8\xff\xe0" + b"\x00" * 16).decode()
+        webp_b64 = base64.b64encode(b"RIFF\x10\x00\x00\x00WEBP" + b"\x00" * 8).decode()
+        data_url_png = f"  data:image/png;base64,{png_b64}"
+        with tempfile.TemporaryDirectory() as folder:
+            async with Env() as env:
+                s = await self.open(env)
+                # warm the connection so env.clients["kami"] exists before installing the canonical RPC hook
+                self.assertTrue((await s.req("chat.open", bot="kami"))["ok"])
+                c = env.clients["kami"]
+                orig_rpc = c.rpc
+                staged_n = 0
+
+                async def canonical_rpc(method, **params):
+                    nonlocal staged_n
+                    if method == "image.attach_bytes":
+                        c.calls.append((method, params))
+                        staged_n += 1
+                        ext = Path(params.get("filename") or "x.png").suffix.lower()
+                        mime = {".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp"}[ext]
+                        return {"attached": True, "path": f"/h/cache/images/upload_{staged_n}{ext}",
+                                "mime": mime, "text": f"[User attached image: upload_{staged_n}{ext}]"}
+                    return await orig_rpc(method, **params)
+
+                c.rpc = canonical_rpc
+                # messenger drags: extensionless PNG, Windows .jfif JPEG, WebP misnamed as .png, data-URL PNG
+                a1 = await s.req("chat.attach", bot="kami", kind="image", name="pasted", data_base64=png_b64)
+                a2 = await s.req("chat.attach", bot="kami", kind="image", name="table.jfif", data_base64=jpg_b64)
+                a3 = await s.req("chat.attach", bot="kami", kind="image", name="discord.png", data_base64=webp_b64)
+                a4 = await s.req("chat.attach", bot="kami", kind="image", name="clip", data_base64=data_url_png)
+                # filenames sent to Hermes match actual magic bytes
+                self.assertEqual([p["filename"] for p in c.find("image.attach_bytes")],
+                                 ["pasted.png", "table.jpg", "discord.webp", "clip.png"])
+                ids = [r["result"]["attachment_id"] for r in (a1, a2, a3, a4)]
+                self.assertTrue(all(isinstance(x, str) and x for x in ids))
+                # host paths are never exposed back to the page
+                for r in (a1, a2, a3, a4):
+                    self.assertNotIn("path", r["result"])
+
+                # duplicate attachment_id is refused without consuming the token
+                dup = await s.req("chat.send", bot="kami", text="dup", attachment_ids=[ids[0], ids[0]])
+                self.assertEqual(dup["error"]["code"], "bad_request")
+
+                # cross-session replay: an image staged on main is refused on a folder chat
+                fid = (await s.req("folder.open", bot="kami", cwd=folder))["result"]["session"]
+                cross = await s.req("chat.send", bot="kami", session=fid, text="steal", attachment_ids=[ids[0]])
+                self.assertEqual(cross["error"]["code"], "bad_request")
+
+                # send a1 + a2; leave a3 + a4 unused to verify abandoned attaches never leak to later sends
+                sent = await s.req("chat.send", bot="kami", text="[User attached image: upload_1.png]",
+                                   attachment_ids=ids[:2])
+                self.assertTrue(sent["ok"])
+                submits = c.find("prompt.submit")
+                self.assertEqual(submits[-1]["attachments"], [
+                    {"path": "/h/cache/images/upload_1.png", "mime": "image/png"},
+                    {"path": "/h/cache/images/upload_2.jpg", "mime": "image/jpeg"},
+                ])
+
+                # single-use: re-sending a consumed id is refused
+                reused = await s.req("chat.send", bot="kami", text="again", attachment_ids=[ids[0]])
+                self.assertEqual(reused["error"]["code"], "bad_request")
+
+                # plain message afterwards does not pick up abandoned a3/a4
+                plain = await s.req("chat.send", bot="kami", text="plain text")
+                self.assertTrue(plain["ok"])
+                self.assertNotIn("attachments", c.find("prompt.submit")[-1])
+
+                # >10 image attachments per message is refused without burning the staged tokens
+                many = []
+                for i in range(ob.MAX_PROMPT_ATTACHMENTS + 1):
+                    r = await s.req("chat.attach", bot="kami", kind="image", name=f"m{i}.png", data_base64=png_b64)
+                    many.append(r["result"]["attachment_id"])
+                over = await s.req("chat.send", bot="kami", text="too many", attachment_ids=many)
+                self.assertEqual(over["error"]["code"], "bad_request")
+                ok10 = await s.req("chat.send", bot="kami", text="exact 10", attachment_ids=many[:ob.MAX_PROMPT_ATTACHMENTS])
+                self.assertTrue(ok10["ok"])
+                self.assertEqual(len(c.find("prompt.submit")[-1]["attachments"]), ob.MAX_PROMPT_ATTACHMENTS)
+
+                # FIFO eviction beyond MAX_STAGED_ATTACHMENTS (64)
+                evict_first = (await s.req("chat.attach", bot="kami", kind="image", name="old.png", data_base64=png_b64))["result"]["attachment_id"]
+                for i in range(ob.MAX_STAGED_ATTACHMENTS):
+                    await s.req("chat.attach", bot="kami", kind="image", name=f"f{i}.png", data_base64=png_b64)
+                evicted = await s.req("chat.send", bot="kami", text="old", attachment_ids=[evict_first])
+                self.assertEqual(evicted["error"]["code"], "bad_request")
+
+                # disconnect (_drop) clears staged_attachments so pre-disconnect tokens are rejected after reconnect
+                pre_drop = (await s.req("chat.attach", bot="kami", kind="image", name="drop.png", data_base64=png_b64))["result"]["attachment_id"]
+                await env.bridge._drop(env.bridge.conns["kami"], emit=False)
+                self.assertEqual(env.bridge.conns["kami"].staged_attachments, {})
+                after_drop = await s.req("chat.send", bot="kami", text="stale", attachment_ids=[pre_drop])
+                self.assertEqual(after_drop["error"]["code"], "bad_request")
+
+                # a client-supplied path/unknown id is refused and never reaches prompt.submit
+                bogus = await s.req("chat.send", bot="kami", text="hi", attachment_ids=["/etc/passwd"])
+                self.assertEqual(bogus["error"]["code"], "bad_request")
+                # slash commands cannot carry attachments
+                slash = await s.req("chat.send", bot="kami", text="/help", attachment_ids=[ids[2]])
+                self.assertEqual(slash["error"]["code"], "bad_request")
 
 
 class Discovery(unittest.TestCase):

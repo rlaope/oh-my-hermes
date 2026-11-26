@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
+import binascii
 import contextlib
 import errno
 import hmac
@@ -75,6 +77,8 @@ PROVIDER_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,40}$")
 # setup.runtime_check answers a retryable error while its probe still runs: waits before asking again (None: give up).
 READY_RETRY = (0.5, 1.0, None)
 RUNNING_STATUSES = frozenset({"working", "streaming", "waiting", "starting"})
+# `/goal …` as the person typed it: sent through Hermes' `slash.exec` (Bridge._goal_command), never as a prompt
+GOAL_COMMAND = re.compile(r"/goal(?:\s|$)", re.IGNORECASE)
 MAX_ELSEWHERE = 20
 MAX_OPEN_MESSAGES = 200
 PEEK_CHARS = 400
@@ -86,6 +90,87 @@ OFFLINE_COOLDOWN = 10.0
 ATTACH_B64_MAX = (100 * 1024 * 1024 + 2) // 3 * 4
 UI_FRAME_MAX = ATTACH_B64_MAX + 64 * 1024
 ATTACH_TIMEOUT = 180.0
+MAX_STAGED_ATTACHMENTS = 64
+MAX_PROMPT_ATTACHMENTS = 10
+_CANONICAL_IMAGE_MIMES = frozenset({"image/png", "image/jpeg", "image/gif", "image/webp"})
+_IMAGE_EXT_EQUIV = {".jpeg": ".jpg"}
+_DATA_URL_PREFIX_RE = re.compile(r"^data:[a-zA-Z0-9.+/_-]*;base64,", re.IGNORECASE)
+
+
+def _sniff_base64_image_ext(data_b64: str) -> str | None:
+    """Sniff canonical image format (.png/.jpg/.gif/.webp) from the leading bytes of base64, else None."""
+    stripped = data_b64.lstrip()
+    m = _DATA_URL_PREFIX_RE.match(stripped)
+    if m:
+        stripped = stripped[m.end():]
+    cleaned = "".join(stripped[:64].split())
+    if len(cleaned) < 8:
+        return None
+    sample = cleaned[:24]
+    pad = (-len(sample)) % 4
+    try:
+        head = base64.b64decode(sample + ("=" * pad), validate=False)
+    except (ValueError, binascii.Error):
+        return None
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    if head.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    if head[:6] in (b"GIF87a", b"GIF89a"):
+        return ".gif"
+    if len(head) >= 12 and head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return ".webp"
+    return None
+
+
+def _image_attach_filename(name: str, data_b64: str) -> str:
+    """Align an uploaded image's suffix with its real magic bytes when known, so extensionless or
+    .jfif / mismatched messenger drops pass canonical Hermes' suffix allowlist."""
+    ext = _sniff_base64_image_ext(data_b64)
+    if not ext:
+        return name
+    cur = Path(name).suffix.lower()
+    if _IMAGE_EXT_EQUIV.get(cur, cur) == ext:
+        return name
+    stem = name[:-len(cur)] if cur else name
+    return f"{stem or 'image'}{ext}"
+
+
+def _stage_attachment(conn: "Conn", session_id: str, kind: str, res: dict) -> str | None:
+    """Remember a canonical gateway's staged image receipt server-side under an opaque token so the
+    subsequent ``chat.send`` forwards ``attachments=[{path, mime}]`` without letting the page name a path."""
+    if kind != "image":
+        return None
+    staged_path = res.get("path")
+    staged_mime = res.get("mime")
+    if not isinstance(staged_path, str) or not staged_path or staged_mime not in _CANONICAL_IMAGE_MIMES:
+        return None
+    aid = uuid.uuid4().hex
+    conn.staged_attachments[aid] = (session_id, {"path": staged_path, "mime": staged_mime})
+    while len(conn.staged_attachments) > MAX_STAGED_ATTACHMENTS:
+        conn.staged_attachments.pop(next(iter(conn.staged_attachments)))
+    return aid
+
+
+def _take_staged_attachments(conn: "Conn", session_id: str, raw_ids) -> list[dict[str, str]]:
+    """Resolve and consume opaque ``attachment_ids`` staged on ``conn`` for ``session_id``."""
+    if raw_ids is None:
+        return []
+    if not isinstance(raw_ids, list) or any(not isinstance(x, str) or not x for x in raw_ids):
+        raise BridgeError("bad_request", "attachment_ids must be a list of non-empty strings")
+    if len(raw_ids) > MAX_PROMPT_ATTACHMENTS:
+        raise BridgeError("bad_request", f"at most {MAX_PROMPT_ATTACHMENTS} image attachments per message")
+    if len(set(raw_ids)) != len(raw_ids):
+        raise BridgeError("bad_request", "duplicate attachment_id")
+    items: list[dict[str, str]] = []
+    for aid in raw_ids:
+        entry = conn.staged_attachments.get(aid)
+        if entry is None or entry[0] != session_id:
+            raise BridgeError("bad_request", "unknown or expired attachment_id")
+        items.append(entry[1])
+    for aid in raw_ids:
+        conn.staged_attachments.pop(aid, None)
+    return items
 # The only actions omher sends to Hermes' own `cron.manage` and `plugins.manage` (BOUNDARY rules 24 and 25).
 CRON_ACTIONS = frozenset({"add", "pause", "resume", "remove"})
 PLUGIN_ACTIONS = frozenset({"list", "toggle", "inspect", "install", "update", "remove"})
@@ -6849,6 +6934,7 @@ class Conn:
         self.asked: dict[str, tuple[float, float | None]] = {}  # open prompt_id -> (asked at, gateway timeout s)
         self.batches: dict[str, list[str]] = {}  # open batch clarify request id -> question ids, in order
         self.clarify_batch: bool | None = None  # the gateway asks a multi-question clarify as one request
+        self.staged_attachments: dict[str, tuple[str, dict[str, str]]] = {}  # opaque attachment_id -> (session_id, {path, mime})
         self.watch_names: set[str] = set()  # names of the channel watches (collector jobs) that deliver into this Bot Chat
 
     @property
@@ -7201,6 +7287,7 @@ class Bridge:
         conn.asked.clear()
         conn.batches.clear()
         conn.clarify_batch = None
+        conn.staged_attachments.clear()
         if pump is not None and pump is not asyncio.current_task():
             pump.cancel()
             with contextlib.suppress(BaseException):
@@ -7633,6 +7720,9 @@ class Bridge:
         command = text.lstrip().startswith("/")
         if command and reply_to is not None:
             raise BridgeError("bad_request", "a slash command takes no reply target")
+        attachment_ids = p.get("attachment_ids")
+        if command and attachment_ids:
+            raise BridgeError("bad_request", "a slash command takes no attachments")
         conn = await self._conn(p.get("bot"))
         main, chat = await self._target(conn, p)
         if reply_to is not None:
@@ -7655,12 +7745,48 @@ class Bridge:
         input_id = str(uuid.uuid4())
         await self._probe_clarify_batch(conn)
         queued = p.get("queued") is True
-        await self._submit(conn, main, text, input_id, queued)
+        goal = command and GOAL_COMMAND.match(text.lstrip()) is not None
+        kick = await self._goal_command(conn, main, chat, text) if goal else None
+        if kick is not None:  # /goal ran through slash.exec: what goes now is the goal's first turn, if it has one
+            text = kick
+        attachments = _take_staged_attachments(conn, main, attachment_ids)
+        if text:
+            await self._submit(conn, main, text, input_id, queued, attachments=attachments)
         if chat is not None and chat.kind == "thread" and not chat.title:
             await self._name_thread(conn, chat, p["text"])
         # behind a turn Hermes lost in a restart: Hermes keeps it in its queue and runs it only after that turn is
         # discarded (chat.discard), so the page shows it waiting, not read
         return {"input_id": input_id, **({"paused": True} if (chat or conn).lost_turns else {})}
+
+    async def _goal_command(self, conn: Conn, main: str, chat: FolderChat | None, text: str) -> str | None:
+        """``/goal`` through Hermes' own ``slash.exec``, as Hermes' TUI and Desktop send it. Sent as a prompt, Hermes
+        runs the command as an admitted turn: it answers "Goal set" but puts the goal's first turn on a local queue
+        nothing reads, so the goal never starts. ``slash.exec`` hands that turn back instead (``type: send``) for the
+        client to submit itself. Its answer shows as the bot's message; returns the turn to submit ("" for none), or
+        None on a gateway without ``slash.exec`` (the command then goes as typed)."""
+        try:
+            res = await self._call(conn, "slash.exec", session_id=main, command=text.strip()[1:])
+        except BridgeError:
+            raise
+        except Exception as e:
+            if _named(e, "GatewayRPCError") and (str(e) == "unknown_method" or getattr(e, "code", None) == -32601):
+                return None
+            raise
+        res = res if isinstance(res, dict) else {}
+        kick = res.get("message") if res.get("type") == "send" and isinstance(res.get("message"), str) else ""
+        note = res.get("notice") if res.get("type") == "send" else res.get("output")
+        if isinstance(note, str) and note.strip():
+            await self._command_note(conn, chat, note.strip())
+        return kick if kick.strip() else ""
+
+    async def _command_note(self, conn: Conn, chat: FolderChat | None, text: str) -> None:
+        """A command's answer that runs no turn, shown as the bot's message the way its turn used to show it."""
+        opened = not (chat or conn).in_turn
+        if opened:
+            await self._begin_turn(conn, chat)
+        await self._chat_emit(conn, chat, "message", id=uuid.uuid4().hex, text=text)
+        if opened:
+            await self._end_turn(conn, "done", chat=chat)
 
     async def _probe_clarify_batch(self, conn: Conn) -> None:
         """Ask once per connection whether the gateway can send a turn's several clarify questions as one
@@ -7691,7 +7817,7 @@ class Bridge:
         conn = await self._conn(p.get("bot"))
         main = await self._main(conn)
         if kind == "image":
-            method, source = "image.attach_bytes", {"content_base64": data, "filename": name}
+            method, source = "image.attach_bytes", {"content_base64": data, "filename": _image_attach_filename(name, data)}
         elif kind == "pdf":
             method, source = "pdf.attach", {"content_base64": data, "filename": name}
         else:
@@ -7700,15 +7826,23 @@ class Bridge:
         res = res if isinstance(res, dict) else {}
         if res.get("attached") is False:
             raise BridgeError("attach_failed", str(res.get("message") or f"could not attach {name}"))
-        return {"kind": kind, "name": name, "text": str(res.get("text") or ""), "ref_text": str(res.get("ref_text") or "")}
+        aid = _stage_attachment(conn, main, kind, res)
+        return {
+            "kind": kind, "name": name, "text": str(res.get("text") or ""),
+            "ref_text": str(res.get("ref_text") or ""),
+            **({"attachment_id": aid} if aid else {}),
+        }
 
-    async def _submit(self, conn: Conn, main_id: str, text: str, input_id: str, queued: bool = False):
+    async def _submit(self, conn: Conn, main_id: str, text: str, input_id: str, queued: bool = False,
+                      attachments: list[dict[str, str]] | None = None):
         # The single place a turn is sent. It takes the main chat's id or a folder chat's that this bridge
         # created (both from _target), and nothing else. ``queued`` (a message the app held, steer queue): when the
         # session is still busy, Hermes runs it after that work in its own FIFO, never as a steer or interrupt.
-        batch = {"clarify_batch": True} if conn.clarify_batch else {}
+        batch: dict = {"clarify_batch": True} if conn.clarify_batch else {}
         if queued:
             batch["queued"] = True
+        if attachments:
+            batch["attachments"] = attachments
         return await self._call(conn, "prompt.submit", session_id=main_id, text=text, input_id=input_id, **batch)
 
     async def _generation(self, conn: Conn, main: str, chat: FolderChat | None = None):
@@ -7721,8 +7855,34 @@ class Bridge:
     async def op_chat_interrupt(self, p) -> dict:
         conn = await self._conn(p.get("bot"))
         main, chat = await self._target(conn, p)
+        paused = await self._pause_goal(conn, main)
         await self._call(conn, "session.interrupt", session_id=main, execution_generation=await self._generation(conn, main, chat))
+        if paused:
+            await self._command_note(conn, chat, paused)
         return {}
+
+    async def _pause_goal(self, conn: Conn, main: str) -> str | None:
+        """Stop during a /goal pauses the goal first, as Ctrl+C does in Hermes' CLI. Hermes' gateway judges a stopped
+        turn like a finished one and starts the goal's next turn, so a Stop alone never ends the run. Only an
+        ``active`` goal is paused (pausing a done goal would make it paused again); the pause runs before the
+        interrupt, so the judge of the stopped turn already finds it paused. Returns Hermes' answer to show, or None.
+        A gateway that cannot read or pause a goal still gets the interrupt."""
+        try:
+            snap = await self._call(conn, "session.control.read", session_id=main)
+            control = snap.get("control") if isinstance(snap, dict) else None
+            goal = control.get("goal") if isinstance(control, dict) else None
+            if not isinstance(goal, dict) or goal.get("status") != "active":
+                return None
+            res = await self._call(conn, "session.control", session_id=main, action="goal.pause")
+        except BridgeError:
+            raise
+        except Exception as e:
+            if not _named(e, "GatewayRPCError"):
+                raise
+            return None
+        dispatch = res.get("dispatch") if isinstance(res, dict) else None
+        out = dispatch.get("output") if isinstance(dispatch, dict) else None
+        return out.strip() if isinstance(out, str) and out.strip() else None
 
     async def op_chat_discard(self, p) -> dict:
         """The person's Discard on a chat Hermes paused: a turn of it was lost when Hermes' gateway stopped

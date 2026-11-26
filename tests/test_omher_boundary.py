@@ -720,11 +720,13 @@ class DocPins(unittest.TestCase):
         # the name by Hermes' rule, the outcome from the folder Hermes made; one more `OMH_READS` entry for the
         # gallery's `profile bot-templates --json`; one apply message once the bot has the template skill); 45: rule 45
         # (a bot on another computer: its platforms read there by that computer's own bridge, asked over the link with
-        # the bare op and nothing in it, once per interval, checked again here, kept in memory only); 46: rule 46
+        # the bare op and nothing in it, once per interval, checked again here, kept in memory only); 46: rule 46 (a
+        # typed `/goal` through Hermes' own `slash.exec`, its handed-back turn through the one `prompt.submit`; Stop
+        # pauses only an `active` goal through Hermes' own `session.control` `goal.pause` before the interrupt); 47: rule 47
         # (remote-only mode: one shell-written ~/.omher/remote.json, no local bridge, Python or peer links, one rule 31
         # link to the server and the page talking only to that bridge). The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 46, len(rules))
+        self.assertTrue(6 <= len(rules) <= 47, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -2197,7 +2199,7 @@ class AddKeyOpensOnlyHermesAuthAdd(unittest.TestCase):
         self.assertIn('["auth".into(), "add".into(), provider.into()]', args)
         sig = re.search(r"async fn open_hermes_sign_in\((.*?)\) -> ", self.lib, re.S)
         self.assertIsNotNone(sig)
-        # the page passes a provider id only; the shell's own state is for rule 46's refusal on a server
+        # the page passes a provider id only; the shell's own state is for rule 47's refusal on a server
         self.assertEqual(sig.group(1).strip(), "shell: State<'_, Shell>, provider: String")
         self.assertIn("hermes_auth::open(hermes_auth::Form::SignIn, &provider)", self.lib)
         # the page's list is the shell's list, and its stand-in in a browser is e2e's only
@@ -2239,7 +2241,7 @@ class AddKeyOpensOnlyHermesAuthAdd(unittest.TestCase):
         self.assertIn(".stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null())", self.prod)
         sig = re.search(r"async fn open_hermes_auth\((.*?)\) -> ", self.lib, re.S)
         self.assertIsNotNone(sig)
-        # the page passes a provider id only; the shell's own state is for rule 46's refusal on a server
+        # the page passes a provider id only; the shell's own state is for rule 47's refusal on a server
         self.assertEqual(sig.group(1).strip(), "shell: State<'_, Shell>, provider: String")
         self.assertIn("hermes_auth::open(hermes_auth::Form::ApiKey, &provider)", self.lib)
 
@@ -2888,6 +2890,32 @@ class SshPeersOnlyOverTheOwnSsh(unittest.TestCase):
         self.assertIn(r'PEER_URL = re.compile(r"ws://127\.0\.0\.1:[0-9]{1,5}/\?token=[0-9a-f]{32}")', self.bridge)
 
 
+class GoalThroughHermesOwnControls(unittest.TestCase):
+    """Rule 46: a typed `/goal` goes through Hermes' own `slash.exec` and its handed-back turn through the one
+    `prompt.submit` call site; Stop pauses only an `active` goal, through Hermes' own `session.control` `goal.pause`,
+    before the interrupt, and the bridge never resumes, clears or sets a goal itself."""
+
+    def _fn(self, src: str, tree: ast.AST, name: str) -> str:
+        fn = [f for f in ast.walk(tree) if isinstance(f, ast.AsyncFunctionDef) and f.name == name][0]
+        return ast.get_source_segment(src, fn) or ""
+
+    def test_goal_and_stop_use_only_hermes_own_controls(self) -> None:
+        src = BRIDGE.read_text(encoding="utf-8")
+        tree = ast.parse(src)
+        goal = self._fn(src, tree, "_goal_command")
+        self.assertEqual(re.findall(r'_call\(conn, "([a-z._]+)"', goal), ["slash.exec"])
+        self.assertNotIn("prompt.submit", goal)
+        pause = self._fn(src, tree, "_pause_goal")
+        self.assertEqual(re.findall(r'_call\(conn, "([a-z._]+)"', pause), ["session.control.read", "session.control"])
+        self.assertIn('goal.get("status") != "active"', pause)
+        self.assertEqual(re.findall(r'action="([a-z.]+)"', src), ["goal.pause"])
+        for verb in ("goal.resume", "goal.clear", "goal resume", "goal clear"):
+            self.assertNotIn(verb, src, verb)
+        stop = self._fn(src, tree, "op_chat_interrupt")
+        self.assertLess(stop.index("self._pause_goal("), stop.index('"session.interrupt"'))
+        self.assertEqual(src.count('"slash.exec"'), 1)
+
+
 class BotThreads(unittest.TestCase):
     """Rules 3, 11 and 32 for bot threads: a thread is removed by interrupt + Hermes' own archive, never a
     delete; the SESSIONS entry is back as TERMINALS (terminal sessions only, no chat mode); the terminal panel's and the
@@ -3104,7 +3132,7 @@ class HandToBotAddsNoRead(unittest.TestCase):
         panel = (UI_SRC / "elsewhere" / "PanelTabs.tsx").read_text(encoding="utf-8")
         self.assertIn("const canHand = () => !bot.host && handBots(getStore().getSnapshot().bots).length > 0;", panel)
         self.assertIn("if (!canHand()) return;", panel)
-        # none at all in remote-only mode (rule 46): every bot runs on the server, which cannot read a folder here
+        # none at all in remote-only mode (rule 47): every bot runs on the server, which cannot read a folder here
         self.assertIn('export const handBots = (bots: Bot[]) => (remoteOnly() ? [] : bots.filter((b) => !b.host && b.status !== "offline"));', self.card)
         rows = (UI_SRC / "sessions" / "SessionsSection.tsx").read_text(encoding="utf-8")
         self.assertIn("termMenuItems(rec, handBots(getStore().getSnapshot().bots).length > 0)", rows)
@@ -3597,7 +3625,7 @@ class BotPageReadsPersonaAndMemoryOnly(unittest.TestCase):
         # nowhere else in the app names the op or keeps what it answered (unit tests may name it)
         hits = [p.relative_to(UI_SRC).as_posix() for p in UI_SRC.rglob("*.ts*")
                 if ".test." not in p.name and '"bots.page"' in p.read_text(encoding="utf-8")]
-        # lib/remoteOps.ts is rule 46's audit table: it names every op and sends none, keeping no answer
+        # lib/remoteOps.ts is rule 47's audit table: it names every op and sends none, keeping no answer
         self.assertEqual(sorted(hits), ["lib/protocol.ts", "lib/remoteOps.ts", "state/store.ts"])
 
 
@@ -3747,16 +3775,16 @@ class MessagingPlatformsThroughOmh(unittest.TestCase):
                 self.assertNotIn(bad, text, bad)
         hits = [p.relative_to(UI_SRC).as_posix() for p in UI_SRC.rglob("*.ts*")
                 if ".test." not in p.name and '"bots.platforms"' in p.read_text(encoding="utf-8")]
-        # lib/remoteOps.ts is rule 46's audit table: it names every op and sends none, keeping no answer
+        # lib/remoteOps.ts is rule 47's audit table: it names every op and sends none, keeping no answer
         self.assertEqual(sorted(hits), ["lib/protocol.ts", "lib/remoteOps.ts", "state/store.ts"])
 
 
 class RemoteOnlyMode(unittest.TestCase):
-    """Rule 46: remote-only mode is one shell-written mode file; in it the shell starts no local bridge, no Python and no
+    """Rule 47: remote-only mode is one shell-written mode file; in it the shell starts no local bridge, no Python and no
     peer links, keeps one link made by rule 31's `peers::connect`, and the peer commands refuse."""
 
     RULE_46 = (
-        "46. omher can run with nothing installed on this computer, using the Hermes on a server the person reaches over"
+        "47. omher can run with nothing installed on this computer, using the Hermes on a server the person reaches over"
         " `ssh` (remote-only mode, issue #3229).",
         "The mode is one file, `~/.omher/remote.json` (`{\"v\":1,\"host\":\"user@host\",\"port\":22|null,\"label\":\"...\"}`),"
         " which only the desktop shell writes, and only when the person presses Connect",

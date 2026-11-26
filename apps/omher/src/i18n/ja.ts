@@ -1051,6 +1051,7 @@ export const ja: Record<Key, string> = {
   "att.removeOf": "{name} を外す",
   "att.drop": "ドロップして添付",
   "att.tooMany": "{n} 個を超えています",
+  "att.tooManyImages": "画像が {n} 枚を超えています",
   "att.tooBig": "100 MB を超えています",
   "att.failed": "{name} を添付できませんでした · {error}",
   "bub.replyTarget": "返信先",
@@ -1771,9 +1772,11 @@ export const ja: Record<Key, string> = {
   "term.folderEmpty": "ターミナルなし · 右クリックで追加",
   "term.folderGone": "このフォルダはもうありません",
   "term.folderGoneRan": "{folder} はもうないため、{at} で開きました",
-  // spacing: the BOTS | TERMINALS divider
+  // spacing: the BOTS | TERMINALS divider and the sidebar's right edge
   "side.split": "ボットとターミナルの高さを変える",
   "side.splitTip": "ドラッグでボットかターミナルを広げます。ダブルクリックで自動に戻ります。",
+  "side.resize": "サイドバーの幅を変える",
+  "side.resizeTip": "ドラッグで幅を変更 · ダブルクリックで標準の幅",
   // tidy: a thread row's second line
   "thread.said": "{name}: {text}",
   "thread.you": "あなた",
