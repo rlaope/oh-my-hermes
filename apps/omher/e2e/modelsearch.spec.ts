@@ -50,7 +50,7 @@ test("search is focused on open and filters by model and provider as you type", 
   await expect(pop.getByTestId("model-opt")).toHaveCount(12);
 
   await page.keyboard.type("GPT");
-  await expect(names(pop)).toHaveText(["gpt-6.1-sol", "gpt-6.1-terra"]);
+  await expect(names(pop)).toHaveText(["GPT-6.1 Sol", "GPT-6.1 Terra"]);
   await expect(pop.locator(".mp-g")).toHaveText(["OpenAI"]);
 
   // provider name matches every model it serves
@@ -65,7 +65,7 @@ test("search is focused on open and filters by model and provider as you type", 
 test("compact match: 'opus55' finds claude-opus-5-5 and Opus 5.5", async ({ page }) => {
   const pop = await openPicker(page);
   await pop.getByTestId("model-search").fill("opus55");
-  await expect(names(pop)).toHaveText(["Opus 5.5", "anthropic/claude-opus-5-5"]);
+  await expect(names(pop)).toHaveText(["Opus 5.5", "Opus 5.5"]);
   await expect(pop.locator(".mp-g")).toHaveText(["Claude (proxy)", "OpenRouter"]);
 });
 
@@ -79,7 +79,7 @@ test("vendor chips: only vendors with models, each with its mark; a chip filters
   await expect(pop.locator('[data-testid="model-chip-kimi"], [data-testid="model-chip-mistral"]')).toHaveCount(0);
 
   await pop.getByTestId("model-chip-claude").click();
-  await expect(names(pop)).toHaveText(["Opus 5.5", "Sonnet 5.5", "Haiku 5", "anthropic/claude-opus-5-5"]);
+  await expect(names(pop)).toHaveText(["Opus 5.5", "Sonnet 5.5", "Haiku 5", "Opus 5.5"]);
   const on = pop.getByTestId("model-chip-claude");
   await expect(on).toHaveAttribute("aria-pressed", "true");
   // the chosen chip is gray, never the brand gradient
@@ -97,11 +97,11 @@ test("chip and search combine", async ({ page }) => {
   const pop = await openPicker(page);
   await pop.getByTestId("model-chip-claude").click();
   await pop.getByTestId("model-search").fill("opus");
-  await expect(names(pop)).toHaveText(["Opus 5.5", "anthropic/claude-opus-5-5"]);
+  await expect(names(pop)).toHaveText(["Opus 5.5", "Opus 5.5"]);
   await pop.getByTestId("model-chip-openai").click();
   await expect(pop.getByTestId("model-opt")).toHaveCount(0);
   await pop.getByTestId("model-search").fill("terra");
-  await expect(names(pop)).toHaveText(["gpt-6.1-terra"]);
+  await expect(names(pop)).toHaveText(["GPT-6.1 Terra"]);
 });
 
 test("keyboard: Down/Up move the highlight, Enter picks, Esc closes", async ({ page }) => {
@@ -116,7 +116,7 @@ test("keyboard: Down/Up move the highlight, Enter picks, Esc closes", async ({ p
   await page.keyboard.press("ArrowUp");
   await expect(rows.nth(1)).toHaveAttribute("data-active", "true");
   await page.keyboard.press("Enter");
-  await expect(page.getByTestId("model-label")).toHaveText("gpt-6.1-terra");
+  await expect(page.getByTestId("model-label")).toHaveText("GPT-6.1 Terra");
   await expect.poll(setModelCalls).toEqual([{ bot: "kami", model: "gpt-6.1-terra", provider: "openai" }]);
 
   await page.keyboard.press("Escape");
@@ -127,7 +127,7 @@ test("keyboard: Down/Up move the highlight, Enter picks, Esc closes", async ({ p
   await expect(again.getByTestId("model-search")).toHaveValue("");
   await expect(again.getByTestId("model-search")).toBeFocused();
   await expect(again.getByTestId("model-opt")).toHaveCount(12);
-  await expect(again.locator('[data-active="true"]')).toContainText("gpt-6.1-terra");
+  await expect(again.locator('[data-active="true"]')).toContainText("GPT-6.1 Terra");
 });
 
 test("Esc closes the picker and gives focus back to the model button", async ({ page }) => {
@@ -143,17 +143,17 @@ test("Esc closes the picker and gives focus back to the model button", async ({ 
 });
 
 // The header at the Tauri minimum window (900x700) with Details open: the model button stays inside the
-// header and off the panel, whatever the id length; a long id ellipsizes and keeps the full id in its title.
+// header and off the panel, whatever the name length; a long name ellipsizes, and the title keeps the full id.
 test("long model id ellipsizes and stays inside the header at 900x700 with the panel open", async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 700 });
   const openPanel = async () => {
     if (!/\bpanel-open\b/.test((await page.getByTestId("window").getAttribute("class")) ?? "")) await page.getByTestId("who").click();
     await expect(page.getByTestId("window")).toHaveClass(/\bpanel-open\b/);
   };
-  const check = async (id: string) => {
+  const check = async (id: string, shown = id) => {
     await openPanel();
     const label = page.getByTestId("model-label");
-    await expect(label).toHaveText(id);
+    await expect(label).toHaveText(shown);
     await expect(label).toHaveAttribute("title", id);
     await expect.poll(async () => Math.round((await page.getByTestId("details").boundingBox())?.width ?? 0)).toBe(300);
     // the panel slides in; wait until it has stopped moving before measuring (slow CI runners catch it mid-slide)
@@ -183,19 +183,19 @@ test("long model id ellipsizes and stays inside the header at 900x700 with the p
     expect(hit ?? "").not.toMatch(/^(model-|reasoning-)/);
   };
 
-  // the longest id the mock offers, picked through the UI
+  // the longest id the mock offers, picked through the UI: the button names it, the title keeps the id
   await openPicker(page);
   await page.keyboard.type("anthropic/claude");
   await page.keyboard.press("Enter");
   await page.keyboard.press("Escape");
-  await check("anthropic/claude-opus-5-5");
+  await check("anthropic/claude-opus-5-5", "Opus 5.5");
 
-  // an id far longer than the button: the text is cut with an ellipsis, not pushed past the header
-  const long = "openrouter-preview/anthropic/claude-opus-5-5-thinking-extended-2026-11-01";
+  // a name far longer than the button (an id no naming rule shortens): cut with an ellipsis, not pushed past the header
+  const long = "openrouter-preview/acme/acme-research-preview-long-context-instruct-experimental-2611";
   await mock("chat.set_model", { bot: "kami", model: long });
   await page.reload();
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
-  await check(long);
+  await check(long, "acme-research-preview-long-context-instruct-experimental-2611");
   const label = page.getByTestId("model-label");
   expect(await label.evaluate((el) => getComputedStyle(el).textOverflow)).toBe("ellipsis");
   expect(await label.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
@@ -293,4 +293,80 @@ test("picker screenshots, dark and light", async ({ page }) => {
     await pop.getByTestId("model-search").fill("zzz");
     await page.screenshot({ path: `${SHOTS}/picker-${theme}-empty.png`, clip: { x: 720, y: 0, width: 560, height: 640 } });
   }
+});
+
+// UI review A14-A17: the chips stay one row, rows read as names, the current model is found in a long catalog, and a
+// catalog with no models offers only the way to set one up.
+test("the vendor chips are one row that scrolls sideways, fading on the side with more", async ({ page }) => {
+  const pop = await openPicker(page);
+  const chips = pop.getByTestId("model-chips");
+  const tops = await chips.getByRole("button").evaluateAll((els) => [...new Set(els.map((e) => Math.round(e.getBoundingClientRect().top)))]);
+  expect(tops).toHaveLength(1);
+  // nine chips do not fit 320px: the row scrolls, and fades at its end
+  expect(await chips.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+  await expect(chips).toHaveAttribute("data-more", "end");
+  // picking the last chip brings it into view; the start now has more
+  await pop.getByTestId("model-chip-other").focus();
+  await pop.getByTestId("model-chip-other").click();
+  await expect(names(pop)).toHaveText(["my-local-model"]);
+  await expect(chips).toHaveAttribute("data-more", /start|both/);
+  const box = (await chips.boundingBox())!;
+  const other = (await pop.getByTestId("model-chip-other").boundingBox())!;
+  expect(other.x + other.width).toBeLessThanOrEqual(box.x + box.width + 0.5);
+  // a mouse wheel turns the row back
+  await chips.hover();
+  await page.mouse.wheel(0, -600);
+  await expect(chips).toHaveAttribute("data-more", "end");
+});
+
+test("rows read as model names, the id in the title; a name two models share keeps the ids", async ({ page }) => {
+  const pop = await openPicker(page);
+  await pop.getByTestId("model-search").fill("gpt");
+  await expect(names(pop)).toHaveText(["GPT-6.1 Sol", "GPT-6.1 Terra"]);
+  await expect(names(pop).first()).toHaveAttribute("title", "gpt-6.1-sol");
+  // OpenRouter's anthropic/claude-opus-5-5 reads "Opus 5.5" like the proxy's display name, under its own provider
+  await pop.getByTestId("model-search").fill("opus55");
+  await expect(names(pop)).toHaveText(["Opus 5.5", "Opus 5.5"]);
+  await expect(pop.locator(".mp-g")).toHaveText(["Claude (proxy)", "OpenRouter"]);
+  // an id no rule names stays as written
+  await pop.getByTestId("model-search").fill("my-local");
+  await expect(names(pop)).toHaveText(["my-local-model"]);
+  // the button names the picked model the same way
+  await pop.getByTestId("model-search").fill("terra");
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("model-label")).toHaveText("GPT-6.1 Terra");
+  await expect(page.getByTestId("model-label")).toHaveAttribute("title", "gpt-6.1-terra");
+});
+
+test("in a long catalog the current model is checked and in view on open", async ({ page }) => {
+  await mock("mock.providers", { fixture: "long" });
+  await page.goto("/");
+  await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
+  await page.getByTestId("model-pill").click();
+  const pop = page.getByTestId("model-pop");
+  const on = pop.locator(".mp-opt.on");
+  await expect(on).toHaveCount(1);
+  await expect(on).toContainText("Opus 5.5");
+  await expect(on).toHaveAttribute("data-active", "true");
+  await expect(on).toBeInViewport();
+  // the list fades where it has more rows, so the row its box cuts never sits in full ink on the Reasoning heading
+  await expect(pop.locator(".mp-list")).toHaveAttribute("data-more", /below|both/);
+  await pop.locator(".mp-list").evaluate((el) => el.scrollTo({ top: el.scrollHeight }));
+  await expect(pop.locator(".mp-list")).toHaveAttribute("data-more", "above");
+  // under the chat's provider (the proxy, which lists it as claude-opus-5-5), not Nous' or Anthropic's row of that name
+  expect(await on.evaluate((el) => el.closest('[role="group"]')?.getAttribute("aria-label"))).toBe("Claude (proxy)");
+});
+
+test("with no model listed the popover offers only the way to set one up", async ({ page }) => {
+  await mock("mock.providers", { fixture: "empty" });
+  await page.goto("/");
+  await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
+  await page.getByTestId("model-pill").click();
+  const pop = page.getByTestId("model-pop");
+  await expect(pop.getByTestId("model-empty")).toHaveText("Kami has no models to pick yet");
+  for (const id of ["model-search", "model-chips", "reasoning-seg"]) await expect(pop.getByTestId(id)).toHaveCount(0);
+  await expect(pop.locator(".mp-f")).toHaveText("Add one in Bot settings");
+  await pop.getByRole("button", { name: "Bot settings" }).click();
+  await expect(page.getByTestId("model-pop")).toHaveCount(0);
+  await expect(page.getByTestId("settings")).toBeVisible();
 });

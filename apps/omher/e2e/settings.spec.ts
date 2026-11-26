@@ -106,9 +106,9 @@ test("changing reasoning and model calls chat.set_model and updates the pill", a
     { bot: "kami", reasoning: "max" },
   ]);
 
-  await pop.getByTestId("model-opt").filter({ hasText: "gpt-6.1-terra" }).click();
-  await expect(page.getByTestId("model-label")).toHaveText("gpt-6.1-terra");
-  await expect(pop.locator(".mp-opt.on")).toContainText("gpt-6.1-terra");
+  await pop.getByTestId("model-opt").filter({ hasText: "GPT-6.1 Terra" }).click();
+  await expect(page.getByTestId("model-label")).toHaveText("GPT-6.1 Terra");
+  await expect(pop.locator(".mp-opt.on")).toContainText("GPT-6.1 Terra");
   const calls = await callsOf("chat.set_model");
   expect(calls[2].params).toEqual({ bot: "kami", model: "gpt-6.1-terra", provider: "openai" });
   await expect(page.getByTestId("model-note")).toHaveCount(0);

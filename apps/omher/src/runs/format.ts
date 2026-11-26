@@ -2,7 +2,7 @@
 import type { RunNode } from "../lib/runs";
 import type { Key } from "../i18n";
 
-/** A model's name as people say it: "claude-opus-5-5" -> "Opus 5.5", "gpt-6.1-sol" -> "GPT-6.1 Sol", "gpt-6-astra"
+/** A model's name as people say it: "claude-opus-5-5" (or Nous' "claude-opus-5.5") -> "Opus 5.5", "gpt-6.1-sol" -> "GPT-6.1 Sol", "gpt-6-astra"
  *  -> "GPT-6 Astra", "gemini-3-pro" -> "Gemini 3 Pro", "z-ai/glm-5.3-ultrafast" -> "GLM-5.3", "kimi-k3" -> "Kimi K3",
  *  "deepseek-v4.1-flash" -> "DeepSeek V4.1" (a speed tier after GLM, Kimi or DeepSeek is not part of the name). What a provider puts around the id is dropped: a path in front ("anthropic/claude-haiku-5" ->
  *  "Haiku 5"), "us.anthropic." in front, and behind it a context tag ("[1m]"), an effort or revision (":high",
@@ -18,7 +18,7 @@ export function modelName(model: string): string {
     .replace(/-(?:\d{8}|\d{4}-\d{2}-\d{2})$/, "");
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   const words = (tail: string) => tail.split("-").filter(Boolean).map((part) => ` ${cap(part)}`).join("");
-  const claude = /^claude-([a-z]+)-(\d{1,2})(?:-(\d{1,2}))?((?:-[a-z]+)*)$/.exec(id);
+  const claude = /^claude-([a-z]+)-(\d{1,2})(?:[-.](\d{1,2}))?((?:-[a-z]+)*)$/.exec(id);
   if (claude) return `${cap(claude[1])} ${claude[2]}${claude[3] ? `.${claude[3]}` : ""}${words(claude[4])}`;
   const gpt = /^gpt-(\d+(?:\.\d+)?)((?:-[a-z][a-z0-9.]*)*)$/i.exec(id);
   if (gpt) return `GPT-${gpt[1]}${words(gpt[2])}`;
