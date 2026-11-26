@@ -18,10 +18,10 @@ from omh.plugin_bundle.omh.hooks.tool_hooks import post_tool_call, pre_tool_call
 from omh.plugin_bundle.omh.tool_bursts import tool_call_activity
 
 
-def sionic_omh_usage_evaluation_prompt() -> str:
-    return """이번 Sionic 작업에서 OMH가 얼마나 관여했는지 사용성 평가하고,
+def demo_omh_usage_evaluation_prompt() -> str:
+    return """이번 Example 작업에서 OMH가 얼마나 관여했는지 사용성 평가하고,
 왜 OMH를 덜 썼는지 분석해서 라우터 강화 플랜으로 잡아줘.
-Sionic은 마크다운 노트뿐 아니라 위키 페이지/site 생성도 포함했어.
+Example은 마크다운 노트뿐 아니라 위키 페이지/site 생성도 포함했어.
 결과창에는 Background process proc_d5eb61ddcf80 finished with exit code 0~
 Here's the final output: 같은 raw output, turn.completed usage, Self-improvement review 줄이 보였고
 이걸 프리티하게 OMH wrapper report로 정리해야 했어.
@@ -1126,7 +1126,7 @@ class HookManifestTests(unittest.TestCase):
         self.assertNotIn(message, context)
 
     def test_awareness_route_hint_treats_pasted_omh_status_as_diagnostic(self) -> None:
-        message = sionic_omh_usage_evaluation_prompt()
+        message = demo_omh_usage_evaluation_prompt()
 
         payload = awareness_route_hint(message, max_hints=3)
         context_result = pre_llm_call(user_message=message, is_first_turn=False)

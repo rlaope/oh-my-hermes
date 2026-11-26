@@ -2294,7 +2294,7 @@ mod tests {
         assert_eq!(cmd_path_arg(r"C:\x^y\a|b\(1)\<c>@\codex.cmd").unwrap(), r"C:\x^^y\a^|b\^(1^)\^<c^>^@\codex.cmd");
         assert_eq!(cmd_path_arg(r"C:\Users\k\AppData\Roaming\npm\codex.cmd").unwrap(), r"C:\Users\k\AppData\Roaming\npm\codex.cmd");
         // whitespace only: quoted by the PTY layer, and cmd keeps those quotes
-        assert_eq!(cmd_path_arg(r"C:\Users\Kim Lee\npm\codex.cmd").unwrap(), r"C:\Users\Kim Lee\npm\codex.cmd");
+        assert_eq!(cmd_path_arg(r"C:\Users\Demo User\npm\codex.cmd").unwrap(), r"C:\Users\Demo User\npm\codex.cmd");
         // whitespace plus an operator, or %: cmd would split it, so refuse
         for bad in [r"C:\Users\A & B\npm\codex.cmd", r"C:\Program Files (x86)\npm\codex.cmd", r"C:\%PATH%\codex.cmd", r"C:\a\b%c\codex.cmd"] {
             assert!(cmd_path_arg(bad).is_err(), "{bad}");

@@ -130,7 +130,7 @@ test("inside a thread, ./thread opens a sibling thread under the same bot", asyn
 
 test("no New thread line under a bot: the tree holds only its threads; the row's + is the way in", async ({ page }) => {
   await setup(page);
-  // khope (2026-11-19): a "+ New thread" line always under the bot is too much. Kami is open with no threads: nothing
+  // demo (2026-11-19): a "+ New thread" line always under the bot is too much. Kami is open with no threads: nothing
   await expect(page.getByTestId("threads-kami")).toHaveCount(0);
   await expect(page.getByTestId("thread-new")).toHaveCount(0);
   await page.getByTestId("bot-row-kami").hover();

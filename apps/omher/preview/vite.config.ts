@@ -32,13 +32,13 @@ const HOOKS: Record<string, [string, string][]> = {
     ],
     ['    return "/home/you";', '    return "/Users/you";'],
     // the mock `/late` command's status line carried a real memory id; the public bundle gets a neutral one
-    ['text: "mem:khope-sionic-ai-d09472c9 9d ago (+1)" }', 'text: "mem:you-d09472c9 9d ago (+1)" }'],
+    ['text: "mem:demo-00000000 9d ago (+1)" }', 'text: "mem:you-00000000 9d ago (+1)" }'],
   ],
   // the in-page SSH peer host (Connect over SSH): a neutral user in its staged denial line and remote Python path
   "src/peers/host.ts": [
-    ['line: "sionic@denied: Permission denied (publickey,password)." }', 'line: "you@denied: Permission denied (publickey,password)." }'],
-    ['fail.line.replace("sionic@denied", host)', 'fail.line.replace("you@denied", host)'],
-    ['python: "/home/sionic/.hermes/tools/python-3.14.9/bin/python3",', 'python: "/home/you/.hermes/tools/python-3.14.9/bin/python3",'],
+    ['line: "demo@denied: Permission denied (publickey,password)." }', 'line: "you@denied: Permission denied (publickey,password)." }'],
+    ['fail.line.replace("demo@denied", host)', 'fail.line.replace("you@denied", host)'],
+    ['python: "/home/demo/.hermes/tools/python-3.14.9/bin/python3",', 'python: "/home/you/.hermes/tools/python-3.14.9/bin/python3",'],
   ],
   // the Shell card's login shell: a plain prompt, no "(mock)" line
   "src/terminal/host.ts": [

@@ -478,7 +478,7 @@
 }
 },
 {
-"anchors":"agency attach binary clean convert creat csv deck differenc docx excel export extract hwp item keynot korean layout material monthly outlin pdf powerpoint ppt pptx proposal pull render sheet spreadsheet tabl word xlsx",
+"anchors":"agency attach binary clean convert csv deck differenc docx excel export extract hwp item keynot korean layout material monthly outlin pdf powerpoint ppt pptx proposal pull render sheet spreadsheet tabl word xlsx",
 "hangul":"고서 노트 드시 디에 레드 렌더 리프 문서 보고 부한 분석 브리 비교 생성 셀을 스프 시트 안서 에프 엑셀 워드 월간 자료 제안 처리 첨부 추출 키노 키지 파일 패키 표를 프레 피디 한글",
 "hangul_anchors":"고서 노트 드시 디에 레드 렌더 리프 문서 보고 부한 분석 브리 비교 생성 셀을 스프 시트 안서 에프 엑셀 워드 월간 자료 제안 처리 첨부 추출 키노 키지 파일 패키 표를 프레 피디 한글",
 "label":"omh-materials-package",
@@ -1367,7 +1367,7 @@
 }
 },
 {
-"anchors":"bug creat discord duplicat github intak maintainer submit",
+"anchors":"bug discord duplicat github intak maintainer submit",
 "hangul":"깃허 등록 록해 리포 버그 생성 성해 슈로 올려 이슈 포트 허브",
 "hangul_anchors":"깃허 등록 록해 리포 버그 생성 성해 슈로 올려 이슈 포트 허브",
 "label":"omh-github-issue-intake",
@@ -1584,7 +1584,7 @@
 }
 },
 {
-"anchors":"appl bad beta boot cert creat devic everyon expir fastlan fifty know misbehav month nobody older privacyinfo reach reject replacement resubmit stop tester testflight today xcprivacy",
+"anchors":"appl bad beta boot cert devic everyon expir fastlan fifty know misbehav month nobody older privacyinfo reach reject replacement resubmit stop tester testflight today xcprivacy",
 "hangul":"",
 "hangul_anchors":"",
 "label":"omh-mobile-release",
@@ -1601,7 +1601,7 @@
 }
 },
 {
-"anchors":"access actually auditor bad committee creat enough entry found happen icfr invoic itgc journal payment person proof pull quarterly re reconciliation reperform reperformanc three unapprov vendor workpaper",
+"anchors":"access actually auditor bad committee enough entry found happen icfr invoic itgc journal payment person proof pull quarterly re reconciliation reperform reperformanc three unapprov vendor workpaper",
 "hangul":"",
 "hangul_anchors":"",
 "label":"omh-internal-audit",
@@ -1849,6 +1849,21 @@
 "4":"folder",
 "5":"check load",
 "7":"eval"
+}
+},
+{
+"anchors":"alert bot inbox templat vault",
+"hangul":"템플 플릿",
+"hangul_anchors":"템플 플릿",
+"label":"omh-bot-template",
+"name":"bot-template",
+"situation":"New bot to set up from a template",
+"terms":{
+"1":"after approval ask asked chat connect exist gallery id md omher paus person persona right schedul seed send soul webhook",
+"2":"alert befor creat inbox install note pr releas research review triag vault want",
+"3":"add app new set",
+"6":"apply",
+"9":"bot templat"
 }
 },
 {
@@ -2233,7 +2248,7 @@
 }
 },
 {
-"anchors":"calendar channel creat crm discord dm draft email event gmail googl hubspot invit jira linear meet notion saa salesforc send slack ticket",
+"anchors":"calendar channel crm discord dm draft email event gmail googl hubspot invit jira linear meet notion saa salesforc send slack ticket",
 "hangul":"넥터 노션 린더 메일 발송 보내 액션 외부 이메 이슈 이지 초대 초안 캘린 커넥 티켓 페이",
 "hangul_anchors":"넥터 노션 린더 메일 발송 보내 액션 외부 이메 이슈 이지 초대 초안 캘린 커넥 티켓 페이",
 "label":"omh-apps",
@@ -2500,7 +2515,7 @@
 }
 },
 {
-"anchors":"adopt adoption agentskill community creat discovery don extend famous fork github io marketplac plugin popular reinvent scout top useful worth",
+"anchors":"adopt adoption agentskill community discovery don extend famous fork github io marketplac plugin popular reinvent scout top useful worth",
 "hangul":"검색 그인 기존 들기 러그 명한 비교 설치 스카 스킬 없는 용한 우트 유명 유용 찾기 찾아 치할 카우 플러 할지 후보",
 "hangul_anchors":"검색 그인 기존 들기 러그 명한 비교 설치 스카 스킬 없는 용한 우트 유명 유용 찾기 찾아 치할 카우 플러 할지 후보",
 "label":"omh-skill-scout",

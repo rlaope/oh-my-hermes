@@ -1344,7 +1344,7 @@ class MockChat {
         this.say("ok", 60);
         this.at(400, () => {
           this.end("done"); // clears the pending timers: the late events are scheduled after it
-          this.at(50, () => this.emit({ event: "status", text: "mem:khope-sionic-ai-d09472c9 9d ago (+1)" }));
+          this.at(50, () => this.emit({ event: "status", text: "mem:demo-00000000 9d ago (+1)" }));
           this.at(100, () => this.emit({ event: "thinking" }));
         });
         return;

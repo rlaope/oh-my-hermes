@@ -6339,8 +6339,8 @@ mod tests {
         assert!(late.events.is_empty(), "{:?}", late.events);
         // while a turn runs, its status shows as the agent wrote it
         p.on_input(Input::Send { text: "again".into(), images: vec![], id: String::new() }).unwrap();
-        let st = p.on_line(r#"{"type":"extension_ui_request","id":"s1","method":"setStatus","statusKey":"memory","statusText":"mem:khope-sionic-ai-d09472c9 9d ago (+1)"}"#);
-        assert_eq!(st.events, [json!({"event": "status", "text": "mem:khope-sionic-ai-d09472c9 9d ago (+1)"})]);
+        let st = p.on_line(r#"{"type":"extension_ui_request","id":"s1","method":"setStatus","statusKey":"memory","statusText":"mem:demo-00000000 9d ago (+1)"}"#);
+        assert_eq!(st.events, [json!({"event": "status", "text": "mem:demo-00000000 9d ago (+1)"})]);
     }
 
     /// codex-9-helpers: the person's turn spawns two sub-agents (`write_one`, `read_first_line`); their threads'

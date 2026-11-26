@@ -386,14 +386,14 @@ class SolutionLeakTests(unittest.TestCase):
         """
 
         for raw in (
-            "config at /Users/nashmbp/.hermes/config.yaml; see above",
+            "config at /Users/demo/.hermes/config.yaml; see above",
             "it lives in /home/someone/.config/omh",
             "or C:\\Users\\someone\\AppData",
         ):
             with self.subTest(raw=raw):
                 redacted = corpus.redact_home_directories(raw)
                 self.assertIn("<home>", redacted)
-                for name in ("nashmbp", "someone"):
+                for name in ("demo", "someone"):
                     self.assertNotIn(name, redacted)
 
     def test_redaction_leaves_an_ordinary_repository_path_alone(self) -> None:

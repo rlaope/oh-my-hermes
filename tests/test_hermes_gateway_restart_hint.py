@@ -62,21 +62,21 @@ def _record(home: Path, **overrides: object) -> dict[str, object]:
 class GatewayRestartHintTests(unittest.TestCase):
     def test_a_gateway_started_before_the_bundle_was_installed_is_named(self) -> None:
         with TemporaryDirectory() as tmp:
-            home = Path(tmp) / "miku"
+            home = Path(tmp) / "mbot"
             _write_home(home, starts=[1789456697.382985, 1789551415.168149, 1789810555.531535], pid_record=_record(home))
 
-            hint = gateway_restart_hint(home, label="profile miku", restart_command="hermes --profile miku gateway restart")
+            hint = gateway_restart_hint(home, label="profile mbot", restart_command="hermes --profile mbot gateway restart")
 
             self.assertEqual(
                 hint,
-                "Hermes gateway for profile miku: last recorded start 2026-09-19T09:35:55Z precedes this bundle's "
+                "Hermes gateway for profile mbot: last recorded start 2026-09-19T09:35:55Z precedes this bundle's "
                 "install (2026-09-24T02:05:26Z); OMH skills reload on their own, but the new OMH plugin code loads "
-                "only after `hermes --profile miku gateway restart`",
+                "only after `hermes --profile mbot gateway restart`",
             )
 
     def test_a_gateway_started_after_the_install_needs_no_restart(self) -> None:
         with TemporaryDirectory() as tmp:
-            home = Path(tmp) / "miku"
+            home = Path(tmp) / "mbot"
             _write_home(home, starts=[1789810555.531535, _INSTALLED_EPOCH + 60], pid_record=_record(home))
             self.assertIsNone(gateway_restart_hint(home, label="x", restart_command="y"))
 
@@ -99,7 +99,7 @@ class GatewayRestartHintTests(unittest.TestCase):
     def test_a_record_naming_another_home_is_that_home_s_gateway(self) -> None:
         with TemporaryDirectory() as tmp:
             home = Path(tmp) / "primary"
-            other = Path(tmp) / "profiles" / "miku"
+            other = Path(tmp) / "profiles" / "mbot"
             _write_home(home, starts=[_INSTALLED_EPOCH - 3600], pid_record=_record(other))
             self.assertIsNone(gateway_restart_hint(home, label="x", restart_command="y"))
 
@@ -181,11 +181,11 @@ class GatewayRestartHintTests(unittest.TestCase):
             root = Path(tmp)
             hermes_home = root / ".hermes"
             _write_home(hermes_home, starts=[_INSTALLED_EPOCH - 3600], pid_record=_record(hermes_home))
-            miku = hermes_home / "profiles" / "miku"
+            mbot = hermes_home / "profiles" / "mbot"
             # A real named profile has host identity; an empty shell is ignored.
-            miku.mkdir(parents=True, exist_ok=True)
-            (miku / "SOUL.md").write_text("Profile identity\n", encoding="utf-8")
-            _write_home(miku, starts=[_INSTALLED_EPOCH - 60], pid_record=_record(miku))
+            mbot.mkdir(parents=True, exist_ok=True)
+            (mbot / "SOUL.md").write_text("Profile identity\n", encoding="utf-8")
+            _write_home(mbot, starts=[_INSTALLED_EPOCH - 60], pid_record=_record(mbot))
             fresh = hermes_home / "profiles" / "fresh"
             fresh.mkdir(parents=True, exist_ok=True)
             (fresh / "SOUL.md").write_text("Profile identity\n", encoding="utf-8")
@@ -200,9 +200,9 @@ class GatewayRestartHintTests(unittest.TestCase):
                     f"Hermes gateway for {hermes_home}: last recorded start 2026-09-24T01:05:26Z precedes this "
                     "bundle's install (2026-09-24T02:05:26Z); OMH skills reload on their own, but the new OMH plugin "
                     "code loads only after `hermes gateway restart`",
-                    "Hermes gateway for profile miku: last recorded start 2026-09-24T02:04:26Z precedes this "
+                    "Hermes gateway for profile mbot: last recorded start 2026-09-24T02:04:26Z precedes this "
                     "bundle's install (2026-09-24T02:05:26Z); OMH skills reload on their own, but the new OMH plugin "
-                    "code loads only after `hermes --profile miku gateway restart`",
+                    "code loads only after `hermes --profile mbot gateway restart`",
                 ],
             )
 
@@ -211,13 +211,13 @@ class GatewayRestartHintTests(unittest.TestCase):
             root = Path(tmp)
             hermes_home = root / ".hermes"
             _write_home(hermes_home, starts=[_INSTALLED_EPOCH - 3600], pid_record=_record(hermes_home))
-            miku = hermes_home / "profiles" / "miku"
-            miku.mkdir(parents=True, exist_ok=True)
-            (miku / "SOUL.md").write_text("Profile identity\n", encoding="utf-8")
-            _write_home(miku, starts=[_INSTALLED_EPOCH - 60], pid_record=_record(miku))
+            mbot = hermes_home / "profiles" / "mbot"
+            mbot.mkdir(parents=True, exist_ok=True)
+            (mbot / "SOUL.md").write_text("Profile identity\n", encoding="utf-8")
+            _write_home(mbot, starts=[_INSTALLED_EPOCH - 60], pid_record=_record(mbot))
             paths = OmhPaths(omh_home=root / ".omh", hermes_home=hermes_home)
 
-            hints = gateway_restart_hints(paths, unrefreshed_configs=frozenset({str(miku / "config.yaml")}))
+            hints = gateway_restart_hints(paths, unrefreshed_configs=frozenset({str(mbot / "config.yaml")}))
 
             self.assertEqual(
                 hints,
@@ -225,9 +225,9 @@ class GatewayRestartHintTests(unittest.TestCase):
                     f"Hermes gateway for {hermes_home}: last recorded start 2026-09-24T01:05:26Z precedes this "
                     "bundle's install (2026-09-24T02:05:26Z); OMH skills reload on their own, but the new OMH plugin "
                     "code loads only after `hermes gateway restart`",
-                    "Hermes gateway for profile miku: last recorded start 2026-09-24T02:04:26Z precedes this "
+                    "Hermes gateway for profile mbot: last recorded start 2026-09-24T02:04:26Z precedes this "
                     "bundle's install (2026-09-24T02:05:26Z); the new OMH skills and plugin code load only after "
-                    "`hermes --profile miku gateway restart`",
+                    "`hermes --profile mbot gateway restart`",
                 ],
             )
 
@@ -235,7 +235,7 @@ class GatewayRestartHintTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             hermes_home = Path(tmp) / ".hermes"
             _write_home(hermes_home, starts=[_INSTALLED_EPOCH - 3600, _INSTALLED_EPOCH - 7200], pid_record=_record(hermes_home))
-            for name, pid_record in (("miku", True), ("stopped", False)):
+            for name, pid_record in (("mbot", True), ("stopped", False)):
                 profile = hermes_home / "profiles" / name
                 profile.mkdir(parents=True, exist_ok=True)
                 (profile / "SOUL.md").write_text("Profile identity\n", encoding="utf-8")
@@ -252,24 +252,24 @@ class UpdatePrintsRestartHintsTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             hermes_home = root / ".hermes"
-            miku = hermes_home / "profiles" / "miku"
-            miku.mkdir(parents=True)
+            mbot = hermes_home / "profiles" / "mbot"
+            mbot.mkdir(parents=True)
             # Seed genuine profile identity before setup registers the profile.
-            (miku / "SOUL.md").write_text("Profile identity\n", encoding="utf-8")
+            (mbot / "SOUL.md").write_text("Profile identity\n", encoding="utf-8")
             status, _, stderr = run_cli(self._base(root) + ["setup"])
             self.assertEqual(status, 0, stderr)
             # Started well before the bundle setup installed above.
             stale_start = datetime.now(UTC).timestamp() - 86400
             _write_home(hermes_home, starts=[stale_start], pid_record=_record(hermes_home), installed_at=None)
             fresh_start = (datetime.now(UTC) + timedelta(days=1)).timestamp()
-            _write_home(miku, starts=[fresh_start], pid_record=_record(miku), installed_at=None)
+            _write_home(mbot, starts=[fresh_start], pid_record=_record(mbot), installed_at=None)
 
             status, stdout, stderr = run_cli(self._base(root) + ["update"], output_json=False)
 
             self.assertEqual(status, 0, stderr)
             self.assertIn(f"  Hermes gateway for {hermes_home.resolve()}: last recorded start ", stdout)
             self.assertIn("; OMH skills reload on their own, but the new OMH plugin code loads only after `hermes gateway restart`", stdout)
-            self.assertNotIn("hermes --profile miku gateway restart", stdout)
+            self.assertNotIn("hermes --profile mbot gateway restart", stdout)
             # The profile line no longer asks for a restart to reload skills.
             self.assertIn(
                 "New bot conversations and every skill load use the new OMH skills on their own; an open conversation "

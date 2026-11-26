@@ -592,7 +592,7 @@ class PluginDistributionTests(unittest.TestCase):
     def test_hermes_code_root_falls_back_to_root_tree_for_a_profile_home(self) -> None:
         with TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"HERMES_PYTHON": ""}):
             root = Path(tmp) / ".hermes"
-            profile = root / "profiles" / "miku"
+            profile = root / "profiles" / "mbot"
             profile.mkdir(parents=True)
             root_tree = _write_fake_hermes_code_tree(root / "hermes-agent", version="0.21.5")
 
@@ -3533,7 +3533,7 @@ class HermesProfileSyncTests(unittest.TestCase):
         # removal reads the same set. Removing today's path alone left the
         # older entry in place, so the opt-out never took: the profile kept
         # its plugin directory AND a live registration, and the next update
-        # refreshed it again. This is the miku shape — the one install this
+        # refreshed it again. This is the mbot shape — the one install this
         # whole change targets — so the opt-out has to be reachable on it.
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

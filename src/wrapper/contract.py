@@ -483,6 +483,7 @@ VISIBLE_ACTIONS = (
     "prepare_skill_health",
     "show_skill_health",
     "prepare_skill_eval",
+    "prepare_bot_template",
     "record_skill_health_signal",
     "record_skill_amendment_review",
     "route_to_doctor_skill_or_workflow_learning",
@@ -1149,6 +1150,7 @@ _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
     "prepare_skill_scout": ("prepare_skill_scout", "Prepare skill scout"),
     "prepare_skill_health": ("prepare_skill_health", "Prepare skill health"),
     "prepare_skill_eval": ("prepare_skill_eval", "Check the skill"),
+    "prepare_bot_template": ("prepare_bot_template", "Apply the template"),
     "prepare_context_budget_review": ("prepare_context_budget_review", "Review context"),
     "show_run_efficiency_report": ("show_run_efficiency_report", "Show run efficiency"),
     "prepare_security_safety_review": ("prepare_security_safety_review", "Review safety"),
@@ -3108,6 +3110,35 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
             "host verdict",
             "skill file edit",
             "with/without lift",
+        ],
+    },
+    "bot-template": {
+        "kind": "bot_template",
+        "headline": "I can apply a bot template to this bot, with every schedule created paused.",
+        "body": (
+            "I will read the template, check that each skill it uses is installed, add its persona to SOUL.md once "
+            "you approve the write, and create its schedules paused. Webhooks and apps I only list. Nothing runs "
+            "until you turn a schedule on."
+        ),
+        "phase": "bot_template_prepared",
+        "next_action": "prepare_bot_template",
+        "artifact_schema": "bot_template/v1",
+        "claim_boundary_suffix": "A listed template is not a written persona or a created job until Hermes shows them.",
+        "actions": [
+            {"id": "prepare_bot_template", "label": "Apply the template", "style": "primary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "load_the_template_by_id",
+            "preflight_every_listed_skill",
+            "append_the_persona_after_approval",
+            "create_each_schedule_paused",
+            "list_webhooks_and_apps",
+        ],
+        "evidence_not_observed": [
+            "SOUL.md write",
+            "cron job created",
+            "app connected",
         ],
     },
     "skill-scout": {

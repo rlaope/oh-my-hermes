@@ -25,6 +25,7 @@ Trigger phrases and the role registry live in `references/workflow-registry.md`;
 - `omh-award-bar-score`: [omh] Aiming for design-award quality: score a web surface against published design-award judging axes and name the binding constraint.
 - `omh-backend`: [omh] Designing an API, server, or data-layer change: prepare server, API, and data-layer contracts — auth boundary, error paths, response shape, and schema/migration discipline — before implementation.
 - `omh-biomedical-evidence`: [omh] Public variant claims to cross-check: retrieve and reconcile source-labelled biomedical evidence with identity, conflict and freshness checks.
+- `omh-bot-template`: [omh] New bot to set up from a template: apply one OMH bot template in this bot's own chat, with its own approvals: a persona seed for SOUL.md, the skills it uses, schedules created paused, and the webhooks and apps to connect.
 - `omh-browser`: [omh] Browser login, click, or form task: policy overlay for browser tasks - add auth, confirmation, and observed-trace gates after preferring the native browser for ordinary URL, click, login, and form actions.
 - `omh-build-failure-triage`: [omh] Build or CI failure to triage: classify build, typecheck, lint, test, CI, and DCO failures into minimal safe fix handoffs.
 - `omh-buzz`: [omh] Buzz community agent setup or relay trouble: connect and operate Hermes as a native Buzz community agent, deliver local media with verified relay receipts, or diagnose a self-hosted Buzz relay without inventing transport evidence.

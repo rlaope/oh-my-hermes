@@ -331,9 +331,9 @@ class PluginCapabilitiesTests(unittest.TestCase):
             status, _, stderr = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "setup", "--with-plugin"])
             self.assertEqual(status, 0, stderr)
             plugin_dir = hermes_home / "plugins" / "omh"
-            sionic_prompt_fixture = """이번 Sionic 작업에서 OMH가 얼마나 관여했는지 사용성 평가하고,
+            demo_prompt_fixture = """이번 Example 작업에서 OMH가 얼마나 관여했는지 사용성 평가하고,
 왜 OMH를 덜 썼는지 분석해서 라우터 강화 플랜으로 잡아줘.
-Sionic은 마크다운 노트뿐 아니라 위키 페이지/site 생성도 포함했어.
+Example은 마크다운 노트뿐 아니라 위키 페이지/site 생성도 포함했어.
 결과창에는 Background process proc_d5eb61ddcf80 finished with exit code 0~
 Here's the final output: 같은 raw output, turn.completed usage, Self-improvement review 줄이 보였고
 이걸 프리티하게 OMH wrapper report로 정리해야 했어.
@@ -414,10 +414,10 @@ merge_observed=false
                         "include_prompt_context": True,
                     }})
                 )
-                sionic_prompt = {sionic_prompt_fixture!r}
-                context_sionic = json.loads(
+                demo_prompt = {demo_prompt_fixture!r}
+                context_demo = json.loads(
                     context_handler({{
-                        "message": sionic_prompt,
+                        "message": demo_prompt,
                         "source": "discord",
                         "limit": 3,
                         "include_prompt_context": True,
@@ -519,13 +519,13 @@ merge_observed=false
                     "context_meta_mentioned_workflows": context_meta["route_hint"]["mentioned_workflows"],
                     "context_meta_runtime_terms": context_meta["route_hint"]["mentioned_runtime_terms"],
                     "context_meta_prompt_context": context_meta["prompt_context"],
-                    "context_sionic_primary_workflow": context_sionic["route_hint"]["primary_workflow"],
-                    "context_sionic_intent_class": context_sionic["route_hint"]["intent_class"],
-                    "context_sionic_mentioned_workflows": context_sionic["route_hint"]["mentioned_workflows"],
-                    "context_sionic_runtime_terms": context_sionic["route_hint"]["mentioned_runtime_terms"],
-                    "context_sionic_not_executed": context_sionic["route_hint"]["not_executed"],
-                    "context_sionic_first_hint": context_sionic["route_hint"]["hints"][0]["workflow"],
-                    "context_sionic_prompt_context": context_sionic["prompt_context"],
+                    "context_demo_primary_workflow": context_demo["route_hint"]["primary_workflow"],
+                    "context_demo_intent_class": context_demo["route_hint"]["intent_class"],
+                    "context_demo_mentioned_workflows": context_demo["route_hint"]["mentioned_workflows"],
+                    "context_demo_runtime_terms": context_demo["route_hint"]["mentioned_runtime_terms"],
+                    "context_demo_not_executed": context_demo["route_hint"]["not_executed"],
+                    "context_demo_first_hint": context_demo["route_hint"]["hints"][0]["workflow"],
+                    "context_demo_prompt_context": context_demo["prompt_context"],
                     "interaction_schema": interaction["schema_version"],
                     "interaction_degraded": interaction["degraded"],
                     "interaction_source": interaction["source_backend"],
@@ -684,15 +684,15 @@ merge_observed=false
             self.assertIn("Codex", payload["context_meta_runtime_terms"])
             self.assertIn("selected=workflow-learning", payload["context_meta_prompt_context"])
             self.assertNotIn("selected=ultraprocess", payload["context_meta_prompt_context"])
-            self.assertEqual(payload["context_sionic_primary_workflow"], "workflow-learning")
-            self.assertIn(payload["context_sionic_intent_class"], {"feedback_signal", "meta_discussion"})
-            self.assertIn("ulw-process", payload["context_sionic_mentioned_workflows"])
-            self.assertIn("Codex", payload["context_sionic_runtime_terms"])
-            self.assertIn("ulw-process", payload["context_sionic_not_executed"])
-            self.assertIn("Codex", payload["context_sionic_not_executed"])
-            self.assertEqual(payload["context_sionic_first_hint"], "workflow-learning")
-            self.assertIn("selected=workflow-learning", payload["context_sionic_prompt_context"])
-            self.assertNotIn("selected=ultraprocess", payload["context_sionic_prompt_context"])
+            self.assertEqual(payload["context_demo_primary_workflow"], "workflow-learning")
+            self.assertIn(payload["context_demo_intent_class"], {"feedback_signal", "meta_discussion"})
+            self.assertIn("ulw-process", payload["context_demo_mentioned_workflows"])
+            self.assertIn("Codex", payload["context_demo_runtime_terms"])
+            self.assertIn("ulw-process", payload["context_demo_not_executed"])
+            self.assertIn("Codex", payload["context_demo_not_executed"])
+            self.assertEqual(payload["context_demo_first_hint"], "workflow-learning")
+            self.assertIn("selected=workflow-learning", payload["context_demo_prompt_context"])
+            self.assertNotIn("selected=ultraprocess", payload["context_demo_prompt_context"])
             self.assertEqual(payload["interaction_schema"], "chat_interaction/v1")
             self.assertTrue(payload["interaction_degraded"])
             self.assertEqual(payload["interaction_source"], "standalone_plugin_bundle_fallback")

@@ -325,7 +325,7 @@ class ReaderFamilyTests(unittest.TestCase):
                 runs=[run("t_run00001", status="done", outcome="completed", ended_at=NOW - 60,
                           metadata=json.dumps({"worker_session_id": "sess-worker-1"}))],
             )
-            build_state_db(home / "profiles" / "miku" / "state.db", [worker_session("sess-worker-1")])
+            build_state_db(home / "profiles" / "mbot" / "state.db", [worker_session("sess-worker-1")])
             build_state_db(home / "state.db", [{"id": "sess-parent", "source": "tui", "started_at": float(NOW)}])
 
         def read(home: Path) -> tuple:

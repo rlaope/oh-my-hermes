@@ -50,7 +50,7 @@ class OfflineSkillToolkitsTests(unittest.TestCase):
     def test_residual_scan_detects_pii_and_secrets_without_echoing_values(self) -> None:
         secret_email = "alice.secret@example.org"
         secret_key = "sk-proj-TestValueNeverEcho1234567890"
-        secret_path = "/Users/private-user/Desktop/export.csv"
+        secret_path = "/Users/demo/Desktop/export.csv"
         with TemporaryDirectory() as tmp:
             dirty = Path(tmp) / "tickets.csv"
             dirty.write_text(

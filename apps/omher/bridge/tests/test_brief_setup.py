@@ -218,7 +218,7 @@ class BriefSetup(unittest.TestCase):
 
 
 class BriefPrompt(unittest.TestCase):
-    """What the briefing says first (khope, 2026-11-22: a brief that opened with what the bot did or could not do left
+    """What the briefing says first (demo, 2026-11-22: a brief that opened with what the bot did or could not do left
     him guessing what it was about)."""
 
     def test_it_opens_with_a_greeting_and_what_it_is_about(self) -> None:

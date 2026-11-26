@@ -82,9 +82,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # (+3 in its index line); the pin before it was c370d495...0d2c.
         # 12978 -> 13065 and the digest re-derived: app-work-intake adds one index line (+87 with its newline);
         # dropping only that line reproduces 934f2285...23b4 / 12978.
-        self.assertEqual(_digest(legacy), '35e317fb767116e462375a5211bf27e664ecc1a16e7b0e622c5c55dceac2c6a2')
-        self.assertEqual(len('\n'.join(legacy)), 13065)
-        delta = len('\n'.join(lines)) - 13065
+        # 13065 -> 13147 and the digest re-derived: bot-template then adds one index line (+82 with its newline);
+        # dropping only that line reproduces 35e317fb...c6a2 / 13065.
+        self.assertEqual(_digest(legacy), '75024fbfe785a1cea01eeb3a8ccdbfd806e3f8bc1e2ecdf7cc296d8874f75f2f')
+        self.assertEqual(len('\n'.join(legacy)), 13147)
+        delta = len('\n'.join(lines)) - 13147
         self.assertGreater(delta, 0)
         self.assertLessEqual(delta, INDEX_DELTA_CAP)
         # A catalog ratchet is exact; do not carry the old row's unused slack.
@@ -214,11 +216,17 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # 546679 -> 550928 and the digests re-derived: app-work-intake adds one row to each producer (+4249 and
             # +952 with separators); dropping only that row reproduces 8e3f5c83...d898 at 546679 and
             # 7bf53703...578d at 146420.
-            (skill_capabilities, 551032, FULL_ROW_DELTA_CAP,
-             '7a56ace7cb24f749d6cc1188d18a679f52fd71584e559bf50807580bba2e763f',
+            # 550928 -> 551032: automation-blueprint keeps its scheduled-spend guardrail inline under universal
+            # progressive disclosure (+104, itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row
+            # moved, and the digest became 7a56ace7...e763f.
+            # 551032 -> 555442 and the digest re-derived: merged with the bot-template branch, bot-template adds
+            # one row to each producer (+4410 and +943 with separators); dropping only that row reproduces
+            # 7a56ace7...e763f at 551032 and adad03a4...9d4b at 147372.
+            (skill_capabilities, 555442, FULL_ROW_DELTA_CAP,
+             '9a07210f82e60876214bbea4219f409136319c42f8ef87702e6c0ca56d5cd690',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
-            (standalone_skill_capability_items, 147372, STANDALONE_ROW_DELTA_CAP,
-             'adad03a49ec76047544490d099be7f9dd53414a9ac71b73b939710d61cae9d4b',
+            (standalone_skill_capability_items, 148315, STANDALONE_ROW_DELTA_CAP,
+             'b8cefdf3ebb50457f29264250068856d9302bffc0748290527bbcf0629fe7bf4',
              release.STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
         ):
             with self.subTest(producer=producer.__name__):
@@ -266,9 +274,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # reproduces 4be90d47...e2fa / 33802.
         # 34006 -> 34215 and the digest re-derived: app-work-intake adds its trigger row and token (+209);
         # dropping both reproduces 6f986a70...d8f7 / 34006.
-        self.assertEqual(_digest(legacy), 'd76ce202d5800ae7f00d4cba9d118628c02f76c89306fad8ed48a41f70a9757e')
+        # 34215 -> 34364 and the digest re-derived: bot-template then adds its 133-byte trigger row and a 16-byte
+        # operator token (+149); dropping both reproduces d76ce202...757e / 34215.
+        self.assertEqual(_digest(legacy), 'ac1a88aaa2470706d0cc503d6b4bafc8bf4f0cbcf22bba79d478c0d72b6cef51')
         baseline = len(''.join(legacy).encode())
-        self.assertEqual(baseline, 34215)
+        self.assertEqual(baseline, 34364)
         # 33_100 -> 33_318: main's ru pack and repro-audit (+222 over 32874) used
         # the gate's room and sprite-forge adds its 221-byte row and token; each
         # side alone fit, the merged tree measures 33317. The gate stays exact.
@@ -276,7 +286,8 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 33_594 -> 33_803: model-compression's 238 bytes; the gate stays exact.
         # 33_803 -> 34_007: skill-eval's 204 bytes; the gate stays exact.
         # 34_007 -> 34_216: app-work-intake's 209 bytes; the gate stays exact.
-        self.assertLess(baseline, 34_216)  # The existing content keeps its old gate.
+        # 34_216 -> 34_365: bot-template's 149 bytes; the gate stays exact.
+        self.assertLess(baseline, 34_365)  # The existing content keeps its old gate.
         self.assertLessEqual(len(registry.encode()) - baseline, REGISTRY_DELTA_CAP)
 
     def test_repeated_growth_is_only_mandatory_rails_and_existing_bodies_survive(self) -> None:
@@ -595,7 +606,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # from 1,549,057 -> 1,348,078 and repeated bytes from 93,533 -> 92,654); re-derived from producer.
         # Companion toolkit pointers in quality_bar for data-share-review, commit-pr-authoring, and
         # inference-serving update those three legacy bodies; re-derived from the producer.
-        self.assertEqual(_digest(legacy_hashes), '47bcd46de3af3d550cdccb59a94ded8718ae2eb0c0ced6e98d373f7ad114a50a')
+        # Merged with the bot-template branch: bot-template's body, rendered under universal progressive
+        # disclosure, joins the legacy set; no existing body moves, and dropping only that body reproduces
+        # 47bcd46d...a50a. Re-derived from the producer.
+        self.assertEqual(_digest(legacy_hashes), '776c5e14bdeae196d49329d2cac203b03a7dd294a01fca677488a1eb694a5fe5')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -624,7 +638,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # 91785 -> 93533: app-work-intake's Workflow Lane (342) and Runtime Evidence (1406) rails.
         # 93533 -> 92654: universal progressive disclosure for non-bespoke `omh-*` skills drops repeated
         # `Do Not Use When` defaults (-879).
-        self.assertEqual(legacy['repeated']['bytes'], 92654)
+        # 92654 -> 92996: merged with the bot-template branch, bot-template's Workflow Lane rail adds 342;
+        # dropping only that body reproduces 92654.
+        self.assertEqual(legacy['repeated']['bytes'], 92996)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
         self.assertLessEqual(delta, REPEATED_DELTA_CAP)

@@ -19,6 +19,7 @@ import { rowStatus } from "../threads/ThreadTree";
 import { StatusGlyph } from "../threads/StatusGlyph";
 import { botAutomations, botElsewhere, editDraft, fileProblem, memoryUse, type DraftKind } from "./botPage";
 import { PlatformsSection } from "../platforms/PlatformSection";
+import { PendingTemplate } from "../addbot/PendingTemplate";
 
 const AUTO_STATUS = { ok: "bp.autoOk", failed: "bp.autoFailed", never: "bp.autoNever", paused: "bp.autoPaused" } as const;
 
@@ -44,7 +45,8 @@ export function BotSections({ bot }: { bot: Bot }) {
     );
     void s.loadElsewhere(bot.name);
     void s.loadAutomations();
-    if (!remote) void s.loadPlatforms(seq > 0);
+    // a bot on another computer is read there (rule 45): Read again re-asks this bridge, which never forwards `fresh`
+    void s.loadPlatforms(!remote && seq > 0);
     void s.loadThreads(bot.name);
     return () => {
       live = false;
@@ -62,6 +64,8 @@ export function BotSections({ bot }: { bot: Bot }) {
           {t("bp.refresh")}
         </button>
       </div>
+
+      <PendingTemplate bot={bot} />
 
       <PlatformsSection bot={bot} />
 

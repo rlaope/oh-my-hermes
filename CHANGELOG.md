@@ -524,6 +524,43 @@ All notable changes will be documented here.
   `--script`, drops events the bot's own runs caused and more than 5 events per 15 minutes. Both scripts are inert
   package data the person's Hermes runs (owner-approved scoped integration, 2026-11-23); OMH never runs them.
   (`src/skills/pr_watch_toolkit/`, `src/skills/catalog_feature_surfaces.py`, `src/routing/policy.py`)
+- **Bot templates: a new bot can start as a PR reviewer, an inbox triager or a channel watcher, with nothing turned
+  on.** Seven templates (`pr-review`, `inbox-triage`, `release-notes`, `alert-triage`, `meeting-to-issues`,
+  `research-vault`, `channel-watch`) each name what they reuse: OMH skills, Hermes' bundled skills, the PR watch and
+  event guard of `github-event-ops`, the channel watch and monitor recipes of `automation-blueprint`, the inbox-to-work
+  and alert-to-fix recipes of `app-work-intake` and `operating-rhythm`'s meeting-to-issues line, a team profile pack
+  role and playbooks. `omh profile bot-templates --json` lists them (`bot_template_catalog/v1`). Asking a bot to
+  apply one ("apply the pr-review bot template", "봇 템플릿 적용해줘", or omher's `/omh-bot-template` line) loads the
+  new `omh-bot-template` skill: it stops at the first skill the bot lacks with the line that adds it, shows the plan
+  and waits for the person's yes before any change, appends the
+  persona seed to the bot's `SOUL.md` only through Hermes' own approval for that write, creates every schedule paused,
+  lists webhooks and apps without creating or connecting any, and on a second run says what is already there. A
+  Discord, Slack or Telegram bot template in code, a repository's own release-notes or PR-review template file, a PR
+  template, an email, Jinja or prompt template keep their old routes. (`src/catalogs/bot_templates.py`, `src/skills/bot_template_skill.py`, `src/routing/bot_template_cues.py`)
+- **Routing: a template applied to a bot for its forge or app, and an alert about latency, reach their skills.**
+  "apply the pr-review template to this bot for our github prs" (and the GitLab, Korean and release-notes forms)
+  now reaches `bot-template`: when the apply verb governs a GitHub template's id and the word bot is said, GitHub no
+  longer counts as a code word, and the GitHub event, app-work, connector and research lanes stand down for an app
+  that template itself reads ("apply the alert-triage template to this bot for our sentry alerts"). A declined or
+  deferred apply, another action in the same message ("... and merge github PR 12"), a GitHub repository, file,
+  workflow or language word, or a template that reads no such app keeps the old route. "Datadog monitor fired for high latency, investigate and
+  fix it" now reaches `app-work-intake`: latency lit the ops-observability guard, which outscored the alert's own;
+  that guard now stands down when an alert should become a fix, and a latency status read keeps it. A monitor
+  threshold to fix is the monitor's config and stays off the alert-to-fix card.
+  (`src/routing/bot_template_cues.py`, `src/routing/policy.py`, `src/routing/chat.py`)
+- **A bot made after install gets OMH's skills without `omh update`: `omh apply --profile <name>`.** A Hermes
+  profile created after OMH was installed had no OMH skills until the next `omh update`, which also updates OMH and
+  touches every Hermes home. `omh apply --profile <name>` runs the update's own per-profile pass for that one profile
+  (one function now serves both), with the same plugin bundle, manifest and opt-out rules: no OMH self-update, no
+  network, no Hermes command, and the main home and every other profile are left byte-identical. It refuses a name
+  outside Hermes' profile rule, `default`, a name Hermes reserves, `omh-tui`, and anything that is not a live profile
+  under `profiles/`, and it is idempotent; `--dry-run` previews and `--json` prints the profile's row. Hermes re-reads
+  `skills.external_dirs` when `config.yaml` changes, so a running gateway finds the skills without a restart; OMH's
+  plugin tools there load at the gateway's next start, which the command names when the gateway's record shows it.
+  `omh update`'s failure path changes with it (its success path is byte-identical): a bot whose config OMH cannot
+  edit used to get the plugin bundle and no registration, which every later update read as the deliberate opt-out;
+  now the registration is tried as a dry run before the first bundle goes in, a write that still fails takes the
+  bundle back, and a rerun after the repair sets the bot up.
 - **automation-blueprint: be told when something happens on a platform that sends no webhook.** Asking Hermes to
   be told when new mail matches a filter, a calendar event is about to start, a Notion page or database changes, a
   Linear or Jira issue is assigned, an Obsidian vault folder changes, or a Sentry issue opens ("tell me when a mail
@@ -752,6 +789,27 @@ All notable changes will be documented here.
   there by its own bridge, over the same SSH link. Picture and name editing stay where they were.
   (`apps/omher/bridge/omher_bridge.py` `read_bot_page`, `apps/omher/src/settings/BotSections.tsx`;
   `docs/OMHER-BOUNDARY.md` rule 42)
+- **omher: make a new bot from the sidebar `+`, from a bot template or empty.** Add a bot used to list only profiles
+  that already existed and name `hermes profile create`. New bot now shows oh-my-hermes' bot templates beside No
+  template; you pick one, type a name and press Create. omher checks the name against Hermes' own rule (lowercase
+  letters, numbers, `-` or `_`, up to 64, not a name Hermes keeps such as `default`) and refuses one that is already on
+  this computer, then runs Hermes' own `hermes -p default profile create <name> --no-alias` (no shell, nothing on stdin,
+  at most 330 seconds, Hermes' own 300 for a create through its gateway plus 30) and counts it done only when Hermes
+  said it finished and the new profile's folder is there. A stopped run, or one that left a folder without that
+  finish, is shown as not confirmed, with what may exist and `hermes profile list` to check, and nothing is listed or
+  sent; otherwise Hermes' own words show. The page says before Create that the new bot copies the main profile's API
+  keys and model and shares its logins, as Hermes does by default; no alias is written, and the page shows
+  `hermes profile alias <name>` for one. With a template, the new bot's main chat gets one
+  message, ``/omh-bot-template Apply the bot template `<id>` to this bot.``; the bot shows its plan, changes nothing
+  until you say yes, then applies it with its own approvals, every schedule paused. A new profile gets oh-my-hermes' skills on the next `omh update`, so until then
+  the gallery says so and sends nothing until you press Apply template, there or later on the bot's page. The
+  templates come from `omh --hermes-home <root> profile bot-templates --json` through the same `omh` runner as the
+  messaging platforms; without `omh`, or with one from before bot templates, the gallery says so and an empty bot still
+  works. (`apps/omher/src/addbot/NewBot.tsx`, `apps/omher/bridge/omher_bridge.py` `op_bots_create`;
+  `docs/OMHER-BOUNDARY.md` rule 44)
+- **omher: a new bot waiting for its template names the command for that bot.** The New bot gallery's waiting step
+  and the bot page's pending-template line used to say `omh update`; they now show `omh apply --profile <name>` for
+  the bot, which sets up only that bot and needs no Hermes restart. omher shows the command and does not run it.
 - **A bot whose Discord or Slack stopped connecting now says so in omher and on the OMH TUI bot board.** A Discord
   bot whose profile gained a role allowlist can be refused at its next reconnect (Discord's Server Members privileged
   intent) and stay offline, with only Hermes' gateway log saying why; `omh doctor` now reads it, but nothing showed
@@ -777,6 +835,15 @@ All notable changes will be documented here.
   names the gateway's profile in every restart command (`hermes -p default gateway restart`; a bare `hermes gateway
   restart` follows Hermes' sticky active profile). (`src/maintenance/gateway_health.py` `bot_platforms`,
   `src/tui/bot_board.py`, `apps/omher/src/platforms/`; `docs/OMHER-BOUNDARY.md` rule 43)
+- **omher shows a bot's disconnected messaging platform for a bot on another computer too.** A bot reached over SSH
+  now gets the same sidebar marker and the same Messaging section on its page as a bot here, with the same 10-minute
+  threshold for a reconnect. The other computer's own omher bridge reads it there with its own `omh hermes
+  platforms`: this computer asks it over the existing SSH link once per poll interval with the bare op and nothing in
+  it, and checks every field of the answer again (types, states, lengths, control and bidi characters; no fix text,
+  no link). The page names the computer it was read on and says where to run Hermes' restart command. A computer
+  that is offline, gave no usable answer or has no `omh` reads as cannot tell, never as connected or not.
+  (`apps/omher/bridge/omher_bridge.py` `peer_platform_rows`, `apps/omher/src/platforms/`; `docs/OMHER-BOUNDARY.md`
+  rule 45)
 - The OMH TUI no longer asks for kitty image previews in an omher terminal that cannot paint them. omher 1.1.3
   and earlier set `TERM_PROGRAM=omher` but draw no kitty Unicode placeholders, so pasting an image showed a block of
   tofu boxes in the transcript and the picture itself over the composer. omher now also sets

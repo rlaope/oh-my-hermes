@@ -129,10 +129,10 @@ class DistributionReleaseContractTests(unittest.TestCase):
     def test_npm_owner_preflight_accepts_cli_text_and_json(self) -> None:
         metadata = PROJECT_ROOT / "tools" / "package_manager" / "metadata.py"
         accepted = (
-            "rlaope <piyrw9754@gmail.com>\n",
+            "rlaope <demo4@example.com>\n",
             '["rlaope"]\n',
-            '{"rlaope":"piyrw9754@gmail.com"}\n',
-            '[{"name":"rlaope","email":"piyrw9754@gmail.com"}]\n',
+            '{"rlaope":"demo4@example.com"}\n',
+            '[{"name":"rlaope","email":"demo4@example.com"}]\n',
         )
         for owner_output in accepted:
             with self.subTest(owner_output=owner_output):

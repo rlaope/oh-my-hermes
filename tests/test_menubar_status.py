@@ -759,9 +759,9 @@ class MenubarStatusTests(unittest.TestCase):
 
             ps_output = "\n".join(
                 [
-                    " 101 1 /Applications/Codex.app/Contents/MacOS/Codex /Users/rlaope/Desktop/khope/hermes-agent",
-                    " 22064 1 /Users/rlaope/.hermes/hermes-agent/venv/bin/python /Users/rlaope/.hermes/hermes-agent/hermes",
-                    " 22065 22064 /opt/homebrew/bin/node --expose-gc /Users/rlaope/.hermes/hermes-agent/ui-tui/dist/entry.js",
+                    " 101 1 /Applications/Codex.app/Contents/MacOS/Codex /Users/demo/code/hermes-agent",
+                    " 22064 1 /Users/demo/.hermes/hermes-agent/venv/bin/python /Users/demo/.hermes/hermes-agent/hermes",
+                    " 22065 22064 /opt/homebrew/bin/node --expose-gc /Users/demo/.hermes/hermes-agent/ui-tui/dist/entry.js",
                 ]
             )
 

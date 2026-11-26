@@ -49,7 +49,7 @@ describe("findMentions", () => {
   });
 
   it("needs a boundary before the @: no emails, paths or handles inside words", () => {
-    expect(bots("mail kami@hermes.dev or a@kami.com")).toEqual([]);
+    expect(bots("mail kami@hermes.example or a@kami.example")).toEqual([]);
     expect(bots("x@kami y_@kami 1@kami")).toEqual([]);
     expect(bots("see /w/@kami and @@kami")).toEqual([]);
   });
