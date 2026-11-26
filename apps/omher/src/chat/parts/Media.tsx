@@ -6,6 +6,7 @@ import { useStore } from "../../state/store";
 import { fileName, fileSize, mediaKind, type MediaKind } from "./mediaLines";
 import "./media.css";
 import { t } from "../../i18n";
+import { remoteOnly } from "../../app/remote";
 
 type Loaded =
   | { state: "loading" }
@@ -131,7 +132,8 @@ export function FileRow({ name, size, title, testId, children }: { name: string;
 
 function FileCard({ file }: { file: MediaFile }) {
   // a file on another computer (a bot over SSH) has no path here to open: only its name and size show
-  if (file.remote) return <FileRow name={file.name} size={file.size} title={t("peer.fileThere")} testId="media-file" />;
+  // (on a server, rule 46, every bot's file is there)
+  if (file.remote || remoteOnly()) return <FileRow name={file.name} size={file.size} title={t("peer.fileThere")} testId="media-file" />;
   return (
     <FileRow name={file.name} size={file.size} title={file.path} testId="media-file">
       <span className="media-acts">

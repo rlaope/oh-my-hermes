@@ -45,6 +45,7 @@ import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titl
 import { getDraft, setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type ConvState, type PastChat, type SessionHost } from "./host";
 import { localBot } from "../peers/peerKey";
+import { remoteOnly } from "../app/remote";
 import { folderKey, getStore, notifySessionEvent, notifySessionNote, onBridgeEvent, selectAsks, setChatRoute, setSessionKeyLookup, type OutFile, type SentFile, type Store } from "../state/store";
 import { blobType, bytesOf, inlinePicture, parseSentFiles, pathsTyped, putSentFiles, SENT_FILES_KEY, shellQuote, wireText, type SavedFile, type SentFilesBook } from "./attach";
 import type { AccountCli, AccountGroup, ApprovalChoice, BridgeEvent, ClarifyAnswers, Msg } from "../lib/protocol";
@@ -688,6 +689,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     procs.set(id, proc);
     try {
       if (!bot) throw new Error(tr("ss.noBot"));
+      // a folder of this computer is not one a bot on the server can work in (rule 46)
+      if (remoteOnly()) throw new Error(tr("remote.noFolderChat"));
       const res = await store().actions.folderOpen(bot, r.cwd);
       proc.fid = res.session;
       if (procs.get(id) !== proc) {

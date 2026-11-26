@@ -10,16 +10,48 @@ import mark from "../assets/omher-mark.png";
 import "./gate.css";
 import { t } from "../i18n";
 import { omhInstalled } from "../onboarding/omhPrompt";
+import type { CheckResult, FailKind } from "../peers/host";
+import { UpdateButton } from "../sidebar/UpdateButton";
+import "../sidebar/sidebar.css";
+import { CHANGE_SERVER_EVENT, noteServerMode, serverLabel } from "./remote";
+import { RemoteConnect } from "./RemoteConnect";
 
-export type BridgeState = { state: "ready" | "starting" | "failed"; error?: string; missing?: "hermes" };
+/** `bridge_status`. Local mode may name `missing: "hermes"`; remote-only mode (rule 46) names the server's `host` and
+ *  never `missing` (connecting and reconnecting both read `starting`, with the last failure line in `error`). */
+export type BridgeState = { state: "ready" | "starting" | "failed"; error?: string; missing?: "hermes"; mode?: "local" | "remote"; host?: string };
 export type InstallEvent = { kind: "line"; text: string } | { kind: "exit"; code: number | null };
 
-/** The shell's commands, or the e2e stand-in. */
+/** `remote_status`, `remote_use` and `remote_leave`: the mode file and its link. */
+export type RemoteStatus =
+  | { mode: "local" }
+  | {
+      mode: "remote";
+      host: string;
+      port?: number;
+      label: string;
+      state: "connecting" | "connected" | "reconnecting" | "failed";
+      kind?: FailKind;
+      reason?: string;
+      attempt?: number;
+    };
+
+/** The shell's commands, or the e2e stand-in. The remote ones are optional so an older stand-in still loads. */
 export interface GateShell {
   status(): Promise<BridgeState>;
   retry(): Promise<void>;
   installCommand(): Promise<string>;
   install(onEvent: (e: InstallEvent) => void): Promise<number | null>;
+  /** `peers_hosts`: names from ~/.ssh/config. */
+  hosts?(): Promise<string[]>;
+  /** `remote_check`: one link up, nothing written; fails with `{kind, line}`. */
+  remoteCheck?(host: string, port?: number): Promise<CheckResult>;
+  /** `peers_check_close`: a Check link no Connect took. */
+  remoteCheckClose?(check: string): Promise<void>;
+  /** `remote_use`: writes ~/.omher/remote.json and switches to that server now (adopting the checked link). */
+  remoteUse?(label: string, host: string, port: number | undefined, check: string | undefined): Promise<RemoteStatus>;
+  /** `remote_leave`: deletes the file, stops the link, starts this computer's bridge again. */
+  remoteLeave?(): Promise<RemoteStatus>;
+  remoteStatus?(): Promise<RemoteStatus>;
 }
 
 const inTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -35,6 +67,12 @@ async function tauriShell(): Promise<GateShell> {
       ch.onmessage = onEvent;
       return invoke<number | null>("install_engine", { onEvent: ch });
     },
+    hosts: () => invoke<string[]>("peers_hosts"),
+    remoteCheck: (host, port) => invoke<CheckResult>("remote_check", { host, port: port ?? null }),
+    remoteCheckClose: (check) => invoke<void>("peers_check_close", { check }),
+    remoteUse: (label, host, port, check) => invoke<RemoteStatus>("remote_use", { label, host, port: port ?? null, check: check ?? null }),
+    remoteLeave: () => invoke<RemoteStatus>("remote_leave"),
+    remoteStatus: () => invoke<RemoteStatus>("remote_status"),
   };
 }
 
@@ -108,11 +146,17 @@ export function appendLine(lines: string[], text: string, max = MAX_LINES): stri
  *  a bar says so and offers Retry, and the app stays usable under it, terminals included, until the bridge is ready). */
 export type GateMode = "boot" | "up" | "down";
 
-export function gateMode(prev: GateMode, state: BridgeState["state"] | undefined): GateMode {
+export function gateMode(prev: GateMode, state: BridgeState["state"] | undefined, remote = false): GateMode {
   if (state === "ready") return "up";
   if (prev === "up" && state === "failed") return "down";
+  // a server's link that drops is said at once (the shell is already reconnecting it): the bar, never the gate
+  if (remote && prev === "up" && state === "starting") return "down";
   return prev;
 }
+
+/** One `bridge_status` answer against the last: the same answer keeps the same object (a steady poll re-renders nothing). */
+export const sameStatus = (a: BridgeState | null, b: BridgeState) =>
+  !!a && a.state === b.state && a.error === b.error && a.missing === b.missing && a.mode === b.mode && a.host === b.host;
 
 /** How often the gate asks the shell: often while the bridge is not up, then every couple of seconds so a bridge that
  *  dies later (and a shell that gives up on starting it again) is seen without a restart. */
@@ -149,7 +193,7 @@ export function BridgeGate({ children }: { children: ReactNode }) {
       try {
         const s = await (await shell()).status();
         // the same answer keeps the same object: a steady "ready" every 2 s re-renders nothing
-        if (alive) setStatus((prev) => (prev && prev.state === s.state && prev.error === s.error && prev.missing === s.missing ? prev : s));
+        if (alive) setStatus((prev) => (sameStatus(prev, s) ? prev : s));
       } catch (e) {
         // once the bridge is up, one refused ask (a webview reload, say) is not a failure: the shell answers the next one
         if (alive) setStatus((prev) => (prev?.state === "ready" ? prev : { state: "failed", error: String(e) }));
@@ -163,8 +207,57 @@ export function BridgeGate({ children }: { children: ReactNode }) {
     };
   }, [ready, running, shell]);
 
+  const remote = status?.mode === "remote";
+  const host = remote ? status?.host : undefined;
+  useEffect(() => {
+    if (status) noteServerMode(status);
+  }, [status]);
+  // the server's name (the mode file's label) for "Connecting to <label>…": asked once per host
+  const [label, setLabel] = useState("");
+  useEffect(() => {
+    if (!host) return;
+    let alive = true;
+    void shell()
+      .then((s) => s.remoteStatus?.())
+      .then((r) => {
+        if (!alive || !r || r.mode !== "remote") return;
+        setLabel(r.label);
+        noteServerMode({ mode: "remote", host: r.host, label: r.label });
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [host, shell]);
+  const name = serverLabel({ host, label });
+
+  // Settings › Server › Change server: the Connect form over the app; a Connect there reloads onto the new server
+  const [changing, setChanging] = useState(false);
+  useEffect(() => {
+    const open = () => setChanging(true);
+    window.addEventListener(CHANGE_SERVER_EVENT, open);
+    return () => window.removeEventListener(CHANGE_SERVER_EVENT, open);
+  }, []);
+  // the first screen's two ways in: install Hermes here, or use one on a server
+  const [choice, setChoice] = useState<"install" | "remote">("install");
+  const [leaving, setLeaving] = useState(false);
+  const [leaveError, setLeaveError] = useState("");
+  const useThisComputer = useCallback(async () => {
+    setLeaving(true);
+    setLeaveError("");
+    try {
+      await (await shell()).remoteLeave?.();
+      setStatus({ state: "starting" });
+      setChoice("install");
+    } catch (e) {
+      setLeaveError(String(e));
+    } finally {
+      setLeaving(false);
+    }
+  }, [shell]);
+
   const [mode, setMode] = useState<GateMode>("boot");
-  const nextMode = gateMode(mode, status?.state);
+  const nextMode = gateMode(mode, status?.state, remote);
   if (nextMode !== mode) setMode(nextMode);
 
   const needsHermes = status?.state === "failed" && status.missing === "hermes";
@@ -223,7 +316,23 @@ export function BridgeGate({ children }: { children: ReactNode }) {
     }
   }, [shell]);
 
-  if (nextMode === "up") return <>{children}</>;
+  const changeForm = changing && (
+    <div className="gate gate-over" data-testid="change-server">
+      <div className="gate-box gate-setup">
+        <img className="gate-mark" src={mark} alt="" width={44} height={44} />
+        <div className="gate-head">{t("remote.changeHead")}</div>
+        <RemoteConnect shell={shell} onCancel={() => setChanging(false)} onDone={() => window.location.reload()} />
+      </div>
+    </div>
+  );
+
+  if (nextMode === "up")
+    return (
+      <>
+        {children}
+        {changeForm}
+      </>
+    );
   // after the app was up, nothing hides it: terminals need no bridge, and a hidden one could still take keystrokes
   if (nextMode === "down") {
     const failed = status?.state === "failed";
@@ -231,7 +340,14 @@ export function BridgeGate({ children }: { children: ReactNode }) {
       <>
         {children}
         <div className="gate-bar" role={failed ? "alert" : "status"} data-testid="bridge-bar" data-state={status?.state ?? "starting"}>
-          <span className="gate-bar-title">{failed ? t("gate.unreachable") : t("gate.reviving")}</span>
+          <span className="gate-bar-title">
+            {remote ? (failed ? t("remote.unreachable", { label: name }) : t("remote.lost", { label: name })) : failed ? t("gate.unreachable") : t("gate.reviving")}
+          </span>
+          {remote && !failed && status?.error && (
+            <span className="gate-bar-error" data-testid="bridge-error" title={status.error}>
+              {status.error}
+            </span>
+          )}
           {failed && (
             <>
               <span className="gate-bar-error" data-testid="bridge-error" title={status?.error}>
@@ -243,7 +359,44 @@ export function BridgeGate({ children }: { children: ReactNode }) {
             </>
           )}
         </div>
+        {changeForm}
       </>
+    );
+  }
+
+  // remote-only mode before the app was up: the server's name, the last failure line, Retry, and the way back
+  if (remote) {
+    const failed = status?.state === "failed";
+    return (
+      <div className="gate" data-testid="bridge-gate" data-state={status?.state ?? "starting"} data-mode="remote">
+        <div className="gate-box gate-setup" data-testid="remote-gate">
+          <img className="gate-mark" src={mark} alt="" width={44} height={44} />
+          <div className="gate-head" data-testid="remote-head">
+            {failed ? t("remote.unreachable", { label: name }) : t("remote.connecting", { label: name })}
+          </div>
+          {host && host !== name && <code className="gate-remote-at">{host}</code>}
+          {!failed && <span className="gate-spin gate-spin-lg" aria-hidden="true" />}
+          {status?.error && (
+            <p className={`gate-error${failed ? " gate-error--bad" : ""}`} data-testid="bridge-error">
+              {status.error}
+            </p>
+          )}
+          {leaveError && (
+            <p className="gate-error gate-error--bad" role="alert">
+              {leaveError}
+            </p>
+          )}
+          <div className="gate-actions">
+            <button type="button" className="gate-retry gate-primary" data-testid="bridge-retry" disabled={retrying} onClick={retry}>
+              {t("gate.retry")}
+            </button>
+            <button type="button" className="gate-retry gate-quiet" data-testid="remote-leave" disabled={leaving} onClick={() => void useThisComputer()}>
+              {t("remote.useHere")}
+            </button>
+          </div>
+          <GateUpdate />
+        </div>
+      </div>
     );
   }
 
@@ -253,8 +406,34 @@ export function BridgeGate({ children }: { children: ReactNode }) {
         <div className="gate-box gate-setup" data-testid="setup-screen">
           <img className="gate-mark" src={mark} alt="" width={44} height={44} />
           <div className="gate-head" data-testid="setup-head">
-            {install === "failed" ? t("gate.failedHead") : t("gate.head")}
+            {install === "failed" ? t("gate.failedHead") : choice === "remote" ? t("remote.head") : t("gate.head")}
           </div>
+          <div className="gate-choice" role="group" aria-label={t("remote.choiceLabel")} data-testid="gate-choices">
+            <button
+              type="button"
+              className="gate-choice-b"
+              aria-pressed={choice === "install"}
+              disabled={running}
+              onClick={() => setChoice("install")}
+              data-testid="gate-choice-install"
+            >
+              {t("remote.choiceInstall")}
+            </button>
+            <button
+              type="button"
+              className="gate-choice-b"
+              aria-pressed={choice === "remote"}
+              disabled={running}
+              onClick={() => setChoice("remote")}
+              data-testid="gate-choice-remote"
+            >
+              {t("remote.choiceRemote")}
+            </button>
+          </div>
+          {choice === "remote" ? (
+            <RemoteConnect shell={shell} onDone={() => setStatus({ state: "starting", mode: "remote" })} />
+          ) : (
+          <>
           <p className="gate-text">{t("gate.text")}</p>
           {command && (
             <div className="gate-cmdbox">
@@ -327,6 +506,9 @@ export function BridgeGate({ children }: { children: ReactNode }) {
               {t("gate.note")}
             </p>
           )}
+          </>
+          )}
+          <GateUpdate />
         </div>
       </div>
     );
@@ -348,6 +530,15 @@ export function BridgeGate({ children }: { children: ReactNode }) {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/** The update button on the gate: the updater needs no bridge, so a person stuck here can still update in place. */
+function GateUpdate() {
+  return (
+    <div className="gate-upd" data-testid="gate-update">
+      <UpdateButton />
     </div>
   );
 }

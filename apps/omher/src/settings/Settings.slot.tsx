@@ -19,6 +19,8 @@ import { ProvidersPage } from "./providers/ProvidersPage";
 import { TerminalPage } from "./terminal/TerminalPage";
 import { SshMarker } from "../peers/SshMarker";
 import { RemoteMachines } from "../peers/RemoteMachines";
+import { openChangeServer, serverLabel, useServerMode } from "../app/remote";
+import { gateShell } from "../app/BridgeGate";
 import { setBar, useTasks } from "../tasks/state";
 import { DISK_WARN_CHOICES, diskWarn, setDiskWarn } from "../lib/disk";
 import { Toggle } from "../pages/kit";
@@ -598,7 +600,55 @@ function GeneralPage() {
           </Value>
         </Row>
       </div>
+      <ServerBlock />
       <RemoteMachines />
+    </div>
+  );
+}
+
+/** Remote-only mode (rule 46): the server omher uses, Change server (the gate's Connect form) and Use this computer. */
+function ServerBlock() {
+  const m = useServerMode();
+  const [leaving, setLeaving] = useState(false);
+  const [err, setErr] = useState("");
+  if (m.mode !== "remote") return null;
+  const leave = async () => {
+    setLeaving(true);
+    setErr("");
+    try {
+      await (await gateShell())?.remoteLeave?.();
+      // this computer's bridge starts again (or the install screen shows if Hermes is missing here)
+      window.location.reload();
+    } catch (e) {
+      setErr(String(e));
+      setLeaving(false);
+    }
+  };
+  return (
+    <div data-testid="server-block">
+      <div className="st-gh">{t("remote.server")}</div>
+      <div className="st-grp">
+        <Row title={serverLabel(m)} hint={t("remote.serverHint")}>
+          <Value mono>
+            <span data-testid="server-host">{m.host}</span>
+          </Value>
+        </Row>
+        <Row title={t("remote.change")}>
+          <button type="button" className="st-btn" onClick={openChangeServer} data-testid="server-change">
+            {t("remote.change")}
+          </button>
+        </Row>
+        <Row title={t("remote.useHere")} hint={t("remote.leaveHint")}>
+          <button type="button" className="st-btn" disabled={leaving} onClick={() => void leave()} data-testid="server-leave">
+            {t("remote.useHere")}
+          </button>
+        </Row>
+      </div>
+      {err && (
+        <p className="peer-warn" role="alert">
+          {err}
+        </p>
+      )}
     </div>
   );
 }
