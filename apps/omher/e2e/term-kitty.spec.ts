@@ -1,6 +1,7 @@
 // The Kitty keyboard protocol (xterm 6.1, Settings > Terminal > Modern key encoding, on by default), on the mock
-// host: a program that asks for it (`CSI > 1 u`, as Claude Code and Codex do) gets Shift+Enter as `CSI 13;2 u`; one
-// that does not ask, or any program with the setting off, gets `\r` as before. A terminal parked and made again
+// host: a program that asks for it (`CSI > 1 u`, as Claude Code and Codex do) gets Shift+Enter as `CSI 13;2 u`; an
+// agent that does not ask, or any agent with the setting off, gets the new line `ESC CR` (term-shift-enter.spec.ts), and
+// a shell `\r`. A terminal parked and made again
 // keeps what its program asked for. Option+drag selects inside a program that reports the mouse (macOS).
 import { expect, test, type Page } from "@playwright/test";
 import { feed, mock, newTerminal, openApp, platformIsMac, pointAt, settle, typed } from "./term-find-helpers";
@@ -35,25 +36,25 @@ test("a program that asks for the Kitty protocol gets Shift+Enter as CSI 13;2 u,
   await expect.poll(() => flags(page)).toBe(1);
   expect(await sends(page, "Shift+Enter")).toBe("\x1b[13;2u");
   expect(await sends(page, "Enter")).toBe("\r");
-  // the program pops it when it ends: back to the legacy bytes
+  // the program pops it when it ends: back to the legacy bytes (an agent's new line, ESC CR)
   await feed(page, "\x1b[<u");
-  expect(await sends(page, "Shift+Enter")).toBe("\r");
+  expect(await sends(page, "Shift+Enter")).toBe("\x1b\r");
 });
 
-test("a program that does not ask keeps today's bytes: Shift+Enter is \\r", async ({ page }) => {
+test("an agent that does not ask gets the legacy new line: Shift+Enter is ESC CR", async ({ page }) => {
   await openApp(page);
   await newTerminal(page);
   expect(await flags(page)).toBe(0);
-  expect(await sends(page, "Shift+Enter")).toBe("\r");
+  expect(await sends(page, "Shift+Enter")).toBe("\x1b\r");
   expect(await sends(page, "Enter")).toBe("\r");
 });
 
-test("with the setting off, a program's request is ignored and Shift+Enter is \\r", async ({ page }) => {
+test("with the setting off, a program's request is ignored and Shift+Enter is the legacy new line, ESC CR", async ({ page }) => {
   await openApp(page, { term: { kittyKeys: false } });
   await newTerminal(page);
   await feed(page, "\x1b[>1u");
   expect(await flags(page)).toBe(0);
-  expect(await sends(page, "Shift+Enter")).toBe("\r");
+  expect(await sends(page, "Shift+Enter")).toBe("\x1b\r");
 });
 
 test("a query is answered only with the protocol on (CSI ? u -> CSI ? flags u)", async ({ page }) => {
@@ -78,7 +79,7 @@ test("Settings > Terminal: Modern key encoding (Kitty) is on by default, and off
   expect(JSON.parse((await page.evaluate(() => localStorage.getItem("omher.term"))) ?? "{}")).toMatchObject({ kittyKeys: false });
   await page.locator("[data-testid=session-list] .ss-row .ss-open").first().click();
   await expect(page.getByTestId("terminal")).toBeVisible();
-  expect(await sends(page, "Shift+Enter")).toBe("\r");
+  expect(await sends(page, "Shift+Enter")).toBe("\x1b\r");
 });
 
 test("a terminal parked and made again keeps the protocol its program asked for", async ({ page }) => {

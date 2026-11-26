@@ -125,11 +125,12 @@ jobs:
             e2e/cards-webkit.spec.ts e2e/term-kitty.spec.ts e2e/term-split-panes.spec.ts e2e/term-find.spec.ts
             e2e/term-clip-scroll-keys.spec.ts e2e/terminals.spec.ts e2e/bot-reorder.spec.ts e2e/peers.spec.ts
             e2e/ux021.spec.ts e2e/term-blocks.spec.ts e2e/term-exit.spec.ts e2e/runs.spec.ts
-            e2e/session-folder-create.spec.ts e2e/settings-pages-fit.spec.ts
+            e2e/session-folder-create.spec.ts e2e/settings-pages-fit.spec.ts e2e/term-shift-enter.spec.ts
           E2E_WINDOWS: >-
             e2e/term-windows-keys.spec.ts e2e/reply-there-fit.spec.ts e2e/panel-ring-drop.spec.ts
             e2e/sessions-attach.spec.ts e2e/accounts.spec.ts e2e/settings-pages-fit.spec.ts e2e/tasks-fit.spec.ts
             e2e/terminals.spec.ts e2e/term-find.spec.ts e2e/term-import.spec.ts e2e/copy-prompt.spec.ts
+            e2e/term-shift-enter.spec.ts
       - name: Rust tests (Tauri shell)
         working-directory: apps/omher/src-tauri
         run: cargo test
