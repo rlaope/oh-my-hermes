@@ -96,6 +96,15 @@ Check a download against `SHA256SUMS.txt` on the same release:
 3. The installer's default home: `~/.hermes/hermes-agent/venv/bin/python` on macOS and Linux,
    `%LOCALAPPDATA%\hermes\hermes-agent\venv\Scripts\python.exe` on Windows.
 
+### No Hermes here: connect to a server
+
+If Hermes runs on a server you reach over SSH, nothing needs to be installed on this computer. On the first screen pick
+**Connect to a server (SSH)**, choose a host from `~/.ssh/config` or type `user@host` (key or ssh agent login only),
+press Check to see the server's bots, then Connect. omher saves `~/.omher/remote.json`, starts no local bridge or
+Python, and keeps one `ssh` link (the same one Remote machines uses) to that server's own omher bridge, reconnecting
+when it drops. Settings › General › Server has Change server and Use this computer, which deletes the file.
+Terminals stay this computer's own; handing a bot a folder here and remote machines are off. `BOUNDARY.md` rule 47.
+
 ## Architecture
 
 ```

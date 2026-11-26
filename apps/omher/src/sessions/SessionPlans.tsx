@@ -26,6 +26,7 @@ import { focusSplitPane } from "./SplitView";
 import { groupOf, sessionOf, useSplit } from "./splitState";
 import { paneRects } from "../terminal/layout";
 import { pickTitle } from "./titles";
+import { useServerMode } from "../app/remote";
 import "../runs/runs.css";
 
 /** The Plans graph's run id of a session: `<agent>:<its agent session id>`, for the agents whose records omher
@@ -213,8 +214,10 @@ function SplitMap({ rec }: { rec: SessionRec }) {
 export function SessionPanel({ onClose }: { onClose: () => void }) {
   const s = useStore();
   const ss = useSessions();
+  // on a server (rule 47) a session of this computer has no Plans: the server cannot read its agent's records here
+  const remote = useServerMode().mode === "remote";
   const rec = ss.list.find((r) => r.id === s.ui.session) ?? null;
-  if (!rec) return null;
+  if (!rec || remote) return null;
   const key = getSessions().chatKey(rec.id);
   return <SessionPlans key={rec.id} rec={rec} chat={key ? s.chats[key] : undefined} onClose={onClose} />;
 }

@@ -5,6 +5,7 @@ import { t } from "../i18n";
 import { AttachCard } from "./AttachCard";
 import { linkText, SshIcon } from "./SshMarker";
 import { removePeer, retryPeer, usePeers } from "./links";
+import { useServerMode } from "../app/remote";
 import "./peers.css";
 
 export function RemoteMachines() {
@@ -12,6 +13,8 @@ export function RemoteMachines() {
   const [asking, setAsking] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [err, setErr] = useState("");
+  // on a server (rule 47) other computers are that server's to reach: no peer link starts from here
+  const remote = useServerMode().mode === "remote";
   return (
     <div className="peer-set" data-testid="remote-machines">
       <div className="st-gh">{t("peer.machines")}</div>
@@ -72,20 +75,28 @@ export function RemoteMachines() {
             </div>
           </div>
         ))}
-        <div className="st-row">
-          <div className="st-k">
-            <b>{t("peer.add")}</b>
-            <span>{t("peer.addHint")}</span>
+        {remote ? (
+          <div className="st-row" data-testid="remote-add-off">
+            <div className="st-k">
+              <span>{t("remote.noPeers")}</span>
+            </div>
           </div>
-          <div className="st-v">
-            <button type="button" className="st-btn" onClick={() => setAdding(true)} data-testid="remote-add">
-              {t("peer.title")}
-            </button>
+        ) : (
+          <div className="st-row">
+            <div className="st-k">
+              <b>{t("peer.add")}</b>
+              <span>{t("peer.addHint")}</span>
+            </div>
+            <div className="st-v">
+              <button type="button" className="st-btn" onClick={() => setAdding(true)} data-testid="remote-add">
+                {t("peer.title")}
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
       {err && <p className="peer-warn" role="alert">{err}</p>}
-      {adding && <AttachCard seed={{}} onClose={() => setAdding(false)} />}
+      {adding && !remote && <AttachCard seed={{}} onClose={() => setAdding(false)} />}
     </div>
   );
 }

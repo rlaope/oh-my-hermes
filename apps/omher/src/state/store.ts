@@ -9,6 +9,7 @@ import { promptText } from "../chat/parts/attachFiles";
 import { findTokens, toWire } from "../chat/parts/skillTokens";
 import { forBots, parseResume, RESUME_KEY, type ResumeSnap } from "../app/resume";
 import { getDraft } from "../app/drafts";
+import { remoteOnly } from "../app/remote";
 import { moveInSidebar } from "./order";
 import { lang, LANG_KEY, readLang, setLang, t as tr, type Key, type Lang } from "../i18n";
 import type {
@@ -2243,6 +2244,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         let wire = p.wire;
         let attachment_ids: string[] = [];
         if (p.files?.length) {
+          if (remoteOnly()) throw new Error(tr("remote.noFiles"));
           const results: AttachResult[] = [];
           for (const f of p.files) results.push(await bridge.request("chat.attach", { bot: to.bot, kind: f.attach, name: f.name, data_base64: await f.read() }));
           attachment_ids = results.map((r) => r.attachment_id).filter((aid): aid is string => !!aid);
@@ -2707,6 +2709,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const bot = state.selectedBot;
       if (!bot) return;
       if (!files.length) return actions.send(text);
+      // a file of this computer never goes to a bot on the server (rule 47); the composer offers none there either
+      if (remoteOnly()) throw new Error(tr("remote.noFiles"));
       const chip = state.replyTo[bot] ?? null;
       const reply = chip ? { source: chip.source, label: chip.place } : undefined;
       if (mustHold(state, bot)) {
@@ -2868,7 +2872,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       void loadAutomations();
     },
     openTasks: () => dispatch({ type: "ui.tasks" }),
-    tasksLinear: (bot) => (bridge.request as unknown as (op: string, p: unknown) => Promise<{ configured: boolean; server: string }>)("tasks.linear", { bot }),
+    tasksLinear: (bot) => bridge.request("tasks.linear", { bot }),
     async startTaskThread(bot, title, text) {
       try {
         const key = `t${Date.now().toString(36)}${(threadSeq += 1)}`;
@@ -2996,8 +3000,15 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       else if (state.selectedBot !== bot || state.ui.view !== "chat") await selectBot(bot);
     },
     openSession: (id) => dispatch({ type: "ui.session", id }),
-    folderOpen: (bot, cwd) => bridge.request("folder.open", { bot, cwd }),
-    folderResume: (bot, cwd, stored) => bridge.request("folder.resume", { bot, cwd, stored }),
+    // a folder of this computer is never sent to a bot on the server (rule 47), however the chat was asked for
+    folderOpen: async (bot, cwd) => {
+      if (remoteOnly()) throw new Error(tr("remote.noFolderChat"));
+      return bridge.request("folder.open", { bot, cwd });
+    },
+    folderResume: async (bot, cwd, stored) => {
+      if (remoteOnly()) throw new Error(tr("remote.noFolderChat"));
+      return bridge.request("folder.resume", { bot, cwd, stored });
+    },
     async folderClose(bot, session) {
       await bridge.request("folder.close", { bot, session });
     },

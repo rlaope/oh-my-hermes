@@ -28,6 +28,17 @@ All notable changes will be documented here.
   Ctrl+C does in Hermes' CLI, and the chat says `⏸ Goal paused`; `/goal resume` continues it. A goal that is already
   paused or done is left alone. (`docs/OMHER-BOUNDARY.md` rule 46)
 
+- **omher: connect to a Hermes on your server over SSH, nothing installed on this computer.** When this computer has no
+  Hermes, the first screen now offers Connect to a server (SSH) next to Install: pick a host from `~/.ssh/config` or
+  type `user@host` (and a port), Check lists the server's bots through the same `ssh` link Remote machines uses (key or
+  ssh agent only; a host that wants a password is told to run `ssh-copy-id`), and Connect saves `~/.omher/remote.json`.
+  From then on omher starts no local bridge and no Python, keeps one link to that server, reconnects it when it drops
+  ("Connection to <name> lost, reconnecting") and talks only to the server's bridge. Settings › General shows the
+  server with Change server and Use this computer. Handing a bot a folder here, folder chats with a local folder and
+  remote machines are off in this mode; terminals stay this computer's own. The update button also shows on the setup
+  and connecting screens. Closes #3229. (`apps/omher/src-tauri/src/remote.rs`, `apps/omher/src/app/RemoteConnect.tsx`,
+  BOUNDARY rule 47)
+
 ## 5.0.1 - 2026-11-26
 
 - **TUI: session picker shows conversations rather than background runs.** On a shared Hermes gateway, `/sessions` and

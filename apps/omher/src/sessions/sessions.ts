@@ -37,7 +37,7 @@ import { savedPanelKeys } from "../terminal/state";
 import { termTheme } from "./term/themes";
 import { getShellHost, learnThisHost } from "../terminal/host";
 import { onSessionFg } from "./fg";
-import { fgHasId, isFgCli, isUuid, restoreLine } from "./fgResume";
+import { fgHasId, fgLine, isFgCli, isUuid, restoreLine } from "./fgResume";
 import { nextBusySince, termActs } from "./termActivity";
 import { isLinkId, LINK_COPIED_EVENT, newLinkId, termLinkUrl } from "./termLink";
 import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, idInUse, installLine, isBuiltin, isGone, isShell, isTerminalRec, LAST_LINE_MAX, refusedResume, SHELL, termEnd, termMarkAgent, lastPrintedLine, OPEN_KEY, setsUpScreen, UI_BYTES, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, termGroups, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
@@ -45,6 +45,7 @@ import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titl
 import { getDraft, setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type ConvState, type PastChat, type SessionHost } from "./host";
 import { localBot } from "../peers/peerKey";
+import { modeKnown, remoteOnly } from "../app/remote";
 import { folderKey, getStore, notifySessionEvent, notifySessionNote, onBridgeEvent, selectAsks, setChatRoute, setSessionKeyLookup, type OutFile, type SentFile, type Store } from "../state/store";
 import { blobType, bytesOf, inlinePicture, parseSentFiles, pathsTyped, putSentFiles, SENT_FILES_KEY, shellQuote, wireText, type SavedFile, type SentFilesBook } from "./attach";
 import type { AccountCli, AccountGroup, ApprovalChoice, BridgeEvent, ClarifyAnswers, Msg } from "../lib/protocol";
@@ -688,6 +689,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     procs.set(id, proc);
     try {
       if (!bot) throw new Error(tr("ss.noBot"));
+      // a folder of this computer is not one a bot on the server can work in (rule 47)
+      if (remoteOnly()) throw new Error(tr("remote.noFolderChat"));
       const res = await store().actions.folderOpen(bot, r.cwd);
       proc.fid = res.session;
       if (procs.get(id) !== proc) {
@@ -720,6 +723,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const bot = r?.bot;
     const stored = r?.agentSession;
     if (!r || !bot || !stored) return tr("ss.noBot");
+    // on a server the row stays as it was saved (paused, its stored id kept) for when this computer is used again
+    if (remoteOnly()) return tr("remote.noFolderChat");
     const proc: ChatProc = { kind: "folder", bot };
     procs.set(id, proc);
     try {
@@ -1453,6 +1458,18 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     t.told = null;
     // the terminal view of a chat session does not decide the session's status; the chat does
     const ofChat = sessionMode(state.agents, r) !== "terminal";
+    // oh-my-hermes on a server (rule 47): this computer's `omh` (a Hermes Python launcher) is not started, not after a
+    // restart and not on sight; the row stays paused with why, as a folder chat does (the shell refuses it too)
+    if (!shell && !ofChat && r.agent === "omh") {
+      await modeKnown();
+      if (t.run !== run) return;
+      if (remoteOnly()) {
+        termAgain.delete(id);
+        t.closed = true;
+        patchRec(id, { status: "exited", exitCode: null, paused: true, error: tr("remote.noLocalHermes") });
+        return;
+      }
+    }
     // a TERMINALS Claude Code or Codex session that has its own conversation continues it: put back after a restart
     // (by itself, once) and on Restart; Claude Code's terminal view of a chat continues the chat's conversation
     if (!ofChat) termAgain.delete(id);
@@ -2015,6 +2032,12 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const pty = t.hostId;
     const still = () => terms.get(id) === t && t.run === run && t.restore === line && !t.closed && !t.held && t.hostId === pty && !rec(id)?.fgAgent;
     if (pty === null || !still()) return dropRestore(id, t);
+    // on a server (rule 47) the `omh` line is never typed: it would start this computer's oh-my-hermes
+    if (line === fgLine("omh")) {
+      await modeKnown();
+      if (remoteOnly()) return dropRestore(id, t);
+      if (!still()) return dropRestore(id, t);
+    }
     const front = await getShellHost().shellInFront(pty).catch(() => false);
     if (terms.get(id) !== t || t.run !== run) return;
     if (!front || !still()) return dropRestore(id, t);
@@ -2145,8 +2168,18 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const mode = sessionMode(state.agents, r);
     if (mode === "chat") return restart(id);
     if (mode === "terminal") {
+      // oh-my-hermes on a server: this computer's `omh` is not started (rule 47); the row stays paused with why
+      if (r.agent === "omh" && remoteOnly()) {
+        patchRec(id, { error: tr("remote.noLocalHermes") });
+        return;
+      }
       // the terminal view starts the program when it mounts
       patchRec(id, { paused: undefined, status: "starting", error: undefined, exitCode: null });
+      return;
+    }
+    // oh-my-hermes on a server: nothing of this folder is sent; the row stays paused with why (rule 47)
+    if (remoteOnly()) {
+      patchRec(id, { error: tr("remote.noFolderChat") });
       return;
     }
     patchRec(id, { paused: undefined, status: "starting", error: undefined, exitCode: null });
@@ -2323,9 +2356,10 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     // their terminals are made and started now, off the page (a view that opens one later takes it as it is)
     const now = [...termAgain].filter((id) => !omhLater.includes(id));
     if (now.length && typeof document !== "undefined") void loadXterm().then((m) => now.forEach((id) => startOffPage(m, id)));
-    // the folder chats once the bridge has put back the bots: refused or failed, a row is paused with the reason
+    // the folder chats once the bridge has put back the bots and the mode is known (on a server none is sent):
+    // refused or failed, a row is paused with the reason
     if (folderAgain.length)
-      void store().resumed.then(() =>
+      void Promise.all([store().resumed, modeKnown()]).then(() =>
         Promise.all(
           folderAgain.map(async (id) => {
             if (procs.has(id) || rec(id)?.status !== "starting") return;

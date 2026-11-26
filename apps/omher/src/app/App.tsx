@@ -20,6 +20,7 @@ import { useLookAttributes, useThemeAttribute } from "./theme";
 import { useShortcuts } from "./shortcuts";
 import { useAsksBadge } from "./badge";
 import { startPeers } from "../peers/links";
+import { useServerMode } from "./remote";
 import { startPower } from "../lib/power";
 import { setTerminalCwd, useTermPanel } from "../terminal/state";
 
@@ -31,6 +32,7 @@ const TerminalPanel = lazy(() => import("../terminal/Panel").then((m) => ({ defa
 
 export function App() {
   const s = useStore();
+  const remote = useServerMode().mode === "remote";
   useThemeAttribute(s.ui.theme);
   useLookAttributes(s.ui.look);
   useShortcuts();
@@ -65,8 +67,9 @@ export function App() {
     };
   }, [s.bots, current]);
   // a bot's chat shows its Details and Plans; a SESSIONS chat shows Plans for that session alone
+  // on a server (rule 47) a session of this computer has no Plans panel: its agent's records are here, not there
   const onSession = s.ui.view === "session" && !!s.ui.session;
-  const panelOpen = s.ui.panelOpen && ((s.ui.view === "chat" && !!bot) || onSession);
+  const panelOpen = s.ui.panelOpen && ((s.ui.view === "chat" && !!bot) || (onSession && !remote));
   // maximised in place: the panel takes the chat column's room; the chat stays mounted (draft, scroll, stream)
   const panelMax = panelOpen && !onSession && s.ui.panelMax;
   const Details = slots.detailsPanel;
