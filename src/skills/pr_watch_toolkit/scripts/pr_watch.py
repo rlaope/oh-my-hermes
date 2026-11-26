@@ -104,6 +104,8 @@ MAX_GH_OUTPUT = 8 * 1024 * 1024
 WAIT_LINE = "next=wait reason=unsettled"
 LOCK_WAIT_S = 20.0
 LOCK_STALE_S = 120.0
+# Windows refuses a replace while another tick's lockless read has the file open: retry for this long
+REPLACE_WAIT_S = 2.0
 # Names Windows refuses as a file or folder, whatever the extension.
 RESERVED_NAMES = frozenset({"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)),
                             *(f"lpt{i}" for i in range(1, 10))})
@@ -286,12 +288,13 @@ def write_state(path: Path, data: dict) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(json.dumps(data, sort_keys=True) + "\n")
-        for attempt in range(3):
+        deadline = time.monotonic() + REPLACE_WAIT_S
+        while True:
             try:
                 os.replace(tmp, path)
                 return
             except PermissionError:  # Windows: a reader still has the file open
-                if attempt == 2:
+                if time.monotonic() >= deadline:
                     raise
                 time.sleep(0.05)
     finally:
@@ -306,6 +309,13 @@ def take_lock(lock: Path) -> bool:
     while True:
         try:
             fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except PermissionError:
+            # Windows answers "access denied" for a lock another tick has just deleted and not yet released;
+            # a denial that outlasts the wait is real and still fails the tick.
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.05)
+            continue
         except FileExistsError:
             try:
                 if time.time() - lock.stat().st_mtime > LOCK_STALE_S:

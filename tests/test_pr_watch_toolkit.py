@@ -25,6 +25,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 from urllib.parse import urlencode
 
 from _platform_support import requires_posix
@@ -692,6 +693,58 @@ class WatchConcurrencyTest(unittest.TestCase):
         self.assertEqual((state["first_failed_head"], state["rounds_floor"]), (A, 3))
         self.assertEqual(sorted(state["watches"]), ["w-one", "w-three", "w-two"])
         self.assertEqual([p.name for p in (root / "state" / "acme" / "widgets").iterdir()], ["pr-42.json"])
+
+
+
+class WatchWindowsDenialTest(unittest.TestCase):
+    """Windows answers "access denied" while another tick has the state file open or the lock half deleted."""
+
+    def setUp(self):
+        self.mod = load(WATCH, "pr_watch_windows_denial")
+        tmp = TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+
+    def denied(self, real, times):
+        calls = []
+        def flaky(*args, **kwargs):
+            calls.append(1)
+            if len(calls) <= times:
+                raise PermissionError(13, "Access is denied")
+            return real(*args, **kwargs)
+        return flaky, calls
+
+    def test_a_replace_denied_for_longer_than_a_few_polls_still_lands(self):
+        # 3 x 50 ms used to be all it got: on a busy runner a lockless read outlasted that and the tick exited 6.
+        path = self.root / "pr-42.json"
+        flaky, calls = self.denied(os.replace, 8)
+        with mock.patch.object(self.mod.os, "replace", flaky):
+            self.mod.write_state(path, {"rounds_floor": 1})
+        self.assertEqual(len(calls), 9)
+        self.assertEqual(json.loads(path.read_text(encoding="utf-8")), {"rounds_floor": 1})
+        self.assertEqual([p.name for p in self.root.iterdir()], ["pr-42.json"])
+
+    def test_a_replace_denied_past_the_wait_still_fails(self):
+        path = self.root / "pr-42.json"
+        flaky, _ = self.denied(os.replace, 10**6)
+        with mock.patch.object(self.mod, "REPLACE_WAIT_S", 0.2), \
+                mock.patch.object(self.mod.os, "replace", flaky), self.assertRaises(PermissionError):
+            self.mod.write_state(path, {"rounds_floor": 1})
+        self.assertEqual(list(self.root.iterdir()), [])
+
+    def test_a_lock_denied_while_another_tick_releases_it_is_taken(self):
+        lock = self.root / "pr-42.json.lock"
+        flaky, calls = self.denied(os.open, 3)
+        with mock.patch.object(self.mod.os, "open", flaky):
+            self.assertTrue(self.mod.take_lock(lock))
+        self.assertEqual(len(calls), 4)
+        self.assertTrue(lock.exists())
+
+    def test_a_lock_denied_past_the_wait_still_fails(self):
+        flaky, _ = self.denied(os.open, 10**6)
+        with mock.patch.object(self.mod, "LOCK_WAIT_S", 0.2), \
+                mock.patch.object(self.mod.os, "open", flaky), self.assertRaises(PermissionError):
+            self.mod.take_lock(self.root / "pr-42.json.lock")
 
 
 FAKE_GH = """#!{python}

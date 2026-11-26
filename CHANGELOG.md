@@ -4,6 +4,12 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **PR watch: concurrent watches on one PR no longer fail a tick on Windows.** When several watches on the same PR
+  ticked at once, Windows answered "access denied" to the lock holder's state replace while another tick was still
+  reading the file, or to a new lock while the last holder's was still being deleted. The replace gave up after
+  three 50 ms polls and the lock failed at once, so the tick exited 6 and Hermes delivered an alert. The replace now
+  retries for up to 2 seconds and the lock retries within its existing 20-second wait; a denial that outlasts either
+  still fails the tick. (`src/skills/pr_watch_toolkit/scripts/pr_watch.py`)
 - **A dag-ulw run whose verify node was repaired twice ends instead of staying open with a node no child takes.**
   After a failed verify node, a repair group answers that failure and the node runs again. When a group member failed
   too (a re-review that found more) its repair became the root's second group, and counting failures against groups
