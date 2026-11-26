@@ -124,8 +124,8 @@ Un nœud distinct vérifie l'objectif avant que vous receviez le rapport.
 >     <td>Suivez <a href="https://github.com/rlaope">@rlaope</a> sur GitHub pour d'autres projets, les versions et le travail en cours.</td>
 >   </tr>
 >   <tr>
->     <td width="124"><a href="https://discord.gg/6EjTP3cWM"><img alt="Discord invite" src="https://img.shields.io/badge/Join-Discord-5865F2?style=flat-square&logo=discord&logoColor=white&labelColor=black" width="112" /></a></td>
->     <td>Rejoignez l'<a href="https://discord.gg/6EjTP3cWM">Oh-My-Hermes Community</a> sur Discord pour poser vos questions, partager vos workflows et échanger avec d'autres utilisateurs.</td>
+>     <td width="124"><a href="https://discord.gg/SuwJxE84j"><img alt="Discord invite" src="https://img.shields.io/badge/Join-Discord-5865F2?style=flat-square&logo=discord&logoColor=white&labelColor=black" width="112" /></a></td>
+>     <td>Rejoignez l'<a href="https://discord.gg/SuwJxE84j">Oh-My-Hermes Community</a> sur Discord pour poser vos questions, partager vos workflows et échanger avec d'autres utilisateurs.</td>
 >   </tr>
 >   <tr>
 >     <td width="124"><a href="https://github.com/rlaope/oh-my-hermes/graphs/contributors"><img alt="AI agent collaborators" src="https://img.shields.io/badge/With-AI%20agents-6f42c1?style=flat-square&labelColor=black" width="112" /></a></td>

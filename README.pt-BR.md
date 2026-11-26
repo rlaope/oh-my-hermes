@@ -124,8 +124,8 @@ Um nó separado verifica o objetivo antes de você receber o relatório.
 >     <td>Siga <a href="https://github.com/rlaope">@rlaope</a> no GitHub para ver mais projetos, versões e o trabalho em andamento.</td>
 >   </tr>
 >   <tr>
->     <td width="124"><a href="https://discord.gg/6EjTP3cWM"><img alt="Discord invite" src="https://img.shields.io/badge/Join-Discord-5865F2?style=flat-square&logo=discord&logoColor=white&labelColor=black" width="112" /></a></td>
->     <td>Entre na <a href="https://discord.gg/6EjTP3cWM">Oh-My-Hermes Community</a> no Discord para tirar dúvidas, compartilhar workflows e conversar com outros usuários.</td>
+>     <td width="124"><a href="https://discord.gg/SuwJxE84j"><img alt="Discord invite" src="https://img.shields.io/badge/Join-Discord-5865F2?style=flat-square&logo=discord&logoColor=white&labelColor=black" width="112" /></a></td>
+>     <td>Entre na <a href="https://discord.gg/SuwJxE84j">Oh-My-Hermes Community</a> no Discord para tirar dúvidas, compartilhar workflows e conversar com outros usuários.</td>
 >   </tr>
 >   <tr>
 >     <td width="124"><a href="https://github.com/rlaope/oh-my-hermes/graphs/contributors"><img alt="AI agent collaborators" src="https://img.shields.io/badge/With-AI%20agents-6f42c1?style=flat-square&labelColor=black" width="112" /></a></td>
