@@ -75,6 +75,8 @@ PROVIDER_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,40}$")
 # setup.runtime_check answers a retryable error while its probe still runs: waits before asking again (None: give up).
 READY_RETRY = (0.5, 1.0, None)
 RUNNING_STATUSES = frozenset({"working", "streaming", "waiting", "starting"})
+# `/goal …` as the person typed it: sent through Hermes' `slash.exec` (Bridge._goal_command), never as a prompt
+GOAL_COMMAND = re.compile(r"/goal(?:\s|$)", re.IGNORECASE)
 MAX_ELSEWHERE = 20
 MAX_OPEN_MESSAGES = 200
 PEEK_CHARS = 400
@@ -7655,12 +7657,47 @@ class Bridge:
         input_id = str(uuid.uuid4())
         await self._probe_clarify_batch(conn)
         queued = p.get("queued") is True
-        await self._submit(conn, main, text, input_id, queued)
+        goal = command and GOAL_COMMAND.match(text.lstrip()) is not None
+        kick = await self._goal_command(conn, main, chat, text) if goal else None
+        if kick is not None:  # /goal ran through slash.exec: what goes now is the goal's first turn, if it has one
+            text = kick
+        if text:
+            await self._submit(conn, main, text, input_id, queued)
         if chat is not None and chat.kind == "thread" and not chat.title:
             await self._name_thread(conn, chat, p["text"])
         # behind a turn Hermes lost in a restart: Hermes keeps it in its queue and runs it only after that turn is
         # discarded (chat.discard), so the page shows it waiting, not read
         return {"input_id": input_id, **({"paused": True} if (chat or conn).lost_turns else {})}
+
+    async def _goal_command(self, conn: Conn, main: str, chat: FolderChat | None, text: str) -> str | None:
+        """``/goal`` through Hermes' own ``slash.exec``, as Hermes' TUI and Desktop send it. Sent as a prompt, Hermes
+        runs the command as an admitted turn: it answers "Goal set" but puts the goal's first turn on a local queue
+        nothing reads, so the goal never starts. ``slash.exec`` hands that turn back instead (``type: send``) for the
+        client to submit itself. Its answer shows as the bot's message; returns the turn to submit ("" for none), or
+        None on a gateway without ``slash.exec`` (the command then goes as typed)."""
+        try:
+            res = await self._call(conn, "slash.exec", session_id=main, command=text.strip()[1:])
+        except BridgeError:
+            raise
+        except Exception as e:
+            if _named(e, "GatewayRPCError") and (str(e) == "unknown_method" or getattr(e, "code", None) == -32601):
+                return None
+            raise
+        res = res if isinstance(res, dict) else {}
+        kick = res.get("message") if res.get("type") == "send" and isinstance(res.get("message"), str) else ""
+        note = res.get("notice") if res.get("type") == "send" else res.get("output")
+        if isinstance(note, str) and note.strip():
+            await self._command_note(conn, chat, note.strip())
+        return kick if kick.strip() else ""
+
+    async def _command_note(self, conn: Conn, chat: FolderChat | None, text: str) -> None:
+        """A command's answer that runs no turn, shown as the bot's message the way its turn used to show it."""
+        opened = not (chat or conn).in_turn
+        if opened:
+            await self._begin_turn(conn, chat)
+        await self._chat_emit(conn, chat, "message", id=uuid.uuid4().hex, text=text)
+        if opened:
+            await self._end_turn(conn, "done", chat=chat)
 
     async def _probe_clarify_batch(self, conn: Conn) -> None:
         """Ask once per connection whether the gateway can send a turn's several clarify questions as one
@@ -7721,8 +7758,34 @@ class Bridge:
     async def op_chat_interrupt(self, p) -> dict:
         conn = await self._conn(p.get("bot"))
         main, chat = await self._target(conn, p)
+        paused = await self._pause_goal(conn, main)
         await self._call(conn, "session.interrupt", session_id=main, execution_generation=await self._generation(conn, main, chat))
+        if paused:
+            await self._command_note(conn, chat, paused)
         return {}
+
+    async def _pause_goal(self, conn: Conn, main: str) -> str | None:
+        """Stop during a /goal pauses the goal first, as Ctrl+C does in Hermes' CLI. Hermes' gateway judges a stopped
+        turn like a finished one and starts the goal's next turn, so a Stop alone never ends the run. Only an
+        ``active`` goal is paused (pausing a done goal would make it paused again); the pause runs before the
+        interrupt, so the judge of the stopped turn already finds it paused. Returns Hermes' answer to show, or None.
+        A gateway that cannot read or pause a goal still gets the interrupt."""
+        try:
+            snap = await self._call(conn, "session.control.read", session_id=main)
+            control = snap.get("control") if isinstance(snap, dict) else None
+            goal = control.get("goal") if isinstance(control, dict) else None
+            if not isinstance(goal, dict) or goal.get("status") != "active":
+                return None
+            res = await self._call(conn, "session.control", session_id=main, action="goal.pause")
+        except BridgeError:
+            raise
+        except Exception as e:
+            if not _named(e, "GatewayRPCError"):
+                raise
+            return None
+        dispatch = res.get("dispatch") if isinstance(res, dict) else None
+        out = dispatch.get("output") if isinstance(dispatch, dict) else None
+        return out.strip() if isinstance(out, str) and out.strip() else None
 
     async def op_chat_discard(self, p) -> dict:
         """The person's Discard on a chat Hermes paused: a turn of it was lost when Hermes' gateway stopped

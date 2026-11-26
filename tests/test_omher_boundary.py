@@ -720,10 +720,12 @@ class DocPins(unittest.TestCase):
         # the name by Hermes' rule, the outcome from the folder Hermes made; one more `OMH_READS` entry for the
         # gallery's `profile bot-templates --json`; one apply message once the bot has the template skill); 45: rule 45
         # (a bot on another computer: its platforms read there by that computer's own bridge, asked over the link with
-        # the bare op and nothing in it, once per interval, checked again here, kept in memory only). The rules stay
-        # numbered 1..n with no gap or repeat.
+        # the bare op and nothing in it, once per interval, checked again here, kept in memory only); 46: rule 46 (a
+        # typed `/goal` through Hermes' own `slash.exec`, its handed-back turn through the one `prompt.submit`; Stop
+        # pauses only an `active` goal through Hermes' own `session.control` `goal.pause` before the interrupt). The
+        # rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 45, len(rules))
+        self.assertTrue(6 <= len(rules) <= 46, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -2883,6 +2885,32 @@ class SshPeersOnlyOverTheOwnSsh(unittest.TestCase):
         self.assertEqual(sorted(set(re.findall(r'call\("([a-z.]+)"', probe))), ["bots.list", "hello"])
         # the peer URL is the forwarded loopback port only
         self.assertIn(r'PEER_URL = re.compile(r"ws://127\.0\.0\.1:[0-9]{1,5}/\?token=[0-9a-f]{32}")', self.bridge)
+
+
+class GoalThroughHermesOwnControls(unittest.TestCase):
+    """Rule 46: a typed `/goal` goes through Hermes' own `slash.exec` and its handed-back turn through the one
+    `prompt.submit` call site; Stop pauses only an `active` goal, through Hermes' own `session.control` `goal.pause`,
+    before the interrupt, and the bridge never resumes, clears or sets a goal itself."""
+
+    def _fn(self, src: str, tree: ast.AST, name: str) -> str:
+        fn = [f for f in ast.walk(tree) if isinstance(f, ast.AsyncFunctionDef) and f.name == name][0]
+        return ast.get_source_segment(src, fn) or ""
+
+    def test_goal_and_stop_use_only_hermes_own_controls(self) -> None:
+        src = BRIDGE.read_text(encoding="utf-8")
+        tree = ast.parse(src)
+        goal = self._fn(src, tree, "_goal_command")
+        self.assertEqual(re.findall(r'_call\(conn, "([a-z._]+)"', goal), ["slash.exec"])
+        self.assertNotIn("prompt.submit", goal)
+        pause = self._fn(src, tree, "_pause_goal")
+        self.assertEqual(re.findall(r'_call\(conn, "([a-z._]+)"', pause), ["session.control.read", "session.control"])
+        self.assertIn('goal.get("status") != "active"', pause)
+        self.assertEqual(re.findall(r'action="([a-z.]+)"', src), ["goal.pause"])
+        for verb in ("goal.resume", "goal.clear", "goal resume", "goal clear"):
+            self.assertNotIn(verb, src, verb)
+        stop = self._fn(src, tree, "op_chat_interrupt")
+        self.assertLess(stop.index("self._pause_goal("), stop.index('"session.interrupt"'))
+        self.assertEqual(src.count('"slash.exec"'), 1)
 
 
 class BotThreads(unittest.TestCase):

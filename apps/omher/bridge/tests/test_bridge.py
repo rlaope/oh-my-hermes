@@ -47,8 +47,10 @@ class FakeClient:
     """The slice of ``GatewayClient`` the bridge uses: ``rpc`` and ``events``."""
 
     def __init__(self, name: str, *, bot_chat: bool = True, sessions=None, history=None, caps=None, lacks=(), ready=None,
-                 model_replies=None, resume_bumps=False, legacy=False, slow=(), keeps_created=False):
+                 model_replies=None, resume_bumps=False, legacy=False, slow=(), keeps_created=False, answers=None):
         self.name = name
+        # method -> its answer (a dict, a callable of the params, or an exception to raise), before the defaults below
+        self.answers = dict(answers or {})
         self.slow = frozenset(slow)  # methods that answer after a short wait, so two requests overlap in them
         self.keeps_created = keeps_created  # a main-chat session.create makes a Bot Chat the next session.list finds
         self.legacy = legacy  # True: the older tui gateway (session.title/archive/close, idempotency_key)
@@ -90,6 +92,12 @@ class FakeClient:
         if method in self.slow:
             await asyncio.sleep(0.05)
         self.refuse(method, params)
+        if method in self.answers:
+            answer = self.answers[method]
+            answer = answer(params) if callable(answer) else answer
+            if isinstance(answer, Exception):
+                raise answer
+            return answer
         if method == "session.list":
             if params.get("title") == ob.BOT_CHAT_TITLE:
                 rows = [{"id": MAIN_STORED, "title": ob.BOT_CHAT_TITLE, "source": "tui"}] if self.bot_chat else []
@@ -1663,12 +1671,122 @@ class Plugins(BridgeCase):
             self.assertEqual(await env.bridge.poll_plugins_once(), 0)
 
 
+# What Hermes' gateway answers (caafe5389a, read from a real daemon): `/goal <text>` and `/goal status` through
+# `slash.exec`, the goal through `session.control.read`, and `goal.pause` through `session.control`.
+GOAL_SET = {"type": "send", "message": "search spacex", "display": "/goal search spacex",
+            "notice": "\u2299 Goal set (20-turn budget): search spacex\nI'll keep working until the goal is done."}
+GOAL_STATUS = {"type": "exec", "output": "\u2299 Goal (active, 0/20 turns): search spacex"}
+
+
+def goal_control(status):
+    goal = None if status is None else {"title": "search spacex", "status": status, "turns_used": 4, "max_turns": 20}
+    return {"control": {"goal": goal, "loop": None, "heartbeat": None, "revision": "r1"}}
+
+
+GOAL_PAUSED = {**goal_control("paused"), "dispatch": {"type": "exec", "output": "\u23f8 Goal paused: search spacex",
+                                                      "notice": None, "message": None, "display": None}}
+
+
+class GoalCommand(BridgeCase):
+    """`/goal` goes through Hermes' own `slash.exec` (sent as a prompt, Hermes answered "Goal set" and never started
+    the goal), and Stop during an active goal pauses it before the interrupt (else Hermes' judge starts the next
+    turn)."""
+
+    async def test_goal_set_answers_then_submits_the_turn_hermes_hands_back(self):
+        async with Env(answers={"slash.exec": GOAL_SET}) as env:
+            s = await self.open(env)
+            await s.req("chat.open", bot="kami")
+            r = await s.req("chat.send", bot="kami", text="/goal search spacex")
+            self.assertTrue(r["ok"], r)
+            c = env.clients["kami"]
+            self.assertEqual(c.find("slash.exec"), [{"session_id": MAIN_RUNTIME, "command": "goal search spacex"}])
+            [sub] = c.find("prompt.submit")
+            self.assertEqual((sub["session_id"], sub["text"]), (MAIN_RUNTIME, "search spacex"))  # the goal's first turn
+            self.assertEqual(r["result"], {"input_id": sub["input_id"]})
+            await s.until(lambda ev: any(e["event"] == "turn.end" for e in ev))
+            self.assertEqual(s.kinds(), ["turn.start", "message", "turn.end"])
+            note = [e for e in s.events if e["event"] == "message"][0]
+            self.assertTrue(note["text"].startswith("\u2299 Goal set (20-turn budget): search spacex"), note)
+            self.assertLess([m for m, _ in c.calls].index("slash.exec"), [m for m, _ in c.calls].index("prompt.submit"))
+
+    async def test_goal_status_answers_and_starts_no_turn(self):
+        async with Env(answers={"slash.exec": GOAL_STATUS}) as env:
+            s = await self.open(env)
+            r = await s.req("chat.send", bot="kami", text="  /GOAL status")
+            self.assertTrue(r["ok"], r)
+            c = env.clients["kami"]
+            self.assertEqual(c.find("slash.exec")[0]["command"], "GOAL status")
+            self.assertEqual(c.find("prompt.submit"), [])
+            await s.until(lambda ev: any(e["event"] == "turn.end" for e in ev))
+            self.assertEqual([e["text"] for e in s.events if e["event"] == "message"], [GOAL_STATUS["output"]])
+
+    async def test_a_gateway_without_slash_exec_gets_the_text_as_typed(self):
+        async with Env(lacks=("slash.exec",)) as env:
+            s = await self.open(env)
+            self.assertTrue((await s.req("chat.send", bot="kami", text="/goal search spacex"))["ok"])
+            self.assertEqual([p["text"] for p in env.clients["kami"].find("prompt.submit")], ["/goal search spacex"])
+
+    async def test_other_commands_still_go_as_typed(self):
+        async with Env(answers={"slash.exec": GOAL_SET}) as env:
+            s = await self.open(env)
+            for text in ("/goals", "/usage", "/subgoal add x", "goal search spacex"):
+                self.assertTrue((await s.req("chat.send", bot="kami", text=text))["ok"])
+            c = env.clients["kami"]
+            self.assertEqual(c.find("slash.exec"), [])
+            self.assertEqual([p["text"] for p in c.find("prompt.submit")][:3], ["/goals", "/usage", "/subgoal add x"])
+
+    async def test_a_refused_goal_command_fails_the_send_and_submits_nothing(self):
+        async with Env(answers={"slash.exec": GatewayRPCError("unsupported_command")}) as env:
+            s = await self.open(env)
+            r = await s.req("chat.send", bot="kami", text="/goal search spacex")
+            self.assertFalse(r["ok"], r)
+            self.assertEqual(env.clients["kami"].find("prompt.submit"), [])
+
+    async def test_stop_pauses_an_active_goal_before_the_interrupt(self):
+        async with Env(answers={"session.control.read": goal_control("active"), "session.control": GOAL_PAUSED}) as env:
+            s = await self.open(env)
+            await s.req("chat.open", bot="kami")
+            c = env.clients["kami"]
+            c.push("message.start", {}, execution_generation=9)
+            await s.until(lambda ev: any(e["event"] == "turn.start" for e in ev))
+            self.assertTrue((await s.req("chat.interrupt", bot="kami"))["ok"])
+            calls = [m for m, _ in c.calls if m.startswith("session.control") or m == "session.interrupt"]
+            self.assertEqual(calls, ["session.control.read", "session.control", "session.interrupt"])
+            self.assertEqual(c.find("session.control"), [{"session_id": MAIN_RUNTIME, "action": "goal.pause"}])
+            self.assertEqual(c.find("session.interrupt"), [{"session_id": MAIN_RUNTIME, "execution_generation": 9}])
+            await s.until(lambda ev: any(e["event"] == "message" for e in ev))
+            notes = [e["text"] for e in s.events if e["event"] == "message"]
+            self.assertEqual(notes, ["\u23f8 Goal paused: search spacex"])
+            self.assertNotIn("turn.end", s.kinds())  # the note joins the running turn; Hermes ends that turn itself
+
+    async def test_stop_leaves_a_goal_that_is_not_active_and_still_interrupts(self):
+        for read in (goal_control("paused"), goal_control("done"), goal_control(None), {},
+                     GatewayRPCError("unknown_method", {"reason": "unknown_method"})):
+            with self.subTest(read=read):
+                async with Env(answers={"session.control.read": read, "session.control": GOAL_PAUSED}) as env:
+                    s = await self.open(env)
+                    self.assertTrue((await s.req("chat.interrupt", bot="kami"))["ok"])
+                    c = env.clients["kami"]
+                    self.assertEqual(c.find("session.control"), [])
+                    self.assertEqual(len(c.find("session.interrupt")), 1)
+
+    async def test_a_refused_pause_still_interrupts(self):
+        async with Env(answers={"session.control.read": goal_control("active"),
+                                "session.control": GatewayRPCError("busy")}) as env:
+            s = await self.open(env)
+            self.assertTrue((await s.req("chat.interrupt", bot="kami"))["ok"])
+            c = env.clients["kami"]
+            self.assertEqual(len(c.find("session.interrupt")), 1)
+            self.assertFalse(any(e["event"] == "message" for e in s.events))
+
+
 class ReadOnlyRule(BridgeCase):
     """No Hermes call that attaches to or writes a session may carry any id but the bot's main chat."""
 
     GUARDED = ("prompt.submit", "session.resume", "session.interrupt", "approval.respond", "clarify.respond",
                "session.mutate", "session.title", "session.steer", "session.redirect", "session.activate",
-               "image.attach_bytes", "pdf.attach", "file.attach")
+               "image.attach_bytes", "pdf.attach", "file.attach", "slash.exec", "session.control",
+               "session.control.read")
 
     async def test_no_guarded_call_carries_a_foreign_session_id(self):
         foreign = "20261108_235229_aaaf70c4"

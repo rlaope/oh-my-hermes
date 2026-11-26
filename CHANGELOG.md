@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: `/goal` starts the goal, and Stop ends a goal run.** Typing `/goal <text>` in a bot's chat answered "Goal
+  set (20-turn budget)" but never started a turn, so `/goal status` stayed at 0 turns. omher sent the command as a
+  prompt; Hermes ran it as an admitted turn and queued the goal's first turn where nothing reads it. omher now sends
+  `/goal` through Hermes' own `slash.exec`, as Hermes' TUI and Desktop do, and submits the first turn Hermes hands
+  back. Pressing Stop while a goal was working (`↻ Continuing toward goal (4/20)`) stopped that turn, but Hermes'
+  judge then started the next one, so Stop looked dead. Stop now pauses an active goal before it interrupts, as
+  Ctrl+C does in Hermes' CLI, and the chat says `⏸ Goal paused`; `/goal resume` continues it. A goal that is already
+  paused or done is left alone. (`docs/OMHER-BOUNDARY.md` rule 46)
+
 ## 5.0.1 - 2026-11-26
 
 - **TUI: session picker shows conversations rather than background runs.** On a shared Hermes gateway, `/sessions` and
