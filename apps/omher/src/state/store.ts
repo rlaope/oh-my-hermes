@@ -2557,6 +2557,23 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
   /** The thread a `session`-tagged event belongs to, when it is one of the bot's threads. */
   const threadOf = (ev: BridgeEvent) => (ev.session ? (state.threads[ev.bot] ?? []).find((r) => r.thread === ev.session) : undefined);
   let threadSeq = 0;
+  // One thread.create, its row and chat opened; null (and a line where the person acted) when it is refused.
+  const createThread = async (bot: string): Promise<string | null> => {
+    try {
+      const key = `t${Date.now().toString(36)}${(threadSeq += 1)}`;
+      const r = await threadReq("thread.create", { bot, key });
+      const { model, provider, reasoning, ...row } = r;
+      dispatch({ type: "thread.upsert", bot, row: { ...row, last: now() / 1000 } });
+      const ck = threadRoute(bot, row.thread);
+      dispatch({ type: "chat.opened", bot: ck, res: { session_id: row.thread, messages: [], running: false, model, provider, reasoning }, now: now() });
+      dispatch({ type: "ui.thread", bot, thread: row.thread });
+      return row.thread;
+    } catch (e) {
+      fail(e);
+      threadNote(bot, tr("thread.newFailed", { error: errText(e) }));
+      return null;
+    }
+  };
   // a thread create out per bot (see newThread)
   const newThreads = new Map<string, Promise<string | null>>();
   // A thread action that failed says so where the person acted: the open chat of that bot (its main chat or the open
@@ -3132,29 +3149,12 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       // one press = one thread: a second press while the create is out reuses it (a fresh key would make a second thread)
       const out = newThreads.get(bot);
       if (out) return out;
-      const made = (async () => {
-        try {
-          const key = `t${Date.now().toString(36)}${(threadSeq += 1)}`;
-          const r = await threadReq("thread.create", { bot, key });
-          const { model, provider, reasoning, ...row } = r;
-          dispatch({ type: "thread.upsert", bot, row: { ...row, last: now() / 1000 } });
-          const ck = threadRoute(bot, row.thread);
-          dispatch({ type: "chat.opened", bot: ck, res: { session_id: row.thread, messages: [], running: false, model, provider, reasoning }, now: now() });
-          dispatch({ type: "ui.thread", bot, thread: row.thread });
-          return row.thread;
-        } catch (e) {
-          fail(e);
-          threadNote(bot, tr("thread.newFailed", { error: errText(e) }));
-          return null;
-        } finally {
-          newThreads.delete(bot);
-        }
-      })();
+      const made = createThread(bot).finally(() => newThreads.delete(bot));
       newThreads.set(bot, made);
       return made;
     },
     async newThreadWith(bot, first) {
-      const thread = await actions.newThread(bot);
+      const thread = await createThread(bot); // not the guarded + press: each submission carries its own first message
       if (thread && first.trim()) await actions.threadSend(bot, thread, first);
       return thread;
     },

@@ -6,6 +6,7 @@ import type { BridgeStatus } from "../lib/bridge";
 
 function fixture(opts: { refuse?: string } = {}) {
   const calls: { op: string; params: any }[] = [];
+  let made = 0;
   const bridge: BridgeLike = {
     connect: async () => {},
     onAny: (_h: (e: BridgeEvent) => void) => () => {},
@@ -19,14 +20,14 @@ function fixture(opts: { refuse?: string } = {}) {
       if (op === "thread.create") {
         await new Promise((r) => setTimeout(r, 20));
         if (opts.refuse) throw { code: "thread_limit", message: opts.refuse };
-        return { thread: `th${calls.filter((c) => c.op === "thread.create").length}`, title: "", cwd: "/w", started_at: 1, running: false, needs: false, message_count: 0, model: "m", provider: "p", reasoning: "" };
+        return { thread: `th${(made += 1)}`, title: "", cwd: "/w", started_at: 1, running: false, needs: false, message_count: 0, model: "m", provider: "p", reasoning: "" };
       }
       if (op === "chat.interrupt" && opts.refuse) throw { code: "failed", message: opts.refuse };
       return {};
     }) as BridgeLike["request"],
   };
   const store = createStore(bridge);
-  return { store, creates: () => calls.filter((c) => c.op === "thread.create") };
+  return { store, sends: () => calls.filter((c) => c.op === "chat.send").map((c) => c.params), creates: () => calls.filter((c) => c.op === "thread.create") };
 }
 const settle = (ms = 80) => new Promise((r) => setTimeout(r, ms));
 const lines = (f: ReturnType<typeof fixture>, key: string) =>
@@ -66,4 +67,16 @@ it("a refused task thread and a refused Stop show a line too", async () => {
   await f.store.actions.threadInterrupt("kami", "th1");
   await settle();
   expect(lines(f, "kami").filter((l) => l.includes("gateway down"))).toHaveLength(2);
+});
+
+it("two newThreadWith calls while the first create is out make two threads, each with its own text", async () => {
+  const f = fixture();
+  await f.store.actions.init();
+  await settle();
+  const [a, b] = await Promise.all([f.store.actions.newThreadWith("kami", "A"), f.store.actions.newThreadWith("kami", "B")]);
+  expect(f.creates()).toHaveLength(2);
+  expect(a).not.toBe(b);
+  const sends = f.sends();
+  expect(sends).toContainEqual({ bot: "kami", session: a, text: "A" });
+  expect(sends).toContainEqual({ bot: "kami", session: b, text: "B" });
 });
