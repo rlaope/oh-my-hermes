@@ -2,13 +2,15 @@
 // browser on Cmd+click (macOS) or Ctrl+click (Windows, Linux). A plain click does nothing here, so it still selects
 // text and a program's own mouse handling is left alone. It opens through the app's one opener (`openExternal`, the
 // Tauri `open_external` command: docs/OMHER-BOUNDARY.md rule 22) and only for an address that passes the same rule:
-// http or https, no user name or password. Nothing is fetched. Both kinds of link follow it: an address found in
-// the text (the web-links add-on) and a hyperlink the program marked itself (OSC 8, `ESC ] 8 ;; url ST`), which
-// xterm would otherwise open through its own `confirm()` dialog and `window.open`.
-import type { Terminal } from "@xterm/xterm";
+// http or https, no user name or password. Nothing is fetched. Every kind of link follows it: an address found in
+// the text (the web-links add-on), an address the program broke across rows of a table cell (engine-cell-links.ts),
+// and a hyperlink the program marked itself (OSC 8, `ESC ] 8 ;; url ST`), which xterm would otherwise open through
+// its own `confirm()` dialog and `window.open`.
+import type { IBufferCell, IDisposable, Terminal } from "@xterm/xterm";
 import type { WebLinksAddon } from "@xterm/addon-web-links";
 import { openExternal } from "../../lib/openExternal";
 import { t } from "../../i18n";
+import { cellWrappedLinks, URL_PATTERN, type CellRow } from "./engine-cell-links";
 
 /** The add-on's chunk loads with the first terminal (with xterm), never with the app. */
 let linksLoad: Promise<typeof WebLinksAddon> | null = null;
@@ -64,6 +66,21 @@ export function tipTop(pointerY: number, host: HTMLElement, rows: number, tipHei
   return above >= screen.top ? above : rowTop + 2 * line;
 }
 
+/** One buffer row as `cellWrappedLinks` reads it: each column's text, "" for a wide character's right half. */
+function cellRows(term: Terminal): (y: number) => CellRow | undefined {
+  let cell: IBufferCell | undefined;
+  return (y) => {
+    const line = y < 0 ? undefined : term.buffer.active.getLine(y);
+    if (!line) return undefined;
+    const cols: string[] = [];
+    for (let x = 0; x < line.length; x++) {
+      cell = line.getCell(x, cell);
+      cols.push(!cell ? " " : cell.getWidth() === 0 ? "" : cell.getChars() || " ");
+    }
+    return { cols, wrapped: line.isWrapped };
+  };
+}
+
 /** Links for one terminal; returns what undoes it. */
 export function attachLinks(term: Terminal): () => void {
   let gone = false;
@@ -91,10 +108,39 @@ export function attachLinks(term: Terminal): () => void {
   // a hyperlink the program marked (OSC 8): the same click rule, the same opener, the same hint. xterm passes only
   // http and https addresses to it (`allowNonHttpProtocols` stays off) and `activateLink` checks the address again.
   term.options.linkHandler = { activate: (e, uri) => void activateLink(e, uri), hover: (e) => show(e), leave: hide };
+  // an address the program broke across rows of a table cell or a paragraph (engine-cell-links.ts). Registered
+  // before the add-on loads, so xterm prefers it where both link the first piece and drops the add-on's half link.
+  let cellLinks: IDisposable | null = null;
+  try {
+    const rows = cellRows(term);
+    cellLinks = term.registerLinkProvider({
+      provideLinks: (y, done) => {
+        let found: ReturnType<typeof cellWrappedLinks> = [];
+        try {
+          found = cellWrappedLinks(rows, y - 1);
+        } catch {
+          // xterm asks the providers in turn with no guard: a throw here would leave the row with no links at all
+        }
+        done(
+          found.length
+            ? found.map((l) => ({
+                range: { start: { x: l.start + 1, y: l.y + 1 }, end: { x: l.end, y: l.y + 1 } },
+                text: l.url,
+                activate: (e: MouseEvent, uri: string) => void activateLink(e, uri),
+                hover: (e: MouseEvent) => show(e),
+                leave: hide,
+              }))
+            : undefined,
+        );
+      },
+    });
+  } catch {
+    cellLinks = null; // the add-on's links still work
+  }
   void loadLinks().then(
     (Ctor) => {
       if (gone) return;
-      addon = new Ctor((e, uri) => void activateLink(e, uri), { hover: (e) => show(e), leave: hide });
+      addon = new Ctor((e, uri) => void activateLink(e, uri), { hover: (e) => show(e), leave: hide, urlRegex: URL_PATTERN });
       try {
         term.loadAddon(addon);
       } catch {
@@ -108,6 +154,7 @@ export function attachLinks(term: Terminal): () => void {
     hide();
     try {
       term.options.linkHandler = null;
+      cellLinks?.dispose();
       addon?.dispose();
     } catch {
       /* already gone with the terminal */
