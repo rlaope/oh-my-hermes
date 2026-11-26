@@ -4,6 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher bots page: platform status and bot templates read the live omh.** Dock-launched omher (short PATH), and
+  Windows (where `which` finds `omh.cmd` and it is rejected), fell back to `<data>/omh/venv`, the pre-generation env
+  an update leaves behind (omh 2.0.0 here), so `platforms` and `bot-templates` failed with "invalid choice".
+  `omh_path` now tries `<data>/omh/current/venv/{bin,Scripts}/omh[.exe]` (and `~/.local/bin/omh` on macOS and Linux)
+  before the old venv, with `%LOCALAPPDATA%` first on Windows. `apps/omher/bridge/omher_bridge.py`.
 - **omher terminal: an address a table cell breaks across rows opens whole.** Claude Code's markdown tables put
   real newlines inside a cell, so `https://github.com/` sat on one row and `sgl-project/sglang/pull/…` under it; the
   web-links add-on joins only rows xterm itself wrapped, linked the first piece alone, and Cmd+click opened
