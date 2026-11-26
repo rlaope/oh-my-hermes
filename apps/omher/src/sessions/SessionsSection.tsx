@@ -21,6 +21,7 @@ import { t } from "../i18n";
 import { composing } from "../lib/ime";
 import { AgentMark } from "./AgentMark";
 import { agentDef, agentLabel, draftFolder, folderChoices, folderName, hermesOnly, installLine, isNews, isTerminalRec, menuFocus, menuOrder, missingNote, parentPath, SHELL, splitPaneName, termActivity, termFallbackName, terminalAgents, termMarkAgent, termStatus, tildePath, type AgentId, type AgentInfo, type RowMark, type SessionRec, type TermStatus, type Unseen } from "./agents";
+import { useServerMode } from "../app/remote";
 import { TermRowMark } from "./TermRowMark";
 import { SplitGlyph, splitWith, useSplit, useSplitPrune } from "./SplitView";
 import { SplitCard, type RowMenuKit } from "./SplitLayoutCard";
@@ -252,7 +253,11 @@ function NewSessionMenu({ onClose, trigger, initialFolder }: { onClose: () => vo
   useEffect(() => {
     if (ss.agents === null) void getSessions().loadAgents();
   }, [ss.agents]);
-  const parts = ss.agents ? terminalAgents(ss.agents, ss.recent) : null;
+  // on a server (rule 46) no Hermes chat starts in a folder of this computer: its bots cannot read it
+  const remote = useServerMode().mode === "remote";
+  const all = ss.agents ? terminalAgents(ss.agents, ss.recent) : null;
+  const here = (a: { id: string }) => !remote || agentDef(a.id).mode !== "hermes";
+  const parts = all && remote ? { shown: all.shown.filter(here), more: all.more.filter(here) } : all;
   const agents = parts ? [...parts.shown, ...parts.more] : null;
   // the agents that are not installed stay folded until the person opens them
   const [unfold, setUnfold] = useState(false);
