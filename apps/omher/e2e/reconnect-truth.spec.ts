@@ -47,10 +47,12 @@ test("an approval still waiting after the bridge comes back is in Needs you agai
   const dot = page.getByTestId("bot-friren").getByTestId("needs");
   await expect(dot).toBeVisible();
 
+  const reads = async () => (await calls("chat.open")).filter((c: any) => c.params.bot === "friren").length;
+  const before = await reads();
   drop!();
   // the outage closes the turn here; the reconnect reads the chat again and the bridge replays the ask
-  await expect(page.getByTestId("needs-strip")).toBeVisible({ timeout: 10_000 });
-  await page.waitForTimeout(2500); // past the reconnect and its re-read
+  await expect.poll(reads, { timeout: 10_000 }).toBeGreaterThan(before);
+  await expect(page.getByTestId("needs-strip")).toBeVisible();
   await expect(dot).toBeVisible();
 
   await page.getByTestId("bot-friren").click();

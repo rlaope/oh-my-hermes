@@ -10,24 +10,38 @@ import type { BridgeEvent } from "../lib/protocol";
 import type { BridgeStatus } from "../lib/bridge";
 
 type Thread = { running: boolean; needs: boolean };
+type Opts = { thread?: Thread; /** how many listed threads (th1, th2, ...) */ threads?: number; /** thread.open takes this long */ openMs?: number };
+type Held = {
+  running: boolean;
+  messages: { id: string; role: "user" | "assistant"; text: string; ts: number }[];
+  ask?: string;
+  clarify?: boolean;
+  lost?: { id: string; text: string }[];
+};
 
-function fixture(o: { thread?: Thread } = {}) {
+function fixture(o: Opts = {}) {
   let status!: (s: BridgeStatus) => void;
   let event!: (e: BridgeEvent) => void;
   const calls: { op: string; params: any }[] = [];
   // what Hermes holds now: per chat ("kami" or a thread id), whether its turn runs, its rows and a waiting ask
-  const hermes: Record<string, { running: boolean; messages: { id: string; role: "user" | "assistant"; text: string; ts: number }[]; ask?: string }> = {
-    kami: { running: false, messages: [] },
-    th1: { running: false, messages: [] },
-  };
+  const hermes: Record<string, Held> = { kami: { running: false, messages: [] } };
+  const ids = Array.from({ length: o.threads ?? 1 }, (_, n) => `th${n + 1}`);
+  for (const t of ids) hermes[t] = { running: false, messages: [] };
+  const opens = { now: 0, most: 0 }; // thread.open in flight now, and the most at once
   let listed = false; // a bridge started again knows no thread until thread.list listed it
-  const row = () => ({ thread: "th1", title: "Build", cwd: "/w", started_at: 1, running: false, needs: false, message_count: 1, ...o.thread });
+  const row = (thread: string) => ({ thread, title: "Build", cwd: "/w", started_at: 1, running: false, needs: false, message_count: 1, ...o.thread });
   const replay = (bot: string, session?: string) => {
-    const id = hermes[session ?? bot].ask;
+    const h = hermes[session ?? bot];
+    const id = h.ask;
+    const where = { bot, ...(session ? { session } : {}), request_id: id };
     // the bridge writes the reply frame first and replays after it: the event is a later frame
     if (id)
       setTimeout(() =>
-        event({ event: "approval.request", bot, ...(session ? { session } : {}), request_id: id, title: "Delete", command: "rm -rf build", choices: ["once", "deny"] } as BridgeEvent),
+        event(
+          (h.clarify
+            ? { event: "clarify.request", ...where, question: "Which environment?", choices: ["staging", "production"] }
+            : { event: "approval.request", ...where, title: "Delete", command: "rm -rf build", choices: ["once", "deny"] }) as BridgeEvent,
+        ),
       );
   };
   const bridge: BridgeLike = {
@@ -47,17 +61,23 @@ function fixture(o: { thread?: Thread } = {}) {
         return { bots: [{ name: "kami", display_name: "Kami", is_default: true, model: "m", provider: "p", description: "", status: "online", running: false }] };
       if (op === "chat.open") {
         replay("kami");
-        return { session_id: "s-kami", messages: hermes.kami.messages, running: hermes.kami.running, lost: [], model: "m", provider: "p", reasoning: "high" };
+        return { session_id: "s-kami", messages: hermes.kami.messages, running: hermes.kami.running, lost: hermes.kami.lost ?? [], model: "m", provider: "p", reasoning: "high" };
       }
       if (op === "thread.list") {
         await new Promise((r) => setTimeout(r, 20)); // Hermes' session.list takes a moment
         listed = true;
-        return { threads: [row()] };
+        return { threads: ids.map(row) };
       }
       if (op === "thread.open") {
         if (!listed) throw { code: "not_found", message: "no such thread" };
-        replay("kami", "th1");
-        return { thread: "th1", session_id: "th1", title: "Build", cwd: "/w", messages: hermes.th1.messages, running: hermes.th1.running, lost: [], model: "m", provider: "p", reasoning: "" };
+        const t = params.thread as string;
+        opens.now += 1;
+        opens.most = Math.max(opens.most, opens.now);
+        await new Promise((r) => setTimeout(r, o.openMs ?? 0));
+        opens.now -= 1;
+        replay("kami", t);
+        const h = hermes[t];
+        return { thread: t, session_id: t, title: "Build", cwd: "/w", messages: h.messages, running: h.running, lost: h.lost ?? [], model: "m", provider: "p", reasoning: "" };
       }
       if (op === "chat.send") {
         if (params.session && !listed) throw { code: "not_found", message: "no such folder chat" };
@@ -75,6 +95,7 @@ function fixture(o: { thread?: Thread } = {}) {
     store,
     calls,
     hermes,
+    opens,
     status: (s: BridgeStatus) => status(s),
     event: (e: BridgeEvent) => event(e),
     /** The bridge process started again: it has not listed the bot's threads yet. */
@@ -86,7 +107,7 @@ function fixture(o: { thread?: Thread } = {}) {
 const settle = (ms = 80) => new Promise((r) => setTimeout(r, ms));
 const TH = "fold:kami:th1";
 
-async function started(o: { thread?: Thread } = {}) {
+async function started(o: Opts = {}) {
   const f = fixture(o);
   await f.store.actions.init();
   f.status("open");
@@ -126,6 +147,7 @@ it("an answered card stays answered when the ask is replayed", async () => {
 async function openThread(f: Awaited<ReturnType<typeof started>>) {
   await f.store.actions.openThread("kami", "th1");
   expect(f.store.getState().chats[TH].loaded).toBe(true);
+  await f.store.actions.threadSend("kami", "th1", "build it"); // the person's row that starts the turn
   f.event({ event: "turn.start", bot: "kami", session: "th1" } as BridgeEvent);
   expect(f.store.getState().chats[TH].turn).not.toBeNull();
 }
@@ -196,4 +218,113 @@ it("an idle thread is not read until it is opened", async () => {
   const f = await started();
   expect(f.calls.filter((c) => c.op === "thread.open")).toEqual([]);
   expect(f.store.getState().chats[TH]).toBeUndefined();
+});
+
+it("a thread whose transcript ends with an older answer (this turn's message not saved yet) still reads lost", async () => {
+  const f = await started();
+  await openThread(f);
+  f.status("connecting");
+  f.hermes.th1 = {
+    running: false,
+    messages: [
+      { id: "u0", role: "user", text: "earlier question", ts: 1 },
+      { id: "a0", role: "assistant", text: "earlier answer", ts: 2 },
+    ],
+  };
+  await settle(5);
+  f.status("open");
+  await settle();
+  expect(f.store.getState().chats[TH].lastTurn?.outcome).toBe("interrupted");
+});
+
+it("a thread whose turn Hermes recovered as lost still reads lost, though an answer is the last row", async () => {
+  const f = await started();
+  await openThread(f);
+  f.status("connecting");
+  f.hermes.th1 = {
+    running: false,
+    messages: [
+      { id: "u1", role: "user", text: "build it", ts: 1 },
+      { id: "a1", role: "assistant", text: "built", ts: Date.now() / 1000 },
+    ],
+    lost: [{ id: "l1", text: "build it" }],
+  };
+  await settle(5);
+  f.status("open");
+  await settle();
+  expect(f.store.getState().chats[TH].lastTurn?.outcome).toBe("interrupted");
+});
+
+it("the main chat's turn that finished while the bridge was away reads done", async () => {
+  const f = await started();
+  f.event({ event: "turn.start", bot: "kami" } as BridgeEvent);
+  f.status("connecting");
+  expect(f.store.getState().chats.kami.lastTurn?.outcome).toBe("interrupted");
+  await settle(5);
+  f.hermes.kami = {
+    running: false,
+    messages: [
+      { id: "u1", role: "user", text: "clean up", ts: Date.now() / 1000 - 1 },
+      { id: "a1", role: "assistant", text: "cleaned", ts: Date.now() / 1000 },
+    ],
+  };
+  f.status("open");
+  await settle();
+  const chat = f.store.getState().chats.kami;
+  expect(chat.lastTurn?.outcome).toBe("done");
+  expect(chat.lastTurn?.error).toBeUndefined();
+});
+
+it("a question still waiting after a reconnect comes back once, with its context row once", async () => {
+  const f = await started();
+  f.event({ event: "turn.start", bot: "kami" } as BridgeEvent);
+  f.event({ event: "delta", bot: "kami", text: "Two places can take this." } as BridgeEvent);
+  f.event({ event: "tool.start", bot: "kami", tool_id: "c1", name: "clarify", detail: "" } as BridgeEvent);
+  f.event({ event: "clarify.request", bot: "kami", request_id: "cl1", question: "Which environment?", choices: ["staging", "production"] } as BridgeEvent);
+  f.status("connecting");
+  expect(selectAsks(f.store.getState())).toEqual([]);
+  f.hermes.kami = { running: true, messages: [], ask: "cl1", clarify: true };
+  await settle(5);
+  f.status("open");
+  await settle();
+  expect(selectAsks(f.store.getState()).map((a) => [a.bot, a.item.request_id])).toEqual([["kami", "cl1"]]);
+  const items = f.store.getState().chats.kami.items;
+  expect(items.filter((i) => i.kind === "clarify")).toHaveLength(1);
+  // the context row comes back with the card, once, right above it
+  const notes = items.filter((i) => i.id === "clarify-note-cl1");
+  expect(notes.map((i) => i.kind === "assistant" && i.text)).toEqual(["Two places can take this."]);
+  expect(items.findIndex((i) => i.kind === "clarify")).toBe(items.indexOf(notes[0]) + 1);
+  expect(new Set(items.map((i) => i.id)).size).toBe(items.length);
+});
+
+it("an unanswered card of a turn Hermes itself ended is not reopened by a later replay", async () => {
+  const f = await started();
+  f.event({ event: "turn.start", bot: "kami" } as BridgeEvent);
+  f.event({ event: "approval.request", bot: "kami", request_id: "ap1", title: "Delete", command: "rm -rf build", choices: ["once", "deny"] } as BridgeEvent);
+  await settle(5);
+  f.event({ event: "turn.end", bot: "kami", outcome: "interrupted" } as BridgeEvent);
+  await settle(5);
+  f.event({ event: "turn.start", bot: "kami" } as BridgeEvent);
+  f.event({ event: "approval.request", bot: "kami", request_id: "ap1", title: "Delete", command: "rm -rf build", choices: ["once", "deny"] } as BridgeEvent);
+  expect(selectAsks(f.store.getState())).toEqual([]);
+});
+
+it("a click on a thread while its automatic open runs waits for it: one thread.open", async () => {
+  const f = fixture({ thread: { running: true, needs: false }, openMs: 60 });
+  f.hermes.th1 = { running: true, messages: [] };
+  await f.store.actions.init();
+  await settle(40); // thread.list answered; the automatic open is in flight
+  expect(f.calls.filter((c) => c.op === "thread.open")).toHaveLength(1);
+  await f.store.actions.openThread("kami", "th1");
+  await settle();
+  expect(f.calls.filter((c) => c.op === "thread.open")).toHaveLength(1);
+  expect(f.store.getState().chats[TH].loaded).toBe(true);
+});
+
+it("busy threads are opened at most three at a time", async () => {
+  const f = fixture({ thread: { running: true, needs: false }, threads: 7, openMs: 20 });
+  await f.store.actions.init();
+  await settle(300);
+  expect(f.calls.filter((c) => c.op === "thread.open")).toHaveLength(7);
+  expect(f.opens.most).toBe(3);
 });
