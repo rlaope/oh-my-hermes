@@ -835,6 +835,33 @@ class PluginToolSchemaProducerTests(unittest.TestCase):
             self.assertEqual(carry["type"], "string")
             return before - len(json.dumps(target, sort_keys=True, ensure_ascii=False))
 
+        # The define-only `fast` flag (+215, its own PLUGIN_TOOL_SCHEMA_CHAR_LIMIT entry) is stripped first: one
+        # optional boolean with its description, and the sentence naming it.
+        def without_fast(target: dict) -> int:
+            before = len(json.dumps(target, sort_keys=True, ensure_ascii=False))
+            fast = target["parameters"]["properties"].pop("fast")
+            self.assertEqual(fast, {"type": "boolean",
+                                    "description": "define, opt-in: a small graph whose verify node you run yourself."})
+            sentence = ("fast (define): a small graph keeps its verify node for you to run, so it never goes to "
+                        "delegate_task. ")
+            self.assertEqual(target["description"].count(sentence), 1)
+            target["description"] = target["description"].replace(sentence, "", 1)
+            return before - len(json.dumps(target, sort_keys=True, ensure_ascii=False))
+
+        # The batch `settles` list (+379, its own PLUGIN_TOOL_SCHEMA_CHAR_LIMIT entry) is stripped next: one array of
+        # {node, outcome, reason?, provider_error?}, and the sentence naming it.
+        def without_settles(target: dict) -> int:
+            before = len(json.dumps(target, sort_keys=True, ensure_ascii=False))
+            settles = target["parameters"]["properties"].pop("settles")
+            self.assertEqual(settles["items"]["properties"]["outcome"]["enum"], ["accepted", "failed", "blocked"])
+            self.assertEqual(settles["description"], "settle: several nodes at once, all applied together or none.")
+            sentence = "settles (settle): several nodes at once, all or none. "
+            self.assertEqual(target["description"].count(sentence), 1)
+            target["description"] = target["description"].replace(sentence, "", 1)
+            return before - len(json.dumps(target, sort_keys=True, ensure_ascii=False))
+
+        self.assertEqual(without_fast(legacy), 215)
+        self.assertEqual(without_settles(legacy), 379)
         self.assertEqual(without_carry_forward(legacy), 188)
         self.assertEqual(without_review_focus(legacy), 130)
         self.assertEqual(without_escalation(legacy), 224)
@@ -862,6 +889,8 @@ class PluginToolSchemaProducerTests(unittest.TestCase):
         # category values, so category growth cannot spend the parked cap.
         live = copy.deepcopy(schema)
         del live["parameters"]["properties"]["nodes"]["items"]["properties"]["category"]["enum"][-len(recipe):]
+        self.assertEqual(without_fast(live), 215)
+        self.assertEqual(without_settles(live), 379)
         self.assertEqual(without_carry_forward(live), 188)
         self.assertEqual(without_review_focus(live), 130)
         self.assertEqual(without_escalation(live), 224)
@@ -877,7 +906,7 @@ class PluginToolSchemaProducerTests(unittest.TestCase):
         delta = len(json.dumps(live, sort_keys=True, ensure_ascii=False)) - len(encoded)
         self.assertEqual(
             per_turn_context.plugin_tool_schema_chars_by_tool()["omh_dag"] - len(encoded) - delta,
-            75 + 85 + 70 + 62 + 3 + 37 + 226 + 95 + 8 + 45 + 122 + 224 + 188 + 130,
+            75 + 85 + 70 + 62 + 3 + 37 + 226 + 95 + 8 + 45 + 122 + 224 + 188 + 130 + 215 + 379,
         )
         self.assertGreater(delta, 0)
         self.assertLessEqual(delta, 429)  # Measured feature cap, not general headroom.
