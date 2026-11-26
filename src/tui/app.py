@@ -2587,7 +2587,9 @@ class App(ModesMixin, AgentViewMixin):
         # next `_take_input` in the order they were typed.
         self.held_input: list[Key | Paste | Mouse] = []
         self.menu_index = 0
-        self.menu_closed: str | None = None  # the composer text Esc closed the `/` menu on; it stays closed over that text
+        # The composer text Esc or a history recall (Up/Down, vim `j`/`k`, Ctrl+R) closed the `/` menu on; it stays
+        # closed over that text, so a recalled `/model` walks on with Up/Down and sends as it is on Enter.
+        self.menu_closed: str | None = None
         # The composer text the person's own typing left (a printable key or Backspace), else None: a mid-line `/name`
         # opens the menu only over it, so a recalled, pasted or loaded text opens none until the next typed key.
         self.menu_typed: str | None = None
@@ -5451,12 +5453,29 @@ class App(ModesMixin, AgentViewMixin):
         self._close_proofread()
 
     def _edit(self, composer: Composer, event: Key | Paste) -> ComposerAction:
-        """`event` to `composer`, the person's own key: one that changes its text reopens the `/` menu at its top."""
+        """`event` to `composer`, the person's own key: an edit reopens the `/` menu at its top; a history recall keeps
+        it closed over the recalled text (`menu_closed`) until the next edit."""
         before, editing, visual = composer.text, composer.normal, composer.visual
+        before_history = composer.history_index
         action = composer.handle(event)
         if composer.take_bell() and self.environ.get(BELL_ENV) != BELL_OFF:
             self.terminal.write(BELL)
-        if composer.text != before:
+        recalled = (
+            composer is self.composer
+            and composer.history_index != before_history
+            and isinstance(event, Key)
+            and (
+                event.name in (UP, DOWN)
+                or (editing and event.name == CHAR and not event.ctrl and not event.alt and event.char in ("j", "k"))
+            )
+        )
+        if recalled:
+            self.menu_index = 0
+            self.menu_closed = composer.text or None
+            self.menu_typed = None
+            if composer.text != before:
+                self.escape_armed = None
+        elif composer.text != before:
             self.menu_index = 0
             self.menu_closed = None
             if composer is self.composer:
@@ -5642,6 +5661,9 @@ class App(ModesMixin, AgentViewMixin):
         action = search.handle_key(event)
         if action == SEARCH_ACCEPT:
             self._set_composer(search.current() or search.original)
+            self.menu_index = 0
+            self.menu_closed = self.composer.text or None
+            self.menu_typed = None
         if action in (SEARCH_ACCEPT, SEARCH_CANCEL):
             self.search = None
 
@@ -6594,9 +6616,10 @@ class App(ModesMixin, AgentViewMixin):
         self.dirty = True
 
     def _menu_entries(self) -> list[Completion]:
-        """Completions for what the `/` menu completes (`_menu_token`), unless Esc closed them over this text; none in
-        vim mode's NORMAL. A leading `/` offers every command and skill; a mid-line `/name` only the skills, by prefix
-        and substring (`skill_completions`), since a built-in command means something only at the line's start."""
+        """Completions for what the `/` menu completes (`_menu_token`), unless Esc or history recall closed them over
+        this text; none in vim mode's NORMAL. A leading `/` offers every command and skill; a mid-line `/name` only the
+        skills, by prefix and substring (`skill_completions`), since a built-in command means something only at the
+        line's start."""
         text = self.composer.text
         token = None if self.slot is not None or self.composer.normal or text == self.menu_closed else self._menu_token()
         if token is None:
