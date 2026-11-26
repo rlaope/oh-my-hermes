@@ -50,13 +50,14 @@ import math
 from .composer import PROMPT
 from .frame import RULE
 from .fuzzy import subsequence_tail
-from .keys import BACKSPACE, CHAR, DOWN, ENTER, ESCAPE, PAGE_DOWN, PAGE_UP, UP, Key, Paste, list_nav_step
+from .keys import BACKSPACE, CHAR, DOWN, ENTER, ESCAPE, PAGE_DOWN, PAGE_UP, TAB, UP, Key, Paste, list_nav_step
 from .prompts import CHOICE_MARK
 from .style import Line, Span, Style
 from .theme import Theme
 from .width import cell_width, truncate, truncate_line, wrap
 
 PICK = "pick"
+LOCAL_HISTORY = "local_history"
 CLOSE = "close"
 LOAD_OLDER = "load_older"
 RENAME = "rename"  # with the session's stored id and the title typed for it
@@ -134,6 +135,13 @@ class SessionRow:
     resumable: bool = True
     owner_runtime: str = ""
     source: str = ""  # where it was started (`tui`, `cli`, a messaging platform), as `session.list` names it
+    profile: str = ""
+    lineage: frozenset[str] = frozenset()
+    local: object | None = None  # picker-local capability; local rows never carry a gateway id
+
+    @property
+    def key(self) -> object:
+        return self.local if self.local is not None else self.id
 
     @property
     def label(self) -> str:
@@ -143,7 +151,7 @@ class SessionRow:
     @property
     def read_only(self) -> bool:
         """Whether the row opens its history in a pager instead of resuming the session."""
-        return not self.resumable or self.owner_runtime == "other"
+        return self.local is not None or not self.resumable or self.owner_runtime == "other"
 
 
 @dataclass(frozen=True)
@@ -151,6 +159,7 @@ class PickerAction:
     kind: str  # PICK, CLOSE, LOAD_OLDER, RENAME or DELETE
     session_id: str = ""
     title: str = ""  # RENAME's new title
+    local: object | None = None
 
 
 def _number(value: object) -> float:
@@ -171,7 +180,7 @@ def _seconds(value: object) -> float:
     return number
 
 
-def session_rows(result: Mapping[str, object]) -> list[SessionRow]:
+def session_rows(result: Mapping[str, object], *, profile: str = "") -> list[SessionRow]:
     """The rows of a `session.list` answer, in its order; rows without an id are skipped."""
     sessions = result.get("sessions")
     if not isinstance(sessions, list):
@@ -183,6 +192,9 @@ def session_rows(result: Mapping[str, object]) -> list[SessionRow]:
         title = entry.get("title")
         preview = entry.get("preview")
         source = entry.get("source")
+        names = [entry.get(key) for key in ("id", "resolved_id", "_lineage_root_id")]
+        if isinstance(entry.get("_lineage_ids"), list):
+            names.extend(entry["_lineage_ids"])
         rows.append(
             SessionRow(
                 id=entry["id"],
@@ -197,6 +209,8 @@ def session_rows(result: Mapping[str, object]) -> list[SessionRow]:
                 resumable=entry.get("resumable") is not False,
                 owner_runtime=entry["owner_runtime"] if isinstance(entry.get("owner_runtime"), str) else "",
                 source=" ".join(source.split())[:24] if isinstance(source, str) else "",
+                profile=profile,
+                lineage=frozenset(name for name in names if isinstance(name, str) and name),
             )
         )
     return rows
@@ -337,6 +351,22 @@ def _messages(count: int, digits: int) -> str:
     return f"{count:>{digits}} message{' ' if count == 1 else 's'}"
 
 
+def _matches(needle: str, value: str) -> bool:
+    """Match a casefolded needle without scoring or allocating a search matrix."""
+    value = value.casefold()
+    if needle in value:
+        return True
+    if len(needle) > len(value):
+        return False
+    start = 0
+    for char in needle:
+        at = value.find(char, start)
+        if at < 0:
+            return False
+        start = at + 1
+    return True
+
+
 @dataclass
 class SessionPicker:
     rows: list[SessionRow]
@@ -357,18 +387,98 @@ class SessionPicker:
     next_page: str = ""  # the shared-gateway child's opaque continuation, not the owner's cursor
     loading_older: bool = False
     older_problem: str = ""
+    profiles: tuple[str, ...] | None = None  # None is the unchanged /resume picker; () is inventory loading
+    profile_index: int = 0  # 0 is All local profiles
+    inventory_status: str = ""
+    gateway_status: str = ""
+    history_status: str = ""
+    deleted_inventory: set[tuple[str, str]] = field(default_factory=set)
+    _table_cache: tuple[tuple[str, str, str], list[SessionRow]] | None = field(
+        default=None, init=False, repr=False, compare=False)
+
+    @property
+    def scoped_profile(self) -> str:
+        return self.profiles[self.profile_index - 1] if self.profiles and self.profile_index else ""
+
+    @property
+    def partial(self) -> bool:
+        return self.inventory_status.startswith("Partial") or self.gateway_status.startswith(
+            ("Gateway list unavailable", "Gateway list did not answer"))
+
+    def selected(self) -> SessionRow | None:
+        shown = self.visible()
+        return shown[min(self.index, len(shown) - 1)] if shown else None
+
+    @staticmethod
+    def _same_lineage(left: SessionRow, right: SessionRow) -> bool:
+        return bool(left.profile and left.profile == right.profile and left.lineage & right.lineage)
+
+    def _restore_selection(self, selected: SessionRow | None) -> None:
+        shown = self.visible()
+        self.index = next((i for i, row in enumerate(shown) if selected is not None and (
+            row.key == selected.key or self._same_lineage(row, selected))), 0)
+
+    def add_local(self, profiles: list[str], rows: list[SessionRow]) -> None:
+        """Only the authenticated list contributes actions; matching local rows supply display metadata."""
+        selected = self.selected()
+        self.profiles = tuple(profiles)
+        owner_rows, self.rows = self.rows, [row for row in rows if not self._inventory_deleted(row)]
+        self._merge_gateway(owner_rows)
+        self._restore_selection(selected)
+
+    def _inventory_deleted(self, row: SessionRow) -> bool:
+        return any((row.profile, name) in self.deleted_inventory for name in row.lineage)
+
+    def _merge_gateway(self, rows: list[SessionRow]) -> None:
+        self._table_cache = None
+        existing = {row.id: i for i, row in enumerate(self.rows) if row.local is None}
+        local_by_name = {(row.profile, name): row for row in self.rows if row.local is not None for name in row.lineage}
+        gateway_by_name = {(row.profile, name): i for i, row in enumerate(self.rows) if row.local is None and row.profile
+                           for name in row.lineage}
+        claimed: set[object] = set()
+        for row in rows:
+            if (self.profiles is None and row.id in existing) or self._inventory_deleted(row):
+                continue
+            incoming_id = row.id
+            locals_by_key = {local_by_name[(row.profile, name)].key: local_by_name[(row.profile, name)]
+                             for name in sorted(row.lineage) if (row.profile, name) in local_by_name}
+            for local in locals_by_key.values():
+                claimed.add(local.key)
+                row = replace(row, title=row.title or local.title, preview=row.preview or local.preview,
+                              source=row.source or local.source, activity_at=max(row.activity_at, local.activity_at),
+                              lineage=row.lineage | local.lineage)
+            same = {gateway_by_name[(row.profile, name)] for name in row.lineage if (row.profile, name) in gateway_by_name}
+            if incoming_id in existing:
+                same.add(existing[incoming_id])
+            if same:
+                index = min(same, key=lambda i: (self.rows[i].id != self.current, i))
+                read_only = row.read_only or any(self.rows[i].read_only for i in same)
+                for duplicate in same - {index}:
+                    other = self.rows[duplicate]
+                    claimed.add(other.key)
+                    row = replace(row, lineage=row.lineage | other.lineage)
+                    for known_id, known_index in existing.items():
+                        if known_index == duplicate:
+                            existing[known_id] = index
+                previous = self.rows[index]
+                row = replace(previous, title=previous.title or row.title, preview=previous.preview or row.preview,
+                              source=previous.source or row.source, activity_at=max(previous.activity_at, row.activity_at),
+                              lineage=previous.lineage | row.lineage, resumable=not read_only)
+                self.rows[index] = row
+            else:
+                index = len(self.rows)
+                self.rows.append(row)
+            existing[incoming_id] = index
+            if row.profile:
+                gateway_by_name.update(((row.profile, name), index) for name in row.lineage)
+        self.rows = [row for row in self.rows if row.key not in claimed]
 
     def add_older(self, rows: list[SessionRow], next_page: str) -> None:
         """Extend the existing filter without moving its highlight to a different session."""
-        shown = self.visible()
-        selected = shown[min(self.index, len(shown) - 1)].id if shown else ""
-        existing = {row.id for row in self.rows}
-        for row in rows:
-            if row.id not in existing:
-                existing.add(row.id)
-                self.rows.append(row)
+        selected = self.selected()
+        self._merge_gateway(rows)
         self.next_page, self.loading_older, self.older_problem = next_page, False, ""
-        self.index = next((i for i, row in enumerate(self.visible()) if row.id == selected), 0)
+        self._restore_selection(selected)
 
     def _older_hint(self) -> str:
         if self.loading_older:
@@ -380,8 +490,25 @@ class SessionPicker:
     def visible(self) -> list[SessionRow]:
         """The rows the filter keeps: the current session first, then a day group after another (`day_group`), in
         list order inside each."""
+        scope = self.scoped_profile
+        if self.profiles is not None:
+            cache_key = (scope, self.query.casefold(), self.current)
+            if self._table_cache is not None and self._table_cache[0] == cache_key:
+                return self._table_cache[1]
+            rows = [row for row in self.rows if row.profile == scope] if scope else self.rows
+            needle = cache_key[1]
+            if needle:
+                # This table ranks by recency, so it needs a match, not a fuzzy score.
+                rows = [row for row in rows if any(_matches(needle, value) for value in
+                        (row.title, row.preview, row.id, *row.lineage))]
+            shown = sorted(rows, key=lambda row: (not self._current(row), -(row.activity_at or row.started_at)))
+            self._table_cache = cache_key, shown
+            return shown
         kept = subsequence_tail(self.rows, self.query, lambda row: (row.title, row.preview, row.id))
         return sorted(kept, key=self._rank) if self.now > 0 else kept
+
+    def _current(self, row: SessionRow) -> bool:
+        return row.local is None and (row.id == self.current or self.profiles is not None and self.current in row.lineage)
 
     def _rank(self, row: SessionRow) -> int:
         return -1 if row.id == self.current else day_group(row.activity_at or row.started_at, self.now)
@@ -405,12 +532,20 @@ class SessionPicker:
             return PickerAction(CLOSE)
         if _ctrl(event, "g") and self.next_page and not self.loading_older:
             return PickerAction(LOAD_OLDER)
+        if self.profiles and event.name == TAB and not (event.alt or event.ctrl):
+            selected = self.selected()
+            self.profile_index = (self.profile_index + (-1 if event.shift else 1)) % (1 + len(self.profiles))
+            self._restore_selection(selected)
+            return None
         shown = self.visible()
         if (_ctrl(event, "r") or _ctrl(event, "d")) and shown:
             self._edit(shown[min(self.index, len(shown) - 1)], rename=_ctrl(event, "r"))
             return None
         if event.name == ENTER:
-            return PickerAction(PICK, shown[min(self.index, len(shown) - 1)].id) if shown else None
+            if not shown:
+                return None
+            row = shown[min(self.index, len(shown) - 1)]
+            return PickerAction(LOCAL_HISTORY, local=row.local) if row.local is not None else PickerAction(PICK, row.id)
         steps = {UP: -1, DOWN: 1, PAGE_UP: -self.page, PAGE_DOWN: self.page}
         arc = list_nav_step(event)
         if arc and shown:
@@ -430,11 +565,13 @@ class SessionPicker:
     def _edit(self, row: SessionRow, rename: bool) -> None:
         """Ctrl+R or Ctrl+D on `row`: the title field, or the delete's first press. A row whose call is still out
         takes neither, and the current session is not deleted."""
+        if row.local is not None:
+            return
         if row.id in self.out:
             self.notes[row.id] = self.out[row.id]
         elif rename:
             self.renaming, self.title = row.id, row.title
-        elif row.id == self.current:
+        elif self._current(row):
             self.notes[row.id] = CURRENT_NOT_DELETED
         else:
             self.arming = row.id
@@ -465,6 +602,17 @@ class SessionPicker:
         if self.renaming:
             return RENAME_KEYS
         hint = self._older_hint()
+        if self.profiles is not None:
+            row = self.selected()
+            action = ("Enter opens read-only history" if row.read_only else "Enter switches") if row else ""
+            paging = "Loading older…" if self.loading_older else "Ctrl+G older" if self.next_page else ""
+            partial = "Partial" if self.partial else ""
+            short = " · ".join(part for part in (action, "Tab/Shift+Tab profiles", paging, partial, "Esc closes") if part)
+            edits = "Ctrl+R rename · Ctrl+D delete" if row and not row.read_only else ""
+            long = " · ".join(part for part in (action, "Tab/Shift+Tab profiles", hint, edits, partial, "Esc closes") if part)
+            compact = " · ".join(part for part in (action, paging, partial) if part)
+            condensed = "Enter reads history · Partial" if row and row.read_only and partial else compact
+            return long, short, compact, condensed, partial or action or "Esc closes"
         return (f"{KEYS[0]} · {hint}", f"↑↓ move · {hint} · esc closes", hint, *KEYS) if hint else KEYS
 
     def asked(self, action: PickerAction) -> None:
@@ -473,6 +621,7 @@ class SessionPicker:
 
     def renamed(self, session_id: str, title: str) -> bool:
         """Hermes renamed `session_id` to `title`: its row says the new title. False when no row has that id."""
+        self._table_cache = None
         self.out.pop(session_id, None)
         found = False
         for number, row in enumerate(self.rows):
@@ -482,7 +631,11 @@ class SessionPicker:
 
     def deleted(self, session_id: str) -> bool:
         """Hermes deleted `session_id`: its row goes. False when no row had that id."""
+        self._table_cache = None
         self.out.pop(session_id, None)
+        if self.profiles is not None:
+            self.deleted_inventory.update((row.profile, name) for row in self.rows if row.id == session_id
+                                          for name in row.lineage)
         kept = [row for row in self.rows if row.id != session_id]
         found, self.rows = len(kept) != len(self.rows), kept
         if self.arming == session_id:
@@ -501,6 +654,8 @@ class SessionPicker:
     def lines(self, width: int, theme: Theme, max_rows: int, now: float) -> list[Line]:
         """A header row, the filtered rows under their day groups' headings scrolled so the highlighted one shows,
         then the filter row (`picker_frame`)."""
+        if self.profiles is not None:
+            return self._table(width, theme, max_rows, now)
         self.now = now
         shown = self.visible()
         self.index = min(self.index, max(len(shown) - 1, 0))
@@ -529,6 +684,69 @@ class SessionPicker:
         self.page, self.caret = frame.page, frame.caret
         return frame.lines
 
+    def _table(self, width: int, theme: Theme, max_rows: int, now: float) -> list[Line]:
+        shown = self.visible()
+        self.index = min(self.index, max(len(shown) - 1, 0))
+        scope = self.scoped_profile
+        head = f" Sessions · {scope or 'All local profiles'} ({len(shown)})"
+        status = " · ".join(part for part in (self.history_status, self.gateway_status, self.inventory_status,
+                                               self.older_problem) if part)
+        renamed = next((row for row in self.rows if self.renaming and row.id == self.renaming), None)
+        if renamed is not None:
+            status = f"Rename {renamed.label}"
+        inset = cell_width(CHOICE_MARK) + 2
+        columns = []
+        if not scope and width >= 36:
+            columns.append(("Profile", min(18, max(7, width // 6))))
+        if width >= 52 or (scope and width >= 39):
+            columns.append(("Source", min(18, width // 7)))
+        if width >= 28:
+            columns.append(("Last active" if width >= 48 else "Active", 11 if width >= 48 else 8))
+        title_width = width - inset - sum(size + 2 for _, size in columns)
+
+        def cells(label: str, facts: list[str], style: Style) -> Line:
+            value = truncate(label, max(title_width, 1))
+            parts = [Span(value, style)]
+            for fact, (_, size) in zip(facts, columns):
+                value = truncate(fact, size)
+                padding = max(title_width - cell_width(parts[0].text), 0) if len(parts) == 1 else 0
+                parts.append(Span(" " * (padding + 2) + value + " " * (size - cell_width(value)), theme.muted))
+            return tuple(parts)
+
+        def row_line(number: int) -> Line:
+            row = shown[number]
+            highlighted = number == self.index
+            mark = CURRENT_MARK if self._current(row) else " "
+            style = theme.menu_current if highlighted else theme.menu
+            note = self.notes.get(row.id) or (DELETE_CONFIRM if row.id and row.id == self.arming else self.out.get(row.id))
+            if note:
+                return picker_row(highlighted, f"{mark} ", row.label, note, width, theme, theme.warn)
+            facts = {"Profile": row.profile or "Unknown", "Source": row.source or "—"}
+            age = age_text(row.activity_at or row.started_at, now) or "—"
+            return (pointer(highlighted, theme), Span(f"{mark} ", style),
+                    *cells(row.label, [facts.get(name, age) for name, _ in columns], style))
+
+        headers = max_rows >= 5
+        extra_status = bool(status and max_rows >= 6)
+        if status and not extra_status:
+            head = f" Partial ·{head}" if self.partial else f"{head} · {status}"
+        frame = picker_frame((Span(head, theme.heading),), len(shown), self.index, row_line,
+                             " No matching sessions" if self.query else " No sessions in this view",
+                             self.title if renamed is not None else self.query, width, theme,
+                             max_rows - int(headers) - int(extra_status),
+                             placeholder=RENAME_PLACEHOLDER if renamed else
+                             WAITING_PLACEHOLDER if self.waiting else FILTER_PLACEHOLDER)
+        prefix: list[Line] = []
+        if extra_status:
+            prefix.append(truncate_line((Span(f" {status}", theme.warn),), width))
+        if headers:
+            prefix.append(truncate_line((Span(" " * inset), *cells("Title / preview", [name for name, _ in columns],
+                                                                  theme.muted)), width))
+        frame.lines[1:1] = prefix
+        self.page = frame.page
+        self.caret = (frame.caret[0] + len(prefix), frame.caret[1]) if frame.caret else None
+        return frame.lines
+
     def _entry(
         self, entry: SessionRow | str, highlighted: bool, width: int, theme: Theme, now: float, ages: int, digits: int
     ) -> Line:
@@ -553,7 +771,7 @@ class SessionPicker:
         """Whether the card layout (`card_lines`) has room: `CARDS_MIN_COLS` columns, its head, two cards and its
         wrapped keys in `max_rows`, and the picker taking the keys (one waiting for typing to stop sits over the
         composer, so it stays a list)."""
-        if self.waiting or width < CARDS_MIN_COLS:
+        if self.profiles is not None or self.waiting or width < CARDS_MIN_COLS:
             return False
         return max_rows >= CARDS_HEAD_ROWS + CARDS_TWO_ROWS + 1 + len(self._key_rows(width))
 
