@@ -1245,8 +1245,10 @@ class ReviewCategoryLintTests(unittest.TestCase):
                 node("check", depends_on=("api", "diff"), role="verify"),
             ])
         self.assertEqual(result["status"], "ok", result)
-        # Defined without goal criteria: the define reply adds that advice, and the stored record does not.
-        self.assertEqual(result["lint"], ["review_not_review_category:diff", "no_review_focus:api", "no_goal_criteria"])
+        # Defined without goal criteria: the define reply adds that advice, and the stored record does not; the graph
+        # (one build node, one review, one verify) could have run fast, which only the reply says.
+        self.assertEqual(result["lint"],
+                         ["review_not_review_category:diff", "no_review_focus:api", "no_goal_criteria", "fast_eligible"])
         record = dag_run.new_record(PARENT, "feat", "", "", [
             node("api", scope=("src/api.py",)),
             node("diff", category="unspecified-high", depends_on=("api",), role="review"),

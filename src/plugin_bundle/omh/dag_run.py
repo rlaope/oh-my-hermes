@@ -61,12 +61,19 @@ recorded ``carried`` and never handed out; its dependents read the earlier
 handoff (`carry_forward`). The graph must hold a verify node, which is never
 carried, so it runs over the carried work; a carried node whose parent runs
 again runs again too.
+
+A small graph can go fast (``fast``, opt-in at define; `fast_ineligible`
+decides once and the record keeps the answer): its verify node never rides in
+a ``delegate_task`` call but comes back under ``for_parent``, for the parent's
+own turn, so the run costs one child fewer. `settle_many` closes several
+nodes' attempts in one call, all of them or none.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager
+import copy
 from dataclasses import dataclass
 import hashlib
 import json
@@ -147,6 +154,28 @@ DEEP_CATEGORIES: Final = frozenset({"deep", "deep-work"})
 # trade-off); a graph this wide with none of them is told to give that node `ultrabrain` (`no_judgement_node`).
 JUDGEMENT_CATEGORIES: Final = frozenset({"ultrabrain", "architect", "forensics"})
 JUDGEMENT_GRAPH_NODES: Final = 4
+# A small run can go fast (`fast`, opt-in at define): the parent runs its one verify node itself, so the run costs
+# one child fewer and its verify node never rides in a delegate_task call. The graph limits it holds, checked once at
+# define (`fast_ineligible`): at most this many build nodes and nodes in all, one verify node that runs no full suite
+# and names no identity and is not local, no baseline node and no node with an owner.
+FAST_MAX_BUILD_NODES: Final = 3
+FAST_MAX_NODES: Final = 6
+# The lint a fast run leaves out: the parent's own verify turn is where review and judgement sit (`run_lint`).
+FAST_QUIET_LINT: Final = frozenset({"no_review_node", "no_judgement_node"})
+# Why a graph cannot go fast (`fast_ineligible`), in the words the parent's reply names them.
+FAST_INELIGIBLE_WORDS: Final = {
+    "too_many_build_nodes": f"more than {FAST_MAX_BUILD_NODES} build nodes",
+    "too_many_nodes": f"more than {FAST_MAX_NODES} nodes in all",
+    "verify_nodes": "not exactly one verify node",
+    "verify_full_suite": "a verify node whose prompt names a full suite",
+    "verify_identity": "a verify node pinned to an identity",
+    "verify_local": "a local verify node",
+    "baseline_node": "a baseline node",
+    "owner_node": "a node with a coding owner",
+}
+# A batch `settle` (`settles`) closes several nodes in one call; parked and escalated stay single-node settles.
+BATCH_OUTCOMES: Final = ("accepted", "failed", "blocked")
+BATCH_SETTLE_FIELDS: Final = frozenset({"node", "outcome", "reason", "provider_error"})
 # ``escalated`` closes the attempt like a provider-error ``retry``: the node is pending again, one category up.
 OUTCOMES: Final = ("accepted", "failed", "blocked", "parked", "escalated")
 # The difficulty ladder a node climbs when its child stops on a judgement it cannot settle (`settle` escalated); a
@@ -317,6 +346,9 @@ def _record_shape_ok(raw: object) -> bool:
         return False
     ids = [node.get("id") for node in nodes if isinstance(node, dict)]
     if len(ids) != len(nodes) or len(set(ids)) != len(ids) or not all(isinstance(i, str) and _ID.fullmatch(i) for i in ids):
+        return False
+    # The fast mark `define` decided once (`fast_ineligible`); a run defined without it has no key.
+    if "fast" in raw and not isinstance(raw["fast"], bool):
         return False
     # The coding owners the defining request named (`dag_tool._define`); only `define` writes them.
     owners = raw.get("owners", [])
@@ -943,6 +975,114 @@ def is_producer(node: Mapping[str, Any]) -> bool:
     return bool(node["write_scope"]) and not is_verification(node)
 
 
+def fast_ineligible(nodes: Sequence[Mapping[str, Any]]) -> list[str]:
+    """Why a graph cannot run fast (`fast`), as reason codes in a fixed order; ``[]`` when it can.
+
+    A fast run leaves its verify node to the parent, so the graph must be
+    small enough to hold in one turn: at most `FAST_MAX_BUILD_NODES` build
+    nodes and `FAST_MAX_NODES` nodes in all, exactly one verify node, and that
+    node runs no full suite and names no identity and is not local; no
+    baseline node, and no node with an owner. Read once at define and stored
+    as ``fast: true``; nothing recomputes it for a run already recorded.
+    """
+    reasons: list[str] = []
+    if sum(1 for node in nodes if node_role(node) == DEFAULT_ROLE) > FAST_MAX_BUILD_NODES:
+        reasons.append("too_many_build_nodes")
+    if len(nodes) > FAST_MAX_NODES:
+        reasons.append("too_many_nodes")
+    verifiers = [node for node in nodes if is_verification(node)]
+    if len(verifiers) != 1:
+        reasons.append("verify_nodes")
+    else:
+        verifier = verifiers[0]
+        if _mentions_full_suite(str(verifier["prompt"])):
+            reasons.append("verify_full_suite")
+        if verifier.get("identity"):
+            reasons.append("verify_identity")
+        if verifier.get("local"):
+            reasons.append("verify_local")
+    if any(is_baseline(node) for node in nodes):
+        reasons.append("baseline_node")
+    if any(node.get("owner") for node in nodes):
+        reasons.append("owner_node")
+    return reasons
+
+
+def fast_say(reasons: Sequence[str]) -> str:
+    """What the parent is told when a define asked for `fast` and the graph does not qualify: the reasons, and that
+    the run is defined as it always was."""
+    words = [FAST_INELIGIBLE_WORDS[str(reason)] for reason in reasons]
+    return (f"The run is defined without the fast path: the graph has {'; '.join(words)}. A fast run needs at most "
+            f"{FAST_MAX_BUILD_NODES} build nodes and {FAST_MAX_NODES} nodes in all, exactly one verify node that runs "
+            "no full suite and is neither pinned to an identity nor local, no baseline node and no node with an "
+            "owner. Every node runs on delegate_task as usual.")
+
+
+def run_lint(record: Mapping[str, Any], *, defining: bool = True) -> list[str]:
+    """The run's lint as its record keeps it: `lint`, less what a fast run does not need (`FAST_QUIET_LINT`)."""
+    findings = lint(record["nodes"], defining=defining)
+    if record.get("fast"):
+        findings = [finding for finding in findings if finding not in FAST_QUIET_LINT]
+    return findings
+
+
+def parent_nodes(record: Mapping[str, Any]) -> list[str]:
+    """The nodes a fast run leaves to the parent: its verify nodes, which never go to a delegate_task child.
+
+    ``[]`` for any other run, so nothing else reads a verify node out of the calls. Read from the record's own
+    ``fast`` mark, which define decided once: a repair of the verify node, or an extend round, keeps it with the
+    parent too.
+    """
+    if not record.get("fast"):
+        return []
+    return [str(node["id"]) for node in record["nodes"] if is_verification(node)]
+
+
+def attempt_open(attempt: object) -> bool:
+    """Whether an attempt is still out: handed out and closed by nothing, public settle or internal (`retry`).
+
+    Read from what closing writes (``settled_at`` and a non-empty ``outcome``), never from membership in `OUTCOMES`:
+    a provider error's ``retry`` closes an attempt too, and so does any internal outcome added later.
+    """
+    return isinstance(attempt, Mapping) and attempt.get("settled_at") is None and not attempt.get("outcome")
+
+
+def parent_lane_open(record: Mapping[str, Any]) -> list[str]:
+    """A fast run's verify nodes whose attempt is out on the parent lane right now, in record order.
+
+    ``[]`` for a run that is not fast or is cancelled. What the write guard binds the parent to
+    (`dag_scope_guard`) and what `ready` counts before it hands the parent another check. A node a later repair
+    group superseded is left out though its attempt was never closed: `settle` refuses it as not out, so nothing
+    could ever release it.
+    """
+    if record.get("cancelled_at") is not None:
+        return []
+    mine = set(parent_nodes(record))
+    found = []
+    for node in record["nodes"]:
+        attempts = node.get("attempts") or []
+        if (str(node["id"]) in mine and attempts and isinstance(attempts[-1], Mapping)
+                and attempts[-1].get("lane") == "parent" and attempt_open(attempts[-1])):
+            found.append(str(node["id"]))
+    if not found:
+        return []
+    # `derive` owns what superseded means; no child runs a parent-lane node, so it needs none of them here.
+    states = derive(record, (), 0.0)
+    return [node_id for node_id in found if states[node_id]["state"] in OPEN]
+
+
+def define_fast_lint(record: Mapping[str, Any]) -> list[str]:
+    """The fast-path advice a define reply adds to the record's lint, and nothing else.
+
+    ``fast_eligible`` for a graph defined without ``fast`` that could have run fast: the parent may define it that
+    way next time. A run that is already fast, or whose define asked for it and was told why not
+    (``fast_ineligible:<reasons>``, kept in the record), adds nothing.
+    """
+    if record.get("fast") or any(finding.startswith("fast_ineligible:") for finding in record["lint"]):
+        return []
+    return [] if fast_ineligible(record["nodes"]) else ["fast_eligible"]
+
+
 def verification_misses(nodes: Sequence[Mapping[str, Any]], verifiers: Sequence[Mapping[str, Any]], *,
                         skip: Iterable[str] = ()) -> list[str]:
     """The producers (`is_producer`) no node of ``verifiers`` follows, sorted; ``skip`` names nodes left out.
@@ -980,7 +1120,8 @@ def topology(nodes: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     }
 
 
-def definition_digest(nodes: Sequence[Mapping[str, Any]], criteria: Sequence[Mapping[str, str]] = ()) -> str:
+def definition_digest(nodes: Sequence[Mapping[str, Any]], criteria: Sequence[Mapping[str, str]] = (),
+                      *, fast: bool = False) -> str:
     # A build role is left out, so a run stored before nodes carried a role, defined again unchanged, is the same run.
     shape: object = [{key: node[key] for key in sorted(NODE_FIELDS)
                       if key in node and (key != "role" or node[key] != DEFAULT_ROLE)}
@@ -988,34 +1129,34 @@ def definition_digest(nodes: Sequence[Mapping[str, Any]], criteria: Sequence[Map
     if criteria:
         # Criteria are part of what a run is; a run defined without them keeps the digest it had before they existed.
         shape = {"criteria": [dict(item) for item in criteria], "nodes": shape}
+    if fast:
+        # A fast run of the same nodes is a different run (the parent checks it itself), and only then: a run defined
+        # without `fast` keeps the digest it always had.
+        shape = {"fast": True, "nodes": shape}
     return hashlib.sha256(json.dumps(shape, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
 
 def new_record(session_id: str, run: str, name: object, goal: object, raw_nodes: object, now: float, *,
                oneshot_limit: int | None = None, oneshot_spent: int = 0,
-               named_roles: bool = True, criteria: object = None,
+               named_roles: bool = True, criteria: object = None, fast: object = False,
                owners: Collection[str] = EXTERNAL_OWNERS) -> dict[str, Any]:
     """A validated run record. ``oneshot_limit`` and ``oneshot_spent``: the one-shot child budget and the children
     this process already started against it; a graph over what is left is refused. ``named_roles=False`` leaves
     `require_named_roles` to the caller: `dag_tool` first checks whether the run already exists (a run stored
     before nodes carried a role, defined again unchanged, is the same run). ``criteria``: the goal's separately
-    checkable outcomes (`_validated_criteria`); ``None`` keeps the record as it was before criteria existed."""
+    checkable outcomes (`_validated_criteria`); ``None`` keeps the record as it was before criteria existed.
+    ``fast``: the parent asked for the fast path. The record gets ``fast: true`` only when `fast_ineligible` passes;
+    a graph that does not qualify is defined as it always was, with ``fast_ineligible:<reasons>`` in its lint."""
     if not isinstance(raw_nodes, list) or not raw_nodes:
         raise DagRefusal("empty_graph", "A run needs at least one node.")
+    if fast is not None and not isinstance(fast, bool):
+        raise DagRefusal("invalid_fast", "fast is true or false.")
     if len(raw_nodes) > MAX_NODES:
         raise DagRefusal("too_many_nodes", f"A run holds at most {MAX_NODES} nodes; split the goal into phases.")
     remaining = None if oneshot_limit is None else max(0, oneshot_limit - oneshot_spent)
-    if remaining is not None and len(raw_nodes) > remaining:
-        used = (f" This session already started {oneshot_spent} of its {oneshot_limit}, so {remaining} "
-                f"{'is' if remaining == 1 else 'are'} left." if oneshot_spent else "")
-        cut = (f"cut the graph to {remaining} or fewer" if remaining else "do the work in this session yourself")
-        raise DagRefusal(
-            "oneshot_budget_exceeded",
-            f"This one-shot session may define at most {remaining} "
-            f"{'node' if remaining == 1 else 'nodes'} (delegation.oneshot_max_children is {oneshot_limit}), and the "
-            f"graph has {len(raw_nodes)}.{used} A one-shot run has no later session: {cut}, or "
-            "run the work interactively.",
-        )
+    # A graph that may run fast is counted once it is validated, where its verify node costs no child (below).
+    if fast is not True and remaining is not None and len(raw_nodes) > remaining:
+        raise _oneshot_graph_refusal(remaining, oneshot_limit, oneshot_spent, len(raw_nodes))
     nodes = [_validated_node(raw, owners) for raw in raw_nodes]
     if named_roles:
         require_named_roles(raw_nodes)
@@ -1025,22 +1166,35 @@ def new_record(session_id: str, run: str, name: object, goal: object, raw_nodes:
     stated = _plain(goal, MAX_GOAL_CHARS, "invalid_goal", GOAL_REFUSED) if goal else ""
     # An empty list is no criteria: the run is as one defined without them.
     checks = _validated_criteria(criteria) if criteria is not None and criteria != [] else []
+    # Decided here, once, and stored: a run already recorded never recomputes it.
+    ineligible = fast_ineligible(nodes)
+    adopt_fast = fast is True and not ineligible
+    if remaining is not None:
+        # A fast run's verify node is the parent's own turn, so it costs no child of a one-shot session.
+        counted = _child_count(nodes, fast=adopt_fast)
+        if counted > remaining:
+            raise _oneshot_graph_refusal(remaining, oneshot_limit, oneshot_spent, counted,
+                                         None if counted == len(nodes) else len(nodes))
     record = {
         "schema_version": DAG_SCHEMA_VERSION,
         "session_id": session_id,
         "run": run,
         "name": title,
         "goal": stated,
-        "digest": definition_digest(nodes, checks),
+        "digest": definition_digest(nodes, checks, fast=adopt_fast),
         "defined_at": now,
         "updated_at": now,
         "cancelled_at": None,
         "nodes": nodes,
         "repairs": {},
         "topology": topology(nodes),
-        "lint": lint(nodes),
         "claim_boundary": DAG_CLAIM_BOUNDARY,
     }
+    if adopt_fast:
+        record["fast"] = True
+    record["lint"] = run_lint(record)
+    if fast is True and ineligible:
+        record["lint"].append(f"fast_ineligible:{','.join(ineligible)}")
     if checks:
         record["criteria"] = checks
     return record
@@ -1351,13 +1505,18 @@ def status_line(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, An
                 now: float | None = None, limits: Limits = DEFAULT_LIMITS) -> str:
     """The one line a messenger reply carries on a completion turn: ``DAG <name> · 3/6 done · 2 running``.
 
+    A fast run says so after the name: ``DAG <name> · fast · 3/6 done``.
     ``added`` is the clause naming nodes a repair or an extend round added
     since the chat last showed the run (`delegation_snapshot.added_clause`).
     With ``now``, nodes open past the stuck mark are counted, the oldest named
     with its age: ``1 open past 1h (Docs body 2h 10m)``.
     """
     tally = counts(record, derived)
-    parts = [f"DAG {record['name']}", f"{tally['done']}/{tally['total']} done", f"{tally['running']} running"]
+    parts = [f"DAG {record['name']}"]
+    if record.get("fast"):
+        # A fast run says so where the parent reads the line: its verify node is the parent's own turn.
+        parts.append("fast")
+    parts.extend([f"{tally['done']}/{tally['total']} done", f"{tally['running']} running"])
     if tally.get("carried"):
         parts.append(f"carried {tally['carried']} of {tally['total']} nodes from {record.get('carried_from')}")
     if tally["parked"]:
@@ -1901,6 +2060,8 @@ def calls_for(
     skipped = set(skip)
     # Under model_map the option is the retry count's: nodes on different retries go in different calls.
     by_option = str((backend or {}).get("backend") or "") == "model_map"
+    # A fast run's verify node is the parent's own turn (`parent_nodes`): never in a call, whatever the caller skips.
+    skipped |= set(parent_nodes(record))
     # A local node no local model can take is never handed out, whatever the caller skips.
     skipped |= set(local_blocked(record, offerable(record, derived, now, limits=limits), backend))
     groups: dict[tuple[str, bool, int, bool, str], list[str]] = {}
@@ -2104,6 +2265,67 @@ def settle(
     return str(outcome)
 
 
+def settle_many(
+    record: dict[str, Any], items: object, *, children: Sequence[Mapping[str, Any]],
+    read_handoff_for: Callable[[str], tuple[bool, str]],
+    read_criteria_for: Callable[[str], tuple[bool, str, list[str]]], now: float,
+) -> list[dict[str, str]]:
+    """Close several nodes' open attempts in one call, all of them or none (``settles``).
+
+    Each item is ``{node, outcome, reason?, provider_error?}`` with outcome
+    ``accepted``, ``failed`` or ``blocked``; parked and escalated stay
+    single-node settles, since each needs its own handle, deadline or
+    question. Every item is validated and applied against a deep copy of the
+    record, in the order given (each item sees the states the earlier ones
+    left), and only when all of them close is the record replaced. A refused
+    item raises its own refusal with a say that names the item, and the
+    record is untouched: nothing of the call was recorded. Returns what each
+    item closed as, ``[{"node": ..., "outcome": ...}]``.
+    """
+    if not isinstance(items, list) or not items:
+        raise DagRefusal("invalid_settles",
+                         "settles lists at least one item, each {node, outcome}; a single node settles with node and "
+                         "outcome.")
+    wanted: list[tuple[str, str, object, bool]] = []
+    for index, item in enumerate(items, start=1):
+        if not isinstance(item, Mapping) or set(item) - BATCH_SETTLE_FIELDS:
+            raise DagRefusal("invalid_settles",
+                             f"Settle item {index} takes only node, outcome, reason and provider_error.")
+        node_id = valid_id(item.get("node"), "invalid_settles", f"Settle item {index} names the node it closes.")
+        outcome = item.get("outcome")
+        if not isinstance(outcome, str) or outcome not in BATCH_OUTCOMES:
+            raise DagRefusal(
+                "invalid_settles",
+                f"Settle item {index} ({node_id}) closes accepted, failed or blocked; parked and escalated settle one "
+                "node per call.")
+        provider_error = item.get("provider_error")
+        if provider_error is not None and not isinstance(provider_error, bool):
+            raise DagRefusal(
+                "invalid_provider_error",
+                f"Nothing was settled: settle item {index} ({node_id}) has provider_error that is not true or false, "
+                "and it takes true or false. The items of one settle apply together or not at all, so this call "
+                "recorded none of them.")
+        wanted.append((node_id, outcome, item.get("reason"), bool(provider_error)))
+    working = copy.deepcopy(dict(record))
+    settled: list[dict[str, str]] = []
+    for index, (node_id, outcome, reason, provider_error) in enumerate(wanted, start=1):
+        try:
+            happened = settle(
+                working, derive(working, children, now), node_id, outcome, reason, provider_error,
+                read_handoff=lambda node=node_id: read_handoff_for(node), now=now,
+                read_criteria=lambda node=node_id: read_criteria_for(node))
+        except DagRefusal as refusal:
+            raise DagRefusal(
+                refusal.reason,
+                f"Nothing was settled: settle item {index} ({node_id}) was refused. {refusal.say} The items of one "
+                "settle apply together or not at all, so this call recorded none of them.") from None
+        settled.append({"node": node_id, "outcome": happened})
+    working["updated_at"] = now
+    record.clear()
+    record.update(working)
+    return settled
+
+
 def _escalate(node: dict[str, Any], reason: object, now: float) -> str:
     """Close the open attempt as escalated and move the node one rung up `ESCALATION_LADDER`. No handoff is read."""
     node_id, category = str(node["id"]), str(node["category"])
@@ -2155,15 +2377,82 @@ def handoff_unchecked(node: Mapping[str, Any]) -> bool:
     return bool(attempts) and isinstance(attempts[-1], Mapping) and attempts[-1].get("handoff_checked") is False
 
 
-def _require_oneshot_room(added: Sequence[Mapping[str, Any]], remaining: int | None, what: str) -> None:
-    if remaining is not None and len(added) > remaining:
-        raise DagRefusal(
-            "oneshot_budget_exceeded",
-            f"This one-shot session can start {remaining} more "
-            f"{'child' if remaining == 1 else 'children'} (delegation.oneshot_max_children), and the {what} adds "
-            f"{len(added)} {'node' if len(added) == 1 else 'nodes'}. Add {remaining} or fewer, or do the work in this "
-            "session yourself and report what is open.",
-        )
+def _child_count(nodes: Sequence[Mapping[str, Any]], *, fast: bool) -> int:
+    """How many of ``nodes`` cost a child. A fast run's verify node is the parent's own turn, so it costs none; every
+    other node of a fast run, and every node of any other run, costs one."""
+    return sum(1 for node in nodes if not (fast and is_verification(node)))
+
+
+def _oneshot_graph_refusal(remaining: int, limit: int | None, spent: int, counted: int,
+                           total: int | None = None) -> DagRefusal:
+    """The refusal for a define whose graph needs more children than a one-shot session has left.
+
+    ``counted``: the nodes that cost a child; ``total``: every node of the graph, given only when a fast run's verify
+    node was counted out, so the say names both numbers.
+    """
+    used = (f" This session already started {spent} of its {limit}, so {remaining} "
+            f"{'is' if remaining == 1 else 'are'} left." if spent else "")
+    cut = (f"cut the graph to {remaining} or fewer" if remaining else "do the work in this session yourself")
+    graph = (f"the graph has {counted}." if total is None or total == counted else
+             f"the graph has {total} nodes, {counted} of which "
+             f"{'needs' if counted == 1 else 'need'} a child (a fast run's verify node costs none).")
+    return DagRefusal(
+        "oneshot_budget_exceeded",
+        f"This one-shot session may define at most {remaining} "
+        f"{'node' if remaining == 1 else 'nodes'} (delegation.oneshot_max_children is {limit}), and "
+        f"{graph}{used} A one-shot run has no later session: {cut}, or "
+        "run the work interactively.",
+    )
+
+
+def _require_oneshot_room(record: Mapping[str, Any], added: Sequence[Mapping[str, Any]], remaining: int | None,
+                          what: str) -> None:
+    """Refuse a repair group or extend round that needs more children than a one-shot session has left.
+
+    In a fast run only the nodes that cost a child are counted: its verify node is the parent's own turn.
+    """
+    if remaining is None:
+        return
+    counted = _child_count(added, fast=bool(record.get("fast")))
+    if counted <= remaining:
+        return
+    fast = ("" if counted == len(added) else
+            f" A fast run's verify node costs no child, so {counted} of its {len(added)} nodes "
+            f"{'needs' if counted == 1 else 'need'} one.")
+    raise DagRefusal(
+        "oneshot_budget_exceeded",
+        f"This one-shot session can start {remaining} more "
+        f"{'child' if remaining == 1 else 'children'} (delegation.oneshot_max_children), and the {what} adds "
+        f"{counted} {'node' if counted == 1 else 'nodes'}.{fast} Add {remaining} or fewer, or do the work in this "
+        "session yourself and report what is open.",
+    )
+
+
+def _require_fast_verify(record: Mapping[str, Any], added: Sequence[Mapping[str, Any]]) -> None:
+    """Refuse a verify node that a fast run cannot run: one naming an identity, or marked local.
+
+    A fast run's verify node runs in the parent's own session (`parent_nodes`), which applies no identity's model and
+    prompt policy and makes no local-only promise, so such a node is refused before it is recorded.
+    """
+    if not record.get("fast"):
+        return
+    for node in added:
+        if not is_verification(node):
+            continue
+        if node.get("identity"):
+            raise DagRefusal(
+                "fast_verify_identity",
+                f"Node {node['id']} is a verify node with identity {node['identity']}, and this run is fast: its verify "
+                "node runs in this session, which cannot apply an identity's model and prompt policy. Remove the "
+                "identity, or define the work as a new run without `fast` so that identity's child checks it.",
+            )
+        if node.get("local"):
+            raise DagRefusal(
+                "fast_verify_local",
+                f"Node {node['id']} is a verify node marked local, and this run is fast: its verify node runs in this "
+                "session, whose model has no local-only guarantee. Remove `local`, or define the work as a new run "
+                "without `fast` so a local model's child checks it.",
+            )
 
 
 def repair(
@@ -2193,6 +2482,7 @@ def repair(
     added = [_validated_node(raw, owners) for raw in raw_nodes]
     require_named_roles(raw_nodes)
     require_prompt_markers(added)
+    _require_fast_verify(record, added)
     if len(nodes) + len(added) > MAX_NODES:
         raise DagRefusal("too_many_nodes", f"A run holds at most {MAX_NODES} nodes.")
     group = {str(node["id"]) for node in added}
@@ -2214,11 +2504,11 @@ def repair(
     every = {str(node["id"]): node["depends_on"] for node in record["nodes"]}
     below = {key: sorted(group) for key in every if root in ancestors(key, every)}
     _require_graph(list(record["nodes"]) + added, editable=group | runnable, involving=group, before=below)
-    _require_oneshot_room(added, oneshot_remaining, "repair")
+    _require_oneshot_room(record, added, oneshot_remaining, "repair")
     record["nodes"].extend(added)
     groups.append([str(node["id"]) for node in added])
     record["topology"] = topology(record["nodes"])
-    record["lint"] = lint(record["nodes"], defining=False)
+    record["lint"] = run_lint(record, defining=False)
     record["updated_at"] = now
     return [str(node["id"]) for node in added]
 
@@ -2273,6 +2563,7 @@ def extend(
     added = [_validated_node(raw, owners) for raw in raw_nodes]
     require_named_roles(raw_nodes)
     require_prompt_markers(added)
+    _require_fast_verify(record, added)
     if len(nodes) + len(added) > MAX_NODES:
         raise DagRefusal(
             "too_many_nodes", f"A run holds at most {MAX_NODES} nodes, extend rounds included; report what is open.")
@@ -2288,7 +2579,7 @@ def extend(
                 f"Node {node['id']} may depend only on accepted nodes or on this round's own, not {', '.join(outside)}.",
             )
         node.update(origin=f"extend:{len(rounds) + 1}", found_by=origin)
-    _require_oneshot_room(added, oneshot_remaining, "extend round")
+    _require_oneshot_room(record, added, oneshot_remaining, "extend round")
     more = (_validated_criteria(criteria, [item["id"] for item in run_criteria(record)])
             if criteria is not None and criteria != [] else [])
     record["nodes"].extend(added)
@@ -2296,7 +2587,7 @@ def extend(
     if more:
         record["criteria"] = [*run_criteria(record), *more]
     record["topology"] = topology(record["nodes"])
-    record["lint"] = lint(record["nodes"], defining=False)
+    record["lint"] = run_lint(record, defining=False)
     record["updated_at"] = now
     return [str(node["id"]) for node in added]
 
