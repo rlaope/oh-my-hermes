@@ -1337,7 +1337,8 @@ mod tests {
     /// sign-in or Hermes look-up. (Its refusal itself: `remote::tests`.)
     #[test]
     fn every_local_hermes_command_refuses_first_in_remote_mode() {
-        let src = include_str!("lib.rs");
+        // a Windows checkout has CRLF line ends (setup.rs reads lib.rs the same way)
+        let src = include_str!("lib.rs").replace("\r\n", "\n");
         let src = &src[..src.find("#[cfg(test)]").unwrap()];
         for name in LOCAL_HERMES_COMMANDS {
             let at = src.find(&format!("async fn {name}(")).unwrap_or_else(|| panic!("{name} is not a command here"));
