@@ -111,6 +111,8 @@ export interface Turn {
   /** The words written between the last tool call and a `clarify` ask: the question's context, which the cut below
    *  would otherwise drop. Held until the ask arrives, then kept as its own row above the card. */
   askNote?: string;
+  /** Ended here because the bridge went away, not by Hermes: the chat's next read says how it really ended. */
+  connLost?: boolean;
 }
 
 /** One subagent of a fan-out, as its latest event left it. */
@@ -924,6 +926,29 @@ function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string, 
   } else if (!res.running && next.turn && next.turn.startedAt < since) {
     next = endTurn(next, now, "done");
   }
+  // the turn the bridge's outage cut off here finished meanwhile: Hermes runs nothing, lost no turn, and the last row
+  // is the bot's answer to THIS turn (written after it started, or right after the person's row that started it; an
+  // older answer is the previous turn's, when Hermes has not saved this turn's message). It ended as done, not as
+  // "Connection to Hermes lost"; the steps it cut off returned, they were not stopped
+  const cut = next.lastTurn;
+  const said = res.messages.filter((m) => !m.queued);
+  const answer = said.at(-1);
+  const asked = said.slice(0, -1).reverse().find((m) => m.role === "user");
+  const at = cut ? chat.items.findIndex((i) => i.kind === "activity" && i.id === cut.id) : -1;
+  const prompt = [...chat.items.slice(0, Math.max(at, 0))].reverse().find((i): i is MessageItem => i.kind === "user");
+  const ours =
+    !!cut &&
+    !!answer &&
+    (answer.ts * 1000 >= cut.startedAt || (!!asked && !!prompt && (asked.id === prompt.id || asked.text === (prompt.sent ?? prompt.text))));
+  if (!res.running && !res.lost?.length && !next.turn && cut?.connLost && answer?.role === "assistant" && ours) {
+    next = patchTurnById(next, cut.id, (x) => ({
+      ...x,
+      outcome: "done",
+      error: undefined,
+      connLost: undefined,
+      steps: x.steps.map((s) => (s.stopped && s.endedAt === x.endedAt ? { ...s, ok: undefined, stopped: undefined } : s)),
+    }));
+  }
   return next;
 }
 
@@ -1068,6 +1093,20 @@ function saveBriefNoticed(bots: string[]): void {
   }
 }
 
+/** An ask Hermes sends again (chat.open replays the ones still waiting) while it runs the chat's turn, whose card here
+ *  reads unanswered only because the turn it was asked in ended here when the bridge went away (`connLost`): that card
+ *  (and a question's context row) goes, and the ask is added again in the running turn, answerable. An open, answered
+ *  or expired card, or one whose turn Hermes itself ended, stays as it is. */
+function reasked(c: Chat, kind: "approval" | "clarify", requestId: string): Chat {
+  const old = c.items.find((i): i is ApprovalItem | ClarifyItem => i.kind === kind && i.request_id === requestId);
+  if (!old || !c.turn || old.expired || (old.kind === "approval" ? !!old.resolved : old.answer !== undefined) || askOpen(c.items, old)) return c;
+  let owner: Turn | undefined;
+  for (const i of c.items) if (i.kind === "activity" && i.turn.startedAt <= old.ts * 1000 + 1) owner = i.turn;
+  if (!owner?.connLost) return c;
+  const note = `clarify-note-${requestId}`;
+  return withItems(c, c.items.filter((i) => i !== old && !(kind === "clarify" && i.kind === "assistant" && i.id === note)));
+}
+
 function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
   if (ev.session && ev.event !== "folder.closed") {
     if (ev.event === "bot.status") return state; // a folder chat's turn never moves the bot's own status
@@ -1174,7 +1213,8 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
       return existed ? next : bumpUnread(next, bot);
     }
     case "approval.request":
-      return touchChat(state, bot, (c) => {
+      return touchChat(state, bot, (c0) => {
+        const c = reasked(c0, "approval", ev.request_id);
         // chat.open replays asks that are still waiting; the card is already there.
         if (c.items.some((i) => i.kind === "approval" && i.request_id === ev.request_id)) return c;
         const base = patchTurn(c, (t) => ({ ...t, status: tr("live.waitApproval") }));
@@ -1194,12 +1234,15 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
         return withItems(base, [...base.items, item]);
       });
     case "clarify.request":
-      return touchChat(state, bot, (c) => {
+      return touchChat(state, bot, (c0) => {
+        const c = reasked(c0, "clarify", ev.request_id);
         if (c.items.some((i) => i.kind === "clarify" && i.request_id === ev.request_id)) return c;
         // The words written right before the question are its context. Hermes asks through a tool call, and the
         // commentary beside a tool call is dropped (`cut`, see tool.start), so the card used to arrive alone with
         // the explanation the person was supposed to read gone. Keep that commentary as a row above the card.
-        const note = c.turn?.askNote ?? "";
+        // A question asked again after an outage keeps the context it had (its old row went with its old card).
+        const before = c === c0 ? undefined : c0.items.find((i) => i.kind === "assistant" && i.id === `clarify-note-${ev.request_id}`);
+        const note = c.turn?.askNote || (before?.kind === "assistant" ? before.text : "");
         const asked = patchTurn(c, (t) => ({ ...t, status: tr("live.waitAnswer") }));
         const qs = (ev.questions ?? []).filter((q) => q && typeof q.question === "string" && q.question.trim());
         const item: ClarifyItem = {
@@ -1218,7 +1261,7 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
         const withNote = note ? withItems(asked, [...asked.items, noted]) : asked;
         const base = withItems(withNote, [...withNote.items, item]);
         // the note now lives in its own row: it is not the answer still being written
-        return note ? patchTurn(base, (t) => ({ ...t, streaming: "", cut: undefined, askNote: undefined })) : base;
+        return c.turn?.askNote ? patchTurn(base, (t) => ({ ...t, streaming: "", cut: undefined, askNote: undefined })) : base;
       });
     case "prompt.expired":
       return touchChat(state, bot, (c) =>
@@ -1355,9 +1398,13 @@ export function reduce(state: AppState, a: Action): AppState {
       const chats: AppState["chats"] = {};
       // agent:<id> chats run in the desktop shell, not through Hermes: a bridge outage does not touch them
       for (const [b, c] of Object.entries(state.chats)) {
-        const ended = c.turn && !b.startsWith("agent:") ? endTurn(c, t, "interrupted", tr("live.lost")) : c;
-        // what Hermes runs is not known until the chat is read again: the steer queue waits for that
-        chats[b] = isSessionChat(b) ? ended : { ...ended, stale: true, pendingTurn: null, steeredUnread: undefined, steerAck: null };
+        const ended =
+          c.turn && !b.startsWith("agent:") ? endTurn(patchTurn(c, (x) => ({ ...x, connLost: true })), t, "interrupted", tr("live.lost")) : c;
+        // what Hermes runs is not known until the chat is read again: the steer queue waits for that. A bot's thread
+        // is read again too (rereadThreads), after thread.list: what it holds waits for that read like the main chat
+        const { bot: owner, session } = chatTarget(b);
+        const thread = !!session && !!state.threads[owner]?.some((r) => r.thread === session);
+        chats[b] = isSessionChat(b) && !thread ? ended : { ...ended, stale: true, pendingTurn: null, steeredUnread: undefined, steerAck: null };
       }
       return { ...state, conn: a.status, chats };
     }
@@ -2492,7 +2539,11 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       if (state.bots.some((b) => b.host && (!before.has(b.name) || (b.status === "offline" && was.get(b.name) !== "offline"))))
         void loadPlatforms();
       const stale = Object.entries(state.chats).filter(([n, c]) => c.stale && c.loaded && names.has(n)).map(([n]) => n);
-      await Promise.allSettled(stale.map(loadChat));
+      // and the bots whose threads it left unread (stale), thread.list first
+      const staleThreads = new Set(
+        Object.entries(state.chats).filter(([n, c]) => c.stale && c.loaded && n.startsWith("fold:")).map(([n]) => chatTarget(n).bot),
+      );
+      await Promise.allSettled([...stale.map(loadChat), ...[...staleThreads].filter((b) => names.has(b)).map(rereadThreads)]);
       // a profile that appeared since: ask it too (only new names, so a bots.update storm asks nobody twice)
       await Promise.allSettled(
         selectUnlisted(state).filter((b) => !before.has(b.name) && !state.chats[b.name]?.loaded).map((b) => peekAsks(b.name)),
@@ -2559,11 +2610,38 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     });
     return key;
   };
+  /** A thread's open (thread.open) in flight, per chat key: a click while the automatic open runs waits for it,
+   *  never a second open (two session.resume of one thread at once). */
+  const threadOpens = new Map<string, Promise<void>>();
+  const openOnce = (bot: string, thread: string): Promise<void> => {
+    const key = threadKey(bot, thread);
+    let run = threadOpens.get(key);
+    if (!run) {
+      run = loadThread(bot, thread).finally(() => threadOpens.delete(key));
+      threadOpens.set(key, run);
+    }
+    return run;
+  };
+  /** At most this many automatic thread opens at once per listing (thread.list can list hundreds). */
+  const PEEK_THREADS = 3;
   const loadThreads = async (bot: string) => {
     try {
       const r = await threadReq("thread.list", { bot });
       dispatch({ type: "threads", bot, threads: r.threads });
       for (const row of r.threads) threadRoute(bot, row.thread);
+      // a thread Hermes is running or that waits on the person, not read in this run (omher started again while
+      // Hermes ran on): read it now, as peekAsks asks a bot outside the list, so its row runs and its asks reach
+      // Needs you without a click. One open per thread at a time, PEEK_THREADS at once; the ones already read are
+      // re-read elsewhere.
+      const busy = r.threads.filter((row) => (row.running || row.needs) && !state.chats[threadKey(bot, row.thread)]?.loaded);
+      let next = 0;
+      const peek = async () => {
+        while (next < busy.length) {
+          const row = busy[next++];
+          if (!state.chats[threadKey(bot, row.thread)]?.loaded) await openOnce(bot, row.thread);
+        }
+      };
+      void Promise.all(Array.from({ length: Math.min(PEEK_THREADS, busy.length) }, peek));
     } catch {
       /* an offline bot, or a bridge without threads: the bot row shows none */
     }
@@ -3191,7 +3269,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       if (state.ui.roster && state.bots.some((b) => b.name === bot)) listBot(bot, true);
       if (!thread) return selectBot(bot);
       dispatch({ type: "ui.thread", bot, thread });
-      if (!state.chats[threadKey(bot, thread)]?.loaded) await loadThread(bot, thread);
+      if (!state.chats[threadKey(bot, thread)]?.loaded) await openOnce(bot, thread);
     },
     async threadSend(bot, thread, text) {
       const key = threadRoute(bot, thread);
