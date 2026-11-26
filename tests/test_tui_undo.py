@@ -11,6 +11,7 @@ from __future__ import annotations
 import unittest
 
 from test_tui_modes import make_app, type_text
+from omh.tui.app import SESSION_LIST_LIMIT
 from omh.tui.composer import Composer
 from omh.tui.keys import BACKSPACE, CHAR, ENTER, ESCAPE, LEFT, UP, Key, KeyDecoder, Paste
 
@@ -135,6 +136,20 @@ class CtrlXTests(unittest.TestCase):
         self.assertEqual(key_client.calls, command_client.calls)
         self.assertEqual(key_client.calls[0][0], "session.list")
         self.assertEqual(by_key.composer.text, "")
+
+    def test_ctrl_x_opens_the_all_profile_table(self) -> None:
+        app, client = make_app()
+        app._on_input(Key(CHAR, "x", ctrl=True))
+        self.assertIsNotNone(app.picker)
+        self.assertIsNotNone(app.picker.profiles)
+        self.assertEqual(client.calls[0], ("session.list", {"limit": SESSION_LIST_LIMIT}))
+
+    def test_resume_keeps_the_gateway_only_picker(self) -> None:
+        app, client = make_app()
+        type_text(app, "/resume")
+        app._on_input(Key(ENTER))
+        self.assertIsNone(app.picker)
+        self.assertEqual(client.calls[0], ("session.list", {"limit": SESSION_LIST_LIMIT}))
 
     def test_ctrl_x_keeps_the_draft_underneath(self) -> None:
         app, client = make_app()

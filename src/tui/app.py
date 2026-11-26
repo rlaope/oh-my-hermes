@@ -5631,11 +5631,14 @@ class App(ModesMixin, AgentViewMixin):
         return True
 
     def _sessions_key(self, event: Key | Paste) -> bool:
-        """Open the Gateway switcher with the keyboard; /sessions opens the local profile table."""
-        if not self._leader_matches(event, "s") and (not isinstance(event, Key) or event != Key(CHAR, "x", ctrl=True)):
-            return False
-        self._sessions("")
-        return True
+        """Ctrl+X opens the all-profile table; leader+s retains the Gateway picker."""
+        if isinstance(event, Key) and event == Key(CHAR, "x", ctrl=True):
+            self._profile_sessions()
+            return True
+        if self._leader_matches(event, "s"):
+            self._sessions("")
+            return True
+        return False
 
     def _plan_fold_key(self, event: Key | Paste) -> bool:
         """Ctrl+P folds the plan to its header or expands it, for the rest of the session (a new plan keeps the
