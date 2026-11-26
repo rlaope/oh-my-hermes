@@ -44,7 +44,7 @@ from __future__ import annotations
 
 import base64
 import binascii
-from collections.abc import Collection, Mapping
+from collections.abc import Collection, Mapping, Sequence
 import hashlib
 import json
 import os
@@ -159,6 +159,9 @@ WORKTREE_ISOLATION_WHY = (
     "`hermes config set delegation.worktree_isolation false` (or in the profile's config.yaml); OMH never changes it.")
 WORKTREE_ISOLATION_REFUSED = WORKTREE_ISOLATION_WHY + " Then define the run again, or do the work without dag-ulw."
 WORKTREE_ISOLATION_HELD = "No node was handed out: " + WORKTREE_ISOLATION_WHY + " Then call omh_dag action=ready."
+# The same hold in a wave where a fast run's parent check did go out: only the children wait.
+WORKTREE_ISOLATION_CHILDREN_HELD = ("No delegate_task call was handed out: " + WORKTREE_ISOLATION_WHY
+                                    + " Then call omh_dag action=ready.")
 # The plain scalars PyYAML (YAML 1.1) reads as false or as a zero number. Hermes reads the key with `bool()`, so every
 # other value is on: a quoted one ('false' too), `y`, `enabled`, `1.0`, a non-empty list or mapping.
 _YAML_FALSE = ("false", "False", "FALSE", "no", "No", "NO", "off", "Off", "OFF")
@@ -189,7 +192,9 @@ OMH_DAG_SCHEMA = {
         "handle and wake_at (future UTC ISO-8601 or epoch, within 24h); ready reoffers it then, at most three parks. "
         "A child whose handoff starts a line with ESCALATE: settles escalated with the question as reason; the node is "
         "offered again one category up (quick, unspecified-low, unspecified-high, ultrabrain), at most twice. "
-        "settle returns what is next. repair adds nodes for a failed "
+        "settle returns what is next. fast (define): a small graph keeps its verify node for you to run, so it "
+        "never goes to delegate_task. settles (settle): several nodes at once, all or none. repair adds nodes "
+        "for a failed "
         "node, at most two cycles. extend adds nodes to an all-passed run when the goal check finds work "
         "missing, at most two rounds. Past either limit, report what is open. criteria (define, extend): the "
         "goal's checkable outcomes, each met only by a verify node's handoff line. Relay any `say` once."
@@ -231,6 +236,15 @@ OMH_DAG_SCHEMA = {
             "node": {"type": "string",
                      "description": "settle / repair: the node id. extend: the node whose check found the gap."},
             "outcome": {"type": "string", "enum": list(dag_run.OUTCOMES)},
+            "settles": {"type": "array",
+                        "items": {"type": "object", "properties": {
+                            "node": {"type": "string"},
+                            "outcome": {"type": "string", "enum": list(dag_run.BATCH_OUTCOMES)},
+                            "reason": {"type": "string"},
+                            "provider_error": {"type": "boolean"}}},
+                        "description": "settle: several nodes at once, all applied together or none."},
+            "fast": {"type": "boolean",
+                     "description": "define, opt-in: a small graph whose verify node you run yourself."},
             "reason": {"type": "string"},
             "handle": {"type": "string", "maxLength": dag_run.MAX_HANDLE_CHARS,
                        "description": "settle parked: the still-running background process or CI run handle."},
@@ -305,7 +319,10 @@ def omh_dag_handler(args: Mapping[str, object], **kwargs: object) -> str:
                 exports, unavailable, owner_say = _owner_exports(record, derived, offered, live)
                 coding = [node_id for entry in exports for node_id in entry["nodes"]]
                 coding.extend(unavailable)
-                say = WORKTREE_ISOLATION_HELD if _isolation_holds(record, offered, coding, hermes_home) else ""
+                say = ""
+                if _isolation_holds(record, offered, coding, hermes_home):
+                    say = (WORKTREE_ISOLATION_CHILDREN_HELD if dag_run.parent_lane_open(record)
+                           else WORKTREE_ISOLATION_HELD)
                 say = " ".join(part for part in (say, _export_say(exports), owner_say) if part)
                 return _result(action, record, derived, shown, say=say, extra=_export_fields(exports), unavailable=unavailable,
                                now=now, limits=limits, ignored=ignored, spent=(hermes_home, children))
@@ -336,8 +353,16 @@ def omh_dag_handler(args: Mapping[str, object], **kwargs: object) -> str:
                 return _ready(action, record, path, derived, children, omh_home, hermes_home, now, shown, task=task, live=live,
                               budget=budget, limits=limits, ignored=ignored)
             if action == "settle":
-                node = dag_run.valid_id(args.get("node"), "invalid_node_id", "Name the node to settle.")
                 backend = record.get("backend")
+                if args.get("settles") is not None:
+                    if args.get("node") is not None or args.get("outcome") is not None:
+                        raise dag_run.DagRefusal(
+                            "invalid_settles",
+                            "settle takes either one node (node and outcome) or a batch (settles), not both: call "
+                            "each separately.")
+                    return _batch_settle(args, record, path, derived, children, omh_home, hermes_home, now, shown,
+                                         task=task, live=live, budget=budget, limits=limits, ignored=ignored)
+                node = dag_run.valid_id(args.get("node"), "invalid_node_id", "Name the node to settle.")
 
                 def read() -> tuple[bool, str]:
                     # Called by `settle` only once its other checks passed. The child wrote the file under its own
@@ -369,8 +394,16 @@ def omh_dag_handler(args: Mapping[str, object], **kwargs: object) -> str:
                     say = (f"Node {node} is accepted, but its handoff was not checked: OMH could not read the {backend} "
                            f"terminal the child wrote it in ({unread}). The nodes after it read that file; if it is "
                            "not there, they stop and say so.")
-                return _ready(action, record, path, derived, children, omh_home, hermes_home, now, shown, task=task, live=live,
-                              say=say, settled={"node": node, "outcome": happened}, budget=budget, limits=limits, ignored=ignored)
+                try:
+                    return _ready(action, record, path, derived, children, omh_home, hermes_home, now, shown,
+                                  task=task, live=live, say=say, settled={"node": node, "outcome": happened},
+                                  budget=budget, limits=limits, ignored=ignored)
+                except dag_run.DagRefusal as refusal:
+                    # The settle is written: the next-wave refusal is reported beside it, never as a refused settle.
+                    return _settled_next_refused(action, record, derived, shown,
+                                                 {"node": node, "outcome": happened}, refusal, now=now,
+                                                 limits=limits, ignored=ignored, hermes_home=hermes_home,
+                                                 children=children)
             if action == "repair":
                 node = dag_run.valid_id(args.get("node"), "invalid_node_id", "Name the failed node to repair.")
                 added = dag_run.repair(record, derived, node, args.get("nodes"), now,
@@ -499,7 +532,10 @@ def _define(args: Mapping[str, object], omh_home: Path, hermes_home: Path, durab
     record = dag_run.new_record(durable, run, args.get("name"), args.get("goal"), args.get("nodes"), now,
                                 oneshot_limit=budget["limit"] if budget else None,
                                 oneshot_spent=budget["spent"] if budget else 0, named_roles=False,
-                                criteria=args.get("criteria"), owners=admitted)
+                                criteria=args.get("criteria"), fast=args.get("fast"), owners=admitted)
+    # A define that asked for `fast` and did not get it is defined as usual; the reason is in the record's lint.
+    ineligible = next((finding for finding in record["lint"] if finding.startswith("fast_ineligible:")), "")
+    fast_note = dag_run.fast_say(ineligible.split(":", 1)[1].split(",")) if ineligible else ""
     named_configured = sorted({str(node["owner"]) for node in record["nodes"] if "owner" in node}
                               - set(dag_run.EXTERNAL_OWNERS))
     if named_configured:
@@ -568,7 +604,7 @@ def _define(args: Mapping[str, object], omh_home: Path, hermes_home: Path, durab
         dag_run.write_run(path, record)
         derived = dag_run.derive(record, [], now)
         return _ready("define", record, path, derived, [], omh_home, hermes_home, now, shown, task=task, live=live, budget=budget,
-                      limits=limits, ignored=ignored, carry=carry)
+                      limits=limits, ignored=ignored, carry=carry, say=fast_note)
 
 
 def _prior_handoff(omh_home: Path, prior: Mapping[str, Any], node: str) -> str:
@@ -1021,12 +1057,14 @@ def _backend_lines(task_id: str, command: str, *, whole: bool = False) -> tuple[
 def _ready(
     action: str, record: dict[str, Any], path: Path, derived: Mapping[str, Mapping[str, Any]],
     children: list[dict[str, Any]], omh_home: Path, hermes_home: Path, now: float, shown: set[str] | None, *,
-    task: str, live: Collection[str], say: str = "", settled: Mapping[str, Any] | None = None, budget: Mapping[str, int] | None = None,
+    task: str, live: Collection[str], say: str = "",
+    settled: Mapping[str, Any] | Sequence[Mapping[str, str]] | None = None, budget: Mapping[str, int] | None = None,
     limits: dag_run.Limits = dag_run.DEFAULT_LIMITS, ignored: tuple[str, ...] = (), note: str = "",
     carry: Mapping[str, Any] | None = None,
 ) -> str:
     """``note`` is appended after every instruction the reply builds, so it never stands in for one of them.
-    ``carry``: what a define's ``carry_forward`` carried and did not (`dag_run.carry_forward`)."""
+    ``carry``: what a define's ``carry_forward`` carried and did not (`dag_run.carry_forward`). ``settled``: the one
+    node a settle closed, or the list a batch ``settles`` closed."""
     slots = free_slots(hermes_home)
     if budget is not None:
         slots["oneshot"] = dict(budget)  # only in a one-shot session: an interactive payload is unchanged
@@ -1067,7 +1105,41 @@ def _ready(
                                        token=dag_run.wants_token(record, nodes[node_id]), omh_home=omh_home)
             attempt["lane"] = "parent"
         held = []
-    if calls or pinned or mine:
+    # A fast run keeps its verify node for the parent (`dag_run.parent_nodes`): no child takes it, so the parent's
+    # own turn is its VERIFY commands and its handoff, and the node settles from that. `calls_for` never puts it in a
+    # call; here it goes out on the parent lane, with the criteria token a verify child would get.
+    fast_nodes = dag_run.parent_nodes(record)
+    parent_handed: list[str] = []
+    # A fast verify node this session cannot honour: an identity's model and prompt policy, or a local model's
+    # promise, belong to a child. Admission refuses both now; an older record may still carry one, and it is never
+    # handed to the parent lane.
+    off_lane = [node_id for node_id in fast_nodes
+                if nodes[node_id].get("identity") or bool(nodes[node_id].get("local")) or node_id in local_held]
+    # Isolation holds child dispatch only: the parent's own check needs no worktree, so a mixed wave still gets it.
+    # One check at a time per conversation: each binds the parent's writes to its scope (`dag_scope_guard`), so a
+    # second one stays ready (`held_for_parent`) until the open one, in this run or another, is settled.
+    parent_waiting: list[str] = []
+    parent_busy: list[str] = []
+    if fast_nodes and not waits:
+        candidates = [node_id for node_id in offered
+                      if node_id in fast_nodes and node_id not in coding and node_id not in off_lane]
+        if candidates:
+            # The scan of this conversation's other runs and the hand-out are one step under the conversation's
+            # parent-lane lock, and the record is written before it is released: two calls on two fast runs that
+            # overlap (each under its own run lock) cannot both see no open check and both hand one out.
+            with dag_run.locked(_parent_lane_lock_path(record, omh_home, hermes_home)):
+                parent_busy = [*dag_run.parent_lane_open(record),
+                               *_parent_lane_elsewhere(record, omh_home, hermes_home)]
+                parent_handed = [] if parent_busy else candidates[:1]
+                parent_waiting = candidates[len(parent_handed):]
+                for node_id in parent_handed:
+                    attempt = dag_run.hand_out(nodes[node_id], derived[node_id]["state"], now,
+                                               token=dag_run.wants_token(record, nodes[node_id]), omh_home=omh_home)
+                    attempt["lane"] = "parent"
+                if parent_handed:
+                    record["updated_at"] = now
+                    dag_run.write_run(path, record)
+    if calls or pinned or mine or parent_handed:
         record["updated_at"] = now
         dag_run.write_run(path, record)
         derived = dag_run.derive(record, children, now)
@@ -1080,18 +1152,31 @@ def _ready(
     if local_held and not (waits or isolated):
         extra["held_for_local_model"] = local_held
         say = " ".join(part for part in (say, _local_say(local_held, backend)) if part)
-    if mine:
-        extra["for_parent"] = mine
-    if settled:
-        extra["settled"] = dict(settled)
+    # The nodes on the parent lane now: the one-shot budget's (mine) and a fast run's verify node. A fast run's verify
+    # node stays named while it waits on the parent, so a later ready call repeats the instruction.
+    on_parent = [node_id for node_id in fast_nodes
+                 if derived[node_id]["state"] == "handed_out"
+                 and (nodes[node_id].get("attempts") or [{}])[-1].get("lane") == "parent"]
+    for_parent = [*mine, *(node_id for node_id in on_parent if node_id not in mine)]
+    if for_parent:
+        extra["for_parent"] = for_parent
+    if parent_waiting:
+        extra["held_for_parent"] = parent_waiting
+    if settled is not None:
+        extra["settled"] = ([dict(item) for item in settled] if isinstance(settled, (list, tuple))
+                            else dict(settled))
     extra.update(_export_fields(exports))
     say = " ".join(part for part in (say, _export_say(exports), owner_say) if part)
     if action in ("define", "repair", "extend"):
         extra["topology"] = record["topology"]
         extra["lint"] = served_lint(record["lint"], omh_home, hermes_home)
-        if action == "define" and not dag_run.run_criteria(record):
-            # Advice on the define reply alone: the stored record stays as a run without criteria always was.
-            extra["lint"] = [*extra["lint"], "no_goal_criteria"]
+        if action == "define":
+            if not dag_run.run_criteria(record) and not record.get("fast"):
+                # Advice on the define reply alone: the stored record stays as a run without criteria always was. A
+                # fast run leaves out all three of `no_review_node`, `no_judgement_node` and this one.
+                extra["lint"] = [*extra["lint"], "no_goal_criteria"]
+            # A graph that could have run fast is told so once, on the reply that defined it.
+            extra["lint"] = [*extra["lint"], *dag_run.define_fast_lint(record)]
     if carry is not None:
         extra["carry_forward"] = dict(carry)
         moved = carry["carried"]
@@ -1110,12 +1195,6 @@ def _ready(
             f"{'its handoff' if len(mine) == 1 else 'each handoff'} ("
             + "; ".join(f"{node_id}: {dag_run.node_handoff(record, omh_home, node_id)}" for node_id in mine)
             + "), and settle it; do not call delegate_task for it.")) if part)
-        criteria = [str(item["id"]) for item in dag_run.run_criteria(record)]
-        for node_id in (node_id for node_id in mine if criteria and dag_run.is_verification(nodes[node_id])):
-            # A verify node the parent does itself writes the criterion lines its child would have been told.
-            say = (f"{say} In {node_id}'s handoff write one line per criterion ({', '.join(criteria)}): "
-                   f"`CRITERION <id> #{dag_run.attempt_token(nodes[node_id])}: met | unmet | unobserved - "
-                   "<the command you ran and what it showed>`.")
     elif spent_out:
         # Added to whatever else the reply says (a provider-error retry's offer, for one): no child takes these.
         say = " ".join(part for part in (say, (
@@ -1123,21 +1202,97 @@ def _ready(
             f"(delegation.oneshot_max_children is {budget['limit']}, {budget['spent']} started): dispatch the "
             "calls returned, settle the nodes out, and call ready again; the rest is then yours to do in this "
             "session.")) if part)
+    if on_parent:
+        say = " ".join(part for part in (say, _fast_parent_say(record, nodes, on_parent, omh_home)) if part)
+    if parent_waiting:
+        first = parent_busy[0] if parent_busy else parent_handed[0]
+        say = " ".join(part for part in (say, (
+            f"One parent check at a time: {', '.join(parent_waiting)} "
+            f"{'stays' if len(parent_waiting) == 1 else 'stay'} ready until {first} is settled. Finish and settle "
+            f"{first} first (or cancel its run), then call ready.")) if part)
+    stalled = [node_id for node_id in off_lane if node_id in offered]
+    if stalled:
+        say = " ".join(part for part in (say, _fast_off_lane_say(nodes, stalled)) if part)
+    for node_id in [*mine, *on_parent]:
+        # A verify node the parent does itself writes the criterion lines its child would have been told.
+        say = " ".join(part for part in (say, _criterion_lines_say(record, nodes, node_id)) if part)
     if not say and held and not calls:
         say = "No delegate_task slot is free; end the turn and call ready again after a completion."
     if waits:
         instruction = TERMINAL_INTERRUPTED if waits == "interrupted" else TERMINAL_FIRST
         say = " ".join(part for part in (say, instruction.format(backend=record["backend"])) if part)
     elif isolated:
-        say = " ".join(part for part in (say, WORKTREE_ISOLATION_HELD) if part)
+        say = " ".join(part for part in (
+            say, WORKTREE_ISOLATION_CHILDREN_HELD if on_parent else WORKTREE_ISOLATION_HELD) if part)
     say = " ".join(part for part in (say, note) if part)
     return _result(action, record, derived, shown, say=say, extra=extra, now=now, limits=limits, ignored=ignored,
                    unavailable=unavailable, spent=(hermes_home, children))
 
 
+def _batch_settle(args: Mapping[str, object], record: dict[str, Any], path: Path,
+                  derived: Mapping[str, Mapping[str, Any]], children: list[dict[str, Any]], omh_home: Path,
+                  hermes_home: Path, now: float, shown: set[str] | None, *, task: str, live: Collection[str],
+                  budget: Mapping[str, int] | None, limits: dag_run.Limits, ignored: tuple[str, ...]) -> str:
+    """`settle` with ``settles``: several nodes closed in one call, all of them or none (`dag_run.settle_many`).
+
+    Each item's handoff is read where its child wrote it, as a single settle
+    reads one, and its criteria too when it is a verify node of a run with
+    criteria. A refused item records nothing: the record file stays as it was.
+    """
+
+    def handoff_task(node_id: str) -> str:
+        child = derived[node_id].get("child") or {}
+        return str(child.get("subagent_id") or task)
+
+    settled = dag_run.settle_many(
+        record, args.get("settles"), children=children,
+        read_handoff_for=lambda node_id: read_handoff(record, omh_home, node_id, handoff_task(node_id)),
+        read_criteria_for=lambda node_id: read_handoff_criteria(record, omh_home, node_id, handoff_task(node_id)),
+        now=now)
+    record["updated_at"] = now
+    dag_run.write_run(path, record)
+    derived = dag_run.derive(record, children, now)
+    try:
+        return _ready("settle", record, path, derived, children, omh_home, hermes_home, now, shown, task=task,
+                      live=live, settled=settled, budget=budget, limits=limits, ignored=ignored)
+    except dag_run.DagRefusal as refusal:
+        # `settle_many` replaced the record and it is written: the reply says so instead of calling the batch refused.
+        return _settled_next_refused("settle", record, derived, shown, settled, refusal, now=now, limits=limits,
+                                     ignored=ignored, hermes_home=hermes_home, children=children)
+
+
 def _isolation_holds(record: Mapping[str, Any], offered: list[str], coding: list[str], hermes_home: Path) -> bool:
-    """Whether a node `ready` would hand to `delegate_task` is held because each child would get its own worktree."""
-    return bool(set(offered) - set(coding)) and worktree_isolation_on(hermes_home, str(record.get("backend") or ""))
+    """Whether a node `ready` would hand to `delegate_task` is held because each child would get its own worktree.
+
+    A fast run's verify node is no child's (`dag_run.parent_nodes`): it runs in this session, so holding it for a
+    worktree no child would get is no hold at all, and `_ready` hands it to the parent while the children wait.
+    Child tasks are held as before.
+    """
+    children = set(offered) - set(coding) - set(dag_run.parent_nodes(record))
+    return bool(children) and worktree_isolation_on(hermes_home, str(record.get("backend") or ""))
+
+
+def _parent_lane_lock_path(record: Mapping[str, Any], omh_home: Path, hermes_home: Path) -> Path:
+    """The one lock every run of this conversation takes to hand the parent a fast check (`_ready`).
+
+    Keyed on the conversation's first session id, sorted, so each of its rotated segments finds the same file.
+    """
+    session = str(record.get("session_id") or "")
+    owners = sorted({session, *_kanban_board_reader.conversation_session_ids(hermes_home, session)} - {""})
+    return dag_run.session_dir(omh_home, owners[0] if owners else session) / "parent-lane"
+
+
+def _parent_lane_elsewhere(record: Mapping[str, Any], omh_home: Path, hermes_home: Path) -> list[str]:
+    """Fast verify nodes out on the parent lane in this conversation's other runs, as ``<node> in run <run>``."""
+    session = str(record.get("session_id") or "")
+    owners = sorted({session, *_kanban_board_reader.conversation_session_ids(hermes_home, session)} - {""})
+    found: list[str] = []
+    for owner in owners:
+        for other, _path in dag_run.session_runs(omh_home, owner):
+            if str(other.get("run")) == str(record["run"]) and str(other.get("session_id")) == session:
+                continue
+            found.extend(f"{node_id} in run {other['run']}" for node_id in dag_run.parent_lane_open(other))
+    return sorted(found)
 
 
 def _backend_say(calls: list[dict[str, Any]]) -> str:
@@ -1156,6 +1311,65 @@ def _backend_say(calls: list[dict[str, Any]]) -> str:
         return text
     return (f"Hermes routes children with its {backend} backend, which OMH does not route: do not call "
             "omh_delegate_route, and pass the tasks unchanged.")
+
+
+def _criterion_lines_say(record: Mapping[str, Any], nodes: Mapping[str, Mapping[str, Any]], node_id: str) -> str:
+    """The line a parent that runs a verify node itself is told to write per criterion, as its child would be told.
+
+    ``""`` for a run without criteria, and for any node that is no verify node.
+    """
+    criteria = [str(item["id"]) for item in dag_run.run_criteria(record)]
+    if not criteria or not dag_run.is_verification(nodes[node_id]):
+        return ""
+    return (f"In {node_id}'s handoff write one line per criterion ({', '.join(criteria)}): "
+            f"`CRITERION <id> #{dag_run.attempt_token(nodes[node_id])}: met | unmet | unobserved - "
+            "<the command you ran and what it showed>`.")
+
+
+def _fast_parent_say(record: Mapping[str, Any], nodes: Mapping[str, Mapping[str, Any]], ids: Sequence[str],
+                     omh_home: Path) -> str:
+    """What a fast run's parent is told when its verify node is its own turn (`for_parent`): run the VERIFY commands
+    itself, write the handoff there, and settle the node."""
+    one = len(ids) == 1
+    paths = "; ".join(f"{node_id}: {dag_run.node_handoff(record, omh_home, node_id)}" for node_id in ids)
+    return (f"This run is fast: no child runs {', '.join(ids)}. Run {'its' if one else 'each'} VERIFY commands "
+            f"yourself in this session (do not call delegate_task for {'it' if one else 'them'}), write "
+            f"{'its handoff' if one else 'each handoff'} ({paths}), and settle {'it' if one else 'them'}.")
+
+
+def _fast_off_lane_say(nodes: Mapping[str, Mapping[str, Any]], ids: Sequence[str]) -> str:
+    """Why a fast run's verify node is neither a child's nor this session's: it names an identity, or is local."""
+    reasons = []
+    for node_id in ids:
+        node = nodes[node_id]
+        if node.get("identity"):
+            reasons.append(f"{node_id} names identity {node['identity']}, whose model and prompt policy this session "
+                           "cannot apply")
+        else:
+            reasons.append(f"{node_id} is local, and this session makes no local-only promise")
+    return (f"A fast run's verify node runs in this session, but {', '.join(ids)} cannot run here: "
+            f"{'; '.join(reasons)}. Remove the identity or the local flag, or define the run again without `fast` "
+            "so a child on that route runs it.")
+
+
+def _settled_next_refused(action: str, record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]],
+                          shown: set[str] | None, settled: object, refusal: dag_run.DagRefusal, *, now: float,
+                          limits: dag_run.Limits, ignored: tuple[str, ...], hermes_home: Path,
+                          children: list[dict[str, Any]]) -> str:
+    """The reply for a settle whose nodes are on disk but whose next wave `ready` refused: `status: ok`, `settled`, and
+    the refusal as `next_refused`, so a batch that was written is never reported as refused."""
+    named = (", ".join(f"{item.get('node', '')} as {item.get('outcome', '')}" for item in settled)
+             if isinstance(settled, (list, tuple))
+             else f"{settled.get('node', '')} as {settled.get('outcome', '')}" if isinstance(settled, Mapping) else "")
+    say = (f"Recorded {named}, but scheduling the next wave was refused ({refusal.reason}): {refusal.say} "
+           "The settlements are on disk, so settling them again is refused as node_not_out: fix what the refusal "
+           "names, then call ready.")
+    payload: dict[str, Any] = {"calls": [],
+                               "settled": ([dict(item) for item in settled] if isinstance(settled, (list, tuple))
+                                           else dict(settled) if isinstance(settled, Mapping) else settled),
+                               "next_refused": {"reason": refusal.reason, "say": refusal.say}}
+    return _result(action, record, derived, shown, say=say, extra=payload, now=now, limits=limits, ignored=ignored,
+                   spent=(hermes_home, children))
 
 
 def _local_say(held: list[str], backend: Mapping[str, Any] | None) -> str:
@@ -1283,6 +1497,9 @@ def _result(action: str, record: Mapping[str, Any], derived: Mapping[str, Mappin
         "exports": [],
         "claim_boundary": dag_run.DAG_CLAIM_BOUNDARY,
     }
+    if record.get("fast"):
+        # The run's fast mark (`dag_run.fast_ineligible` decided it at define): its verify node is the parent's.
+        payload["fast"] = True
     for row in payload["nodes"]:
         if unavailable and row["id"] in unavailable:
             row["reason"] = unavailable[row["id"]]
