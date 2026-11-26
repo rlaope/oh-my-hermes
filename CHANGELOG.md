@@ -9,8 +9,8 @@ All notable changes will be documented here.
   web-links add-on joins only rows xterm itself wrapped, linked the first piece alone, and Cmd+click opened
   github.com. A second link finder now reads such a cell (or a hard-wrapped paragraph) back together and links every
   piece to the whole address, through the same opener and rule. Two rows join only when the piece above ends where
-  an address can break or fills its row, the piece below starts at the same left edge, and it could not have fit on
-  the row above. (`apps/omher/src/sessions/term/engine-cell-links.ts`)
+  an address can break or fills its row, the piece below starts at the same left edge, looks like part of an address
+  (a plain word a sentence wrapped is not), and could not have fit on the row above. (`apps/omher/src/sessions/term/engine-cell-links.ts`)
 
 - **PR watch: concurrent watches on one PR no longer fail a tick on Windows.** When several watches on the same PR
   ticked at once, Windows answered "access denied" to the lock holder's state replace while another tick was still

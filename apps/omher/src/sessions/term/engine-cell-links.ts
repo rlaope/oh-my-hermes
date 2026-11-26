@@ -25,7 +25,11 @@ export interface CellLink {
 const BORDERS = new Set(["│", "┃", "║", "|"]);
 // the web-links add-on's own pattern, so a joined address ends where an unbroken one would
 const URL_RE = /(https?|HTTPS?):[/]{2}[^\s"'!*(){}|\\^<>`]*[^\s"':,.!?{}|\\^~[\]`()<>]/g;
-const BREAKS_AFTER = /[/\-_.?=&#%+~:@]$/;
+// a piece that ends here may go on below even with room left on its row; `.`, `,`, `:` and `?` also end sentences,
+// so after them only a full row (a word cut at the row's end) joins
+const BREAKS_AFTER = /[/\-_=&#%+~@]$/;
+// the piece below must look like part of an address, not a plain word a sentence wrapped onto the next row
+const ADDRESS_PART = /[/.?=&#%_\-~+:@0-9]/;
 const MAX_ROWS = 30;
 
 interface Seg {
@@ -85,6 +89,7 @@ function joins(row: (y: number) => CellRow | undefined, y: number, seg: Seg): bo
   if (first.start !== upToks[0].start) return false;
   const room = seg.end - last.end - (seg.bordered ? 1 : 0);
   if (first.end - first.start + 1 <= room) return false; // it fit after a space: a new word
+  if (!ADDRESS_PART.test(first.text)) return false;
   return BREAKS_AFTER.test(last.text) || room <= 0;
 }
 
@@ -107,10 +112,9 @@ function linksOfRun(row: (y: number) => CellRow | undefined, pieces: { y: number
   pieces.forEach((p, i) => {
     const cols = row(p.y)!.cols;
     for (let x = p.tok.start; x < p.tok.end; x++) {
-      for (const ch of cols[x]) {
-        text += ch;
-        at.push({ y: p.y, x, piece: i });
-      }
+      text += cols[x];
+      // one entry per UTF-16 unit, as the match index counts: an emoji is two
+      for (let u = 0; u < cols[x].length; u++) at.push({ y: p.y, x, piece: i });
     }
   });
   const out: CellLink[] = [];
@@ -126,7 +130,13 @@ function linksOfRun(row: (y: number) => CellRow | undefined, pieces: { y: number
 }
 
 /** The address pieces on row `y` (0-based) that belong to an address the program broke across rows. */
-export function cellWrappedLinks(row: (y: number) => CellRow | undefined, y: number): CellLink[] {
+export function cellWrappedLinks(read: (y: number) => CellRow | undefined, y: number): CellLink[] {
+  // each row is read once per call however many times the walk passes it
+  const seen = new Map<number, CellRow | undefined>();
+  const row = (n: number) => {
+    if (!seen.has(n)) seen.set(n, read(n));
+    return seen.get(n);
+  };
   const here = row(y);
   if (!here) return [];
   const out: CellLink[] = [];
@@ -134,7 +144,11 @@ export function cellWrappedLinks(row: (y: number) => CellRow | undefined, y: num
     const toks = tokens(here.cols, seg);
     if (!toks.length) continue;
     let top = y;
-    while (top > y - MAX_ROWS && top > 0 && joins(row, top - 1, seg)) top--;
+    while (top > y - MAX_ROWS && top > 0 && joins(row, top - 1, seg)) {
+      top--;
+      // a row with more than one token in the cell ends one address and starts the next: the run begins there
+      if (tokens(row(top)!.cols, seg).length > 1) break;
+    }
     if (top < y) out.push(...linksOfRun(row, run(row, top, seg), y));
     // a run that starts on this row: unless this row's only token was the tail of the run above
     if (top === y || toks.length > 1) out.push(...linksOfRun(row, run(row, y, seg), y));

@@ -115,7 +115,12 @@ export function attachLinks(term: Terminal): () => void {
     const rows = cellRows(term);
     cellLinks = term.registerLinkProvider({
       provideLinks: (y, done) => {
-        const found = cellWrappedLinks(rows, y - 1);
+        let found: ReturnType<typeof cellWrappedLinks> = [];
+        try {
+          found = cellWrappedLinks(rows, y - 1);
+        } catch {
+          // xterm asks the providers in turn with no guard: a throw here would leave the row with no links at all
+        }
         done(
           found.length
             ? found.map((l) => ({

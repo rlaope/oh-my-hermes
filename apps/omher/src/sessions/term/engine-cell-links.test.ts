@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { cellWrappedLinks, type CellRow } from "./engine-cell-links";
 
-// a screen from plain strings: a Hangul syllable takes two columns, as xterm lays it out
-const wide = (ch: string) => /[ᄀ-ᇿ㄰-㆏가-힯]/.test(ch);
+// a screen from plain strings: a Hangul syllable or an emoji takes two columns, as xterm lays it out
+const wide = (ch: string) => /[ᄀ-ᇿ㄰-㆏가-힯]|\p{Extended_Pictographic}/u.test(ch);
 function screen(lines: string[], wrapped: number[] = []): (y: number) => CellRow | undefined {
   const rows = lines.map((line, i) => {
     const cols: string[] = [];
@@ -73,5 +73,32 @@ describe("terminal links: an address the program broke across rows", () => {
   it("only http and https addresses are joined", () => {
     const row = screen(["│ (ftp://github.com/   │", "│ sgl-project/sglang/  │"]);
     expect(cellWrappedLinks(row, 0)).toEqual([]);
+  });
+
+  it("an emoji before the address keeps every piece on its own columns", () => {
+    const row = screen(["│ 🔗https://github.com/ │", "│ sgl-project/sglang/   │"]);
+    const url = "https://github.com/sgl-project/sglang/";
+    expect(cellWrappedLinks(row, 0)).toEqual([{ y: 0, start: 4, end: 23, url }]);
+    expect(cellWrappedLinks(row, 1)).toEqual([{ y: 1, start: 2, end: 21, url }]);
+  });
+
+  it("a sentence wrapped after an address does not join its next word onto the address", () => {
+    for (const lines of [
+      ["│ docs: https://a.dev. │", "│ Afterwards it runs   │"],
+      ["│ at https://github.com/ │", "│ containing the code    │"],
+    ]) {
+      expect(cellWrappedLinks(screen(lines), 0), lines[0]).toEqual([]);
+      expect(cellWrappedLinks(screen(lines), 1), lines[1]).toEqual([]);
+    }
+  });
+
+  it("a row that ends one address and starts the next joins each to its own rows", () => {
+    const row = screen(["│ https://github.com/  │", "│ a/b x https://b.dev/ │", "│ zzzzzzzzzzzzzzzzzz/  │"]);
+    expect(cellWrappedLinks(row, 0)).toEqual([{ y: 0, start: 2, end: 21, url: "https://github.com/a/b" }]);
+    expect(cellWrappedLinks(row, 2)).toEqual([{ y: 2, start: 2, end: 21, url: "https://b.dev/zzzzzzzzzzzzzzzzzz/" }]);
+    expect(cellWrappedLinks(row, 1).map((l) => [l.start, l.end, l.url])).toEqual([
+      [2, 5, "https://github.com/a/b"],
+      [8, 22, "https://b.dev/zzzzzzzzzzzzzzzzzz/"],
+    ]);
   });
 });
