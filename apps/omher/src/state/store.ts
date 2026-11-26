@@ -10,6 +10,7 @@ import { findTokens, toWire } from "../chat/parts/skillTokens";
 import { forBots, parseResume, RESUME_KEY, type ResumeSnap } from "../app/resume";
 import { getDraft } from "../app/drafts";
 import { remoteOnly } from "../app/remote";
+import { openModelPicker } from "../lib/modelPickerEvent";
 import { moveInSidebar } from "./order";
 import { lang, LANG_KEY, readLang, setLang, t as tr, type Key, type Lang } from "../i18n";
 import type {
@@ -158,6 +159,10 @@ export type MessageItem = {
   text: string;
   /** assistant rows only: the answer to an automation's delivered result, drawn under a "Watch · <name>" line. */
   watch?: { name: string; ts: number };
+  /** assistant rows only: the answer to a `/usage` or `/status` the person ran while a turn ran (`chat.command`),
+   *  drawn under that command's line. It is no answer of the turn: the typing bubble, the reply quote and the face of
+   *  the answer still being written look past it. */
+  command?: string;
   /** user rows only: the send failed (text of the bridge error). */
   error?: string;
   /** user rows only: sent while a turn ran, and the agent has not taken it yet (`queued`), or Stop threw it away
@@ -1194,6 +1199,16 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
       );
     case "delta":
       return touchChat(state, bot, (c) => patchTurn(c, (t) => ({ ...t, streaming: t.streaming + ev.text })));
+    case "command.output":
+      // a /usage or /status the person ran mid-turn (`chat.command`): Hermes' answer as the bot's message, placed
+      // above the running answer (which goes on below it); the turn and what it streams are untouched
+      return touchChat(state, bot, (c) => {
+        const id = `command-${ev.id}`;
+        if (c.items.some((i) => i.kind === "assistant" && i.id === id)) return c;
+        const msg: MessageItem = { kind: "assistant", id, ts: now / 1000, text: ev.text, command: ev.command || "/" };
+        const slot = answerSlot(c);
+        return withItems(c, [...c.items.slice(0, slot), msg, ...c.items.slice(slot)]);
+      });
     case "message": {
       const next = touchChat(state, bot, (c) => {
         // the answer came: a steer Hermes took by now runs in this turn or right after it (never dropped by a Stop)
@@ -1984,6 +1999,11 @@ export function selectUnreadTotal(state: AppState): number {
   return Object.values(state.unread).reduce((a, b) => a + b, 0);
 }
 
+/** The commands a bot chat runs at once while its turn runs (`runNow`), as Claude Code runs them mid-turn: name, then
+ *  what follows it. Measured on Claude Code 2.1.332: `/cost`, `/status` and `/model` act at once; `/context`, `/help`,
+ *  `/compact`, `/export` and a skill wait for the turn. */
+const RUN_NOW = /^\/(usage|status|model)(?=\s|$)(.*)$/is;
+
 // ---- store ----------------------------------------------------------------------------------
 
 export interface Actions {
@@ -2359,6 +2379,24 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
    *  Reply there target, a `/` command Hermes runs itself, no turn yet, the bridge coming back, a refused steer ahead
    *  of it) it is held (steer queue, the ↵ ↓ × buttons) and sent when the turn ends. False when nothing runs there:
    *  send it now. */
+  /** A slash command typed while `key`'s turn runs, done at once as Claude Code does it mid-turn: `/usage` and
+   *  `/status` run beside the turn (`chat.command`, their answer shows above the running one) and `/model` opens the
+   *  header's picker (a pick then applies from the next turn). True when it was one of those; every other command
+   *  and any message wait in the queue as before. `/model` with an argument waits too: it is Hermes' own form. */
+  const runNow = (key: string, bot: string, text: string, session?: string): boolean => {
+    const c = state.chats[key];
+    if (!c?.turn) return false;
+    const m = RUN_NOW.exec(text.trim());
+    if (!m) return false;
+    const name = m[1].toLowerCase();
+    if (name === "model") {
+      if (m[2].trim() || session) return false;
+      openModelPicker(bot);
+      return true;
+    }
+    void bridge.request("chat.command", session ? { bot, session, text: text.trim() } : { bot, text: text.trim() }).catch(fail);
+    return true;
+  };
   const holdIfBusy = (key: string, id: string, p: { text: string; wire: string; reply_to?: string; files?: OutFile[] }, row: Extract<Action, { type: "local.user" }>) => {
     if (!mustHold(state, key)) return false;
     held.set(id, { bot: key, ...p });
@@ -2820,6 +2858,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const chip = state.replyTo[bot] ?? null;
       const reply = chip ? { source: chip.source, label: chip.place } : undefined;
       const wire = toWire(t, skillNames.get(bot) ?? []);
+      // /usage, /status and /model during a turn: at once, nothing queued (runNow)
+      if (!chip && runNow(bot, bot, t)) return;
       // a turn runs: omher holds it (steer queue) and sends it when the turn ends
       if (holdIfBusy(bot, id, { text: t, wire, ...(chip ? { reply_to: chip.session_id } : {}) }, { type: "local.user", bot, id, text: t, now: now(), reply, sent: wire, skills: tokenNames(t, bot) })) {
         if (chip) dispatch({ type: "reply.set", bot, chip: null });
@@ -2906,6 +2946,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const bot = botArg(which);
       const p = bot ? heldRow(bot, id) : null;
       if (!bot || !p || state.chats[bot]?.steering) return;
+      // a slash command is no text for the running answer: Send now instead (stop it, send this one first)
+      if (state.chats[bot]?.turn && p.wire.trimStart().startsWith("/")) return actions.queueSendNow(id, bot);
       // no turn to steer (it ended), or a message Hermes cannot take as a steer (files, a Reply there target):
       // it goes out next as a normal message
       if (!state.chats[bot]?.turn || p.files?.length || p.reply_to) {
@@ -3275,6 +3317,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const key = threadRoute(bot, thread);
       const id = `local-${++localSeq}`;
       const t = text.trim();
+      // /usage and /status during the thread's turn: at once, nothing queued (runNow)
+      if (runNow(key, bot, t, thread)) return;
       // typed while the thread's turn runs: the same steer queue as the main chat (held, ↵ ↓ × buttons, sent in order)
       if (holdIfBusy(key, id, { text: t, wire: t }, { type: "local.user", bot: key, id, text: t, now: now() })) return;
       dispatch({ type: "local.user", bot: key, id, text: t, now: now() });

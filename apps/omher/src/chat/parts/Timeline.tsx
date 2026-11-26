@@ -37,7 +37,7 @@ function divider(prev: TimelineItem | undefined, cur: TimelineItem): string | nu
 }
 
 /** A bot bubble right above: the next bot bubble keeps the indent but not the face (one face per run). */
-const botSpoke = (it?: TimelineItem) => it?.kind === "assistant";
+const botSpoke = (it?: TimelineItem) => it?.kind === "assistant" && !it.command;
 
 /** `face` stands in for the bot's picture beside its bubbles and the typing bubble (a SESSIONS chat: its
  *  agent's mark). Pass a stable element (useMemo): the bubbles are memoized on it. */
@@ -129,7 +129,15 @@ export function Timeline({
   const render = (it: TimelineItem, prev?: TimelineItem, at = -1): ReactNode => {
     switch (it.kind) {
       case "user": {
-        const off = queue ? queue.off(it) : (it.held && !it.autoSteer) || it.steerUnknown ? {} : null;
+        // a held slash command is no text for the running answer: its ↵ is Send now (stop it, send this first), as
+        // Claude Code's ctrl+x ctrl+s runs a queued command; never a steer
+        const off = queue
+          ? queue.off(it)
+          : (it.held && !it.autoSteer) || it.steerUnknown
+            ? it.held && it.text.trimStart().startsWith("/")
+              ? { steer: t("sq.commandNoSteer") }
+              : {}
+            : null;
         return (
           <Bubble
             item={it}
@@ -146,6 +154,16 @@ export function Timeline({
       case "assistant":
         // the face shows on the first bot bubble after something else (the user, a day line, a card); an automation's
         // answer has its "Watch · <name>" line above it
+        // the answer to a /usage or /status run mid-turn: under its command's line, with the face, never quoting
+        if (it.command)
+          return (
+            <>
+              <div className="line sys" data-testid="command-line">
+                <span className="line-t">{it.command}</span>
+              </div>
+              <Bubble item={it} bot={bot.name} face faceEl={face} />
+            </>
+          );
         if (it.watch)
           return (
             <>

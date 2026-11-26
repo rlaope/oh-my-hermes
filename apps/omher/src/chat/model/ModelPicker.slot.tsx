@@ -20,6 +20,7 @@ import { modelName } from "../../runs/format";
 import { t, tx } from "../../i18n";
 import { composing } from "../../lib/ime";
 import { useBotReady } from "../connect/ready";
+import { OPEN_MODEL_PICKER } from "../../lib/modelPickerEvent";
 
 export const slot = "modelPicker";
 
@@ -75,6 +76,13 @@ export default function ModelPicker({ bot, chat }: SlotProps["modelPicker"]) {
   useEffect(() => {
     setOpen(false);
     setNote(null);
+  }, [bot.name]);
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      if ((e as CustomEvent<string>).detail === bot.name) setOpen(true);
+    };
+    window.addEventListener(OPEN_MODEL_PICKER, onOpen);
+    return () => window.removeEventListener(OPEN_MODEL_PICKER, onOpen);
   }, [bot.name]);
   useEffect(() => {
     if (!open) return;
@@ -296,7 +304,7 @@ export default function ModelPicker({ bot, chat }: SlotProps["modelPicker"]) {
             </div>
           )}
           <div className="mp-f">
-            {tx(empty ? "mp.setUp" : "mp.appliesChat", {
+            {tx(empty ? "mp.setUp" : chat?.turn ? "mp.appliesNext" : "mp.appliesChat", {
               link: (
                 <button
                   type="button"

@@ -329,23 +329,25 @@ class UnansweredYoloTests(unittest.TestCase):
 
 
 class ListAfterMovingOnTests(unittest.TestCase):
-    def test_a_list_answered_after_a_prompt_went_does_not_open_during_the_turn(self) -> None:
-        # /model's picker opens loading and takes what is typed (`ModelLoadingTests`), so there the turn is one
-        # Hermes starts (another client's prompt) before the list lands.
-        for command, result, notice in (("/rewind", HISTORY, app_module.REWIND_BUSY_NOTICE),
-                                        ("/model", OPTIONS, app_module.MODEL_BUSY_NOTICE)):
-            with self.subTest(command=command):
-                app, client = make_app()
-                rid = run(app, command)
-                if command == "/model":
-                    app._on_event(Event("message.start", SID, {}))
-                else:
-                    run(app, "run the tests")
-                self.assertTrue(app._busy())
-                app._on_response(Response(rid, result, None))
-                self.assertEqual((app.rewind_picker, app.model_picker), (None, None))
-                self.assertIn(notice, [b.text for b in [*app.transcript.blocks, *app.transcript._held]
-                                       if hasattr(b, "text")])
+    def test_a_rewind_list_answered_after_a_prompt_went_does_not_open_during_the_turn(self) -> None:
+        app, client = make_app()
+        rid = run(app, "/rewind")
+        run(app, "run the tests")
+        self.assertTrue(app._busy())
+        app._on_response(Response(rid, HISTORY, None))
+        self.assertIsNone(app.rewind_picker)
+        self.assertIn(app_module.REWIND_BUSY_NOTICE, [b.text for b in [*app.transcript.blocks, *app.transcript._held]
+                                                      if hasattr(b, "text")])
+
+    def test_a_model_list_answered_after_a_turn_started_still_opens_its_picker(self) -> None:
+        # Claude Code's /model opens mid-turn; a pick then is Hermes' deferred switch, from the next turn.
+        app, client = make_app()
+        rid = run(app, "/model")
+        app._on_event(Event("message.start", SID, {}))  # a turn Hermes starts (another client's prompt)
+        self.assertTrue(app._busy())
+        app._on_response(Response(rid, OPTIONS, None))
+        self.assertIsNotNone(app.model_picker)
+        self.assertFalse(app.model_picker.loading)
 
     def test_a_rewind_pick_keeps_the_draft_typed_while_the_history_was_on_its_way(self) -> None:
         app, client = make_app()
