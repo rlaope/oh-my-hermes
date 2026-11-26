@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import subprocess
 
@@ -16,12 +17,21 @@ import time
 
 root = Path(sys.argv[0]).resolve().parent
 args = sys.argv[1:]
+
+
+def record(log, entry):
+    # One file per call: both arms run at once, and two processes appending to
+    # one file can tear or drop a line on Windows, where append is not atomic.
+    calls = root / log
+    calls.mkdir(exist_ok=True)
+    (calls / f"{os.getpid()}-{time.time_ns()}.json").write_text(json.dumps(entry), encoding="utf-8")
+
+
 # A paired-run arm's harness-owned gateway: ready once gateway.pid exists.
 if args[:2] == ["gateway", "run"]:
     home = Path(os.environ["HERMES_HOME"])
-    with (root / "gateways.jsonl").open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps({"argv": args, "hermes_home": str(home), "pid": os.getpid(),
-                                 "env_names": sorted(os.environ)}) + "\n")
+    record("gateways", {"argv": args, "hermes_home": str(home), "pid": os.getpid(),
+                        "env_names": sorted(os.environ)})
     (home / "gateway.pid").write_text(str(os.getpid()), encoding="utf-8")
     while True:
         time.sleep(0.2)
@@ -33,11 +43,17 @@ elif "--oneshot" in args:
     prompt = args[args.index("--oneshot") + 1]
 else:
     raise SystemExit("no Hermes query transport in argv")
-with (root / "calls.jsonl").open("a", encoding="utf-8") as handle:
-    handle.write(json.dumps({"argv": args, "prompt": prompt,
-                             "hermes_home": os.environ.get("HERMES_HOME", "")}) + "\n")
+record("calls", {"argv": args, "prompt": prompt, "hermes_home": os.environ.get("HERMES_HOME", "")})
 print("completed")
 """
+
+
+def recorded_calls(root: Path, log: str = "calls") -> list[dict[str, object]]:
+    """What the fake Hermes at `root` recorded, one file per invocation."""
+    calls = root / log
+    if not calls.is_dir():
+        return []
+    return [json.loads(path.read_text(encoding="utf-8")) for path in sorted(calls.glob("*.json"))]
 
 
 def git(repo: Path, *argv: str) -> str:
