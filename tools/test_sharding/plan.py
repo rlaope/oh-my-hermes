@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ─── How to run ───
-# python tools/test_sharding/plan.py --shards 2 --shard0-offset 25 \
+# python tools/test_sharding/plan.py --shards 3 --shard0-offset 25 \
 #   --durations tools/test_sharding/timings.json \
 #   --quarantine tools/test_sharding/quarantine.json --out plan.json
 """Build a deterministic, static unittest shard plan without importing tests."""

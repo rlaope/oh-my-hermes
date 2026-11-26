@@ -118,7 +118,9 @@ import threading
 from typing import Any
 import uuid
 
-_PICKER_SOURCE_LIMIT = 200
+_PICKER_SOURCE_LIMIT = 200  # the owner's maximum per request; stored history may need many pages
+# Desktop's conversations omit background runs. A local-* id is not a source: real chats use that prefix too.
+_PICKER_NOISE_SOURCES = frozenset({"acp", "cron", "kanban", "oneshot", "subagent", "tool"})
 
 TO_CLIENT = "client"
 TO_OWNER = "owner"
@@ -244,7 +246,19 @@ def _activity_at(row: dict[str, Any]) -> float:
     return 0.0
 
 
-def _same_conversations(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _picker_conversation(row: dict[str, Any], *, live: bool = False) -> bool:
+    """Desktop-like conversation feed; canonical local-* ids are not the noisy cron source.
+
+    A missing count from an older owner is unknown rather than empty. An empty live chat remains selectable before
+    its first message; stored zero-message runs do not crowd the conversation list.
+    """
+    source = row.get("source")
+    return (isinstance(row.get("id"), str) and bool(row["id"])
+            and (not isinstance(source, str) or source.strip().lower() not in _PICKER_NOISE_SOURCES)
+            and (live or row.get("message_count") != 0))
+
+
+def _same_conversations(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     """One row per conversation: rows sharing an id, a resolved id or a lineage root are merged, newest activity
     first. What only one of them carries is kept -- a stored row's title and preview, a live row's running state --
     and a row either half calls not resumable stays that way, since that says who owns it."""
@@ -606,7 +620,9 @@ class Adapter:
         self.new_id = new_id
         self.contract: dict[str, Any] | None = None  # `runtime.describe`'s session_create, once answered
         self.capabilities: frozenset[str] = frozenset()  # what `runtime.describe` says the owner's listing knows
-        self.held: list[dict[str, Any]] = []  # session.create calls that wait for it
+        # Opaque continuations issued to this TUI. Bound retained state if the picker was closed without paging.
+        self.list_pages: dict[str, Callable[[object], list[Action]]] = {}
+        self.held: list[dict[str, Any]] = []  # calls that need runtime.describe before being sent
         self.sessions: dict[str, _Session] = {}
         self.current = ""  # the session the TUI last opened
         self.shown: dict[str, _Shown] = {}  # request id the TUI answers -> the owner prompt it stands for
@@ -618,7 +634,7 @@ class Adapter:
     # ── what the owner is asked first ──
 
     def describe(self) -> list[Action]:
-        """Ask the owner for its session contract; session.create waits for the answer."""
+        """Ask the owner for its session contract and listing capabilities."""
         return [self._call("runtime.describe", {}, self._on_described)]
 
     def _on_described(self, frame: dict[str, Any]) -> list[Action]:
@@ -891,38 +907,75 @@ class Adapter:
         return [self._forward(request_id, "shell.exec", params, translated=False)]
 
     def _list(self, request_id: object, params: dict[str, Any]) -> list[Action]:
-        """The owner's live sessions and its stored ones, as one answer (Ink's resume picker reads both).
+        """Fill a page with conversations, not background runs. Keep the gateway cursor and overflow in the child.
 
-        One conversation is one row: a session the owner holds open and the stored row it would resume are merged by
-        the ids that name the same lineage, the fields only one of them carries are kept, and the merged rows are
-        ordered by the latest activity of the conversation before the limit is applied -- so a listing never spends
-        its page on a row the other half of the same session already answered. `picker` asks the owner for the
-        previews its own picker draws, which a live row has not otherwise.
-
-        A `title` lookup is one call: the owner answers it from its whole store, and refuses it with a scope.
+        A continuation carries the same live/stored merge forward, so duplicate lineages don't take another slot
+        and an over-fetched owner page isn't discarded. Only a cursor-capable owner advertises that older history
+        can be loaded. Exact-title lookup still goes straight to Hermes.
         """
+        if "page" in params:
+            page = params["page"]
+            more = self.list_pages.get(page) if isinstance(page, str) else None
+            return more(request_id) if more else [_refuse(request_id, REFUSED, "Reopen the session list to load more")]
         if "title" in params:
             return [self._forward(request_id, "session.list", params, translated=False)]
-        limit = params.get("limit")
-        asked = {**params, "limit": _PICKER_SOURCE_LIMIT}
+        if self.contract is None:
+            self.held.append({"jsonrpc": "2.0", "id": request_id, "method": "session.list", "params": params})
+            return []
+        requested = params.get("limit")
+        limit = _PICKER_SOURCE_LIMIT
+        if isinstance(requested, int) and not isinstance(requested, bool) and requested > 0:
+            limit = requested
+        asked: dict[str, Any] = {"limit": _PICKER_SOURCE_LIMIT}
         if "session-list-picker-v1" in self.capabilities:
             asked["picker"] = True
+        paging = "session-list-cursor-v1" in self.capabilities
+        stored_params = {**asked, "scope": "stored"}
+
+        def collect(rid: object, previous: list[dict[str, Any]], emitted: set[str], visited: set[str],
+                    cursor: str | None, page: str = "", *, first: bool = False) -> list[Action]:
+            rows, cursors = previous.copy(), visited.copy()
+
+            def advance(next_cursor: str | None, *, first: bool = False) -> list[Action]:
+                kept = [row for row in _same_conversations(rows) if row.get("id") not in emitted]
+                if first or (len(kept) < limit and next_cursor):
+                    query = dict(stored_params)
+                    if next_cursor:
+                        query["cursor"] = next_cursor
+                        cursors.add(next_cursor)
+                    return [self._call("session.list", query, on_stored)]
+                batch = kept[:limit]
+                result: dict[str, Any] = {"sessions": batch}
+                if paging and (len(kept) > limit or next_cursor):
+                    token = self.new_id()
+                    sent = emitted | {row["id"] for row in batch}
+                    self.list_pages[token] = lambda rid: collect(rid, rows, sent, cursors, next_cursor, token)
+                    result["next_page"] = token
+                # A timed-out client may retry after the owner's answer arrived. Replay that page instead of
+                # restarting the scan or making the client reopen. Completed entries retain only their reply.
+                if page in self.list_pages:
+                    self.list_pages[page] = lambda retry: [_reply(retry, result)]
+                if len(self.list_pages) > 8:
+                    del self.list_pages[next(iter(self.list_pages))]
+                return [_reply(rid, result)]
+
+            def on_stored(stored: dict[str, Any]) -> list[Action]:
+                result = stored.get("result")
+                if not isinstance(result, dict):
+                    return [(TO_CLIENT, {**stored, "id": rid})]
+                rows.extend(row for row in result.get("sessions") or []
+                            if isinstance(row, dict) and _picker_conversation(row))
+                token = result.get("next_cursor") if paging else None
+                return advance(token if isinstance(token, str) and token not in cursors else None)
+
+            return advance(cursor, first=first)
 
         def on_live(live: dict[str, Any]) -> list[Action]:
             if not isinstance(live.get("result"), dict):
                 return [(TO_CLIENT, {**live, "id": request_id})]
-            rows = [row for row in live["result"].get("sessions") or [] if isinstance(row, dict)]
-
-            def on_stored(stored: dict[str, Any]) -> list[Action]:
-                result = stored.get("result")
-                for row in (result.get("sessions") or []) if isinstance(result, dict) else []:
-                    if isinstance(row, dict):
-                        rows.append(row)
-                kept = _same_conversations(rows)
-                kept = kept[:limit] if _whole(limit) and limit > 0 else kept
-                return [_reply(request_id, {"sessions": kept})]
-
-            return [self._call("session.list", {**asked, "scope": "stored"}, on_stored)]
+            rows = [row for row in live["result"].get("sessions") or []
+                    if isinstance(row, dict) and _picker_conversation(row, live=True)]
+            return collect(request_id, rows, set(), set(), None, first=True)
 
         return [self._call("session.list", asked, on_live)]
 

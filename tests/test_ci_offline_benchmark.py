@@ -70,7 +70,7 @@ class CiOfflineBenchmarkTests(unittest.TestCase):
 
         self.assertIn("fromJSON('[\"3.11\"]') || fromJSON('[\"3.11\", \"3.13\"]')", workflow)
         self.assertIn("--lane windows-3.12 --shard", workflow)
-        self.assertIn("python tools/test_sharding/plan.py --shards 2", workflow)
+        self.assertIn("python tools/test_sharding/plan.py --shards 3", workflow)
         # Each lane runs its shard list and, in its last shard's job, the
         # serial quarantine -- both from the plan that lane was given.
         self.assertEqual(
@@ -78,9 +78,9 @@ class CiOfflineBenchmarkTests(unittest.TestCase):
             2,
         )
         self.assertIn("--lane linux-${{ matrix.python-version }} --quarantine", workflow)
-        # The Windows lane runs its own 4-shard plan over the same inventory,
+        # The Windows lane runs its own 6-shard plan over the same inventory,
         # and the aggregate reconciles that lane against it.
-        self.assertIn("python tools/test_sharding/plan.py --shards 4", workflow)
+        self.assertIn("python tools/test_sharding/plan.py --shards 6", workflow)
         self.assertEqual(
             workflow.count("python tools/test_sharding/run.py --plan shard-plan/plan-windows.json"),
             2,

@@ -564,6 +564,9 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
         # Catalog sync, 2026-11-20: Gemini 4 Neon's own card, cached input a
         # twentieth of input (aistudio.google.com/docs/pricing).
         "gemini-4-neon": (3.0, 15.0, 0.15),
+        # Catalog sync, 2026-11-26: Solar Pro 4 Contributor's own card,
+        # cached input a fifth of input (console.upstage.ai/docs/models/solar-pro-4).
+        "solar-pro-4-contributor": (0.09, 0.36, 0.018),
     }
 
     def test_catalog_sync_rows_cost_out_at_the_vendor_list_price(self):
@@ -637,12 +640,21 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
                 self.assertNotIn(
                     "opencode", hermes_delegation_module.HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES[model_id]
                 )
-        # Qwen 3.8, Qwen4-Max, Solar Pro 4, and MiniMax have no first-party family in the
-        # vocabulary that was observed serving them. OpenRouter lists some of
+        # Qwen 3.8, Qwen4-Max, Solar Pro 4 (and its Contributor variant), and
+        # MiniMax have no first-party family in the vocabulary that was
+        # observed serving them. OpenRouter lists some of
         # these ids, but a relay-only row would turn every first-party
         # provider's verdict into False, so there is no row and the verdict
         # stays unknown.
-        for model_id in ("qwen3.8-max", "qwen3.8-flash", "qwen4-max", "solar-pro4", "minimax-m3", "minimax-m3.1-flash"):
+        for model_id in (
+            "qwen3.8-max",
+            "qwen3.8-flash",
+            "qwen4-max",
+            "solar-pro4",
+            "solar-pro-4-contributor",
+            "minimax-m3",
+            "minimax-m3.1-flash",
+        ):
             with self.subTest(model_id=model_id):
                 self.assertNotIn(model_id, hermes_delegation_module.HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES)
                 self.assertIsNone(provider_serves_alias(model_id, "qwen-oauth"))

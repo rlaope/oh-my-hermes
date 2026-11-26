@@ -1903,6 +1903,17 @@ APPROX_PRICE_PER_MTOK: dict[str, tuple[float, float]] = {
     # deprecated on 2026-10-30 and says to upgrade to `solar-mini4`. No provider row, on the `solar-pro4`
     # terms. Recognition-only, in no shipped chain.
     "solar-mini4": (0.10, 0.40),
+    # Upstage list price (console.upstage.ai/docs/models/solar-pro-4 and
+    # /docs/models/history, read 2026-11-26): `solar-pro-4-contributor`, the
+    # alias of `solar-pro-4-260806-contributor` (released 2026-11-23), is
+    # 0.09/0.36 with cached input 0.018 (APPROX_CACHE_READ_RATIO), excluding
+    # VAT: 70% off Solar Pro 4's list for the same model. It is a data-handling
+    # variant, not a cheaper tier: Upstage stores every request and response
+    # for a year and trains on them (console.upstage.ai/docs/guides/
+    # contributor-mode), and it answers 403 until the organization owner opts
+    # in. No provider row, on the `solar-pro4` terms. Recognition-only, in no
+    # shipped chain.
+    "solar-pro-4-contributor": (0.09, 0.36),
     # Mistral list price (docs.mistral.ai/models/mistral-large-4-0, read
     # 2026-11-06): Mistral Large 4 0.70/2.10, cached input 0.07 (the default
     # tenth). The card carries no promotion mark; the 2026-10-06 changelog's
@@ -2049,6 +2060,9 @@ APPROX_CACHE_READ_RATIO: dict[str, float] = {
     # cards (platform.minimax.io/docs/guides/pricing-paygo, read 2026-10-28).
     "solar-pro4": 0.2,
     "minimax-m3": 0.2,
+    # Solar Pro 4 Contributor cached input 0.018 against 0.09 (the same
+    # console.upstage.ai/docs/models/solar-pro-4 card, read 2026-11-26).
+    "solar-pro-4-contributor": 0.2,
     # GPT-6.1 Sol: "Cached input tokens are priced at 5% of the uncached input
     # token rate" (developers.openai.com model page, read 2026-10-01).
     "gpt-6.1-sol": 0.05,

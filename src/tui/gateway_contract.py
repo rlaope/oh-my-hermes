@@ -80,8 +80,9 @@ CLIENT_METHODS: dict[str, frozenset[str]] = {
     "config.set": frozenset({"key", "value", "session_id", "confirm_expensive_model"}),
     # `title`: an exact-title lookup, which `/sessions <title>` asks after a shared gateway refused the title as an id;
     # a gateway that does not know it answers with its normal listing, which the TUI scans the same way.
-    # The gateway child, not the TUI, adds a shared gateway's own `scope` and `picker` (`gateway_attach._list`).
-    "session.list": frozenset({"limit", "title"}),
+    # `page`: an opaque continuation returned by the shared-gateway child. Only that child sends Hermes'
+    # `scope`, `picker`, and `cursor` parameters (`gateway_attach._list`). The stdio entry never returns `next_page`.
+    "session.list": frozenset({"limit", "title", "page"}),
     # The session picker's Ctrl+R and second Ctrl+D, on the person's keys only (docs/OMH-TUI-BOUNDARY.md). The
     # stdio entry renames a session by its live id and deletes a stored one it does not hold open; attached to a
     # shared gateway the gateway child sends either as the owner's revision-fenced `session.mutate`.
@@ -462,6 +463,10 @@ def call_problem(method: str, params: dict[str, object]) -> str:
     undeclared = undeclared_params(method, params)
     if undeclared:
         return f"{method} does not declare {', '.join(undeclared)} in the gateway contract"
+    if method == "session.list" and "page" in params:
+        page = params["page"]
+        if not isinstance(page, str) or not page or len(params) != 1:
+            return "session.list page must be a nonempty token sent on its own"
     if method == "prompt.submit" and ("truncate_before_row_id" in params or "confirm_truncate" in params):
         row_id = params.get("truncate_before_row_id")
         if not isinstance(row_id, int) or isinstance(row_id, bool) or params.get("confirm_truncate") is not True:

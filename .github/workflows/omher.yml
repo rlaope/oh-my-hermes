@@ -1,7 +1,8 @@
 name: omher
 
-# omher (apps/omher) on macOS and Windows: UI checks, the Tauri shell's Rust tests and an unsigned debug build
-# per platform, plus the bridge's unit tests against a FakeGateway (no Hermes needed) on Linux and Windows.
+# omher (apps/omher): the whole Playwright e2e suite on Linux runners (no queue, many shards at once); on macOS and
+# Windows the UI checks, the specs that behave per platform, the Tauri shell's Rust tests and an unsigned debug build;
+# plus the bridge's unit tests against a FakeGateway (no Hermes needed) on Linux and Windows.
 
 on:
   pull_request:
@@ -42,6 +43,43 @@ jobs:
           PYTHONPATH: tests
         run: python -m unittest tests.test_omher_boundary -v
 
+  # The whole Playwright suite on Linux: four runners of two shards each (scripts/e2e-shards.sh, OMHER_E2E_PART),
+  # every shard its own Vite + mock bridge. Linux runners start at once; macOS ones queued 45-65 minutes.
+  e2e:
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [1, 2, 3, 4]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - name: Install pnpm
+        run: npm install --global pnpm@11
+      - name: Install dependencies
+        working-directory: apps/omher
+        run: pnpm install --frozen-lockfile
+      - name: Install Chromium and its Linux libraries, with CJK fonts
+        working-directory: apps/omher
+        run: |
+          pnpm exec playwright install --with-deps chromium
+          sudo apt-get install -y --no-install-recommends fonts-noto-cjk
+      # Left out here and run in the macOS job: specs that measure text or terminal cells against the macOS and
+      # Windows UI fonts (Linux's fallback fonts run wider and its cells round to whole pixels).
+      - name: End-to-end tests against the mock bridge (part ${{ matrix.part }} of 4)
+        working-directory: apps/omher
+        env:
+          OMHER_E2E_PART: ${{ matrix.part }}/4
+          OMHER_E2E_SKIP: >-
+            e2e/ux021.spec.ts e2e/term-blocks.spec.ts e2e/term-exit.spec.ts e2e/runs.spec.ts
+            e2e/session-folder-create.spec.ts e2e/settings-pages-fit.spec.ts
+        run: bash scripts/e2e-shards.sh 2
+
   app:
     strategy:
       fail-fast: false
@@ -75,12 +113,23 @@ jobs:
       - name: Install Chromium (and WebKit on macOS) for Playwright
         working-directory: apps/omher
         run: pnpm exec playwright install chromium ${{ runner.os == 'macOS' && 'webkit' || '' }}
-      # Shards at once, each its own Vite + mock bridge on its own ports (one serial run took about an hour on both
-      # runners). macOS runs 3 (63 -> 30 min, green twice in PR #3191). Windows runs 2: at 3 its shards took 31-35 min
-      # but each run lost a different test per shard past its retry, which a lighter load avoids.
-      - name: End-to-end tests against the mock bridge
+      # The whole suite runs in the e2e job on Linux. Here only the specs whose keys, fonts, paths or engine differ
+      # per platform: the macOS runner queue alone used to hold a PR 45-65 minutes before an hour of e2e.
+      - name: End-to-end tests that behave per platform
         working-directory: apps/omher
-        run: bash scripts/e2e-shards.sh ${{ runner.os == 'Windows' && 2 || 3 }}
+        run: |
+          if [ "$RUNNER_OS" = macOS ]; then read -ra specs <<< "$E2E_MACOS"; else read -ra specs <<< "$E2E_WINDOWS"; fi
+          bash scripts/e2e-shards.sh 2 "${specs[@]}"
+        env:
+          E2E_MACOS: >-
+            e2e/cards-webkit.spec.ts e2e/term-kitty.spec.ts e2e/term-split-panes.spec.ts e2e/term-find.spec.ts
+            e2e/term-clip-scroll-keys.spec.ts e2e/terminals.spec.ts e2e/bot-reorder.spec.ts e2e/peers.spec.ts
+            e2e/ux021.spec.ts e2e/term-blocks.spec.ts e2e/term-exit.spec.ts e2e/runs.spec.ts
+            e2e/session-folder-create.spec.ts e2e/settings-pages-fit.spec.ts
+          E2E_WINDOWS: >-
+            e2e/term-windows-keys.spec.ts e2e/reply-there-fit.spec.ts e2e/panel-ring-drop.spec.ts
+            e2e/sessions-attach.spec.ts e2e/accounts.spec.ts e2e/settings-pages-fit.spec.ts e2e/tasks-fit.spec.ts
+            e2e/terminals.spec.ts e2e/term-find.spec.ts e2e/term-import.spec.ts e2e/copy-prompt.spec.ts
       - name: Rust tests (Tauri shell)
         working-directory: apps/omher/src-tauri
         run: cargo test
