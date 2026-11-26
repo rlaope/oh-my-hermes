@@ -1,7 +1,7 @@
 """Foreground-only, read-only session inventory over registered Hermes homes."""
 
 from collections.abc import Callable, Iterator, Mapping
-from concurrent.futures import Future
+from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import closing, contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -9,7 +9,6 @@ import re
 import json
 import sqlite3
 import stat
-from threading import Thread
 from time import monotonic
 from typing import Any, TypeVar
 
@@ -208,19 +207,10 @@ class Inventory:
 
 def background(read: Callable[[], _T], wake: Callable[[], None]) -> Future[_T]:
     """Run the bounded SQLite read away from the key/paint loop."""
-    future: Future[_T] = Future()
-
-    def run() -> None:
-        if not future.set_running_or_notify_cancel():
-            return
-        try:
-            result = read()
-        except Exception as error:
-            future.set_exception(error)
-        else:
-            future.set_result(result)
-        finally:
-            wake()
-
-    Thread(target=run, name="omh-profile-sessions", daemon=True).start()
+    worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="omh-profile-sessions")
+    try:
+        future = worker.submit(read)
+    finally:
+        worker.shutdown(wait=False)
+    future.add_done_callback(lambda _finished: wake())
     return future

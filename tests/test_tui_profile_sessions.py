@@ -13,7 +13,7 @@ from test_tui_resume_feedback import reply
 
 from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, TAB, Key
 from omh.tui.profile_sessions import Inventory
-from omh.tui.session_picker import DELETE, PickerAction, SessionPicker, SessionRow
+from omh.tui.session_picker import DELETE, PickerAction, SessionPicker, SessionRow, session_rows
 from omh.tui.theme import DEFAULT_THEME
 from omh.tui.width import line_width
 
@@ -280,6 +280,24 @@ class ProfileSessionsTests(unittest.TestCase):
         self.assertEqual([(row.id, row.label, row.read_only) for row in app.picker.rows], [("created", "Tip", True)])
         app._on_input(Key(ENTER))
         self.assertEqual(client.calls[-1], ("session.transcript", {"session_id": "created", "order": "latest", "limit": 500}))
+
+    def test_confirmed_delete_removes_row_folded_into_an_alias_while_in_flight(self) -> None:
+        picker = SessionPicker([], current="", profiles=("night",))
+        rows = session_rows({"sessions": [{"id": "first"}, {"id": "target"}]}, profile="night")
+        picker.add_older(rows, "older")
+        picker.handle_key(Key(DOWN))
+        picker.handle_key(Key(CHAR, "d", ctrl=True))
+        action = picker.handle_key(Key(CHAR, "d", ctrl=True))
+        self.assertEqual(action, PickerAction(DELETE, "target"))
+        picker.asked(action)
+
+        bridge = session_rows({"sessions": [{"id": "bridge", "_lineage_ids": ["first", "target"]}]}, profile="night")
+        picker.add_older(bridge, "older-still")
+        self.assertEqual([row.id for row in picker.visible()], ["first"])
+        self.assertTrue(picker.deleted("target"))
+        picker.add_older(rows + bridge, "")
+        lines = picker.lines(80, DEFAULT_THEME, 10, 450)
+        self.assertIn("No sessions in this view", "\n".join(map(line_text, lines)))
 
     def test_incomplete_sidecars_are_reported_without_creating_a_pair(self) -> None:
         with closing(create_store(self.default)) as db:

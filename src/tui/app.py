@@ -8542,11 +8542,10 @@ class App(ModesMixin, AgentViewMixin):
             self.profile_read = None
             picker, future = reading
             if picker is self.picker:
-                try:
-                    inventory = future.result()
-                except Exception:
+                if future.cancelled() or future.exception() is not None:
                     picker.inventory_status = "Partial local history · profile read failed"
                 else:
+                    inventory = future.result()
                     self.profile_inventory = inventory
                     picker.add_local(inventory.profiles, inventory.rows)
                     problems = ", ".join(inventory.problems)
@@ -8563,10 +8562,10 @@ class App(ModesMixin, AgentViewMixin):
                     picker.history_status = ""
                     self.dirty = True
                     return
-                try:
-                    result = future.result()
-                except Exception:
+                if future.cancelled() or future.exception() is not None:
                     result = {"problem": "Local session history unavailable"}
+                else:
+                    result = future.result()
                 picker.history_status = as_text(result.get("problem"))
                 if not picker.history_status:
                     self.picker = None

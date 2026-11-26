@@ -633,10 +633,14 @@ class SessionPicker:
         """Hermes deleted `session_id`: its row goes. False when no row had that id."""
         self._table_cache = None
         self.out.pop(session_id, None)
-        if self.profiles is not None:
-            self.deleted_inventory.update((row.profile, name) for row in self.rows if row.id == session_id
-                                          for name in row.lineage)
-        kept = [row for row in self.rows if row.id != session_id]
+        kept = []
+        for row in self.rows:
+            # An older page can fold the requested gateway id into another row before the reply arrives.
+            alias = self.profiles is not None and row.local is None and session_id in row.lineage
+            if row.id != session_id and not alias:
+                kept.append(row)
+            elif self.profiles is not None:
+                self.deleted_inventory.update((row.profile, name) for name in row.lineage)
         found, self.rows = len(kept) != len(self.rows), kept
         if self.arming == session_id:
             self.arming = ""

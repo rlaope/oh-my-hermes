@@ -52,17 +52,16 @@ class EchoTests(unittest.TestCase):
         self.assertEqual(commands(app), ["/usage"])
 
     def test_what_a_quiet_command_says_during_a_turn_waits_under_what_runs(self) -> None:
-        # With no echo to hold it, a notice from /rewind, /logs or /sessions must not close the streaming reply;
-        # it is written once the turn's next boundary comes. /rewind and /sessions wait for a running turn's end, so
-        # theirs comes when a turn started while their list was out.
+        # With no echo to hold it, a notice from /rewind, /logs or /resume must not close the streaming reply;
+        # it is written once the turn's next boundary comes. For /rewind and /resume, a turn starts while the list is out.
         said = {
             "rewind": REWIND_BUSY_NOTICE,
             "logs": "The gateway has written nothing to stderr.",
-            "sessions": SESSIONS_EMPTY_NOTICE,
+            "resume": SESSIONS_EMPTY_NOTICE,
         }
         for name, notice in said.items():
             with self.subTest(name=name):
-                listed = name in ("rewind", "sessions")
+                listed = name in ("rewind", "resume")
                 app, client = make_app(busy=not listed)
                 client.stderr_tail = lambda: []  # type: ignore[attr-defined]
                 if listed:
