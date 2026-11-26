@@ -45,7 +45,7 @@ import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titl
 import { getDraft, setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type ConvState, type PastChat, type SessionHost } from "./host";
 import { localBot } from "../peers/peerKey";
-import { remoteOnly } from "../app/remote";
+import { modeKnown, remoteOnly } from "../app/remote";
 import { folderKey, getStore, notifySessionEvent, notifySessionNote, onBridgeEvent, selectAsks, setChatRoute, setSessionKeyLookup, type OutFile, type SentFile, type Store } from "../state/store";
 import { blobType, bytesOf, inlinePicture, parseSentFiles, pathsTyped, putSentFiles, SENT_FILES_KEY, shellQuote, wireText, type SavedFile, type SentFilesBook } from "./attach";
 import type { AccountCli, AccountGroup, ApprovalChoice, BridgeEvent, ClarifyAnswers, Msg } from "../lib/protocol";
@@ -723,6 +723,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     const bot = r?.bot;
     const stored = r?.agentSession;
     if (!r || !bot || !stored) return tr("ss.noBot");
+    // on a server the row stays as it was saved (paused, its stored id kept) for when this computer is used again
+    if (remoteOnly()) return tr("remote.noFolderChat");
     const proc: ChatProc = { kind: "folder", bot };
     procs.set(id, proc);
     try {
@@ -2152,6 +2154,11 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       patchRec(id, { paused: undefined, status: "starting", error: undefined, exitCode: null });
       return;
     }
+    // oh-my-hermes on a server: nothing of this folder is sent; the row stays paused with why (rule 46)
+    if (remoteOnly()) {
+      patchRec(id, { error: tr("remote.noFolderChat") });
+      return;
+    }
     patchRec(id, { paused: undefined, status: "starting", error: undefined, exitCode: null });
     // oh-my-hermes: the same Hermes chat when the bridge still has it (`folder.resume`, by the stored id the row kept)
     if (r.agentSession && r.bot && !(await reattachFolder(id))) return;
@@ -2326,9 +2333,10 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     // their terminals are made and started now, off the page (a view that opens one later takes it as it is)
     const now = [...termAgain].filter((id) => !omhLater.includes(id));
     if (now.length && typeof document !== "undefined") void loadXterm().then((m) => now.forEach((id) => startOffPage(m, id)));
-    // the folder chats once the bridge has put back the bots: refused or failed, a row is paused with the reason
+    // the folder chats once the bridge has put back the bots and the mode is known (on a server none is sent):
+    // refused or failed, a row is paused with the reason
     if (folderAgain.length)
-      void store().resumed.then(() =>
+      void Promise.all([store().resumed, modeKnown()]).then(() =>
         Promise.all(
           folderAgain.map(async (id) => {
             if (procs.has(id) || rec(id)?.status !== "starting") return;

@@ -180,9 +180,11 @@ async fn install_engine_command() -> Result<String, String> {
 
 /// Install Hermes and oh-my-hermes with OMH's fixed one-line installer (the first-run screen's Install
 /// button), streaming its output to the screen, then start the bridge again. Takes nothing from the
-/// page but the output channel; one run at a time.
+/// page but the output channel; one run at a time. Refused in remote-only mode (rule 46), and a Connect while it
+/// runs means its end starts no local bridge (`remote::after_install`).
 #[tauri::command]
 async fn install_engine(shell: State<'_, Shell>, on_event: Channel<InstallEvent>) -> Result<Option<i32>, String> {
+    remote::no_install_in_remote_mode(&shell.remote)?;
     if shell.installing.swap(true, Ordering::SeqCst) {
         return Err("the installer is already running".into());
     }
@@ -203,11 +205,7 @@ async fn install_engine(shell: State<'_, Shell>, on_event: Channel<InstallEvent>
         let found = code != Some(0) || bridge::discover_python(|k| std::env::var(k).ok(), |p| p.is_file()).is_ok();
         setup::check_installed(code, found)
     });
-    if outcome == Ok(Some(0)) {
-        shell.bridge.start(shell.resource_dir.clone());
-    } else {
-        shell.bridge.release();
-    }
+    remote::after_install(&shell.remote, &shell.bridge, outcome == Ok(Some(0)), shell.resource_dir.clone());
     outcome
 }
 

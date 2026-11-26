@@ -453,13 +453,40 @@ pub fn bridge_url(remote: &Remote, bridge: &Arc<Bridge>, wait: Duration) -> Resu
     }
 }
 
-/// `remote_use`: save the mode, stop the local bridge and any peer links, and bring the remote link up now.
+/// `remote_use`: save the mode, bring the remote link up now, and stop the local bridge and any peer links. The mode
+/// is set before the bridge stops, so an installer ending meanwhile (`after_install`) either sees it and starts
+/// nothing, or started the local bridge before it and this stop ends that one.
 pub fn use_remote(home: &Path, remote: &Arc<Remote>, bridge: &Bridge, peers: &Peers, mode: RemoteMode, adopt: Option<Box<dyn Link>>) -> Result<RemoteStatus, String> {
     write_mode(home, &mode)?;
+    remote.start(mode, adopt);
     bridge.stop();
     peers.stop_all();
-    remote.start(mode, adopt);
     Ok(remote.status())
+}
+
+/// `install_engine` refuses at once in remote-only mode: the installer and the bridge it starts are this computer's.
+pub fn no_install_in_remote_mode(remote: &Remote) -> Result<(), String> {
+    if remote.active() {
+        return Err("omher uses a server: nothing is installed on this computer; use this computer first".into());
+    }
+    Ok(())
+}
+
+/// The end of `install_engine`: a clean install starts the local bridge, any other end releases the installer's hold,
+/// unless remote-only mode began while the installer ran (a Connect meanwhile): then nothing local starts. Decided
+/// under the link's lock, so it never interleaves with `use_remote` setting the mode. False when it was skipped.
+pub fn after_install(remote: &Remote, bridge: &Arc<Bridge>, clean: bool, resource_dir: Option<PathBuf>) -> bool {
+    let g = remote.inner.lock().unwrap();
+    if g.mode.is_some() {
+        return false;
+    }
+    if clean {
+        bridge.start(resource_dir);
+    } else {
+        bridge.release();
+    }
+    drop(g);
+    true
 }
 
 /// `remote_leave`: delete the mode file, stop the link, and start the local bridge and peer links again (the gate
@@ -752,6 +779,34 @@ mod tests {
         leave_remote(&home, &r, &bridge, &peers, None).unwrap();
         assert_eq!(bridge.status().state, "ready");
         bridge.stop();
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn an_install_is_refused_in_remote_mode_and_one_ending_after_connect_starts_no_local_bridge() {
+        let home = tmp_home("install");
+        let bridge = Bridge::new();
+        let peers = Peers::new(home.clone());
+        let (r, _plan) = fake(vec![Ok(9102)]);
+        // local mode: the install may run, and its clean end starts the local bridge
+        assert_eq!(no_install_in_remote_mode(&r), Ok(()));
+        bridge.hold();
+        assert!(after_install(&r, &bridge, true, None));
+        assert_eq!(bridge.status().state, "starting");
+        bridge.stop();
+        // an installer is running (the bridge held) when the person presses Connect
+        bridge.set_ready_for_test(9, "local");
+        bridge.hold();
+        use_remote(&home, &r, &bridge, &peers, mode(), None).unwrap();
+        // its clean end (or a failed one) starts and revives nothing here: the server link is the bridge now
+        assert!(!after_install(&r, &bridge, true, None));
+        assert!(!after_install(&r, &bridge, false, None));
+        assert_eq!(bridge.status().state, "failed", "the local bridge stays stopped");
+        assert_eq!(bridge_url(&r, &bridge, Duration::from_secs(5)).unwrap(), "ws://127.0.0.1:9102/?token=t");
+        // and a new install is refused before anything runs
+        let err = no_install_in_remote_mode(&r).unwrap_err();
+        assert!(err.contains("omher uses a server"), "{err}");
+        r.stop();
         let _ = std::fs::remove_dir_all(&home);
     }
 

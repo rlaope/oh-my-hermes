@@ -12,6 +12,7 @@ import { InstallLog } from "../app/BridgeGate";
 import { hermesOnly } from "../sessions/agents";
 import { getSessions, useSessions } from "../sessions/sessions";
 import { getAddOmh, useAddOmh } from "../sessions/addOmh";
+import { useServerMode } from "../app/remote";
 
 const AlertIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -37,7 +38,9 @@ export function OmhNotice() {
   useEffect(() => {
     if (ss.agents === null) void getSessions().loadAgents();
   }, [ss.agents]);
-  const shown = hermesOnly(ss.agents) && !(add.hidden && !add.open);
+  // on a server (rule 46) nothing is installed on this computer: no offer at all
+  const remote = useServerMode().mode === "remote";
+  const shown = !remote && hermesOnly(ss.agents) && !(add.hidden && !add.open);
   useLayoutEffect(() => {
     if (!shown || !add.open) return;
     const measure = () => {

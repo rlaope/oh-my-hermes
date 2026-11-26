@@ -1914,4 +1914,6 @@ export const ko: Record<Key, string> = {
   "remote.leaveHint": "서버를 그만 쓰고 이 컴퓨터에서 omher를 다시 돌려요.",
   "remote.noPeers": "omher가 서버를 쓰는 동안 다른 컴퓨터는 여기가 아니라 그 서버에서 연결해요.",
   "remote.noFolderChat": "omher가 서버를 쓰는 중이라 그 봇들은 이 컴퓨터의 폴더에서 일할 수 없어요.",
+  "remote.noFiles": "omher가 서버를 쓰는 중이라 이 컴퓨터의 파일은 그 봇들에게 보낼 수 없어요.",
+  "remote.noInstall": "omher가 서버를 쓰는 중이라 이 컴퓨터에는 아무것도 설치하지 않아요.",
 };

@@ -192,6 +192,8 @@ export function BridgeGate({ children }: { children: ReactNode }) {
     const poll = async () => {
       try {
         const s = await (await shell()).status();
+        // the mode is known before the app under the gate renders (its effects run before this one's)
+        if (s.mode || s.state === "ready") noteServerMode(s);
         // the same answer keeps the same object: a steady "ready" every 2 s re-renders nothing
         if (alive) setStatus((prev) => (sameStatus(prev, s) ? prev : s));
       } catch (e) {
@@ -210,7 +212,9 @@ export function BridgeGate({ children }: { children: ReactNode }) {
   const remote = status?.mode === "remote";
   const host = remote ? status?.host : undefined;
   useEffect(() => {
-    if (status) noteServerMode(status);
+    // only the shell's own answer names the mode (with no shell the page is local and nothing waits for one); a
+    // refused ask is no answer (an older stand-in that names no mode reads as local once its bridge is ready)
+    if (status && hasShell() && (status.mode || status.state === "ready")) noteServerMode(status);
   }, [status]);
   // the server's name (the mode file's label) for "Connecting to <label>…": asked once per host
   const [label, setLabel] = useState("");

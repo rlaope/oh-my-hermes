@@ -530,7 +530,7 @@ function NewSessionMenu({ onClose, trigger, initialFolder }: { onClose: () => vo
             {t("term.moreBelow")}
           </button>
         )}
-        {hermesOnly(ss.agents) && <AddOmhLine onPick={() => close("pick")} />}
+        {!remote && hermesOnly(ss.agents) && <AddOmhLine onPick={() => close("pick")} />}
       </div>
     </Popover>
   );

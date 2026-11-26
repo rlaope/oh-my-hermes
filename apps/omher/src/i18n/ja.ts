@@ -1914,4 +1914,6 @@ export const ja: Record<Key, string> = {
   "remote.leaveHint": "サーバーの利用をやめ、このコンピューターで omher を動かします。",
   "remote.noPeers": "omher がサーバーを使っている間、他のコンピューターはここではなくそのサーバーから接続します。",
   "remote.noFolderChat": "omher はサーバーを使用中のため、そのボットはこのコンピューターのフォルダーでは作業できません。",
+  "remote.noFiles": "omher はサーバーを使用中のため、このコンピューターのファイルはそのボットに送れません。",
+  "remote.noInstall": "omher はサーバーを使用中のため、このコンピューターには何もインストールしません。",
 };

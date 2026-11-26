@@ -1914,4 +1914,6 @@ export const zh: Record<Key, string> = {
   "remote.leaveHint": "停止使用服务器，改回在这台电脑上运行 omher。",
   "remote.noPeers": "omher 使用服务器期间，其他电脑要从那台服务器连接，而不是从这里。",
   "remote.noFolderChat": "omher 正在使用服务器：那里的机器人无法在这台电脑的文件夹里工作。",
+  "remote.noFiles": "omher 正在使用服务器：这台电脑上的文件无法发送给那里的机器人。",
+  "remote.noInstall": "omher 正在使用服务器：不会在这台电脑上安装任何东西。",
 };

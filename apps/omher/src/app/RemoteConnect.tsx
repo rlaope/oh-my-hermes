@@ -68,6 +68,8 @@ export function RemoteConnect({ shell, onCancel, onDone }: { shell: () => Promis
   const [step, setStep] = useState<Step>({ at: "form" });
   const [err, setErr] = useState("");
   const checkId = useRef<string | null>(null);
+  // false once the form is gone: a Check that answers after that closes its own link at once
+  const mounted = useRef(true);
   const hostRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -78,13 +80,15 @@ export function RemoteConnect({ shell, onCancel, onDone }: { shell: () => Promis
       .catch(() => setHosts([]));
   }, [shell]);
   // a Check link the form opened ends when the form goes away without Connect
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
       const id = checkId.current;
+      checkId.current = null;
       if (id) void shell().then((s) => s.remoteCheckClose?.(id)).catch(() => undefined);
-    },
-    [shell],
-  );
+    };
+  }, [shell]);
 
   const h = host.trim();
   const p = parsePort(port);
@@ -108,6 +112,11 @@ export function RemoteConnect({ shell, onCancel, onDone }: { shell: () => Promis
       }
       if (!s.remoteCheck) throw { kind: "bridge", line: "" };
       const c = await s.remoteCheck(h, p ?? undefined);
+      // the form went away while Check ran (Install picked, Change server cancelled): nothing will Connect it
+      if (!mounted.current) {
+        await s.remoteCheckClose?.(c.check).catch(() => undefined);
+        return;
+      }
       checkId.current = c.check;
       setStep({ at: "found", check: c, probe: await probeRemote(c.url) });
     } catch (e) {

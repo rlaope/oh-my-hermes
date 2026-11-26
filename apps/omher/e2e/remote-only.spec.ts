@@ -1,7 +1,9 @@
 // Remote-only mode (BOUNDARY rule 46), the page side: the first screen's two choices, Check that lists the server's bots
 // before anything is saved, a refused key that names ssh-copy-id, Connect landing in the app with the server's bots,
 // Settings › Server (Use this computer goes back to the first screen), a lost link said in the bar, no Hand to <bot>
-// on a server, and the update button on the gate.
+// on a server, and the update button on the gate. On a server nothing of this computer goes out: no saved folder chat
+// is resumed, no file is attached, no installer runs (the WebSocket frames are checked), and a Check that answers after
+// its form is gone is closed.
 // `window.__OMHER_GATE__` stands in for the shell (bridge_status, remote_check, remote_use, remote_leave, remote_status,
 // peers_hosts); its mode lives in localStorage so a reload keeps it, as the mode file does. The "server" is the mock
 // bridge itself: Check returns its URL, and after Connect the page dials it as it would the forwarded port.
@@ -13,7 +15,7 @@ const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 const SHOTS = process.env.OMHER_REMOTE_SHOTS || "";
 const URL_ = `ws://127.0.0.1:${MOCK}/?token=e2e`;
 
-type Start = { mode: "local" | "remote"; host?: string; label?: string; update?: string; linkLost?: boolean };
+type Start = { mode: "local" | "remote"; host?: string; label?: string; update?: string; linkLost?: boolean; checkMs?: number };
 
 async function stub(page: Page, start: Start) {
   await page.addInitScript(
@@ -39,11 +41,11 @@ async function stub(page: Page, start: Start) {
         },
         retry: async () => {},
         installCommand: async () => "curl -fsSL https://example.invalid/install.sh | sh",
-        install: async () => 1,
+        install: async () => (calls.push(["install_engine"]), 1),
         hosts: async () => ["vps", "build-box"],
         remoteCheck: async (host: string, port?: number) => {
           calls.push(["remote_check", host, port ?? null]);
-          await new Promise((r) => setTimeout(r, 80));
+          await new Promise((r) => setTimeout(r, start.checkMs ?? 80));
           const word = host.split("@").pop();
           if (word === "denied") throw { kind: "auth", line: `${host}: Permission denied (publickey).` };
           if (word === "nowhere") throw { kind: "unreachable", line: "ssh: Could not resolve hostname nowhere" };
@@ -77,6 +79,22 @@ async function stub(page: Page, start: Start) {
     },
     { start, url: URL_ },
   );
+}
+
+/** Every op the page sends over any WebSocket (the app's bridge and a Check's probe), in order. */
+function sentOps(page: Page): { op: string; params: Record<string, unknown> }[] {
+  const ops: { op: string; params: Record<string, unknown> }[] = [];
+  page.on("websocket", (ws) =>
+    ws.on("framesent", (f) => {
+      try {
+        const m = JSON.parse(String(f.payload));
+        if (m && typeof m.op === "string") ops.push({ op: m.op, params: m });
+      } catch {
+        /* not JSON */
+      }
+    }),
+  );
+  return ops;
 }
 
 const calls = (page: Page) => page.evaluate(() => (window as unknown as { __gateCalls: unknown[] }).__gateCalls);
@@ -239,4 +257,100 @@ test("the update button shows on the gate, so a person stuck there can update in
   await expect(upd).toBeVisible();
   await upd.click();
   await expect(page.getByTestId("update-confirm")).toBeVisible();
+});
+
+test("on a server a saved folder chat of this computer is not resumed, by itself or by Resume; it stays saved", async ({ page }) => {
+  await stub(page, { mode: "remote", host: "demo@vps", label: "VPS" });
+  const ops = sentOps(page);
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem("e2e.resumeSeeded")) return;
+    sessionStorage.setItem("e2e.resumeSeeded", "1");
+    for (const k of ["omher.sessions.recent", "omher.sessions.open", "__omherMockHistory"]) localStorage.removeItem(k);
+    localStorage.setItem(
+      "omher.resume",
+      JSON.stringify({
+        v: 1,
+        at: Date.now(),
+        bot: "friren",
+        view: "session",
+        session: "s47",
+        drafts: {},
+        sessions: [{ id: "s47", agent: "omh", cwd: "/fixture/this-computer/project", startedAt: 1000, view: "chat", running: true, bot: "friren", agentSession: "20261126_120000_local001" }],
+      }),
+    );
+  });
+  await page.goto("/");
+  await expect(page.getByTestId("bot-kami")).toBeVisible();
+  // the saved chat opens as it was left: paused, saying why, never attached
+  const paused = page.getByTestId("session-paused");
+  await expect(paused).toContainText("omher uses a server");
+  await page.getByTestId("session-resume").click();
+  await expect(paused).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(ops.filter((o) => o.op.startsWith("folder.")).map((o) => o.op)).toEqual([]);
+  expect(JSON.stringify(ops)).not.toContain("/fixture/this-computer/project");
+  // the row is kept as it was saved, for when this computer is used again
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("omher.resume") || "null"));
+  expect(saved.sessions.find((x: { id: string }) => x.id === "s47")).toMatchObject({ cwd: "/fixture/this-computer/project", agentSession: "20261126_120000_local001", running: true });
+});
+
+test("on a server a chat takes no file from this computer: no +, drop or paste, one line says why", async ({ page }) => {
+  await stub(page, { mode: "remote", host: "demo@vps", label: "VPS" });
+  const ops = sentOps(page);
+  await page.goto("/");
+  await page.getByTestId("bot-friren").click();
+  await expect(page.getByTestId("composer")).toBeEnabled();
+  await expect(page.getByTestId("attach")).toHaveCount(0);
+  await expect(page.getByTestId("composer-no-files")).toHaveText("omher uses a server: files from this computer can’t be sent to its bots.");
+  const dt = await page.evaluateHandle(() => {
+    const d = new DataTransfer();
+    d.items.add(new File(["verify-fixture"], "this-computer.txt", { type: "text/plain" }));
+    return d;
+  });
+  const pane = page.locator(".pane");
+  await pane.dispatchEvent("dragenter", { dataTransfer: dt });
+  await pane.dispatchEvent("dragover", { dataTransfer: dt });
+  await expect(page.getByTestId("attach-drop")).toHaveCount(0);
+  await pane.dispatchEvent("drop", { dataTransfer: dt });
+  await page.getByTestId("composer").dispatchEvent("paste", { clipboardData: dt });
+  await expect(page.getByTestId("attach-chips")).toHaveCount(0);
+  await page.getByTestId("composer").fill("hello server");
+  await page.getByTestId("send").click();
+  await expect.poll(() => ops.filter((o) => o.op === "chat.send").length).toBe(1);
+  expect(ops.filter((o) => o.op === "chat.attach")).toEqual([]);
+  expect(JSON.stringify(ops)).not.toContain("this-computer.txt");
+});
+
+test("on a server no oh-my-hermes install is offered and the installer is never asked for", async ({ page }) => {
+  await stub(page, { mode: "remote", host: "demo@vps", label: "VPS" });
+  await page.addInitScript(() => {
+    const w = window as unknown as Record<string, unknown>;
+    localStorage.removeItem("omher.omhOffer.hidden");
+    w.__omherMockAgents = ["claude", "codex"];
+    w.__omherMockNoOmh = true;
+  });
+  await page.goto("/");
+  await expect(page.getByTestId("bot-kami")).toBeVisible();
+  await page.getByTestId("session-new").or(page.getByTestId("session-start")).first().click();
+  await expect(page.getByTestId("session-agent-claude")).toBeVisible();
+  await expect(page.getByTestId("session-add-omh")).toHaveCount(0);
+  await expect(page.getByTestId("omh-notice")).toHaveCount(0);
+  expect((await calls(page)).filter((c) => (c as string[])[0] === "install_engine")).toEqual([]);
+});
+
+test("a Check that answers after its form is gone closes its link", async ({ page }) => {
+  await stub(page, { mode: "local", checkMs: 600 });
+  const ops = sentOps(page);
+  await page.goto("/");
+  await page.getByTestId("gate-choice-remote").click();
+  await page.getByTestId("remote-host").fill("demo@vps");
+  await page.getByTestId("remote-check").click();
+  await page.getByTestId("gate-choice-install").click();
+  await expect(page.getByTestId("setup-install")).toBeVisible();
+  await expect.poll(() => calls(page)).toEqual([
+    ["remote_check", "demo@vps", null],
+    ["peers_check_close", "c1"],
+  ]);
+  // nothing reads the server through the closed check
+  expect(ops.filter((o) => o.op === "hello" || o.op === "bots.list")).toEqual([]);
 });

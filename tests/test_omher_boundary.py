@@ -3762,6 +3762,10 @@ class RemoteOnlyMode(unittest.TestCase):
         "the shell starts no other process for this mode.",
         "The page talks only to that server's omher bridge, through the forwarded loopback port and its token,",
         "Nothing about this computer is sent to the server beyond what rule 31 already sends:",
+        "a saved folder chat from local mode is never resumed there (not by the restart, not by Resume;",
+        "no file of this computer is attached (the chat has no +, drop or paste, and the store refuses `chat.attach`);",
+        "the oh-my-hermes offer is hidden, `install_engine` refuses, and an install already running when Connect is pressed"
+        " starts no local bridge when it ends;",
         "Use this computer (Disconnect) deletes the file, stops the link and starts the local bridge and peer links again.",
     )
 
@@ -3780,6 +3784,30 @@ class RemoteOnlyMode(unittest.TestCase):
             self.assertNotIn(banned, self.remote)
         self.assertIn("peers::connect(host, port, &script)", self.remote)
         self.assertIn('".omher").join("remote.json")', self.remote)
+
+    def test_the_installer_refuses_and_starts_nothing_in_remote_mode(self) -> None:
+        fn = self.lib[self.lib.index("async fn install_engine("):]
+        fn = fn[: fn.index("\n}\n")]
+        self.assertLess(fn.index("remote::no_install_in_remote_mode(&shell.remote)?;"), fn.index("setup::run_install("))
+        # the end of an install decides under the link's lock whether the local bridge starts
+        self.assertIn("remote::after_install(&shell.remote, &shell.bridge,", fn)
+        self.assertNotIn("shell.bridge.start(", fn)
+        after = self.remote[self.remote.index("pub fn after_install("):]
+        after = after[: after.index("\n}\n")]
+        self.assertIn("remote.inner.lock()", after)
+        self.assertLess(after.index("if g.mode.is_some()"), after.index("bridge.start("))
+
+    def test_the_page_sends_no_folder_or_file_of_this_computer_in_remote_mode(self) -> None:
+        store = (UI_SRC / "state" / "store.ts").read_text(encoding="utf-8")
+        for op in ("folder.open", "folder.resume"):
+            at = store.index(f'bridge.request("{op}"')
+            self.assertIn('if (remoteOnly()) throw new Error(tr("remote.noFolderChat"));', store[at - 200: at])
+        self.assertEqual(store.count('if (remoteOnly()) throw new Error(tr("remote.noFiles"));'), 2)
+        self.assertEqual(store.count('bridge.request("chat.attach"'), 2)
+        sessions = (UI_SRC / "sessions" / "sessions.ts").read_text(encoding="utf-8")
+        self.assertIn("Promise.all([store().resumed, modeKnown()])", sessions)
+        chat = (UI_SRC / "chat" / "Chat.tsx").read_text(encoding="utf-8")
+        self.assertIn("onSendFiles={remote ? undefined :", chat)
 
     def test_startup_in_remote_mode_starts_no_bridge_and_no_peers(self) -> None:
         start = self.lib.index("match remote::read_mode(&home) {")

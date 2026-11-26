@@ -1918,4 +1918,6 @@ export const en = {
   "remote.leaveHint": "Stop using the server and run omher on this computer again.",
   "remote.noPeers": "While omher uses a server, other computers are reached from that server, not from here.",
   "remote.noFolderChat": "omher uses a server: its bots can’t work in a folder of this computer.",
+  "remote.noFiles": "omher uses a server: files from this computer can’t be sent to its bots.",
+  "remote.noInstall": "omher uses a server: nothing is installed on this computer.",
 };
