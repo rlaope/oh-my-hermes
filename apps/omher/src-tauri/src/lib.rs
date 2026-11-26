@@ -985,6 +985,15 @@ async fn peers_watch(shell: State<'_, Shell>, on_event: Channel<peers::PeerStatu
     Ok(())
 }
 
+/// Remote-only mode (rule 46) runs no peer links, so the commands that would start one (`peers_check`, `peers_add`,
+/// `peers_retry`) refuse there, whatever the page shows. `remote_check` stays open: Change server uses it.
+fn no_peer_links_in_remote_mode(remote: &remote::Remote) -> Result<(), String> {
+    if remote.active() {
+        return Err("remote machines are off while omher runs on a server; use this computer first".into());
+    }
+    Ok(())
+}
+
 /// The host field's suggestions: `Host` aliases from `~/.ssh/config` (read only; patterns skipped).
 #[tauri::command]
 async fn peers_hosts() -> Result<Vec<String>, String> {
@@ -997,6 +1006,7 @@ async fn peers_hosts() -> Result<Vec<String>, String> {
 /// the returned loopback URL. Nothing is written on this computer; `peers_check_close` (or Connect) ends it.
 #[tauri::command]
 async fn peers_check(shell: State<'_, Shell>, host: String, port: Option<u16>) -> Result<serde_json::Value, peers::Failure> {
+    no_peer_links_in_remote_mode(&shell.remote).map_err(|line| peers::Failure { kind: peers::FailKind::Bridge, line })?;
     let p = shell.peers.clone();
     tauri::async_runtime::spawn_blocking(move || p.check(&host, port))
         .await
@@ -1013,6 +1023,7 @@ async fn peers_check_close(shell: State<'_, Shell>, check: String) -> Result<(),
 /// The confirm card's Connect: the one call that adds a row to `~/.omher/peers.json`.
 #[tauri::command]
 async fn peers_add(shell: State<'_, Shell>, label: String, host: String, port: Option<u16>, check: Option<String>) -> Result<peers::PeerStatus, String> {
+    no_peer_links_in_remote_mode(&shell.remote)?;
     let p = shell.peers.clone();
     tauri::async_runtime::spawn_blocking(move || p.add(&label, &host, port, check.as_deref())).await.map_err(|e| e.to_string())?
 }
@@ -1027,6 +1038,7 @@ async fn peers_remove(shell: State<'_, Shell>, id: String) -> Result<(), String>
 /// Try a failed link again now.
 #[tauri::command]
 async fn peers_retry(shell: State<'_, Shell>, id: String) -> Result<(), String> {
+    no_peer_links_in_remote_mode(&shell.remote)?;
     shell.peers.retry(&id)
 }
 
@@ -1319,6 +1331,20 @@ mod tests {
         assert_eq!(past_home_in(&home, "codex", None, &none), Ok(home.join(".codex")));
         assert!(past_home_in(&home, "grok", None, &none).is_err());
         let _ = std::fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn peer_links_are_refused_in_remote_only_mode() {
+        let connect: crate::remote::Connect = std::sync::Arc::new(|_: &str, _: Option<u16>| {
+            Err(crate::peers::Failure { kind: crate::peers::FailKind::Unreachable, line: "no route".into() })
+        });
+        let remote = crate::remote::Remote::new(connect);
+        assert_eq!(super::no_peer_links_in_remote_mode(&remote), Ok(()));
+        remote.start(crate::remote::RemoteMode::new("VPS", "demo@host.example", Some(2222)).unwrap(), None);
+        let err = super::no_peer_links_in_remote_mode(&remote).unwrap_err();
+        assert!(err.contains("remote machines are off"), "{err}");
+        remote.stop();
+        assert_eq!(super::no_peer_links_in_remote_mode(&remote), Ok(()));
     }
 
     #[test]
