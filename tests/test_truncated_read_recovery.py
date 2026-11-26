@@ -44,7 +44,7 @@ from omh.plugin_bundle.omh.truncated_read_recovery import (
     truncated_read_window,
 )
 
-PATH = "/Users/khope@sionic.ai/Desktop/khope/oh-my-hermes-worktrees/architecture-visualization/src/skills/render.py"
+PATH = "/Users/demo/code/oh-my-hermes-worktrees/architecture-visualization/src/skills/render.py"
 SESSION = "20260919_140745_db409e"
 
 # Verbatim, minus the 100,000 characters of `content`: the non-content fields

@@ -1304,7 +1304,7 @@ mod tests {
     #[test]
     fn opens_web_links_from_link_chips_and_nothing_else() {
         assert!(allowed_external("https://github.com/rlaope/oh-my-hermes/pull/2657"));
-        assert!(allowed_external("https://sionicai.slack.com/archives/C0BLC924P1P/p1794195216893139"));
+        assert!(allowed_external("https://example.slack.com/archives/C0000000001/p1700000000000001"));
         assert!(allowed_external("http://example.com"));
         assert!(allowed_external("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=83s"));
         assert!(!allowed_external("https://github.com@evil.io/x"));

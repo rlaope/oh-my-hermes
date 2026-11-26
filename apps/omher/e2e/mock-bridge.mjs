@@ -53,6 +53,14 @@
 // mock.botPageFail {bot, on} (the bot page's bots.page read fails for that bot until turned off),
 // mock.platforms {available?, bots?} (what bots.platforms answers: OMH's `omh hermes platforms`, rule 43; by default
 // every listed platform is connected),
+// mock.peerPlatforms {available?, why?, bots?} (what every attached computer's own bridge answered, under `peers`, as
+// the bridge's rule 45 read gives it already checked; by default each lists its bots with no platform),
+// Add bot › New bot (rule 44): bots.templates answers OMH's catalog (TEMPLATE_SEED) or `missing`/`unavailable`
+// (mock.templates {omh}); bots.create {name} checks Hermes' name rule and the bots here as the bridge does, then makes
+// the bot as `hermes profile create` would (no oh-my-hermes skills yet: mock.skills adds `omh-bot-template`), or fails
+// with Hermes' text once (mock.createNext {line}), or answers that the create could not be confirmed
+// (mock.createNext {line, unconfirmed: true}), or finishes with a failed setup step (mock.createNext {line, incomplete:
+// true}: `ok` with that `⚠` line and `incomplete`).
 // mock.move {on} (the bridge died and came back on a new port: answers `{port}` once a second listener is up, then drops
 // every connection to the first port, which refuses WebSockets until `mock.move {on: false}` or mock.reset).
 import http from "node:http";
@@ -78,7 +86,7 @@ const MIN = 60;
 // ---- seed data -------------------------------------------------------------------------------
 
 const BOT_SEED = [
-  { name: "kami", display_name: "Kami", is_default: false, model: "Opus 5.5", provider: "claude-proxy", description: "khope's everyday assistant", status: "online", running: true, reasoning: "high" },
+  { name: "kami", display_name: "Kami", is_default: false, model: "Opus 5.5", provider: "claude-proxy", description: "demo's everyday assistant", status: "online", running: true, reasoning: "high" },
   { name: "friren", display_name: "Friren", is_default: false, model: "Sonnet 5.5", provider: "claude-proxy", description: "research and reading", status: "online", running: false, reasoning: "medium" },
   { name: "default", display_name: "Hermes", is_default: true, model: "Haiku 5", provider: "claude-proxy", description: "the default profile", status: "online", running: false, reasoning: "low" },
   { name: "omh-tui", display_name: "OMH TUI", is_default: false, model: "Sonnet 5.5", provider: "claude-proxy", description: "", status: "online", running: false, reasoning: "medium" },
@@ -91,8 +99,8 @@ const LINKS = JSON.parse(readFileSync(new URL("./fixtures/links.json", import.me
 // six channels is left out on purpose, so its chip shows the fallback.
 const LINK_PLACES = {
   kami: {
-    slack: { C0BLC924P1P: "#docs-agent", C0C7TPCQZSL: "#product-docs", C0BU9M6C6EA: "#lab" },
-    discord: { "1544259371528232980": "#cron" },
+    slack: { C0000000001: "#docs-agent", C0000000004: "#product-docs", C0000000003: "#lab" },
+    discord: { "1100000000000000010": "#cron" },
   },
 };
 
@@ -136,8 +144,8 @@ const mediaLines = (text) =>
 const AWAY_SEED = {
   kami: [
     { id: "slack-og-dev-502", source: "slack", title: "gateway 502 on /v1/responses", place: "#og-dev", url: "slack://channel?team=T1&id=C1&thread_ts=1794186944.520669", target: "slack:C0123ABCD:1794186944.520669", reply: "Reading gateway logs from 14:31. Upstream resets look like keep-alive expiry.", started: 4 * MIN, last: 20, count: 14, running: true },
-    { id: "discord-cron-openmaus", source: "discord", title: "OpenMausBot 조사후 브리핑", place: "#cron", url: "https://discord.com/channels/1/2", target: "discord:1569310397687791637:1569310397687791637", reply: "OpenMausBot은 Claude·Codex·Grok CLI를 채팅 앱으로 묶는 Electron 앱입니다. ⭐17,657, Apache-2.0입니다.", started: 3 * 3600, last: 2 * 3600, count: 6, running: false },
-    { id: "discord-omh-2657", source: "discord", title: "PR #2657 review", place: "#oh-my-hermes", url: "https://discord.com/channels/1/3", target: "discord:1544259371528232981", started: 27 * 3600, last: 26 * 3600, count: 9, running: false },
+    { id: "discord-cron-openmaus", source: "discord", title: "OpenMausBot 조사후 브리핑", place: "#cron", url: "https://discord.com/channels/1/2", target: "discord:1100000000000000040:1100000000000000040", reply: "OpenMausBot은 Claude·Codex·Grok CLI를 채팅 앱으로 묶는 Electron 앱입니다. ⭐17,657, Apache-2.0입니다.", started: 3 * 3600, last: 2 * 3600, count: 6, running: false },
+    { id: "discord-omh-2657", source: "discord", title: "PR #2657 review", place: "#oh-my-hermes", url: "https://discord.com/channels/1/3", target: "discord:1100000000000000011", started: 27 * 3600, last: 26 * 3600, count: 9, running: false },
   ],
   friren: [{ id: "telegram-reading-list", source: "telegram", title: "Reading list", started: 6 * 3600, last: 4 * 3600, count: 5, running: false }],
   default: [],
@@ -660,6 +668,8 @@ let noSkills;
 let botPageFail;
 // Each bot's messaging platforms as the bridge's PlatformStates answers (mock.platforms {available?, bots?}).
 let platformsRead;
+// What each attached computer's bridge answered for its bots (mock.peerPlatforms), the same for every peer.
+let peerPlatformsRead;
 // As OMH reports them: every profile of the Hermes home, most with no messaging platform.
 const PLATFORMS_NONE = () => Object.fromEntries(BOT_SEED.map((b) => [b.name, { log: "read", platforms: [] }]));
 const PLATFORMS_SEED = () => ({
@@ -701,6 +711,19 @@ const APP_SKILL_SEED = {
   ],
 };
 let notReady = new Map();
+// Add bot › New bot (rule 44): what `omh --hermes-home <root> profile bot-templates --json` answers, and the next create's failure line.
+let templatesOmh = "ok";
+let createNext = null;
+const TEMPLATE_SEED = [
+  { id: "pr-review", title: "PR reviewer", summary: "Reviews pull requests bug first and watches a PR until its checks settle.",
+    skills: ["code-review", "github-event-ops"], schedules: [{ name: "pr-review-review-queue", title: "Weekday review queue" }],
+    webhooks: ["Pull request and review events"], apps: [] },
+  { id: "inbox-triage", title: "Inbox triage", summary: "Sorts new mail into reply, task and ignore, and never sends without your yes.",
+    skills: ["connector-operator"], schedules: [{ name: "inbox-triage-new-mail", title: "New mail matching a filter" },
+      { name: "inbox-triage-morning-digest", title: "Weekday morning digest" }], webhooks: [], apps: [] },
+];
+const PROFILE_NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+const PROFILE_RESERVED = new Set(["hermes", "default", "test", "tmp", "root", "sudo"]);
 
 // The bot page's persona and memory (bots.page), as the bridge's read_bot_page answers: one bot with everything,
 // one with no SOUL.md, a memory file too big to read and a switched-off target, one whose SOUL.md is a link (never
@@ -934,8 +957,11 @@ function reset() {
   lostTurns = new Map();
   lostQueue = new Map();
   noSkills = new Set();
+  templatesOmh = "ok";
+  createNext = null;
   botPageFail = new Set();
   platformsRead = PLATFORMS_SEED();
+  peerPlatformsRead = null; // null: every peer bot with no platform, its logs read
   linearMcp = new Map();
   appState = new Map([["kami:linear", "installed"], ["kami:figma", "needs_signin"], ["kami:datadog", "disabled"]]);
   appsNext = {};
@@ -1618,12 +1644,41 @@ const OPS = {
       routines: (ROUTINE_SEED[b.name] ?? []).length,
     };
   },
-  "bots.platforms": () => structuredClone(platformsRead),
+  "bots.platforms": () => ({
+    ...structuredClone(platformsRead),
+    peers: Object.fromEntries(
+      [...peers.keys()].map((id) => [
+        id,
+        structuredClone(
+          peerPlatformsRead ?? { available: true, why: "", bots: Object.fromEntries((peerBots ?? PEER_BOTS_SEED).map((b) => [b.name, { log: "read", platforms: [] }])) },
+        ),
+      ]),
+    ),
+  }),
   "bots.page": (p) => {
     const b = needBotAny(p);
     if (botPageFail.has(b.name)) throw new OpError("bot_offline", `${b.name} is offline`);
     const seed = b.host ? remotePage : (BOT_PAGE_SEED[b.name] ?? (() => ({ soul: pageFile("SOUL.md", "missing"), memory: [memTarget("memory", "MEMORY.md", "missing", [], 2200), memTarget("user", "USER.md", "missing", [], 1375)] })));
     return seed();
+  },
+  "bots.templates": () =>
+    templatesOmh === "ok" ? { omh: "ok", templates: structuredClone(TEMPLATE_SEED) } : { omh: templatesOmh, templates: [] },
+  "bots.create": (p) => {
+    const name = p.name;
+    if (typeof name !== "string" || !PROFILE_NAME.test(name))
+      throw new OpError("bad_request", "Use lowercase letters, numbers, '-' or '_', starting with a letter or number, up to 64 characters.");
+    if (PROFILE_RESERVED.has(name)) throw new OpError("bad_request", `${name} is a name Hermes keeps for itself.`);
+    if (name === "omh-tui") throw new OpError("bad_request", `${name} is oh-my-hermes' own TUI profile.`);
+    if (bots[name]) throw new OpError("exists", `A folder named ${name} is already under Hermes' profiles.`);
+    const next = createNext;
+    createNext = null;
+    if (next?.unconfirmed) return { outcome: "unconfirmed", line: next.line };
+    if (next && !next.incomplete) return { outcome: "failed", line: next.line };
+    bots[name] = { name, display_name: name.charAt(0).toUpperCase() + name.slice(1), is_default: false, model: "Haiku 5",
+      provider: "claude-proxy", description: "", status: "online", running: false, reasoning: "low" };
+    models[name] = { model: "Haiku 5", provider: "claude-proxy", reasoning: "low" };
+    history[name] = [];
+    return next ? { outcome: "ok", bot: name, notes: [next.line], incomplete: true } : { outcome: "ok", bot: name, notes: [], incomplete: false };
   },
   "skills.list": (p) => {
     needBot(p);
@@ -1939,6 +1994,14 @@ const OPS = {
     plugins[b.name] = [...(plugins[b.name] ?? []).filter((x) => x.name !== "omh"), { ...structuredClone(omh), live_tools: 0 }];
     return {};
   },
+  "mock.templates": (p) => {
+    templatesOmh = needStr(p, "omh");
+    return {};
+  },
+  "mock.createNext": (p) => {
+    createNext = { line: needStr(p, "line"), unconfirmed: p.unconfirmed === true, incomplete: p.incomplete === true };
+    return {};
+  },
   "mock.skills": (p) => {
     skillsLater = { add: Array.isArray(p.add) ? p.add : [], after: Number(p.after) || 0 };
     return {};
@@ -2246,6 +2309,11 @@ const OPS = {
     platformsRead = { available: p.available !== false, bots: { ...PLATFORMS_NONE(), ...(p.bots ?? {}) } };
     return {};
   },
+  "mock.peerPlatforms": (p) => {
+    const available = p.available !== false;
+    peerPlatformsRead = { available, why: available ? "" : p.why === "offline" ? "offline" : "unread", bots: available ? (p.bots ?? {}) : {} };
+    return {};
+  },
   "mock.botPageFail": (p) => {
     const b = needBotAny(p);
     if (p.on) botPageFail.add(b.name);
@@ -2343,7 +2411,7 @@ const OPS = {
     automations = automations.filter((x) => x.id !== j.id);
     automations.push(j);
     broadcast({ event: "routines.update", bot: b.name });
-    broadcast({ event: "brief.ready", bot: b.name, owner_name: "Hope" });
+    broadcast({ event: "brief.ready", bot: b.name, owner_name: "Demo" });
     return { id: j.id };
   },
   "mock.watches": () => {

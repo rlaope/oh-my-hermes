@@ -54,7 +54,7 @@ from omh.workflows.native_capability_change_preview import (
 )
 
 
-REVIEWER = "khope"
+REVIEWER = "demo"
 
 AXES: tuple[dict[str, object], ...] = (
     {"axis": "routing", "state": "changed", "surfaces": ["routing.chat"], "note": "adds one phrase trigger"},

@@ -113,6 +113,7 @@ from .policy import _github_event_ops_guard_applies
 from .policy import app_work_intake_guard_applies, meeting_to_issues_guard_applies
 from .policy import _github_issue_intake_guard_applies
 from .policy import _invocation_token
+from .bot_template_cues import bot_template_id_applied
 from .recommend import (
     has_strong_named_catalog_owner,
     recommendation_for_definition,
@@ -5342,7 +5343,8 @@ def _operator_surface_fast_path_decision(
         return None
     # "turn Linear issue ENG-42 into a PR" and "turn the meeting transcript into Linear issues" name a
     # tracker phrase this fast path holds; the work they ask for is app-work-intake's and operating-rhythm's,
-    # which scoring reaches through their guards. "ping me when a Linear issue is assigned to me" holds it too,
+    # which scoring reaches through their guards; applying a template to a bot "for our linear issues" is
+    # bot-template's. "ping me when a Linear issue is assigned to me" holds it too,
     # but it asks for a monitor recipe, not a connector action.
     if selected_skill == "connector-operator" and (
         _app_work_or_meeting_issues_applies(routing_message)
@@ -5793,7 +5795,12 @@ def _is_command_operator_failure_or_coding_request(message: str) -> bool:
 
 def _app_work_or_meeting_issues_applies(message: str) -> bool:
     normalized_query = normalized_phrase(prepare_routing_text(message).scoring_text)
-    return app_work_intake_guard_applies(normalized_query) or meeting_to_issues_guard_applies(normalized_query)
+    # "apply the meeting-to-issues template to this bot for our linear issues" sets a bot up from a template.
+    return (
+        app_work_intake_guard_applies(normalized_query)
+        or meeting_to_issues_guard_applies(normalized_query)
+        or bot_template_id_applied(normalized_query)
+    )
 
 
 def _is_connector_operator_setup_or_gateway_request(message: str) -> bool:

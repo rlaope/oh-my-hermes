@@ -2,7 +2,7 @@
 
 Fixture homes stand in for a real root: `default` with a gateway this very
 process "runs" (its pid and start time), a connected Slack it stamped and a
-Discord entry an older process left; `miku` whose record still says running
+Discord entry an older process left; `mbot` whose record still says running
 for a pid that is gone; `broken` with a record that is not JSON and no
 state.db; `locked` whose state.db another connection holds exclusively; and
 three directories that are no profile (hidden, no identity file, a deletion
@@ -188,13 +188,13 @@ def make_root(root: Path) -> None:
     for name in ("mem_a.json", "mem_b.json", "notes.txt"):
         (records / name).write_text("{}", encoding="utf-8")
     profiles = root / "profiles"
-    miku = profiles / "miku"
-    miku.mkdir(parents=True)
-    write_record(miku, {
-        "pid": GONE_PID, "start_time": 1, "hermes_home": str(miku), "gateway_state": "running",
+    mbot = profiles / "mbot"
+    mbot.mkdir(parents=True)
+    write_record(mbot, {
+        "pid": GONE_PID, "start_time": 1, "hermes_home": str(mbot), "gateway_state": "running",
         "platforms": {"slack": {"state": "connected", "writer_pid": GONE_PID, "writer_start_time": 1}},
     })
-    write_store(miku, [(f"m-{n}", "slack", f"chat {n}", NOW - 20 * DAY, NOW - 19 * DAY, 5) for n in range(3)], wal=True)
+    write_store(mbot, [(f"m-{n}", "slack", f"chat {n}", NOW - 20 * DAY, NOW - 19 * DAY, 5) for n in range(3)], wal=True)
     broken = profiles / "broken"
     broken.mkdir()
     (broken / "config.yaml").write_text("model: {}\n", encoding="utf-8")
@@ -230,14 +230,14 @@ class HomesTests(FixtureRoot):
     def test_the_root_and_each_named_profile_and_nothing_that_is_no_profile(self) -> None:
         current, homes = board_homes(self.environ)
         self.assertEqual(current, self.root)
-        self.assertEqual([name for name, _home in homes], ["default", "broken", "locked", "miku"])
+        self.assertEqual([name for name, _home in homes], ["default", "broken", "locked", "mbot"])
 
     def test_a_profile_home_finds_its_root_and_is_the_one_marked_as_this_tui(self) -> None:
-        environ = {"HERMES_HOME": str(self.root / "profiles" / "miku")}
+        environ = {"HERMES_HOME": str(self.root / "profiles" / "mbot")}
         current, homes = board_homes(environ)
         self.assertEqual(homes[0], ("default", self.root))
         snapshot = read_board(environ, BoardView(), NOW)
-        self.assertEqual([profile.name for profile in snapshot.profiles if profile.this_tui], ["miku"])
+        self.assertEqual([profile.name for profile in snapshot.profiles if profile.this_tui], ["mbot"])
 
     def test_without_hermes_home_it_is_hermes_own_default_under_home(self) -> None:
         current, homes = board_homes({"HOME": str(self.root)})
@@ -256,7 +256,7 @@ class GatewayTests(FixtureRoot):
         self.assertEqual(platforms, {"discord": False, "slack": True}, "an entry another process stamped is old news")
 
     def test_a_running_record_whose_pid_is_gone_does_not_read_as_running(self) -> None:
-        gateway = read_gateway(self.root / "profiles" / "miku")
+        gateway = read_gateway(self.root / "profiles" / "mbot")
         self.assertEqual(gateway.state, "running")
         self.assertFalse(gateway.live)
         self.assertEqual([platform.current for platform in gateway.platforms], [False])
@@ -353,7 +353,7 @@ class StoreTests(FixtureRoot):
         self.assertEqual(profile.last_activity, NOW - 600)
 
     def test_open_sessions_days_old_are_not_active(self) -> None:
-        profile = read_profile("miku", self.root / "profiles" / "miku", None, NOW)
+        profile = read_profile("mbot", self.root / "profiles" / "mbot", None, NOW)
         self.assertEqual((profile.sources, profile.active), ((("slack", 3),), 0))
 
     def test_a_locked_store_reads_as_busy_and_does_not_wait(self) -> None:
@@ -421,19 +421,19 @@ class ReadOnlyTests(FixtureRoot):
             return real_io_open(self, *args, **kwargs)
 
         with patch.object(os, "open", side_effect=os_open), patch.object(bot_board.Path, "open", path_open):
-            for view in (BoardView(), BoardView("default"), BoardView("default", "s-new"), BoardView("miku")):
+            for view in (BoardView(), BoardView("default"), BoardView("default", "s-new"), BoardView("mbot")):
                 read_board(self.environ, view, NOW)
         self.assertEqual([path for path in opened if path.endswith("state.db")], [])
         self.assertTrue([path for path in opened if path.endswith("gateway_state.json")], "the probe saw the reads")
 
 
     def test_a_wal_store_a_writer_has_open_is_read_with_what_the_writer_committed(self) -> None:
-        writer = sqlite3.connect(self.root / "profiles" / "miku" / "state.db")
+        writer = sqlite3.connect(self.root / "profiles" / "mbot" / "state.db")
         self.addCleanup(writer.close)
         writer.execute("INSERT INTO sessions (id, source, started_at) VALUES ('m-new', 'slack', ?)", (NOW,))
         writer.commit()
-        self.assertTrue((self.root / "profiles" / "miku" / "state.db-wal").exists())
-        profile = read_profile("miku", self.root / "profiles" / "miku", None, NOW)
+        self.assertTrue((self.root / "profiles" / "mbot" / "state.db-wal").exists())
+        profile = read_profile("mbot", self.root / "profiles" / "mbot", None, NOW)
         self.assertEqual((profile.sources, profile.active), ((("slack", 4),), 1))
 
     @POSIX_ONLY
@@ -452,7 +452,7 @@ class ReadOnlyTests(FixtureRoot):
             return real_kill(pid, signal) if signal == 0 else None
 
         with patch.object(sqlite_readonly.sqlite3, "connect", side_effect=connect), patch.object(os, "kill", side_effect=kill):
-            for view in (BoardView(), BoardView("default"), BoardView("default", "s-new"), BoardView("miku"),
+            for view in (BoardView(), BoardView("default"), BoardView("default", "s-new"), BoardView("mbot"),
                          BoardView("locked"), BoardView("broken"), BoardView("broken", "nope")):
                 read_board(self.environ, view, NOW)
         self.assertTrue(connects)
@@ -709,17 +709,17 @@ class SummaryTests(FixtureRoot):
         self.assertRegex(bot, r"up \S+( \S+)? · 2 agents · [\d.]+ [KMG]B ─╮$")
 
     def test_a_gateway_that_is_not_running_says_so_and_level_two_how_old_its_record_is(self) -> None:
-        miku = self.root / "profiles" / "miku"
-        record = json.loads((miku / "gateway_state.json").read_text(encoding="utf-8"))
-        write_record(miku, {**record, "updated_at": NOW - 3 * DAY})
+        mbot = self.root / "profiles" / "mbot"
+        record = json.loads((mbot / "gateway_state.json").read_text(encoding="utf-8"))
+        write_record(mbot, {**record, "updated_at": NOW - 3 * DAY})
         with patch.object(bot_board, "resident_bytes") as rss:
-            top, bottom = self.row(self.profile("miku"), "top"), self.row(self.profile("miku"), "bottom")
+            top, bottom = self.row(self.profile("mbot"), "top"), self.row(self.profile("mbot"), "bottom")
         rss.assert_not_called()
-        self.assertTrue(top.startswith("╭──────────┬─ ◌ miku ─") and top.endswith("──╮"), "no running gateway: no facts on top")
+        self.assertTrue(top.startswith("╭──────────┬─ ◌ mbot ─") and top.endswith("──╮"), "no running gateway: no facts on top")
         self.assertNotIn(" up ", top)
         self.assertIn("its record still says running (pid 4194301 is gone) slack ○", bottom)
-        self.assertIn("its record still says running (pid 4194301 is gone) · updated 3d ago", self.detail("miku"))
-        self.assertIn("slack ○", self.detail("miku").splitlines()[-1], "a platform as last recorded, in the bottom edge")
+        self.assertIn("its record still says running (pid 4194301 is gone) · updated 3d ago", self.detail("mbot"))
+        self.assertIn("slack ○", self.detail("mbot").splitlines()[-1], "a platform as last recorded, in the bottom edge")
 
     def test_the_sparkline_is_the_active_sessions_tokens_by_hour(self) -> None:
         write_usage_store(self.root, [
@@ -739,7 +739,7 @@ class SummaryTests(FixtureRoot):
 
     def test_the_ascii_charset_draws_gauges_sparkline_and_chips_without_unicode_blocks(self) -> None:
         write_usage_store(self.root, [("now", "cli", "t", NOW - 60, 2, "m", 80, 20, 0, None, None, None)])
-        lines, _span = profile_lines([self.profile(), self.profile("miku")], 0, NOW, 80, DEFAULT_THEME, charset="ascii")
+        lines, _span = profile_lines([self.profile(), self.profile("mbot")], 0, NOW, 80, DEFAULT_THEME, charset="ascii")
         text = lines_text(lines)
         self.assertFalse({character for row in text for character in row if ord(character) > 127} - {"·", "…"},
                          "no block, box or chip glyph is left")
@@ -753,7 +753,7 @@ class SummaryTests(FixtureRoot):
         # Off POSIX the gateway's words come first and take an 80-column edge; 150 leaves room for the chips.
         wide, _span = profile_lines([self.profile()], 0, NOW, 150, DEFAULT_THEME, charset="ascii")
         self.assertIn("discord o", squeeze(lines_text(wide)[-2]), "a platform as last recorded: o")
-        self.assertTrue(any(row.startswith("+----------+- ? miku -") for row in text), "a gateway whose record outlived it: ?")
+        self.assertTrue(any(row.startswith("+----------+- ? mbot -") for row in text), "a gateway whose record outlived it: ?")
 
     def test_hermes_display_name_is_read_from_profile_yaml(self) -> None:
         self.assertEqual(self.profile().display, "")
@@ -799,7 +799,7 @@ def bots() -> tuple:
                           usage=bot_board.Usage(184_200, 41_700, 2_310_000, 1.86, True, 0, 0), memory=memory, this_tui=True),
         bot_board.Profile("kami", Path("/h/kami"), bot_board.Gateway("", False, problem="no gateway record"),
                           (("slack", 9),), 0, NOW - 20 * DAY, model="glm-5.3", memory=memory),
-        bot_board.Profile("miku", Path("/h/miku"), live, (("discord", 688), ("telegram", 344)), 31, NOW - 12,
+        bot_board.Profile("mbot", Path("/h/mbot"), live, (("discord", 688), ("telegram", 344)), 31, NOW - 12,
                           model="deepseek-v4.1-flash", provider="deepseek", usage=usage,
                           newest=bot_board.SessionRow("s1", "#live-stage · setlist for Saturday's stream", "discord",
                                                       NOW - 12, 48, "kimi-k3.1-pro"),
@@ -851,12 +851,12 @@ class LayoutTests(unittest.TestCase):
     def test_at_150_and_120_the_fields_sit_in_two_columns_beside_the_face(self) -> None:
         for cols in (150, 120):
             with self.subTest(cols=cols):
-                miku = self.cards(cols)[2]
-                self.assertEqual(len(miku), 6, "the edges and four rows: the face's height")
-                self.assertTrue(miku[0].startswith("╭──────────┬─ ● miku ─"))
-                self.assertTrue(miku[0].endswith(" up 6d 2h · 3 agents · 512 MB ─╮"))
-                self.assertTrue(miku[1].startswith("│ " + avatar("miku")[0] + " │ model   deepseek-v4.1-flash"))
-                cells = [[squeeze(cell) for cell in row.split("│")[2:-1]] for row in miku[1:-1]]
+                mbot = self.cards(cols)[2]
+                self.assertEqual(len(mbot), 6, "the edges and four rows: the face's height")
+                self.assertTrue(mbot[0].startswith("╭──────────┬─ ● mbot ─"))
+                self.assertTrue(mbot[0].endswith(" up 6d 2h · 3 agents · 512 MB ─╮"))
+                self.assertTrue(mbot[1].startswith("│ " + avatar("mbot")[0] + " │ model   deepseek-v4.1-flash"))
+                cells = [[squeeze(cell) for cell in row.split("│")[2:-1]] for row in mbot[1:-1]]
                 self.assertEqual([left.split()[0] for left, _right in cells], ["model", "now", "tokens", "cost"])
                 self.assertEqual([right.split()[0] for _left, right in cells], ["24", "memory", "user", "OMH"])
                 self.assertTrue(cells[1][0].startswith("now #live-stage"))
@@ -867,14 +867,14 @@ class LayoutTests(unittest.TestCase):
                 self.assertEqual(cells[1][1], f"memory {gauge(89, 8)}")
                 self.assertEqual(cells[2][1], f"user {gauge(90, 9)}")
                 self.assertEqual(cells[3][1], "OMH 139 records")
-                self.assertTrue(squeeze(miku[-1]).startswith("╰──────────┴─ discord ● whatsapp ●! slack ●! ─"))
+                self.assertTrue(squeeze(mbot[-1]).startswith("╰──────────┴─ discord ● whatsapp ●! slack ●! ─"))
 
     def test_at_80_the_fields_stack_in_one_column(self) -> None:
-        miku = self.cards(80)[2]
-        labels = [squeeze(row.split("│")[2]).split(" ")[0] for row in miku[1:-1]]
+        mbot = self.cards(80)[2]
+        labels = [squeeze(row.split("│")[2]).split(" ")[0] for row in mbot[1:-1]]
         self.assertEqual(labels, ["model", "now", "tokens", "cost", "24", "memory", "user", "OMH"])
-        self.assertEqual([row[1:11] for row in miku[1:5]], [f" {line} " for line in avatar("miku")])
-        self.assertEqual({row[1:11] for row in miku[5:-1]}, {" " * 10}, "the face is four rows; the rest are blank")
+        self.assertEqual([row[1:11] for row in mbot[1:5]], [f" {line} " for line in avatar("mbot")])
+        self.assertEqual({row[1:11] for row in mbot[5:-1]}, {" " * 10}, "the face is four rows; the rest are blank")
 
     def test_the_kami_card_says_its_gateway_serves_it_and_it_had_no_day(self) -> None:
         kami = self.cards(150)[1]
@@ -885,15 +885,15 @@ class LayoutTests(unittest.TestCase):
     def test_the_selected_card_takes_the_accent_and_the_rest_the_rule(self) -> None:
         lines = self.lines(150)
         edges = lambda line: {span.style for span in line if span.text.strip() and set(span.text) <= set("╭╮╰╯─┬┴│ ")}
-        self.assertEqual(edges(lines[HEAD + 6 + 1 + 6 + 1]), {bot_board._highlight(DEFAULT_THEME)}, "miku's top edge")
+        self.assertEqual(edges(lines[HEAD + 6 + 1 + 6 + 1]), {bot_board._highlight(DEFAULT_THEME)}, "mbot's top edge")
         self.assertEqual(edges(lines[HEAD]), {DEFAULT_THEME.rule})
 
     def test_a_narrow_card_gives_up_its_figures_its_face_and_its_last_chips(self) -> None:
         states = []
         for cols in range(80, 24, -1):
-            miku = self.cards(cols)[2]
-            top, body, bottom = miku[0], miku[1], squeeze(miku[-1])
-            state = ("up 6d" in top, avatar("miku")[0] in body, "slack" in bottom, "whatsapp" in bottom)
+            mbot = self.cards(cols)[2]
+            top, body, bottom = mbot[0], mbot[1], squeeze(mbot[-1])
+            state = ("up 6d" in top, avatar("mbot")[0] in body, "slack" in bottom, "whatsapp" in bottom)
             if not states or state != states[-1]:
                 states.append(state)
         self.assertEqual(states[0], (True, True, True, True))
@@ -913,7 +913,7 @@ class ProfileBoxTests(unittest.TestCase):
     """Level 2: the profile's box, then the sessions in a table box, whole at 150 and 120 columns."""
 
     def page(self, cols: int, sessions=()) -> list[str]:
-        snapshot_ = BoardSnapshot(BoardView("miku"), bots(), tuple(sessions), 41, read_at=NOW)
+        snapshot_ = BoardSnapshot(BoardView("mbot"), bots(), tuple(sessions), 41, read_at=NOW)
         lines, _span = session_lines(snapshot_, 0, NOW, cols, DEFAULT_THEME)
         self.assertLessEqual(max(line_width(line) for line in lines), cols)
         return lines_text(lines)
@@ -924,7 +924,7 @@ class ProfileBoxTests(unittest.TestCase):
                 text = self.page(cols)
                 box = text[: text.index("")]
                 self.assertEqual({len(row) for row in box}, {cols})
-                self.assertTrue(box[0].startswith("╭──────────┬─ ● miku ─") and box[0].endswith(" up 6d 2h · 3 agents · 512 MB ─╮"))
+                self.assertTrue(box[0].startswith("╭──────────┬─ ● mbot ─") and box[0].endswith(" up 6d 2h · 3 agents · 512 MB ─╮"))
                 self.assertEqual(field(box, "gateway"), "gateway running · pid 52417 · 3 agents running")
                 self.assertEqual(field(box, "error"), "error slack: token revoked")
                 self.assertEqual(field(box, "memory"), f"memory {gauge(89, 8)} 18 entries · 3,120/3,500 chars")
@@ -966,7 +966,7 @@ class ProfileBoxTests(unittest.TestCase):
         # Every menu lost its fill on 2026-10-27 (the owner's ragged teal bands): the table marks its row as the
         # completion menu and the pickers do.
         sessions = [bot_board.SessionRow(f"s{n}", f"chat {n}", "cli", NOW - n, 1) for n in range(3)]
-        snapshot_ = BoardSnapshot(BoardView("miku"), bots(), tuple(sessions), read_at=NOW)
+        snapshot_ = BoardSnapshot(BoardView("mbot"), bots(), tuple(sessions), read_at=NOW)
         lines, span = session_lines(snapshot_, 1, NOW, 120, DEFAULT_THEME)
         selected, other = lines[span[0]], lines[span[0] + 1]
         self.assertEqual({item.style.bg for line in lines for item in line}, {None}, "no row has a fill")
@@ -987,7 +987,7 @@ class MessageBoxTests(unittest.TestCase):
             bot_board.MessageRow("tool", "omh_memory: recall · setlist", NOW - 590),
             bot_board.MessageRow("assistant", "Locked.", NOW - 580),
         )
-        snapshot_ = BoardSnapshot(BoardView("miku", "s1"), bots(), (session,), messages=messages, read_at=NOW)
+        snapshot_ = BoardSnapshot(BoardView("mbot", "s1"), bots(), (session,), messages=messages, read_at=NOW)
         lines = message_lines(snapshot_, session, NOW, cols, DEFAULT_THEME, charset)
         self.assertLessEqual(max(line_width(line) for line in lines), cols)
         self.lines = lines
@@ -998,7 +998,7 @@ class MessageBoxTests(unittest.TestCase):
             with self.subTest(cols=cols):
                 text = self.page(cols)
                 head, body = text[: text.index("")], text[text.index("") + 1 :]
-                self.assertTrue(head[0].startswith("╭─ miku › #live-stage · setlist for Saturday's stream ─"))
+                self.assertTrue(head[0].startswith("╭─ mbot › #live-stage · setlist for Saturday's stream ─"))
                 self.assertEqual(squeeze(head[1]), "│ discord · 48 messages · last active just now │")
                 self.assertEqual(squeeze(head[2]), "│ kimi-k3.1-pro · 412.3k in · 38.9k out · 3.1M cache read · ~$0.41 │")
                 joint = body[0].index("┬")
@@ -1018,7 +1018,7 @@ class MessageBoxTests(unittest.TestCase):
     def test_the_ascii_charset_draws_the_same_boxes(self) -> None:
         text = self.page(120, "ascii")
         self.assertFalse({character for row in text for character in row if ord(character) > 127} - {"·", "›", "…"})
-        self.assertTrue(text[0].startswith("+- miku"))
+        self.assertTrue(text[0].startswith("+- mbot"))
 
 
 # Emoji built with chr(): a ZWJ family (five code points, one two-cell cluster) and VS16 emoji (two code points each).
@@ -1068,7 +1068,7 @@ class GraphemeEdgeTests(unittest.TestCase):
 
     def test_emoji_titles_and_display_names_keep_every_box_whole_at_every_width(self) -> None:
         title = (FAMILY + " stage " + HEART + SUN) * 12
-        profile = replace(bots()[2], display=HEART + " Miku " + FAMILY * 3, newest=replace(bots()[2].newest, title=title))
+        profile = replace(bots()[2], display=HEART + " Mbot " + FAMILY * 3, newest=replace(bots()[2].newest, title=title))
         session = replace(profile.newest, title=title)
         messages = (bot_board.MessageRow("user", title, NOW - 60), bot_board.MessageRow("tool", FAMILY * 50, NOW - 30))
         for charset in ("unicode", "ascii"):
@@ -1076,10 +1076,10 @@ class GraphemeEdgeTests(unittest.TestCase):
                 with self.subTest(charset=charset, cols=cols):
                     level_one, _span = profile_lines((bots()[0], profile), 1, NOW, cols, DEFAULT_THEME, charset)
                     self.assert_whole(level_one, cols, charset)
-                    listed = BoardSnapshot(BoardView("miku"), (profile,), (session,), read_at=NOW)
+                    listed = BoardSnapshot(BoardView("mbot"), (profile,), (session,), read_at=NOW)
                     level_two, _span = session_lines(listed, 0, NOW, cols, DEFAULT_THEME, charset)
                     self.assert_whole(level_two, cols, charset)
-                    opened = BoardSnapshot(BoardView("miku", "s1"), (profile,), (session,), messages=messages, read_at=NOW)
+                    opened = BoardSnapshot(BoardView("mbot", "s1"), (profile,), (session,), messages=messages, read_at=NOW)
                     self.assert_whole(message_lines(opened, session, NOW, cols, DEFAULT_THEME, charset), cols, charset)
 
     def test_the_reviewers_family_title_draws_and_does_not_raise(self) -> None:
@@ -1350,22 +1350,22 @@ class MessagingReadTests(FixtureRoot):
         self.assertEqual(by_platform["slack"].status, "connected", "this process's own record entry decides")
         self.assertEqual(by_platform["discord"].status, "failed", "no entry of this run: the line of this run does")
         self.assertEqual(by_platform["discord"].restart, "hermes -p default gateway restart")
-        self.assertEqual(profiles["miku"].messaging, (), "no gateway serves it and its log says nothing")
+        self.assertEqual(profiles["mbot"].messaging, (), "no gateway serves it and its log says nothing")
         self.assertEqual(tree_state(self.root), before, "nothing is written")
 
     def test_a_producer_that_cannot_read_leaves_the_cards_without_states(self) -> None:
         with patch("omh.maintenance.gateway_health.bot_platforms", side_effect=OSError("gone")):
             profiles = snapshot(self.environ).profiles
-        self.assertEqual([profile.name for profile in profiles], ["default", "broken", "locked", "miku"])
+        self.assertEqual([profile.name for profile in profiles], ["default", "broken", "locked", "mbot"])
         self.assertEqual({profile.messaging for profile in profiles}, {()})
 
 
 class AvatarTests(unittest.TestCase):
     def test_a_name_draws_the_same_face_on_every_run(self) -> None:
-        self.assertEqual(avatar("miku"), [" █▀▄▄▀█ ", " █    █ ", "█▀████▀█", " ▀ ▀▀ ▀ "])  # pinned: sha256 of the name
-        self.assertEqual(avatar("miku", "ascii"), [" #',,'# ", " #    # ", "#'####'#", " ' '' ' "])
+        self.assertEqual(avatar("mbot"), [" ▄▀  ▀▄ ", "▄▄ ██ ▄▄", " ▄█  █▄ ", "▀▀████▀▀"])  # pinned: sha256 of the name
+        self.assertEqual(avatar("mbot", "ascii"), [" ,'  ', ", ',, ## ,,', ' ,#  #, ', "''####''"])
         self.assertEqual(avatar("kami"), avatar("kami"))
-        self.assertNotEqual(avatar("kami"), avatar("miku"))
+        self.assertNotEqual(avatar("kami"), avatar("mbot"))
 
     def test_a_face_is_mirrored_and_fills_its_cells(self) -> None:
         for name in ("default", "frieren", "a", "名前"):
@@ -1379,15 +1379,15 @@ class AvatarTests(unittest.TestCase):
     def test_its_colour_is_an_accent_step_that_reads_on_light_and_dark(self) -> None:
         for background in ("#FCF9FD", "#0F1B2D"):
             theme = build_theme(default_theme(), background)
-            for name in ("default", "kami", "miku", "frieren"):
+            for name in ("default", "kami", "mbot", "frieren"):
                 style = bot_board._avatar_style(name, theme)
                 self.assertGreaterEqual(contrast_ratio(style.fg, background), TEXT_CONTRAST, (background, name))
                 self.assertEqual(style, bot_board._avatar_style(name, theme))
 
     def test_hermes_display_name_titles_the_box_beside_the_profile_name(self) -> None:
-        profile = replace(bots()[2], display="Miku Hatsune")
+        profile = replace(bots()[2], display="Mbot Hatsune")
         top = lines_text(bot_board.bot_box(profile, "", False, NOW, 80, DEFAULT_THEME))[0]
-        self.assertTrue(top.startswith("╭──────────┬─ ● Miku Hatsune (miku) ─"), top)
+        self.assertTrue(top.startswith("╭──────────┬─ ● Mbot Hatsune (mbot) ─"), top)
 
 
 class ThemeBandTests(unittest.TestCase):
@@ -1482,7 +1482,7 @@ class DrawingTests(FixtureRoot):
                     self.assertIn("╰──────────┴─ discord ○ slack ● ─", text, "a platform as last recorded: ○")
                     self.assertIn("2 agents", text)
                     self.assertIn("24 h 2 active · 4 stored", text)
-                    self.assertIn("╭──────────┬─ ◌ miku ─", text)
+                    self.assertIn("╭──────────┬─ ◌ mbot ─", text)
                     self.assertIn("╰──────────┴─ gateway not running slack ○ ─", text, "the why gives way to the chips")
                     self.assertNotIn("is gone…", text, "never cut mid-word")
                     self.assertIn("╭──────────┬─ ○ broken ─", text)
@@ -1495,10 +1495,10 @@ class DrawingTests(FixtureRoot):
     @POSIX_ONLY
     def test_a_profile_the_default_gateway_serves_reads_as_served(self) -> None:
         record = json.loads((self.root / "gateway_state.json").read_text(encoding="utf-8"))
-        write_record(self.root, {**record, "served_profiles": ["default", "miku"]})
+        write_record(self.root, {**record, "served_profiles": ["default", "mbot"]})
         lines, _span = profile_lines(snapshot(self.environ).profiles, 0, NOW, 150, DEFAULT_THEME)
         text = "\n".join(squeeze(row) for row in lines_text(lines))
-        self.assertIn("╭──────────┬─ ● miku ─", text)
+        self.assertIn("╭──────────┬─ ● mbot ─", text)
         self.assertIn("╰──────────┴─ served by the default gateway slack ○ ─", text)
 
     def test_levels_two_and_three_fit_any_width_and_show_the_tail(self) -> None:
@@ -1613,7 +1613,7 @@ class ReaderThreadTests(FixtureRoot):
         settled = len(reads)
         time.sleep(0.2)
         self.assertEqual(len(reads), settled, "nothing is read while the board is closed")
-        reader.show(BoardView("miku"))
+        reader.show(BoardView("mbot"))
         reader.start()
         self.assertIs(reader._thread, thread)
         self.assertEqual(self.wait_for(reader).view, BoardView(), "it opens again at the profiles")
@@ -1634,7 +1634,7 @@ class ReaderThreadTests(FixtureRoot):
         reader = bot_board.BoardReader(self.environ)
 
         def slow(environ, view, now):
-            reader.show(BoardView("miku"))  # the person moved while this read ran
+            reader.show(BoardView("mbot"))  # the person moved while this read ran
             return BoardSnapshot(view, ())
 
         reader._open = True
@@ -1694,7 +1694,7 @@ class BoardKeysTests(FixtureRoot):
         board.frame(80, 8, DEFAULT_THEME)
         first, _last = board._span
         self.assertTrue(board.top <= first < board.top + board.body_rows(8), "the highlighted box's top edge is on screen")
-        self.assertIn("miku", line_text(board.lines[first]))
+        self.assertIn("mbot", line_text(board.lines[first]))
 
     def test_the_highlight_stays_on_its_session_when_the_list_reorders(self) -> None:
         board, reader = self.board()
@@ -1749,9 +1749,9 @@ class BoardKeysTests(FixtureRoot):
 
     def test_a_snapshot_for_another_view_is_not_drawn_as_this_one(self) -> None:
         board, reader = self.board()
-        board.view = BoardView("miku")
+        board.view = BoardView("mbot")
         board.frame(100, 24, DEFAULT_THEME)
-        self.assertEqual(lines_text(board.lines), ["miku · reading…"])
+        self.assertEqual(lines_text(board.lines), ["mbot · reading…"])
 
 
 class AppTests(FixtureRoot):

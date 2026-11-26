@@ -123,7 +123,7 @@ test("output makes a cell work with an orbiting edge, still under reduced motion
   await page.keyboard.press("Enter");
   await page.getByTestId(`session-${c}`).locator(".ss-open").click();
   await expect(card(page)).toHaveAttribute("data-away", "true");
-  // a ring is news (it may have finished): a soft accent edge breathing slowly, never the amber wait (khope 2026-11-23)
+  // a ring is news (it may have finished): a soft accent edge breathing slowly, never the amber wait (demo 2026-11-23)
   await expect(cell(page, a)).toHaveAttribute("data-state", "news", { timeout: 8000 });
   await expect(cell(page, b)).not.toHaveAttribute("data-state", "news");
   await expect(cell(page, a).locator(".sc-wait")).toHaveCount(0);

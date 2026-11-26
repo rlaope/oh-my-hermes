@@ -385,9 +385,12 @@ NON_SKILL_BACKTICKS = frozenset(
 # event to `github-event-ops`, a meeting's issues to `operating-rhythm` and a
 # declared outage to `live-incident-response`; no sibling gains a line pointing
 # back. Four cases, four pairs, one new owner.
-EXPECTED_DEFERENCE_CASES = 477
-EXPECTED_DEFERENCE_PAIRS = 504
-EXPECTED_DEFERRING_OWNERS = 141
+# `bot-template` defers a recurring job of the person's own design to
+# `automation-blueprint` and a wait on one pull request to `github-event-ops`;
+# no sibling gains a line pointing back. Two cases, two pairs, one new owner.
+EXPECTED_DEFERENCE_CASES = 479
+EXPECTED_DEFERENCE_PAIRS = 506
+EXPECTED_DEFERRING_OWNERS = 142
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,
 # not one more dict line with a plausible sentence attached.

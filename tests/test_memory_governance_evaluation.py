@@ -359,7 +359,7 @@ class SafetyAndEvaluationTests(unittest.TestCase):
 
     def test_windows_and_unc_paths_are_safe(self) -> None:
         for path in (
-            r"C:\Users\kim\AppData\Local\Programs\Python\Python313\python.exe",
+            r"C:\Users\demo\AppData\Local\Programs\Python\Python313\python.exe",
             r"\\server\share\AppData\Local\Programs\Python\Python313\python.exe",
         ):
             with self.subTest(path=path):

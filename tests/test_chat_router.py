@@ -328,10 +328,10 @@ _REPINNED_PI_FAMILY_SESSION_INVENTORY_REQUESTS_OPEN_HARNESS_SESSION_IN = frozens
 )
 
 
-def sionic_omh_usage_evaluation_prompt() -> str:
-    return """이번 Sionic 작업에서 OMH가 얼마나 관여했는지 사용성 평가하고,
+def demo_omh_usage_evaluation_prompt() -> str:
+    return """이번 Example 작업에서 OMH가 얼마나 관여했는지 사용성 평가하고,
 왜 OMH를 덜 썼는지 분석해서 라우터 강화 플랜으로 잡아줘.
-Sionic은 마크다운 노트뿐 아니라 위키 페이지/site 생성도 포함했어.
+Example은 마크다운 노트뿐 아니라 위키 페이지/site 생성도 포함했어.
 결과창에는 Background process proc_d5eb61ddcf80 finished with exit code 0~
 Here's the final output: 같은 raw output, turn.completed usage, Self-improvement review 줄이 보였고
 이걸 프리티하게 OMH wrapper report로 정리해야 했어.
@@ -3789,7 +3789,7 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
         self.assertIn("do not persist transient task", card["summary"])
 
     def test_pasted_omh_awareness_evaluation_routes_learning_before_delivery(self) -> None:
-        message = sionic_omh_usage_evaluation_prompt()
+        message = demo_omh_usage_evaluation_prompt()
 
         decision = route_chat_message(message, source="discord", limit=8)
         task_card = decision["task_card"]
@@ -3834,12 +3834,12 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
         self.assertIsNone(decision["task_card"])
         self.assertNotIn("task_card:router_design_feedback", decision["recommendations"][0]["matched"])
 
-        domain = route_chat_message("고객 관여도 분석해서 Sionic 위키 페이지 개선해줘.", source="discord")
+        domain = route_chat_message("고객 관여도 분석해서 Example 위키 페이지 개선해줘.", source="discord")
         self.assertNotEqual(domain["selected_skill"], "workflow-learning")
         self.assertIsNone(domain["task_card"])
 
     def test_domain_work_with_pasted_status_does_not_become_omh_quality_loop(self) -> None:
-        message = """Sionic 위키 페이지 사용성 평가하고 더 보기 좋게 만들어줘.
+        message = """Example 위키 페이지 사용성 평가하고 더 보기 좋게 만들어줘.
 
 [omh] v1.0.2 | plugin:ready | target:single | coding-agent:runtime(codex)
 [OMH] Native bridge status context.
@@ -3862,7 +3862,7 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
 Evidence boundary: prepared handoffs are not execution evidence.
 Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
 
-Sionic 작업 말고 OMH 라우터 강화 플랜으로 잡아줘.
+Example 작업 말고 OMH 라우터 강화 플랜으로 잡아줘.
 """
 
         decision = route_chat_message(message, source="discord")

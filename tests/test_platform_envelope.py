@@ -199,7 +199,7 @@ class RawPiiDetectionTests(unittest.TestCase):
 
     def test_email_shaped_detected(self) -> None:
         self.assertTrue(is_raw_pii_shaped("agent@example.com"))
-        self.assertTrue(is_raw_pii_shaped("a.b+tag@sub.domain.org"))
+        self.assertTrue(is_raw_pii_shaped("a.b+tag@sub.example.org"))
 
     def test_opaque_refs_not_flagged(self) -> None:
         self.assertFalse(is_raw_pii_shaped("conv_123"))

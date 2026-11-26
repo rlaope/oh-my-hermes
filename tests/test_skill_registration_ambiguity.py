@@ -586,7 +586,7 @@ class RegisteredManagedEntriesTests(unittest.TestCase):
             "Hermes refuses a bare skill name that resolves to two different files, "
             "so OMH skills fail to load by name",
         )
-        self.assertEqual(registration_home_label(config, profile="miku"), f"profile miku ({config})")
+        self.assertEqual(registration_home_label(config, profile="mbot"), f"profile mbot ({config})")
 
 
 class DoctorAmbiguityCheckTests(unittest.TestCase):
@@ -643,7 +643,7 @@ class DoctorAmbiguityCheckTests(unittest.TestCase):
             pointer.mkdir(parents=True)
             paths.hermes_home.mkdir()
             write_config(paths.hermes_config_path, _config_naming(pointer))
-            for name, config in (("miku", _config_naming(old, pointer)), ("clean", _config_naming(pointer))):
+            for name, config in (("mbot", _config_naming(old, pointer)), ("clean", _config_naming(pointer))):
                 profile = paths.hermes_home / "profiles" / name
                 profile.mkdir(parents=True)
                 write_config(profile / "config.yaml", config)
@@ -652,15 +652,15 @@ class DoctorAmbiguityCheckTests(unittest.TestCase):
 
             self.assertEqual(checks["external_dir_ambiguity"].severity, "ok")
             self.assertNotIn("external_dir_ambiguity:clean", checks)
-            row = checks["external_dir_ambiguity:miku"]
+            row = checks["external_dir_ambiguity:mbot"]
             self.assertEqual((row.ok, row.severity, row.next_action), (True, "warning", "run `omh update`"))
-            profile_config = paths.hermes_home / "profiles" / "miku" / "config.yaml"
-            self.assertTrue(row.message.startswith(f"profile miku ({profile_config}) names 2 OMH-managed"))
+            profile_config = paths.hermes_home / "profiles" / "mbot" / "config.yaml"
+            self.assertTrue(row.message.startswith(f"profile mbot ({profile_config}) names 2 OMH-managed"))
             self.assertIn(old.as_posix(), row.message)
             self.assertIn(pointer.as_posix(), row.message)
 
     def test_a_profile_relative_entry_is_read_from_the_profile_s_own_home(self) -> None:
-        # `../../../.omh/skills` in `profiles/miku` is the pre-pointer copy to
+        # `../../../.omh/skills` in `profiles/mbot` is the pre-pointer copy to
         # Hermes; read from the primary's home or the cwd it names nothing,
         # and the profile's ambiguity would go unreported.
         with TemporaryDirectory() as tmp:
@@ -672,13 +672,13 @@ class DoctorAmbiguityCheckTests(unittest.TestCase):
             pointer.mkdir(parents=True)
             paths.hermes_home.mkdir()
             write_config(paths.hermes_config_path, _config_naming(pointer))
-            profile = paths.hermes_home / "profiles" / "miku"
+            profile = paths.hermes_home / "profiles" / "mbot"
             profile.mkdir(parents=True)
             write_config(profile / "config.yaml", _config_naming(pointer) + "    - ../../../.omh/skills\n")
 
             checks = self._checks(paths, pointer)
 
-            row = checks["external_dir_ambiguity:miku"]
+            row = checks["external_dir_ambiguity:mbot"]
             self.assertEqual((row.ok, row.severity), (True, "warning"))
             self.assertIn(f"({pointer.as_posix()} and ../../../.omh/skills)", row.message)
 
@@ -710,7 +710,7 @@ class DoctorAmbiguityCheckTests(unittest.TestCase):
         label = registration_home_label(Path("/h/config.yaml"))
         ambiguous = _doctor_module._ambiguity_check("external_dir_ambiguity", label, ["/a", "/b"])
         profile_row = _doctor_module._ambiguity_check(
-            "external_dir_ambiguity:miku", registration_home_label(Path("/p/config.yaml"), profile="miku"), ["/a", "/b"]
+            "external_dir_ambiguity:mbot", registration_home_label(Path("/p/config.yaml"), profile="mbot"), ["/a", "/b"]
         )
         clean = _doctor_module._ambiguity_check("external_dir_ambiguity", label, ["/a"])
         passing = _doctor_module.Check("external_dir", True, "ok")
@@ -733,7 +733,7 @@ class UpdatePostCheckTests(unittest.TestCase):
             old.mkdir(parents=True)
             pointer.mkdir(parents=True)
             write_config(hermes_home / "config.yaml", _config_naming(old, pointer))
-            profile = hermes_home / "profiles" / "miku"
+            profile = hermes_home / "profiles" / "mbot"
             profile.mkdir(parents=True)
             write_config(profile / "config.yaml", _config_naming(old, pointer))
             clean = hermes_home / "profiles" / "clean"
@@ -746,7 +746,7 @@ class UpdatePostCheckTests(unittest.TestCase):
 
             self.assertEqual(len(lines), 2, lines)
             self.assertTrue(lines[0].startswith(f"{hermes_home.resolve() / 'config.yaml'} names 2 OMH-managed"))
-            self.assertTrue(lines[1].startswith(f"profile miku ({profile.resolve() / 'config.yaml'}) names 2 OMH-managed"))
+            self.assertTrue(lines[1].startswith(f"profile mbot ({profile.resolve() / 'config.yaml'}) names 2 OMH-managed"))
             for line in lines:
                 # Entries are named the way the file spells them.
                 self.assertIn(f"({old.as_posix()} and {pointer.as_posix()})", line)
@@ -762,7 +762,7 @@ class UpdatePostCheckTests(unittest.TestCase):
             pointer.mkdir(parents=True)
             hermes_home.mkdir()
             write_config(hermes_home / "config.yaml", _config_naming(pointer))
-            profile = hermes_home / "profiles" / "miku"
+            profile = hermes_home / "profiles" / "mbot"
             profile.mkdir(parents=True)
             write_config(profile / "config.yaml", _config_naming(pointer) + "    - ../../../.omh/skills\n")
             args = argparse.Namespace(omh_home=str(root / ".omh"), hermes_home=str(hermes_home))
@@ -771,7 +771,7 @@ class UpdatePostCheckTests(unittest.TestCase):
                 lines = _setup_module._registration_ambiguity_lines(args)
 
             self.assertEqual(len(lines), 1, lines)
-            self.assertTrue(lines[0].startswith(f"profile miku ({profile.resolve() / 'config.yaml'}) names 2 OMH-managed"))
+            self.assertTrue(lines[0].startswith(f"profile mbot ({profile.resolve() / 'config.yaml'}) names 2 OMH-managed"))
 
     def test_the_post_check_is_quiet_for_homes_naming_one(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -814,7 +814,7 @@ class DoctorUnregisteredCopyCheckTests(unittest.TestCase):
             paths = _managed_paths(root, generation)
             paths.hermes_home.mkdir()
             write_config(paths.hermes_config_path, _config_naming(pointer))
-            profile = paths.hermes_home / "profiles" / "miku"
+            profile = paths.hermes_home / "profiles" / "mbot"
             profile.mkdir(parents=True)
             write_config(profile / "config.yaml", _config_naming(pointer))
             copy = self._frozen_copy(paths)
@@ -879,7 +879,7 @@ class DoctorUnregisteredCopyCheckTests(unittest.TestCase):
             paths = _managed_paths(root, generation)
             paths.hermes_home.mkdir()
             write_config(paths.hermes_config_path, _config_naming(pointer))
-            profile = paths.hermes_home / "profiles" / "miku"
+            profile = paths.hermes_home / "profiles" / "mbot"
             profile.mkdir(parents=True)
             copy = self._frozen_copy(paths)
             write_config(profile / "config.yaml", _config_naming(copy, pointer))
@@ -889,7 +889,7 @@ class DoctorUnregisteredCopyCheckTests(unittest.TestCase):
             self.assertEqual((check.ok, check.severity), (True, "ok"))
             self.assertEqual(
                 check.message,
-                f"pre-pointer skills copy at {copy} is still registered by profile miku ({profile / 'config.yaml'}); "
+                f"pre-pointer skills copy at {copy} is still registered by profile mbot ({profile / 'config.yaml'}); "
                 f"`omh update` migrates that registration to {generation}",
             )
 
@@ -903,7 +903,7 @@ class DoctorUnregisteredCopyCheckTests(unittest.TestCase):
             paths = _managed_paths(root, generation)
             paths.hermes_home.mkdir()
             write_config(paths.hermes_config_path, _config_naming(pointer))
-            profile = paths.hermes_home / "profiles" / "miku"
+            profile = paths.hermes_home / "profiles" / "mbot"
             profile.mkdir(parents=True)
             copy = self._frozen_copy(paths)
             write_config(profile / "config.yaml", _config_naming(pointer) + "    - ../../../.omh/skills\n")
@@ -911,7 +911,7 @@ class DoctorUnregisteredCopyCheckTests(unittest.TestCase):
             check = self._check(paths, pointer)
 
             self.assertEqual((check.ok, check.severity), (True, "ok"))
-            self.assertIn(f"skills copy at {copy} is still registered by profile miku ({profile / 'config.yaml'})", check.message)
+            self.assertIn(f"skills copy at {copy} is still registered by profile mbot ({profile / 'config.yaml'})", check.message)
 
     def test_an_unmanaged_install_serves_skills_from_that_directory(self) -> None:
         with TemporaryDirectory() as tmp:

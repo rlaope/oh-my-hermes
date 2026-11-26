@@ -1035,8 +1035,9 @@ def read_bot_page(profile_dir: Path) -> dict:
 PLATFORMS_TTL = 30.0
 PLATFORMS_TTL_MISS = 120.0
 # The read-only `omh` JSON commands the bridge may run, each a fixed argv after `omh --hermes-home <Hermes root>`.
-# This table is the whole list: an entry needs a boundary rule of its own (`platforms`: rule 43).
-OMH_READS = {"platforms": ("hermes", "platforms")}
+# This table is the whole list: an entry needs a boundary rule of its own (`platforms`: rule 43; `bot_templates`:
+# rule 44).
+OMH_READS = {"platforms": ("hermes", "platforms"), "bot_templates": ("profile", "bot-templates", "--json")}
 OMH_READ_TIMEOUT = 20.0  # a read still running then is stopped (`_stop_run`)
 OMH_READ_OUTPUT_MAX = 1 << 20  # what it prints, at most; a longer answer is refused, not cut
 PLATFORMS_SCHEMA = "omh_bot_platforms/v1"
@@ -1144,28 +1145,50 @@ def platform_rows(out: str | None) -> dict[str, dict] | None:
         name = bot.get("profile") if isinstance(bot, dict) else None
         if not isinstance(name, str) or not PROFILE_ID.fullmatch(name):
             continue
-        rows = []
-        for row in bot.get("platforms") if isinstance(bot.get("platforms"), list) else []:
-            if not isinstance(row, dict) or not isinstance(row.get("platform"), str) \
-                    or not PLATFORM_NAME.fullmatch(row["platform"]) or row.get("status") not in PLATFORM_STATUSES:
-                continue
-            kind, why = row.get("reason_kind"), row.get("unknown_why")
-            restart = row.get("restart")
-            intents = row.get("intents") if isinstance(row.get("intents"), list) else []
-            rows.append({
-                "platform": row["platform"], "status": row["status"], "attention": row.get("attention") is True,
-                **{k: row[k] if isinstance(row.get(k), str) and PLATFORM_TIME.fullmatch(row[k]) else ""
-                   for k in ("since", "logged")},
-                "reason_kind": kind if isinstance(kind, str) and PLATFORM_TOKEN.fullmatch(kind) else "",
-                "unknown_why": why if isinstance(why, str) and PLATFORM_TOKEN.fullmatch(why) else "",
-                **{k: _platform_text(row.get(k), n) for k, n in PLATFORM_TEXT_MAX.items()},
-                "restart": restart if isinstance(restart, str) and PLATFORM_RESTART.fullmatch(restart) else "",
-                "intents": [i for i in intents if isinstance(i, str) and i in PLATFORM_INTENTS],
-            })
-            if len(rows) >= 32:
-                break
-        log = bot.get("log")
-        bots[name] = {"log": log if log in PLATFORM_LOGS else "unknown", "platforms": rows}
+        bots[name] = _platform_entry(bot)
+    return bots
+
+
+def _platform_entry(bot: dict) -> dict:
+    """One bot's {log, platforms}, every field checked and clipped: at most 32 rows, each of the fields below only."""
+    rows, seen = [], set()
+    for row in bot.get("platforms") if isinstance(bot.get("platforms"), list) else []:
+        if not isinstance(row, dict) or not isinstance(row.get("platform"), str) \
+                or not PLATFORM_NAME.fullmatch(row["platform"]) or not isinstance(row.get("status"), str) \
+                or row["status"] not in PLATFORM_STATUSES or row["platform"] in seen:
+            continue  # a platform named twice keeps its first row
+        seen.add(row["platform"])
+        kind, why = row.get("reason_kind"), row.get("unknown_why")
+        restart = row.get("restart")
+        intents = row.get("intents") if isinstance(row.get("intents"), list) else []
+        rows.append({
+            "platform": row["platform"], "status": row["status"], "attention": row.get("attention") is True,
+            **{k: row[k] if isinstance(row.get(k), str) and PLATFORM_TIME.fullmatch(row[k]) else ""
+               for k in ("since", "logged")},
+            "reason_kind": kind if isinstance(kind, str) and PLATFORM_TOKEN.fullmatch(kind) else "",
+            "unknown_why": why if isinstance(why, str) and PLATFORM_TOKEN.fullmatch(why) else "",
+            **{k: _platform_text(row.get(k), n) for k, n in PLATFORM_TEXT_MAX.items()},
+            "restart": restart if isinstance(restart, str) and PLATFORM_RESTART.fullmatch(restart) else "",
+            "intents": list(dict.fromkeys(i for i in intents[:8] if isinstance(i, str) and i in PLATFORM_INTENTS)),
+        })
+        if len(rows) >= 32:
+            break
+    log = bot.get("log")
+    return {"log": log if isinstance(log, str) and log in PLATFORM_LOGS else "unknown", "platforms": rows}
+
+
+def peer_platform_rows(out) -> dict[str, dict] | None:
+    """A peer bridge's `bots.platforms` answer (rule 45), checked again on this side as if it were `omh`'s: only a
+    dict that says `available` is true, at most 256 bots whose names a peer bot can have, each through
+    `_platform_entry`. None when it is not that (an error, an older bridge, a peer without `omh`, any other shape), so
+    the page says it cannot tell. Its `peers` and any other field are dropped: a peer's own peers are never read."""
+    import itertools
+    if not isinstance(out, dict) or out.get("available") is not True or not isinstance(out.get("bots"), dict):
+        return None
+    bots: dict[str, dict] = {}
+    for name, bot in itertools.islice(out["bots"].items(), 256):
+        if isinstance(name, str) and PEER_BOT.fullmatch(name) and isinstance(bot, dict):
+            bots[name] = _platform_entry(bot)
     return bots
 
 
@@ -3058,7 +3081,7 @@ MCP_STOP_WAIT = 5.0             # seconds to wait for a stopped run to end
 
 
 def _stop_run(proc) -> None:
-    """End a run the bridge started past its time (rule 41's `hermes mcp`, rule 43's `omh` read): on POSIX its whole
+    """End a run the bridge started past its time (rule 41's `hermes mcp`, rule 43's `omh` read, rule 44's `hermes profile create`): on POSIX its whole
     process group (it was started in a session of its own, so this reaches nothing else), on Windows the process
     itself (started in a group of its own). The wait after is bounded, so the run's bot is never left busy."""
     if os.name == "nt":
@@ -3072,14 +3095,25 @@ def _stop_run(proc) -> None:
 
 
 def run_hermes_mcp(hermes: str, bot: str, verb: str, name: str, home: Path, timeout: float) -> tuple[int | None, str]:
-    """Run one `hermes mcp` argv and return (exit code, its output); the code is None for a run stopped at *timeout*
-    (`_stop_run`), whose output so far is still returned. No shell, nothing on stdin (so Hermes asks nothing: a value it
-    needs is refused in its own words), the Hermes root as HERMES_HOME, none of the gateway's own markers, and UTF-8
-    output on every system. The output goes to a temporary file, not a pipe, so a helper Hermes left running (a
-    browser it opened) can never keep the run from ending."""
+    """Rule 41: one `hermes -p <bot> mcp install|login|remove <name>` (mcp_argv) through `_run_hermes_argv`."""
+    return _run_hermes_argv(mcp_argv(hermes, bot, verb, name), home, timeout)
+
+
+def run_hermes_profile_create(hermes: str, name: str, home: Path, timeout: float) -> tuple[int | None, str]:
+    """Rule 44: one `hermes -p default profile create <name> --no-alias` (profile_create_argv) through `_run_hermes_argv`."""
+    return _run_hermes_argv(profile_create_argv(hermes, name), home, timeout)
+
+
+def _run_hermes_argv(argv: list[str], home: Path, timeout: float) -> tuple[int | None, str]:
+    """Run one pinned Hermes argv and return (exit code, its output); the code is None for a run stopped at *timeout*
+    (`_stop_run`), whose output so far is still returned. Only run_hermes_mcp and run_hermes_profile_create call it,
+    each with its own checked argv (mcp_argv, profile_create_argv). No shell, nothing on stdin (so Hermes asks nothing:
+    a value it needs is refused in its own words), the Hermes root as HERMES_HOME, none of the gateway's own markers
+    and no TUI gateway address (so Hermes acts here, not through a gateway the address names), and UTF-8 output on
+    every system. The output goes to a temporary file, not a pipe, so a helper Hermes left running (a browser it
+    opened, the default-plugin install a new profile starts) can never keep the run from ending."""
     import tempfile
-    argv = mcp_argv(hermes, bot, verb, name)
-    env = {k: v for k, v in os.environ.items() if k not in _GATEWAY_MARKERS}
+    env = {k: v for k, v in os.environ.items() if k not in _GATEWAY_MARKERS and k != "HERMES_TUI_GATEWAY_URL"}
     env.update(HERMES_HOME=str(home), PYTHONIOENCODING="utf-8", NO_COLOR="1")
     if os.name == "nt":
         kw = {"creationflags": 0x08000000 | 0x00000200}  # CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP
@@ -3100,6 +3134,135 @@ def run_hermes_mcp(hermes: str, bot: str, verb: str, name: str, home: Path, time
         out.seek(max(0, size - MCP_OUTPUT_MAX))
         text = out.read(MCP_OUTPUT_MAX).decode("utf-8", errors="replace")
     return code, text
+
+
+# ---------------------------------------------------------------- new bots (Add bot › Create, BOUNDARY rule 44)
+# A press runs one fixed argv, `hermes -p default profile create <name> --no-alias`: `-p default` so the new profile
+# copies the main profile's keys and model (Hermes' own default for a new profile) whatever Hermes' sticky
+# `active_profile` names.
+# The name follows Hermes' own rule (hermes_cli/profiles.py `validate_profile_name`: `PROFILE_ID_RE` from
+# hermes_constants.py, not one of `_RESERVED_NAMES`, never `default`), and a name that is already a folder under
+# `profiles/` is refused before anything runs. The outcome is read from the folder Hermes made, not its exit code.
+PROFILE_RESERVED = frozenset({"hermes", "default", "test", "tmp", "root", "sudo"})
+# OMH's own TUI runtime profile (src/omh/skin_pack.py TUI_PROFILE): `omh update` never gives it OMH's skills.
+OMH_PROFILES = frozenset({"omh-tui"})
+# seconds: above Hermes' own 300 s for a create run through the default profile's gateway (profile_provision_gateway.py
+# CREATE_RPC_TIMEOUT), so a stop here never cuts a create that gateway is still finishing
+PROFILE_CREATE_TIMEOUT = 330.0
+
+
+def profile_create_argv(hermes: str, name: str) -> list[str]:
+    """`hermes -p default profile create <name> --no-alias`: the name is checked here as one argv element; nothing else
+    varies. `--no-alias` (hermes_cli/subcommands/profile.py) keeps Hermes from writing a `~/.local/bin/<name>` wrapper,
+    so the press writes nothing outside Hermes' home; `hermes profile alias <name>` adds one later."""
+    if not isinstance(name, str) or not PROFILE_ID.fullmatch(name) or name in PROFILE_RESERVED or name in OMH_PROFILES:
+        raise ValueError(f"not a new profile name Hermes accepts: {name!r}")
+    return [hermes, "-p", "default", "profile", "create", name, "--no-alias"]
+
+
+def new_profile_refusal(home: Path, name: object) -> tuple[str, str] | None:
+    """(error code, the words the page shows) when *name* cannot be a new bot, else None. Hermes' own rule, then what
+    is on disk: any entry of that name under `profiles/` (a link, a file, a folder with or without a config) is
+    refused, as Hermes refuses it."""
+    if not isinstance(name, str) or not PROFILE_ID.fullmatch(name):
+        return "bad_request", "Use lowercase letters, numbers, '-' or '_', starting with a letter or number, up to 64 characters."
+    if name in PROFILE_RESERVED:
+        return "bad_request", f"{name} is a name Hermes keeps for itself."
+    if name in OMH_PROFILES:
+        return "bad_request", f"{name} is oh-my-hermes' own TUI profile."
+    if os.path.lexists(home / "profiles" / name):
+        return "exists", f"A folder named {name} is already under Hermes' profiles."
+    return None
+
+
+def new_profile_confirmed(home: Path, name: str, code: int | None, output: str) -> bool:
+    """Whether Hermes finished the create: it exited 0, printed its own `Profile '<name>' created at` line (hermes_cli/
+    profile_cmd.py `_profile_create` prints it only after `provision_profile` returned, past the publish, the key and
+    model copy and the skill seeding, through the gateway or locally), and the folder is there. Hermes writes no
+    completion marker file, so this is the one signal it gives."""
+    return code == 0 and f"Profile '{name}' created at" in (output or "") and new_profile_made(home, name)
+
+
+# A `⚠` line Hermes' create prints when a setup step after the publish failed: `_profile_create` prints
+# "Skills could not be seeded" and each `provision_profile` warning as `<step>: <error>` (profile_provision.py `step`).
+# These steps leave the bot without its skills, keys or model, so no template is applied to it.
+SETUP_FAILED = re.compile(r"^⚠ (?:Skills could not be seeded|bundled skills:|launch credentials:|model inherit:|model:)")
+
+
+def hermes_warnings(output: str) -> list[str]:
+    """Hermes' own `⚠` lines of a create, without colour codes, trimmed and clipped; a start-up note about Hermes' own
+    update says nothing about this run and is left out (as in `hermes_said`)."""
+    lines = [ln.strip() for ln in _ANSI.sub("", output or "").splitlines()]
+    keep = [ln for ln in lines if ln.startswith("⚠")
+            and (SETUP_FAILED.match(ln) or not re.search(r"\bupdate\b", ln, re.IGNORECASE))]
+    return [_clip(ln, 300) for ln in keep][:8]
+
+
+def new_profile_leftovers(home: Path, name: str) -> list[str]:
+    """What a create that omher could not confirm may have left under `profiles/`: the profile folder itself and
+    Hermes' staging folders (`.<name>.staging-<pid>`, profiles_initialization.py), by name, read-only."""
+    root = home / "profiles"
+    found = [f"profiles/{name}"] if os.path.lexists(root / name) else []
+    try:
+        found += sorted(f"profiles/{e.name}" for e in root.iterdir() if e.name.startswith(f".{name}.staging-"))
+    except OSError:
+        pass
+    return found[:4]
+
+
+def new_profile_made(home: Path, name: str) -> bool:
+    """Whether Hermes made the bot: `profiles/<name>/` is a real folder (not a link) holding its config.yaml, the
+    file omher lists a bot by (discover_bots)."""
+    path = home / "profiles" / name
+    try:
+        return not path.is_symlink() and path.is_dir() and (path / "config.yaml").is_file()
+    except OSError:
+        return False
+
+
+# ---------------------------------------------------------------- bot templates (OMH's catalog, BOUNDARY rule 44)
+# The Add bot gallery lists OMH's bot templates through rule 43's runner, one more OMH_READS entry
+# (`omh --hermes-home <root> profile bot-templates --json`, `bot_template_catalog/v1`). omher keeps only what the gallery
+# shows, each field checked and clipped, and never sends text from it: the one message a Create sends is built in the
+# page from the template id.
+BOT_TEMPLATE_CATALOG = "bot_template_catalog/v1"
+TEMPLATE_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
+TEMPLATES_MAX = 32
+
+
+def _template_row(t: object) -> dict | None:
+    """One template as the gallery shows it, or None for a row that is not one."""
+    if not isinstance(t, dict) or not isinstance(t.get("id"), str) or not TEMPLATE_ID.fullmatch(t["id"]):
+        return None
+    text = lambda v, n: _platform_text(v, n) if isinstance(v, str) else ""  # noqa: E731
+    rows = lambda v: [r for r in v if isinstance(r, dict)][:16] if isinstance(v, list) else []  # noqa: E731
+    return {
+        "id": t["id"],
+        "title": text(t.get("title"), 80) or t["id"],
+        "summary": text(t.get("summary"), 300),
+        # each name once, in the listing's order
+        "skills": list(dict.fromkeys(s for s in t.get("skills") or [] if isinstance(s, str) and TEMPLATE_ID.fullmatch(s)))[:16],
+        "schedules": [{"name": r["job_name"], "title": text(r.get("title"), 80)} for r in rows(t.get("schedules"))
+                      if isinstance(r.get("job_name"), str) and PROFILE_ID.fullmatch(r["job_name"])],
+        "webhooks": [text(r.get("title"), 120) for r in rows(t.get("webhooks"))],
+        "apps": [{"name": r["name"], "need": "required" if r.get("need") == "required" else "optional"}
+                 for r in rows(t.get("apps")) if isinstance(r.get("name"), str) and MCP_NAME.fullmatch(r["name"])],
+    }
+
+
+def bot_template_rows(out: str | None) -> list[dict] | None:
+    """`omh profile bot-templates --json`'s answer, kept field by field, or None when it is not that answer (no
+    answer, an `omh` from before bot templates, anything else)."""
+    if not out or len(out) > OMH_READ_OUTPUT_MAX:
+        return None
+    try:
+        payload = json.loads(out)
+    except ValueError:
+        return None
+    if not isinstance(payload, dict) or payload.get("schema_version") != BOT_TEMPLATE_CATALOG \
+            or not isinstance(payload.get("templates"), list):
+        return None
+    return [row for t in payload["templates"][:TEMPLATES_MAX] if (row := _template_row(t))]
 
 
 class PrStates:
@@ -6011,6 +6174,8 @@ PEER_BOT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")  # a remote profile na
 PEER_CALL_TIMEOUT = 240.0
 PEER_LIST_TIMEOUT = 5.0
 PEER_OPEN_TIMEOUT = 15.0
+# A peer's `bots.platforms` (rule 45): its bridge may run its own `omh` read first (OMH_READ_TIMEOUT), then answer.
+PEER_PLATFORMS_TIMEOUT = OMH_READ_TIMEOUT + PEER_LIST_TIMEOUT
 # Bot-scoped ops a peer's bot takes: sent to the peer with the bare name, its answer passed back as it came.
 PEER_FORWARD = frozenset({
     "chat.open", "chat.send", "chat.interrupt", "chat.discard", "chat.steer", "approval.respond", "clarify.respond", "chat.attach", "chat.set_model",
@@ -6052,6 +6217,12 @@ class PeerLink:
         # the only `session` values forwarded for that bot; and the (name, thread) pairs whose turn runs now
         self.threads: dict[str, set[str]] = {}
         self.thread_running: set[tuple[str, str]] = set()
+        # rule 45: its bridge's last `bots.platforms` answer as checked here, when it came, and the ask under way;
+        # in memory only, gone with the link
+        self.platforms: dict | None = None
+        self.platforms_at = 0.0
+        self.platforms_ask: asyncio.Task | None = None
+        self.platforms_late = False  # an answer went out without this ask: say `platforms.update` when it lands
         self.on_event = None
         self.on_lost = None
 
@@ -6736,6 +6907,7 @@ class Bridge:
             "bots.rename": self.op_bots_rename, "bots.avatar": self.op_bots_avatar,
             "bots.set_avatar": self.op_bots_set_avatar, "bots.info": self.op_bots_info,
             "bots.page": self.op_bots_page, "bots.platforms": self.op_bots_platforms,
+            "bots.templates": self.op_bots_templates, "bots.create": self.op_bots_create,
             "skills.list": self.op_skills_list, "commands.list": self.op_commands_list, "links.places": self.op_links_places, "tasks.linear": self.op_tasks_linear,
             "folder.open": self.op_folder_open, "folder.close": self.op_folder_close,
             "folder.resume": self.op_folder_resume,
@@ -6766,6 +6938,7 @@ class Bridge:
         self.announce_media = False  # amain: tell the app (stdout) which files it may open
         self._restarting: set[str] = set()      # bots whose restart command runs now
         self._apps_busy: set[str] = set()       # bots whose `hermes mcp` run (rule 41) runs now
+        self._creating = False                  # a `hermes profile create` (rule 44) runs now
         self._refused: dict[str, float] = {}     # bot -> when Hermes last refused its restart (live work)
         self._reattaching: set[str] = set()     # bots that omher's own restart attaches again (`_reattach`)
         self._recovering: set[str] = set()      # bots a `_recover` looks for
@@ -8447,9 +8620,60 @@ class Bridge:
 
     async def op_bots_platforms(self, p) -> dict:
         """Every local bot's messaging platforms, read-only (rule 43): `omh hermes platforms` through PlatformStates.
-        `fresh` (the bot page's Read again) asks again once the last answer is two seconds old. A bot on another
-        computer is not read: it has no row here."""
-        return await asyncio.to_thread(self.platforms.read, p.get("fresh") is True)
+        `fresh` (the bot page's Read again) asks again once the last answer is two seconds old. Each attached peer's
+        bots come under `peers`, as that computer's own bridge read them (rule 45, `_peer_platforms`); `fresh` never
+        reaches a peer."""
+        links = list(self.peers.values())
+        local, *peers = await asyncio.gather(asyncio.to_thread(self.platforms.read, p.get("fresh") is True),
+                                             *(self._peer_platforms(link) for link in links))
+        return {**local, "peers": {link.peer: answer for link, answer in zip(links, peers)}}
+
+    async def op_bots_templates(self, p) -> dict:
+        """Add bot's gallery: OMH's bot templates through rule 43's runner, its `bot_templates` read (rule 44). `missing`
+        when no `omh` is on this computer, `unavailable` when it gave no catalog (an `omh` from before bot templates,
+        an error, a timeout)."""
+        omh = omh_path()
+        if not omh:
+            return {"omh": "missing", "templates": []}
+        rows = bot_template_rows(await asyncio.to_thread(run_omh_read, omh, self.home, "bot_templates"))
+        return {"omh": "ok", "templates": rows} if rows is not None else {"omh": "unavailable", "templates": []}
+
+    async def op_bots_create(self, p) -> dict:
+        """Add bot › Create: one `hermes -p default profile create <name> --no-alias` on this computer (rule 44). The name is
+        checked against Hermes' rule and the disk first; the outcome is the folder Hermes made, and a failure shows
+        Hermes' own words. omher writes nothing in the new profile."""
+        name = p.get("name")
+        refusal = await asyncio.to_thread(new_profile_refusal, self.home, name)
+        if refusal:
+            raise BridgeError(*refusal)
+        if self._creating:
+            raise BridgeError("busy", "omher is still making another bot")
+        hermes = hermes_path()
+        if not hermes:
+            return {"outcome": "failed", "line": "Hermes is not on this computer."}
+        self._creating = True
+        try:
+            code, output = await asyncio.to_thread(run_hermes_profile_create, hermes, name, self.home, PROFILE_CREATE_TIMEOUT)
+        finally:
+            self._creating = False
+        if await asyncio.to_thread(new_profile_confirmed, self.home, name, code, output):
+            # Hermes' setup steps never fail the create: they print `⚠`. The page shows them, and one that left the
+            # skills, keys or model unset holds the template back.
+            notes = hermes_warnings(output)
+            return {"outcome": "ok", "bot": name, "notes": notes,
+                    "incomplete": any(SETUP_FAILED.match(n) for n in notes)}
+        said = hermes_said(output)
+        leftovers = await asyncio.to_thread(new_profile_leftovers, self.home, name)
+        if code is None or leftovers:
+            # stopped, or something is on disk without Hermes' own finish: Hermes publishes the folder before it
+            # copies keys, sets the model and seeds skills, and a create through the default profile's gateway goes on
+            # after this run is stopped. Nothing is listed, applied or sent; the person checks with Hermes.
+            what = (f"It may have left {', '.join(leftovers)}." if leftovers
+                    else f"It may still be making {name} through the running gateway.")
+            line = (f"omher could not confirm that Hermes finished making {name}. {what} "
+                    "Check with `hermes profile list` in a terminal." + (f"\n{said}" if said else ""))
+            return {"outcome": "unconfirmed", "line": line}
+        return {"outcome": "failed", "line": said or f"Hermes exited with code {code}."}
 
     async def op_tasks_linear(self, p) -> dict:
         """Tasks › Linear: whether the bot has a Linear MCP server in its config (rule 33). Hermes' gateway offers no
@@ -9012,6 +9236,8 @@ class Bridge:
             raise
         link.running = {r["name"] for r in link.rows if r["running"]}
         if old is not None:
+            # the same computer again: its platforms keep their interval across the reconnect (rule 45)
+            link.platforms, link.platforms_at = old.platforms, old.platforms_at
             await self._peer_turns_end(old, f"lost the link to {old.label}")
         self.peers[peer] = link
         back = peer in self._peers_seen
@@ -9109,12 +9335,45 @@ class Bridge:
             known.add(out["thread"])
         return {**out, "cwd": ""} if "cwd" in out else out
 
+    async def _peer_platforms(self, link: PeerLink) -> dict:
+        """A peer's bots' messaging platforms (rule 45): asked of that computer's own bridge over the link, one ask
+        per PLATFORMS_TTL (PLATFORMS_TTL_MISS after an answer it could not use) that overlapping asks share. The ask
+        is the bare op with nothing in it: that bridge picks its own Hermes root and runs its own rule 43 read. Its
+        answer is checked again here (`peer_platform_rows`). An offline link, an error, an older bridge or a peer
+        without `omh` is `available: false`, so the page says it cannot tell. It never waits for the peer: an ask
+        runs in the background (bounded by PEER_PLATFORMS_TIMEOUT), the last checked answer stands meanwhile
+        (`unasked` when there is none), and `platforms.update` tells the app once the ask lands."""
+        if not link.connected:
+            return {"available": False, "why": "offline", "bots": {}}
+        if link.platforms is not None and time.monotonic() - link.platforms_at < (
+                PLATFORMS_TTL if link.platforms["available"] else PLATFORMS_TTL_MISS):
+            return link.platforms
+        if link.platforms_ask is None or link.platforms_ask.done():
+            link.platforms_ask = self._spawn(self._ask_peer_platforms(link))
+        link.platforms_late = True
+        return link.platforms or {"available": False, "why": "unasked", "bots": {}}
+
+    async def _ask_peer_platforms(self, link: PeerLink) -> dict:
+        try:
+            out = await link.call("bots.platforms", {}, PEER_PLATFORMS_TIMEOUT)
+        except BridgeError:
+            out = None
+        bots = peer_platform_rows(out)
+        link.platforms = {"available": bots is not None, "why": "" if bots is not None else "unread", "bots": bots or {}}
+        link.platforms_at = time.monotonic()
+        if link.platforms_late:
+            link.platforms_late = False
+            await self.emit("platforms.update", "")
+        return link.platforms
+
     async def _peer_event(self, link: PeerLink, f: dict) -> None:
         """A peer's event, passed on under the namespaced bot name. Events of no bot (the other computer's own
         accounts) are dropped, and so are events of a session that is not one of that bot's threads (a folder chat
         there: omher opens none)."""
         bot, event = f.get("bot"), f.get("event")
         if not isinstance(bot, str) or not PEER_BOT.fullmatch(bot):
+            return
+        if event == "platforms.update":  # this computer says it itself when its own ask lands (rule 45)
             return
         known = link.threads.setdefault(bot, set())
         if event == "thread.added" and isinstance(f.get("thread"), str):
@@ -9155,6 +9414,7 @@ class Bridge:
             return
         await self._peer_turns_end(link, f"lost the link to {link.label}")
         await self.emit("bots.update", "")
+        await self.emit("platforms.update", "")  # its bots read as cannot tell (offline) at once (rule 45)
 
     # ------------------------------------------------------------ elsewhere (read only)
 

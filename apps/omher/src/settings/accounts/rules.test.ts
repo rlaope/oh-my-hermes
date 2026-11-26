@@ -33,7 +33,7 @@ const group = (cli: AccountGroup["cli"], accounts: Account[], extra: Partial<Acc
 
 describe("row names", () => {
   it("shows the full email, then the label, then This computer", () => {
-    expect(rowTitle(acc("default", "active", { email: "khope@sionic.ai", label: "Personal" }), 0)).toBe("khope@sionic.ai");
+    expect(rowTitle(acc("default", "active", { email: "demo@example.com", label: "Personal" }), 0)).toBe("demo@example.com");
     expect(rowTitle(acc("work", "ready", { label: "Work" }), 1)).toBe("Work");
     expect(rowTitle(acc("default", "ready"), 0)).toBe("This computer");
     expect(rowTitle(acc("x", "login"), 2)).toBe("Account 3");

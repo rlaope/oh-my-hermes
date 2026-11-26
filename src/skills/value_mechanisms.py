@@ -199,6 +199,8 @@ _SKILL_VALUE_MECHANISMS: dict[str, tuple[str, ...]] = {
     "agent-ops-review": (VALUE_MECHANISM_PROSE_TEMPLATE_REVIEW,),
     # App work intake (check if present in latest main!)
     "app-work-intake": (VALUE_MECHANISM_CONTROL_PLANE, VALUE_MECHANISM_HERMES_RUNTIME_CONTRACT),
+    # Bot templates: the bot's own SOUL.md write and native cron jobs under Hermes approval, schedules created paused
+    "bot-template": (VALUE_MECHANISM_HERMES_RUNTIME_CONTRACT, VALUE_MECHANISM_COUNTER_DEFAULT_GUARDRAIL),
 }
 
 

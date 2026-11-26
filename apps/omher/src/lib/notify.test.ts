@@ -74,7 +74,7 @@ describe("sessionRings: a program end notifies only when it went wrong", () => {
   });
 });
 
-describe("a session's ring: it rang, not that it waits (khope 2026-11-23)", () => {
+describe("a session's ring: it rang, not that it waits (demo 2026-11-23)", () => {
   afterEach(() => setLang("en"));
   it("says it rang and that it may have finished or be waiting", () => {
     const name = "web-app · Claude Code";

@@ -333,7 +333,9 @@ class RouterContentTests(unittest.TestCase):
         # measured, +270); the existing allowance is kept, not widened.
         # 33,892 -> 34,218: `app-work-intake` adds its index entry (33,714 ->
         # 34,040 measured on main 04ea74a2e, +326); the 178-byte allowance is kept.
-        self.assertLess(len(rendered.encode("utf-8")), 34_218)
+        # 34,218 -> 34,468: `bot-template` adds its index entry (34,040 -> 34,290
+        # measured, +250); the existing allowance is kept, not widened.
+        self.assertLess(len(rendered.encode("utf-8")), 34_468)
         for line in rendered.splitlines():
             self.assertLess(len(line.encode("utf-8")), 400, line)
 
@@ -542,9 +544,11 @@ class RouterContentTests(unittest.TestCase):
                 # 14-byte tracker token (34,046 -> 34,250 measured, +204).
                 # 34,283 -> 34,492: `app-work-intake` adds its trigger row and
                 # token (34,250 -> 34,459 measured on main 04ea74a2e, +209).
-                limit = 34_492
+                # 34,492 -> 34,641: `bot-template` adds its 133-byte trigger row and
+                # 16-byte operator token (34,459 -> 34,608 measured, +149).
+                limit = 34_641
             elif template.skill_name == "oh-my-hermes" and template.relative_path == "references/catalog-index.md":
-                limit = 34_218
+                limit = 34_468
             else:
                 limit = 33_100
             self.assertLess(len(template.content.encode("utf-8")), limit, template.relative_path)
