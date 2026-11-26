@@ -37,9 +37,11 @@ class StopRun(unittest.TestCase):
 
     def test_posix_signals_the_process_group_and_runs_no_taskkill(self):
         proc, trees, killed = Proc(), [], []
-        with mock.patch.object(ob.os, "killpg", lambda pid, sig: killed.append((pid, sig)), create=True):
+        # Windows' signal module has no SIGKILL: a stand-in, so the POSIX branch runs on every runner
+        with mock.patch.object(ob.os, "killpg", lambda pid, sig: killed.append((pid, sig)), create=True), \
+                mock.patch.object(ob.signal, "SIGKILL", 9, create=True):
             ob._stop_run(proc, windows=False, tree_killer=trees.append)
-        self.assertEqual(killed, [(4242, ob.signal.SIGKILL)])
+        self.assertEqual(killed, [(4242, 9)])
         self.assertEqual((trees, proc.events), ([], [("wait", ob.MCP_STOP_WAIT)]))
 
     def test_the_tree_kill_is_one_fixed_system32_taskkill_with_no_shell(self):

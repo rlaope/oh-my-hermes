@@ -275,13 +275,16 @@ class Argv(unittest.TestCase):
 
     def test_a_run_past_its_time_is_stopped_with_its_group_and_the_wait_after_is_bounded(self):
         seen: dict = {}
-        killed = []
+        killed, trees = [], []
+        # the tree stop (rule 48) runs taskkill through subprocess.run, which would reach the fake Popen: record it instead
         with mock.patch.object(ob.subprocess, "Popen", self.fake_popen(seen, said=b"  Open https://example.org/a\n", hang=True)), \
-                mock.patch.object(ob.os, "killpg", lambda pid, sig: killed.append((pid, sig)), create=True):
+                mock.patch.object(ob.os, "killpg", lambda pid, sig: killed.append((pid, sig)), create=True), \
+                mock.patch.object(ob, "_windows_kill_tree", trees.append):
             code, out = ob.run_hermes_mcp("/h/hermes", BOT, "login", "notion", Path("/h"), 2.0)
         self.assertEqual((code, out), (None, "  Open https://example.org/a\n"))  # what Hermes said so far is kept
         self.assertEqual(seen["waits"], [2.0, ob.MCP_STOP_WAIT])
         if os.name == "nt":
+            self.assertEqual(trees, [4242])
             self.assertTrue(seen.get("killed"))
         else:
             self.assertEqual(killed, [(4242, ob.signal.SIGKILL)])
