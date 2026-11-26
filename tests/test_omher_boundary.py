@@ -868,14 +868,16 @@ class LinkChipsFetchNothing(unittest.TestCase):
         self.assertIn("is_control()", allowed[: allowed.index("\n}\n")])
 
     def test_a_terminal_link_opens_only_through_the_one_opener(self) -> None:
-        # links in a SESSIONS terminal's output (found in the text, or marked by the program with OSC 8): one
-        # click rule, one address rule, the app's one opener; nothing fetched, no window opened by the terminal code
+        # links in a SESSIONS terminal's output (found in the text, broken across a table cell's rows, or marked by the
+        # program with OSC 8): one click rule, one address rule, the app's one opener; nothing fetched, no window
+        # opened by the terminal code
         term = UI_SRC / "sessions" / "term"
         links = (term / "engine-links.ts").read_text(encoding="utf-8")
         code = "\n".join(line for line in links.splitlines() if not line.lstrip().startswith(("//", "*", "/**")))
         self.assertIn('import { openExternal } from "../../lib/openExternal";', code)
-        # both kinds go through activateLink, which holds the modifier and the address checks
-        self.assertEqual(code.count("activateLink(e, uri)"), 2)
+        # all three kinds go through activateLink, which holds the modifier and the address checks: the OSC 8 handler,
+        # the cell-broken address provider (engine-cell-links.ts) and the web-links add-on
+        self.assertEqual(code.count("activateLink(e, uri)"), 3)
         self.assertIn("term.options.linkHandler = { activate: (e, uri) => void activateLink(e, uri)", code)
         self.assertNotIn("allowNonHttpProtocols", code)
         body = code[code.index("export function activateLink"):]
