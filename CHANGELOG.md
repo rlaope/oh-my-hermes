@@ -9,6 +9,11 @@ All notable changes will be documented here.
   a refused Task / Hand to bot start or a failed thread Stop showed nothing: the error only reached cards and the
   model picker. A second press now reuses the create in flight, each failure puts a line where the person acted, and
   `./thread <task>` gives the typed task back when the create is refused. `apps/omher/src/state/store.ts`.
+- **omher bots page: platform status and bot templates read the live omh.** Dock-launched omher (short PATH), and
+  Windows (where `which` finds `omh.cmd` and it is rejected), fell back to `<data>/omh/venv`, the pre-generation env
+  an update leaves behind (omh 2.0.0 here), so `platforms` and `bot-templates` failed with "invalid choice".
+  `omh_path` now tries `<data>/omh/current/venv/{bin,Scripts}/omh[.exe]` (and `~/.local/bin/omh` on macOS and Linux)
+  before the old venv, with `%LOCALAPPDATA%` first on Windows. `apps/omher/bridge/omher_bridge.py`.
 - **omher: the New bot card, the answered-interview line and `HTTPS://` links read and work in every language.** The
   bridge sent English sentences ("unconfirmed", "Hermes is not on this computer.", the `busy` and `exists`
   refusals, which also covers a leftover `profiles/<name>/` without config.yaml) and the card showed them in ko/zh/ja,

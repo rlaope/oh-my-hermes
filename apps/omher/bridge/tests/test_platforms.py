@@ -109,6 +109,40 @@ class FindAndRun(unittest.TestCase):
                 self.assertEqual(ob.omh_path(which=lambda name: None, environ={"XDG_DATA_HOME": str(data)}), str(other))
 
     @POSIX
+    def test_the_live_generation_is_tried_before_the_pre_generation_venv(self):
+        def make(path):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("#!/bin/sh\n")
+            path.chmod(0o755)
+            return str(path)
+        find = lambda env=None: ob.omh_path(which=lambda name: None, environ=env or {})
+        for name, data_rel, env in (("macos/linux default", ".local/share", None), ("XDG_DATA_HOME", "xdg", "xdg")):
+            with self.subTest(name), tempfile.TemporaryDirectory() as tmp:
+                home = Path(tmp)
+                environ = {"XDG_DATA_HOME": str(home / env)} if env else {}
+                data = home / data_rel
+                with mock.patch.object(Path, "home", return_value=home):
+                    old = make(data / "omh" / "venv" / "bin" / "omh")
+                    self.assertEqual(find(environ), old)
+                    shim = make(home / ".local" / "bin" / "omh")
+                    self.assertEqual(find(environ), shim)
+                    live = make(data / "omh" / "current" / "venv" / "bin" / "omh")
+                    self.assertEqual(find(environ), live)
+
+    @POSIX
+    def test_on_windows_the_live_generation_exe_comes_before_the_old_venv(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local = Path(tmp, "Local")
+            find = lambda: ob.omh_path(which=lambda name: r"C:\bin\omh.cmd", environ={"LOCALAPPDATA": str(local)}, windows=True)
+            with mock.patch.object(Path, "home", return_value=Path(tmp)):
+                for rel in ("venv", "current/venv"):
+                    exe = local / "omh" / rel / "Scripts" / "omh.exe"
+                    exe.parent.mkdir(parents=True)
+                    exe.write_text("")
+                    exe.chmod(0o755)
+                    self.assertEqual(find(), str(exe))
+
+    @POSIX
     def test_a_relative_or_current_folder_omh_from_path_is_passed_over(self):
         with tempfile.TemporaryDirectory() as tmp:
             with mock.patch.object(Path, "home", return_value=Path(tmp)):
