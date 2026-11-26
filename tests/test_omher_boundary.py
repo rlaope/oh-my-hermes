@@ -1400,7 +1400,7 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         runs = [c for c in ast.walk(self.tree) if isinstance(c, ast.Call) and ast.unparse(c.func).startswith("subprocess.")]
         self.assertEqual(sorted(ast.unparse(c.args[0]) for c in runs),
                          ["['git', *pre, *args]",
-                          "['taskkill', '/T', '/F', '/PID', str(int(pid))]",  # rule 48, pinned in StopRunEndsTheTreeOnWindows
+                          "[_windows_taskkill(), '/T', '/F', '/PID', str(int(pid))]",  # rule 48, pinned in StopRunEndsTheTreeOnWindows
                           "[gh, 'pr', 'view', str(number), '-R', repo, '--json', 'state,isDraft,mergedAt,url,statusCheckRollup,headRefOid']",
                           "argv", "argv", "argv", "argv"])  # argv: rule 29's restart_argv (RestartOneBotOnAPress),
         # rule 24's brief_create_argv (`hermes -p <bot> cron create`, pinned in bridge/tests/test_brief_setup.py), rule
@@ -3790,7 +3790,7 @@ class StopRunEndsTheTreeOnWindows(unittest.TestCase):
 
     RULE_48 = (
         "48. A run omher stops past its time ends with everything it started on Windows.",
-        "it first runs one fixed `taskkill /T /F /PID <pid>` for that run's own process id",
+        "it first runs one fixed `taskkill.exe /T /F /PID <pid>`, Windows' own from `%SystemRoot%\\System32` by absolute path (`C:\\Windows` only when `SystemRoot` is unset or not absolute), never found by a bare name in the application's or current folder, for that run's own process id",
         "`taskkill` is called from one place, `_windows_kill_tree`, only by `_stop_run`, and only on Windows.",
         "On macOS and Linux the stop is unchanged: the run's own process group, which it was started in.",
     )
@@ -3804,8 +3804,9 @@ class StopRunEndsTheTreeOnWindows(unittest.TestCase):
         src = (ROOT / "apps" / "omher" / "bridge" / "omher_bridge.py").read_text(encoding="utf-8")
         tree = ast.parse(src)
         fns = {f.name: f for f in ast.walk(tree) if isinstance(f, ast.FunctionDef)}
-        self.assertEqual(src.count('"taskkill"'), 1)
-        self.assertIn('["taskkill", "/T", "/F", "/PID", str(int(pid))]', ast.get_source_segment(src, fns["_windows_kill_tree"]))
+        self.assertEqual(src.count('"taskkill.exe"'), 1)  # one bare name only: the System32 path built in `_windows_taskkill`
+        self.assertIn('"System32"', ast.get_source_segment(src, fns["_windows_taskkill"]))
+        self.assertIn('[_windows_taskkill(), "/T", "/F", "/PID", str(int(pid))]', ast.get_source_segment(src, fns["_windows_kill_tree"]))
         self.assertNotIn("shell", ast.get_source_segment(src, fns["_windows_kill_tree"]).replace("no shell", ""))
         callers = sorted(n for n, f in fns.items() if any(isinstance(c, ast.Name) and c.id == "_windows_kill_tree"
                                                          for c in ast.walk(f)))

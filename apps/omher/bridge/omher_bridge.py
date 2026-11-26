@@ -32,6 +32,7 @@ import hmac
 import inspect
 import json
 import logging
+import ntpath
 import os
 import re
 import signal
@@ -3165,11 +3166,20 @@ MCP_OUTPUT_MAX = 256 * 1024     # bytes of a run's output read back
 MCP_STOP_WAIT = 5.0             # seconds to wait for a stopped run to end
 
 
+def _windows_taskkill() -> str:
+    """Windows' own taskkill.exe by absolute path (SystemRoot\\System32), never a bare name that CreateProcess would look for in the
+    application's folder or the current directory first."""
+    root = os.environ.get("SystemRoot", "")
+    if not (root and ntpath.isabs(root)):
+        root = "C:\\Windows"
+    return ntpath.join(root, "System32", "taskkill.exe")
+
+
 def _windows_kill_tree(pid: int) -> None:
-    """Rule 48: `taskkill /T /F /PID <pid>`, the run and everything it started. `hermes.cmd` makes cmd.exe the child, so ending it
+    """Rule 48: System32's `taskkill.exe /T /F /PID <pid>`, the run and everything it started. `hermes.cmd` makes cmd.exe the child, so ending it
     alone leaves Hermes running. One fixed argv, no shell, nothing on stdin, no output kept; best effort, the caller kills the child too."""
     with contextlib.suppress(OSError, subprocess.SubprocessError):
-        subprocess.run(["taskkill", "/T", "/F", "/PID", str(int(pid))], stdin=subprocess.DEVNULL,
+        subprocess.run([_windows_taskkill(), "/T", "/F", "/PID", str(int(pid))], stdin=subprocess.DEVNULL,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=MCP_STOP_WAIT,
                        creationflags=0x08000000)  # CREATE_NO_WINDOW
 

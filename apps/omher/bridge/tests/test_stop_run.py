@@ -42,13 +42,20 @@ class StopRun(unittest.TestCase):
         self.assertEqual(killed, [(4242, ob.signal.SIGKILL)])
         self.assertEqual((trees, proc.events), ([], [("wait", ob.MCP_STOP_WAIT)]))
 
-    def test_the_tree_kill_is_one_fixed_taskkill_with_no_shell(self):
-        with mock.patch.object(ob.subprocess, "run") as run:
+    def test_the_tree_kill_is_one_fixed_system32_taskkill_with_no_shell(self):
+        with mock.patch.dict(ob.os.environ, {"SystemRoot": "D:\\Win"}), mock.patch.object(ob.subprocess, "run") as run:
             ob._windows_kill_tree(4242)
-        argv = run.call_args.args[0]
-        self.assertEqual(argv, ["taskkill", "/T", "/F", "/PID", "4242"])
+        self.assertEqual(run.call_args.args[0], ["D:\\Win\\System32\\taskkill.exe", "/T", "/F", "/PID", "4242"])
         self.assertNotIn("shell", run.call_args.kwargs)
         self.assertIs(run.call_args.kwargs["stdin"], subprocess.DEVNULL)
+
+    def test_an_unset_or_relative_systemroot_falls_back_to_c_windows(self):
+        for root in (None, "", "Windows", ".\\evil"):
+            env = {k: v for k, v in ob.os.environ.items() if k != "SystemRoot"}
+            if root is not None:
+                env["SystemRoot"] = root
+            with mock.patch.dict(ob.os.environ, env, clear=True):
+                self.assertEqual(ob._windows_taskkill(), "C:\\Windows\\System32\\taskkill.exe", root)
 
     def test_a_missing_or_hung_taskkill_still_leaves_the_child_killed(self):
         for err in (FileNotFoundError("taskkill"), subprocess.TimeoutExpired("taskkill", 5)):
