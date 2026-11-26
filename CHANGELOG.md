@@ -4,6 +4,14 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: Shift+Enter makes a new line in Claude Code, Codex and the other agents, on Windows too.** A terminal sent
+  Shift+Enter as Enter's own byte unless the program turned the Kitty keyboard protocol on. On Windows ConPTY never
+  lets Claude Code turn it on, so Shift+Enter sent the prompt there every time; on macOS the same happened in omh,
+  Hermes and Claude Code before 2.1.269. A terminal with a coding agent in front now sends `ESC CR` (a new line in
+  Claude Code, Codex, Antigravity, omh and Hermes, measured against the real CLIs, and what Claude Code's own
+  `/terminal-setup` binds), `CSI 13;2 u` to pi, oh-my-pi and Droid, and the protocol's own code when the agent asked for
+  it. A plain shell keeps Enter's byte, so PowerShell, zsh and bash are unchanged.
+
 - **TUI: session picker shows conversations rather than background runs.** On a shared Hermes gateway, `/sessions` and
   `/resume` skip cron, subagent and other internal sources and empty stored runs, while keeping genuine `local-*` chats.
   The picker starts with up to 100 conversations; **Ctrl+G** loads older authorized history into the same filter on

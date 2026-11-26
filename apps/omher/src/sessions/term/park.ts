@@ -105,10 +105,12 @@ export interface Carried {
 
 type RawKitty = { flags?: unknown; mainFlags?: unknown; altFlags?: unknown; mainStack?: unknown; altStack?: unknown };
 const kittyOf = (term: Terminal) => (term as unknown as { _core?: { coreService?: { kittyKeyboard?: RawKitty } } })._core?.coreService?.kittyKeyboard;
-/** A program has the Kitty keyboard protocol on (it then gets keys as CSI-u codes and reads them itself). */
+/** A program has the Kitty keyboard protocol on (it then gets keys as CSI-u codes and reads them itself). Flags a
+ *  program pushed stay after the setting is turned off, but xterm then sends the legacy bytes (its `useKitty` needs
+ *  both), so this does too. */
 export const kittyKeysOn = (term: Terminal): boolean => {
   const f = kittyOf(term)?.flags;
-  return typeof f === "number" && f !== 0;
+  return typeof f === "number" && f !== 0 && term.options.vtExtensions?.kittyKeyboard === true;
 };
 const nums = (v: unknown): v is number[] => Array.isArray(v) && v.every((n) => typeof n === "number");
 

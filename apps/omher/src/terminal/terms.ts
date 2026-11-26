@@ -8,6 +8,7 @@ import type { FitAddon } from "@xterm/addon-fit";
 import { afterOpen, bracketedPaste, CELLS_EVENT, feed, isParked, live, onVisible, type Remake } from "../sessions/term/engine";
 import { TERM_INPUT_EVENT } from "../sessions/term/paste-guard";
 import { onCwd } from "../sessions/term/engine-marks";
+import { setTermAgent } from "../sessions/term/engine-input";
 import { applyLook, termOptions } from "../sessions/term/look";
 import { termFontsReady } from "../sessions/term/fonts";
 import { onTermSettings, readTermSettings } from "../sessions/term/settings";
@@ -51,6 +52,8 @@ interface PanelTerm {
   saved: boolean;
   settle: ReturnType<typeof setTimeout> | null;
   undo: () => void;
+  /** the CLI in its shell's foreground (`session-fg`), null while the shell itself is in front */
+  fg: string | null;
   /** stops following the shell's foreground CLI */
   fgOff?: () => void;
   /** stops following the folder its shell reports */
@@ -137,10 +140,13 @@ function create([{ Terminal }, { FitAddon }]: Xterm, key: number, want: string |
     ended: false,
     typed: false,
     saved: false,
+    fg: null,
     settle: null,
     undo: () => undefined,
   };
   terms.set(key, p);
+  // Shift+Enter makes a new line in the agent in front (engine-input.ts shiftEnterBytes)
+  setTermAgent(el, () => (p.ended ? null : p.fg));
   wire(first.term);
   // the person's own keys or paste (engine-input.ts, engine-ime.ts, paste-guard.ts)
   el.addEventListener(TERM_INPUT_EVENT, () => {
@@ -178,6 +184,7 @@ async function start(key: number, p: PanelTerm, want: string | null, restored: b
       },
       (code) => {
         p.ended = true;
+        p.fg = null;
         setPaneFg(key, null);
         if (gh && typeof window !== "undefined") window.dispatchEvent(new CustomEvent(GH_LOGIN_ENDED));
         // as a TERMINALS shell: one that ends (exit, Ctrl+D, any code once the person typed) closes its pane and the
@@ -195,7 +202,10 @@ async function start(key: number, p: PanelTerm, want: string | null, restored: b
         }
         p.id = started.id;
         // the tab's mark follows the CLI in the shell's foreground
-        p.fgOff = onSessionFg(started.id, (agent) => setPaneFg(key, agent));
+        p.fgOff = onSessionFg(started.id, (agent) => {
+          p.fg = agent;
+          setPaneFg(key, agent);
+        });
         if (p.owed) host.ack(p.id, p.owed);
         p.owed = 0;
         setPaneCwd(key, started.cwd);
