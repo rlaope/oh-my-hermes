@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher bot management: Remove from list, rename and the row menu behave, with the keyboard too.** Remove from
+  list on the open bot switched the view to the chat and threw the person out of Settings or Automations; the chat
+  behind now follows the next bot and the view stays. A renamed bot's threads kept the old name in Needs you and in
+  system notifications (their route label was fixed when the list loaded); renaming rebuilds them. The rename
+  editor's Cancel left a failed save's error for the next pencil press. Closing a bot row's menu (Escape or a pick)
+  dropped the keyboard to the page; it returns to the row's ⋯. The ContextMenu key (or Shift+F10) opened the menu at
+  the window's top-left; it opens under the row. The handover card opened from a Worktrees row gave no way back, so
+  focus was lost on close; it returns to that row. Main files: `apps/omher/src/state/store.ts`,
+  `apps/omher/src/sidebar/BotRow.tsx`.
 - **omher terminal: an address a table cell breaks across rows opens whole.** Claude Code's markdown tables put
   real newlines inside a cell, so `https://github.com/` sat on one row and `sgl-project/sglang/pull/…` under it; the
   web-links add-on joins only rows xterm itself wrapped, linked the first piece alone, and Cmd+click opened
