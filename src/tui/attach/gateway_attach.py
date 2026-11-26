@@ -1734,8 +1734,10 @@ def failure_message(receipt: object) -> str:
 
 def _frames(text: str) -> Iterable[dict[str, Any] | str]:
     """Each non-empty line of a WebSocket message, parsed; a line that is not a JSON object stays text."""
-    for line in text.splitlines():
-        line = line.strip()
+    # Split on LF only: str.splitlines() also breaks on U+2028, U+2029, U+0085 and other Unicode line
+    # separators that valid JSON strings may hold unescaped (#3221).
+    for line in text.split("\n"):
+        line = line.strip(" \t\r")
         if not line:
             continue
         try:
