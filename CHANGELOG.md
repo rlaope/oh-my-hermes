@@ -11,8 +11,20 @@ All notable changes will be documented here.
   read unreachable until the next reconnect; a click opens it again. Two re-reads of a bot's threads at once (a
   resync and a restart) no longer send two `thread.open` for one thread. A refused `./thread` typed inside a thread
   now keeps the typed text, as in the main chat. New bot names a reserved name or `omh-tui` instead of the name rule,
-  boundary rule 41 defers to rule 48 for the Windows stop, a task's thread starts through the same create as `+`,
+  boundary rule 41 defers to rule 49 for the Windows stop, a task's thread starts through the same create as `+`,
   and a skipped resume spec is gone. (`apps/omher/src/state/store.ts`)
+- **Slash commands typed while a turn runs follow Claude Code, in the OMH TUI and in omher's bot chats.** Measured
+  on Claude Code 2.1.332: `/usage` (`/cost`) and `/status` now answer at once beside the running turn, and `/model`
+  opens its picker (or switches to the model it names) at once; a pick made mid-turn is Hermes' deferred switch, so
+  the running turn ends on its model and the next one uses the new one. `/context`, `/compress`, `/export`, `/new`,
+  `/resume`, a skill and every other command still wait for the turn. A queued command was stuck behind the turn
+  with no way to hurry it: its send-now key (TUI `ctrl+enter`, omher's ↵) now stops the turn once and runs the
+  command first, ahead of the rest of the queue, as Claude Code's `ctrl+x ctrl+s` does; in omher the ↵ of a queued
+  command no longer steers it into the answer as plain text. omher shows the mid-turn command's answer under its
+  command's line, never as the turn's reply, with the typing dots going on below it; the bridge runs it through
+  Hermes' own `slash.exec` (`chat.command`, `/usage` and `/status` only; omher boundary rule 48).
+  (`src/tui/app.py`, `src/tui/slash.py`, `apps/omher/src/state/store.ts`, `apps/omher/bridge/omher_bridge.py`)
+
 - **omher: after a reconnect or a restart, bots and threads show what Hermes is really doing.** When the link to the
   bridge dropped (sleep/wake, a bridge restart), an approval Hermes still waited on read "Not answered" for good: the
   outage ended the turn here, and the bridge's replay of the same ask was dropped as a duplicate. A replayed ask in a
@@ -26,7 +38,7 @@ All notable changes will be documented here.
 - **omher on Windows: stopping a long Hermes run stops all of it.** A `hermes profile create` past its 330 s limit, or a
   `hermes mcp install`/`login` or `omh` read past its time, was stopped by killing only `cmd.exe` (Hermes starts through
   `hermes.cmd`), so Hermes kept running. The bridge now ends the whole process tree with one fixed
-  `taskkill /T /F /PID <pid>` (boundary rule 48) and then the child; macOS and Linux still stop the run's process
+  `taskkill /T /F /PID <pid>` (boundary rule 49) and then the child; macOS and Linux still stop the run's process
   group. The bot-draft Add test and two terminal resume specs run again against the current UI, and the README says the
   bridge tests need websockets, pyyaml and ruamel.yaml. (`apps/omher/bridge/omher_bridge.py`)
 - **omher SSH bots: only the actions that work are offered, and removing a computer leaves a bot open.** The row

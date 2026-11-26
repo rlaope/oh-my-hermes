@@ -1735,6 +1735,49 @@ class GoalCommand(BridgeCase):
             self.assertEqual(c.find("slash.exec"), [])
             self.assertEqual([p["text"] for p in c.find("prompt.submit")][:3], ["/goals", "/usage", "/subgoal add x"])
 
+    async def test_usage_during_a_turn_runs_beside_it_and_its_answer_is_no_message_of_the_turn(self):
+        # Claude Code runs /cost and /status mid-turn: `chat.command` runs them through the same `slash.exec`, at once,
+        # and their answer is `command.output`, never the running turn's `message` (rule 48)
+        usage = {"type": "exec", "output": "Session tokens: 1,234 in \u00b7 567 out"}
+        async with Env(answers={"slash.exec": usage}) as env:
+            s = await self.open(env)
+            await s.req("chat.open", bot="kami")
+            c = env.clients["kami"]
+            c.push("message.start")
+            await s.until(lambda ev: any(e["event"] == "turn.start" for e in ev))
+            r = await s.req("chat.command", bot="kami", text="/usage")
+            self.assertTrue(r["ok"], r)
+            self.assertEqual(r["result"], {})
+            self.assertEqual(c.find("slash.exec"), [{"session_id": MAIN_RUNTIME, "command": "usage"}])
+            self.assertEqual(c.find("prompt.submit"), [])
+            self.assertEqual(c.find("session.interrupt"), [])
+            await s.until(lambda ev: any(e["event"] == "command.output" for e in ev))
+            [out] = [e for e in s.events if e["event"] == "command.output"]
+            self.assertEqual((out["text"], out["command"]), (usage["output"], "/usage"))
+            self.assertNotIn("turn.end", s.kinds())  # the running turn goes on
+            self.assertNotIn("message", s.kinds())
+
+    async def test_chat_command_takes_only_usage_and_status(self):
+        async with Env(answers={"slash.exec": GOAL_STATUS}) as env:
+            s = await self.open(env)
+            await s.req("chat.open", bot="kami")
+            for text in ("/goal x", "/model gpt-5.4", "/compress", "/context", "usage", "/usages", 7, ""):
+                with self.subTest(text=text):
+                    r = await s.req("chat.command", bot="kami", text=text)
+                    self.assertFalse(r["ok"], r)
+                    self.assertEqual(r["error"]["code"], "bad_request")
+            self.assertEqual(env.clients["kami"].find("slash.exec"), [])
+            self.assertTrue((await s.req("chat.command", bot="kami", text="/STATUS"))["ok"])
+            self.assertEqual(env.clients["kami"].find("slash.exec"), [{"session_id": MAIN_RUNTIME, "command": "STATUS"}])
+
+    async def test_chat_command_on_a_gateway_without_slash_exec_says_so_and_sends_nothing(self):
+        async with Env(lacks=("slash.exec",)) as env:
+            s = await self.open(env)
+            r = await s.req("chat.command", bot="kami", text="/usage")
+            self.assertFalse(r["ok"], r)
+            self.assertEqual(r["error"]["code"], "unsupported")
+            self.assertEqual(env.clients["kami"].find("prompt.submit"), [])
+
     async def test_a_refused_goal_command_fails_the_send_and_submits_nothing(self):
         async with Env(answers={"slash.exec": GatewayRPCError("unsupported_command")}) as env:
             s = await self.open(env)
