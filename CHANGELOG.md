@@ -12,6 +12,11 @@ All notable changes will be documented here.
   drew no unread, sound or notification. A thread's or folder chat's unread (`fold:` keys, summed into the Dock
   count) was never cleared, so the Dock count only went up; it now clears when that chat is opened or removed.
   (`apps/omher/src/state/store.ts`, `apps/omher/src/app/shortcuts.ts`, `apps/omher/src/sidebar/useRowDrag.ts`)
+- **omher bots page: platform status and bot templates read the live omh.** Dock-launched omher (short PATH), and
+  Windows (where `which` finds `omh.cmd` and it is rejected), fell back to `<data>/omh/venv`, the pre-generation env
+  an update leaves behind (omh 2.0.0 here), so `platforms` and `bot-templates` failed with "invalid choice".
+  `omh_path` now tries `<data>/omh/current/venv/{bin,Scripts}/omh[.exe]` (and `~/.local/bin/omh` on macOS and Linux)
+  before the old venv, with `%LOCALAPPDATA%` first on Windows. `apps/omher/bridge/omher_bridge.py`.
 - **omher: the New bot card, the answered-interview line and `HTTPS://` links read and work in every language.** The
   bridge sent English sentences ("unconfirmed", "Hermes is not on this computer.", the `busy` and `exists`
   refusals, which also covers a leftover `profiles/<name>/` without config.yaml) and the card showed them in ko/zh/ja,
