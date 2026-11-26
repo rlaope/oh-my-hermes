@@ -106,11 +106,11 @@ class JobStateTests(unittest.TestCase):
         self.input.write_text(json.dumps(capture() if value is None else value), encoding="utf-8")
         return str(self.input)
 
-    def cli(self, *args, exit=0, runner=None):
+    def cli(self, *args, exit=0, runner=None, timeout=15):
         cmd = [sys.executable, "-I", "-B"]
         cmd += [str(SCRIPT)] if runner is None else ["-c", runner, str(SCRIPT)]
         result = subprocess.run([*cmd, *map(str, args)], cwd=self.root,
-                                env=self.env, capture_output=True, text=True, timeout=15)
+                                env=self.env, capture_output=True, text=True, timeout=timeout)
         self.assertEqual(result.returncode, exit, result.stdout + result.stderr)
         stream = result.stdout if exit == 0 else result.stderr
         try:
@@ -783,7 +783,9 @@ runpy.run_path(script, run_name='__main__')
         (self.workspace / "state.json").write_bytes(raw)
         value = capture()
         value["jobs"] = jobs[1100:]
-        self.assertEqual(self.merge(value, exit=2)["error"]["code"], "limit_exceeded")
+        # The child reads, merges and re-serialises ~16 MiB; on a shared CI runner that has
+        # taken longer than the 15 s every other call gets (runs 45631420644, 45658444150, 45795499259).
+        self.assertEqual(self.merge(value, exit=2, timeout=90)["error"]["code"], "limit_exceeded")
         self.assertEqual((self.workspace / "state.json").read_bytes(), raw)
         self.assertEqual(sorted(p.name for p in self.workspace.iterdir()), ["state.json"])
 
