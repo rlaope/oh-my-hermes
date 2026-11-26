@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A dag-ulw run whose verify node was repaired twice ends instead of staying open with a node no child takes.**
+  After a failed verify node, a repair group answers that failure and the node runs again. When a group member failed
+  too (a re-review that found more) its repair became the root's second group, and counting failures against groups
+  read the root's next failure as answered: `ready` handed the root out again with no repair cycle left, and the run
+  stayed `running` under the TUI's composer. Two real runs sat open 40 and 158 hours that way. `repair` now stamps each
+  group with the failure it answers (`answers`, outside the digest), so a failure settled after the group is answered
+  by none and the run asks for a repair or stops; a group stored before the stamp is dated by when its first node went
+  out. (`src/plugin_bundle/omh/dag_run.py`)
+
 - **omher's model picker reads model names, finds the current model, and keeps its maker chips on one row.** The
   rows and the model button name a model as people say it ("Opus 5.5", "GPT-6.1 Terra"; the id is the title), and Nous
   Portal's `claude-opus-5.5` spelling now names too; two of a provider's models that would read the same keep their ids.
