@@ -10,6 +10,15 @@ All notable changes will be documented here.
   three 50 ms polls and the lock failed at once, so the tick exited 6 and Hermes delivered an alert. The replace now
   retries for up to 2 seconds and the lock retries within its existing 20-second wait; a denial that outlasts either
   still fails the tick. (`src/skills/pr_watch_toolkit/scripts/pr_watch.py`)
+- **omher's model picker reads model names, finds the current model, and keeps its maker chips on one row.** The
+  rows and the model button name a model as people say it ("Opus 5.5", "GPT-6.1 Terra"; the id is the title), and Nous
+  Portal's `claude-opus-5.5` spelling now names too; two of a provider's models that would read the same keep their ids.
+  The current row is found by name as well as by id, so a long catalog checks it and scrolls to it on open. The maker
+  chips are one row that scrolls sideways and fades on the side with more (nine chips used to wrap 4 / 4 / 1, "Other"
+  alone), and the list fades where it has more rows instead of cutting a row against the Reasoning heading. With no
+  model listed, the popover is the sentence and "Add one in Bot settings" only, without the search, chips and Reasoning
+  that had nothing to work on. (`apps/omher/src/chat/model/`, `apps/omher/src/runs/format.ts`)
+
 - **OMH TUI: Up/Down walks the input history past slash commands.** Recalling an earlier `/model` or `/config`
   with Up opened the `/` menu over it, and the next Up or Down moved the menu's highlight instead of the history, so
   history stalled at the first slash command. A recalled entry (Up/Down, vim NORMAL `j`/`k`, a Ctrl+R pick) now keeps
