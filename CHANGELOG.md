@@ -10,6 +10,12 @@ All notable changes will be documented here.
   `taskkill /T /F /PID <pid>` (boundary rule 48) and then the child; macOS and Linux still stop the run's process
   group. The bot-draft Add test and two terminal resume specs run again against the current UI, and the README says the
   bridge tests need websockets, pyyaml and ruamel.yaml. (`apps/omher/bridge/omher_bridge.py`)
+- **omher SSH bots: only the actions that work are offered, and removing a computer leaves a bot open.** The row
+  menu offered Restart (and an offline chat offered Start) for a bot on another computer, which the bridge always
+  refuses; they are no longer shown for it. Removing the computer whose bot was open left the "Pick a bot" pane:
+  the first listed bot opens now (a chat moves to it, Settings stays). Cancelling the Connect over SSH card while
+  Check was still running left its ssh tunnel up until the next check; it ends when the check answers.
+  `apps/omher/src/state/store.ts`, `apps/omher/src/peers/AttachCard.tsx`.
 - **omher threads: what you do in an open thread acts on that thread.** Esc with a thread open interrupted the
   bot's main chat (and did nothing when only the thread ran); it now stops the open thread's turn and leaves the main
   chat alone. Thread rows sit inside their bot's sidebar row, so a slow press on a thread or its × lifted the bot for

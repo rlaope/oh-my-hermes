@@ -100,6 +100,8 @@ export function RestartLine({ bot, testId = "restart-line", pop = false }: { bot
 /** One press in place: "Restart" (or "Start" for an offline bot), outlined, then the same line as the row's. */
 export function RestartAction({ bot, start = false, label, testId = "restart-press" }: { bot: Bot; start?: boolean; label?: string; testId?: string }) {
   const st = useRestart(bot.name);
+  // a bot on another computer: the bridge refuses bots.restart for it (rule 31), so no press is offered
+  if (bot.host) return null;
   if (st.step === "restarting") {
     return (
       <span className="rs-wait" role="status" data-testid={`${testId}-wait`}>

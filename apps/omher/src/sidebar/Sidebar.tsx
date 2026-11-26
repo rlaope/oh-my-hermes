@@ -165,7 +165,7 @@ export function Sidebar() {
                 pinned,
                 onPin: () => s.pinBot(b.name, !pinned),
                 onEdit: () => s.openSettings(`bot:${b.name}`),
-                onRestart: () => void getRestarts().press(b.name),
+                onRestart: b.host ? undefined : () => void getRestarts().press(b.name),
                 offline: b.status === "offline",
                 onRemove: listed.length > 1 ? () => s.listBot(b.name, false) : undefined,
               }}
