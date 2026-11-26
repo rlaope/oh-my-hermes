@@ -2856,7 +2856,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         }
         const given = Object.values(answer).filter((v) => v !== null).length;
         const total = Object.keys(answer).length;
-        const summary = `${given} of ${total}`;
+        const summary = tr("card.givenOfTotal", { given: String(given), n: String(total) });
         dispatch({ type: "clarify.resolved", bot: b, request_id: requestId, answer: summary, answers: answer });
       } catch (e) {
         fail(e);
