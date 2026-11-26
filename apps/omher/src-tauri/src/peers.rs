@@ -464,6 +464,9 @@ pub struct Found {
 pub struct Up {
     pub url: String,
     pub found: Found,
+    /// The checked host and port this link reaches.
+    pub host: String,
+    pub port: Option<u16>,
     child: Child,
     stdin: Option<ChildStdin>,
     tail: Arc<Mutex<Vec<String>>>,
@@ -583,7 +586,7 @@ fn connect_once(host: &str, port: Option<u16>, script: &[u8]) -> Result<Up, Fail
             Ok(Line::Python(p)) => found.python = p,
             Ok(Line::PyVer(v)) => found.pyver = v,
             Ok(Line::Ready(p)) if p == remote_port => {
-                return Ok(Up { url: bridge_ws_url(local, &token), found, child, stdin, tail });
+                return Ok(Up { url: bridge_ws_url(local, &token), found, host: host.to_string(), port, child, stdin, tail });
             }
             Ok(Line::Ready(_)) => {}
             Ok(Line::Other(l)) => push_tail(&tail, l),
@@ -611,6 +614,14 @@ fn connect_once(host: &str, port: Option<u16>, script: &[u8]) -> Result<Up, Fail
 }
 
 impl Up {
+    /// The link's last output lines once its `ssh` has exited, `None` while it runs.
+    pub fn ended(&mut self) -> Option<Vec<String>> {
+        match self.child.try_wait() {
+            Ok(Some(_)) => Some(self.tail.lock().unwrap().clone()),
+            _ => None,
+        }
+    }
+
     /// Stop the link: EOF first (the remote bridge exits on it), then the `ssh` child.
     pub fn stop(mut self) {
         self.stdin.take();
@@ -682,7 +693,7 @@ impl Peers {
         *self.script.lock().unwrap() = Some(path);
     }
 
-    fn script_bytes(&self) -> Result<Vec<u8>, Failure> {
+    pub(crate) fn script_bytes(&self) -> Result<Vec<u8>, Failure> {
         let path = self.script.lock().unwrap().clone();
         let path = path.ok_or_else(|| Failure { kind: FailKind::Bridge, line: "omher's bridge script was not found".into() })?;
         std::fs::read(&path).map_err(|e| Failure { kind: FailKind::Bridge, line: format!("could not read {}: {e}", path.display()) })
@@ -840,6 +851,18 @@ impl Peers {
         let (url, found) = (up.url.clone(), up.found.clone());
         self.checks.lock().unwrap().insert(id.clone(), (up, Instant::now()));
         Ok((id, url, found))
+    }
+
+    /// Hand a Check's link over (remote-only mode's Connect keeps it as its one link) instead of closing it. A check
+    /// of another host or port is closed, not handed over.
+    pub fn take_check(&self, id: &str, host: &str, port: Option<u16>) -> Option<Up> {
+        let (up, _) = self.checks.lock().unwrap().remove(id)?;
+        if up.host == host && up.port == port {
+            Some(up)
+        } else {
+            up.stop();
+            None
+        }
     }
 
     pub fn check_close(&self, id: &str) {

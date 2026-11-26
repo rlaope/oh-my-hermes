@@ -9,10 +9,13 @@ import { ConnectBlock } from "./connect/ConnectBlock";
 import { LostTurnBlock } from "./parts/LostTurnBlock";
 import { t } from "../i18n";
 import { ThreadChat } from "../threads/ThreadChat";
+import { useServerMode } from "../app/remote";
 
 /** The selected bot's one main chat: header, timeline, composer. */
 export function Chat() {
   const s = useStore();
+  // on a server (rule 47) a file of this computer is never sent: no +, drop or paste, one quiet line instead
+  const remote = useServerMode().mode === "remote";
   const bot = s.bots.find((b) => b.name === s.selectedBot) ?? null;
   if (!bot) {
     // no bot at all: one line that says Hermes has none yet and where to connect one (the + menu), no command
@@ -57,7 +60,14 @@ export function Chat() {
           plugins
           history={promptsOf(chat?.items)}
           onSend={(text) => void s.send(text)}
-          onSendFiles={(text, files) => s.sendWithFiles(text, files)}
+          onSendFiles={remote ? undefined : (text, files) => s.sendWithFiles(text, files)}
+          foot={
+            remote ? (
+              <div className="cmp-held" role="note" data-testid="composer-no-files">
+                {t("remote.noFiles")}
+              </div>
+            ) : undefined
+          }
           onStop={() => void s.interrupt()}
           reply={s.replyTo[bot.name] ?? null}
           onClearReply={() => s.setReplyTo(null, bot.name)}

@@ -19,6 +19,7 @@ mod peers;
 mod power;
 #[cfg(all(test, unix))]
 mod pty_bench;
+mod remote;
 mod session_files;
 mod sessions;
 mod setup;
@@ -45,6 +46,8 @@ use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
 struct Shell {
     bridge: Arc<Bridge>,
     peers: Arc<peers::Peers>,
+    /// Remote-only mode's one link (remote.rs); idle in local mode.
+    remote: Arc<remote::Remote>,
     resource_dir: Option<PathBuf>,
     installing: Arc<AtomicBool>,
     logins: Arc<accounts::Logins>,
@@ -52,18 +55,19 @@ struct Shell {
     chats: Arc<ChatSessions>,
 }
 
-/// `ws://127.0.0.1:<port>/?token=<token>` once the bridge is ready. The wait for a starting bridge blocks, so it runs
-/// on the blocking pool: every client re-dials while a bridge comes back, and none may park an async worker.
+/// `ws://127.0.0.1:<port>/?token=<token>` once the bridge is ready: the local bridge's, or in remote-only mode the
+/// `ssh` link's loopback forward to the server's bridge. The wait for a starting bridge blocks, so it runs on the
+/// blocking pool: every client re-dials while a bridge comes back, and none may park an async worker.
 #[tauri::command]
 async fn bridge_url(shell: State<'_, Shell>) -> Result<String, String> {
-    let bridge = Arc::clone(&shell.bridge);
-    tauri::async_runtime::spawn_blocking(move || bridge.url(Duration::from_secs(2))).await.map_err(|e| e.to_string())?
+    let (bridge, remote) = (Arc::clone(&shell.bridge), Arc::clone(&shell.remote));
+    tauri::async_runtime::spawn_blocking(move || remote::bridge_url(&remote, &bridge, Duration::from_secs(2))).await.map_err(|e| e.to_string())?
 }
 
-/// `{state: "ready" | "starting" | "failed", error?}`.
+/// `{state: "ready" | "starting" | "failed", error?, missing?, mode: "local" | "remote", host?}`.
 #[tauri::command]
 async fn bridge_status(shell: State<'_, Shell>) -> Result<BridgeStatus, String> {
-    Ok(shell.bridge.status())
+    Ok(remote::bridge_status(&shell.remote, &shell.bridge))
 }
 
 /// Open a link the person clicked: a thread in its own app (Slack / Discord / Telegram), a plan node's GitHub
@@ -168,6 +172,20 @@ pub(crate) fn web_link(url: &str) -> bool {
     !host.is_empty() && !host.contains('@') && !host.contains('\\')
 }
 
+/// Remote-only mode's one shell refusal (BOUNDARY rule 47): while omher uses a server, nothing resolves or runs this
+/// computer's Hermes, oh-my-hermes or Hermes' Python. Every command in [`LOCAL_HERMES_COMMANDS`] calls it first (a test
+/// reads each one's body), and `sessions_agents` asks it before looking for Hermes here.
+fn refuse_local_hermes_in_remote(remote: &remote::Remote) -> Result<(), String> {
+    if remote.active() {
+        return Err("omher uses a server: Hermes and oh-my-hermes on this computer are not run; use this computer first".into());
+    }
+    Ok(())
+}
+
+/// The commands that resolve or run this computer's `hermes`, `omh` or Hermes' Python, each refused in remote-only mode
+/// by [`refuse_local_hermes_in_remote`] before anything else (`session_start` for an oh-my-hermes agent only).
+const LOCAL_HERMES_COMMANDS: [&str; 4] = ["install_engine", "open_hermes_auth", "open_hermes_sign_in", "session_start"];
+
 /// The line the first-run screen shows as what Install will run.
 #[tauri::command]
 async fn install_engine_command() -> Result<String, String> {
@@ -176,9 +194,11 @@ async fn install_engine_command() -> Result<String, String> {
 
 /// Install Hermes and oh-my-hermes with OMH's fixed one-line installer (the first-run screen's Install
 /// button), streaming its output to the screen, then start the bridge again. Takes nothing from the
-/// page but the output channel; one run at a time.
+/// page but the output channel; one run at a time. Refused in remote-only mode (rule 47), and a Connect while it
+/// runs means its end starts no local bridge (`remote::after_install`).
 #[tauri::command]
 async fn install_engine(shell: State<'_, Shell>, on_event: Channel<InstallEvent>) -> Result<Option<i32>, String> {
+    refuse_local_hermes_in_remote(&shell.remote)?;
     if shell.installing.swap(true, Ordering::SeqCst) {
         return Err("the installer is already running".into());
     }
@@ -199,11 +219,7 @@ async fn install_engine(shell: State<'_, Shell>, on_event: Channel<InstallEvent>
         let found = code != Some(0) || bridge::discover_python(|k| std::env::var(k).ok(), |p| p.is_file()).is_ok();
         setup::check_installed(code, found)
     });
-    if outcome == Ok(Some(0)) {
-        shell.bridge.start(shell.resource_dir.clone());
-    } else {
-        shell.bridge.release();
-    }
+    remote::after_install(&shell.remote, &shell.bridge, outcome == Ok(Some(0)), shell.resource_dir.clone());
     outcome
 }
 
@@ -274,10 +290,12 @@ enum AnyAgent {
     Custom(custom_agents::CustomInfo),
 }
 
+/// In remote-only mode Hermes is not looked for here: the oh-my-hermes row reads as not on this computer.
 #[tauri::command]
-async fn sessions_agents() -> Result<Vec<AnyAgent>, String> {
-    tauri::async_runtime::spawn_blocking(|| {
-        let mut all: Vec<AnyAgent> = sessions::agents_on_this_machine().into_iter().map(AnyAgent::Listed).collect();
+async fn sessions_agents(shell: State<'_, Shell>) -> Result<Vec<AnyAgent>, String> {
+    let local_hermes = refuse_local_hermes_in_remote(&shell.remote).is_ok();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut all: Vec<AnyAgent> = sessions::agents_on_this_machine(local_hermes).into_iter().map(AnyAgent::Listed).collect();
         // then the person's own agents, each checked as the file is read now (a broken entry is not listed here)
         all.extend(custom_agents::list_here().agents.into_iter().map(AnyAgent::Custom));
         all
@@ -357,6 +375,9 @@ async fn session_start(
     on_data: Channel<InvokeResponseBody>,
     on_exit: Channel<Option<u32>>,
 ) -> Result<u32, String> {
+    if sessions::runs_local_hermes(&agent) {
+        refuse_local_hermes_in_remote(&shell.remote)?;
+    }
     let sessions = shell.sessions.clone();
     tauri::async_runtime::spawn_blocking(move || {
         // The account Settings › Accounts picked for new sessions of this agent's CLI (or, for a session started
@@ -811,7 +832,8 @@ pub(crate) fn media_target<S: Fn(&str) -> bool>(path: &str, served: S) -> Result
 /// `hermes auth add <provider> --type api-key` (rule 23). Hermes asks for the key there and stores it; omher
 /// takes only the provider id, checked by `hermes_auth::valid_provider`, and never sees the key.
 #[tauri::command]
-async fn open_hermes_auth(provider: String) -> Result<(), String> {
+async fn open_hermes_auth(shell: State<'_, Shell>, provider: String) -> Result<(), String> {
+    refuse_local_hermes_in_remote(&shell.remote)?;
     tauri::async_runtime::spawn_blocking(move || hermes_auth::open(hermes_auth::Form::ApiKey, &provider)).await.map_err(|e| e.to_string())?
 }
 
@@ -819,7 +841,8 @@ async fn open_hermes_auth(provider: String) -> Result<(), String> {
 /// 23), Hermes' own sign-in for that provider. Only `openai-codex` and `nous` pass
 /// (`hermes_auth::SIGN_IN`); omher never sees what the person types there.
 #[tauri::command]
-async fn open_hermes_sign_in(provider: String) -> Result<(), String> {
+async fn open_hermes_sign_in(shell: State<'_, Shell>, provider: String) -> Result<(), String> {
+    refuse_local_hermes_in_remote(&shell.remote)?;
     tauri::async_runtime::spawn_blocking(move || hermes_auth::open(hermes_auth::Form::SignIn, &provider)).await.map_err(|e| e.to_string())?
 }
 
@@ -981,6 +1004,15 @@ async fn peers_watch(shell: State<'_, Shell>, on_event: Channel<peers::PeerStatu
     Ok(())
 }
 
+/// Remote-only mode (rule 47) runs no peer links, so the commands that would start one (`peers_check`, `peers_add`,
+/// `peers_retry`) refuse there, whatever the page shows. `remote_check` stays open: Change server uses it.
+fn no_peer_links_in_remote_mode(remote: &remote::Remote) -> Result<(), String> {
+    if remote.active() {
+        return Err("remote machines are off while omher runs on a server; use this computer first".into());
+    }
+    Ok(())
+}
+
 /// The host field's suggestions: `Host` aliases from `~/.ssh/config` (read only; patterns skipped).
 #[tauri::command]
 async fn peers_hosts() -> Result<Vec<String>, String> {
@@ -993,6 +1025,7 @@ async fn peers_hosts() -> Result<Vec<String>, String> {
 /// the returned loopback URL. Nothing is written on this computer; `peers_check_close` (or Connect) ends it.
 #[tauri::command]
 async fn peers_check(shell: State<'_, Shell>, host: String, port: Option<u16>) -> Result<serde_json::Value, peers::Failure> {
+    no_peer_links_in_remote_mode(&shell.remote).map_err(|line| peers::Failure { kind: peers::FailKind::Bridge, line })?;
     let p = shell.peers.clone();
     tauri::async_runtime::spawn_blocking(move || p.check(&host, port))
         .await
@@ -1009,6 +1042,7 @@ async fn peers_check_close(shell: State<'_, Shell>, check: String) -> Result<(),
 /// The confirm card's Connect: the one call that adds a row to `~/.omher/peers.json`.
 #[tauri::command]
 async fn peers_add(shell: State<'_, Shell>, label: String, host: String, port: Option<u16>, check: Option<String>) -> Result<peers::PeerStatus, String> {
+    no_peer_links_in_remote_mode(&shell.remote)?;
     let p = shell.peers.clone();
     tauri::async_runtime::spawn_blocking(move || p.add(&label, &host, port, check.as_deref())).await.map_err(|e| e.to_string())?
 }
@@ -1023,14 +1057,59 @@ async fn peers_remove(shell: State<'_, Shell>, id: String) -> Result<(), String>
 /// Try a failed link again now.
 #[tauri::command]
 async fn peers_retry(shell: State<'_, Shell>, id: String) -> Result<(), String> {
+    no_peer_links_in_remote_mode(&shell.remote)?;
     shell.peers.retry(&id)
 }
 
-/// Start the bridge again (the Retry button on the failed screen).
+/// Start the bridge again (the Retry button on the failed screen); in remote-only mode, the link to the server.
 #[tauri::command]
 async fn bridge_retry(shell: State<'_, Shell>) -> Result<(), String> {
-    shell.bridge.start(shell.resource_dir.clone());
+    if !shell.remote.retry() {
+        shell.bridge.start(shell.resource_dir.clone());
+    }
     Ok(())
+}
+
+/// Remote-only mode's Check (the gate's connect form): the same link as `peers_check`, returned as `{check, url,
+/// found}` so the gate can list the server's bots before anything is saved. `peers_check_close` closes it.
+#[tauri::command]
+async fn remote_check(shell: State<'_, Shell>, host: String, port: Option<u16>) -> Result<serde_json::Value, peers::Failure> {
+    let p = shell.peers.clone();
+    tauri::async_runtime::spawn_blocking(move || p.check(&host, port))
+        .await
+        .map_err(|e| peers::Failure { kind: peers::FailKind::Bridge, line: e.to_string() })?
+        .map(|(check, url, found)| serde_json::json!({"check": check, "url": url, "found": found}))
+}
+
+/// The gate's Connect: the one write of `~/.omher/remote.json`. Stops the local bridge and any peer links and brings
+/// the server link up now (no restart), keeping the Check's link when `check` names one for the same host.
+#[tauri::command]
+async fn remote_use(shell: State<'_, Shell>, label: String, host: String, port: Option<u16>, check: Option<String>) -> Result<remote::RemoteStatus, String> {
+    let (bridge, peers, link) = (Arc::clone(&shell.bridge), Arc::clone(&shell.peers), Arc::clone(&shell.remote));
+    tauri::async_runtime::spawn_blocking(move || {
+        let mode = remote::RemoteMode::new(&label, &host, port)?;
+        let home = user_home()?;
+        let adopt = check.and_then(|c| peers.take_check(&c, &mode.host, mode.port)).map(|up| Box::new(up) as Box<dyn remote::Link>);
+        remote::use_remote(&home, &link, &bridge, &peers, mode, adopt)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Disconnect / Use this computer: deletes the mode file, stops the link, and starts the local bridge again (the
+/// gate shows Install when Hermes is missing here).
+#[tauri::command]
+async fn remote_leave(shell: State<'_, Shell>) -> Result<remote::RemoteStatus, String> {
+    let (bridge, peers, link, resource_dir) = (Arc::clone(&shell.bridge), Arc::clone(&shell.peers), Arc::clone(&shell.remote), shell.resource_dir.clone());
+    tauri::async_runtime::spawn_blocking(move || remote::leave_remote(&user_home()?, &link, &bridge, &peers, resource_dir))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// `{mode: "local"}` or `{mode: "remote", host, port?, label, state, kind?, reason?, attempt?}`.
+#[tauri::command]
+async fn remote_status(shell: State<'_, Shell>) -> Result<remote::RemoteStatus, String> {
+    Ok(shell.remote.status())
 }
 
 /// `omher --statusline-relay <account>` (a TERMINALS Claude Code's status line, `claude_usage.rs`): records the usage
@@ -1077,6 +1156,10 @@ pub fn run() {
             bridge_url,
             bridge_status,
             bridge_retry,
+            remote_check,
+            remote_use,
+            remote_leave,
+            remote_status,
             open_external,
             install_engine,
             install_engine_command,
@@ -1157,13 +1240,24 @@ pub fn run() {
         .setup(|app| {
             let bridge = Bridge::new();
             let resource_dir = app.path().resource_dir().ok();
-            bridge.start(resource_dir.clone());
             let manifest = if cfg!(debug_assertions) { Some(std::path::Path::new(env!("CARGO_MANIFEST_DIR"))) } else { None };
-            let peers = peers::Peers::new(user_home().unwrap_or_default());
+            let home = user_home().unwrap_or_default();
+            let peers = peers::Peers::new(home.clone());
             if let Ok(script) = bridge::resolve_script(resource_dir.as_deref(), manifest, |p| p.is_file()) {
                 peers.set_script(script);
             }
-            peers.start_all();
+            let remote = remote::Remote::new(remote::ssh_connector(Arc::clone(&peers)));
+            match remote::read_mode(&home) {
+                // remote-only mode (rule 47): no local bridge, no Python, no peer links; one link to the server
+                Some(mode) => {
+                    bridge.stop();
+                    remote.start(mode, None);
+                }
+                None => {
+                    bridge.start(resource_dir.clone());
+                    peers.start_all();
+                }
+            }
             app.manage(Arc::new(tasks::Tasks::default()));
             app.manage(Arc::new(gh_me::Me::default()));
             // free space on the home folder's volume, read once a minute (disk.rs)
@@ -1196,6 +1290,7 @@ pub fn run() {
             app.manage(Shell {
                 bridge,
                 peers,
+                remote,
                 resource_dir,
                 installing: Arc::new(AtomicBool::new(false)),
                 logins: accounts::Logins::new(),
@@ -1222,6 +1317,7 @@ pub fn run() {
                 shell.chats.close_all();
                 shell.logins.cancel_all();
                 shell.peers.stop_all();
+                shell.remote.stop();
                 shell.bridge.stop();
             }
             // the sessions are gone: so are the status files bots read
@@ -1234,7 +1330,33 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{allowed_external, media_target, past_home_in};
+    use super::{allowed_external, media_target, past_home_in, LOCAL_HERMES_COMMANDS};
+
+    /// Rule 47's shell audit: each command that resolves or runs this computer's Hermes, oh-my-hermes or Hermes' Python
+    /// asks `refuse_local_hermes_in_remote` before it does anything else, and nothing else calls the local install,
+    /// sign-in or Hermes look-up. (Its refusal itself: `remote::tests`.)
+    #[test]
+    fn every_local_hermes_command_refuses_first_in_remote_mode() {
+        // a Windows checkout has CRLF line ends (setup.rs reads lib.rs the same way)
+        let src = include_str!("lib.rs").replace("\r\n", "\n");
+        let src = &src[..src.find("#[cfg(test)]").unwrap()];
+        for name in LOCAL_HERMES_COMMANDS {
+            let at = src.find(&format!("async fn {name}(")).unwrap_or_else(|| panic!("{name} is not a command here"));
+            let body = &src[at..];
+            let body = &body[body.find(") -> Result<").unwrap()..];
+            let body = &body[..body.find("\n}\n").unwrap()];
+            let guard = body.find("refuse_local_hermes_in_remote(&shell.remote)?;").unwrap_or_else(|| panic!("{name} has no refusal"));
+            let first_work = ["spawn_blocking", "shell.installing", "shell.sessions"].iter().filter_map(|w| body.find(w)).min().unwrap();
+            assert!(guard < first_work, "{name} refuses only after it started work");
+        }
+        // the calls that reach this computer's Hermes are only in those commands (and the guarded inventory)
+        // (each call is named in pieces here, so this test does not count itself; setup.rs counts the installer's)
+        for (call, owners) in [("hermes_auth::open", 2), ("setup::run_install", 1), ("sessions.start_agent", 1), ("agents_on_this_machine(local_hermes)", 1)] {
+            let call = if call.ends_with(')') { call.to_string() } else { format!("{call}(") };
+            assert_eq!(src.matches(call.as_str()).count(), owners, "{call}");
+        }
+        assert!(src.contains("let local_hermes = refuse_local_hermes_in_remote(&shell.remote).is_ok();"));
+    }
 
     #[test]
     fn a_session_account_whose_folder_is_gone_is_not_read_elsewhere() {
@@ -1254,6 +1376,20 @@ mod tests {
         assert_eq!(past_home_in(&home, "codex", None, &none), Ok(home.join(".codex")));
         assert!(past_home_in(&home, "grok", None, &none).is_err());
         let _ = std::fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn peer_links_are_refused_in_remote_only_mode() {
+        let connect: crate::remote::Connect = std::sync::Arc::new(|_: &str, _: Option<u16>| {
+            Err(crate::peers::Failure { kind: crate::peers::FailKind::Unreachable, line: "no route".into() })
+        });
+        let remote = crate::remote::Remote::new(connect);
+        assert_eq!(super::no_peer_links_in_remote_mode(&remote), Ok(()));
+        remote.start(crate::remote::RemoteMode::new("VPS", "demo@host.example", Some(2222)).unwrap(), None);
+        let err = super::no_peer_links_in_remote_mode(&remote).unwrap_err();
+        assert!(err.contains("remote machines are off"), "{err}");
+        remote.stop();
+        assert_eq!(super::no_peer_links_in_remote_mode(&remote), Ok(()));
     }
 
     #[test]

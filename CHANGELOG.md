@@ -10,6 +10,15 @@ All notable changes will be documented here.
   three 50 ms polls and the lock failed at once, so the tick exited 6 and Hermes delivered an alert. The replace now
   retries for up to 2 seconds and the lock retries within its existing 20-second wait; a denial that outlasts either
   still fails the tick. (`src/skills/pr_watch_toolkit/scripts/pr_watch.py`)
+- **A dag-ulw run whose verify node was repaired twice ends instead of staying open with a node no child takes.**
+  After a failed verify node, a repair group answers that failure and the node runs again. When a group member failed
+  too (a re-review that found more) its repair became the root's second group, and counting failures against groups
+  read the root's next failure as answered: `ready` handed the root out again with no repair cycle left, and the run
+  stayed `running` under the TUI's composer. Two real runs sat open 40 and 158 hours that way. `repair` now stamps each
+  group with the failure it answers (`answers`, outside the digest), so a failure settled after the group is answered
+  by none and the run asks for a repair or stops; a group stored before the stamp is dated by when its first node went
+  out. (`src/plugin_bundle/omh/dag_run.py`)
+
 - **omher's model picker reads model names, finds the current model, and keeps its maker chips on one row.** The
   rows and the model button name a model as people say it ("Opus 5.5", "GPT-6.1 Terra"; the id is the title), and Nous
   Portal's `claude-opus-5.5` spelling now names too; two of a provider's models that would read the same keep their ids.
@@ -33,6 +42,17 @@ All notable changes will be documented here.
   judge then started the next one, so Stop looked dead. Stop now pauses an active goal before it interrupts, as
   Ctrl+C does in Hermes' CLI, and the chat says `⏸ Goal paused`; `/goal resume` continues it. A goal that is already
   paused or done is left alone. (`docs/OMHER-BOUNDARY.md` rule 46)
+
+- **omher: connect to a Hermes on your server over SSH, nothing installed on this computer.** When this computer has no
+  Hermes, the first screen now offers Connect to a server (SSH) next to Install: pick a host from `~/.ssh/config` or
+  type `user@host` (and a port), Check lists the server's bots through the same `ssh` link Remote machines uses (key or
+  ssh agent only; a host that wants a password is told to run `ssh-copy-id`), and Connect saves `~/.omher/remote.json`.
+  From then on omher starts no local bridge and no Python, keeps one link to that server, reconnects it when it drops
+  ("Connection to <name> lost, reconnecting") and talks only to the server's bridge. Settings › General shows the
+  server with Change server and Use this computer. Handing a bot a folder here, folder chats with a local folder and
+  remote machines are off in this mode; terminals stay this computer's own. The update button also shows on the setup
+  and connecting screens. Closes #3229. (`apps/omher/src-tauri/src/remote.rs`, `apps/omher/src/app/RemoteConnect.tsx`,
+  BOUNDARY rule 47)
 
 ## 5.0.1 - 2026-11-26
 

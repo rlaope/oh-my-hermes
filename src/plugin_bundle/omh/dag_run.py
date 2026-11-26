@@ -1074,6 +1074,36 @@ def _root(node: Mapping[str, Any]) -> str:
     return str(node.get("repairs") or node["id"])
 
 
+def _root_failures(node: Mapping[str, Any]) -> int:
+    """How many of a node's attempts were settled failed or blocked."""
+    return sum(1 for attempt in node.get("attempts") or [] if attempt.get("outcome") in ("failed", "blocked"))
+
+
+def _group_answers_last_failure(root: Mapping[str, Any], group: Sequence[Mapping[str, Any]], groups: int) -> bool:
+    """Whether the root's latest repair group answers the root's latest failure, so the root's re-run is due.
+
+    `repair` stamps each node of a group with the root's failure count when the group was added (``answers``): the
+    group answers that failure, and a failure settled after it (the re-run that failed again) is answered by no group,
+    so the root stays failed or blocked and the run asks for a repair, or stops with no cycle left. Counting failures
+    against groups made a group added for a group member's failure (a re-review that found more) look like the answer
+    to the root's next failure, and handed the root out again with no repair left: the run never ended (two real
+    runs, open 40 and 158 hours). A group stored before the stamp answers the failures settled before its first node
+    went out; a record without those times keeps the count.
+    """
+    failures = _root_failures(root)
+    stamps = {member.get("answers") for member in group}
+    stamp = next(iter(stamps)) if len(stamps) == 1 else None
+    if isinstance(stamp, int) and not isinstance(stamp, bool):
+        return failures == stamp
+    went_out = [_number((member.get("attempts") or [{}])[0].get("handed_out_at")) for member in group]
+    settled = [_number(attempt.get("settled_at")) for attempt in root.get("attempts") or []
+               if attempt.get("outcome") in ("failed", "blocked")]
+    if went_out and settled and None not in went_out and None not in settled:
+        first = min(moment for moment in went_out if moment is not None)
+        return failures == sum(1 for moment in settled if moment is not None and moment <= first)
+    return failures <= groups
+
+
 def derive(record: Mapping[str, Any], children: Sequence[Mapping[str, Any]], now: float) -> dict[str, dict[str, Any]]:
     """Each node's state, what it waits on, and its bound child. Never stored; recomputed on every read."""
     nodes = {str(node["id"]): node for node in record["nodes"]}
@@ -1117,13 +1147,13 @@ def derive(record: Mapping[str, Any], children: Sequence[Mapping[str, Any]], now
         if base[root]["state"] in ("failed", "blocked") and latest and all(
             base.get(member, {}).get("state") == "accepted" for member in latest
         ):
-            failures = sum(1 for attempt in nodes[root].get("attempts") or [] if attempt.get("outcome") in ("failed", "blocked"))
             # A role-less writer guessed as verify ("Re-verify the fix") re-runs too, though it covers nothing, but only
             # after a group `repair` stamped ``reruns_root``: a group stored before that rule keeps the root repaired.
             reruns = any(nodes.get(member, {}).get("reruns_root") for member in latest)
             if not (is_verification(nodes[root]) or reruns):
                 base[root]["state"] = "repaired"
-            elif failures <= len(root_groups):
+            elif _group_answers_last_failure(nodes[root], [nodes[member] for member in latest if member in nodes],
+                                             len(root_groups)):
                 base[root].update(state="pending", child=None)
         for older in root_groups[:-1]:
             for member in older:
@@ -2174,7 +2204,8 @@ def repair(
                 "repair_depends_on_open_node",
                 f"Repair node {node['id']} may depend only on accepted nodes or its own group, not {', '.join(outside)}.",
             )
-        node.update(repairs=root, cycle=len(groups) + 1, origin=f"repair:{root}")
+        # ``answers``: the root's failure this group answers (`_group_answers_last_failure`); not in the digest.
+        node.update(repairs=root, cycle=len(groups) + 1, origin=f"repair:{root}", answers=_root_failures(nodes[root]))
         if nodes[root].get("role_guess") == "verify":
             node["reruns_root"] = True  # `derive` runs the root again once this group is accepted; not in the digest
     runnable = {key for key, info in derived.items() if info["state"] in LIVE | {"ready", "waiting", "held"}}

@@ -722,10 +722,11 @@ class DocPins(unittest.TestCase):
         # (a bot on another computer: its platforms read there by that computer's own bridge, asked over the link with
         # the bare op and nothing in it, once per interval, checked again here, kept in memory only); 46: rule 46 (a
         # typed `/goal` through Hermes' own `slash.exec`, its handed-back turn through the one `prompt.submit`; Stop
-        # pauses only an `active` goal through Hermes' own `session.control` `goal.pause` before the interrupt). The
-        # rules stay numbered 1..n with no gap or repeat.
+        # pauses only an `active` goal through Hermes' own `session.control` `goal.pause` before the interrupt); 47: rule 47
+        # (remote-only mode: one shell-written ~/.omher/remote.json, no local bridge, Python or peer links, one rule 31
+        # link to the server and the page talking only to that bridge). The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 46, len(rules))
+        self.assertTrue(6 <= len(rules) <= 47, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -2198,7 +2199,8 @@ class AddKeyOpensOnlyHermesAuthAdd(unittest.TestCase):
         self.assertIn('["auth".into(), "add".into(), provider.into()]', args)
         sig = re.search(r"async fn open_hermes_sign_in\((.*?)\) -> ", self.lib, re.S)
         self.assertIsNotNone(sig)
-        self.assertEqual(sig.group(1).strip(), "provider: String")
+        # the page passes a provider id only; the shell's own state is for rule 47's refusal on a server
+        self.assertEqual(sig.group(1).strip(), "shell: State<'_, Shell>, provider: String")
         self.assertIn("hermes_auth::open(hermes_auth::Form::SignIn, &provider)", self.lib)
         # the page's list is the shell's list, and its stand-in in a browser is e2e's only
         ready = (UI_SRC / "chat" / "connect" / "ready.ts").read_text(encoding="utf-8")
@@ -2239,7 +2241,8 @@ class AddKeyOpensOnlyHermesAuthAdd(unittest.TestCase):
         self.assertIn(".stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null())", self.prod)
         sig = re.search(r"async fn open_hermes_auth\((.*?)\) -> ", self.lib, re.S)
         self.assertIsNotNone(sig)
-        self.assertEqual(sig.group(1).strip(), "provider: String")
+        # the page passes a provider id only; the shell's own state is for rule 47's refusal on a server
+        self.assertEqual(sig.group(1).strip(), "shell: State<'_, Shell>, provider: String")
         self.assertIn("hermes_auth::open(hermes_auth::Form::ApiKey, &provider)", self.lib)
 
     def test_the_page_never_takes_a_key(self) -> None:
@@ -3129,7 +3132,8 @@ class HandToBotAddsNoRead(unittest.TestCase):
         panel = (UI_SRC / "elsewhere" / "PanelTabs.tsx").read_text(encoding="utf-8")
         self.assertIn("const canHand = () => !bot.host && handBots(getStore().getSnapshot().bots).length > 0;", panel)
         self.assertIn("if (!canHand()) return;", panel)
-        self.assertIn('export const handBots = (bots: Bot[]) => bots.filter((b) => !b.host && b.status !== "offline");', self.card)
+        # none at all in remote-only mode (rule 47): every bot runs on the server, which cannot read a folder here
+        self.assertIn('export const handBots = (bots: Bot[]) => (remoteOnly() ? [] : bots.filter((b) => !b.host && b.status !== "offline"));', self.card)
         rows = (UI_SRC / "sessions" / "SessionsSection.tsx").read_text(encoding="utf-8")
         self.assertIn("termMenuItems(rec, handBots(getStore().getSnapshot().bots).length > 0)", rows)
         # a split card's cell offers it through the row's own items and card, never a Hand path of its own
@@ -3621,7 +3625,8 @@ class BotPageReadsPersonaAndMemoryOnly(unittest.TestCase):
         # nowhere else in the app names the op or keeps what it answered (unit tests may name it)
         hits = [p.relative_to(UI_SRC).as_posix() for p in UI_SRC.rglob("*.ts*")
                 if ".test." not in p.name and '"bots.page"' in p.read_text(encoding="utf-8")]
-        self.assertEqual(sorted(hits), ["lib/protocol.ts", "state/store.ts"])
+        # lib/remoteOps.ts is rule 47's audit table: it names every op and sends none, keeping no answer
+        self.assertEqual(sorted(hits), ["lib/protocol.ts", "lib/remoteOps.ts", "state/store.ts"])
 
 
 class MessagingPlatformsThroughOmh(unittest.TestCase):
@@ -3770,7 +3775,118 @@ class MessagingPlatformsThroughOmh(unittest.TestCase):
                 self.assertNotIn(bad, text, bad)
         hits = [p.relative_to(UI_SRC).as_posix() for p in UI_SRC.rglob("*.ts*")
                 if ".test." not in p.name and '"bots.platforms"' in p.read_text(encoding="utf-8")]
-        self.assertEqual(sorted(hits), ["lib/protocol.ts", "state/store.ts"])
+        # lib/remoteOps.ts is rule 47's audit table: it names every op and sends none, keeping no answer
+        self.assertEqual(sorted(hits), ["lib/protocol.ts", "lib/remoteOps.ts", "state/store.ts"])
+
+
+class RemoteOnlyMode(unittest.TestCase):
+    """Rule 47: remote-only mode is one shell-written mode file; in it the shell starts no local bridge, no Python and no
+    peer links, keeps one link made by rule 31's `peers::connect`, and the peer commands refuse."""
+
+    RULE_47 = (
+        "47. omher can run with nothing installed on this computer, using the Hermes on a server the person reaches over"
+        " `ssh` (remote-only mode, issue #3229).",
+        "The mode is one file, `~/.omher/remote.json` (`{\"v\":1,\"host\":\"user@host\",\"port\":22|null,\"label\":\"...\"}`),"
+        " which only the desktop shell writes, and only when the person presses Connect",
+        "While the file is valid the shell starts no local bridge and no Python (no Hermes discovery, no install screen)"
+        " and runs no rule 31 peer links: `peers_check`, `peers_add` and `peers_retry` refuse,",
+        "It keeps one link to the server, made by rule 31's `peers::connect` with rule 31's fixed `ssh` argv,",
+        "the shell starts no other process for this mode.",
+        "The page talks only to that server's omher bridge, through the forwarded loopback port and its token,",
+        "Nothing about this computer is sent to the server beyond what rule 31 already sends:",
+        "a saved folder chat from local mode is never resumed there (not by the restart, not by Resume;",
+        "no file of this computer is attached (the chat has no +, drop or paste, and the store refuses `chat.attach`);",
+        "the oh-my-hermes offer is hidden, `install_engine` refuses, and an install already running when Connect is pressed"
+        " starts no local bridge when it ends;",
+        "Two choke points hold this, each with its own audit.",
+        "On the page, every op goes out through one filter: `BridgeClient.request` asks `remoteRefusal`"
+        " (`src/lib/remoteOps.ts`), whose table `REMOTE_OPS` names every op the page sends;",
+        "and any op the table does not name, and an op it could refuse waits for the shell's mode first.",
+        "In the shell, one helper, `refuse_local_hermes_in_remote`, is called first by every command that resolves or runs"
+        " this computer's Hermes, oh-my-hermes or Hermes' Python (`install_engine`, `open_hermes_auth`,"
+        " `open_hermes_sign_in`, and `session_start` for oh-my-hermes), and `sessions_agents` looks for no Hermes here in"
+        " that mode.",
+        "Use this computer (Disconnect) deletes the file, stops the link and starts the local bridge and peer links again.",
+    )
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.remote = (SHELL / "remote.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
+        cls.lib = (SHELL / "lib.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
+
+    def test_the_doc_states_rule_47(self) -> None:
+        text = _flat(DOC.read_text(encoding="utf-8"))
+        for sentence in self.RULE_47:
+            self.assertIn(_flat(sentence), text)
+
+    def test_the_one_link_is_rule_31s_connect_and_nothing_else_spawns(self) -> None:
+        for banned in ("Command::new", "spawn_command", "TcpStream"):
+            self.assertNotIn(banned, self.remote)
+        self.assertIn("peers::connect(host, port, &script)", self.remote)
+        self.assertIn('".omher").join("remote.json")', self.remote)
+
+    def test_the_installer_refuses_and_starts_nothing_in_remote_mode(self) -> None:
+        fn = self.lib[self.lib.index("async fn install_engine("):]
+        fn = fn[: fn.index("\n}\n")]
+        self.assertLess(fn.index("refuse_local_hermes_in_remote(&shell.remote)?;"), fn.index("setup::run_install("))
+        # the end of an install decides under the link's lock whether the local bridge starts
+        self.assertIn("remote::after_install(&shell.remote, &shell.bridge,", fn)
+        self.assertNotIn("shell.bridge.start(", fn)
+        after = self.remote[self.remote.index("pub fn after_install("):]
+        after = after[: after.index("\n}\n")]
+        self.assertIn("remote.inner.lock()", after)
+        self.assertLess(after.index("if g.mode.is_some()"), after.index("bridge.start("))
+
+    def test_the_page_sends_no_folder_or_file_of_this_computer_in_remote_mode(self) -> None:
+        store = (UI_SRC / "state" / "store.ts").read_text(encoding="utf-8")
+        for op in ("folder.open", "folder.resume"):
+            at = store.index(f'bridge.request("{op}"')
+            self.assertIn('if (remoteOnly()) throw new Error(tr("remote.noFolderChat"));', store[at - 200: at])
+        self.assertEqual(store.count('if (remoteOnly()) throw new Error(tr("remote.noFiles"));'), 2)
+        self.assertEqual(store.count('bridge.request("chat.attach"'), 2)
+        sessions = (UI_SRC / "sessions" / "sessions.ts").read_text(encoding="utf-8")
+        self.assertIn("Promise.all([store().resumed, modeKnown()])", sessions)
+        chat = (UI_SRC / "chat" / "Chat.tsx").read_text(encoding="utf-8")
+        self.assertIn("onSendFiles={remote ? undefined :", chat)
+
+    def test_the_shell_choke_point_guards_every_local_hermes_command(self) -> None:
+        self.assertIn('const LOCAL_HERMES_COMMANDS: [&str; 4] = ["install_engine", "open_hermes_auth", "open_hermes_sign_in", "session_start"];', self.lib)
+        for name in ("install_engine", "open_hermes_auth", "open_hermes_sign_in", "session_start"):
+            fn = self.lib[self.lib.index(f"async fn {name}("):]
+            fn = fn[: fn.index("\n}\n")]
+            self.assertIn("refuse_local_hermes_in_remote(&shell.remote)?;", fn, name)
+        self.assertIn("let local_hermes = refuse_local_hermes_in_remote(&shell.remote).is_ok();", self.lib)
+        self.assertNotIn("no_install_in_remote_mode", self.remote)
+
+    def test_the_page_choke_point_is_the_one_send(self) -> None:
+        bridge = (UI_SRC / "lib" / "bridge.ts").read_text(encoding="utf-8")
+        req = bridge[bridge.index("  request<K extends Op>("):]
+        req = req[: req.index("\n  }\n")]
+        self.assertLess(req.index("remoteRefusal(op,"), req.index("ws.send("))
+        ops = (UI_SRC / "lib" / "remoteOps.ts").read_text(encoding="utf-8")
+        self.assertIn("export const REMOTE_OPS: Record<PageOp, OpRule> = {", ops)
+        for op, rule in (("folder.open", "never"), ("folder.resume", "never"), ("chat.attach", "never"), ("cli.title", "never")):
+            self.assertIn(f'"{op}": {{ send: "{rule}"', ops)
+        for op, field in (("bots.set_avatar", "data"), ("runs.cli", "cwd"), ("thread.create", "cwd")):
+            self.assertIn(f'"{op}": {{ send: "without", field: "{field}"', ops)
+        # the page writes to a bridge socket in one place only
+        sends = [p.relative_to(UI_SRC).as_posix() for p in UI_SRC.rglob("*.ts*")
+                 if ".test." not in p.name and ".send(JSON.stringify(" in p.read_text(encoding="utf-8")]
+        self.assertEqual(sends, ["lib/bridge.ts"])
+
+    def test_startup_in_remote_mode_starts_no_bridge_and_no_peers(self) -> None:
+        start = self.lib.index("match remote::read_mode(&home) {")
+        arm = self.lib[start: self.lib.index("None =>", start)]
+        self.assertIn("bridge.stop();", arm)
+        self.assertIn("remote.start(mode, None);", arm)
+        self.assertNotIn("bridge.start(", arm)
+        self.assertNotIn("start_all", arm)
+
+    def test_peer_link_commands_refuse_in_remote_mode(self) -> None:
+        for cmd in ("async fn peers_check(", "async fn peers_add(", "async fn peers_retry("):
+            body = self.lib[self.lib.index(cmd):]
+            body = body[: body.index("\n}\n")]
+            self.assertIn("no_peer_links_in_remote_mode(&shell.remote)", body, cmd)
 
 
 class PeerPlatformsThroughTheirOwnBridge(unittest.TestCase):

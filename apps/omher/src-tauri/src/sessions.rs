@@ -602,20 +602,36 @@ pub fn hermes_row(omh: Option<PathBuf>, hermes: Option<PathBuf>) -> AgentInfo {
     }
 }
 
+/// The oh-my-hermes row: `look` finds `omh` and Hermes' Python here, and runs only when this computer's Hermes is used.
+pub fn omh_row(local_hermes: bool, look: impl FnOnce() -> (Option<PathBuf>, Option<PathBuf>)) -> AgentInfo {
+    if !local_hermes {
+        return hermes_row(None, None);
+    }
+    let (omh, hermes) = look();
+    hermes_row(omh, hermes)
+}
+
+/// Whether starting agent `id` runs this computer's oh-my-hermes (`omh`, a Hermes Python launcher): refused in
+/// remote-only mode (rule 47). Plain shells and the other CLIs are this computer's own programs and stay.
+pub fn runs_local_hermes(id: &str) -> bool {
+    agent(id).is_some_and(|a| a.mode == Mode::Hermes)
+}
+
 /// The oh-my-hermes row's name when only Hermes is there.
 pub const HERMES_LABEL: &str = "Hermes";
 
 /// Every allow-listed agent with where it was found on this machine: the built-ins, then the generic ACP agents,
-/// each with its list row.
-pub fn agents_on_this_machine() -> Vec<AgentInfo> {
+/// each with its list row. `local_hermes` false (remote-only mode, rule 47): the oh-my-hermes row is not looked for
+/// at all (no `omh`, no Hermes discovery) and reads as not on this computer.
+pub fn agents_on_this_machine(local_hermes: bool) -> Vec<AgentInfo> {
     let dirs = host_dirs();
     let rows = AGENTS.iter().map(|a| (a, None)).chain(acp_agents::ACP_LIST.iter().map(|e| (&e.agent, Some(e))));
     rows.map(|(a, acp)| {
-        let found = find_agent(a, &dirs);
         if a.id == "omh" {
             // Hermes as the bridge finds it (the same look-up the first-run screen keys on)
-            return hermes_row(found, crate::bridge::discover_python(host_env, |p| p.is_file()).ok());
+            return omh_row(local_hermes, || (find_agent(a, &dirs), crate::bridge::discover_python(host_env, |p| p.is_file()).ok()));
         }
+        let found = find_agent(a, &dirs);
         AgentInfo { id: a.id, label: a.label, mode: a.mode, path: found.map(|p| p.to_string_lossy().into_owned()), via: None, acp }
     })
     .collect()
@@ -1799,6 +1815,20 @@ mod tests {
 
     /// A person with Hermes and no `omh` gets a usable "Hermes" row; with both, the row is as it always was; with
     /// neither, it is not installed. The row never names a program to start: `launch_for("omh")` still needs `omh`.
+    #[test]
+    fn in_remote_mode_the_omh_row_looks_for_nothing_here_and_only_omh_runs_local_hermes() {
+        let off = omh_row(false, || panic!("Hermes was looked for on this computer in remote-only mode"));
+        assert_eq!((off.id, off.label, off.path, off.via), ("omh", "oh-my-hermes", None, None));
+        let py = PathBuf::from("/Users/k/.hermes/hermes-agent/venv/bin/python");
+        let on = omh_row(true, || (None, Some(py.clone())));
+        assert_eq!((on.label, on.via), (HERMES_LABEL, Some("hermes")));
+        let only: Vec<&str> = AGENTS.iter().map(|a| a.id).filter(|id| runs_local_hermes(id)).collect();
+        assert_eq!(only, ["omh"]);
+        for other in ["claude", "codex", "shell", "pi", "grok", "", "hermes"] {
+            assert!(!runs_local_hermes(other), "{other}");
+        }
+    }
+
     #[test]
     fn the_hermes_row_without_omh_with_both_and_with_neither() {
         let omh = PathBuf::from("/Users/k/.local/bin/omh");
@@ -3033,7 +3063,7 @@ mod tests {
     #[test]
     #[ignore]
     fn real_rows_without_omh() {
-        let row = agents_on_this_machine().into_iter().find(|a| a.id == "omh").unwrap();
+        let row = agents_on_this_machine(true).into_iter().find(|a| a.id == "omh").unwrap();
         println!("omh row: {row:?}");
         assert_eq!((row.label, row.via), ("Hermes", Some("hermes")));
         assert!(launch_for("omh").is_err(), "no `omh` program to start");
@@ -3047,7 +3077,7 @@ mod tests {
     fn real_agents_print_their_version() {
         let s = Sessions::default();
         let mut ran = 0;
-        for info in agents_on_this_machine() {
+        for info in agents_on_this_machine(true) {
             println!("{:<7} {}", info.id, info.path.as_deref().unwrap_or("not installed"));
             if !matches!(info.id, "claude" | "codex") || info.path.is_none() {
                 continue;

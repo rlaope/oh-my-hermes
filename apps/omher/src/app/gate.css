@@ -250,3 +250,90 @@
     transform: rotate(360deg);
   }
 }
+
+/* The first screen's two ways in (install here, or a server over SSH): the app's segmented control, full width. */
+.gate-choice {
+  display: flex;
+  width: 100%;
+  padding: 2px;
+  gap: 2px;
+  box-sizing: border-box;
+  border-radius: var(--r-sm, 4px);
+  background: var(--raise, #1b181e);
+  border: 1px solid var(--line, #29252c);
+}
+.gate-choice-b {
+  flex: 1;
+  height: 28px;
+  border: 0;
+  border-radius: var(--r-sm, 4px);
+  background: transparent;
+  color: var(--muted, #9a929d);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+.gate-choice-b:hover:not(:disabled):not([aria-pressed="true"]) {
+  color: var(--body, #dcd6de);
+}
+.gate-choice-b[aria-pressed="true"] {
+  background: var(--seg-on, #3d3843);
+  color: var(--ink, #f3eff4);
+}
+.gate-choice-b:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+/* the Connect form: the peer card's fields and results, left-aligned under the centred head */
+.gate-remote {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+.gate-remote .peer-form,
+.gate-remote .peer-found,
+.gate-remote .peer-fail,
+.gate-remote .peer-wait,
+.gate-remote .peer-warn {
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+}
+.gate-remote-row {
+  display: flex;
+  gap: 8px;
+}
+.gate-remote-host {
+  flex: 1;
+  min-width: 0;
+}
+.gate-remote-port {
+  flex: 0 0 84px;
+}
+.gate-remote-at {
+  font: 12px var(--mono, ui-monospace, monospace);
+  color: var(--muted, #9a929d);
+}
+.gate-spin-lg {
+  width: 14px;
+  height: 14px;
+  color: var(--muted, #9a929d);
+}
+/* the updater needs no bridge: its button sits under the gate's actions */
+.gate-upd {
+  display: flex;
+  justify-content: center;
+}
+.gate-upd:empty {
+  display: none;
+}
+.gate-upd .upd {
+  margin-left: 0;
+}
+/* Change server, over the app that stays mounted under it */
+.gate.gate-over {
+  z-index: 300;
+  overflow: auto;
+}

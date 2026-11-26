@@ -7,6 +7,7 @@ import { Avatar, SourceIcon, Spinner } from "../ui";
 import { shortTime } from "../app/time";
 import { lang, t, tx } from "../i18n";
 import { composing } from "../lib/ime";
+import { useServerMode } from "../app/remote";
 
 const SIDE = 256;
 const KINDS = ["image/png", "image/jpeg", "image/webp"];
@@ -89,6 +90,16 @@ export function usePictureEditor(bot: Bot) {
 export function AvatarEditor({ bot, ed }: { bot: Bot; ed: ReturnType<typeof usePictureEditor> }) {
   const [over, setOver] = useState(false);
   const { busy, apply, pick } = ed;
+  // on a server (rule 47) a picture of this computer is not sent: the picture shows, with no click or drop on it
+  const remote = useServerMode().mode === "remote";
+  if (remote)
+    return (
+      <div className="be-av-wrap">
+        <span className="be-av" data-testid="avatar-view">
+          <Avatar bot={bot.name} size={64} />
+        </span>
+      </div>
+    );
   return (
     <div className="be-av-wrap">
       <button
@@ -122,11 +133,15 @@ export function AvatarEditor({ bot, ed }: { bot: Bot; ed: ReturnType<typeof useP
 
 /** Inline picture actions next to Open chat, plus the error line when a picture was refused. */
 export function PictureActions({ ed }: { ed: ReturnType<typeof usePictureEditor> }) {
+  // on a server (rule 47) no picture of this computer is chosen; going back to the default face sends none
+  const remote = useServerMode().mode === "remote";
   return (
     <>
-      <button type="button" className="be-link" onClick={ed.pick} disabled={ed.busy} data-testid="avatar-change">
-        {t("id.changePic")}
-      </button>
+      {!remote && (
+        <button type="button" className="be-link" onClick={ed.pick} disabled={ed.busy} data-testid="avatar-change">
+          {t("id.changePic")}
+        </button>
+      )}
       {ed.own && (
         <button type="button" className="be-link" onClick={() => void ed.reset()} disabled={ed.busy} data-testid="avatar-reset">
           {t("id.defaultFace")}
