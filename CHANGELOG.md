@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher threads: what you do in an open thread acts on that thread.** Esc with a thread open interrupted the
+  bot's main chat (and did nothing when only the thread ran); it now stops the open thread's turn and leaves the main
+  chat alone. Thread rows sit inside their bot's sidebar row, so a slow press on a thread or its × lifted the bot for
+  a drag, and ⌥↑/⌥↓ on a focused thread reordered the bots; presses and keys inside the thread list no longer start
+  either. The open thread counted as off screen: its answers still rang and notified, while the main chat's answers
+  drew no unread, sound or notification. A thread's or folder chat's unread (`fold:` keys, summed into the Dock
+  count) was never cleared, so the Dock count only went up; it now clears when that chat is opened or removed.
+  (`apps/omher/src/state/store.ts`, `apps/omher/src/app/shortcuts.ts`, `apps/omher/src/sidebar/useRowDrag.ts`)
+
 - **omher terminal: an address a table cell breaks across rows opens whole.** Claude Code's markdown tables put
   real newlines inside a cell, so `https://github.com/` sat on one row and `sgl-project/sglang/pull/…` under it; the
   web-links add-on joins only rows xterm itself wrapped, linked the first piece alone, and Cmd+click opened

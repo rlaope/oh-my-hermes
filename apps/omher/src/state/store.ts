@@ -801,8 +801,18 @@ function touchChat(state: AppState, bot: string, fn: (c: Chat) => Chat): AppStat
   return { ...state, chats: { ...state.chats, [bot]: fn(chat) } };
 }
 
+/** The selected bot's chat the person has open: its open thread's (`fold:<bot>:<thread>`), else its main chat. */
+function openChatKey(state: AppState): string | null {
+  const bot = state.selectedBot;
+  return bot && state.ui.thread ? threadKey(bot, state.ui.thread) : bot;
+}
+
+/** The SESSIONS chat on screen (a folder chat's `fold:<bot>:<session>`, an agent's `agent:<id>`), or null. */
+const sessionChatShown = (state: AppState) => (state.ui.view === "session" ? (sessionKeyOf?.(state.ui.session) ?? null) : null);
+
 function bumpUnread(state: AppState, bot: string): AppState {
-  if (bot === state.selectedBot) return state;
+  // the chat on screen counts nothing: with a thread open that is the thread, so its bot's main chat counts again
+  if (bot === openChatKey(state) || bot === sessionChatShown(state)) return state;
   return { ...state, unread: { ...state.unread, [bot]: (state.unread[bot] ?? 0) + 1 } };
 }
 
@@ -1366,7 +1376,8 @@ export function reduce(state: AppState, a: Action): AppState {
       return {
         ...state,
         selectedBot: a.bot,
-        unread: a.thread ? state.unread : { ...state.unread, [a.bot]: 0 },
+        // the chat opened is read: the thread's own key (`fold:<bot>:<thread>`, in the Dock count), or the main chat
+        unread: { ...state.unread, [a.thread ? threadKey(a.bot, a.thread) : a.bot]: 0 },
         ui: { ...state.ui, view: "chat", thread: a.thread },
       };
     case "threads": {
@@ -1409,10 +1420,12 @@ export function reduce(state: AppState, a: Action): AppState {
       if (!list?.some((r) => r.thread === a.thread) && !state.chats[key] && state.ui.thread !== a.thread) return state;
       const chats = { ...state.chats };
       delete chats[key];
+      const { [key]: _gone, ...unread } = state.unread;
       const open = state.selectedBot === a.bot && state.ui.thread === a.thread;
       return {
         ...state,
         chats,
+        unread,
         threads: { ...state.threads, [a.bot]: (list ?? []).filter((r) => r.thread !== a.thread) },
         ui: open ? { ...state.ui, thread: null } : state.ui,
       };
@@ -1585,10 +1598,14 @@ export function reduce(state: AppState, a: Action): AppState {
       const max = runsFull && rest.panelOpen;
       return { ...state, ui: { ...state.ui, ...rest, panelMax: max, ...(session ? { view: "session" as const, session } : {}) } };
     }
-    case "ui.session":
+    case "ui.session": {
+      // a folder chat opened is read (its `fold:` key counts in the Dock until then)
+      const key = a.id ? sessionKeyOf?.(a.id) : null;
+      const unread = key && state.unread[key] ? { ...state.unread, [key]: 0 } : state.unread;
       return a.id
-        ? { ...state, ui: { ...state.ui, view: "session", session: a.id } }
+        ? { ...state, unread, ui: { ...state.ui, view: "session", session: a.id } }
         : { ...state, ui: { ...state.ui, view: state.ui.view === "session" ? "chat" : state.ui.view, session: null } };
+    }
     case "ui.pin": {
       const rest = state.ui.pinned.filter((b) => b !== a.bot);
       return { ...state, ui: { ...state.ui, pinned: a.on ? [...rest, a.bot] : rest } };
@@ -1609,7 +1626,9 @@ export function reduce(state: AppState, a: Action): AppState {
       if (!state.chats[a.bot]) return state;
       const chats = { ...state.chats };
       delete chats[a.bot];
-      return { ...state, chats };
+      // a removed thread's or replaced folder chat's unread goes with it (the Dock count sums every key)
+      const { [a.bot]: _gone, ...unread } = state.unread;
+      return { ...state, chats, unread };
     }
     default:
       return state;
@@ -3280,11 +3299,12 @@ export function getStore(): Store {
   }));
 }
 
-/** True while the person sees chat `key`: the window has focus and shows that bot's chat or that session. */
+/** True while the person sees chat `key`: the window has focus and shows that session, or that bot's chat (with a
+ *  thread open: that thread's, not the bot's main chat). */
 function watchingChat(state: AppState, key: string): boolean {
   if (!windowWatched()) return false;
-  if (isSessionChat(key)) return state.ui.view === "session" && sessionKeyOf?.(state.ui.session) === key;
-  return state.ui.view === "chat" && state.selectedBot === key;
+  if (state.ui.view === "session") return sessionChatShown(state) === key;
+  return state.ui.view === "chat" && openChatKey(state) === key;
 }
 
 /** Sounds: your own send (any chat), and a bot's or SESSIONS chat's events. A chat's (re)load and a dropped
