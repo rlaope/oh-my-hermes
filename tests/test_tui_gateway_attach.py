@@ -1710,5 +1710,32 @@ class GrantTests(unittest.TestCase):
         self.assertIsInstance(error, AttributeError)
 
 
+class FramesTests(unittest.TestCase):
+    """`_frames` splits WebSocket messages on LF only, never on Unicode line separators inside JSON strings."""
+
+    def test_unicode_line_separators_inside_json_strings_stay_one_frame(self) -> None:
+        # Valid RFC 8259 JSON strings may hold literal U+2028, U+2029, or U+0085 when serialized with
+        # `ensure_ascii=False`; `str.splitlines()` broke them into unparseable fragments (#3221).
+        message = "before\u2028line-sep\u2029para-sep\u0085next-line"
+        frame = _answer(2, {"session_id": SID, "messages": [{"role": "assistant", "text": message}]})
+        raw = json.dumps(frame, ensure_ascii=False)
+        for wire in (raw, f"{raw}\n", f"{raw}\r\n"):
+            with self.subTest(suffix=repr(wire[len(raw):])):
+                self.assertEqual(list(attach._frames(wire)), [frame])
+
+    def test_lf_and_crlf_delimited_frames_split_cleanly_and_skip_blank_lines(self) -> None:
+        first = _event("message.delta", {"text": "part\u2028one"})
+        second = _event("message.complete", {"text": "part\u2029two"})
+        wire = (
+            f"  {json.dumps(first, ensure_ascii=False)} \r\n"
+            "\r\n"
+            " \t \n"
+            f"{json.dumps(second, ensure_ascii=False)}\n"
+            "[1, 2]\n"
+            "not json\r\n"
+        )
+        self.assertEqual(list(attach._frames(wire)), [first, second, "[1, 2]", "not json"])
+
+
 if __name__ == "__main__":
     unittest.main()
