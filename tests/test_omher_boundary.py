@@ -3783,7 +3783,7 @@ class RemoteOnlyMode(unittest.TestCase):
     """Rule 47: remote-only mode is one shell-written mode file; in it the shell starts no local bridge, no Python and no
     peer links, keeps one link made by rule 31's `peers::connect`, and the peer commands refuse."""
 
-    RULE_46 = (
+    RULE_47 = (
         "47. omher can run with nothing installed on this computer, using the Hermes on a server the person reaches over"
         " `ssh` (remote-only mode, issue #3229).",
         "The mode is one file, `~/.omher/remote.json` (`{\"v\":1,\"host\":\"user@host\",\"port\":22|null,\"label\":\"...\"}`),"
@@ -3814,9 +3814,9 @@ class RemoteOnlyMode(unittest.TestCase):
         cls.remote = (SHELL / "remote.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
         cls.lib = (SHELL / "lib.rs").read_text(encoding="utf-8").split("#[cfg(test)]", 1)[0]
 
-    def test_the_doc_states_rule_46(self) -> None:
+    def test_the_doc_states_rule_47(self) -> None:
         text = _flat(DOC.read_text(encoding="utf-8"))
-        for sentence in self.RULE_46:
+        for sentence in self.RULE_47:
             self.assertIn(_flat(sentence), text)
 
     def test_the_one_link_is_rule_31s_connect_and_nothing_else_spawns(self) -> None:

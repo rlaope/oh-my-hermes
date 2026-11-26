@@ -513,6 +513,8 @@ export interface OpMap {
   "folder.resume": { params: { bot: string; cwd: string; stored: string }; result: FolderResumeResult };
   "elsewhere.list": { params: { bot: string }; result: { sessions: Away[] } };
   "routines.list": { params: { bot: string }; result: { routines: Routine[] } };
+  /** Tasks › Linear: whether the bot's config has a Linear MCP server (read from its config.yaml; rule 33). */
+  "tasks.linear": { params: { bot: string }; result: { configured: boolean; server: string } };
   /** Every bot's cron jobs, each tagged with its bot (read from files; no gateway). */
   "automations.list": { params: Record<string, never>; result: { automations: Automation[] } };
   /** These four go through the bot's own `cron.manage` (add, pause, resume, remove) and nothing else. `deliver` is

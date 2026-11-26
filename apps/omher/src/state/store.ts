@@ -2872,7 +2872,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       void loadAutomations();
     },
     openTasks: () => dispatch({ type: "ui.tasks" }),
-    tasksLinear: (bot) => (bridge.request as unknown as (op: string, p: unknown) => Promise<{ configured: boolean; server: string }>)("tasks.linear", { bot }),
+    tasksLinear: (bot) => bridge.request("tasks.linear", { bot }),
     async startTaskThread(bot, title, text) {
       try {
         const key = `t${Date.now().toString(36)}${(threadSeq += 1)}`;

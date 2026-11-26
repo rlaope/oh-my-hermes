@@ -39,6 +39,7 @@ export const REMOTE_OPS: Record<PageOp, OpRule> = {
   "folder.resume": { send: "never", key: FOLDER, why: "cwd is a folder of this computer, stored a session made for it" },
   "elsewhere.list": ok("bot name only"),
   "routines.list": ok("bot name only"),
+  "tasks.linear": ok("bot name only"),
   "automations.list": ok("no fields"),
   "automations.add": ok("a name, schedule and prompt the person typed"),
   "automations.pause": ok("a job id the server listed"),

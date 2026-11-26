@@ -119,6 +119,8 @@ describe("the page's one outgoing filter (rule 47)", () => {
     for (const f of files) {
       const text = readFileSync(f, "utf-8");
       for (const m of text.matchAll(/\b(?:request|threadReq)\(\s*["`]([a-z_]+\.[a-z_]+)["`]/g)) used.add(m[1]);
+      // a call through a cast (`(bridge.request as unknown as ...)("tasks.linear", ...)`) names its op right after the cast
+      for (const m of text.matchAll(/\brequest\s+as\s[^;]*?\)\(\s*["`]([a-z_]+\.[a-z_]+)["`]/g)) used.add(m[1]);
       // a template op (`automations.${action}`): each of its family the audit names
       for (const m of text.matchAll(/\brequest\(\s*`([a-z_]+)\.\$\{/g)) expect(ops.some(([op]) => op.startsWith(`${m[1]}.`)), m[1]).toBe(true);
     }
