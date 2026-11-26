@@ -99,8 +99,9 @@ export interface RowMenu {
   pinned: boolean;
   onPin: () => void;
   onEdit: () => void;
-  /** Restart that bot (Start when it is offline), through Hermes' own command; restart.ts holds what follows. */
-  onRestart: () => void;
+  /** Restart that bot (Start when it is offline), through Hermes' own command; restart.ts holds what follows.
+   *  Absent for a bot on another computer: the bridge refuses bots.restart for it (rule 31), so no item. */
+  onRestart?: () => void;
   /** The bot is offline: the row reads "Start". */
   offline?: boolean;
   /** Take the bot out of the sidebar list (the profile stays; it is offered under + again). Absent for the last
@@ -131,7 +132,7 @@ function Menu({ menu, onClose, name, bot, at }: { menu: RowMenu; onClose: () => 
     ...(menu.onNewThread ? ([[t("thread.new", { name }), menu.onNewThread]] as [string, () => void][]) : []),
     [menu.pinned ? t("row.unpin") : t("row.pin"), menu.onPin],
     [t("row.edit"), menu.onEdit],
-    [menu.offline ? t("row.start") : t("row.restart"), menu.onRestart],
+    ...(menu.onRestart ? ([[menu.offline ? t("row.start") : t("row.restart"), menu.onRestart]] as [string, () => void][]) : []),
     [t("row.remove"), menu.onRemove],
   ];
   return (
@@ -156,8 +157,9 @@ function Menu({ menu, onClose, name, bot, at }: { menu: RowMenu; onClose: () => 
       }}
     >
       {items.map(([label, fn], at) => {
-        // the fixed items keep their places (Restart is 2, Remove 3) after the New thread line
-        const i = at - (menu.onNewThread ? 1 : 0);
+        // the fixed items keep their places (Restart is 2, Remove 3; 2 when there is no Restart) after the New thread line
+        const i0 = at - (menu.onNewThread ? 1 : 0);
+        const i = !menu.onRestart && i0 === 2 ? 3 : i0;
         return i === -1 && fn ? (
           <div key={label} role="none" className="row-mg">
             <button type="button" role="menuitem" className="row-mi row-mi-new" onClick={run(fn)} data-testid="row-new-thread">

@@ -926,6 +926,8 @@ export type Action =
   | { type: "error"; message: string | null }
   | { type: "bots"; bots: Bot[] }
   | { type: "select"; bot: string }
+  /** The selected bot is gone from the list: another takes its place, the view stays (Settings stays Settings). */
+  | { type: "select.keepView"; bot: string }
   | { type: "chat.opened"; bot: string; res: ChatOpenResult; now: number; since?: number }
   /** Automation answers that came in while omher was closed (or not attached): `count` more unread. */
   | { type: "watch.missed"; bot: string; count: number }
@@ -1360,6 +1362,8 @@ export function reduce(state: AppState, a: Action): AppState {
       return { ...state, lastError: a.message };
     case "bots":
       return { ...state, bots: a.bots };
+    case "select.keepView":
+      return { ...state, selectedBot: a.bot };
     case "select":
       return { ...state, selectedBot: a.bot, unread: { ...state.unread, [a.bot]: 0 }, ui: { ...state.ui, view: "chat", thread: null } };
     case "ui.thread":
@@ -2458,6 +2462,14 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const r = await bridge.request("bots.list", {});
       dispatch({ type: "bots", bots: r.bots });
       ensureRoster();
+      // the open bot is gone (its computer was removed): the first listed bot takes its place. A chat or thread of
+      // the gone bot moves to the new bot's chat; any other view stays.
+      const gone = state.selectedBot;
+      const next = gone && !state.bots.some((b) => b.name === gone) ? (selectSidebarBots(state)[0] ?? state.bots[0]) : undefined;
+      if (next) {
+        if (state.ui.view === "chat") void selectBot(next.name);
+        else dispatch({ type: "select.keepView", bot: next.name });
+      }
       // a reconnect whose bots.list failed left chats unread (stale): read them now, so their held rows go out
       const names = new Set(state.bots.map((b) => b.name));
       // a computer attached since, or whose link just went down (rule 45): its bots' platforms now, not at the next
