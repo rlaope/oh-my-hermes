@@ -1463,8 +1463,13 @@ class GoalVerdictTests(unittest.TestCase):
         for item in record["nodes"]:
             item.pop("answers", None)
         settled(record, "fix2", "accepted")
+        # Times as a real run has them, seconds apart: a coarse clock (Windows) can stamp these calls alike.
+        nodes = {item["id"]: item for item in record["nodes"]}
+        nodes["verify"]["attempts"][0]["settled_at"] = 100.0
+        nodes["fix2"]["attempts"][0]["handed_out_at"] = 200.0
         self.assertEqual(dag_run.derive(record, [], time.time())["verify"]["state"], "ready")
         settled(record, "verify", "blocked")
+        nodes["verify"]["attempts"][-1]["settled_at"] = 300.0
         self.assertEqual(finished(record)[0], "stopped")
 
     def test_a_verify_node_failing_past_its_repair_cycles_is_verify_failed(self) -> None:
