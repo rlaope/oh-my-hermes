@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -234,7 +234,12 @@ class PromptCacheDoctorTests(unittest.TestCase):
     def test_doctor_cli_prints_the_prompt_cache_section(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = self._paths(Path(tmp))
-            _home(Path(tmp).resolve(), _PROXY_ROUTE + "prompt_caching:\n  cache_ttl: 5m\n", _LOG)
+            # The CLI reads the warmer window against the wall clock (no `now` seam), so the log line is dated
+            # relative to it; the fixed-date `_LOG` aged out of the 24h window a day after it was written.
+            recent = (datetime.now() - timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S")
+            log = (f"{recent},001 INFO [s1] agent.prompt_cache_lifecycle.warmer: prompt cache warming stopped: "
+                   "cache economics unavailable (refreshes=0, spent=$0.0000)\n")
+            _home(Path(tmp).resolve(), _PROXY_ROUTE + "prompt_caching:\n  cache_ttl: 5m\n", log)
             base = ["--omh-home", str(paths.omh_home), "--hermes-home", str(paths.hermes_home)]
             _status, stdout, _stderr = run_cli(base + ["doctor", "--no-state-write"], output_json=False)
             self.assertIn("Prompt cache (read-only)", stdout)
