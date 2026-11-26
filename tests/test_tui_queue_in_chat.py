@@ -37,7 +37,8 @@ class QueueInChatTests(ImageTestCase):
         rows = self.rows()
         prompt = rows.index("┃ ❯ /skill-a now")
         self.assertLess(prompt, self.working_row(rows))
-        self.assertIn("⎿  Queued · ↑ to edit", rows[prompt + 1])
+        # a queued command offers the send-now key, as Claude Code's ctrl+x ctrl+s does
+        self.assertIn("⎿  Queued · ctrl+j to send now · ↑ to edit", rows[prompt + 1])
         self.assertFalse(any(row.startswith("⧗") for row in rows), rows)
 
     def test_a_queued_prompt_with_an_image_shows_its_image_and_the_send_now_key(self) -> None:

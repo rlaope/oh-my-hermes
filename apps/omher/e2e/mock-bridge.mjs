@@ -48,7 +48,7 @@
 // mock.steerMode {bot, mode: "accept"|"reject"} (what chat.steer answers while a turn runs, in the main chat or with
 // `session` a folder chat / thread; with no turn it is
 // always rejected, as Hermes' session.steer), mock.endTurn {bot, outcome?} (a manual turn ends, as Hermes ends it),
-// mock.steers (every steer the mock took),
+// mock.steers (every steer the mock took), mock.commands (every mid-turn /usage or /status),
 // mock.ready {bot, ok, signIn?} (what `bots.ready` answers for a bot: ok false = Hermes says it cannot answer; with
 // signIn: the strict check for that provider passes, as after `hermes auth add <id>`, and its models show in
 // models.options),
@@ -661,6 +661,8 @@ let manual;
 // chat.steer: per bot "accept" (default) or "reject" (mock.steerMode), and every steer taken (mock.steers)
 let steerMode = new Map();
 let steers = [];
+// chat.command: every mid-turn /usage or /status the mock ran (mock.commands)
+let commands = [];
 // #3123: a turn Hermes lost when its gateway was killed (`mock.lostTurn`), chat key (the bot, or its thread's
 // folderTurnKey) -> [{ id, text }], and the messages Hermes keeps queued behind it, chat key -> [{ id, text, ts }].
 // Nothing runs until `chat.discard`.
@@ -959,6 +961,7 @@ function reset() {
   manual = new Set();
   steerMode = new Map();
   steers = [];
+  commands = [];
   lostTurns = new Map();
   lostQueue = new Map();
   noSkills = new Set();
@@ -1593,6 +1596,17 @@ const OPS = {
     if (!turns[key] || steerMode.get(b.name) === "reject") return { status: "rejected" };
     steers.push({ bot: b.name, text, ...(p.session !== undefined ? { session: p.session } : {}) });
     return { status: "queued" };
+  },
+  // a /usage or /status typed mid-turn: its answer at once, as a note beside the running turn (rule 48)
+  "chat.command": (p) => {
+    const b = needBot(p);
+    const text = needStr(p, "text");
+    const name = /^\/([\w-]+)(?:\s|$)/.exec(text.trim())?.[1]?.toLowerCase();
+    if (name !== "usage" && name !== "status") throw new OpError("bad_request", "only /usage and /status run during a turn");
+    const key = p.session !== undefined ? (needFolder(p, b), folderTurnKey(b.name, p.session)) : b.name;
+    commands.push({ bot: b.name, text, ...(p.session !== undefined ? { session: p.session } : {}) });
+    setTimeout(() => ev(key, "command.output", { id: `cmd-${commands.length}`, command: text.trim(), text: name === "usage" ? "Session tokens: 1,234 in · 567 out" : "Model: sonnet · gateway: running" }), 30);
+    return {};
   },
   "chat.interrupt": (p) => {
     const b = needBot(p);
@@ -2243,6 +2257,7 @@ const OPS = {
     return {};
   },
   "mock.steers": () => ({ steers: steers.map((x) => ({ ...x })) }),
+  "mock.commands": () => ({ commands: commands.map((x) => ({ ...x })) }),
   "mock.ready": (p) => {
     const b = needBotAny(p);
     if (p.ok) notReady.delete(b.name);

@@ -1019,15 +1019,15 @@ class CutInTests(ImageTestCase):
 
     def test_lines_queued_before_it_wait_behind_it_and_go_after_its_turn(self) -> None:
         self.running()
-        self.type("/usage")
-        self.press(Key(ENTER))  # a slash command during a turn queues
+        self.type("/context")
+        self.press(Key(ENTER))  # a slash command during a turn queues (/usage and /status run at once)
         data = self.paste_image()
         self.type("now")
         self.press(Key(ENTER, ctrl=True))
         self.stopped()
         self.hermes.admit()
         self.assertEqual(self.hermes.turns, [("[Image #1] now", [data])])
-        self.assertEqual([line.shown or line.text for line in self.app.queued], ["/usage"])
+        self.assertEqual([line.shown or line.text for line in self.app.queued], ["/context"])
 
     def test_esc_while_it_waits_gives_it_back_to_the_composer_with_its_image(self) -> None:
         data = self.cut_in()
@@ -1308,15 +1308,20 @@ class QueuedImageSendNowTests(ImageTestCase):
         self.press(Key(CHAR, "j", ctrl=True))
         self.assertEqual(self.methods("session."), ["session.interrupt"])
 
-    def test_a_queued_slash_command_with_an_image_is_not_offered(self) -> None:
+    def test_a_queued_slash_command_with_an_image_cuts_in_as_the_command_it_is(self) -> None:
+        # Claude Code's ctrl+x ctrl+s runs a queued command; with an image it is still the command, never a prompt:
+        # it stays at the queue's head and runs as the queue runs it when the turn ends.
         self.app._on_event(Event("message.start", SID, {}))
         self.hermes.pump()
         self.type("/skill-a ")
         self.paste_image()
         self.press(Key(ENTER))
-        self.assertNotIn("to send now", self.screen())
+        self.assertIn("to send now", self.screen())
         self.press(Key(ENTER, ctrl=True))
-        self.assertEqual(self.methods("session.interrupt"), [])
+        self.assertEqual(self.methods("session.interrupt"), ["session.interrupt"])
+        self.assertEqual([line.text for line in self.app.queued], ["/skill-a [Image #1]"])
+        self.assertIsNotNone(self.app.queued[0].command)
+        self.assertIsNone(self.app.cut_in)  # not the prompt cut-in: nothing sent as text
 
     def test_not_offered_while_a_cut_in_already_waits(self) -> None:
         self.queue_image_prompt("first")

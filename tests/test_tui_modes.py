@@ -1257,7 +1257,8 @@ class BusyQueueTests(unittest.TestCase):
                 app._on_input(Key(ENTER))
                 self.assertEqual(client.named("slash.exec"), [])
                 self.assertEqual([line.shown or line.text for line in app.queued], ["/compress", "and then this"])
-                self.assertIsNone(send_now_row(app))  # the oldest is a command: the send-now key has nothing to send
+                # the oldest is a command: the send-now key stops the turn for it (Claude Code's ctrl+x ctrl+s)
+                self.assertEqual(send_now_row(app), "  ⎿  Queued · ctrl+j to send now · ↑ to edit")
                 self.end_turn(app)
                 self.assertEqual(client.calls[-1], ("slash.exec", {"command": "compress", "session_id": SID}))
                 self.assertEqual(client.named("prompt.submit"), [])  # the prompt waits for the compression's answer
@@ -1331,11 +1332,11 @@ class BusyQueueTests(unittest.TestCase):
         self.assertEqual(RUNS_DURING_TURN, frozenset({
             "stop", "steer", "queue", "btw", "bg", "help", "keys", "whats-new", "redraw", "history", "todos",
             "details", "logs", "dag", "bots", "copy", "theme", "wallpaper", "image", "paste", "gateway", "quit",
-            "yolo", "effort", "timestamps",
+            "yolo", "effort", "timestamps", "usage", "status",
         }))
         # The TUI's aliases and the commands that only say where they run or that they mean nothing here run too.
         for name in (*sorted(RUNS_DURING_TURN), "q", "s", "exit", "whatsnew", "voice", "agents", "mouse", "worktree",
-                     "snapshot"):
+                     "snapshot", "cost", "model"):
             with self.subTest(name=name):
                 app, client = make_app(busy=True)
                 with patch.object(App, "_route_slash") as ran:
@@ -1380,10 +1381,11 @@ class BusyQueueTests(unittest.TestCase):
                 self.assertEqual(app.stop_asked, typed == "/stop")
 
     def test_every_other_command_queues_during_a_turn_and_runs_at_once_when_idle(self) -> None:
+        # Claude Code queues /context, /help, /config, /compact, /clear, /resume and /export mid-turn (2.1.332).
         typed = ("/compress", "/compact here 4", "/new", "/clear", "/undo", "/retry", "/resume", "/sessions s-2",
-                 "/model", "/model gpt-5.5", "/rewind", "/plan fix it", "/reasoning", "/reasoning hide", "/usage", "/cost",
-                 "/status", "/omh-model", "/reload-skills", "/export", "/frobnicate",
-                 "/omh-codebase-uml map it", "/Compress")
+                 "/model gpt-5.5 --global", "/model x --once", "/rewind", "/plan fix it", "/reasoning", "/reasoning hide",
+                 "/context", "/omh-model", "/reload-skills", "/export", "/frobnicate", "/omh-codebase-uml map it",
+                 "/Compress")
         for text in typed:
             with self.subTest(text=text):
                 app, client = make_app(busy=True)
@@ -1400,18 +1402,55 @@ class BusyQueueTests(unittest.TestCase):
                 self.assertEqual(idle.queued, deque())
                 self.assertEqual(len(ran.call_args_list), 1)
 
-    def test_the_send_now_key_never_steers_a_queued_command(self) -> None:
+    def test_the_send_now_key_on_a_queued_command_stops_the_turn_and_runs_it_first(self) -> None:
+        # Claude Code (2.1.332): a queued /context with ctrl+x ctrl+s stops the turn and the command runs at once.
         for data in (CTRL_ENTER_BYTES, b"\n"):
             with self.subTest(data=data):
                 app, client = make_app(busy=True)
                 for text in ("/compress", "a prompt"):
                     type_text(app, text)
                     app._on_input(Key(ENTER))
+                self.assertEqual(send_now_row(app), "  ⎿  Queued · ctrl+j to send now · ↑ to edit")
                 for event in app.decoder.feed(data):
                     app._on_input(event)
-                self.assertEqual(self.turn_calls(client), [])
-                self.assertEqual([line.text for line in app.queued], ["/compress", "a prompt"])
-                self.assertFalse(app._queue_head_steers())
+                self.assertFalse(app._queue_head_steers())  # never a steer: the command is no text for the turn
+                self.assertEqual(self.turn_calls(client), [("session.interrupt", {"session_id": SID})])
+                self.assertEqual([line.text for line in app.queued], ["/compress", "a prompt"])  # still its row
+                app._on_event(Event("message.complete", SID, {"text": "half", "status": "interrupted"}))
+                self.assertEqual(client.calls[-1], ("slash.exec", {"command": "compress", "session_id": SID}))
+                self.assertFalse(app.queue_held)  # the queue goes on behind it, nothing handed back
+                self.assertEqual(app.composer.text, "")
+                self.assertFalse(any("Interrupted" in text for text in notices(app)))  # quiet, as a cut-in is
+                answer(app, client, {"output": "Compressed 40 messages."})
+                self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "a prompt", "queued": True}])
+
+    def test_a_stop_asked_after_the_send_now_key_holds_the_queue_with_the_command(self) -> None:
+        for stop in ("esc", "/stop"):
+            with self.subTest(stop=stop):
+                app, client = make_app(busy=True)
+                for text in ("/compress", "a prompt"):
+                    type_text(app, text)
+                    app._on_input(Key(ENTER))
+                app._on_input(CTRL_ENTER)
+                self.assertTrue(app.command_cut_in)
+                if stop == "esc":
+                    app._interrupt()
+                else:
+                    app._run_slash(parse_slash("/stop"))
+                self.assertFalse(app.command_cut_in)
+                app._on_event(Event("message.complete", SID, {"text": "half", "status": "interrupted"}))
+                self.assertEqual(client.named("slash.exec")[-1:] if stop == "/stop" else client.named("slash.exec"),
+                                 [{"command": "stop", "session_id": SID}] if stop == "/stop" else [])
+                self.assertEqual(client.named("prompt.submit"), [])
+
+    def test_the_send_now_key_leaves_a_plan_mode_command_waiting(self) -> None:
+        app, client = make_app(busy=True)
+        show_mode(app, MODE_PLAN)
+        type_text(app, "fix the flaky test")
+        app._on_input(Key(ENTER))
+        self.assertFalse(app._queue_head_sends_now())
+        app._on_input(CTRL_ENTER)
+        self.assertEqual(self.turn_calls(client), [])
 
     def test_a_plan_mode_prompt_during_a_turn_waits_as_its_plan_command(self) -> None:
         app, client = make_app(busy=True)
@@ -1428,7 +1467,7 @@ class BusyQueueTests(unittest.TestCase):
 
     def test_up_takes_a_queued_command_back_on_its_own(self) -> None:
         app, _client = make_app(busy=True)
-        for text in ("/compress", "first", "second", "/usage", "third"):
+        for text in ("/compress", "first", "second", "/context", "third"):
             type_text(app, text)
             app._on_input(Key(ENTER))
         app._on_input(Key(UP))
@@ -1436,7 +1475,7 @@ class BusyQueueTests(unittest.TestCase):
         app.composer.replace(0, len(app.composer.text), "")
         app._on_input(Key(UP))
         self.assertEqual(app.composer.text, "first\nsecond")  # the prompts up to the next command
-        self.assertEqual([line.text for line in app.queued], ["/usage", "third"])
+        self.assertEqual([line.text for line in app.queued], ["/context", "third"])
 
     def test_lines_queued_after_a_new_session_command_go_into_the_session_it_opens(self) -> None:
         app, client = make_app(busy=True)

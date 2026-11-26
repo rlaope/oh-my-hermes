@@ -724,9 +724,11 @@ class DocPins(unittest.TestCase):
         # typed `/goal` through Hermes' own `slash.exec`, its handed-back turn through the one `prompt.submit`; Stop
         # pauses only an `active` goal through Hermes' own `session.control` `goal.pause` before the interrupt); 47: rule 47
         # (remote-only mode: one shell-written ~/.omher/remote.json, no local bridge, Python or peer links, one rule 31
-        # link to the server and the page talking only to that bridge). The rules stay numbered 1..n with no gap or repeat.
+        # link to the server and the page talking only to that bridge); 48: rule 48 (a /usage or /status typed during a
+        # turn through the same `slash.exec`, `chat.command`, its answer as `command.output`; a bare /model opens the
+        # picker; every other command waits in the steer queue). The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 47, len(rules))
+        self.assertTrue(6 <= len(rules) <= 48, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -2916,6 +2918,32 @@ class GoalThroughHermesOwnControls(unittest.TestCase):
         stop = self._fn(src, tree, "op_chat_interrupt")
         self.assertLess(stop.index("self._pause_goal("), stop.index('"session.interrupt"'))
         self.assertEqual(src.count('"slash.exec"'), 1)
+
+
+class MidTurnCommands(unittest.TestCase):
+    """Rule 48: `/usage` and `/status` typed during a turn run through rule 46's one `slash.exec` call site
+    (`chat.command`, which takes only those names), their answer as `command.output`; nothing else runs mid-turn."""
+
+    def _fn(self, src: str, tree: ast.AST, name: str) -> str:
+        fn = [f for f in ast.walk(tree) if isinstance(f, ast.AsyncFunctionDef) and f.name == name][0]
+        return ast.get_source_segment(src, fn) or ""
+
+    def test_chat_command_takes_only_the_read_commands_and_reuses_the_one_slash_exec(self) -> None:
+        src = BRIDGE.read_text(encoding="utf-8")
+        tree = ast.parse(src)
+        op = self._fn(src, tree, "op_chat_command")
+        self.assertIn('RUN_NOW_COMMANDS = frozenset({"usage", "status"})', src)
+        self.assertIn("not in RUN_NOW_COMMANDS", op)
+        self.assertIn("self._goal_command(", op)
+        self.assertEqual(re.findall(r'_call\(conn, "([a-z._]+)"', op), [])  # its one Hermes call is _goal_command's
+        self.assertEqual(src.count('"slash.exec"'), 1)
+        note = self._fn(src, tree, "_command_note")
+        self.assertIn('"command.output"', note)
+
+    def test_the_page_runs_at_once_only_usage_status_and_a_bare_model(self) -> None:
+        store = (ROOT / "apps" / "omher" / "src" / "state" / "store.ts").read_text(encoding="utf-8")
+        self.assertIn("const RUN_NOW = /^\\/(usage|status|model)(?=\\s|$)(.*)$/is;", store)
+        self.assertEqual(store.count('bridge.request("chat.command"'), 1)
 
 
 class BotThreads(unittest.TestCase):

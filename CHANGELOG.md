@@ -4,6 +4,18 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Slash commands typed while a turn runs follow Claude Code, in the OMH TUI and in omher's bot chats.** Measured
+  on Claude Code 2.1.332: `/usage` (`/cost`) and `/status` now answer at once beside the running turn, and `/model`
+  opens its picker (or switches to the model it names) at once; a pick made mid-turn is Hermes' deferred switch, so
+  the running turn ends on its model and the next one uses the new one. `/context`, `/compress`, `/export`, `/new`,
+  `/resume`, a skill and every other command still wait for the turn. A queued command was stuck behind the turn
+  with no way to hurry it: its send-now key (TUI `ctrl+enter`, omher's ↵) now stops the turn once and runs the
+  command first, ahead of the rest of the queue, as Claude Code's `ctrl+x ctrl+s` does; in omher the ↵ of a queued
+  command no longer steers it into the answer as plain text. omher shows the mid-turn command's answer under its
+  command's line, never as the turn's reply, with the typing dots going on below it; the bridge runs it through
+  Hermes' own `slash.exec` (`chat.command`, `/usage` and `/status` only; omher boundary rule 48).
+  (`src/tui/app.py`, `src/tui/slash.py`, `apps/omher/src/state/store.ts`, `apps/omher/bridge/omher_bridge.py`)
+
 - **omher: after a reconnect or a restart, bots and threads show what Hermes is really doing.** When the link to the
   bridge dropped (sleep/wake, a bridge restart), an approval Hermes still waited on read "Not answered" for good: the
   outage ended the turn here, and the bridge's replay of the same ask was dropped as a duplicate. A replayed ask in a

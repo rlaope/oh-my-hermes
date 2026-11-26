@@ -276,7 +276,11 @@ RUNS_DURING_TURN = frozenset({
     "quit",  # leaves the TUI, as Ctrl+C twice does during a turn: waiting would keep the person in it
     "yolo",  # Shift+Tab's per-session approvals switch, typed: one `config.set`, which never starts or alters the turn
     "effort",  # Ctrl+T's per-session reasoning effort, typed: one `config.set`, which never starts or alters the turn
+    # Claude Code runs these at once mid-turn (measured on 2.1.332); Hermes' `slash.exec` answers them beside the turn
+    "usage",  # tokens, cost and rate limits (`/cost` is renamed to it): a read
+    "status",  # session, model and gateway status: a read
 })
+# `/model` runs at once too, in the forms `model_runs_during_turn` names (below).
 # `/reasoning` runs at once only with a level, which sets the effort as `/effort` does (`App._reasoning_command`); bare,
 # or with anything else (`hide`, `show`, `--global`, ...), it is Hermes' own `/reasoning` and waits as Hermes' commands do.
 REASONING = "reasoning"
@@ -294,10 +298,26 @@ def runs_during_turn(invocation: SlashInvocation) -> bool:
     command = invocation.command
     if command is not None and command.route in (HERMES, DROPPED, CLASSIC):
         return True
+    if command is not None and command.route == RENAMED and command.target:  # `/cost` goes as `/usage` does
+        return runs_during_turn(SlashInvocation(command.target, invocation.arg, _BY_NAME.get(command.target)))
     name = command.name if command is not None else invocation.name.lower()
     if name == REASONING:
         return invocation.arg.strip().lower() in REASONING_LEVELS
+    if name == MODEL:
+        return model_runs_during_turn(invocation.arg)
     return name in RUNS_DURING_TURN
+
+
+# `/model` bare (the picker), with `--refresh`, or naming a model (`config.set model`, which Hermes holds for the next
+# turn while one runs): at once, as Claude Code's `/model` is. Any other flag (`--global`, `--once`, `--reasoning`) is
+# Hermes' own `/model` as typed, which its `slash.exec` refuses while the session runs: that form waits for the turn.
+MODEL = "model"
+MODEL_FLAGS_AT_ONCE = frozenset({"--refresh", "--provider", "--session"})
+
+
+def model_runs_during_turn(arg: str) -> bool:
+    """Whether `/model <arg>` runs at once during a turn: no flag beyond those `MODEL_FLAGS_AT_ONCE` names."""
+    return all(not word.startswith("--") or word in MODEL_FLAGS_AT_ONCE for word in arg.split())
 
 
 def plan_invocation(text: str) -> SlashInvocation:
