@@ -2587,7 +2587,9 @@ class App(ModesMixin, AgentViewMixin):
         # next `_take_input` in the order they were typed.
         self.held_input: list[Key | Paste | Mouse] = []
         self.menu_index = 0
-        self.menu_closed: str | None = None  # the composer text Esc or history recall closed the `/` menu on; it stays closed over that text
+        # The composer text Esc or a history recall (Up/Down, vim `j`/`k`, Ctrl+R) closed the `/` menu on; it stays
+        # closed over that text, so a recalled `/model` walks on with Up/Down and sends as it is on Enter.
+        self.menu_closed: str | None = None
         # The composer text the person's own typing left (a printable key or Backspace), else None: a mid-line `/name`
         # opens the menu only over it, so a recalled, pasted or loaded text opens none until the next typed key.
         self.menu_typed: str | None = None
@@ -5451,7 +5453,8 @@ class App(ModesMixin, AgentViewMixin):
         self._close_proofread()
 
     def _edit(self, composer: Composer, event: Key | Paste) -> ComposerAction:
-        """`event` to `composer`, the person's own key: an edit reopens the `/` menu at its top; history recall keeps it closed."""
+        """`event` to `composer`, the person's own key: an edit reopens the `/` menu at its top; a history recall keeps
+        it closed over the recalled text (`menu_closed`) until the next edit."""
         before, editing, visual = composer.text, composer.normal, composer.visual
         before_history = composer.history_index
         action = composer.handle(event)

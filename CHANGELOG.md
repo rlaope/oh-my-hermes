@@ -4,6 +4,12 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **OMH TUI: Up/Down walks the input history past slash commands.** Recalling an earlier `/model` or `/config`
+  with Up opened the `/` menu over it, and the next Up or Down moved the menu's highlight instead of the history, so
+  history stalled at the first slash command. A recalled entry (Up/Down, vim NORMAL `j`/`k`, a Ctrl+R pick) now keeps
+  the menu closed over that text: Up/Down walk on, and Enter sends the command exactly as it was. Typing or Backspace
+  on it opens the menu again. (#3236, thanks @brixtonpham)
+
 - **omher: `/goal` starts the goal, and Stop ends a goal run.** Typing `/goal <text>` in a bot's chat answered "Goal
   set (20-turn budget)" but never started a turn, so `/goal status` stayed at 0 turns. omher sent the command as a
   prompt; Hermes ran it as an admitted turn and queued the goal's first turn where nothing reads it. omher now sends
