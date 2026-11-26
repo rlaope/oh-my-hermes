@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **PR watch: concurrent watches on one PR no longer fail a tick on Windows.** When several watches on the same PR
+  ticked at once, Windows answered "access denied" to the lock holder's state replace while another tick was still
+  reading the file, or to a new lock while the last holder's was still being deleted. The replace gave up after
+  three 50 ms polls and the lock failed at once, so the tick exited 6 and Hermes delivered an alert. The replace now
+  retries for up to 2 seconds and the lock retries within its existing 20-second wait; a denial that outlasts either
+  still fails the tick. (`src/skills/pr_watch_toolkit/scripts/pr_watch.py`)
+
 - **omher: `/goal` starts the goal, and Stop ends a goal run.** Typing `/goal <text>` in a bot's chat answered "Goal
   set (20-turn budget)" but never started a turn, so `/goal status` stayed at 0 turns. omher sent the command as a
   prompt; Hermes ran it as an admitted turn and queued the goal's first turn where nothing reads it. omher now sends
