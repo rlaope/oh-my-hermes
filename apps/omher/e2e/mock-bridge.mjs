@@ -12,6 +12,8 @@
 // at start and on every reset), mock.botMade {bot, kind: routine|plugin} (the bot made an automation or installed a
 // plugin from its chat: the bridge's poll would emit routines.update + routine.added, or plugin.added + plugins.update),
 // mock.offline {bot, on} (a bot's gateway down for the Automations / Plugins writes),
+// mock.threadCreate {delay_ms?, line?} (thread.create takes delay_ms to answer and/or is refused with `line`, as the
+// gateway's error or the 48-open-thread cap; no params = back to normal),
 // mock.restart {bot, outcome: "ok"|"refused"|"failed"|"slow", work?, line?} (what Hermes' restart answers next),
 // mock.pluginLoad {load: "live"|"reload"|"restart"|"failed"} (what the next plugin install / reload says),
 // mock.apps {bot, name, state} (one Apps entry's state for a bot), mock.appsNext {verb, line} (the next apps.<verb> run
@@ -639,6 +641,7 @@ let bots, history, models, turns, pending, idSeq, queues, avatars, folders, runs
 let automations, plugins, inspected, offlineWrites;
 /** bots.restart: what the next restart answers per bot, which bot refused last (for "Restart anyway"). */
 let restartNext, restartRefused, pluginLoadNext;
+let threadCreateRule = null; // mock.threadCreate: {delay_ms, line}
 const STANDALONE = new Set(["omh-tui"]);
 const gatewayOf = (name) => (STANDALONE.has(name) ? name : "default");
 const gatewayBots = (gw) => Object.values(bots).filter((x) => gatewayOf(x.name) === gw);
@@ -945,6 +948,7 @@ function reset() {
   inspected = new Map(); // `<bot>:<catalog name>` -> the sha plugins.inspect handed out
   offlineWrites = new Set();
   restartNext = new Map();
+  threadCreateRule = null;
   for (const h of restartTimers) clearTimeout(h);
   restartTimers.clear();
   restartRefused = new Set();
@@ -1418,6 +1422,19 @@ const OPS = {
     return { session: was[0], stored, cwd, model: m.model, provider: m.provider, reasoning: m.reasoning, messages: [], running: false };
   },
   "thread.create": (p) => {
+    const rule = threadCreateRule;
+    if (rule && (rule.delay_ms || rule.line)) {
+      // mock.threadCreate: the create takes a while and/or is refused, as a gateway error or the 48-open-thread cap
+      return new Promise((resolve, reject) =>
+        setTimeout(() => {
+          if (rule.line) return reject(new OpError("thread_limit", rule.line));
+          resolve(OPS["thread.create.now"](p));
+        }, rule.delay_ms || 0),
+      );
+    }
+    return OPS["thread.create.now"](p);
+  },
+  "thread.create.now": (p) => {
     const b = needBot(p);
     // a peer's bot: its thread is a session on that computer's gateway; a folder here is refused, as the bridge does
     if (b.host && p.cwd !== undefined) throw remoteRefusal(b, "folder.open");
@@ -2139,6 +2156,10 @@ const OPS = {
   "mock.restart": (p) => {
     needStr(p, "bot");
     restartNext.set(p.bot, { outcome: p.outcome, work: p.work, line: p.line });
+    return {};
+  },
+  "mock.threadCreate": (p) => {
+    threadCreateRule = p.delay_ms || p.line ? { delay_ms: p.delay_ms, line: p.line } : null;
     return {};
   },
   "mock.restartDone": (p) => {
