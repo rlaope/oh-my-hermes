@@ -4,6 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **TUI: session picker shows conversations rather than background runs.** On a shared Hermes gateway, `/sessions` and
+  `/resume` skip cron, subagent and other internal sources and empty stored runs, while keeping genuine `local-*` chats.
+  The picker starts with up to 100 conversations; **Ctrl+G** loads older authorized history into the same filter on
+  cursor-capable gateways. Older gateways still return a single page. No sessions are deleted or moved.
+
 - **Solar Pro 4 Contributor is priced.** Upstage released `solar-pro-4-contributor` on 2026-11-23: the same model as
   Solar Pro 4 at 70% off its list (0.09/0.36 per MTok, cached input 0.018), in exchange for Upstage storing and
   training on every request and response. A run that names the id now gets an approximate cost; it joins no chain

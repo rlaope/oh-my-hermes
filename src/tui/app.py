@@ -272,7 +272,7 @@ from .screen import (
     cursor_up,
 )
 from .session_picker import DELETE as SESSION_DELETE
-from .session_picker import PICK, RENAME, PickerAction, SessionPicker, SessionRow, pointer, session_rows
+from .session_picker import LOAD_OLDER, PICK, RENAME, PickerAction, SessionPicker, SessionRow, pointer, session_rows
 from .rewind_picker import KEYS as REWIND_PICKER_KEYS
 from .rewind_picker import PICK as REWIND_PICK
 from .rewind_picker import RewindPicker, rewind_rows
@@ -1223,7 +1223,7 @@ COPY_DROPPED_NOTE = "not copied ({why})"  # a copy herdr drops (`clipboard.HERDR
 # The completion menu's name column: at least this wide, wider for the longest name it lists (OMH skills are
 # `omh-*` and `ulw-*` slugs) up to half the terminal; a name longer than that pushes only its own summary.
 MENU_NAME_CELLS = 16
-SESSION_LIST_LIMIT = 50
+SESSION_LIST_LIMIT = 100  # visible rows per picker page; Ctrl+G extends the search to older pages
 # Bare `/sessions` (`/resume`, Ctrl+X) has no echo, so until Hermes answers the list this row stands where the
 # picker will open, under the queued prompts; keys still go to the composer, and the picker opens with an empty filter.
 SESSIONS_LOADING_LINE = "Loading sessions…"
@@ -8476,20 +8476,20 @@ class App(ModesMixin, AgentViewMixin):
         no echo, so during a turn it is drawn under what runs."""
         if self.picker is not None:  # one already open keeps its highlight and filter
             return
-        rows = session_rows(result)
-        if not rows:
+        rows, next_page = session_rows(result), as_text(result.get("next_page"))
+        if not rows and not next_page:
             self.transcript.add_aside(NoticeBlock(SESSIONS_EMPTY_NOTICE))
         elif not self._picker_taken("/resume"):
-            self._open_picker(rows)
+            self._open_picker(rows, next_page=next_page)
 
-    def _open_picker(self, rows: list[SessionRow], query: str = "") -> None:
+    def _open_picker(self, rows: list[SessionRow], query: str = "", *, next_page: str = "") -> None:
         """Open the session picker over `rows`. When the person typed into the composer while its list was out, it
         waits (`SessionPicker.waiting`): typing stays in the composer, and only a key of the picker's own, or an
         empty composer, hands it the keys (`_picker_arms`)."""
         draft = self.composer.text
         typed = bool(draft) and self.list_asked_draft is not None and draft != self.list_asked_draft
         self.list_asked_draft = None
-        self.picker = SessionPicker(rows, current=self.stored_id, query=query, waiting=typed)
+        self.picker = SessionPicker(rows, current=self.stored_id, query=query, waiting=typed, next_page=next_page)
         self._settle_list()
 
     def _picker_arms(self, event: Key | Paste) -> bool:
@@ -8582,6 +8582,9 @@ class App(ModesMixin, AgentViewMixin):
         action = self.picker.handle_key(event)
         if action is None:
             return
+        if action.kind == LOAD_OLDER:
+            self._older_sessions(self.picker)
+            return
         if action.kind in (RENAME, SESSION_DELETE):  # the picker stays open, its row saying how the call went
             row = next((row for row in self.picker.rows if row.id == action.session_id), None)
             if row is not None and row.read_only:
@@ -8596,6 +8599,30 @@ class App(ModesMixin, AgentViewMixin):
                 self._read_session(row)
                 return
             self._switch_session(action.session_id, label=row.label if row is not None else "")
+
+    def _older_sessions(self, picker: SessionPicker) -> None:
+        """Only the open picker that requested a page may receive it."""
+        def done(result: dict[str, Any]) -> None:
+            if self.picker is picker:
+                picker.add_older(session_rows(result), as_text(result.get("next_page")))
+
+        def problem(message: str) -> None:
+            if self.picker is picker:
+                picker.loading_older = False
+                picker.older_problem = message
+
+        def refused(error: dict[str, Any]) -> bool:
+            reason = plain_sentence(as_text(error.get("message"))) or "Hermes refused the page"
+            problem(f"Could not load older sessions: {reason.rstrip('.')}. Ctrl+G retries")
+            return True
+
+        picker.older_problem = ""
+        picker.loading_older = self._request(
+            "session.list", {"page": picker.next_page}, done, refused,
+            lambda seconds: problem(f"No answer after {seconds:g} s. Ctrl+G retries"),
+        ) is not None
+        if not picker.loading_older:
+            problem("Could not request older sessions. Ctrl+G retries")
 
     def _read_session(self, row: SessionRow) -> None:
         """`row`'s history in a pager, read from its owner without resuming it: `session.transcript` mounts the
@@ -8842,7 +8869,7 @@ class App(ModesMixin, AgentViewMixin):
             return
         said = TITLE_SHARED_NOTICE if matched else TITLE_UNKNOWN_NOTICE
         self.transcript.add_notice(said.format(count=len(matched), title=title), NOTICE_WARN)
-        self._open_picker(rows, query=title)
+        self._open_picker(rows, query=title, next_page=as_text(result.get("next_page")))
 
     # ── attachments ──
 

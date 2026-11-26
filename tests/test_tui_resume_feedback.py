@@ -68,6 +68,41 @@ class ResumeFeedbackTests(unittest.TestCase):
         self.assertEqual([row.id for row in app.picker.rows], ["stored-2", "stored-3"])
         self.assertTrue(any("Resume session (1 of 2)" in line for line in drawn(app)))
 
+    def test_older_pages_extend_the_active_filter_and_stop_when_exhausted(self) -> None:
+        app, client = make_app()
+        resume(app)
+        reply(app, client, {**LISTED, "next_page": "first-token"})
+        self.assertTrue(any("Ctrl+G loads older" in line for line in drawn(app)))
+        type_text(app, "years ago")
+        self.assertEqual(app.picker.visible(), [])
+        older = Key(CHAR, "g", ctrl=True)
+        app._on_input(older)
+        app._on_input(older)  # do not start parallel requests
+        self.assertEqual(client.calls[1:], [("session.list", {"page": "first-token"})])
+        self.assertTrue(any("Loading older sessions" in line for line in drawn(app)))
+        reply(app, client, {"sessions": [*LISTED["sessions"], {"id": "oldest", "title": "Years ago"}]})
+        self.assertEqual(app.picker.query, "years ago")
+        self.assertEqual([row.id for row in app.picker.visible()], ["oldest"])
+        self.assertEqual(len(app.picker.rows), 3)
+        self.assertFalse(any("Ctrl+G loads older" in line for line in drawn(app)))
+        app._on_input(older)
+        self.assertEqual(len(client.calls), 2)
+
+    def test_failed_older_page_can_retry_and_late_success_does_not_reopen_picker(self) -> None:
+        app, client = make_app()
+        resume(app)
+        reply(app, client, {**LISTED, "next_page": "token"})
+        older = Key(CHAR, "g", ctrl=True)
+        app._on_input(older)
+        reply(app, client, error={"code": 5006, "message": "database is locked"})
+        self.assertTrue(any("Database is locked" in line for line in drawn(app)))
+        self.assertEqual(len(app.picker.rows), 2)
+        app._on_input(older)
+        self.assertEqual(client.calls[-1], ("session.list", {"page": "token"}))
+        app._on_input(Key(ESCAPE))
+        reply(app, client, LISTED)
+        self.assertIsNone(app.picker)
+
     def test_none_listed_says_so(self) -> None:
         app, client = make_app()
         resume(app)
