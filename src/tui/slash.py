@@ -309,15 +309,20 @@ def runs_during_turn(invocation: SlashInvocation) -> bool:
 
 
 # `/model` bare (the picker), with `--refresh`, or naming a model (`config.set model`, which Hermes holds for the next
-# turn while one runs): at once, as Claude Code's `/model` is. Any other flag (`--global`, `--once`, `--reasoning`) is
-# Hermes' own `/model` as typed, which its `slash.exec` refuses while the session runs: that form waits for the turn.
+# turn while one runs): at once, as Claude Code's `/model` is. Any other form (`--global`, `--once`, `--provider <slug>`
+# alone, `<model> --refresh`) is Hermes' own `/model` as typed, which its `slash.exec` refuses while the session runs:
+# that form waits for the turn.
 MODEL = "model"
-MODEL_FLAGS_AT_ONCE = frozenset({"--refresh", "--provider", "--session"})
+MODEL_REFRESH_ARG = "--refresh"
 
 
 def model_runs_during_turn(arg: str) -> bool:
-    """Whether `/model <arg>` runs at once during a turn: no flag beyond those `MODEL_FLAGS_AT_ONCE` names."""
-    return all(not word.startswith("--") or word in MODEL_FLAGS_AT_ONCE for word in arg.split())
+    """Whether `/model <arg>` runs at once during a turn: bare or `--refresh` (the picker) or a switch `config.set
+    model` sends (`typed_switch_value`)."""
+    from .model_picker import typed_switch_value
+
+    stripped = arg.strip()
+    return not stripped or stripped == MODEL_REFRESH_ARG or bool(typed_switch_value(stripped))
 
 
 def plan_invocation(text: str) -> SlashInvocation:
