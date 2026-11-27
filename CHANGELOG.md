@@ -90,6 +90,20 @@ All notable changes will be documented here.
   opener only takes lower case and the failure was swallowed. The bridge now returns a `reason` and its parts that
   `apps/omher/src/addbot/NewBot.tsx` words from i18n keys, the answered line uses `card.givenOfTotal`, and
   `apps/omher/src/chat/parts/LinkChip.tsx` opens `new URL(url).href` and shows a refused open on the error line.
+- **A Devin unit now runs inside the filesystem fence and can commit.** On Linux a `devin` unit never completed:
+  the fence had no write root for the CLI's own state, so `devin -p` died at session start with `Failed to lock
+  session ... Read-only file system`. Devin's state tree (`~/.local/share/devin`) is now an owner write root, with
+  the installed program inside it (`cli/_versions`) mounted read-only (a new optional `protected_paths` on the
+  sandbox command: `--ro-bind-try` on bwrap, a `file-write*` deny on sandbox-exec), and the state home follows the
+  preset instead of the free-form executor id. Every directory between the state root and the program (`cli`) is
+  pinned too (its own mount point on bwrap, an unlink deny on sandbox-exec), so a unit cannot rename `cli` aside,
+  recreate `cli/_versions` with its own binary and have the host launch that next time. The preset's `accept-edits`
+  mode also rejected `git add` /
+  `git commit` headlessly (`rejected a tool call that requires confirmation`), so a unit could edit but never leave
+  the commit it needs; inside an enforced fence Devin now runs `--permission-mode dangerous`, the way Codex's own
+  sandbox is already turned off there. Without a fence the preset runs as written. Measured end to end on Linux
+  with devin 3000.15.14: a unit edits, commits, passes its verification and is `integration_ready`.
+  (`src/coding/fanout_confinement.py`, `src/coding/fanout_dispatch.py`, `src/quality/cross_harness_adapter_sandbox.py`)
 
 - **omher terminal: an address a table cell breaks across rows opens whole.** Claude Code's markdown tables put
   real newlines inside a cell, so `https://github.com/` sat on one row and `sgl-project/sglang/pull/…` under it; the

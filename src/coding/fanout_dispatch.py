@@ -1298,6 +1298,33 @@ def with_codex_fenced_sandbox(
     return [*argv[:-1], "--sandbox", "danger-full-access", argv[-1]]
 
 
+def with_devin_fenced_permissions(
+    argv: list[str] | None, executor_spec: Any, confinement: FanoutFilesystemConfinement | None
+) -> list[str] | None:
+    """`argv` with Devin's permission mode raised to `dangerous` when the fence is enforced.
+
+    The Devin preset runs `--permission-mode accept-edits`, which in a headless run rejects every
+    shell tool call ("rejected a tool call that requires confirmation"). The unit can then edit
+    files but never `git add` / `git commit`, so it can never leave the commit the dispatcher
+    requires. Inside an enforced fence the dispatcher's confinement is the write boundary, the same
+    reasoning `with_codex_fenced_sandbox` applies to Codex. No fence, an unenforced or other
+    backend, another preset, or an argv that already chose a mode: returned unchanged.
+    """
+    if (
+        not argv
+        or getattr(executor_spec, "preset_id", None) != "devin"
+        or confinement is None
+        or confinement.receipt.get("enforced") is not True
+        or confinement.selected not in {"bwrap", "sandbox-exec"}
+        or "--permission-mode" not in argv
+    ):
+        return argv
+    index = argv.index("--permission-mode") + 1
+    if index >= len(argv) or argv[index] != "accept-edits":
+        return argv
+    return [*argv[:index], "dangerous", *argv[index + 1:]]
+
+
 def build_unit_prompt(
     unit: Mapping[str, Any],
     goal_text: str,
@@ -5747,7 +5774,9 @@ def _dispatch_unit(
             verification_argv.append(check_argv)
         confinement = (
             prepare_fanout_filesystem_confinement(
-                worktree, child_env, (argv, *verification_argv), owner=owner,
+                worktree, child_env, (argv, *verification_argv),
+                # A user executor's state home follows its preset (devin), not its free-form id.
+                owner=(executor_spec.preset_id or owner) if executor_spec is not None else owner,
                 intake_root=intake_root,
                 # Same expression ensure_fanout_unit_worktree used to create this unit's branch.
                 unit_branch=str(unit.get("branch_suggestion", f"agent/{unit_id}")),
@@ -5764,6 +5793,7 @@ def _dispatch_unit(
         )
         # Codex's own sandbox cannot start inside the fence; the fence is the boundary.
         argv = with_codex_fenced_sandbox(argv, owner, confinement)
+        argv = with_devin_fenced_permissions(argv, executor_spec, confinement)
         filesystem_confinement = confinement_receipt(confinement, worktree)
         if confinement is not None and isinstance(filesystem_confinement, dict):
             filesystem_confinement["git_roots_skip"] = git_roots_skip_reason(worktree.resolve())
