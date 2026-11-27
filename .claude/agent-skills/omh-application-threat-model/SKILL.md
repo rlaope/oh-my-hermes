@@ -35,6 +35,12 @@ Good example:
 - Expected behavior: Prepare application_threat_model/v1: ask for the component map and data flows, register card data and settlement records as assets, mark the merchant API edge and the PSP callback as trust boundaries, derive scenarios per boundary, decide a control for each, and name the test that fails when the control is removed.
 - Why: The subject is an application the user operates, and the goal needs assets, boundaries, scenarios, controls, and tests.
 
+Good example (AI model benchmarking):
+
+- Prompt: build a threat model for our GLM-5.3 benchmarking across different providers
+- Expected behavior: Prepare application_threat_model/v1: identify the benchmarking system components and data flows, register the evaluation corpus and measurement results as assets, mark the provider API boundaries as trust boundaries, derive scenarios for measurement integrity and provider-specific variations, decide controls for cross-validation, and name tests that verify consistency across providers.
+- Why: The subject is a benchmarking system the user operates, and the goal needs assets (corpus, results), boundaries (provider APIs), scenarios (measurement drift, provider differences), controls (cross-validation), and tests (consistency checks).
+
 Bad example:
 
 - Prompt: application-threat-model check whether this agent can be prompt-injected through its file tool
@@ -63,6 +69,8 @@ Bad example:
 Use when Hermes must model the security of an application, service, or deployed system the user operates: which assets are worth taking, where trust changes hands, how an attacker reaches each asset, which control stops them, and which security test fails when that control is removed. The subject is the modeled system, never the agent's own runtime.
 
     Strong routing signals: `application-threat-model`, `application threat model`, `threat model`, `threat modeling`, `threat modelling`, `threat modeling session`, `threat modeling workshop`, `security threat model`, `build a threat model`, `model the threats`, `threat scenarios`, `stride analysis`, `stride model`, `trust boundary`, `trust boundaries`, `attack scenario`, `attack scenarios`, `attack tree`, `attack trees`, `abuse case`, `abuse cases`, `security design review`, `security architecture review`, `architecture security review`, `how would an attacker`, `how could an attacker`, `what could an attacker do`, `attacker perspective`
+
+    Specialized routing for AI systems: `ai benchmarking threat model`, `model evaluation security`, `provider comparison threat model`, `cross-provider benchmarking`, `ai measurement integrity`, `model performance threat model`
 
 ## Catalog Metadata
 

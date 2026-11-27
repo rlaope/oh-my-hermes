@@ -15,6 +15,8 @@ An asset is something an attacker wants, not every table in the schema. Each row
 | Financial | balances, settlements, refunds, invoices | corruption or fraud |
 | Operational | audit logs, configuration, feature flags | corruption, then repudiation |
 | Availability-critical | checkout, auth, payment callback | unavailability |
+| Research | benchmark results, evaluation corpus, model measurements | corruption, then invalid decisions |
+| Integrity | measurement consistency, cross-provider validation | corruption, then lost trust |
 
 The four loss words are fixed: **disclosure**, **corruption**, **unavailability**, **fraud**. If none fits, the row is context, not an asset.
 
@@ -29,9 +31,32 @@ A boundary is any place the answer to "who is asserting this, and who checked?" 
 
 Boundaries this repeatedly finds: internet to edge, edge to service, service to service inside one network, tenant to tenant in shared storage, application to third party, batch or cron to production data, operator console to production.
 
+Specialized boundaries for AI systems:
+- Provider API boundary: where your benchmarking system calls external AI model providers
+- Measurement boundary: where raw model outputs are processed into metrics
+- Cross-validation boundary: where results from different providers are compared
+- Corpus boundary: where evaluation data is stored and accessed
+
 ## 3. Scenarios: the STRIDE prompts
 
 Run all six against every boundary. One prompt, one scenario, or a recorded reason the category does not reach this boundary. Run them again against each data store, external entity, and process that holds an asset, since a store at rest or a process inside one zone has no boundary of its own, and add one more prompt for a compromised third-party dependency or build step.
+
+### Specialized scenarios for AI model benchmarking:
+
+**Provider API boundary scenarios:**
+- *Spoofing*: Can an attacker impersonate your benchmarking identity to call provider APIs, getting access to other users' results?
+- *Tampering*: Can an attacker modify benchmark requests to alter model outputs or metrics?
+- *Information disclosure*: Do provider responses leak information about other users' queries or model behavior?
+- *Denial of service*: Is there a way to exhaust provider API quotas or rate limits during benchmarking?
+- *Elevation of privilege*: Can a benchmark request access to higher-tier models or privileged features?
+
+**Measurement integrity scenarios:**
+- *Spoofing*: Can model outputs be manipulated to appear better or worse than they are?
+- *Tampering*: Can benchmark metrics be altered during post-processing?
+- *Repudiation*: Are there gaps in audit logs that could hide measurement manipulation?
+- *Information disclosure*: Do measurement processes leak information about the evaluation corpus?
+- *Denial of service*: Can measurement processes be disrupted to prevent completion?
+- *Elevation of privilege*: Can unauthorized users manipulate benchmark results or override validation checks?
 
 | Category | Prompt for this boundary |
 | --- | --- |
