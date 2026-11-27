@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 import { t } from "../i18n";
 import { agentDef, folderName, type SessionRec } from "../sessions/agents";
 import { continuesItself } from "../app/resume";
+import { termComesBack } from "../sessions/termConv";
 
 /** The running-sessions line, or "" when none runs. */
 export function runningLine(list: readonly SessionRec[], modeOf: (r: SessionRec) => string): string {
@@ -15,7 +16,8 @@ export function runningLine(list: readonly SessionRec[], modeOf: (r: SessionRec)
   // each "folder (Agent)" stays on one line
   const names = live.map((r) => `${folderName(r.cwd)} (${agentDef(r.agent).label})`.replace(/ /g, "\u00a0")).join(", ");
   const head = live.length === 1 ? t("update.running1", { list: names }) : t("update.runningN", { n: live.length, list: names });
-  const auto = live.filter((r) => modeOf(r) === "chat" && continuesItself(r)).length;
+  // a chat that continues its conversation, or a terminal that does (termConv.ts), comes back by itself
+  const auto = live.filter((r) => (modeOf(r) === "chat" && continuesItself(r)) || (modeOf(r) === "terminal" && termComesBack(r))).length;
   const one = live.length === 1;
   const then =
     auto === live.length

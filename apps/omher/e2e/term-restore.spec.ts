@@ -40,7 +40,8 @@ async function open(page: Page) {
     }
     const w = window as unknown as Record<string, unknown>;
     w.__omherPickFolder = folder;
-    w.__omherMockAgents = ["claude", "codex", "grok", "omh", "pi"];
+    w.__omherMockAgents = ["claude", "codex", "grok", "omh", "pi", "agy", "omp", "copilot", "gemini"];
+    if (sessionStorage.getItem("__oldGemini")) w.__omherMockNoSessionId = ["gemini"];
   }, FOLDER);
   await page.goto("/");
   await expect(page.getByTestId("bot-kami")).toBeVisible();
@@ -255,9 +256,131 @@ test("Resume right after a restart learns only the new Codex's own conversation"
   await expect.poll(() => conv(page, a), { timeout: 20_000 }).toBe(C);
 });
 
-test("an agent with no conversation of its own (Grok) still comes back paused and starts only on Resume", async ({ page }) => {
+/** The Antigravity now running in session `id`'s terminal is on conversation `conv`, as its workspace cache names it. */
+async function agyOn(page: Page, id: string, conv: string) {
+  const pty = await ptyOf(page, id);
+  expect(pty).not.toBeNull();
+  await page.evaluate(([p, c]) => void (((window as unknown as { __omherMockAgyOwn?: Record<number, string> }).__omherMockAgyOwn ??= {})[p as number] = c as string), [pty, conv] as const);
+}
+
+test("an Antigravity terminal learns its conversation and continues it by itself after a restart, no Resume", async ({ page }) => {
+  await open(page);
+  const id = await newTerm(page, "agy");
+  const first = await starts(page);
+  expect(first).toEqual([expect.objectContaining({ agent: "agy", cwd: FOLDER })]);
+  expect(first[0].resume).toBeUndefined();
+  expect(first[0].sessionId).toBeUndefined();
+  await agyOn(page, id, A);
+  await expect.poll(() => conv(page, id), { timeout: 15_000 }).toBe(A);
+  const pty = await ptyOf(page, id);
+  await page.waitForTimeout(300);
+  expect(await asks(page)).toEqual([{ op: "own", agent: "agy", pty }]);
+
+  await page.reload();
+  await expect(page.getByTestId(`session-${id}`)).toBeVisible();
+  // it starts by itself as `agy --conversation <id>` in the same folder: no Resume button
+  await expect.poll(() => starts(page)).toEqual([expect.objectContaining({ agent: "agy", cwd: FOLDER, resume: A })]);
+  await page.getByTestId(`session-${id}`).locator(".ss-open").click();
+  await expect(page.getByTestId("terminal")).toBeVisible();
+  await expect(page.getByTestId("session-paused")).toHaveCount(0);
+  await expect(screen(page)).toContainText(/--- restored .+ ---/);
+  await expect(page.locator(".xterm-rows").last()).toContainText("(mock)");
+});
+
+test("two Antigravity terminals in one folder learn nothing while both run; the one left learns its own", async ({ page }) => {
+  test.setTimeout(60_000);
+  await open(page);
+  const a = await newTerm(page, "agy");
+  const b = await newTerm(page, "agy");
+  // Antigravity keeps one id per folder: with both running, neither row is asked about it
+  await agyOn(page, a, A);
+  await agyOn(page, b, B);
+  await page.waitForTimeout(6_000);
+  await flush(page);
+  expect([await conv(page, a), await conv(page, b)]).toEqual([undefined, undefined]);
+  expect(await asks(page)).toEqual([]);
+  // with one closed, the other learns its own at its next ask
+  await closeRow(page, b);
+  await expect.poll(() => conv(page, a), { timeout: 20_000 }).toBe(A);
+  await page.reload();
+  await expect.poll(() => starts(page)).toEqual([expect.objectContaining({ agent: "agy", resume: A })]);
+});
+
+test("a Grok terminal starts under an id omher made: used, it continues by --resume after a restart; unused, a new one starts", async ({ page }) => {
   await open(page);
   const id = await newTerm(page, "grok");
+  const first = await starts(page);
+  expect(first).toEqual([expect.objectContaining({ agent: "grok", cwd: FOLDER })]);
+  expect(first[0].resume).toBeUndefined();
+  const made = first[0].sessionId!;
+  expect(made).toMatch(UUID4);
+  await expect.poll(async () => (await saved(page))?.sessions?.find((s: { id: string }) => s.id === id)).toMatchObject({ agentSession: made, running: true });
+  // nobody typed in it: after a restart it starts by itself, under a new id (Grok has nothing to continue)
+  await page.reload();
+  await expect.poll(async () => (await starts(page)).length).toBe(1);
+  const fresh = (await starts(page))[0];
+  expect(fresh).toMatchObject({ agent: "grok", cwd: FOLDER });
+  expect(fresh.resume).toBeUndefined();
+  expect(fresh.sessionId).toMatch(UUID4);
+  expect(fresh.sessionId).not.toBe(made);
+  // the person says something in it: the next restart continues that conversation, by itself, with no Resume
+  await page.getByTestId(`session-${id}`).locator(".ss-open").click();
+  await page.locator("[data-testid=terminal] .xterm-helper-textarea").last().focus();
+  await page.keyboard.type("hello");
+  await page.keyboard.press("Enter");
+  await expect.poll(async () => (await saved(page))?.sessions?.find((s: { id: string }) => s.id === id)).toMatchObject({ agentSession: fresh.sessionId, used: true });
+  await page.reload();
+  await expect.poll(() => starts(page)).toEqual([expect.objectContaining({ agent: "grok", cwd: FOLDER, resume: fresh.sessionId })]);
+  expect((await starts(page))[0].sessionId).toBeUndefined();
+  await page.getByTestId(`session-${id}`).locator(".ss-open").click();
+  await expect(page.getByTestId("session-paused")).toHaveCount(0);
+});
+
+test("a Gemini CLI from before --session-id starts once more without it, keeps no id, and comes back paused", async ({ page }) => {
+  await page.addInitScript(() => sessionStorage.setItem("__oldGemini", "1"));
+  await open(page);
+  const id = await newTerm(page, "gemini");
+  // it refused the option and ended at once: started again, without an id, and it runs
+  await expect.poll(async () => (await starts(page)).length).toBe(2);
+  const [first, second] = await starts(page);
+  expect(first).toMatchObject({ agent: "gemini", cwd: FOLDER });
+  expect(first.sessionId).toMatch(UUID4);
+  expect(second).toMatchObject({ agent: "gemini", cwd: FOLDER });
+  expect(second.sessionId).toBeUndefined();
+  await expect(screen(page)).toContainText("did not take a conversation id");
+  await expect(page.locator("[data-testid=terminal] .xterm-rows").last()).toContainText("(mock)");
+  // the first start's save (with its id) can still be the one stored: wait for the retry's save, which drops it
+  await expect
+    .poll(async () => {
+      const row = (await saved(page))?.sessions?.find((s: { id: string }) => s.id === id);
+      return row && { agent: row.agent, running: row.running, agentSession: row.agentSession ?? null };
+    })
+    .toEqual({ agent: "gemini", running: true, agentSession: null });
+  // the next Gemini terminal of this page gets no id at all
+  await newTerm(page, "gemini");
+  expect((await starts(page)).slice(2)).toEqual([expect.not.objectContaining({ sessionId: expect.anything() })]);
+  // with no id it comes back paused after a restart, as before
+  await page.reload();
+  await page.getByTestId(`session-${id}`).locator(".ss-open").click();
+  await expect(page.getByTestId("session-paused")).toBeVisible();
+  await page.waitForTimeout(300);
+  expect(await starts(page)).toEqual([]);
+});
+
+test("a Copilot CLI terminal opens the same --session-id again after a restart, by itself", async ({ page }) => {
+  await open(page);
+  const id = await newTerm(page, "copilot");
+  const made = (await starts(page))[0].sessionId!;
+  expect(made).toMatch(UUID4);
+  await expect.poll(async () => (await saved(page))?.sessions?.find((s: { id: string }) => s.id === id)).toMatchObject({ agentSession: made, running: true });
+  await page.reload();
+  await expect.poll(() => starts(page)).toEqual([expect.objectContaining({ agent: "copilot", cwd: FOLDER, sessionId: made })]);
+  expect((await starts(page))[0].resume).toBeUndefined();
+});
+
+test("an agent whose conversation omher can neither give nor learn (oh-my-pi) still comes back paused and starts only on Resume", async ({ page }) => {
+  await open(page);
+  const id = await newTerm(page, "omp");
   expect((await starts(page))[0].sessionId).toBeUndefined();
   await expect.poll(async () => (await saved(page))?.sessions?.find((s: { id: string }) => s.id === id)?.running).toBe(true);
   await page.reload();
@@ -269,7 +392,7 @@ test("an agent with no conversation of its own (Grok) still comes back paused an
 
 test("a paused terminal shows what it showed before the restart, dimmed under the divider, and starts nothing", async ({ page }) => {
   await open(page);
-  const id = await newTerm(page, "grok");
+  const id = await newTerm(page, "omp");
   await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
   await expect.poll(async () => (await calls(page)).some((c) => c.op === "history.save" && c.key === id && !!c.data?.includes("(mock)"))).toBe(true);
   await page.reload();

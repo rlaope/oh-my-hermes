@@ -5,6 +5,7 @@
 import type { HistoryHost } from "./term/history";
 import { AGENTS, acpRow, agentDef, HERMES_LABEL, type AcpRow, type AgentId, type AgentInfo } from "./agents";
 import { mockPtyOut, nextMockPty } from "./fg";
+import { GIVES_ID } from "./termConv";
 import mockAcpAgents from "./mockAcpAgents.json";
 import { botRefusal, mockCheck, mockNewId, type CustomEntry, type CustomList, type CustomPreview, type CustomWhy } from "./custom";
 import type { ApprovalChoice, ClarifyAnswers } from "../lib/protocol";
@@ -126,6 +127,10 @@ export interface SessionHost extends HistoryHost {
    *  Claude Code's own record of that running process names, or null while there is none (rule 11; only the id comes
    *  back). */
   claudeConversation?(id: number): Promise<string | null>;
+  /** The conversation the Antigravity CLI in the foreground of terminal session `id` (its pty) is on: the UUID
+   *  Antigravity's own workspace cache names for the folder that session started in, written since it started, or
+   *  null while there is none (rule 11; only the id comes back). */
+  agyConversation?(id: number): Promise<string | null>;
   /** How many asks wait: a Dock / launcher count, or a dot on the Windows taskbar button. 0 clears it. */
   badge(count: number): Promise<void>;
   /** Keep the computer awake while agents work (src/lib/power.ts): a busy or idle edge. `now`: the setting went off,
@@ -281,6 +286,10 @@ export class TauriHost implements SessionHost {
   async claudeConversation(id: number) {
     const { invoke } = await this.core();
     return invoke<string | null>("claude_conversation", { id });
+  }
+  async agyConversation(id: number) {
+    const { invoke } = await this.core();
+    return invoke<string | null>("agy_conversation", { id });
   }
   async badge(count: number) {
     const { invoke } = await this.core();
@@ -486,6 +495,10 @@ type MockGlobals = {
   __omherPastReads?: { op: "list" | "read" | "own"; agent: string; cwds?: string[]; id?: string; cwd?: string; pty?: number }[];
   /** e2e: the conversation each mock pty's Codex holds open (pty id -> UUID), as a real Codex once its rollout exists */
   __omherMockCodexOwn?: Record<number, string>;
+  /** e2e: agents whose mock CLI is from before `--session-id` (it refuses the option and ends at once) */
+  __omherMockNoSessionId?: AgentId[];
+  /** e2e: the conversation each mock pty's Antigravity is on (pty id -> UUID), as its workspace cache names it */
+  __omherMockAgyOwn?: Record<number, string>;
   /** e2e: the conversation of the Claude Code or Codex a test runs in a Shell row's pty (pty id -> UUID), as the shell
    *  reads it from the CLI in that terminal's foreground */
   __omherMockFgOwn?: Record<number, string>;
@@ -673,6 +686,8 @@ export class MockHost implements SessionHost {
   async start(agent: AgentId, cwd: string, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void, resume?: string, account?: string, sessionId?: string, link?: string) {
     // the shell's own refusal (sessions::terminal_env): only an oh-my-hermes terminal is told its link
     if (link !== undefined && agent !== "omh") throw new Error(`${agent} sessions are not given a terminal link`);
+    // and sessions::terminal_args: only these start under an id omher made
+    if (sessionId !== undefined && !GIVES_ID.includes(agent)) throw new Error(`${agent} sessions are not given a conversation id`);
     const id = nextMockPty();
     this.log({ op: "start", id, agent, cwd, cols, rows, ...(resume ? { resume } : {}), ...(sessionId ? { sessionId } : {}), ...(link ? { link } : {}), ...(account ? { account } : {}) });
     if (this.g.__omherMockMissing?.includes(agent)) throw new Error(`${agentDef(agent).label} is not installed (no \`${agentDef(agent).program}\` found)`);
@@ -683,14 +698,17 @@ export class MockHost implements SessionHost {
     const elsewhere = !!account && !!this.g.__omherMockGoneAccounts?.includes(account);
     const cannot = !!resume && ((convs[resume] && convs[resume].text === undefined) || elsewhere || !!this.g.__omherMockGoneConversations?.includes(resume));
     const refusal =
-      sessionId && convs[sessionId]?.text !== undefined
-        ? `Error: Session ID ${sessionId} is already in use.`
-        : !cannot
-          ? null
-          : agent === "codex"
-            ? `Error: No saved session found with ID ${resume}. Run \`codex resume\` without an ID to choose from existing sessions.`
-            : `No conversation found with session ID: ${resume}`;
-    if (sessionId && !convs[sessionId]) this.putConvs({ ...convs, [sessionId]: { cwd } });
+      // a CLI from before it took `--session-id` refuses the option and ends at once
+      sessionId && this.g.__omherMockNoSessionId?.includes(agent)
+        ? `error: unknown option '--session-id'`
+        : sessionId && convs[sessionId]?.text !== undefined
+          ? `Error: Session ID ${sessionId} is already in use.`
+          : !cannot
+            ? null
+            : agent === "codex"
+              ? `Error: No saved session found with ID ${resume}. Run \`codex resume\` without an ID to choose from existing sessions.`
+              : `No conversation found with session ID: ${resume}`;
+    if (agent === "claude" && sessionId && !convs[sessionId]) this.putConvs({ ...convs, [sessionId]: { cwd } });
     // a resumed Codex holds its own conversation's rollout open again
     if (agent === "codex" && resume) (this.g.__omherMockCodexOwn ??= {})[id] = resume;
     const out = (d: string) => {
@@ -950,6 +968,14 @@ export class MockHost implements SessionHost {
     (this.g.__omherPastReads ??= []).push({ op: "own", agent: "claude", pty: id });
     if (this.live.has(id)) return null;
     return this.g.__omherMockFgOwn?.[id] ?? null;
+  }
+  /** As the shell: the conversation of the Antigravity running in pty `id` (`__omherMockAgyOwn[id]`, set by the test as
+   *  that process's Antigravity writes its workspace cache), and nothing once that program ended or is not Antigravity. */
+  async agyConversation(id: number) {
+    (this.g.__omherPastReads ??= []).push({ op: "own", agent: "agy", pty: id });
+    const s = this.live.get(id);
+    if (!s || s.agent !== "agy") return null;
+    return this.g.__omherMockAgyOwn?.[id] ?? null;
   }
   async badge(count: number) {
     this.g.__omherBadge = count;

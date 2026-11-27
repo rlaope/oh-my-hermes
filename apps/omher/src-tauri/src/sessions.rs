@@ -148,32 +148,48 @@ pub fn dsh_turn_args(patch: &Path, session: Option<&str>) -> Result<Vec<OsString
     Ok(a)
 }
 
-/// The arguments a TERMINALS session of agent `id` starts with, besides none: `--session-id <uuid>` for a new Claude
-/// Code conversation whose id omher made (`new_session`), so the same conversation can be continued after omher
-/// restarts; `--resume <uuid>` (Claude Code) or `resume <uuid>` (Codex, a thread id it wrote) to continue one; and
-/// the chat-era `--session <uuid>` for OmO ([`resume_args`]). Never both; every id must be a UUID; any other agent
-/// or shape is refused.
+/// The TERMINALS agents omher gives a new conversation's id with `--session-id <uuid>` (`new_session`), so the same
+/// conversation can be continued after omher restarts, each by its own help or docs: Claude Code, Gemini CLI (0.68,
+/// `--session-id`, a new session with that id), Qwen Code (0.27, a UUID), Grok (`-s, --session-id <UUID>`, a new
+/// session only), Copilot CLI (`--session-id`: resumes the session with that id, else creates it) and pi (`--session-id`:
+/// opens that id for the folder, else creates it).
+pub const TERM_GIVES_ID: [&str; 6] = ["claude", "gemini", "qwen", "grok", "copilot", "pi"];
+
+/// The argument before the id that continues agent `id`'s conversation in its own terminal UI: `--resume` (Claude
+/// Code; Gemini CLI, Qwen Code and Grok, an id omher gave it), `resume` (Codex, a thread id it wrote), `--conversation`
+/// (Antigravity CLI 1.5.18 `agy --help`: "Resume a previous conversation by ID", the id its workspace cache named:
+/// [`Sessions::agy_conversation`]) or the chat-era `--session` (OmO). Copilot CLI and pi continue by the same
+/// `--session-id` that started them; every other agent has none.
+fn terminal_resume_flag(id: &str) -> Option<&'static str> {
+    Some(match id {
+        "claude" | "gemini" | "qwen" | "grok" => "--resume",
+        "codex" => "resume",
+        "agy" => "--conversation",
+        "omo" => "--session",
+        _ => return None,
+    })
+}
+
+/// The arguments a TERMINALS session of agent `id` starts with, besides none: `--session-id <uuid>` for a new
+/// conversation whose id omher made (`new_session`, the agents of [`TERM_GIVES_ID`]), or the agent's own flag and the
+/// id to continue one (`resume`, [`terminal_resume_flag`]). Never both; every id must be a UUID (so none reads as an
+/// option); any other agent or shape is refused.
 pub fn terminal_args(id: &str, new_session: Option<&str>, resume: Option<&str>) -> Result<Vec<OsString>, String> {
-    match (new_session, resume) {
-        (None, None) => Ok(Vec::new()),
-        (Some(_), Some(_)) => Err("a new conversation or one to continue, not both".into()),
+    let (flag, conv) = match (new_session, resume) {
+        (None, None) => return Ok(Vec::new()),
+        (Some(_), Some(_)) => return Err("a new conversation or one to continue, not both".into()),
         (Some(s), None) => {
-            if id != "claude" {
+            if !TERM_GIVES_ID.contains(&id) {
                 return Err(format!("{id} sessions are not given a conversation id"));
             }
-            if !is_uuid(s) {
-                return Err("not a conversation id".into());
-            }
-            Ok(vec!["--session-id".into(), s.into()])
+            ("--session-id", s)
         }
-        (None, Some(r)) if id == "codex" => {
-            if !is_uuid(r) {
-                return Err("not a conversation id".into());
-            }
-            Ok(vec!["resume".into(), r.into()])
-        }
-        (None, Some(r)) => resume_args(id, r),
+        (None, Some(r)) => (terminal_resume_flag(id).ok_or_else(|| format!("{id} sessions cannot be resumed"))?, r),
+    };
+    if !is_uuid(conv) {
+        return Err("not a conversation id".into());
     }
+    Ok(vec![flag.into(), conv.into()])
 }
 
 /// The one variable a TERMINALS session gets besides the terminal's own and the account's: an oh-my-hermes (`omh`)
@@ -189,6 +205,11 @@ pub fn terminal_env(id: &str, link: Option<&str>) -> Result<Vec<(String, String)
         return Err("not a terminal link id".into());
     }
     Ok(vec![("OMHER_TERMINAL_LINK".into(), link.into())])
+}
+
+/// The person's home folder (`HOME`, `USERPROFILE` on Windows), as the shell's commands read it.
+pub(crate) fn user_home_dir() -> Option<PathBuf> {
+    std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).filter(|v| !v.is_empty()).map(PathBuf::from)
 }
 
 /// `8-4-4-4-12` hex digits, nothing else.
@@ -866,6 +887,13 @@ struct Live {
     /// The account home variable it was started with (`account_env`): its Codex home, for
     /// [`Sessions::codex_conversation`].
     account_env: Vec<(String, String)>,
+    /// The folder it started in and when (just before its program was spawned), for
+    /// [`Sessions::agy_conversation`].
+    cwd: PathBuf,
+    started: std::time::SystemTime,
+    /// An Antigravity row: the id Antigravity's workspace cache named for its folder right before its program started
+    /// (`fg::agy_cache_entry`), never taken as its own.
+    agy_before: Option<String>,
 }
 
 impl Live {
@@ -1008,6 +1036,7 @@ impl Sessions {
             return Err(format!("not a folder: {}", cwd.display()));
         }
         let pair = native_pty_system().openpty(clamp_size(cols, rows)).map_err(|e| e.to_string())?;
+        let started = std::time::SystemTime::now();
         let mut child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
         drop(pair.slave); // only the child holds the terminal side, so its exit ends our reads
         let reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
@@ -1050,13 +1079,13 @@ impl Sessions {
                 }
             });
         }
-        self.live.lock().unwrap().insert(id, Live { master: pair.master, input, writer_done, killer, pid, exited, out, account_env: account_env.to_vec() });
+        self.live.lock().unwrap().insert(id, Live { master: pair.master, input, writer_done, killer, pid, exited, out, account_env: account_env.to_vec(), cwd: cwd.to_path_buf(), started, agy_before: None });
         Ok(id)
     }
 
     /// Start allow-listed agent `agent` in `cwd`. Anything not in [`AGENTS`] is refused before a process
     /// exists. `account_env` is `accounts::session_env` for that agent: the chosen account's home variable,
-    /// or nothing. `new_session` (Claude Code) names the new conversation, `resume` (Claude Code, Codex) continues
+    /// or nothing. `new_session` (the agents of [`TERM_GIVES_ID`]) names the new conversation, `resume` continues
     /// one in the agent's own terminal UI ([`terminal_args`]); `link` (oh-my-hermes only) is the row's link id,
     /// passed as `OMHER_TERMINAL_LINK` ([`terminal_env`]).
     pub fn start_agent<F>(
@@ -1083,11 +1112,17 @@ impl Sessions {
         env.extend(terminal_env(agent_id, link)?);
         let (mut argv, path_env) = launch_for(agent_id)?;
         argv.extend(extra);
+        // a new Antigravity row: what its folder's entry in Antigravity's cache was before it starts (rule 50)
+        let agy_before = (agent_id == "agy" && resume.is_none()).then(|| user_home_dir().and_then(|h| crate::fg::agy_cache_entry(&h, cwd))).flatten();
         // Claude Code's status line runs omher's relay, which records the usage it reports and runs the person's own
         // status line unchanged (`claude_usage.rs`; Claude Code with the person's own status line, on macOS and Linux
         // outside an AppImage)
         argv.extend(crate::claude_usage::terminal_args(agent_id, cwd, account_env, &crate::claude_usage::RelayHost::current()));
-        self.spawn(argv, cwd, Some(path_env), &env, cols, rows, sink)
+        let id = self.spawn(argv, cwd, Some(path_env), &env, cols, rows, sink)?;
+        if let Some(l) = self.live.lock().unwrap().get_mut(&id) {
+            l.agy_before = agy_before;
+        }
+        Ok(id)
     }
 
     /// The conversation the Codex in the foreground of session `id` holds open ([`crate::fg::codex_conversation`]), in
@@ -1115,6 +1150,19 @@ impl Sessions {
         };
         let root = crate::past_chats::cli_home(user_home, "claude", &env, &|k| std::env::var(k).ok())?;
         crate::fg::claude_conversation(fg, &root)
+    }
+
+    /// The conversation the Antigravity CLI in the foreground of session `id` (a TERMINALS `agy` row) is on
+    /// ([`crate::fg::agy_conversation`]): the one Antigravity's own workspace cache names for the folder the session
+    /// started in, written since the session started and not the one it named there before; `None` while there is none, or once the session ended. Only the
+    /// id comes back.
+    pub fn agy_conversation(&self, id: u32, user_home: &Path) -> Option<String> {
+        let (fg, cwd, started, before) = {
+            let g = self.live.lock().unwrap();
+            let l = g.get(&id).filter(|l| !l.exited.load(Ordering::SeqCst))?;
+            (l.foreground()?, l.cwd.clone(), l.started, l.agy_before.clone())
+        };
+        crate::fg::agy_conversation(fg, user_home, &cwd, started, before.as_deref())
     }
 
     /// Whether the shell of session `id` is itself in its terminal's foreground now, nothing it started in front (a
@@ -2019,7 +2067,7 @@ mod tests {
 
     /// A New session may open any agent as its terminal (the person picks Chat or Terminal), so `start_agent` takes
     #[test]
-    fn terminal_args_take_only_a_new_claude_id_or_a_claude_or_codex_one_to_continue() {
+    fn terminal_args_take_only_a_checked_id_each_agent_starts_or_continues_with() {
         let id = "0e2c5a8e-6c1b-4f7e-9a3d-2b1c4d5e6f70";
         let x = "01a1d060-4ab7-72b2-b02b-1dbee1d5f52c";
         let os = |v: &[&str]| v.iter().map(OsString::from).collect::<Vec<_>>();
@@ -2027,18 +2075,37 @@ mod tests {
         assert_eq!(terminal_args("claude", Some(id), None).unwrap(), os(&["--session-id", id]));
         assert_eq!(terminal_args("claude", None, Some(id)).unwrap(), os(&["--resume", id]));
         assert_eq!(terminal_args("codex", None, Some(x)).unwrap(), os(&["resume", x]));
-        // never both, and a new id only for Claude Code
-        assert!(terminal_args("claude", Some(id), Some(id)).is_err());
-        for agent in ["codex", "grok", "pi", "omp", "omh", "opencode", "shell", "gemini"] {
-            assert!(terminal_args(agent, Some(id), None).is_err(), "{agent}");
+        assert_eq!(terminal_args("agy", None, Some(id)).unwrap(), os(&["--conversation", id]));
+        assert_eq!(terminal_args("omo", None, Some(id)).unwrap(), os(&["--session", id]));
+        // Gemini CLI, Qwen Code and Grok start under an id omher made and continue it with --resume; Copilot CLI and
+        // pi open (or create) it by the same --session-id
+        for agent in ["gemini", "qwen", "grok"] {
+            assert_eq!(terminal_args(agent, Some(id), None).unwrap(), os(&["--session-id", id]), "{agent}");
+            assert_eq!(terminal_args(agent, None, Some(id)).unwrap(), os(&["--resume", id]), "{agent}");
         }
-        for agent in ["grok", "pi", "omp", "omh", "opencode", "shell", "gemini"] {
+        for agent in ["copilot", "pi"] {
+            assert_eq!(terminal_args(agent, Some(id), None).unwrap(), os(&["--session-id", id]), "{agent}");
             assert!(terminal_args(agent, None, Some(id)).is_err(), "{agent}");
         }
-        for bad in ["", "--yolo", "x", "0e2c5a8e-6c1b-4f7e-9a3d-2b1c4d5e6f7", "0e2c5a8e-6c1b-4f7e-9a3d-2b1c4d5e6f70 --yolo", "../0e2c5a8e-6c1b-4f7e-9a3d-2b1c4d5e6f70", "0e2c5a8e6c1b4f7e9a3d2b1c4d5e6f70"] {
-            assert!(terminal_args("claude", Some(bad), None).is_err(), "{bad:?}");
-            assert!(terminal_args("claude", None, Some(bad)).is_err(), "{bad:?}");
-            assert!(terminal_args("codex", None, Some(bad)).is_err(), "{bad:?}");
+        // never both, and a new id only for those six
+        for agent in TERM_GIVES_ID {
+            assert!(terminal_args(agent, Some(id), Some(id)).is_err(), "{agent}");
+        }
+        for agent in ["codex", "agy", "omo", "omp", "omh", "opencode", "kimi", "cline", "dsh", "shell", "kilo", ""] {
+            assert!(terminal_args(agent, Some(id), None).is_err(), "{agent}");
+        }
+        // no conversation to continue by an argument: OpenCode, Kimi Code, Cline and oh-my-pi take an id omher can
+        // neither give nor learn, and the rest have none
+        for agent in ["omp", "omh", "opencode", "kimi", "cline", "dsh", "shell", "kilo", "copilot", "pi", ""] {
+            assert!(terminal_args(agent, None, Some(id)).is_err(), "{agent}");
+        }
+        for bad in ["", "--yolo", "-c", "x", "0e2c5a8e-6c1b-4f7e-9a3d-2b1c4d5e6f7", "0e2c5a8e-6c1b-4f7e-9a3d-2b1c4d5e6f70 --yolo", "../0e2c5a8e-6c1b-4f7e-9a3d-2b1c4d5e6f70", "0e2c5a8e6c1b4f7e9a3d2b1c4d5e6f70", "--resume=0e2c5a8e-6c1b-4f7e-9a3d-2b1c4d5e6f70", "0e2c5a8e-6c1b-4f7e-9a3d-2b1c4d5e6f7g"] {
+            for agent in TERM_GIVES_ID {
+                assert!(terminal_args(agent, Some(bad), None).is_err(), "{agent} {bad:?}");
+            }
+            for agent in ["claude", "codex", "agy", "omo", "gemini", "qwen", "grok"] {
+                assert!(terminal_args(agent, None, Some(bad)).is_err(), "{agent} {bad:?}");
+            }
         }
         let s = Sessions::default();
         assert!(s.start_agent("claude", &std::env::temp_dir(), Some("--dangerously-skip-permissions"), None, None, &[], 80, 24, |_| {}).is_err());
