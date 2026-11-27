@@ -97,7 +97,7 @@ COMMANDS: tuple[SlashCommand, ...] = (
                  ("whatsnew",)),
     SlashCommand("quit", LOCAL, "Leave the OMH TUI", ("exit",)),
     SlashCommand("new", LOCAL, "Start a new session", ("clear", "reset")),
-    SlashCommand("sessions", LOCAL, "Switch to a stored session (a picker; an id or exact title after it switches)",
+    SlashCommand("sessions", LOCAL, "Browse local profiles' sessions (an id or exact title asks the gateway to switch)",
                  ("switch", "session", "resume"), echo_bare=False, menu_aliases=("resume",)),
     SlashCommand("redraw", LOCAL, "Repaint the screen", echo_bare=False),
     SlashCommand("history", LOCAL, "Page through this session's transcript", echo_bare=False),

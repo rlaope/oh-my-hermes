@@ -21,6 +21,7 @@ from omh.coding.fanout_dispatch import (  # noqa: E402
     build_dispatch_argv,
     dispatch_fanout,
     with_codex_fenced_sandbox,
+    with_devin_fenced_permissions,
     with_codex_windows_sandbox,
 )
 from omh.coding.fanout_output import FanoutOutput  # noqa: E402
@@ -532,3 +533,25 @@ class SandboxRefusalDispatchTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DevinFencedPermissionsTests(unittest.TestCase):
+    # The preset's `accept-edits` rejects shell calls headlessly, so a Devin unit could edit but never commit.
+    _SPEC = SimpleNamespace(preset_id="devin")
+    _ARGV = ["devin", "-p", "--permission-mode", "accept-edits", "--respect-workspace-trust", "false", "--", "do it"]
+
+    def test_an_enforced_fence_lets_devin_run_git(self) -> None:
+        for selected in ("bwrap", "sandbox-exec"):
+            self.assertEqual(
+                with_devin_fenced_permissions(list(self._ARGV), self._SPEC, _fence(selected)),
+                ["devin", "-p", "--permission-mode", "dangerous", "--respect-workspace-trust", "false", "--", "do it"],
+            )
+
+    def test_without_an_enforced_fence_the_preset_is_unchanged(self) -> None:
+        for fence in (None, _fence("bwrap", enforced=False), _fence("windows")):
+            self.assertEqual(with_devin_fenced_permissions(list(self._ARGV), self._SPEC, fence), self._ARGV)
+
+    def test_other_presets_and_explicit_modes_are_unchanged(self) -> None:
+        self.assertEqual(with_devin_fenced_permissions(list(self._ARGV), SimpleNamespace(preset_id="gemini"), _fence("bwrap")), self._ARGV)
+        smart = [*self._ARGV[:3], "smart", *self._ARGV[4:]]
+        self.assertEqual(with_devin_fenced_permissions(list(smart), self._SPEC, _fence("bwrap")), smart)

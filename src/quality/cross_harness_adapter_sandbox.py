@@ -280,6 +280,8 @@ def sandbox_command(
     # A write root is not screened as a read root: this is an explicit execution
     # allowance, while `read_roots_are_safe` protects data exposed to a child.
     write_roots: Sequence[Path] = (),
+    # Paths inside a write root that stay read-only (an owner's installed program living beside its state).
+    protected_paths: Sequence[Path] = (),
     # bwrap only: keep the spawning process's environment instead of --clearenv
     # plus --setenv, matching sandbox-exec, which never clears it. Fanout filters
     # that environment itself and adds per-command overrides at spawn time.
@@ -353,7 +355,14 @@ def sandbox_command(
             for prefix in macos_ipc_posix_shm_read_prefixes
         )
         network = "(allow network*)" if allow_network else ""
-        policy = f'(version 1)(deny default)(deny syscall-unix (syscall-number 147 82))(allow process-fork){process_exec}(allow sysctl-read){file_read}{write_data_literals}{write_literal_policy}(allow file-write* {write_subpaths}){write_root_pin}{mach_lookup}{shm_read}{network}'
+        protected = write_paths(protected_paths)
+        protected_policy = "".join(f'(deny file-write* (subpath {json.dumps(str(path))}))' for path in protected)
+        # The subpath deny guards the tree, not the directories above it inside the write root.
+        protected_policy += "".join(
+            f'(deny file-write-unlink (literal {json.dumps(str(path))}))'
+            for path in protected_ancestors(protected, write_paths((child.root, *write_roots)))
+        )
+        policy = f'(version 1)(deny default)(deny syscall-unix (syscall-number 147 82))(allow process-fork){process_exec}(allow sysctl-read){file_read}{write_data_literals}{write_literal_policy}(allow file-write* {write_subpaths}){protected_policy}{write_root_pin}{mach_lookup}{shm_read}{network}'
         return ("/usr/bin/sandbox-exec", "-p", policy, *argv)
     tool = _trusted_bwrap(backend_digest)
     assert tool is not None
@@ -367,6 +376,15 @@ def sandbox_command(
     # not been created yet; it never grants the broad parent directory instead.
     # In particular, it cannot create an absent exact file literal (#1356).
     write_binds = [part for root in writable_roots for part in ("--bind-try", str(root), str(root))]
+    # Mounted after the writable binds so the later read-only mount wins inside a writable root.
+    # Each directory between the root and the protected path is bound onto itself first: a mount
+    # point cannot be renamed (EBUSY), so the protected tree cannot be moved aside and replaced.
+    protected = write_paths(protected_paths)
+    write_binds += [
+        part for path in protected_ancestors(protected, write_paths((child.root, *write_roots)))
+        for part in ("--bind-try", str(path), str(path))
+    ]
+    write_binds += [part for path in protected for part in ("--ro-bind-try", str(path), str(path))]
     env_flags = [part for key, value in sorted(environment.items()) for part in ("--setenv", key, value)]
     if allow_broad_file_read:
         # The Linux counterpart of `(allow file-read*)`: the host tree is visible
@@ -408,6 +426,26 @@ def _hidden_user_runtime_directory() -> tuple[str, ...]:
 def _trusted_bwrap(expected_digest: str | None = None) -> str | None:
     snapshot = _backend_security.trusted_bwrap(expected_digest)
     return str(snapshot.path) if snapshot is not None else None
+
+
+def protected_ancestors(protected: Sequence[Path], write_roots: Sequence[Path]) -> tuple[Path, ...]:
+    """Directories strictly between a write root and a read-only path inside it, shallowest first.
+
+    A read-only mount (bwrap) or a subpath deny (sandbox-exec) guards the protected tree
+    itself. Without a pin on each directory above it, a confined process renames one of
+    them inside the writable root, recreates the protected path with its own program, and
+    the host runs that program on the next launch.
+    """
+    pinned: list[Path] = []
+    for path in protected:
+        for root in write_roots:
+            if path == root or not path.is_relative_to(root):
+                continue
+            parent = path.parent
+            while parent != root and parent.is_relative_to(root):
+                pinned.append(parent)
+                parent = parent.parent
+    return tuple(sorted(dict.fromkeys(pinned), key=lambda item: (len(item.parts), str(item))))
 
 
 def unique_roots(roots: Sequence[Path]) -> tuple[Path, ...]:

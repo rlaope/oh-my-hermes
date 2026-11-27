@@ -252,6 +252,8 @@ class _OwnerStatePath:
     fallback_environment_variables: tuple[str, ...] = ()
     is_file: bool = False
     configured_relative: bool = False
+    # Subpaths of this state directory that the fence keeps read-only.
+    protected: tuple[Path, ...] = ()
 
 
 # The argv table in fanout_dispatch identifies the executable profile. These defaults
@@ -268,6 +270,13 @@ _OWNER_STATE_DIRECTORIES: dict[str, dict[str | None, tuple[_OwnerStatePath, ...]
         )
     },
     "hermes": {None: (_OwnerStatePath("HERMES_HOME", Path(".hermes")),)},
+    # Devin CLI keeps session locks and logs under XDG data; without this write root the fence leaves
+    # it read-only and `devin -p` dies at session start ("Failed to lock session ... Read-only file system").
+    # Measured on devin 3000.15.14 (strace): sessions.db and its -wal/-shm, logs, session_locks and plugin
+    # caches all live under cli/; config and cache are not written in a headless run.
+    # The CLI's own program sits in cli/_versions, inside that tree, so it is mounted read-only
+    # (a worker must not be able to retarget the binary the fence launched).
+    "devin": {None: (_OwnerStatePath(None, Path(".local") / "share" / "devin", protected=(Path("cli") / "_versions",)),)},
     "pi-family-runtime": {
         "pi": (_OwnerStatePath("PI_CODING_AGENT_DIR", Path(".pi") / "agent"),),
         # omh resolves and invokes the distribution host directly, never the
@@ -341,6 +350,18 @@ def owner_state_files(owner: str, environment: Mapping[str, str]) -> tuple[Path,
     return unique_roots(tuple(path for path, is_file in _owner_state_paths(owner, environment) if is_file))
 
 
+def owner_state_protected_paths(owner: str, environment: Mapping[str, str]) -> tuple[Path, ...]:
+    """Subpaths of the owner's state directories that must stay read-only inside the fence."""
+    profiles = _OWNER_STATE_DIRECTORIES.get(owner)
+    if not profiles:
+        return ()
+    protected: list[Path] = []
+    for (path, is_file), entry in zip(_owner_state_paths(owner, environment), profiles.get(None, ()), strict=False):
+        if not is_file:
+            protected.extend((path / sub).resolve() for sub in entry.protected)
+    return tuple(protected)
+
+
 def owner_state_directory(owner: str, environment: Mapping[str, str]) -> Path | None:
     """Return the first state directory for compatibility with singular callers."""
     return next(iter(owner_state_directories(owner, environment)), None)
@@ -371,6 +392,7 @@ class FanoutFilesystemConfinement:
     # (`external_command`) instead of the built-in `exec -a` shim. Default off:
     # every built-in owner and every check keeps the byte-identical launch.
     external_worker: bool = False
+    protected_paths: tuple[Path, ...] = ()
 
     def command(self, argv: Sequence[str]) -> tuple[str, ...] | None:
         """Return the same-root sandbox command, or None when no receipt proved it."""
@@ -496,6 +518,7 @@ class FanoutFilesystemConfinement:
             macos_ipc_posix_shm_read_prefixes=_FANOUT_MACOS_PREFERENCE_SHM_READ_PREFIXES,
             allow_broad_file_read=True,
             write_roots=self.write_roots,
+            protected_paths=self.protected_paths,
             inherit_environment=True,
             # Resolved once in `prepare_fanout_filesystem_confinement`.
             write_paths_resolved=True,
@@ -539,6 +562,8 @@ class FanoutFilesystemConfinement:
         resolved = Path(os.path.realpath(value))
         if as_prefix:
             resolved = resolved.parent
+        if any(resolved.is_relative_to(os.path.realpath(path)) for path in self.protected_paths):
+            return False
         return any(resolved.is_relative_to(os.path.realpath(root)) for root in self.write_roots)
 
 
@@ -1098,6 +1123,7 @@ def _prepare_fanout_filesystem_confinement(
         backend_digest,
         executables,
         receipt,
+        protected_paths=owner_state_protected_paths(owner, environment),
     )
 
 

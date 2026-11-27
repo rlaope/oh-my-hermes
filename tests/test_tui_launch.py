@@ -117,6 +117,24 @@ class AvailabilityTests(unittest.TestCase):
     def test_the_shim_ships_where_hermes_looks_for_it(self) -> None:
         self.assertTrue(launch.FRONTEND_ENTRY.is_file())
         self.assertEqual(launch.FRONTEND_ENTRY, launch.FRONTEND_DIR / "dist" / "entry.js")
+        self.assertEqual(json.loads(launch.FRONTEND_ENTRY.with_name("package.json").read_text())["type"], "commonjs")
+
+    def test_the_shim_is_commonjs_even_under_an_esm_parent(self) -> None:
+        if shutil.which("node") is None or os.name == "nt":
+            self.skipTest("needs Node and a POSIX shell")
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "package.json").write_text('{"type":"module"}\n', encoding="utf-8")
+            home = root / "install" / "omh" / "tui" / "frontend" / "dist"
+            home.mkdir(parents=True)
+            for name in ("entry.js", "package.json"):
+                (home / name).write_bytes((launch.FRONTEND_ENTRY.parent / name).read_bytes())
+            result = subprocess.run(["node", str(home / "entry.js")], cwd=root,
+                                    capture_output=True, text=True, timeout=30,
+                                    env={"PATH": os.environ.get("PATH", "")})
+        self.assertEqual(result.returncode, launch.FALLBACK_EXIT, result.stderr)
+        self.assertIn("OMH_TUI_PYTHON is not set", result.stderr)
+        self.assertNotIn("require is not defined", result.stderr)
 
 
 class EnvironmentTests(unittest.TestCase):

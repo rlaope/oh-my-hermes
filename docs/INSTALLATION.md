@@ -1451,10 +1451,17 @@ wake pipe on real Windows pipes.
   rewind goes once that is settled.
   Esc twice with text clears it, keeping it in this session's input history
   (not in Hermes' history file, since it was never sent).
-- `/sessions` (also `/resume`, `/switch`, `/session`) lists your stored
-  sessions, most recently active first, as Claude Code's resume picker
-  does: it takes most of the screen, headed `Resume session (2 of 12)`
-  with a rounded search box under it, and shows each session as a card,
+- `/sessions` (also `/resume`, `/switch`, `/session`, or Ctrl+X) opens a compact table of
+  sessions across **All local profiles**, one block per bot (its name in the
+  colour of its face on the bot board, a blank row between bots), each
+  session with its title or preview, source and last activity as room allows. Type to filter; Tab and Shift+Tab
+  cycle profiles without clearing the filter. Ctrl+G loads older gateway
+  sessions when available. The footer tells you whether Enter switches to the
+  selected session or opens its read-only history. Only sessions authorized
+  by the connected gateway can be switched to, renamed or deleted.
+- Bare `/resume` uses the all-profile table too. The launcher's `omh --resume`
+  session picker retains the connected gateway's card-style picker, with a
+  rounded search box above its cards. Each session has a card,
   its name on one row and `2 days ago · 14 messages · tui` under it. The
   one you are in heads the list under `Current` (`this session` until it
   has a title, and `● this session` on its card), and the rest sit under a
@@ -1479,8 +1486,7 @@ wake pipe on real Windows pipes.
   cancels) and Ctrl+D deletes it once a second Ctrl+D confirms; the session
   you are in is not deleted from there. Hermes' own terminal entry renames
   only a session it has open, so there a stored session's rename may be
-  refused, and the row says Hermes' reason. Each alias runs
-  exactly as `/sessions` does, and the `/` menu offers `/resume` under its
+  refused, and the row says Hermes' reason. The `/` menu offers `/resume` under its
   own name once what you type starts it: `/res` and `/resu` complete to
   `/resume`.
   `/sessions <id or exact title>` (or `/resume <id or exact title>`)
@@ -1512,7 +1518,7 @@ Esc closes it):
 | ↑ / ↓ | Move between the composer's rows, walk the input history at its first and last row (earlier sessions' too, shared with `hermes --tui`), or move through an open completion menu (Ctrl+J / Ctrl+K and Ctrl+N / Ctrl+P move through the menu too) |
 | Ctrl+N / Ctrl+P | Move down / up in lists, menus, pickers and prompts; scroll one line in pagers, including /dag. Also work in CLI theme, model-chain and setup pickers |
 | Ctrl+R | Searches the input history; Ctrl+R again finds an older match, Enter puts it in the composer, Esc leaves the composer as it was |
-| Ctrl+X | Opens the `/sessions` picker |
+| Ctrl+X | Opens the all-profile sessions table |
 | Alt+P | Opens correction or dictionary actions at cursor; Cancel/Esc closes; never sends |
 | Ctrl+S | Opens the bot board, as `/bots` does: this machine's Hermes profiles, their gateways and sessions, read-only |
 | Ctrl+P | Folds the plan above the composer to its header and the item it is on, or expands it again, while a turn runs or between turns; the header says which on its right; on an open menu, Ctrl+P and Ctrl+N move the menu instead |
