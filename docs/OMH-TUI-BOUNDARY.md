@@ -187,7 +187,9 @@ limit is shown alongside the authenticated gateway results.
 
 The table starts on All local profiles. Tab and Shift+Tab cycle profiles in
 either direction without clearing the search; Ctrl+G loads older gateway rows
-when offered. Only the gateway list can authorize a switch, rename or delete.
+when offered. Rows marked `turn running` report only the gateway's current
+turn state; they do not establish that another client holds the session.
+Only the gateway list can authorize a switch, rename or delete.
 It is matched to local rows by the gateway-reported profile and session lineage;
 an unknown gateway profile stays unknown. Enter on a local-only row reads the
 newest user and assistant messages of its listed segment into a read-only

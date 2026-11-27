@@ -138,6 +138,7 @@ class SessionRow:
     profile: str = ""
     lineage: frozenset[str] = frozenset()
     local: object | None = None  # picker-local capability; local rows never carry a gateway id
+    running: bool = False  # gateway-reported turn activity, not whether another viewer has the session open
 
     @property
     def key(self) -> object:
@@ -208,6 +209,7 @@ def session_rows(result: Mapping[str, object], *, profile: str = "") -> list[Ses
                 or _seconds(entry.get("started_at")),
                 resumable=entry.get("resumable") is not False,
                 owner_runtime=entry["owner_runtime"] if isinstance(entry.get("owner_runtime"), str) else "",
+                running=entry.get("running") is True,
                 source=" ".join(source.split())[:24] if isinstance(source, str) else "",
                 profile=profile,
                 lineage=frozenset(name for name in names if isinstance(name, str) and name),
@@ -446,7 +448,7 @@ class SessionPicker:
                 claimed.add(local.key)
                 row = replace(row, title=row.title or local.title, preview=row.preview or local.preview,
                               source=row.source or local.source, activity_at=max(row.activity_at, local.activity_at),
-                              lineage=row.lineage | local.lineage)
+                              lineage=row.lineage | local.lineage, running=row.running or local.running)
             same = {gateway_by_name[(row.profile, name)] for name in row.lineage if (row.profile, name) in gateway_by_name}
             if incoming_id in existing:
                 same.add(existing[incoming_id])
@@ -463,7 +465,8 @@ class SessionPicker:
                 previous = self.rows[index]
                 row = replace(previous, title=previous.title or row.title, preview=previous.preview or row.preview,
                               source=previous.source or row.source, activity_at=max(previous.activity_at, row.activity_at),
-                              lineage=previous.lineage | row.lineage, resumable=not read_only)
+                              lineage=previous.lineage | row.lineage, resumable=not read_only,
+                              running=previous.running or row.running or any(self.rows[i].running for i in same))
                 self.rows[index] = row
             else:
                 index = len(self.rows)
@@ -605,12 +608,13 @@ class SessionPicker:
         if self.profiles is not None:
             row = self.selected()
             action = ("Enter opens read-only history" if row.read_only else "Enter switches") if row else ""
+            activity = "Turn running" if row and row.running and not self._current(row) else ""
             paging = "Loading older…" if self.loading_older else "Ctrl+G older" if self.next_page else ""
             partial = "Partial" if self.partial else ""
-            short = " · ".join(part for part in (action, "Tab/Shift+Tab profiles", paging, partial, "Esc closes") if part)
+            short = " · ".join(part for part in (activity, action, "Tab/Shift+Tab profiles", paging, partial, "Esc closes") if part)
             edits = "Ctrl+R rename · Ctrl+D delete" if row and not row.read_only else ""
-            long = " · ".join(part for part in (action, "Tab/Shift+Tab profiles", hint, edits, partial, "Esc closes") if part)
-            compact = " · ".join(part for part in (action, paging, partial) if part)
+            long = " · ".join(part for part in (activity, action, "Tab/Shift+Tab profiles", hint, edits, partial, "Esc closes") if part)
+            compact = " · ".join(part for part in (activity, action, paging, partial) if part)
             condensed = "Enter reads history · Partial" if row and row.read_only and partial else compact
             return long, short, compact, condensed, partial or action or "Esc closes"
         return (f"{KEYS[0]} · {hint}", f"↑↓ move · {hint} · esc closes", hint, *KEYS) if hint else KEYS
@@ -727,8 +731,9 @@ class SessionPicker:
                 return picker_row(highlighted, f"{mark} ", row.label, note, width, theme, theme.warn)
             facts = {"Profile": row.profile or "Unknown", "Source": row.source or "—"}
             age = age_text(row.activity_at or row.started_at, now) or "—"
+            label = f"{row.label} · turn running" if row.running and not self._current(row) else row.label
             return (pointer(highlighted, theme), Span(f"{mark} ", style),
-                    *cells(row.label, [facts.get(name, age) for name, _ in columns], style))
+                    *cells(label, [facts.get(name, age) for name, _ in columns], style))
 
         headers = max_rows >= 5
         extra_status = bool(status and max_rows >= 6)

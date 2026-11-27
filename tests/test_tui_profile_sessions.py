@@ -195,6 +195,38 @@ class ProfileSessionsTests(unittest.TestCase):
         self.assertEqual([(row.label, row.source) for row in inventory.rows], [("Unknown source", "")])
         self.assertIn("rows", inventory.transcript(self.env, inventory.rows[0].local))
 
+    def test_gateway_running_hint_does_not_claim_another_viewer(self) -> None:
+        app, client = self.open_picker()
+        reply(app, client, {"sessions": [
+            {"id": "busy-turn", "title": "Working", "running": True},
+            {"id": "idle-turn", "title": "Idle", "running": False},
+        ]})
+        self.assertTrue(app.picker.rows[0].running)
+        self.assertFalse(app.picker.rows[1].running)
+        self.assertIn("turn running", "\n".join(map(line_text, app.picker.lines(100, DEFAULT_THEME, 12, 450))))
+        self.assertIn("Turn running", app.picker.keys()[0])
+        app.picker.handle_key(Key(DOWN))
+        self.assertNotIn("Turn running", app.picker.keys()[0])
+        self.assertIn("Working · turn running", "\n".join(map(line_text, app.picker.lines(100, DEFAULT_THEME, 12, 450))))
+        self.assertTrue(app.picker.rows[0].resumable)  # a running turn is not a second-viewer authorization verdict
+
+    def test_running_status_survives_an_older_gateway_lineage_page(self) -> None:
+        picker = SessionPicker([], current="", profiles=("night",))
+        picker.add_older(session_rows({"sessions": [{"id": "root", "running": True}]}, profile="night"), "token")
+        picker.add_older(session_rows({"sessions": [{"id": "tip", "resolved_id": "root", "running": False}]},
+                                      profile="night"), "")
+        self.assertEqual(len(picker.rows), 1)
+        self.assertTrue(picker.rows[0].running)
+        self.assertIn("Turn running", picker.keys()[0])
+
+    def test_busy_hint_does_not_change_read_only_local_history(self) -> None:
+        handle = object()
+        row = SessionRow("", "Other client", "", 100, 1, profile="night", local=handle)
+        picker = SessionPicker([row], current="", profiles=("night",))
+        self.assertTrue(picker.selected().read_only)
+        self.assertNotIn("Turn running", picker.keys()[0])
+        self.assertIn("Enter opens read-only history", picker.keys()[0])
+
     def test_latest_message_wins_over_a_stale_activity_heartbeat(self) -> None:
         with closing(create_store(self.default)) as db:
             insert(db, "old-heartbeat", "Most recent message", activity=200)
