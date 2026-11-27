@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GIVES_ID, learns, TERM_CONTINUES, termStart } from "./termConv";
+import { GIVES_ID, learns, normDir, otherInFolder, TERM_CONTINUES, termStart, type FolderRow } from "./termConv";
 
 const ID = "0e2c5a8e-6c1b-4f7e-9a3d-2b1c4d5e6f70";
 const NEW = "11111111-2222-4333-8444-555555555555";
@@ -33,5 +33,28 @@ describe("termStart", () => {
     expect([...TERM_CONTINUES].sort()).toEqual([...GIVES_ID, "codex", "agy"].sort());
     expect(["codex", "agy"].every(learns)).toBe(true);
     expect(["claude", "gemini", "opencode"].some(learns)).toBe(false);
+  });
+});
+
+describe("one Antigravity per folder", () => {
+  const row = (o: Partial<FolderRow> & { id: string }): FolderRow => ({ agent: "agy", cwd: "/w/app", terminal: true, live: true, ...o });
+  const self = { id: "s1", cwd: "/w/app" };
+  it("folders compare as the cache keys them", () => {
+    expect(normDir("/w/app/")).toBe("/w/app");
+    expect(normDir("/")).toBe("/");
+    expect(normDir("C:\\Users\\Me\\App\\")).toBe(normDir("c:/users/me/app"));
+    expect(normDir("/w/App")).not.toBe(normDir("/w/app"));
+  });
+  it("another running TERMINALS Antigravity, or a Shell row with it in front, in the same folder counts", () => {
+    expect(otherInFolder("agy", self, [row({ id: "s1" })])).toBe(false);
+    expect(otherInFolder("agy", self, [row({ id: "s2", cwd: "/w/app/" })])).toBe(true);
+    expect(otherInFolder("agy", self, [row({ id: "s2", agent: "shell", fgAgent: "agy" })])).toBe(true);
+    expect(otherInFolder("agy", { id: "s1", cwd: "C:\\W\\App" }, [row({ id: "s2", cwd: "c:/w/app/" })])).toBe(true);
+  });
+  it("a chat row, an ended row, another folder or another CLI does not", () => {
+    expect(otherInFolder("agy", self, [row({ id: "s2", terminal: false })])).toBe(false);
+    expect(otherInFolder("agy", self, [row({ id: "s2", live: false })])).toBe(false);
+    expect(otherInFolder("agy", self, [row({ id: "s2", cwd: "/w/other" })])).toBe(false);
+    expect(otherInFolder("agy", self, [row({ id: "s2", agent: "shell", fgAgent: "codex" })])).toBe(false);
   });
 });

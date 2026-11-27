@@ -6,10 +6,14 @@ import { createRequire } from "node:module";
 import type { Terminal } from "@xterm/xterm";
 import { describe, expect, it } from "vitest";
 import { markRestored, onRestored, restoredEnd, selectionServiceOf } from "./engine-restored";
+import { dimmed, divider } from "./history";
 
-/** A terminal shaped like xterm 6's: 10 rows of 20 px on a screen at top 100, scrolled to `viewportY`. */
+/** A terminal shaped like xterm 6's: 10 rows of 20 px on a screen at top 100, scrolled to `viewportY`. `write` keeps
+ *  its lines and cursor as xterm does for plain text and line breaks (escapes take no cell), so a test writes what the
+ *  session writes; `cursor` puts the cursor on a line without writing. */
 function fakeTerm(o: { viewportY?: number; type?: "normal" | "alternate"; cursor?: number; modifier?: boolean } = {}) {
-  const buffer = { viewportY: o.viewportY ?? 0, baseY: 0, cursorY: o.cursor ?? 4, type: o.type ?? "normal" };
+  const buffer = { viewportY: o.viewportY ?? 0, baseY: 0, cursorY: o.cursor ?? 0, type: o.type ?? "normal" };
+  const lines: string[] = [""];
   const ss = { shouldForceSelection: (e: MouseEvent) => !!o.modifier && e.shiftKey };
   const made = () => ({
     line: -1,
@@ -31,7 +35,16 @@ function fakeTerm(o: { viewportY?: number; type?: "normal" | "alternate"; cursor
       return marker;
     },
   };
-  return { term: term as unknown as Terminal, ss, buffer, marker: () => marker };
+  // eslint-disable-next-line no-control-regex
+  const write = (text: string) => {
+    for (const ch of text.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "")) {
+      if (ch === "\n") {
+        buffer.cursorY++;
+        lines[buffer.cursorY] ??= "";
+      } else if (ch !== "\r") lines[buffer.cursorY] += ch;
+    }
+  };
+  return { term: term as unknown as Terminal, ss, buffer, lines, write, marker: () => marker };
 }
 const at = (row: number, shift = false) => ({ clientY: 100 + row * 20 + 10, shiftKey: shift }) as MouseEvent;
 
@@ -42,20 +55,27 @@ describe("engine-restored", () => {
     expect(markRestored({ _core: {} } as unknown as Terminal)).toBe(false);
   });
 
-  it("a press on the restored lines (the divider's and above) forces a selection; one below it is the program's", () => {
-    const { term, ss } = fakeTerm({ cursor: 4 });
+  it("a press on the restored lines (the divider's and above) forces a selection; the new program's first row is its own", () => {
+    const { term, ss, lines, write } = fakeTerm();
+    // what the session writes back (sessions.ts startTerm: restoredText), then marks
+    write(dimmed("one\r\ntwo\r\nthree\r\n") + divider(1_800_000_000));
     expect(ss.shouldForceSelection(at(2))).toBe(false);
     expect(markRestored(term)).toBe(true);
-    expect(restoredEnd(term)).toBe(4);
-    for (const row of [0, 2, 4]) expect(ss.shouldForceSelection(at(row)), `row ${row}`).toBe(true);
-    for (const row of [5, 9]) expect(ss.shouldForceSelection(at(row)), `row ${row}`).toBe(false);
+    const line = lines.findIndex((l) => /^--- .+ ---$/.test(l));
+    expect(line).toBeGreaterThan(2);
+    expect(restoredEnd(term)).toBe(line);
+    for (let row = 0; row <= line; row++) expect(ss.shouldForceSelection(at(row)), `row ${row}`).toBe(true);
+    // the row after the divider is where the new program's output starts
+    write("program banner\r\n");
+    expect(lines[line + 1]).toBe("program banner");
+    for (const row of [line + 1, 9]) expect(ss.shouldForceSelection(at(row)), `row ${row}`).toBe(false);
     // outside the rows
     expect(ss.shouldForceSelection({ clientY: 50, shiftKey: false } as MouseEvent)).toBe(false);
   });
 
   it("the line follows the scroll position, and xterm's own modifier still forces a selection anywhere", () => {
-    const { term, ss, buffer } = fakeTerm({ cursor: 4, modifier: true });
-    markRestored(term);
+    const { term, ss, buffer } = fakeTerm({ cursor: 5, modifier: true });
+    markRestored(term); // the divider on line 4, the cursor below it
     buffer.viewportY = 3; // scrolled down three lines: row 1 is buffer line 4
     expect(ss.shouldForceSelection(at(1))).toBe(true);
     expect(ss.shouldForceSelection(at(2))).toBe(false);
@@ -63,10 +83,10 @@ describe("engine-restored", () => {
   });
 
   it("the alternate screen, a trimmed divider or a parked terminal's line", () => {
-    const alt = fakeTerm({ type: "alternate" });
+    const alt = fakeTerm({ type: "alternate", cursor: 2 });
     markRestored(alt.term);
     expect(onRestored(alt.term, at(0))).toBe(false);
-    const trimmed = fakeTerm();
+    const trimmed = fakeTerm({ cursor: 2 });
     markRestored(trimmed.term);
     trimmed.marker().line = -1;
     expect(restoredEnd(trimmed.term)).toBe(-1);
@@ -82,10 +102,12 @@ describe("engine-restored", () => {
     const { term, ss, buffer } = fakeTerm({ cursor: 2 });
     markRestored(term);
     const wrapped = ss.shouldForceSelection;
-    buffer.cursorY = 6;
+    buffer.cursorY = 7;
     markRestored(term);
     expect(ss.shouldForceSelection).toBe(wrapped);
     expect(restoredEnd(term)).toBe(6);
+    // nothing above the cursor's line: nothing to mark
+    expect(markRestored(fakeTerm({ cursor: 0 }).term)).toBe(false);
   });
 
   // The installed xterm, read as shipped: both the mouse service (which holds a press back from the program) and the

@@ -2099,18 +2099,24 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         text = _flat(DOC.read_text(encoding="utf-8"))
         self.assertIn("50. For a TERMINALS Antigravity CLI (`agy`) session that has no conversation id yet, the shell reads, when the page asks (`agy_conversation`, only the session id goes out), one file of Antigravity's own: its workspace cache `<home>/.gemini/antigravity-cli/cache/last_conversations.json`", text)
         self.assertIn("an Antigravity the person runs in that folder outside omher, active after this one started, can be named instead", text)
+        self.assertIn("and never the id that entry held right before the session's program started", text)
+        self.assertIn("is started once more without it, keeps no id, and comes back paused after a restart as before", text)
         fg = (SHELL / "fg.rs").read_text(encoding="utf-8").split("#[cfg(test)]\nmod tests", 1)[0]
         self.assertIn('home.join(".gemini").join("antigravity-cli").join("cache").join("last_conversations.json")', fg)
         self.assertIn("const AGY_CACHE_MAX: u64 = 256 * 1024;", fg)
-        own = fg.split("pub fn agy_conversation(fg: u32, home: &Path, cwd: &Path, started: std::time::SystemTime)", 1)[1].split("\n}\n", 1)[0]
+        own = fg.split("pub fn agy_conversation(fg: u32, home: &Path, cwd: &Path, started: std::time::SystemTime, before: Option<&str>)", 1)[1].split("\n}\n", 1)[0]
         self.assertIn('if Probe::default().agent(fg) != Some("agy") {', own)
+        # the file is read in one place (no link, capped); the folder's entry from before the start is refused
+        text_of = fg.split("fn agy_cache_text(", 1)[1].split("\n}\n", 1)[0]
+        for needle in ("open_record(&agy_cache_path(home))?", "meta.len() > AGY_CACHE_MAX", ".take(AGY_CACHE_MAX)"):
+            self.assertIn(needle, text_of)
         read = fg.split("pub fn agy_cache_conversation(", 1)[1].split("\n}\n", 1)[0]
-        for needle in ("open_record(&agy_cache_path(home))?", "meta.len() > AGY_CACHE_MAX", ".take(AGY_CACHE_MAX)",
-                       "if meta.modified().ok()? < since {", "agy_workspace_conversation(&text, cwd)"):
+        for needle in ("agy_cache_text(home)?", "if at < since {", "agy_workspace_conversation(&text, cwd).filter(|id| Some(id.as_str()) != before)"):
             self.assertIn(needle, read)
+        self.assertIn('(agent_id == "agy" && resume.is_none()).then(|| user_home_dir().and_then(|h| crate::fg::agy_cache_entry(&h, cwd)))', self.prod)
         entry = fg.split("pub fn agy_workspace_conversation(", 1)[1].split("\n}\n", 1)[0]
         self.assertIn("crate::sessions::is_uuid(id).then(|| id.to_ascii_lowercase())", entry)
-        for body in (own, read, entry):
+        for body in (own, text_of, read, entry):
             for banned in ("Command::new", "fs::write", "OpenOptions", "remove_file", "read_dir"):
                 self.assertNotIn(banned, body, banned)
         sig = re.search(r"async fn agy_conversation\((.*?)\) -> ", self.lib, re.S)
@@ -2121,6 +2127,7 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         ui = (UI_SRC / "sessions" / "sessions.ts").read_text(encoding="utf-8")
         conv = (UI_SRC / "sessions" / "termConv.ts").read_text(encoding="utf-8")
         self.assertIn('export const ONE_PER_FOLDER: readonly AgentId[] = ["agy"];', conv)
+        self.assertIn("(o.agent === agent || o.fgAgent === agent) && normDir(o.cwd) === here", conv)
         self.assertIn('export const GIVES_ID: readonly AgentId[] = ["claude", "gemini", "qwen", "grok", "copilot", "pi"];', conv)
         self.assertIn("const got = shared ? null : await askOf(agent)!.call(host, pty).catch(() => null);", ui)
 

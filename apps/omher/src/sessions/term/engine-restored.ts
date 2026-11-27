@@ -49,14 +49,16 @@ export function onRestored(term: Terminal, ev: MouseEvent): boolean {
   return line !== null && line <= end;
 }
 
-/** The restored text was written into `term` up to its cursor line (the divider): from here on a press on those lines
- *  selects, whatever mode the program puts the mouse in. `line`: the buffer line to mark instead (a parked terminal made
- *  again). False when xterm's shape is not the one this knows (nothing was changed). */
+/** The restored text and its divider were just written into `term` (history.ts `restoredText`: the divider ends with
+ *  a line break, so the cursor sits on the line after it, where the new program's output starts): from here on a press
+ *  on the divider's line or above selects, whatever mode the program puts the mouse in. `line`: the buffer line to mark
+ *  instead (a parked terminal made again). False when xterm's shape is not the one this knows (nothing was changed). */
 export function markRestored(term: Terminal, line?: number): boolean {
   const ss = selectionServiceOf(term);
   if (!ss) return false;
   const b = term.buffer.active;
-  const at = line ?? b.baseY + b.cursorY;
+  const at = line ?? b.baseY + b.cursorY - 1;
+  if (at < 0) return false;
   const m = term.registerMarker(at - (b.baseY + b.cursorY));
   if (!m) return false;
   ends.get(term)?.dispose();

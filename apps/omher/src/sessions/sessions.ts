@@ -39,7 +39,7 @@ import { termTheme } from "./term/themes";
 import { getShellHost, learnThisHost } from "../terminal/host";
 import { onSessionFg } from "./fg";
 import { fgHasId, fgLine, isFgCli, isUuid, restoreLine } from "./fgResume";
-import { learns, ONE_PER_FOLDER, TERM_CONTINUES, TERM_REOPENS, termComesBack, termStart, type Learner } from "./termConv";
+import { GIVES_ID, learns, ONE_PER_FOLDER, otherInFolder, TERM_CONTINUES, TERM_REOPENS, termComesBack, termStart, type Learner } from "./termConv";
 import { nextBusySince, termActs } from "./termActivity";
 import { isLinkId, LINK_COPIED_EVENT, newLinkId, termLinkUrl } from "./termLink";
 import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, idInUse, installLine, isBuiltin, isGone, isShell, isTerminalRec, LAST_LINE_MAX, refusedResume, SHELL, termEnd, termMarkAgent, lastPrintedLine, OPEN_KEY, setsUpScreen, UI_BYTES, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, termGroups, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
@@ -158,6 +158,8 @@ interface Term {
   /** The next start continues the row's conversation without looking for its file first: Claude Code refused that
    *  id as a new conversation because it has it (once). */
   resumeOnce?: boolean;
+  /** The next start gives the CLI no `--session-id`: it refused one (once). */
+  noIdOnce?: boolean;
   /** Its row was closed and waits out the undo window (closeGrace.ts): its program runs on, hidden, and takes no
    *  input (keys, bot prompts, dropped files) until Undo puts the row back. */
   held?: boolean;
@@ -193,10 +195,13 @@ export function newConversationId(): string {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
-/** When a TERMINALS Codex session first asks for its conversation id, and how often after that until it has one (a
+/** A CLI given a new conversation id that ends with an error this soon, before a key was pressed in it, did not take
+ *  `--session-id` (an older Gemini CLI, Qwen Code, Grok, Copilot CLI or pi: "Unknown argument"). */
+const NO_ID_FAILS_MS = 5_000;
+/** When a TERMINALS Codex or Antigravity session first asks for its conversation id, and how often after that until it has one (a
  *  Shell row's foreground Claude Code or Codex asks the same way). */
-const CODEX_ID_FIRST_MS = 5_000;
-const CODEX_ID_EVERY_MS = 15_000;
+const ID_ASK_FIRST_MS = 5_000;
+const ID_ASK_EVERY_MS = 15_000;
 /** A Shell row's fresh shell counts as ready once its output has stopped for this long after it began (its rc files ran
  *  and it drew its prompt): longer than two wakes of the shell's foreground watch (1 s, lib.rs `FOREGROUND_EVERY`), so a
  *  CLI the person's rc started there is seen first. */
@@ -1168,7 +1173,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     clearTimeout(fgIdTimer.get(id));
     fgIdTimer.delete(id);
     const t = terms.get(id);
-    if (isShell(r.agent) && isFgCli(agent) && fgHasId(agent) && t && t.hostId !== null && !t.closed) findFgId(id, t, t.run, t.hostId, agent, CODEX_ID_FIRST_MS);
+    if (isShell(r.agent) && isFgCli(agent) && fgHasId(agent) && t && t.hostId !== null && !t.closed) findFgId(id, t, t.run, t.hostId, agent, ID_ASK_FIRST_MS);
   };
 
   /**
@@ -1375,29 +1380,34 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
    *  folder, so an Antigravity row is not asked about while another Antigravity row runs in its folder. A CLI that ends
    *  stops the asking and hands its id to no row (its row goes on as its shell and is not resumed); one that never
    *  learned it comes back paused. */
-  const codexIdTimer = new Map<string, ReturnType<typeof setTimeout>>();
+  const termIdTimer = new Map<string, ReturnType<typeof setTimeout>>();
+  /** Agents whose CLI here refused the `--session-id` omher gave it (startTerm): their new terminals get none. */
+  const noIdAgents = new Set<AgentId>();
   const askOf = (agent: Learner) => (agent === "codex" ? host.codexConversation : host.agyConversation);
-  const findCodexId = (id: string, t: Term, run: number, pty: number, wait: number) => {
+  const findTermId = (id: string, t: Term, run: number, pty: number, wait: number) => {
     const agent = rec(id)?.agent;
     if (!agent || !learns(agent) || !askOf(agent)) return;
-    clearTimeout(codexIdTimer.get(id));
-    codexIdTimer.set(
+    clearTimeout(termIdTimer.get(id));
+    termIdTimer.set(
       id,
       setTimeout(async () => {
-        codexIdTimer.delete(id);
+        termIdTimer.delete(id);
         const live = () => terms.get(id) === t && t.run === run && !t.closed && t.hostId === pty && rec(id)?.agent === agent && !rec(id)?.agentSession;
         if (!live()) return;
         const r = rec(id)!;
-        const shared = ONE_PER_FOLDER.includes(agent) && state.list.some((o) => o.id !== id && o.agent === agent && o.cwd === r.cwd && (o.status === "running" || o.status === "starting"));
+        // another TERMINALS row running Antigravity in this folder (its own, or a Shell row's in front, in the folder the
+        // shell reports) writes the same cache entry: not asked
+        const rows = state.list.map((o) => ({ id: o.id, agent: o.agent, fgAgent: o.fgAgent, cwd: (isShell(o.agent) && termActs.get(o.id).cwd) || o.cwd, terminal: isTerminalRec(state.agents, o), live: o.status === "running" || o.status === "starting" }));
+        const shared = ONE_PER_FOLDER.includes(agent) && otherInFolder(agent, r, rows);
         const got = shared ? null : await askOf(agent)!.call(host, pty).catch(() => null);
         if (!live()) return;
         if (isUuid(got)) patchRec(id, { agentSession: got.toLowerCase() });
-        else findCodexId(id, t, run, pty, CODEX_ID_EVERY_MS);
+        else findTermId(id, t, run, pty, ID_ASK_EVERY_MS);
       }, wait),
     );
   };
 
-  /** TERMINALS Shell rows with Claude Code or Codex in front: the next ask. As for a Codex row (findCodexId), the shell
+  /** TERMINALS Shell rows with Claude Code or Codex in front: the next ask. As for a Codex row (findTermId), the shell
    *  is asked 5 s after that CLI came to the front and every 15 s after, for as long as it stays there, which
    *  conversation it runs (rule 11: only the pty id goes out, only a UUID comes back): Claude Code's from its own record
    *  of its running process (`claudeConversation`), Codex's from the rollout it holds open (`codexConversation`). The
@@ -1422,7 +1432,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         // gone, or another CLI came to the front meanwhile (its own ask runs)
         if (!live() || fgIdTimer.has(id)) return;
         if (isUuid(got) && got.toLowerCase() !== rec(id)?.fgSession) patchRec(id, { fgSession: got.toLowerCase() });
-        findFgId(id, t, run, pty, cli, CODEX_ID_EVERY_MS);
+        findFgId(id, t, run, pty, cli, ID_ASK_EVERY_MS);
       }, wait),
     );
   };
@@ -1483,6 +1493,12 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     // (Claude Code's terminal view of a chat continues the chat's conversation); a new id is kept once its CLI started
     let resume = ofChat ? (r.agentSession && r.agent === "claude" ? r.agentSession : undefined) : plan.resume;
     let sessionId = plan.sessionId;
+    // a CLI that refused `--session-id` (a version from before it) starts without one, and keeps no id
+    if (!again && sessionId && r.agent !== "claude" && (t.noIdOnce || noIdAgents.has(r.agent))) sessionId = undefined;
+    t.noIdOnce = false;
+    // a new conversation under an id omher made for a CLI other than Claude Code: one that ends at once with an error,
+    // before a key, did not take the flag (termEnd would hand the row to the shell and the CLI would never run here)
+    const newId = !again && !!sessionId && r.agent !== "claude";
     // its conversation's file is looked for first (not after Claude Code refused that id as a new one). Absent: a
     // Claude Code conversation nobody used (no key pressed in it, no title of its own) was never written (Claude Code
     // writes it on the first message), so it starts again under the same id; a used one was deleted, and Codex has
@@ -1633,6 +1649,16 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
           void startTerm(id, t);
           return;
         }
+        // a CLI that refused the `--session-id` omher gave it: started once more without one, as before omher gave ids;
+        // its row then keeps no id, so it comes back paused after a restart, and the next ones of that agent get none
+        if (newId && code !== 0 && !t.keyedHeard && Date.now() - began < NO_ID_FAILS_MS && !noIdAgents.has(r.agent)) {
+          noIdAgents.add(r.agent);
+          t.noIdOnce = true;
+          feed(t.term, `\r\n\x1b[2m[${tr("ss.noSessionId", { agent: label })}]\x1b[0m\r\n`);
+          patchRec(id, { agentSession: undefined, status: "starting", exitCode: null });
+          void startTerm(id, t);
+          return;
+        }
         // a CLI that could not continue its conversation keeps it, ended, for Restart (termEnd)
         const end = termEnd({ ofChat, shell, keyed: shell ? t.keyed : t.keyedHeard, code, resumed: again, drew, refused: again && !!r.agentSession && refusedResume(said, r.agentSession), ms: Date.now() - began });
         if (end === "shell") {
@@ -1702,7 +1728,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       t.reflowed = false; // nothing was drawn by the program yet: no screen of its to redraw
       if (t.settle === null) tellSize(t);
       if (!ofChat) patchRec(id, { status: "running" });
-      if (!ofChat && learns(r.agent) && !rec(id)?.agentSession) findCodexId(id, t, run, hostId, CODEX_ID_FIRST_MS);
+      if (!ofChat && learns(r.agent) && !rec(id)?.agentSession) findTermId(id, t, run, hostId, ID_ASK_FIRST_MS);
     } catch (e) {
       if (t.run !== run) return;
       t.closed = true;
@@ -1758,8 +1784,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     // its history keeping follows the next terminal of the session (Restart), or ends with it
     histOf.get(id)?.stop();
     histOf.delete(id);
-    clearTimeout(codexIdTimer.get(id));
-    codexIdTimer.delete(id);
+    clearTimeout(termIdTimer.get(id));
+    termIdTimer.delete(id);
     clearTimeout(fgIdTimer.get(id));
     fgIdTimer.delete(id);
     fgOff.get(id)?.();

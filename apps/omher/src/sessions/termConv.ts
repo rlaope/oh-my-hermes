@@ -18,12 +18,39 @@ export const OPENS_BY_ID: readonly AgentId[] = ["copilot", "pi"];
 /** Of those, the ones that write a conversation only on its first message and refuse a `--resume` of one they never
  *  wrote: one nobody used starts as a new one instead. (Claude Code has its own look first: sessions.ts `convState`.) */
 export const FRESH_IF_UNUSED: readonly AgentId[] = ["gemini", "qwen", "grok"];
-/** TERMINALS agents whose conversation id omher learns after they start (sessions.ts `findCodexId`). */
+/** TERMINALS agents whose conversation id omher learns after they start (sessions.ts `findTermId`). */
 export type Learner = "codex" | "agy";
 export const LEARNS: readonly Learner[] = ["codex", "agy"];
 export const learns = (a: AgentId): a is Learner => (LEARNS as readonly AgentId[]).includes(a);
-/** Antigravity keeps one id per folder: a row learns it only while no other Antigravity row runs in that folder. */
+/** Antigravity keeps one id per folder: a row learns it only while no other Antigravity runs in a TERMINALS row in
+ *  that folder ([`otherInFolder`]). */
 export const ONE_PER_FOLDER: readonly AgentId[] = ["agy"];
+
+/** A folder as the CLI's cache keys it, for comparing two of them: no trailing separator; a Windows path (a drive
+ *  letter or a backslash) with backslashes and in one case, as Windows compares names. Links are not resolved here (the
+ *  shell also tries the resolved path; a row whose folder is a link to another row's may still be asked). */
+export function normDir(p: string): string {
+  const s = p.replace(/[\\/]+$/, "") || p.slice(0, 1);
+  return /^[A-Za-z]:/.test(s) || s.includes("\\") ? s.replace(/\//g, "\\").toLowerCase() : s;
+}
+
+/** A TERMINALS row as [`otherInFolder`] reads it: its own agent, the CLI in its foreground (a Shell row's), the folder
+ *  it runs in, whether it is a terminal row and whether its program runs. */
+export interface FolderRow {
+  id: string;
+  agent: AgentId;
+  fgAgent?: string | null;
+  cwd: string;
+  terminal: boolean;
+  live: boolean;
+}
+
+/** Whether another TERMINALS row than `self` runs `agent` in `self`'s folder: a row of that agent, or a Shell row with
+ *  that CLI in front (both write the same per-folder cache). Chat rows do not count. */
+export function otherInFolder(agent: AgentId, self: { id: string; cwd: string }, rows: readonly FolderRow[]): boolean {
+  const here = normDir(self.cwd);
+  return rows.some((o) => o.id !== self.id && o.terminal && o.live && (o.agent === agent || o.fgAgent === agent) && normDir(o.cwd) === here);
+}
 /** TERMINALS agents that continue their own conversation after omher restarts. */
 export const TERM_CONTINUES: readonly AgentId[] = [...new Set<AgentId>([...GIVES_ID, ...LEARNS])];
 

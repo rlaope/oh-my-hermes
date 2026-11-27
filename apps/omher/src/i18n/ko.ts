@@ -1313,6 +1313,7 @@ export const ko: Record<Key, string> = {
   "ss.restart": "다시 시작",
   "ss.freshConversation": "새 대화 시작",
   "ss.convGone": "{agent}에서 이 대화를 찾지 못했어요",
+  "ss.noSessionId": "{agent}에 대화 ID를 줄 수 없어 ID 없이 시작했어요. 다시 시작하면 이어하기 버튼으로 이어 가야 해요",
   "ss.agentEnded": "{agent} 끝남",
   "ss.model": "모델",
   "ss.notRunning": "실행 안 함",

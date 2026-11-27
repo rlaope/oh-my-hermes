@@ -30,6 +30,21 @@ const spot = (page: Page, needle: string) =>
     return null;
   }, needle);
 
+/** The middle of the row right under the divider (the new program's first row), or null. */
+const below = (page: Page) =>
+  page.evaluate(() => {
+    const host = document.querySelector('[data-testid="terminal"] .xterm');
+    const w = window as unknown as { __omherTerms?: Set<{ element?: HTMLElement; cols: number; rows: number; buffer: { active: { viewportY: number; getLine(i: number): { translateToString(t: boolean): string } | undefined } } }> };
+    const term = [...(w.__omherTerms ?? [])].find((t) => t.element === host);
+    if (!term) return null;
+    const screen = host!.querySelector(".xterm-screen")!.getBoundingClientRect();
+    for (let r = 0; r + 1 < term.rows; r++) {
+      if (!/^--- .+ ---$/.test((term.buffer.active.getLine(term.buffer.active.viewportY + r)?.translateToString(true) ?? "").trim())) continue;
+      return { x: screen.left + screen.width / 4, y: screen.top + (r + 1.5) * (screen.height / term.rows) };
+    }
+    return null;
+  });
+
 const selected = (page: Page) =>
   page.evaluate(() => {
     const host = document.querySelector('[data-testid="terminal"] .xterm');
@@ -93,6 +108,13 @@ test("restored text above the divider selects with a plain drag while the progra
   await expect.poll(() => selected(page)).toBe("kept-before-the-restart");
   await page.waitForTimeout(200);
   expect((await writes()).slice(before.length)).not.toContain("\x1b[<");
+
+  // the row right under the divider is the new program's first row: a press there is the program's
+  await page.mouse.click(5, 5);
+  const first = (await below(page))!;
+  const atFirst = await writes();
+  await page.mouse.click(first.x, first.y);
+  await expect.poll(async () => (await writes()).slice(atFirst.length)).toContain("\x1b[<0;");
 
   // below the divider the press is the program's: a mouse report goes out, and no selection is made
   await page.mouse.click(5, 5);

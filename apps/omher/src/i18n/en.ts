@@ -1316,6 +1316,7 @@ export const en = {
   "ss.restart": "Restart",
   "ss.freshConversation": "Start a new conversation",
   "ss.convGone": "{agent} could not find this conversation",
+  "ss.noSessionId": "{agent} did not take a conversation id: started without one, so it will not come back by itself after a restart",
   "ss.agentEnded": "{agent} ended",
   "ss.model": "Model",
   "ss.notRunning": "Not running",

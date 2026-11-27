@@ -207,6 +207,11 @@ pub fn terminal_env(id: &str, link: Option<&str>) -> Result<Vec<(String, String)
     Ok(vec![("OMHER_TERMINAL_LINK".into(), link.into())])
 }
 
+/// The person's home folder (`HOME`, `USERPROFILE` on Windows), as the shell's commands read it.
+pub(crate) fn user_home_dir() -> Option<PathBuf> {
+    std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).filter(|v| !v.is_empty()).map(PathBuf::from)
+}
+
 /// `8-4-4-4-12` hex digits, nothing else.
 pub fn is_uuid(s: &str) -> bool {
     let parts: Vec<&str> = s.split('-').collect();
@@ -886,6 +891,9 @@ struct Live {
     /// [`Sessions::agy_conversation`].
     cwd: PathBuf,
     started: std::time::SystemTime,
+    /// An Antigravity row: the id Antigravity's workspace cache named for its folder right before its program started
+    /// (`fg::agy_cache_entry`), never taken as its own.
+    agy_before: Option<String>,
 }
 
 impl Live {
@@ -1071,7 +1079,7 @@ impl Sessions {
                 }
             });
         }
-        self.live.lock().unwrap().insert(id, Live { master: pair.master, input, writer_done, killer, pid, exited, out, account_env: account_env.to_vec(), cwd: cwd.to_path_buf(), started });
+        self.live.lock().unwrap().insert(id, Live { master: pair.master, input, writer_done, killer, pid, exited, out, account_env: account_env.to_vec(), cwd: cwd.to_path_buf(), started, agy_before: None });
         Ok(id)
     }
 
@@ -1104,11 +1112,17 @@ impl Sessions {
         env.extend(terminal_env(agent_id, link)?);
         let (mut argv, path_env) = launch_for(agent_id)?;
         argv.extend(extra);
+        // a new Antigravity row: what its folder's entry in Antigravity's cache was before it starts (rule 50)
+        let agy_before = (agent_id == "agy" && resume.is_none()).then(|| user_home_dir().and_then(|h| crate::fg::agy_cache_entry(&h, cwd))).flatten();
         // Claude Code's status line runs omher's relay, which records the usage it reports and runs the person's own
         // status line unchanged (`claude_usage.rs`; Claude Code with the person's own status line, on macOS and Linux
         // outside an AppImage)
         argv.extend(crate::claude_usage::terminal_args(agent_id, cwd, account_env, &crate::claude_usage::RelayHost::current()));
-        self.spawn(argv, cwd, Some(path_env), &env, cols, rows, sink)
+        let id = self.spawn(argv, cwd, Some(path_env), &env, cols, rows, sink)?;
+        if let Some(l) = self.live.lock().unwrap().get_mut(&id) {
+            l.agy_before = agy_before;
+        }
+        Ok(id)
     }
 
     /// The conversation the Codex in the foreground of session `id` holds open ([`crate::fg::codex_conversation`]), in
@@ -1140,15 +1154,15 @@ impl Sessions {
 
     /// The conversation the Antigravity CLI in the foreground of session `id` (a TERMINALS `agy` row) is on
     /// ([`crate::fg::agy_conversation`]): the one Antigravity's own workspace cache names for the folder the session
-    /// started in, written since the session started; `None` while there is none, or once the session ended. Only the
+    /// started in, written since the session started and not the one it named there before; `None` while there is none, or once the session ended. Only the
     /// id comes back.
     pub fn agy_conversation(&self, id: u32, user_home: &Path) -> Option<String> {
-        let (fg, cwd, started) = {
+        let (fg, cwd, started, before) = {
             let g = self.live.lock().unwrap();
             let l = g.get(&id).filter(|l| !l.exited.load(Ordering::SeqCst))?;
-            (l.foreground()?, l.cwd.clone(), l.started)
+            (l.foreground()?, l.cwd.clone(), l.started, l.agy_before.clone())
         };
-        crate::fg::agy_conversation(fg, user_home, &cwd, started)
+        crate::fg::agy_conversation(fg, user_home, &cwd, started, before.as_deref())
     }
 
     /// Whether the shell of session `id` is itself in its terminal's foreground now, nothing it started in front (a

@@ -5,6 +5,7 @@
 import type { HistoryHost } from "./term/history";
 import { AGENTS, acpRow, agentDef, HERMES_LABEL, type AcpRow, type AgentId, type AgentInfo } from "./agents";
 import { mockPtyOut, nextMockPty } from "./fg";
+import { GIVES_ID } from "./termConv";
 import mockAcpAgents from "./mockAcpAgents.json";
 import { botRefusal, mockCheck, mockNewId, type CustomEntry, type CustomList, type CustomPreview, type CustomWhy } from "./custom";
 import type { ApprovalChoice, ClarifyAnswers } from "../lib/protocol";
@@ -494,6 +495,8 @@ type MockGlobals = {
   __omherPastReads?: { op: "list" | "read" | "own"; agent: string; cwds?: string[]; id?: string; cwd?: string; pty?: number }[];
   /** e2e: the conversation each mock pty's Codex holds open (pty id -> UUID), as a real Codex once its rollout exists */
   __omherMockCodexOwn?: Record<number, string>;
+  /** e2e: agents whose mock CLI is from before `--session-id` (it refuses the option and ends at once) */
+  __omherMockNoSessionId?: AgentId[];
   /** e2e: the conversation each mock pty's Antigravity is on (pty id -> UUID), as its workspace cache names it */
   __omherMockAgyOwn?: Record<number, string>;
   /** e2e: the conversation of the Claude Code or Codex a test runs in a Shell row's pty (pty id -> UUID), as the shell
@@ -684,7 +687,7 @@ export class MockHost implements SessionHost {
     // the shell's own refusal (sessions::terminal_env): only an oh-my-hermes terminal is told its link
     if (link !== undefined && agent !== "omh") throw new Error(`${agent} sessions are not given a terminal link`);
     // and sessions::terminal_args: only these start under an id omher made
-    if (sessionId !== undefined && !["claude", "gemini", "qwen", "grok", "copilot", "pi"].includes(agent)) throw new Error(`${agent} sessions are not given a conversation id`);
+    if (sessionId !== undefined && !GIVES_ID.includes(agent)) throw new Error(`${agent} sessions are not given a conversation id`);
     const id = nextMockPty();
     this.log({ op: "start", id, agent, cwd, cols, rows, ...(resume ? { resume } : {}), ...(sessionId ? { sessionId } : {}), ...(link ? { link } : {}), ...(account ? { account } : {}) });
     if (this.g.__omherMockMissing?.includes(agent)) throw new Error(`${agentDef(agent).label} is not installed (no \`${agentDef(agent).program}\` found)`);
@@ -695,13 +698,16 @@ export class MockHost implements SessionHost {
     const elsewhere = !!account && !!this.g.__omherMockGoneAccounts?.includes(account);
     const cannot = !!resume && ((convs[resume] && convs[resume].text === undefined) || elsewhere || !!this.g.__omherMockGoneConversations?.includes(resume));
     const refusal =
-      sessionId && convs[sessionId]?.text !== undefined
-        ? `Error: Session ID ${sessionId} is already in use.`
-        : !cannot
-          ? null
-          : agent === "codex"
-            ? `Error: No saved session found with ID ${resume}. Run \`codex resume\` without an ID to choose from existing sessions.`
-            : `No conversation found with session ID: ${resume}`;
+      // a CLI from before it took `--session-id` refuses the option and ends at once
+      sessionId && this.g.__omherMockNoSessionId?.includes(agent)
+        ? `error: unknown option '--session-id'`
+        : sessionId && convs[sessionId]?.text !== undefined
+          ? `Error: Session ID ${sessionId} is already in use.`
+          : !cannot
+            ? null
+            : agent === "codex"
+              ? `Error: No saved session found with ID ${resume}. Run \`codex resume\` without an ID to choose from existing sessions.`
+              : `No conversation found with session ID: ${resume}`;
     if (agent === "claude" && sessionId && !convs[sessionId]) this.putConvs({ ...convs, [sessionId]: { cwd } });
     // a resumed Codex holds its own conversation's rollout open again
     if (agent === "codex" && resume) (this.g.__omherMockCodexOwn ??= {})[id] = resume;

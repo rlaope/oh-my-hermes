@@ -40,7 +40,8 @@ async function open(page: Page) {
     }
     const w = window as unknown as Record<string, unknown>;
     w.__omherPickFolder = folder;
-    w.__omherMockAgents = ["claude", "codex", "grok", "omh", "pi", "agy", "omp", "copilot"];
+    w.__omherMockAgents = ["claude", "codex", "grok", "omh", "pi", "agy", "omp", "copilot", "gemini"];
+    if (sessionStorage.getItem("__oldGemini")) w.__omherMockNoSessionId = ["gemini"];
   }, FOLDER);
   await page.goto("/");
   await expect(page.getByTestId("bot-kami")).toBeVisible();
@@ -333,6 +334,32 @@ test("a Grok terminal starts under an id omher made: used, it continues by --res
   expect((await starts(page))[0].sessionId).toBeUndefined();
   await page.getByTestId(`session-${id}`).locator(".ss-open").click();
   await expect(page.getByTestId("session-paused")).toHaveCount(0);
+});
+
+test("a Gemini CLI from before --session-id starts once more without it, keeps no id, and comes back paused", async ({ page }) => {
+  await page.addInitScript(() => sessionStorage.setItem("__oldGemini", "1"));
+  await open(page);
+  const id = await newTerm(page, "gemini");
+  // it refused the option and ended at once: started again, without an id, and it runs
+  await expect.poll(async () => (await starts(page)).length).toBe(2);
+  const [first, second] = await starts(page);
+  expect(first).toMatchObject({ agent: "gemini", cwd: FOLDER });
+  expect(first.sessionId).toMatch(UUID4);
+  expect(second).toMatchObject({ agent: "gemini", cwd: FOLDER });
+  expect(second.sessionId).toBeUndefined();
+  await expect(screen(page)).toContainText("did not take a conversation id");
+  await expect(page.locator("[data-testid=terminal] .xterm-rows").last()).toContainText("(mock)");
+  await expect.poll(async () => (await saved(page))?.sessions?.find((s: { id: string }) => s.id === id)).toMatchObject({ agent: "gemini", running: true });
+  expect((await saved(page)).sessions.find((s: { id: string }) => s.id === id).agentSession).toBeUndefined();
+  // the next Gemini terminal of this page gets no id at all
+  await newTerm(page, "gemini");
+  expect((await starts(page)).slice(2)).toEqual([expect.not.objectContaining({ sessionId: expect.anything() })]);
+  // with no id it comes back paused after a restart, as before
+  await page.reload();
+  await page.getByTestId(`session-${id}`).locator(".ss-open").click();
+  await expect(page.getByTestId("session-paused")).toBeVisible();
+  await page.waitForTimeout(300);
+  expect(await starts(page)).toEqual([]);
 });
 
 test("a Copilot CLI terminal opens the same --session-id again after a restart, by itself", async ({ page }) => {

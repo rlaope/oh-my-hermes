@@ -1313,6 +1313,7 @@ export const ja: Record<Key, string> = {
   "ss.restart": "再起動",
   "ss.freshConversation": "新しい会話を始める",
   "ss.convGone": "{agent} でこの会話が見つかりませんでした",
+  "ss.noSessionId": "{agent} が会話 ID を受け付けなかったため、ID なしで起動しました。再起動後は自動で再開されません",
   "ss.agentEnded": "{agent} は終了しました",
   "ss.model": "モデル",
   "ss.notRunning": "停止中",
