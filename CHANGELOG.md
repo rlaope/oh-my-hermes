@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: SSH bots' threads reconnect, a failed thread open retries, and refusals say why.** An SSH bot's thread
+  key `fold:<peer>:<name>:<thread>` was split at its first colon, so the bot read as `<peer>`: after a reconnect its
+  thread was not held stale, a held message never went out, and Send now / Steer reached the wrong bot. The key is
+  now read against the known bot names. A thread whose automatic open failed (the 48-open cap, a gateway timeout)
+  read unreachable until the next reconnect; a click opens it again. Two re-reads of a bot's threads at once (a
+  resync and a restart) no longer send two `thread.open` for one thread. A refused `./thread` typed inside a thread
+  now keeps the typed text, as in the main chat. New bot names a reserved name or `omh-tui` instead of the name rule,
+  boundary rule 41 defers to rule 49 for the Windows stop, a task's thread starts through the same create as `+`,
+  and a skipped resume spec is gone. (`apps/omher/src/state/store.ts`)
 - **Slash commands typed while a turn runs follow Claude Code, in the OMH TUI and in omher's bot chats.** Measured
   on Claude Code 2.1.332: `/usage` (`/cost`) and `/status` now answer at once beside the running turn, and `/model`
   opens its picker (or switches to the model it names) at once; a pick made mid-turn is Hermes' deferred switch, so
@@ -26,6 +35,12 @@ All notable changes will be documented here.
   `thread.list` now reads such a thread's live status from Hermes' `session.active_list`, and the app opens those
   threads at once so their rows run and their asks reach Needs you. (`apps/omher/src/state/store.ts`,
   `apps/omher/bridge/omher_bridge.py`)
+- **omher on Windows: stopping a long Hermes run stops all of it.** A `hermes profile create` past its 330 s limit, or a
+  `hermes mcp install`/`login` or `omh` read past its time, was stopped by killing only `cmd.exe` (Hermes starts through
+  `hermes.cmd`), so Hermes kept running. The bridge now ends the whole process tree with one fixed
+  `taskkill /T /F /PID <pid>` (boundary rule 49) and then the child; macOS and Linux still stop the run's process
+  group. The bot-draft Add test and two terminal resume specs run again against the current UI, and the README says the
+  bridge tests need websockets, pyyaml and ruamel.yaml. (`apps/omher/bridge/omher_bridge.py`)
 - **omher SSH bots: only the actions that work are offered, and removing a computer leaves a bot open.** The row
   menu offered Restart (and an offline chat offered Start) for a bot on another computer, which the bridge always
   refuses; they are no longer shown for it. Removing the computer whose bot was open left the "Pick a bot" pane:

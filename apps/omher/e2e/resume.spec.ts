@@ -64,6 +64,15 @@ async function setup(page: Page, folders: string[] = []) {
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
 }
 
+/** A terminal session on `agent` in the picker's next folder: the + menu starts the agent in the folder it shows. */
+async function startTerminal(page: Page, agent: string) {
+  await page.getByTestId("session-new").click();
+  await page.getByTestId("session-folder").click();
+  await page.getByTestId("session-choose").click();
+  await page.getByTestId(`session-agent-${agent}`).click();
+  await expect(page.getByTestId("terminal")).toBeVisible();
+}
+
 /** A New session chat on `agent` in the picker's next folder, started: a chat agent by its first message
  *  (`first`), Grok by Start. */
 async function start(page: Page, agent: string, first = "/status") {
@@ -297,10 +306,9 @@ test.skip("after a restart: Claude Code and Codex continue by themselves, pi wai
   expect((await sessionCalls(page)).filter((c) => c.op === "chat.start")).toHaveLength(3);
 });
 
-// chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
-test.skip("a terminal session that was running comes back paused and starts only on Resume", async ({ page }) => {
+test("a terminal session that was running comes back paused and starts only on Resume", async ({ page }) => {
   await setup(page, ["/home/you/code/g"]);
-  await start(page, "grok");
+  await startTerminal(page, "grok");
   await expect(page.getByTestId("terminal")).toBeVisible();
   await expect(page.locator(".xterm-rows")).toContainText("(mock)");
   await expect.poll(async () => (await saved(page))?.sessions?.[0]?.running).toBe(true);
@@ -312,27 +320,6 @@ test.skip("a terminal session that was running comes back paused and starts only
   expect((await sessionCalls(page)).filter((c) => c.op === "start")).toEqual([]);
   await page.getByTestId("session-resume").click();
   await expect(page.locator(".xterm-rows")).toContainText("(mock)");
-  expect((await sessionCalls(page)).filter((c) => c.op === "start")).toEqual([expect.objectContaining({ agent: "grok", cwd: "/home/you/code/g" })]);
-});
-
-// chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)
-test.skip("an ended terminal session comes back with Restart, which starts it again in its folder", async ({ page }) => {
-  await setup(page, ["/home/you/code/g"]);
-  await start(page, "grok");
-  await expect(page.locator(".xterm-rows")).toContainText("(mock)");
-  await page.locator(".xterm-helper-textarea").focus();
-  await page.keyboard.type("exit");
-  await page.keyboard.press("Enter");
-  await expect(page.getByTestId("session-ended")).toBeVisible();
-  await expect.poll(async () => (await saved(page))?.sessions?.[0]?.running).toBe(false);
-  await page.evaluate(() => sessionStorage.setItem("__kept", "1"));
-  await page.reload();
-  await expect(page.getByTestId("session-agent")).toHaveText("Grok");
-  await expect(page.getByTestId("session-idle")).toContainText("Grok ended");
-  expect((await sessionCalls(page)).filter((c) => c.op === "start")).toEqual([]);
-  await page.getByTestId("session-restart").click();
-  await expect(page.locator(".xterm-rows")).toContainText("(mock)");
-  await expect(page.getByTestId("session-ended")).toHaveCount(0);
   expect((await sessionCalls(page)).filter((c) => c.op === "start")).toEqual([expect.objectContaining({ agent: "grok", cwd: "/home/you/code/g" })]);
 });
 

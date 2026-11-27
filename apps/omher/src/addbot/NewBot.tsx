@@ -53,7 +53,11 @@ export function createLine(r: BotCreate, name: string): string {
 export function refusalLine(e: { code?: string; message?: string }, name: string): string {
   if (e.code === "exists") return t("ab.nameOnDisk", { name });
   if (e.code === "busy") return t("ab.createBusy");
-  if (e.code === "bad_request") return t("ab.nameRule");
+  if (e.code === "bad_request") {
+    // the bridge refuses a name with this one code for each of Hermes' rules: say which one it broke
+    const check = checkName(name, []);
+    return t(check === "reserved" || check === "omh" ? NAME_LINE[check] : "ab.nameRule", { name });
+  }
   return e.message || t("ab.createFailed");
 }
 

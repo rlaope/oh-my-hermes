@@ -557,8 +557,9 @@ RULES = (
     "This follows the owner's answer that omher may run a fixed Hermes command on a button press.",
     "each is a fixed argv with no shell and nothing on stdin, the Hermes root as `HERMES_HOME`, stopped after 300, 330"
     " and 60 seconds, one run at a time per bot.",
-    "a run past its time is stopped with that group (on Windows the process itself), then waited for at most 5 seconds:"
-    " that stop is the one signal omher sends, only to its own run.",
+    # rule 49 changed the Windows stop from the process itself to its whole tree (taskkill /T /F); rule 41 defers to it
+    "a run past its time is stopped with that group (on Windows the process tree, rule 49), then waited for at most 5"
+    " seconds: that stop is the one signal omher sends, only to its own run.",
     "and Connect needs it not to be there: Hermes' install replaces a server's whole block and turns it on, so a server"
     " that is already there (on, off or set up by hand), or a config omher cannot read, is never installed over.",
     "Sign in again first asks the person, since Hermes drops the current sign-in before the new one;",
@@ -726,9 +727,10 @@ class DocPins(unittest.TestCase):
         # (remote-only mode: one shell-written ~/.omher/remote.json, no local bridge, Python or peer links, one rule 31
         # link to the server and the page talking only to that bridge); 48: rule 48 (a /usage or /status typed during a
         # turn through the same `slash.exec`, `chat.command`, its answer as `command.output`; a bare /model opens the
-        # picker; every other command waits in the steer queue). The rules stay numbered 1..n with no gap or repeat.
+        # picker; every other command waits in the steer queue); 49: rule 49 (a run stopped past its time ends its whole
+        # process tree on Windows through one fixed `taskkill /T /F /PID`). The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 48, len(rules))
+        self.assertTrue(6 <= len(rules) <= 49, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -1330,8 +1332,9 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         calls = [(fn.name, c) for fn in fns.values() for c in ast.walk(fn)
                  if isinstance(c, ast.Call) and ast.unparse(c.func) == "subprocess.run"]
         # _hermes_run: rule 24's one `hermes -p <bot> cron create` for the briefing (rule 41's run_hermes_mcp is a
-        # Popen, pinned in AppsThroughTheBotsOwnHermes, as is rule 43's run_omh_read in MessagingPlatformsThroughOmh)
-        self.assertEqual(sorted(name for name, _ in calls), ["_git", "_hermes_run", "gh_pr_view", "run_hermes_restart"])
+        # Popen, pinned in AppsThroughTheBotsOwnHermes, as is rule 43's run_omh_read in MessagingPlatformsThroughOmh;
+        # _windows_kill_tree: rule 49's fixed taskkill, pinned in StopRunEndsTheTreeOnWindows)
+        self.assertEqual(sorted(name for name, _ in calls), ["_git", "_hermes_run", "_windows_kill_tree", "gh_pr_view", "run_hermes_restart"])
         fn = fns["gh_pr_view"]
         body = ast.unparse(ast.Module(body=fn.body[1:], type_ignores=[]))  # the code, without its docstring
         self.assertIn("timeout=timeout", body)
@@ -1400,6 +1403,7 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         runs = [c for c in ast.walk(self.tree) if isinstance(c, ast.Call) and ast.unparse(c.func).startswith("subprocess.")]
         self.assertEqual(sorted(ast.unparse(c.args[0]) for c in runs),
                          ["['git', *pre, *args]",
+                          "[_windows_taskkill(), '/T', '/F', '/PID', str(int(pid))]",  # rule 49, pinned in StopRunEndsTheTreeOnWindows
                           "[gh, 'pr', 'view', str(number), '-R', repo, '--json', 'state,isDraft,mergedAt,url,statusCheckRollup,headRefOid']",
                           "argv", "argv", "argv", "argv"])  # argv: rule 29's restart_argv (RestartOneBotOnAPress),
         # rule 24's brief_create_argv (`hermes -p <bot> cron create`, pinned in bridge/tests/test_brief_setup.py), rule
@@ -2590,6 +2594,7 @@ class RestartOneBotOnAPress(unittest.TestCase):
         rest = self.src
         for own in ("_run_hermes_argv", "run_omh_read", "_stop_run"):
             rest = rest.replace(ast.get_source_segment(self.src, self.fns[own]), "")
+        rest = rest.replace(ast.get_source_segment(self.src, self.fns["_windows_kill_tree"]), "")  # rule 49
         for word in ("Popen", "os.kill", "send_signal", "killpg", "launchctl", "systemctl", "schtasks", "os.system"):
             self.assertNotIn(word, rest, word)
         self.assertNotIn("Popen", ast.get_source_segment(self.src, self.fns["_stop_run"]))
@@ -3126,8 +3131,12 @@ class TasksReadOnly(unittest.TestCase):
         self.assertNotIn("bridge.request", page)
         store = (UI_SRC / "state" / "store.ts").read_text(encoding="utf-8")
         start = store.split("async startTaskThread(", 1)[1].split("\n    },\n", 1)[0]
-        self.assertEqual(re.findall(r'(threadReq|bridge\.request)\("([a-z.]+)"', start), [("threadReq", "thread.create")])
-        self.assertIn("await actions.threadSend(bot, row.thread, text);", start)
+        # the task's thread starts through the store's one createThread (the + press's), its only request thread.create
+        self.assertEqual(re.findall(r'(threadReq|bridge\.request)\("([a-z.]+)"', start), [])
+        self.assertIn("const thread = await createThread(bot, title);", start)
+        self.assertIn("await actions.threadSend(bot, thread, text);", start)
+        create = store.split("const createThread = async (", 1)[1].split("\n  };\n", 1)[0]
+        self.assertEqual(re.findall(r'(threadReq|bridge\.request)\("([a-z.]+)"', create), [("threadReq", "thread.create")])
         host = (UI_SRC / "tasks" / "host.ts").read_text(encoding="utf-8")
         self.assertEqual(sorted(set(re.findall(r'invoke<[^>]+>\("([a-z_]+)"', host))), ["gh_accounts", "tasks_list", "tasks_me", "tasks_remote", "tasks_status", "tasks_view"])
 
@@ -3674,7 +3683,7 @@ class MessagingPlatformsThroughOmh(unittest.TestCase):
         " in the home folder without any `PYTHON*` variable of the Hermes interpreter, and at most 1 MB of what it prints"
         " read (a longer answer is refused).",
         "A read still running after 20 seconds is stopped by `_stop_run`, the same stop rule 41 uses: on POSIX with its"
-        " process group, on Windows the process; nothing else is signalled.",
+        " process group, on Windows the process tree (rule 49); nothing else is signalled.",
         "and when Hermes is reconnecting it only once Hermes flags that as needing the person or it has gone on for 10"
         " minutes (`ROW_RECONNECT_MS`);",
         "That command reads, never writes, the gateway record (`gateway_state.json`) of the Hermes root and of each"
@@ -3807,6 +3816,34 @@ class MessagingPlatformsThroughOmh(unittest.TestCase):
                 if ".test." not in p.name and '"bots.platforms"' in p.read_text(encoding="utf-8")]
         # lib/remoteOps.ts is rule 47's audit table: it names every op and sends none, keeping no answer
         self.assertEqual(sorted(hits), ["lib/protocol.ts", "lib/remoteOps.ts", "state/store.ts"])
+
+
+class StopRunEndsTheTreeOnWindows(unittest.TestCase):
+    """Rule 49: a run stopped past its time ends with its whole process tree on Windows, through one fixed `taskkill`."""
+
+    RULE_48 = (
+        "49. A run omher stops past its time ends with everything it started on Windows.",
+        "it first runs one fixed `taskkill.exe /T /F /PID <pid>`, Windows' own from `%SystemRoot%\\System32` by absolute path (`C:\\Windows` only when `SystemRoot` is unset or not absolute), never found by a bare name in the application's or current folder, for that run's own process id",
+        "`taskkill` is called from one place, `_windows_kill_tree`, only by `_stop_run`, and only on Windows.",
+        "On macOS and Linux the stop is unchanged: the run's own process group, which it was started in.",
+    )
+
+    def test_the_doc_states_rule_49(self) -> None:
+        text = _flat(DOC.read_text(encoding="utf-8"))
+        for sentence in self.RULE_48:
+            self.assertIn(_flat(sentence), text)
+
+    def test_one_fixed_taskkill_called_only_by_stop_run(self) -> None:
+        src = (ROOT / "apps" / "omher" / "bridge" / "omher_bridge.py").read_text(encoding="utf-8")
+        tree = ast.parse(src)
+        fns = {f.name: f for f in ast.walk(tree) if isinstance(f, ast.FunctionDef)}
+        self.assertEqual(src.count('"taskkill.exe"'), 1)  # one bare name only: the System32 path built in `_windows_taskkill`
+        self.assertIn('"System32"', ast.get_source_segment(src, fns["_windows_taskkill"]))
+        self.assertIn('[_windows_taskkill(), "/T", "/F", "/PID", str(int(pid))]', ast.get_source_segment(src, fns["_windows_kill_tree"]))
+        self.assertNotIn("shell", ast.get_source_segment(src, fns["_windows_kill_tree"]).replace("no shell", ""))
+        callers = sorted(n for n, f in fns.items() if any(isinstance(c, ast.Name) and c.id == "_windows_kill_tree"
+                                                         for c in ast.walk(f)))
+        self.assertEqual(callers, ["_stop_run"])
 
 
 class RemoteOnlyMode(unittest.TestCase):

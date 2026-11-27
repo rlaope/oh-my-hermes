@@ -32,6 +32,7 @@ import hmac
 import inspect
 import json
 import logging
+import ntpath
 import os
 import re
 import signal
@@ -3173,11 +3174,31 @@ MCP_OUTPUT_MAX = 256 * 1024     # bytes of a run's output read back
 MCP_STOP_WAIT = 5.0             # seconds to wait for a stopped run to end
 
 
-def _stop_run(proc) -> None:
+def _windows_taskkill() -> str:
+    """Windows' own taskkill.exe by absolute path (SystemRoot\\System32), never a bare name that CreateProcess would look for in the
+    application's folder or the current directory first."""
+    root = os.environ.get("SystemRoot", "")
+    if not (root and ntpath.isabs(root)):
+        root = "C:\\Windows"
+    return ntpath.join(root, "System32", "taskkill.exe")
+
+
+def _windows_kill_tree(pid: int) -> None:
+    """Rule 49: System32's `taskkill.exe /T /F /PID <pid>`, the run and everything it started. `hermes.cmd` makes cmd.exe the child, so ending it
+    alone leaves Hermes running. One fixed argv, no shell, nothing on stdin, no output kept; best effort, the caller kills the child too."""
+    with contextlib.suppress(OSError, subprocess.SubprocessError):
+        subprocess.run([_windows_taskkill(), "/T", "/F", "/PID", str(int(pid))], stdin=subprocess.DEVNULL,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=MCP_STOP_WAIT,
+                       creationflags=0x08000000)  # CREATE_NO_WINDOW
+
+
+def _stop_run(proc, windows: bool | None = None, tree_killer=None) -> None:
     """End a run the bridge started past its time (rule 41's `hermes mcp`, rule 43's `omh` read, rule 44's `hermes profile create`): on POSIX its whole
-    process group (it was started in a session of its own, so this reaches nothing else), on Windows the process
-    itself (started in a group of its own). The wait after is bounded, so the run's bot is never left busy."""
-    if os.name == "nt":
+    process group (it was started in a session of its own, so this reaches nothing else), on Windows its whole process tree
+    (rule 49; the child is a launcher such as hermes.cmd) and then the child itself. `windows` and `tree_killer` are for tests.
+    The wait after is bounded, so the run's bot is never left busy."""
+    if os.name == "nt" if windows is None else windows:
+        (tree_killer or _windows_kill_tree)(proc.pid)
         with contextlib.suppress(OSError):
             proc.kill()
     else:

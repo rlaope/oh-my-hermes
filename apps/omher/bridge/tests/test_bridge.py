@@ -1888,9 +1888,10 @@ class ReadOnlyRule(BridgeCase):
         # _run_hermes_argv: rule 41's `hermes -p <bot> mcp install|login|remove <name>` (test_apps pins its argv) and
         # rule 44's `hermes -p default profile create <name> --no-alias` (test_bot_create pins it), each built by its own
         # checked argv function; run_omh_read: rules 43 and 44's read-only `omh` argvs from OMH_READS (test_platforms
-        # and test_bot_create pin the table)
+        # and test_bot_create pin the table); _windows_kill_tree: rule 48's one fixed System32 `taskkill.exe /T /F /PID <pid>` that
+        # `_stop_run` runs on Windows (test_stop_run pins its argv)
         self.assertEqual(uses, ["_git", "run_omh_read", "_hermes_run", "gh_pr_view", "run_hermes_restart",
-                                "_run_hermes_argv"])
+                                "_windows_kill_tree", "_run_hermes_argv"])
         self.assertNotIn("create_subprocess", src)
         self.assertNotIn("os.system", src)
         self.assertEqual(ob.GIT_READS, {("worktree", "list"), ("rev-parse",), ("status",), ("diff",), ("log",),

@@ -340,7 +340,9 @@ bash scripts/e2e-shards.sh 3           # the same as 3 shards at once, each with
 OMHER_E2E_PART=2/4 bash scripts/e2e-shards.sh 2   # one of CI's four Linux runners: shards 3-4 of 8
 (cd src-tauri && cargo test)           # the shell's Rust tests
 (cd src-tauri && cargo test real_agents_print_their_version -- --ignored --nocapture)  # `claude/codex --version` through the PTY
-python -m unittest discover -s bridge/tests -v   # bridge tests with a FakeGateway; needs no Hermes
+# bridge tests with a FakeGateway: no Hermes gateway runs, but the bridge imports websockets, pyyaml and ruamel.yaml, so use
+# a Python that has them (the Hermes venv's: ~/.hermes/hermes-agent/venv/bin/python)
+python -m unittest discover -s bridge/tests -v
 pnpm tauri build --debug --bundles app # a debug .app in src-tauri/target/debug/bundle/macos/
 pnpm tauri build --bundles dmg         # macOS release .dmg (ad-hoc signed)
 pnpm tauri build --bundles nsis,msi    # Windows release installers (unsigned)
