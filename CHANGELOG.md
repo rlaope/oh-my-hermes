@@ -4,12 +4,24 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **omher: a thread with unread answers shows a count, so the Dock or taskbar count can be found.** A thread that
-  answered while it was not open counted in the Dock count and the Windows taskbar dot, but its sidebar row showed
-  only its state (the green check), and the bot row counted only the bot's main chat: the count stayed up with no
-  row saying where. A thread row now carries the bot row's unread count (bold title, an accessible label), an open
-  question keeps its place as on the bot row, and the threads hidden past "Show N more" count on the bot row and on
-  that line until they show. Opening the thread clears the count, as before. (`apps/omher/src/threads/ThreadTree.tsx`)
+- **omher 1.2.4.** Bot fixes across threads, reconnects, SSH bots and Windows, terminals that come back by
+  themselves after a restart, and links that open whole.
+  - **Threads:** Esc, notifications and unread counts follow the open thread; a thread with unread answers shows a
+    count, so the Dock or taskbar count can be found and clears when the thread is opened (#3247, #3264). Starting a
+    thread makes exactly one, or says why and gives the typed text back (#3248, #3258).
+  - **Reconnect and restart:** bots and threads show what Hermes is really doing; approvals still pending can be
+    answered, finished threads are not marked lost, and running threads reach Needs you (#3251, #3258).
+  - **SSH bots:** only actions that work are offered, removing a computer leaves a bot open, and their threads'
+    messages and Stop reach the right bot (#3250, #3258).
+  - **Bots:** platform status and templates read the live omh (#3244); remove, rename and the row menu keep the view
+    and focus (#3249); the New bot card and its refusals, the answered-interview line and `HTTPS://` links work in
+    every language (#3245, #3258).
+  - **Windows:** stopping a long Hermes run stops its whole process tree (#3246 via #3258; BOUNDARY rule 49).
+  - **Terminals:** Antigravity, Gemini CLI, Qwen Code, Grok, Copilot CLI and pi come back by themselves after an
+    update or restart, and the restored text above the divider can be selected and copied (#3261; BOUNDARY rule 50);
+    an address a table cell breaks across rows opens whole, and a Korean particle after a link is not part of it
+    (#3243). Slash commands typed while a turn runs follow Claude Code (#3256, entry below).
+
 - **Fanout: a keyring login the fence hid is `credential_hidden`, not a rejected credential.** On Linux, `agy`
   (Antigravity) keeps its login in the Secret Service keyring, reached over the user D-Bus session, and the bwrap
   fence mounts an empty read-only tmpfs over `/run/user/<uid>`. Inside the fence `agy` said `authentication required`
@@ -20,18 +32,6 @@ All notable changes will be documented here.
   hidden. `_user_runtime_directory` answers None where `os.getuid` does not exist (Windows). (#3253 by @yqecea;
   `src/coding/dispatch_failure_recovery.py`, `src/coding/cause_recovery.py`, `docs/FANOUT.md`)
 
-- **omher: Antigravity, Gemini CLI, Qwen Code, Grok, Copilot CLI and pi terminals come back by themselves after a
-  restart, and the restored scrollback can be selected.** Only Claude Code, Codex and oh-my-hermes terminals continued
-  their conversation after an update or a quit; an Antigravity terminal came back paused, and Resume started a fresh
-  Antigravity under the old scrollback. A TERMINALS Antigravity session now learns its conversation from Antigravity's
-  own workspace cache (boundary rule 50) and continues it with `agy --conversation <id>`; Gemini CLI, Qwen Code, Grok,
-  Copilot CLI and pi start under an id omher makes (`--session-id`) and continue it with `--resume` or the same
-  `--session-id` (a version that refuses the option starts once more without it and comes back paused, as before).
-  OpenCode, Kimi Code, Cline, oh-my-pi and OmO still come back paused, as their ids cannot be tied to one terminal; the
-  update confirm now counts the terminals that come back by themselves. Text written back above the "restored"
-  divider could not be selected once the new program turned mouse reporting on (Antigravity's TUI does): a drag there
-  now selects it, and below the divider the program still gets the mouse. (`apps/omher/src/sessions/sessions.ts`,
-  `apps/omher/src/sessions/term/engine-restored.ts`)
 - **TUI: `/sessions` lists every local Hermes profile's conversations, one block per bot.** Bare `/sessions` (and
   `/resume`, Ctrl+X) opens a table of the conversations stored by every registered profile on this computer, not only
   what the connected gateway lists, so a chat started in Hermes Desktop or another client is findable here. Each bot
@@ -41,15 +41,6 @@ All notable changes will be documented here.
   `running` in the Last active column. The TUI's own runtime profile (`omh-tui`) is not listed, as on `/bots`.
   (#3257 by @DanRioDev; `src/tui/profile_sessions.py`, `src/tui/session_picker.py`, `theme.profile_style`)
 
-- **omher: SSH bots' threads reconnect, a failed thread open retries, and refusals say why.** An SSH bot's thread
-  key `fold:<peer>:<name>:<thread>` was split at its first colon, so the bot read as `<peer>`: after a reconnect its
-  thread was not held stale, a held message never went out, and Send now / Steer reached the wrong bot. The key is
-  now read against the known bot names. A thread whose automatic open failed (the 48-open cap, a gateway timeout)
-  read unreachable until the next reconnect; a click opens it again. Two re-reads of a bot's threads at once (a
-  resync and a restart) no longer send two `thread.open` for one thread. A refused `./thread` typed inside a thread
-  now keeps the typed text, as in the main chat. New bot names a reserved name or `omh-tui` instead of the name rule,
-  boundary rule 41 defers to rule 49 for the Windows stop, a task's thread starts through the same create as `+`,
-  and a skipped resume spec is gone. (`apps/omher/src/state/store.ts`)
 - **Slash commands typed while a turn runs follow Claude Code, in the OMH TUI and in omher's bot chats.** Measured
   on Claude Code 2.1.332: `/usage` (`/cost`) and `/status` now answer at once beside the running turn, and `/model`
   opens its picker (or switches to the model it names) at once; a pick made mid-turn is Hermes' deferred switch, so
@@ -62,62 +53,6 @@ All notable changes will be documented here.
   Hermes' own `slash.exec` (`chat.command`, `/usage` and `/status` only; omher boundary rule 48).
   (`src/tui/app.py`, `src/tui/slash.py`, `apps/omher/src/state/store.ts`, `apps/omher/bridge/omher_bridge.py`)
 
-- **omher: after a reconnect or a restart, bots and threads show what Hermes is really doing.** When the link to the
-  bridge dropped (sleep/wake, a bridge restart), an approval Hermes still waited on read "Not answered" for good: the
-  outage ended the turn here, and the bridge's replay of the same ask was dropped as a duplicate. A replayed ask in a
-  turn Hermes says still runs now comes back answerable, in Needs you. A thread that finished during the outage now
-  reads done instead of a red "Connection to Hermes lost" when its re-read shows the answer, and a thread's held
-  message waits for that thread's re-read (it went out before `thread.list` and failed "no such folder chat"). After
-  omher itself starts again, a thread Hermes runs or that waits on an approval was shown idle until clicked:
-  `thread.list` now reads such a thread's live status from Hermes' `session.active_list`, and the app opens those
-  threads at once so their rows run and their asks reach Needs you. (`apps/omher/src/state/store.ts`,
-  `apps/omher/bridge/omher_bridge.py`)
-- **omher on Windows: stopping a long Hermes run stops all of it.** A `hermes profile create` past its 330 s limit, or a
-  `hermes mcp install`/`login` or `omh` read past its time, was stopped by killing only `cmd.exe` (Hermes starts through
-  `hermes.cmd`), so Hermes kept running. The bridge now ends the whole process tree with one fixed
-  `taskkill /T /F /PID <pid>` (boundary rule 49) and then the child; macOS and Linux still stop the run's process
-  group. The bot-draft Add test and two terminal resume specs run again against the current UI, and the README says the
-  bridge tests need websockets, pyyaml and ruamel.yaml. (`apps/omher/bridge/omher_bridge.py`)
-- **omher SSH bots: only the actions that work are offered, and removing a computer leaves a bot open.** The row
-  menu offered Restart (and an offline chat offered Start) for a bot on another computer, which the bridge always
-  refuses; they are no longer shown for it. Removing the computer whose bot was open left the "Pick a bot" pane:
-  the first listed bot opens now (a chat moves to it, Settings stays). Cancelling the Connect over SSH card while
-  Check was still running left its ssh tunnel up until the next check; it ends when the check answers.
-  `apps/omher/src/state/store.ts`, `apps/omher/src/peers/AttachCard.tsx`.
-- **omher threads: what you do in an open thread acts on that thread.** Esc with a thread open interrupted the
-  bot's main chat (and did nothing when only the thread ran); it now stops the open thread's turn and leaves the main
-  chat alone. Thread rows sit inside their bot's sidebar row, so a slow press on a thread or its × lifted the bot for
-  a drag, and ⌥↑/⌥↓ on a focused thread reordered the bots; presses and keys inside the thread list no longer start
-  either. The open thread counted as off screen: its answers still rang and notified, while the main chat's answers
-  drew no unread, sound or notification. A thread's or folder chat's unread (`fold:` keys, summed into the Dock
-  count) was never cleared, so the Dock count only went up; it now clears when that chat is opened or removed.
-  (`apps/omher/src/state/store.ts`, `apps/omher/src/app/shortcuts.ts`, `apps/omher/src/sidebar/useRowDrag.ts`)
-- **omher: starting a thread makes one thread, or says why not.** A double press on a bot's hover + made two
-  "Untitled" threads (a fresh key per press), and a refused `thread.create` (a gateway error, the 48-open-thread cap),
-  a refused Task / Hand to bot start or a failed thread Stop showed nothing: the error only reached cards and the
-  model picker. A second press now reuses the create in flight, each failure puts a line where the person acted, and
-  `./thread <task>` gives the typed task back when the create is refused. `apps/omher/src/state/store.ts`.
-- **omher bot management: Remove from list, rename and the row menu behave, with the keyboard too.** Remove from
-  list on the open bot switched the view to the chat and threw the person out of Settings or Automations; the chat
-  behind now follows the next bot and the view stays. A renamed bot's threads kept the old name in Needs you and in
-  system notifications (their route label was fixed when the list loaded); renaming rebuilds them. The rename
-  editor's Cancel left a failed save's error for the next pencil press. Closing a bot row's menu (Escape or a pick)
-  dropped the keyboard to the page; it returns to the row's ⋯. The ContextMenu key (or Shift+F10) opened the menu at
-  the window's top-left; it opens under the row. The handover card opened from a Worktrees row gave no way back, so
-  focus was lost on close; it returns to that row. Main files: `apps/omher/src/state/store.ts`,
-  `apps/omher/src/sidebar/BotRow.tsx`.
-- **omher bots page: platform status and bot templates read the live omh.** Dock-launched omher (short PATH), and
-  Windows (where `which` finds `omh.cmd` and it is rejected), fell back to `<data>/omh/venv`, the pre-generation env
-  an update leaves behind (omh 2.0.0 here), so `platforms` and `bot-templates` failed with "invalid choice".
-  `omh_path` now tries `<data>/omh/current/venv/{bin,Scripts}/omh[.exe]` (and `~/.local/bin/omh` on macOS and Linux)
-  before the old venv, with `%LOCALAPPDATA%` first on Windows. `apps/omher/bridge/omher_bridge.py`.
-- **omher: the New bot card, the answered-interview line and `HTTPS://` links read and work in every language.** The
-  bridge sent English sentences ("unconfirmed", "Hermes is not on this computer.", the `busy` and `exists`
-  refusals, which also covers a leftover `profiles/<name>/` without config.yaml) and the card showed them in ko/zh/ja,
-  the store built "2 of 3" for an answered interview, and an upper-case `HTTPS://` link did nothing because the
-  opener only takes lower case and the failure was swallowed. The bridge now returns a `reason` and its parts that
-  `apps/omher/src/addbot/NewBot.tsx` words from i18n keys, the answered line uses `card.givenOfTotal`, and
-  `apps/omher/src/chat/parts/LinkChip.tsx` opens `new URL(url).href` and shows a refused open on the error line.
 - **A Devin unit now runs inside the filesystem fence and can commit.** On Linux a `devin` unit never completed:
   the fence had no write root for the CLI's own state, so `devin -p` died at session start with `Failed to lock
   session ... Read-only file system`. Devin's state tree (`~/.local/share/devin`) is now an owner write root, with
@@ -132,16 +67,6 @@ All notable changes will be documented here.
   sandbox is already turned off there. Without a fence the preset runs as written. Measured end to end on Linux
   with devin 3000.15.14: a unit edits, commits, passes its verification and is `integration_ready`.
   (`src/coding/fanout_confinement.py`, `src/coding/fanout_dispatch.py`, `src/quality/cross_harness_adapter_sandbox.py`)
-
-- **omher terminal: an address a table cell breaks across rows opens whole.** Claude Code's markdown tables put
-  real newlines inside a cell, so `https://github.com/` sat on one row and `sgl-project/sglang/pull/…` under it; the
-  web-links add-on joins only rows xterm itself wrapped, linked the first piece alone, and Cmd+click opened
-  github.com. A second link finder now reads such a cell (or a hard-wrapped paragraph) back together and links every
-  piece to the whole address, through the same opener and rule. Two rows join only when the piece above ends where
-  an address can break or fills its row, the piece below starts at the same left edge, looks like part of an address
-  (a plain word a sentence wrapped is not), and could not have fit on the row above. An address also ends at Hangul, CJK or full-width punctuation now, in both
-  finders: `https://github.com/만` underlined and opened the particle with it.
-  (`apps/omher/src/sessions/term/engine-cell-links.ts`)
 
 - **PR watch: concurrent watches on one PR no longer fail a tick on Windows.** When several watches on the same PR
   ticked at once, Windows answered "access denied" to the lock holder's state replace while another tick was still
