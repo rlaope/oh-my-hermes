@@ -432,6 +432,34 @@ export interface ComputerDriverRun {
   unconfirmed?: boolean;
 }
 
+/** Where a bot's speech goes, as its `config.yaml` names it (`voice.info`, BOUNDARY rule 54). `auto`: Hermes picks its
+ *  local model when installed, else a cloud provider whose key is set; `edge`: Hermes' default TTS, Microsoft's online
+ *  service; `off`: STT is turned off; `other`: a name omher does not know. */
+export type VoiceWhere = "local" | "online" | "auto" | "edge" | "off" | "other";
+
+export interface VoiceInfo {
+  /** This Hermes can take a voice request (ticket minting and the audio routes); `line` says why not. */
+  supported: boolean;
+  line: string;
+  stt: { enabled: boolean; provider: string; where: VoiceWhere };
+  tts: { provider: string; where: VoiceWhere };
+  /** Characters of one answer that one read-aloud covers at most. */
+  text_max: number;
+}
+
+/** One spoken part of an answer: its audio (absent when `empty`: Hermes found nothing to read in it), which part of
+ *  how many, and whether the answer was cut at `text_max`. */
+export interface VoiceSpeech {
+  part: number;
+  parts: number;
+  cut: boolean;
+  text_max: number;
+  empty: boolean;
+  mime?: string;
+  data_base64?: string;
+  provider?: string;
+}
+
 export interface CatalogResult {
   total: number;
   matched: number;
@@ -642,6 +670,14 @@ export interface OpMap {
   "computer.install": { params: Record<string, never>; result: ComputerDriverRun };
   /** macOS: `hermes -p default computer-use permissions grant` (macOS' own dialog), then "This computer" read again. */
   "computer.grant": { params: Record<string, never>; result: ComputerDriverRun };
+  /** Voice (BOUNDARY rule 54): whether this Hermes takes voice, and what the bot's `config.yaml` names for speech. */
+  "voice.info": { params: { bot: string }; result: VoiceInfo };
+  /** A recording to the bot's own Hermes (`POST /api/audio/transcribe` on its gateway's loopback listener). Only the
+   *  bot, the bytes and their type go out; the bridge picks the address, the path and the ticket. */
+  "voice.transcribe": { params: { bot: string; data_base64: string; mime: string }; result: { transcript: string; provider: string } };
+  /** Part `part` of an answer's text, read by the bot's own Hermes (`POST /api/audio/speak`); the bridge splits the
+   *  text, so the page sends the same text with each part number. */
+  "voice.speak": { params: { bot: string; text: string; part: number }; result: VoiceSpeech };
   "models.options": { params: { bot: string }; result: ModelOptions };
   /** Can the bot answer (read-only)? With `provider` (openai-codex, anthropic or nous) the strict check for it. */
   "bots.ready": { params: { bot: string; provider?: string }; result: BotReady };

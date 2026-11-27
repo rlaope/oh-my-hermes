@@ -4,6 +4,17 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: speak to a bot, and hear its answer.** A microphone in the composer of a bot's main chat and its threads
+  records in omher's own window; the bot's own Hermes turns the recording into text, which lands in the draft at the
+  caret and is never sent by omher. A recording stops by itself after 3 minutes. An answer's new speaker button, beside
+  copy, has Hermes read it aloud in parts, with Stop, one answer at a time. Before the first use per bot a notice
+  says where the recording or the text goes and which provider the bot's config names (Hermes' default text-to-speech
+  is Microsoft's online service). Both go through Hermes' own audio routes on the bot's gateway, the bridge's one
+  HTTP use, on loopback with a one-use ticket; omher keeps no recording, no audio and no key, and a transcript stays
+  in the draft like typed text until it is sent or cleared. A bot on another computer and remote-only mode are off
+  with the reason; on Linux omher turns WebKitGTK's media capture on and allows the microphone only, which has not
+  yet been run on a Linux desktop. (`docs/OMHER-BOUNDARY.md` rule 54; `apps/omher/src/chat/voice/`)
+
 - **omher: a bot's browser steps say what it did, with the screenshot.** omher knew one browser tool,
   `browser_navigate`, which current Hermes no longer has, so a step of today's `browser_exec` showed Hermes' preview,
   which without a label is the code on one line, text typed into the page included. A browser step now reads as the

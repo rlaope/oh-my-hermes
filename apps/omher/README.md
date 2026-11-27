@@ -134,6 +134,24 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
 - **While it answers** (Settings › General): a message sent while a bot is answering waits in the steer queue until
   the turn ends (the default), or, set to Steer, is steered into the running answer at once, as its Steer button
   would; a message behind another held one still waits its turn (`e2e/steer-queue.spec.ts`).
+- **Voice** (`src/chat/voice/`, `e2e/voice.spec.ts`): in a bot's main chat and its threads the composer has a
+  microphone. Press it to record in omher's own window (a dot and the time show while it records), press it again or
+  Enter to stop, Cancel or Escape to throw the recording away; it stops by itself after 3 minutes or 20 MB. The bot's
+  own Hermes turns the recording into text (`POST /api/audio/transcribe` on its gateway), which goes into the draft at
+  the caret like typed text, undo included, and is never sent by omher; a quiet line then names the provider Hermes
+  used, or says no speech was heard. An answer has a speaker beside its copy button: Hermes reads the answer's text
+  aloud (`POST /api/audio/speak`), in parts of at most 1500 characters so a host without ffmpeg still reads all of it,
+  up to the answer's first 20,000 characters, played here with Stop. Stop, starting another answer, switching chats or
+  closing the chat ends what plays and asks for no later part (one already asked for is made by Hermes and dropped
+  when it arrives); while the microphone records or waits for its transcript, read aloud is off. Before the first use
+  per bot a notice says where the recording or the text goes and which provider the bot's config names (Hermes'
+  default text-to-speech, `edge`, is Microsoft's online service); Continue is remembered on this computer, Escape is
+  Cancel. The bridge sends both requests to the bot's own gateway on loopback with a one-use ticket. omher keeps no
+  recording and no audio; a transcript stays in the box like anything typed until it is sent or cleared, and read
+  aloud sends only the answer already in the chat. A Hermes whose gateway listens over https is not used for voice
+  (omher has no TLS client for it). A bot on another computer and remote-only mode have voice off with the reason. On macOS the
+  first press brings up macOS' own microphone dialog; on Windows, WebView2's; on Linux see
+  [`docs/omher-linux.md`](../../docs/omher-linux.md). `BOUNDARY.md` rule 54.
 - **Browser steps and their screenshots** (`src/chat/activity/browserSteps.ts`, `e2e/browser-steps.spec.ts`): in a
   chat's step list ("Worked for … · N steps") a bot's `browser_exec` step reads as the label the bot wrote for it
   ("Opening the shop's login page"), or "Used the browser" when it wrote none; a `browser_cdp` step as "Ran browser
@@ -302,7 +320,8 @@ Rules the code keeps:
   calls Hermes' own `image.attach_bytes`, `pdf.attach` or `file.attach` in the main chat, then `chat.send` sends the
   text. 20 files, 100 MB each; if one attach fails, nothing is sent.
 - **Loopback only.** The bridge listens on 127.0.0.1 and talks to the gateway Hermes itself runs on this machine.
-- **No model calls of its own.** Every model call is Hermes'. omher has no API key and no HTTP client.
+- **No model calls of its own.** Every model call is Hermes'. omher has no API key. Its one HTTP use is voice
+  (above): Hermes' own two audio routes on the bot's own gateway, on loopback, which use the provider its config names.
 - **Sessions run only allow-listed agents.** Only when you start one, only `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`,
   `omp`, `grok`, `opencode`, `gemini`, `qwen`, `kimi`, `copilot`, `cline` or `agy` (Antigravity), with no arguments besides the fixed chat mode and a conversation id to continue, in the folder you
   picked; stopped when the session is closed or the app quits.

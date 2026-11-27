@@ -142,7 +142,45 @@ RULES = (
     " attached the same way, without the person opening it,",
     "the bridge reads that chat's own history (`session.history`) after the turn and nothing else.",
     "omher talks only to the person's own Hermes gateway on this machine, over loopback,",
-    "omher makes no LLM or API call itself. Every model call is Hermes'.",
+    "omher makes no LLM call itself, calls no provider's API and holds no API key. Every model call is Hermes'.",
+    "Its one HTTP request is rule 54's, to the person's own Hermes gateway on this machine over loopback;",
+    "and for voice through one HTTP request to that same gateway (rule 54).",
+    # rule 54: voice through Hermes' own two audio routes on the bot's own gateway, loopback, a one-use ticket, no Origin
+    "The bridge sends exactly two requests, Hermes' own `POST /api/audio/transcribe` (`voice.transcribe`) and `POST"
+    " /api/audio/speak` (`voice.speak`), and nothing else: never `/api/audio/voice-config`, which can hand a client the"
+    " provider's keys, never the audio WebSocket routes, never any other path.",
+    "An origin that is not plain HTTP on a loopback address with a port is refused before a socket opens; an `https`"
+    " origin, which Hermes' discovery accepts though its gateway publishes `http`, is refused with its own reason, since"
+    " omher's voice has no TLS client.",
+    "omher does not compare that answer with the connection it is attached to (Hermes' client keeps no identity of the"
+    " owner it dialed), and the request is authenticated only by a ticket that owner mints over its own control socket.",
+    "a single-use `native-http` ticket minted for that one request through Hermes' own `mint_ticket` in the"
+    " `X-Hermes-Gateway-Ticket` header, as Hermes' contract for a local client says, and no `Origin` header;",
+    "a ticket of another shape than Hermes mints is never sent, and an error that could hold it is dropped; it goes"
+    " through no proxy (an environment proxy is never read), follows no redirect, gives the whole exchange at most 180"
+    " seconds for a transcript and 90 for a spoken part (a deadline that ends the socket however slowly an answer comes),"
+    " and reads at most 1 MB of a transcript's answer and 24 MB of a spoken part's.",
+    "ends what plays and asks for no later part; a part already asked for ahead is still made by Hermes and dropped when"
+    " it arrives.",
+    "While the composer's microphone opens, records or waits for a transcript, read aloud is off with that reason, and"
+    " pressing the microphone stops what plays.",
+    "The page sends only the bot's name and either the recording's bytes and type or an answer's text and a part number;"
+    " it names no address, path, host, header or profile.",
+    "The microphone opens only when the person presses it, in omher's own window, and every track is stopped on stop,"
+    " cancel, an error, a chat switch, the window being hidden and the composer going away;",
+    "a recording stops by itself after 3 minutes or 20 MB (Hermes takes at most 25 MB), and its transcript goes into the"
+    " draft at the caret as typed text would, and omher never sends it.",
+    "An answer is read in parts of at most 1500 characters split at sentences,",
+    "and only its first 20,000 characters;",
+    "omher writes no recording and no audio to disk, logs neither them nor the text, keeps no recording after its"
+    " transcript comes back and no audio after its part has played, and never sees a provider's key; the transcript it"
+    " puts in the box is kept like any draft until the person sends or clears it, and the text sent for read aloud is"
+    " the answer already in the chat, so nothing new is stored.",
+    "On Linux the desktop shell turns on the webview's `enable-media-stream` setting and answers the webview's permission"
+    " requests with Allow for the microphone only and the webview's own default, a refusal, for everything else",
+    "Voice is off, with its reason, for a bot on another computer (rule 31: `voice.info`, `voice.transcribe` and"
+    " `voice.speak` are refused for it) and for every bot in remote-only mode (rule 47: the page's filter refuses every"
+    " `voice.*` op on a server);",
     "The bridge listens on 127.0.0.1 only and refuses any connection that lacks the random token",
     "The app starts the bridge as a child process and stops it when the app exits.",
     "A bridge that stops on its own after it was ready is started again, on a new port with a new token,",
@@ -813,10 +851,14 @@ class DocPins(unittest.TestCase):
         # action and the app); 53: rule 53 (a browser step names only its label, CDP method or action, never its code,
         # params or typed text, on the main chat, a subagent's step and the Plans session view; a browser or computer
         # step's capture read once at its `tool.complete` from Hermes' own capture folders, 5 MB at most, no link, an
-        # image by its bytes, kept in the page's memory only; no live view, since Hermes offers none). The rules stay
-        # numbered 1..n with no gap or repeat.
+        # image by its bytes, kept in the page's memory only; no live view, since Hermes offers none); 54: rule 54
+        # (voice: the bridge's one HTTP use, Hermes' own `POST /api/audio/transcribe` and `POST /api/audio/speak` on the
+        # bot's own gateway's loopback `api_origin`, a one-use `native-http` ticket per request, no Origin, no proxy, no
+        # redirect, never `voice-config`; the microphone opened only on a press and closed on stop, cancel, error, chat
+        # switch, hide and unmount; nothing kept; on Linux only, WebKitGTK's media stream on and the microphone alone
+        # allowed; a peer bot and a server refused). The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 53, len(rules))
+        self.assertTrue(6 <= len(rules) <= 54, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -1403,14 +1445,49 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
             self.assertEqual(users, [] if name == "image.attach" else ["op_chat_attach"], name)
 
     def test_bridge_has_no_http_or_llm_client(self) -> None:
+        """Rule 5 and rule 54: no LLM client and no HTTP library; the bridge's one HTTP use is `voice_request`, the one
+        `http.client` import and the one connection, plain HTTP to the bot's own gateway's loopback origin, on Hermes'
+        two audio routes only, with no proxy and no redirect (http.client reads no proxy and follows no redirect)."""
         banned = {"requests", "httpx", "aiohttp", "urllib3", "openai", "anthropic", "urllib.request", "http.client"}
-        imported = set()
+        imported: list[tuple[str, str]] = []
+        fns = {f.name: f for f in ast.walk(self.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))}
+        owner = {id(n): name for name, f in fns.items() for n in ast.walk(f)}
         for node in ast.walk(self.tree):
-            if isinstance(node, ast.Import):
-                imported.update(a.name for a in node.names)
-            elif isinstance(node, ast.ImportFrom):
-                imported.add(node.module or "")
-        self.assertEqual(sorted(i for i in imported if i in banned or i.split(".")[0] in banned), [])
+            names = [a.name for a in node.names] if isinstance(node, ast.Import) else [node.module or ""] if isinstance(node, ast.ImportFrom) else []
+            for name in names:
+                if name in banned or name.split(".")[0] in banned:
+                    imported.append((name, owner.get(id(node), "<module>")))
+        self.assertEqual(imported, [("http.client", "voice_request")])
+        conns = [(owner.get(id(c), "<module>"), ast.unparse(c.func)) for c in ast.walk(self.tree) if isinstance(c, ast.Call)
+                 and ast.unparse(c.func).split(".")[-1] in ("HTTPConnection", "HTTPSConnection", "urlopen", "build_opener", "Request")]
+        self.assertEqual(conns, [("voice_request", "http.client.HTTPConnection")])
+        for word in ("HTTPSConnection", "ProxyHandler", "set_tunnel", "urlopen", "HTTPRedirectHandler", "voice-config",
+                     "transcribe-stream", "speak-stream", "voice-live"):
+            self.assertNotIn(word, self.source, word)
+        body = ast.unparse(ast.Module(body=fns["voice_request"].body[1:], type_ignores=[]))  # the code, without its docstring
+        self.assertIn("path = VOICE_PATHS[which]", body)
+        self.assertIn("host, port = voice_target(origin)", body)
+        self.assertIn("conn.request('POST', f'{path}?profile={profile}', body=body, headers={'Content-Type': 'application/json',"
+                      " 'Accept': 'application/json', 'X-Hermes-Gateway-Ticket': ticket})", body)
+        self.assertNotIn("Origin", body)
+        self.assertIn("chunk = resp.read(min(65536, VOICE_ANSWER_MAX[which] + 1 - len(raw)))", body)
+        # one deadline for the whole exchange, which ends the socket; a ticket of another shape is never sent, and an
+        # http.client refusal of a header value (its message holds the value) is dropped
+        self.assertIn("watchdog = threading.Timer(timeout, _voice_cut, (held, expired))", body)
+        self.assertIn("if not isinstance(ticket, str) or not VOICE_TICKET.fullmatch(ticket):", body)
+        self.assertIn("except ValueError:\n    raise VoiceError('voice_failed', 'omher could not build the request to Hermes.')", body)
+        self.assertIn("sock.shutdown(socket.SHUT_RDWR)", ast.unparse(fns["_voice_cut"]))
+        self.assertLess(body.index("host, port = voice_target(origin)"), body.index("http.client.HTTPConnection("))
+        target = ast.unparse(fns["voice_target"])
+        self.assertIn("ipaddress.ip_address(host).is_loopback", target)
+        self.assertIn("parsed.scheme not in ('http', 'https')", target)
+        # https is refused with its own reason: there is no TLS client
+        self.assertIn("if parsed.scheme == 'https':\n        raise VoiceError('voice_https',", target)
+        paths = next(n.value for n in self.tree.body if isinstance(n, ast.Assign) and getattr(n.targets[0], "id", "") == "VOICE_PATHS")
+        self.assertEqual(ast.literal_eval(paths), {"transcribe": "/api/audio/transcribe", "speak": "/api/audio/speak"})
+        # the one caller hands it the origin and ticket from Hermes' own discovery and mint, never from the page
+        callers = sorted(n for n, f in fns.items() if n != "voice_request" and any(isinstance(c, ast.Name) and c.id == "voice_request" for c in ast.walk(f)))
+        self.assertEqual(callers, ["_voice_send", "exchange"])  # `exchange` is the worker-thread step inside _voice_send
 
     def test_the_only_gh_call_is_the_fixed_pr_view(self) -> None:
         """Rule 21: one `gh` call site, in gh_pr_view, with a fixed argv, a 3 s timeout, no prompt, and a repo and
@@ -3023,9 +3100,10 @@ class SshPeersOnlyOverTheOwnSsh(unittest.TestCase):
 
     def test_the_bridge_refuses_this_computers_ops_and_probes_read_only(self) -> None:
         refused = self.bridge.split("PEER_REFUSED = {", 1)[1].split("\n}\n", 1)[0]
-        # rule 52: a peer bot's computer use would act on that computer's screen
+        # rule 52: a peer bot's computer use would act on that computer's screen; rule 54: voice is for a bot here only
         self.assertEqual(re.findall(r'^    "([a-z.]+)":', refused, re.M),
-                         ["folder.open", "folder.close", "folder.resume", "bots.restart", "computer.bot", "computer.toggle"])
+                         ["folder.open", "folder.close", "folder.resume", "bots.restart", "computer.bot", "computer.toggle",
+                          "voice.info", "voice.transcribe", "voice.speak"])
         forward = self.bridge.split("PEER_FORWARD = frozenset({", 1)[1].split("})", 1)[0]
         for op in ("folder.open", "folder.close", "folder.resume", "bots.restart", "accounts.list", "sessions.start", "usage.read"):
             self.assertNotIn(f'"{op}"', forward, op)
@@ -4778,3 +4856,149 @@ class NewBotThroughHermesOwnCreate(unittest.TestCase):
         # the skill check first, then the send, and the pending offer cleared only after a send that went out
         at = [pending.index(x) for x in ("if (!(await hasApplySkill(bot)", "actions.sendTo(bot, text)", "clearPendingTemplate(bot);\n  return true;")]
         self.assertEqual(at, sorted(at))
+
+
+class VoiceThroughHermesOwnAudioRoutes(unittest.TestCase):
+    """Rule 54: voice goes through Hermes' own two audio routes on the bot's own gateway, from the bridge only; the page
+    sends a bot, a recording's bytes and type, or an answer's text and a part; the ticket is Hermes' own one-use mint;
+    nothing is kept; a peer bot and a server are refused; on Linux only, the shell turns on WebKitGTK's media stream and
+    allows the microphone alone."""
+
+    OPS = ("op_voice_info", "op_voice_transcribe", "op_voice_speak")
+    SHELL_ROOT = ROOT / "apps" / "omher" / "src-tauri"
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.src = BRIDGE.read_text(encoding="utf-8")
+        cls.tree = ast.parse(cls.src)
+        cls.fns = {f.name: f for f in ast.walk(cls.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+    def _body(self, name: str) -> str:
+        fn = self.fns[name]
+        return ast.unparse(ast.Module(body=fn.body[1:] if ast.get_docstring(fn) else fn.body, type_ignores=[]))
+
+    def _const(self, name: str):
+        return next(n.value for n in self.tree.body if isinstance(n, ast.Assign)
+                    and any(getattr(t, "id", "") == name for t in n.targets))
+
+    def test_the_ops_take_no_url_path_host_or_header_from_the_page(self) -> None:
+        read: set[str] = set()
+        for name in (*self.OPS, "_voice_bot"):
+            for c in ast.walk(self.fns[name]):
+                if (isinstance(c, ast.Call) and ast.unparse(c.func) == "p.get" and c.args
+                        and isinstance(c.args[0], ast.Constant)):
+                    read.add(c.args[0].value)
+                if isinstance(c, ast.Subscript) and ast.unparse(c.value) == "p":
+                    read.add(ast.unparse(c.slice))
+        self.assertEqual(read, {"bot", "data_base64", "mime", "text", "part"})
+        # the request is built from the bot the bridge found, Hermes' discovery and mint, and the bridge's own constants
+        send = self._body("_voice_send")
+        # the page's fields are checked and the body made in the worker thread, then a ticket minted for this request;
+        # Hermes' answer is checked in the same thread (a spoken part's audio, `speak_audio`)
+        self.assertIn("body = json.dumps(build()).encode('utf-8')\n    origin, ticket = self.voice_ticket(bot['path'])\n"
+                      "    answer = voice_request(origin, which, bot['name'], ticket, body)\n"
+                      "    return read(answer) if read else answer", send)
+        speak = self._body("op_voice_speak")
+        self.assertIn("parts, cut = await asyncio.to_thread(speak_parts, text)", speak)
+        self.assertIn("read=speak_audio", speak)
+        self.assertIn("return await asyncio.to_thread(exchange)", send)
+        self.assertIn("if conn is None or not conn.connected:", send)
+        self.assertNotIn("self._conn(", send)
+        ops = next(n.value for n in ast.walk(self.tree) if isinstance(n, ast.Assign) and ast.unparse(n.targets[0]) == "self.ops")
+        handlers = {k.value: v.attr for k, v in zip(ops.keys, ops.values)}
+        self.assertEqual({k: v for k, v in handlers.items() if k.startswith("voice.")},
+                         {"voice.info": "op_voice_info", "voice.transcribe": "op_voice_transcribe", "voice.speak": "op_voice_speak"})
+        self.assertIn("self.voice_ticket = voice_ticket or voice_ticket_for", self.src)
+
+    def test_the_ticket_is_hermes_own_one_use_native_http_mint(self) -> None:
+        body = self._body("voice_ticket_for")
+        self.assertIn("found = gateway_runtime.discover_gateway_endpoint(home)", body)
+        self.assertIn("ticket = mint_ticket(home, endpoint, purpose='native-http')", body)
+        self.assertIn("return (str(endpoint.api_origin), ticket)", body)
+        self.assertNotIn("ensure_gateway_runtime", body)  # a request never starts a gateway
+        self.assertNotIn("log", body)
+        supported = self._body("voice_supported")
+        self.assertIn("'purpose' not in inspect.signature(mint_ticket).parameters", supported)
+        self.assertIn("importlib.util.find_spec('hermes_cli.web_routers.audio')", supported)
+        # a request carries the recording and the text in memory only: no file, no log line in any voice function
+        for name in ("voice_request", "voice_ticket_for", "_voice_send", *self.OPS, "speak_parts", "_strip_fences"):
+            body = self._body(name)
+            for bad in ("open(", "write", "tempfile", "log.", "print(", "Path("):
+                self.assertNotIn(bad, body, f"{name}: {bad}")
+        # the bounds the rule names
+        for needle in ("VOICE_TIMEOUT = {'transcribe': 180.0, 'speak': 90.0}",
+                       "VOICE_ANSWER_MAX = {'transcribe': 1024 * 1024, 'speak': 24 * 1024 * 1024}",
+                       "VOICE_AUDIO_MAX = 25 * 1024 * 1024", "SPEAK_PART_MAX = 1500", "SPEAK_TEXT_MAX = 20000"):
+            self.assertIn(needle, ast.unparse(self.tree), needle)
+        config = self._body("voice_config")
+        self.assertIn("cfg = _load_yaml(profile_dir / 'config.yaml')", config)
+        for bad in ("api_key", "key", "write", "save", "dump"):
+            self.assertNotIn(f"'{bad}'", config, bad)
+
+    def test_a_peer_bot_and_a_server_are_refused(self) -> None:
+        refused = ast.literal_eval(self._const("PEER_REFUSED"))
+        forward = ast.literal_eval(self._const("PEER_FORWARD").args[0])
+        for op in ("voice.info", "voice.transcribe", "voice.speak"):
+            self.assertIn("bots on this computer only", refused[op])
+            self.assertNotIn(op, forward)
+        ops = (UI_SRC / "lib" / "remoteOps.ts").read_text(encoding="utf-8")
+        for op in ("voice.info", "voice.transcribe", "voice.speak"):
+            self.assertIn(f'"{op}": {{ send: "never", key: VOICE,', ops)
+        self.assertIn('const VOICE: Key = "voice.offRemote";', ops)
+        store = (UI_SRC / "state" / "store.ts").read_text(encoding="utf-8")
+        self.assertIn('voiceTranscribe: (bot, data_base64, mime) => bridge.request("voice.transcribe", { bot, data_base64, mime }),', store)
+        self.assertIn('voiceSpeak: (bot, text, part) => bridge.request("voice.speak", { bot, text, part }),', store)
+        # the page offers voice only for a bot here: a peer bot and a server show it off with the reason, sending nothing
+        for name in ("useVoiceMic.tsx", "ReadAloud.tsx"):
+            ui = (UI_SRC / "chat" / "voice" / name).read_text(encoding="utf-8")
+            self.assertIn('bot.host ? "voice.offPeer" : remote ? "voice.offRemote"', ui, name)
+
+    def test_the_microphone_opens_on_a_press_and_closes_on_every_way_out(self) -> None:
+        mic = (UI_SRC / "chat" / "voice" / "useVoiceMic.tsx").read_text(encoding="utf-8")
+        self.assertEqual(mic.count("getUserMedia("), 1)
+        self.assertEqual(mic.count("void open()"), 2)  # a press, or Continue on the first-use notice
+        self.assertIn("k.stream.getTracks().forEach((tr) => tr.stop());", mic)
+        self.assertIn('document.addEventListener("visibilitychange", away);', mic)
+        self.assertIn('window.addEventListener("pagehide", gone);', mic)
+        for limit in ("export const RECORD_MAX_MS = 3 * 60_000;", "export const RECORD_MAX_BYTES = 20 * 1024 * 1024;"):
+            self.assertIn(limit, (UI_SRC / "chat" / "voice" / "voice.ts").read_text(encoding="utf-8"))
+        # the transcript joins the draft; the composer never sends it on its own
+        composer = (UI_SRC / "chat" / "parts" / "Composer.tsx").read_text(encoding="utf-8")
+        insert = composer.split("const insertWords = ", 1)[1].split("\n  };\n", 1)[0]
+        for bad in ("send(", "onSend", "chat.send"):
+            self.assertNotIn(bad, insert, bad)
+        self.assertIn('document.execCommand?.("insertText", false, put.insert)', insert)
+        # nothing of a recording is kept in the page's storage: only the bots the person said Continue for
+        for name in ("voice.ts", "useVoiceMic.tsx", "ReadAloud.tsx", "speech.ts"):
+            ui = (UI_SRC / "chat" / "voice" / name).read_text(encoding="utf-8")
+            self.assertNotIn("indexedDB", ui, name)
+            self.assertEqual(ui.count("setItem("), 1 if name == "voice.ts" else 0, name)
+
+    def test_the_linux_permission_answer_allows_the_microphone_only(self) -> None:
+        voice = (self.SHELL_ROOT / "src" / "voice.rs").read_text(encoding="utf-8")
+        code = voice.split("#[cfg(test)]", 1)[0]
+        answer = code.split("pub fn microphone_only(", 1)[1].split("\n}\n", 1)[0]
+        self.assertEqual(re.findall(r"PermissionKind::(\w+) => PermissionResponse::(\w+)", answer), [("Microphone", "Allow")])
+        self.assertIn("_ => PermissionResponse::Default,", answer)
+        self.assertEqual(code.count("PermissionResponse::Allow"), 1)
+        # the media-stream setting and its use exist only on Linux
+        self.assertIn('#[cfg(target_os = "linux")]\npub fn enable_media_stream(', code)
+        self.assertIn("settings.set_enable_media_stream(true);", code)
+        lib = (SHELL / "lib.rs").read_text(encoding="utf-8")
+        self.assertEqual(lib.count("on_permission_request"), 1)
+        self.assertIn('#[cfg(target_os = "linux")]\n    let builder = builder.on_permission_request(|_webview, kind| voice::microphone_only(kind));', lib)
+        self.assertIn('#[cfg(target_os = "linux")]\n            if let Some(w) = app.get_webview_window("main") {\n                voice::enable_media_stream(&w);', lib)
+        self.assertEqual(lib.count("enable_media_stream"), 1)
+        cargo = (self.SHELL_ROOT / "Cargo.toml").read_text(encoding="utf-8")
+        linux = cargo.split("[target.'cfg(target_os = \"linux\")'.dependencies]", 1)[1].split("\n[", 1)[0]
+        self.assertIn('webkit2gtk = { version = "=2.0.2", features = ["v2_4"] }', linux)
+        self.assertEqual(cargo.count("webkit2gtk"), 1)
+        # macOS: the dialog's reason and the microphone entitlement, the app still ad-hoc signed
+        plist = (self.SHELL_ROOT / "Info.plist").read_text(encoding="utf-8")
+        self.assertIn("<key>NSMicrophoneUsageDescription</key>", plist)
+        ent = (self.SHELL_ROOT / "Entitlements.plist").read_text(encoding="utf-8")
+        self.assertEqual(re.findall(r"<key>([^<]+)</key>", ent), ["com.apple.security.device.audio-input"])
+        import json
+        conf = json.loads((self.SHELL_ROOT / "tauri.conf.json").read_text(encoding="utf-8"))
+        self.assertEqual(conf["bundle"]["macOS"]["entitlements"], "Entitlements.plist")
+        self.assertEqual(conf["bundle"]["macOS"]["signingIdentity"], "-")

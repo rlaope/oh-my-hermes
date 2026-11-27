@@ -31,6 +31,7 @@ mod term_link;
 mod term_share;
 mod this_host;
 mod tray;
+mod voice;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -1157,6 +1158,10 @@ pub fn run() {
             let _ = w.set_focus();
         }
     }));
+    // Linux: the composer's microphone (rule 54). WebKitGTK refuses a capture request nobody answers, so the
+    // microphone, and only it, is allowed (voice.rs); macOS and Windows keep their webview's own handling.
+    #[cfg(target_os = "linux")]
+    let builder = builder.on_permission_request(|_webview, kind| voice::microphone_only(kind));
     let app = builder
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
@@ -1261,6 +1266,11 @@ pub fn run() {
             disk::disk_watch
         ])
         .setup(|app| {
+            // Linux: WebKitGTK's media capture is off until the webview's `enable-media-stream` is on (rule 54)
+            #[cfg(target_os = "linux")]
+            if let Some(w) = app.get_webview_window("main") {
+                voice::enable_media_stream(&w);
+            }
             let bridge = Bridge::new();
             let resource_dir = app.path().resource_dir().ok();
             let manifest = if cfg!(debug_assertions) { Some(std::path::Path::new(env!("CARGO_MANIFEST_DIR"))) } else { None };

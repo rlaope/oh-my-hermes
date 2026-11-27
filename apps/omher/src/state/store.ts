@@ -58,6 +58,8 @@ import type {
   ComputerDriverRun,
   ComputerStatus,
   ComputerToggle,
+  VoiceInfo,
+  VoiceSpeech,
   DiffFile,
   PlanItem,
   Msg,
@@ -2140,6 +2142,11 @@ export interface Actions {
   computerBot(bot: string): Promise<OpMap["computer.bot"]["result"]>;
   computerToggle(bot: string, on: boolean): Promise<ComputerToggle>;
   computerDriver(verb: "install" | "grant"): Promise<ComputerDriverRun>;
+  /** Voice (BOUNDARY rule 54): what the bot's config names for speech, a recording's transcript and one spoken part of
+   *  an answer, all through the bot's own Hermes. Only the bot, the bytes and their type, or the text and a part go out. */
+  voiceInfo(bot: string): Promise<VoiceInfo>;
+  voiceTranscribe(bot: string, data_base64: string, mime: string): Promise<{ transcript: string; provider: string }>;
+  voiceSpeak(bot: string, text: string, part: number): Promise<VoiceSpeech>;
   /** Settings › General › Language: saved on this computer, applied at once (no restart). */
   setLanguage(lang: Lang): void;
   loadModels(bot?: string): Promise<void>;
@@ -3160,6 +3167,9 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     computerBot: (bot) => bridge.request("computer.bot", { bot }),
     computerToggle: (bot, on) => bridge.request("computer.toggle", { bot, on }),
     computerDriver: (verb) => (verb === "install" ? bridge.request("computer.install", {}) : bridge.request("computer.grant", {})),
+    voiceInfo: (bot) => bridge.request("voice.info", { bot }),
+    voiceTranscribe: (bot, data_base64, mime) => bridge.request("voice.transcribe", { bot, data_base64, mime }),
+    voiceSpeak: (bot, text, part) => bridge.request("voice.speak", { bot, text, part }),
     setLanguage(lang) {
       try {
         if (typeof localStorage !== "undefined") localStorage.setItem(LANG_KEY, lang);

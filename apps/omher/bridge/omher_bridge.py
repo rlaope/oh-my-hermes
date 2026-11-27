@@ -7,8 +7,9 @@ profile's own gateway through Hermes' ``connect_gateway``.
 
 Prints one line ``OMHER_BRIDGE_READY {"port": N}`` on stdout once listening; everything else goes
 to stderr. Binds 127.0.0.1 only and refuses (403) any connection whose ``token`` query parameter
-differs. Makes no model or network call of its own; the one outside read is a PR's state and check result through
-the person's own `gh` (``runs.prs`` for a plan, ``thread.prs`` for a thread).
+differs. Makes no model call of its own and holds no key; the one outside read is a PR's state and check result
+through the person's own `gh` (``runs.prs`` for a plan, ``thread.prs`` for a thread), and its one HTTP use is voice
+(``voice.transcribe``, ``voice.speak``): one request to the bot's own gateway on loopback (``voice_request``).
 
 Boundary rules the code keeps:
 * One gateway connection per profile, opened lazily (``--eager`` opens them all at start).
@@ -3587,6 +3588,333 @@ def computer_switch(described) -> str:
     return "unknown"
 
 
+# ---------------------------------------------------------------- voice (BOUNDARY rule 54)
+# The bridge's one HTTP use: Hermes' own `POST /api/audio/transcribe` and `POST /api/audio/speak`, served by the same
+# gateway process the bot's chat is attached to, on that gateway's own loopback listener (`api_origin`, which Hermes'
+# `connect_gateway` dials for `/api/ws`). Each request carries a fresh one-use `native-http` ticket in
+# `X-Hermes-Gateway-Ticket` and no `Origin` (hermes_cli/dashboard_auth/native_http.py), goes through no proxy and
+# follows no redirect. The audio and the text live only in the request and its answer: never written, never logged.
+
+VOICE_PATHS = {"transcribe": "/api/audio/transcribe", "speak": "/api/audio/speak"}
+# seconds one request may take: a local faster-whisper loads (or first downloads) its model on first use; one spoken
+# part is one provider call (Hermes gives Edge 60 s per chunk)
+VOICE_TIMEOUT = {"transcribe": 180.0, "speak": 90.0}
+# bytes of an answer read back: a transcript is a short JSON object; one spoken part (SPEAK_PART_MAX characters, about
+# a minute and a half of speech) is a few MB of MP3, or of WAV from a local engine, base64'd in JSON
+VOICE_ANSWER_MAX = {"transcribe": 1024 * 1024, "speak": 24 * 1024 * 1024}
+VOICE_AUDIO_MAX = 25 * 1024 * 1024  # Hermes' own cap on one recording (`_MAX_TRANSCRIPTION_UPLOAD_BYTES`)
+VOICE_AUDIO_B64_MAX = (VOICE_AUDIO_MAX + 2) // 3 * 4
+VOICE_MIME = re.compile(r"(?:audio/[a-z0-9][a-z0-9.+-]{0,40}|video/webm)")  # what Hermes' transcribe route accepts
+VOICE_B64 = re.compile(r"[A-Za-z0-9+/]*={0,2}")
+VOICE_DETAIL = 300       # characters of Hermes' own error text passed on
+TRANSCRIPT_MAX = 20000   # characters of a transcript passed on
+# Read aloud: Hermes' speak route answers with its first audio file only, and on a host without ffmpeg each provider
+# chunk is its own file (Edge 5000, OpenAI 4096, an unknown provider 4000, NeuTTS and KittenTTS 2000 characters:
+# tools/tts_tool_delivery.py), so the bridge sends parts of at most SPEAK_PART_MAX characters, split at sentences, and
+# the page plays them in order. One read-aloud covers at most SPEAK_TEXT_MAX characters of an answer (about 20 minutes
+# of speech), so one press never holds Hermes' TTS, or the online service it names, for longer.
+SPEAK_PART_MAX = 1500
+SPEAK_TEXT_MAX = 20000
+SPEAK_INPUT_MAX = 1024 * 1024  # characters of text the page may send at all
+_SENTENCE_END = re.compile(r"(?<=[.!?…])\s+|(?<=[。！？])")
+# what each provider name means for where the audio or the text goes (tools/transcription_tools.py, tools/tts_tool.py)
+STT_LOCAL = frozenset({"local", "local_command"})
+STT_ONLINE = frozenset({"groq", "openai", "mistral", "xai", "elevenlabs", "deepinfra", "nous"})
+TTS_LOCAL = frozenset({"neutts", "kittentts", "piper"})
+TTS_ONLINE = frozenset({"elevenlabs", "openai", "deepinfra", "minimax", "xai", "mistral", "gemini", "nous"})
+VOICE_PROVIDER = re.compile(r"[a-z0-9][a-z0-9_.-]{0,40}")
+_TRUE_WORDS = frozenset({"1", "true", "yes", "on"})  # Hermes' `utils.env.TRUTHY_STRINGS`
+
+
+class VoiceError(Exception):
+    """A voice request that did not work: a code the page tells apart and the words it shows (Hermes' own when it
+    gave any, cleaned and clipped)."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code, self.message = code, message
+
+
+def _truthy(value, default: bool) -> bool:
+    """Hermes' `is_truthy_value`: None is the default, a string is one of its truthy words, anything else its bool."""
+    if value is None:
+        return default
+    if isinstance(value, str):
+        return value.strip().lower() in _TRUE_WORDS
+    return bool(value)
+
+
+def _voice_selection(section) -> str:
+    """The provider a raw `stt:` or `tts:` section names, as Hermes' `read_selection` reads it: `nous` when
+    `use_gateway` is true, else `provider`, `backend` or `cloud_provider`; "" when it names none."""
+    if not isinstance(section, dict):
+        return ""
+    if _truthy(section.get("use_gateway"), False):
+        return "nous"
+    for key in ("provider", "backend", "cloud_provider"):
+        text = str(section.get(key)).strip().lower() if section.get(key) is not None else ""
+        if text:
+            return text if VOICE_PROVIDER.fullmatch(text) else "other"
+    return ""
+
+
+def voice_config(profile_dir: Path) -> dict:
+    """What the bot's `config.yaml` says about speech, read-only through the cached read: whether STT is on, the STT
+    and TTS providers it names, and where each sends the person's audio or text (`local`, `online`, `auto` when Hermes
+    picks: its local model when installed, else a cloud provider whose key is set; `edge` for Hermes' default TTS,
+    Microsoft's online service; `other` for a name omher does not know). No key or other value is read."""
+    cfg = _load_yaml(profile_dir / "config.yaml")
+    stt, tts = cfg.get("stt"), cfg.get("tts")
+    enabled = _truthy(stt.get("enabled") if isinstance(stt, dict) else None, True)
+    stt_name = _voice_selection(stt)
+    stt_where = ("off" if not enabled else "auto" if not stt_name else "local" if stt_name in STT_LOCAL
+                 else "online" if stt_name in STT_ONLINE else "other")
+    tts_name = _voice_selection(tts) or "edge"
+    tts_where = "edge" if tts_name == "edge" else "local" if tts_name in TTS_LOCAL else "online" if tts_name in TTS_ONLINE else "other"
+    return {"stt": {"enabled": enabled, "provider": stt_name, "where": stt_where},
+            "tts": {"provider": tts_name, "where": tts_where}}
+
+
+def voice_supported() -> str:
+    """Why this Hermes cannot take a voice request, or "" when it can: it needs `mint_ticket` with a `purpose`
+    (hermes_cli/gateway_runtime_attach.py) and the audio routes (hermes_cli/web_routers/audio.py)."""
+    import importlib.util
+    try:
+        from hermes_cli.gateway_runtime_attach import mint_ticket
+        from hermes_cli import gateway_runtime
+        audio = importlib.util.find_spec("hermes_cli.web_routers.audio")
+    except (ImportError, ValueError):
+        return "This Hermes cannot give omher a ticket for its audio routes. Update Hermes to use voice."
+    if "purpose" not in inspect.signature(mint_ticket).parameters or not hasattr(gateway_runtime, "discover_gateway_endpoint"):
+        return "This Hermes cannot give omher a ticket for its audio routes. Update Hermes to use voice."
+    if audio is None:
+        return "This Hermes has no audio routes. Update Hermes to use voice."
+    return ""
+
+
+def voice_ticket_for(home: Path) -> tuple[str, str]:
+    """(api_origin, ticket) for one request: the ready owner Hermes' own discovery finds for this profile (it starts
+    nothing) and one single-use `native-http` ticket minted by that owner's control socket, as Hermes' documented
+    contract says to do for every HTTP request (website/docs/developer-guide/gateway-ssh-clients.md). The ticket is a
+    credential: it is never logged and lives only for this one request."""
+    why = voice_supported()
+    if why:
+        raise VoiceError("voice_unsupported", why)
+    from hermes_cli import gateway_runtime
+    from hermes_cli.gateway_runtime_attach import mint_ticket
+    home = gateway_runtime.gateway_profile_home(home)
+    found = gateway_runtime.discover_gateway_endpoint(home)
+    endpoint = getattr(found, "endpoint", None)
+    if getattr(found, "state", None) != "ready" or endpoint is None:
+        raise VoiceError("voice_not_ready", "This bot's Hermes gateway is not ready yet. Try again in a moment.")
+    try:
+        ticket = mint_ticket(home, endpoint, purpose="native-http")
+    except (RuntimeError, ValueError, OSError) as e:  # Hermes' TicketUnavailable is a RuntimeError with a bounded reason
+        reason = _platform_text(getattr(e, "reason", ""), 80) or type(e).__name__
+        raise VoiceError("voice_refused", f"Hermes did not give omher a ticket for this request ({reason}).")
+    if not isinstance(ticket, str) or not ticket:
+        raise VoiceError("voice_refused", "Hermes did not give omher a ticket for this request.")
+    return str(endpoint.api_origin), ticket
+
+
+def voice_target(origin: str) -> tuple[str, int]:
+    """The (host, port) of a gateway's `api_origin` when it is a plain-HTTP loopback address with a port and nothing
+    else, as Hermes' own discovery checks it; anything else is refused before a socket opens. Hermes' discovery also
+    accepts an `https` origin (hermes_cli/gateway_runtime.py), though its gateway publishes `http`
+    (gateway/webapp_listener.py `dial_origin`); omher has no TLS client for it, so that case is its own refusal."""
+    import ipaddress
+    try:
+        parsed = urlsplit(origin if isinstance(origin, str) else "")
+        host, port = parsed.hostname, parsed.port
+        loopback = bool(host) and ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        loopback, host, port = False, None, None
+    if (not loopback or parsed.scheme not in ("http", "https") or not port or parsed.username is not None
+            or parsed.password is not None or parsed.path not in ("", "/") or parsed.query or parsed.fragment):
+        raise VoiceError("voice_refused", "omher sends voice only to a Hermes gateway on this computer's loopback address.")
+    if parsed.scheme == "https":
+        raise VoiceError("voice_https", "This Hermes serves its gateway listener over https, which omher's voice does not use.")
+    return host, port
+
+
+VOICE_TICKET = re.compile(r"[A-Za-z0-9_-]{1,512}")  # a ticket as Hermes mints it (`secrets.token_urlsafe`)
+
+
+def _voice_cut(held: list, expired: threading.Event) -> None:
+    """The whole exchange ran past its deadline: end its socket, so a server that trickles bytes cannot hold the
+    worker thread (a per-read socket timeout starts again with every byte)."""
+    import socket
+    expired.set()
+    for sock in held:
+        with contextlib.suppress(OSError):
+            sock.shutdown(socket.SHUT_RDWR)
+
+
+def voice_request(origin: str, which: str, profile: str, ticket: str, body: bytes) -> dict:
+    """One POST to Hermes' audio route `which` (`transcribe` or `speak`): the gateway's loopback `api_origin`, the fixed
+    path, `profile` as its query, the ticket header, a JSON body, no `Origin`, no proxy (http.client reads none) and no
+    redirect (http.client follows none). The answer is read up to VOICE_ANSWER_MAX[which] bytes and must be JSON; a
+    status other than 200 becomes a VoiceError with Hermes' own words. Runs in a worker thread."""
+    import http.client
+    path = VOICE_PATHS[which]
+    if not PROFILE_ID.fullmatch(profile or ""):
+        raise VoiceError("bad_request", "not a profile Hermes accepts")
+    if not isinstance(ticket, str) or not VOICE_TICKET.fullmatch(ticket):
+        raise VoiceError("voice_refused", "Hermes' ticket is not one omher can send.")  # never the ticket itself
+    host, port = voice_target(origin)
+    timeout = VOICE_TIMEOUT[which]
+    conn = http.client.HTTPConnection(host, port, timeout=timeout)
+    expired = threading.Event()
+    held: list = []  # the connection's socket, kept here: http.client lets go of it once a response will close
+    watchdog = threading.Timer(timeout, _voice_cut, (held, expired))
+    watchdog.daemon = True
+    watchdog.start()
+    late = VoiceError("voice_timeout", f"Hermes did not answer in {int(timeout)} seconds.")
+    try:
+        conn.connect()
+        held.append(conn.sock)
+        if expired.is_set():
+            raise late
+        conn.request("POST", f"{path}?profile={profile}", body=body, headers={
+            "Content-Type": "application/json", "Accept": "application/json", "X-Hermes-Gateway-Ticket": ticket})
+        resp = conn.getresponse()
+        status, raw = resp.status, bytearray()  # grown in place: a bytes `+=` would copy the whole answer per chunk
+        while len(raw) <= VOICE_ANSWER_MAX[which] and not expired.is_set():
+            chunk = resp.read(min(65536, VOICE_ANSWER_MAX[which] + 1 - len(raw)))
+            if not chunk:
+                break
+            raw += chunk
+    except (TimeoutError, OSError) as e:
+        if expired.is_set() or isinstance(e, TimeoutError) or "timed out" in str(e):
+            raise late
+        raise VoiceError("voice_not_ready", "omher could not reach this bot's Hermes gateway.")
+    except http.client.HTTPException:
+        raise late if expired.is_set() else VoiceError("voice_failed", "Hermes' answer could not be read.")
+    except ValueError:  # http.client refusing a header value: its message would hold the ticket, so it is dropped
+        raise VoiceError("voice_failed", "omher could not build the request to Hermes.")
+    finally:
+        watchdog.cancel()
+        conn.close()
+    if expired.is_set():
+        raise late
+    if len(raw) > VOICE_ANSWER_MAX[which]:
+        raise VoiceError("voice_too_large", "Hermes' answer is larger than omher reads.")
+    try:
+        data = json.loads(raw.decode("utf-8")) if raw else None
+    except ValueError:
+        data = None
+    if status != 200:
+        raise voice_status_error(status, data)
+    if not isinstance(data, dict) or data.get("ok") is not True:
+        raise VoiceError("voice_failed", "Hermes' answer is not one omher knows.")
+    return data
+
+
+def voice_status_error(status: int, data) -> VoiceError:
+    """Hermes' refusal as a code the page tells apart, with Hermes' own `detail` (already redacted by Hermes) on one
+    line, cleaned of escape and control characters and clipped."""
+    detail = data.get("detail") if isinstance(data, dict) else None
+    said = _platform_text(detail, VOICE_DETAIL) if isinstance(detail, str) else ""
+    if status == 503:
+        return VoiceError("voice_not_ready", "This bot's Hermes gateway is not ready yet. Try again in a moment.")
+    if status in (401, 403):
+        return VoiceError("voice_refused", f"Hermes refused omher's request ({said or status}).")
+    if status in (404, 405):
+        return VoiceError("voice_unsupported", "This Hermes has no such audio route. Update Hermes to use voice.")
+    if status == 413:
+        return VoiceError("voice_too_large", said or "The recording is too large for Hermes.")
+    if 300 <= status < 400:
+        return VoiceError("voice_failed", "Hermes answered with a redirect, which omher does not follow.")
+    low = said.lower()
+    if status == 400 and ("no stt provider" in low or "no tts provider" in low):
+        return VoiceError("voice_no_provider", said)
+    if status == 400 and "disabled" in low and "stt" in low:
+        return VoiceError("voice_disabled", said)
+    return VoiceError("voice_failed", said or f"Hermes answered HTTP {status}.")
+
+
+def _voice_text(value) -> str:
+    """A transcript as the page gets it: escapes and control characters out (line breaks kept), clipped."""
+    import unicodedata
+    text = PLATFORM_ESCAPES.sub("", value) if isinstance(value, str) else ""
+    text = "".join(ch for ch in text if ch == "\n" or unicodedata.category(ch) not in ("Cc", "Cf")).strip()
+    return text[:TRANSCRIPT_MAX]
+
+
+def _voice_provider(value) -> str:
+    """The provider Hermes says handled a request, when it is a plain name; else ""."""
+    text = value.strip().lower() if isinstance(value, str) else ""
+    return text if VOICE_PROVIDER.fullmatch(text) else ""
+
+
+SPEAK_DATA_URL = re.compile(r"data:(audio/[a-z0-9][a-z0-9.+-]{0,40});base64,([A-Za-z0-9+/]+={0,2})")
+
+
+def speak_audio(answer: dict) -> tuple[str, str, str]:
+    """(mime, base64 audio, provider) of Hermes' speak answer, when its `data_url` is base64 audio; else a VoiceError.
+    Runs in the worker thread: the audio is up to VOICE_ANSWER_MAX bytes."""
+    url = answer.get("data_url")
+    m = SPEAK_DATA_URL.fullmatch(url) if isinstance(url, str) else None
+    if m is None:
+        raise VoiceError("voice_failed", "Hermes' answer holds no audio omher can play.")
+    return m.group(1), m.group(2), _voice_provider(answer.get("provider"))
+
+
+def _strip_fences(text: str) -> str:
+    """The text without its fenced code blocks (``` or ~~~): code is not read aloud, and Hermes' own cleaner, which
+    drops a whole block, would not see a block cut in two by the split."""
+    out, fence = [], ""
+    for line in text.splitlines():
+        mark = line.lstrip()[:3]
+        if fence:
+            if mark == fence:
+                fence = ""
+            continue
+        if mark in ("```", "~~~"):
+            fence = mark
+            out.append("")
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
+def speak_parts(text: str) -> tuple[list[str], bool]:
+    """An answer's text as the parts read aloud in order, each at most SPEAK_PART_MAX characters, and whether it was
+    cut at SPEAK_TEXT_MAX. Lines stay lines (Hermes' cleaner reads a list item or a heading by its line); a long line
+    splits after a sentence's end (`.`, `!`, `?`, `…` before a space, or `。`, `！`, `？` with or without one), and a
+    sentence longer than a part splits at its last space within the part, else (text without spaces) at the part's
+    length. Parts are joined greedily."""
+    body = _strip_fences(text).strip()
+    cut = len(body) > SPEAK_TEXT_MAX
+    if cut:
+        head = body[:SPEAK_TEXT_MAX]
+        end = max(head.rfind("\n"), *(head.rfind(c) for c in ".!?…。！？"))
+        body = head[: end + 1] if end >= SPEAK_TEXT_MAX - SPEAK_PART_MAX else head
+    pieces: list[tuple[str, str]] = []  # (piece, what joins it to the next)
+    for line in body.split("\n"):
+        for sentence in _SENTENCE_END.split(line):
+            sentence = sentence.strip()
+            while len(sentence) > SPEAK_PART_MAX:
+                at = sentence.rfind(" ", 0, SPEAK_PART_MAX + 1)
+                at = at if at > SPEAK_PART_MAX // 2 else SPEAK_PART_MAX
+                pieces.append((sentence[:at].rstrip(), " "))
+                sentence = sentence[at:].lstrip()
+            if sentence:
+                pieces.append((sentence, " "))
+        if pieces:  # a line ends its last piece; an empty line keeps the paragraph break
+            pieces[-1] = (pieces[-1][0], "\n\n" if not line.strip() else "\n")
+    parts: list[str] = []
+    current = ""
+    for piece, joiner in pieces:
+        if current and len(current) + len(piece) > SPEAK_PART_MAX:
+            parts.append(current.strip())
+            current = ""
+        current += piece + joiner
+    if current.strip():
+        parts.append(current.strip())
+    return parts, cut
+
+
 # ---------------------------------------------------------------- runs: Hermes delegate_task fan-outs (read-only)
 
 DELEG_ID = re.compile(r"^deleg_[0-9a-f]{6,32}$")
@@ -6767,6 +7095,10 @@ PEER_REFUSED = {
     "bots.restart": "omher does not restart Hermes on another computer. Restart it on {label} itself.",
     "computer.bot": "Computer use would act on {label}'s own screen, so omher does not set it up from here.",
     "computer.toggle": "Computer use would act on {label}'s own screen, so omher does not set it up from here.",
+    # rule 54: voice goes to a bot's Hermes on this computer only; recording here for a Hermes there is not built
+    "voice.info": "Voice works with bots on this computer only; {label}'s bots run on another one.",
+    "voice.transcribe": "Voice works with bots on this computer only; {label}'s bots run on another one.",
+    "voice.speak": "Voice works with bots on this computer only; {label}'s bots run on another one.",
 }
 
 
@@ -7439,7 +7771,8 @@ class Conn:
 class Bridge:
     def __init__(self, *, token: str, hermes_home: Path | None = None, gateway_factory=None, eager: bool = False,
                  clock=time.monotonic, poll_s: float = 30.0, elsewhere_poll_s: float = 20.0,
-                 brief_setup: bool = False, omher_home: Path | None = None, brief_runner=None, gateway_probe=None):
+                 brief_setup: bool = False, omher_home: Path | None = None, brief_runner=None, gateway_probe=None,
+                 voice_ticket=None):
         self.token = token
         # the one briefing job omher sets up itself (BOUNDARY rule 24): after the first bots.list, once per run
         self.brief_setup = brief_setup
@@ -7449,6 +7782,8 @@ class Bridge:
         self.home = Path(hermes_home) if hermes_home else default_hermes_home()
         self.gateway_factory = gateway_factory or self._default_connect
         self.gateway_probe = gateway_probe or self._default_probe
+        # rule 54: (api_origin, one-use native-http ticket) for one voice request to the bot's own gateway
+        self.voice_ticket = voice_ticket or voice_ticket_for
         self.eager = eager
         self.clock = clock
         self.poll_s = poll_s
@@ -7504,6 +7839,8 @@ class Bridge:
             "computer.status": self.op_computer_status, "computer.bot": self.op_computer_bot,
             "computer.toggle": self.op_computer_toggle, "computer.install": self.op_computer_install,
             "computer.grant": self.op_computer_grant,
+            "voice.info": self.op_voice_info, "voice.transcribe": self.op_voice_transcribe,
+            "voice.speak": self.op_voice_speak,
             "bots.restart": self.op_bots_restart, "bots.restart_scope": self.op_bots_restart_scope,
             "peers.probe": self.op_peers_probe, "peers.attach": self.op_peers_attach, "peers.detach": self.op_peers_detach,
         }
@@ -9916,6 +10253,91 @@ class Bridge:
         if sys.platform != "darwin":
             raise BridgeError("bad_request", "Only macOS asks for computer-use permissions.")
         return await self._computer_driver("grant")
+
+    # ------------------------------------------------------------ voice (BOUNDARY rule 54)
+    # The page sends a bot's name and either a recording (its bytes and type) or an answer's text and a part number.
+    # The address, the path, the profile and the ticket are the bridge's own; only a bot on this computer whose gateway
+    # omher is attached to is asked. Nothing of a recording or a text is kept, written or logged.
+
+    def _voice_bot(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        if not PROFILE_ID.fullmatch(bot["name"]):
+            raise BridgeError("bad_request", f"{bot['name']} is not a profile id Hermes accepts")
+        return bot
+
+    async def _voice_send(self, bot: dict, which: str, build, read=None):
+        """One request to the bot's own gateway (voice_request), off the event loop: `build()` checks the page's
+        fields and makes the JSON body in the worker thread (a recording is tens of MB), then a ticket is minted for
+        this one request and the request sent; `read(answer)`, when given, checks Hermes' answer in the same thread
+        (a spoken part is up to VOICE_ANSWER_MAX bytes)."""
+        conn = self.conns.get(bot["name"])
+        if conn is None or not conn.connected:
+            raise BridgeError("bot_offline", f"{bot['display_name']} is offline, so omher cannot reach its Hermes.")
+
+        def exchange() -> dict:
+            body = json.dumps(build()).encode("utf-8")
+            origin, ticket = self.voice_ticket(bot["path"])
+            answer = voice_request(origin, which, bot["name"], ticket, body)
+            return read(answer) if read else answer
+        try:
+            return await asyncio.to_thread(exchange)
+        except VoiceError as e:
+            raise BridgeError(e.code, e.message)
+
+    async def op_voice_info(self, p) -> dict:
+        """What the page says before a first use: whether this Hermes takes voice, and what the bot's config names."""
+        bot = self._voice_bot(p)
+        why = await asyncio.to_thread(voice_supported)
+        return {"supported": not why, "line": why, **await asyncio.to_thread(voice_config, bot["path"]),
+                "text_max": SPEAK_TEXT_MAX}
+
+    async def op_voice_transcribe(self, p) -> dict:
+        """A recording to the bot's Hermes for its transcript: the bytes and the type go out as Hermes' data URL."""
+        bot = self._voice_bot(p)
+        data, mime = p.get("data_base64"), p.get("mime")
+        base = mime.split(";", 1)[0].strip().lower() if isinstance(mime, str) else ""
+        if not VOICE_MIME.fullmatch(base):
+            raise BridgeError("bad_request", "the recording's type is not one Hermes takes")
+        if not isinstance(data, str) or not data:
+            raise BridgeError("bad_request", "no recording")
+        if len(data) > VOICE_AUDIO_B64_MAX:
+            raise BridgeError("voice_too_large", f"A recording may be at most {VOICE_AUDIO_MAX // (1024 * 1024)} MB.")
+        if len(data) % 4:
+            raise BridgeError("bad_request", "the recording is not base64")
+
+        def build() -> dict:  # in the worker thread: a scan of tens of MB would stall every other chat on the loop
+            if not VOICE_B64.fullmatch(data):
+                raise VoiceError("bad_request", "the recording is not base64")
+            return {"data_url": f"data:{base};base64,{data}", "mime_type": base}
+        out = await self._voice_send(bot, "transcribe", build)
+        return {"transcript": _voice_text(out.get("transcript")), "provider": _voice_provider(out.get("provider"))}
+
+    async def op_voice_speak(self, p) -> dict:
+        """Part `part` of an answer's text (speak_parts) to the bot's Hermes for its audio. An empty part (all of it
+        was something Hermes does not read, such as a link) answers `empty` so the page goes on to the next."""
+        bot = self._voice_bot(p)
+        text, part = p.get("text"), p.get("part", 0)
+        if not isinstance(text, str):
+            raise BridgeError("bad_request", "no text")
+        if len(text) > SPEAK_INPUT_MAX:
+            raise BridgeError("voice_too_large", "This answer is too long to read aloud.")
+        if not isinstance(part, int) or isinstance(part, bool) or part < 0:
+            raise BridgeError("bad_request", "part is a number from 0")
+        # in the worker thread: splitting up to SPEAK_INPUT_MAX characters, and below the check of an answer of up to
+        # VOICE_ANSWER_MAX bytes, would stall every other chat on the loop
+        parts, cut = await asyncio.to_thread(speak_parts, text)
+        if not parts:
+            raise BridgeError("voice_empty", "This answer has no text to read aloud.")
+        if part >= len(parts):
+            raise BridgeError("bad_request", f"this text has {len(parts)} parts")
+        head = {"part": part, "parts": len(parts), "cut": cut, "text_max": SPEAK_TEXT_MAX}
+        try:
+            mime, audio, provider = await self._voice_send(bot, "speak", lambda: {"text": parts[part]}, read=speak_audio)
+        except BridgeError as e:
+            if e.code == "voice_failed" and "empty after tts cleanup" in e.message.lower():
+                return {**head, "empty": True}
+            raise
+        return {**head, "empty": False, "mime": mime, "data_base64": audio, "provider": provider}
 
     def poll_routines(self) -> list[tuple[str, dict]]:
         """Compare each profile's cron/jobs.json to the last look; returns (bot, job) for each new run. A changed

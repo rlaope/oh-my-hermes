@@ -24,6 +24,10 @@
 // left as it was (with `unknown`, left unreadable); `ms` is how long a run takes; `busy` n: the next n computer.status
 // asks answer `busy`; status fields `codeFocus` [names] (bots whose config sets agent.coding_context: focus) and
 // `noHermes` (a toggle finds no Hermes to run) shape computer.bot and computer.toggle),
+// mock.voice {info?, transcript?, provider?, next?, ms?, parts?} (voice, rule 54: `info` merges into what voice.info
+// answers, `transcript` and `provider` are what the next voice.transcribe gives, `next` {op, code, message} makes the
+// next voice.<op> fail with the bridge's code and Hermes' words, `ms` is how long a request takes, `parts` how many
+// parts voice.speak says an answer has),
 // mock.botStatus {bot, status} (a bot goes offline or online),
 // mock.manual {bot, on} (a message to that bot, or to its folder chats, starts a turn that runs no script: the test
 // drives it with mock.emit),
@@ -726,6 +730,29 @@ let notReady = new Map();
 // Computer use (computer.*, BOUNDARY rule 52): what Hermes' `computer-use permissions status --json` answers (kept as the
 // bridge keeps it), each bot's computer_use switch, the next failing run, and how long a run takes.
 let computerState, computerBots, computerNext, computerMs, computerBusy;
+// Voice (voice.*, BOUNDARY rule 54): what voice.info answers, the next transcript, the next failure, and the delay.
+let voiceInfo, voiceTranscript, voiceProvider, voiceNext, voiceMs, voiceParts;
+const VOICE_INFO = () => ({
+  supported: true, line: "", stt: { enabled: true, provider: "", where: "auto" }, tts: { provider: "edge", where: "edge" }, text_max: 20000,
+});
+// a tenth of a second of silent 8 kHz WAV as each part's audio: the e2e page stubs playback, so no sound is ever made
+const VOICE_AUDIO = (() => {
+  const n = 800;
+  const wav = Buffer.alloc(44 + n, 128);
+  wav.write("RIFF", 0, "latin1");
+  wav.writeUInt32LE(36 + n, 4);
+  wav.write("WAVEfmt ", 8, "latin1");
+  wav.writeUInt32LE(16, 16);
+  wav.writeUInt16LE(1, 20); // PCM
+  wav.writeUInt16LE(1, 22); // mono
+  wav.writeUInt32LE(8000, 24);
+  wav.writeUInt32LE(8000, 28);
+  wav.writeUInt16LE(1, 32);
+  wav.writeUInt16LE(8, 34);
+  wav.write("data", 36, "latin1");
+  wav.writeUInt32LE(n, 40);
+  return wav.toString("base64");
+})();
 const COMPUTER_READY = () => ({
   read: true, pinned: false, platform: "darwin", platform_supported: true, installed: true, version: "cua-driver 0.4.2",
   ready: true, can_grant: true, error: null, accessibility: true, screen_recording: true,
@@ -997,6 +1024,12 @@ function reset() {
   computerNext = {};
   computerMs = 200;
   computerBusy = 0;
+  voiceInfo = VOICE_INFO();
+  voiceTranscript = "check the deploy logs";
+  voiceProvider = "local";
+  voiceNext = {};
+  voiceMs = 150;
+  voiceParts = null;
   notReady = new Map(); // bot -> the sign-in provider that now passes its strict check ("" = none)
   idSeq = 0;
   calls = [];
@@ -1228,6 +1261,17 @@ function computerSwitch(b) {
 // the bots whose config sets agent.coding_context: focus (mock.computer {codeFocus: [names]})
 const computerFocus = (b) => (computerState.codeFocus ?? []).includes(b.name);
 const computerWait = () => new Promise((r) => setTimeout(r, computerMs));
+function voiceOp(p, op, answer) {
+  const b = needBotAny(p);
+  if (b.host) throw new OpError("remote_bot", `Voice works with bots on this computer only; ${b.host.label}'s bots run on another one.`);
+  if (b.status === "offline") throw new OpError("bot_offline", `${b.display_name} is offline, so omher cannot reach its Hermes.`);
+  // refusals answer at once (the dispatcher keeps an OpError's code only when it is thrown here); a result after `ms`
+  const fail = voiceNext[op];
+  delete voiceNext[op];
+  if (fail) throw new OpError(fail.code, fail.message);
+  const result = answer();
+  return new Promise((r) => setTimeout(() => r(result), voiceMs));
+}
 function computerDriver(verb) {
   return computerWait().then(() => {
     const fail = computerNext[verb];
@@ -1840,6 +1884,21 @@ const OPS = {
     });
   },
   "computer.install": () => computerDriver("install"),
+  // voice: a bot on another computer is refused with the bridge's reason; the rest answer as the bridge does
+  "voice.info": (p) => voiceOp(p, "info", () => structuredClone(voiceInfo)),
+  "voice.transcribe": (p) =>
+    voiceOp(p, "transcribe", () => {
+      if (typeof p.data_base64 !== "string" || !p.data_base64) throw new OpError("bad_request", "no recording");
+      if (typeof p.mime !== "string" || !/^(audio\/|video\/webm)/.test(p.mime)) throw new OpError("bad_request", "the recording's type is not one Hermes takes");
+      return { transcript: voiceTranscript, provider: voiceProvider };
+    }),
+  "voice.speak": (p) =>
+    voiceOp(p, "speak", () => {
+      if (typeof p.text !== "string") throw new OpError("bad_request", "no text");
+      const parts = voiceParts ?? Math.max(1, Math.ceil(p.text.length / 1500));
+      if (!Number.isInteger(p.part) || p.part < 0 || p.part >= parts) throw new OpError("bad_request", `this text has ${parts} parts`);
+      return { part: p.part, parts, cut: false, text_max: 20000, empty: false, mime: "audio/wav", data_base64: VOICE_AUDIO, provider: "edge" };
+    }),
   "computer.grant": () => {
     if (computerState.platform !== "darwin") throw new OpError("bad_request", "Only macOS asks for computer-use permissions.");
     return computerDriver("grant");
@@ -2440,6 +2499,15 @@ const OPS = {
   },
   "mock.appsDelay": (p) => {
     appsDelay[String(p.verb)] = Number(p.ms);
+    return {};
+  },
+  "mock.voice": (p) => {
+    if (p.info && typeof p.info === "object") Object.assign(voiceInfo, p.info);
+    if (typeof p.transcript === "string") voiceTranscript = p.transcript;
+    if (typeof p.provider === "string") voiceProvider = p.provider;
+    if (p.next && typeof p.next === "object") voiceNext[String(p.next.op)] = { code: String(p.next.code), message: String(p.next.message) };
+    if (typeof p.ms === "number") voiceMs = p.ms;
+    if (typeof p.parts === "number") voiceParts = p.parts;
     return {};
   },
   "mock.computer": (p) => {
