@@ -4,9 +4,10 @@
 //
 // The "나" (Me) scope and the GitHub accounts (src-tauri/src/gh_me.rs) come through the same host: the page sends
 // only an account id (`<login>@<host>`), a section word and a page number; a non-active account's token never
-// reaches the page (the shell reads it for one `gh` call and drops it).
+// reaches the page (the shell reads it for one `gh` call and drops it). Tasks › GitHub, the dashboard
+// (src-tauri/src/gh_dash.rs, BOUNDARY rule 51), sends only an account id and a pinned repository the same way.
 import { maskSecrets } from "../lib/secrets";
-import type { CliSource, CliStatus, GhAccount, GhAccounts, MeFailKind, MeItem, MePage, MeSection, TaskDetail, TaskFilter, TaskItem, TaskKind, TaskPage, TaskRemote } from "./types";
+import type { CliSource, CliStatus, DashRepo, GhAccount, GhAccounts, MeFailKind, MeItem, MePage, MeSection, TaskDetail, TaskFilter, TaskItem, TaskKind, TaskPage, TaskRemote } from "./types";
 import { PAGE } from "./types";
 
 /** A "나" list that failed, with why (`rate`: GitHub's rate limit, `auth`: sign in again, `other`). */
@@ -40,6 +41,8 @@ export interface TaskHost {
   /** One page of a "나" section as `account`; fails with a MeFail. `fresh` (⟳, window focus): read again past a
    *  short gap instead of the minute's answer. */
   me(account: string, section: MeSection, page: number, fresh?: boolean): Promise<MePage>;
+  /** Tasks › GitHub: one pinned repository read as `account` (a github.com account); fails with a MeFail. */
+  dash(account: string, repo: string, fresh?: boolean): Promise<DashRepo>;
 }
 
 class TauriTaskHost implements TaskHost {
@@ -69,6 +72,10 @@ class TauriTaskHost implements TaskHost {
     const { invoke } = await this.core();
     return invoke<MePage>("tasks_me", { account, section, page, fresh }).catch((e) => Promise.reject(failOf(e)));
   }
+  async dash(account: string, repo: string, fresh = false) {
+    const { invoke } = await this.core();
+    return invoke<DashRepo>("gh_dash", { account, repo, fresh }).catch((e) => Promise.reject(failOf(e)));
+  }
 }
 
 // ---- Mock -----------------------------------------------------------------------------------
@@ -92,6 +99,10 @@ export interface MockTasks {
     me?: Record<string, MeItem[]>;
     /** `<login>@<host>` -> why every list of that account fails */
     fail?: Record<string, { kind: MeFailKind; line: string }>;
+    /** Tasks › GitHub: `owner/repo` -> what the dashboard reads for it (missing parts: empty) */
+    dash?: Record<string, Partial<DashRepo>>;
+    /** `owner/repo` -> why its dashboard read fails */
+    dashFail?: Record<string, { kind: MeFailKind; line: string }>;
   };
 }
 
@@ -101,7 +112,8 @@ export type MockTaskCall =
   | { op: "view"; source: CliSource; repo: string; kind: TaskKind; number: number; account?: string }
   | { op: "remote"; cwd: string }
   | { op: "ghAccounts"; fresh: boolean }
-  | { op: "me"; account: string; section: MeSection; page: number; fresh: boolean };
+  | { op: "me"; account: string; section: MeSection; page: number; fresh: boolean }
+  | { op: "dash"; account: string; repo: string; fresh: boolean };
 
 type G = { __omherTasks?: MockTasks; __omherTaskCalls?: MockTaskCall[] };
 
@@ -162,11 +174,21 @@ class MockTaskHost implements TaskHost {
     const base = section === "mentions" ? 30 : 50;
     return { items: all.slice(page * base, (page + 1) * base), more: all.length > (page + 1) * base };
   }
+  async dash(account: string, repo: string, fresh = false): Promise<DashRepo> {
+    this.log({ op: "dash", account, repo, fresh });
+    await new Promise((r) => setTimeout(r, 30));
+    const fail = this.data.gh?.fail?.[account] ?? this.data.gh?.dashFail?.[repo];
+    if (fail) throw new MeFail(fail.kind, fail.line);
+    const d = this.data.gh?.dash?.[repo] ?? {};
+    return { repo, branch: d.branch ?? "", ci: d.ci ?? "", prs: d.prs ?? [], runs: d.runs ?? [], releases: d.releases ?? [], ahead: d.ahead ?? null, rate: d.rate ?? false };
+  }
 }
 
 // ---- Masking --------------------------------------------------------------------------------
 
 const maskItem = (i: TaskItem): TaskItem => ({ ...i, title: maskSecrets(i.title), labels: i.labels.map((l) => ({ ...l, name: maskSecrets(l.name) })) });
+
+const maskMe = (i: MeItem): MeItem => ({ ...i, title: maskSecrets(i.title), labels: i.labels.map((l) => ({ ...l, name: maskSecrets(l.name) })) });
 
 /** A failed call as an Error whose message has no token-like string in it. */
 const masked = (e: unknown) => new Error(maskSecrets(e instanceof Error ? e.message : String(e)));
@@ -207,7 +229,19 @@ export class MaskingTaskHost implements TaskHost {
       const f = failOf(e);
       return Promise.reject(new MeFail(f.kind, maskSecrets(f.message)));
     });
-    return { ...p, items: p.items.map((i) => ({ ...i, title: maskSecrets(i.title), labels: i.labels.map((l) => ({ ...l, name: maskSecrets(l.name) })) })) };
+    return { ...p, items: p.items.map(maskMe) };
+  }
+  async dash(account: string, repo: string, fresh?: boolean): Promise<DashRepo> {
+    const d = await this.inner.dash(account, repo, fresh).catch((e) => {
+      const f = failOf(e);
+      return Promise.reject(new MeFail(f.kind, maskSecrets(f.message)));
+    });
+    return {
+      ...d,
+      prs: d.prs.map(maskMe),
+      runs: d.runs.map((r) => ({ ...r, workflow: maskSecrets(r.workflow), title: maskSecrets(r.title), branch: maskSecrets(r.branch) })),
+      releases: d.releases.map((r) => ({ ...r, tag: maskSecrets(r.tag), name: maskSecrets(r.name) })),
+    };
   }
 }
 

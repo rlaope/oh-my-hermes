@@ -75,6 +75,16 @@ describe("token-like text from a task never reaches the page or a thread", () =>
       items: [{ repo: "o/r", number: 1, title: `leak ${fake}`, url: "", pr: true, draft: false, state: "open", author: "p", labels: [{ name: `sk-${"Z".repeat(20)}`, color: "" }], created: 0, updated: 0, asked: true, ci: "", review: "", conflict: false, requested: 0 }],
       more: false,
     }),
+    dash: async () => ({
+      repo: "o/r",
+      branch: "main",
+      ci: "passed",
+      prs: [{ repo: "o/r", number: 1, title: `leak ${fake}`, url: "", pr: true, draft: false, state: "open", author: "p", labels: [{ name: `sk-${"Z".repeat(20)}`, color: "" }], created: 0, updated: 0, asked: true, ci: "", review: "", conflict: false, requested: 0 }],
+      runs: [{ id: 1, workflow: `ci ${fake}`, title: `run ${fake}`, branch: "main", event: "push", state: "passed", created: 0, started: 0, updated: 0, url: "" }],
+      releases: [{ tag: "v1", name: `release ${fake}`, latest: true, prerelease: false, published: 0, url: "" }],
+      ahead: 3,
+      rate: false,
+    }),
   };
 
   it("masks the list, the drawer and the error line through the one masker", async () => {
@@ -102,6 +112,22 @@ describe("token-like text from a task never reaches the page or a thread", () =>
     expect(err).toBeInstanceOf(MeFail);
     expect(err.kind).toBe("auth");
     expect(err.message).toBe("HTTP 401: Bad credentials ••••");
+  });
+
+  it("masks the GitHub dashboard's pull requests, runs, releases and error line", async () => {
+    const h = new MaskingTaskHost(leaky);
+    const d = await h.dash("octo@github.com", "o/r");
+    expect(JSON.stringify(d)).not.toContain(fake);
+    expect(d.prs[0].title).toBe("leak ••••");
+    expect(d.prs[0].labels[0].name).toBe("••••");
+    expect(d.runs[0].workflow).toBe("ci ••••");
+    expect(d.releases[0].name).toBe("release ••••");
+    expect(d.ahead).toBe(3);
+    const failing = new MaskingTaskHost({ ...leaky, dash: async () => Promise.reject({ kind: "rate", line: `API rate limit ${fake}` }) });
+    const err = await failing.dash("octo@github.com", "o/r").catch((e) => e);
+    expect(err).toBeInstanceOf(MeFail);
+    expect(err.kind).toBe("rate");
+    expect(err.message).toBe("API rate limit ••••");
   });
 
   it("masks Start in thread's title and first message", () => {

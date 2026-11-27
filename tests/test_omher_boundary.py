@@ -731,9 +731,12 @@ class DocPins(unittest.TestCase):
         # link to the server and the page talking only to that bridge); 48: rule 48 (a /usage or /status typed during a
         # turn through the same `slash.exec`, `chat.command`, its answer as `command.output`; a bare /model opens the
         # picker; every other command waits in the steer queue); 49: rule 49 (a run stopped past its time ends its whole
-        # process tree on Windows through one fixed `taskkill /T /F /PID`). The rules stay numbered 1..n with no gap or repeat.
+        # process tree on Windows through one fixed `taskkill /T /F /PID`); 50: rule 50 (an Antigravity session's
+        # conversation id from its own workspace cache, read-only); 51: rule 51 (Tasks › GitHub: pinned repositories'
+        # open pull requests, runs and releases through rule 33's runner as a chosen account, six fixed read argv).
+        # The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 50, len(rules))
+        self.assertTrue(6 <= len(rules) <= 51, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -3188,7 +3191,78 @@ class TasksReadOnly(unittest.TestCase):
         create = store.split("const createThread = async (", 1)[1].split("\n  };\n", 1)[0]
         self.assertEqual(re.findall(r'(threadReq|bridge\.request)\("([a-z.]+)"', create), [("threadReq", "thread.create")])
         host = (UI_SRC / "tasks" / "host.ts").read_text(encoding="utf-8")
-        self.assertEqual(sorted(set(re.findall(r'invoke<[^>]+>\("([a-z_]+)"', host))), ["gh_accounts", "tasks_list", "tasks_me", "tasks_remote", "tasks_status", "tasks_view"])
+        self.assertEqual(sorted(set(re.findall(r'invoke<[^>]+>\("([a-z_]+)"', host))), ["gh_accounts", "gh_dash", "tasks_list", "tasks_me", "tasks_remote", "tasks_status", "tasks_view"])
+
+
+class GithubDashboardReadOnly(unittest.TestCase):
+    """Rule 51: Tasks › GitHub reads pinned repositories through rule 33's runner as a chosen account, with six fixed
+    read argv the page cannot extend; the page sends only an account id and a repository."""
+
+    RULE_51 = (
+        "51. Tasks › GitHub (the GitHub dashboard: the sidebar's GitHub row, shown once a github.com account is chosen in"
+        " Settings › Accounts, and the Tasks page's third scope) shows, read-only,",
+        "The desktop shell (`gh_dash.rs`) reads them as a chosen github.com account (the one whose login owns the"
+        " repository, else the first) through rule 33's `Me::run_as`:",
+        "The only argv it adds are `pr list --repo <owner>/<repo> --state open --json <fixed fields> --limit 50`, the same"
+        " with `--search review-requested:@me --json number`, `run list --repo <owner>/<repo> --json <fixed fields> --limit"
+        " 15`, `release list --repo <owner>/<repo> --exclude-drafts --json <fixed fields> --limit 5`, `api graphql -f"
+        " query=<one fixed query> -f owner=<owner> -f name=<repo>`",
+        "and `api repos/<owner>/<repo>/compare/<tag>...<branch> --jq .ahead_by`, a GET whose tag comes from the release"
+        " list and whose branch comes from that query, each checked",
+        "The page sends only a chosen account id and a repository, checked as rule 33 checks them;",
+        "omher never comments, reviews, merges, closes, edits, re-runs or cancels anything on GitHub from it.",
+    )
+
+    def setUp(self) -> None:
+        text = (SHELL / "gh_dash.rs").read_text(encoding="utf-8")
+        self.prod = text.split("#[cfg(test)]\nmod tests", 1)[0]
+        self.code = "\n".join(l for l in self.prod.splitlines() if not l.lstrip().startswith("//"))
+        self.lib = (SHELL / "lib.rs").read_text(encoding="utf-8")
+
+    def test_the_rule_is_stated(self) -> None:
+        text = _flat(DOC.read_text(encoding="utf-8"))
+        for sentence in self.RULE_51:
+            self.assertIn(_flat(sentence), text)
+
+    def test_no_spawn_of_its_own_only_the_accounts_runner(self) -> None:
+        # the four reads beside the pull request list run on scoped threads; no process is started here
+        self.assertEqual(re.findall(r"(\w+)\.spawn\(", self.code), ["sc"] * 4)
+        for bad in ("Command::new", "process::", "run_full(", "run_env(", "/bin/sh", '"-c"', "std::fs::", "File::", "OpenOptions", "println!", "eprintln!", "dbg!"):
+            self.assertNotIn(bad, self.code, bad)
+        # every read goes through gh_me.rs's Me::run_as (the chosen account, its token in that one child, cached)
+        self.assertEqual(len(re.findall(r"\brun_as\(", self.code)), 2)
+        self.assertIn("let ask = |argv: Result<Vec<String>, String>| argv.map_err(other).and_then(|a| me.run_as(id, a, fresh));", self.code)
+        self.assertIn("repo_account_ok(id).map_err(other)?;", self.code)
+        self.assertIn("let repo = check_repo(Source::Github, repo).map_err(other)?;", self.code)
+
+    def test_six_fixed_read_argv(self) -> None:
+        verbs = re.findall(r'vec!\[s\("([a-z]+)"\), (?:s\("([a-z]+)"\)|format!)', self.code)
+        self.assertEqual(sorted(verbs), [("api", ""), ("api", "graphql"), ("pr", "list"), ("pr", "list"), ("release", "list"), ("run", "list")])
+        for bad in ("create", "close", "edit", "comment", "merge", "delete", "review", "rerun", "cancel", "watch", "upload", "download", "-X", "--method", "--input", "-F", "--field", "--raw-field", "mutation"):
+            self.assertNotIn(f'"{bad}"', self.code, bad)
+        self.assertNotIn("mutation", self.code)
+        self.assertIn('pub const REPO_QUERY: &str = "query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) {', self.prod)
+        # the compare read is a GET: no field (`-f` turns `gh api` into a POST), its tag and branch checked first
+        compare = self.prod.split("pub fn compare_argv(", 1)[1].split("\n}\n", 1)[0]
+        self.assertNotIn('"-f"', compare)
+        self.assertIn("if !ref_ok(tag) || !ref_ok(branch) {", compare)
+        self.assertIn('Ok(vec![s("api"), format!("repos/{repo}/compare/{tag}...{branch}"), s("--jq"), s(".ahead_by")])', compare)
+        # every repository argv checks the repository before it is built
+        for fn in ("prs_argv", "asked_argv", "runs_argv", "releases_argv", "repo_argv", "compare_argv"):
+            body = self.prod.split(f"pub fn {fn}(", 1)[1].split("\n}\n", 1)[0]
+            self.assertIn("let repo = check_repo(Source::Github, repo)?;", body, fn)
+
+    def test_the_page_sends_only_an_account_and_a_repository(self) -> None:
+        sig = self.lib[self.lib.index("async fn gh_dash("):]
+        sig = _flat(sig[: sig.index(") ->")])
+        self.assertIn("account: String, repo: String, fresh: Option<bool>", sig)
+        self.assertNotRegex(sig, r"\b(argv|args|program|command|token|query|tag|branch)\b")
+        view = (UI_SRC / "tasks" / "DashView.tsx").read_text(encoding="utf-8")
+        dash = (UI_SRC / "tasks" / "dash.ts").read_text(encoding="utf-8")
+        for src in (view, dash):
+            self.assertNotIn("invoke(", src)
+            self.assertNotIn("bridge.request", src)
+        self.assertIn('invoke<DashRepo>("gh_dash", { account, repo, fresh })', (UI_SRC / "tasks" / "host.ts").read_text(encoding="utf-8"))
 
 
 class HandToBotAddsNoRead(unittest.TestCase):

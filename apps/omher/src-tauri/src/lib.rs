@@ -11,6 +11,7 @@ mod disk;
 mod dsh_chat;
 mod fg;
 mod folder_open;
+mod gh_dash;
 mod gh_me;
 mod git_branch;
 mod hermes_auth;
@@ -655,6 +656,15 @@ async fn tasks_me(me: State<'_, Arc<gh_me::Me>>, account: String, section: Strin
     tauri::async_runtime::spawn_blocking(move || m.list(&account, sec, page, fresh.unwrap_or(false))).await.map_err(|e| gh_me::MeError::new("other", e.to_string()))?
 }
 
+/// Tasks › GitHub (the dashboard): one pinned repository's open pull requests (and which ask for my review), recent
+/// workflow runs, releases, default branch CI and commits since the latest release, as GitHub account `account` (rule
+/// 51). The page sends only the account id and the repository; every argv is gh_dash.rs's own.
+#[tauri::command]
+async fn gh_dash(me: State<'_, Arc<gh_me::Me>>, account: String, repo: String, fresh: Option<bool>) -> Result<gh_dash::DashRepo, gh_me::MeError> {
+    let m = Arc::clone(&me);
+    tauri::async_runtime::spawn_blocking(move || gh_dash::read(&m, &account, &repo, fresh.unwrap_or(false))).await.map_err(|e| gh_me::MeError::new("other", e.to_string()))?
+}
+
 /// Settings › Accounts › GitHub: gh's own sign-in for one more account in a terminal-panel tab (`gh auth login`, or
 /// `--hostname <host>` for GitHub Enterprise; rule 18). The page sends only the host (checked) and a size.
 #[tauri::command]
@@ -1242,6 +1252,7 @@ pub fn run() {
             tasks_remote,
             gh_accounts,
             tasks_me,
+            gh_dash,
             gh_login_start,
             window_close,
             power_busy,

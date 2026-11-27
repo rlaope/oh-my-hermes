@@ -4,6 +4,17 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: a GitHub dashboard on one screen.** Once a GitHub account is added in Settings › Accounts, a GitHub row
+  under the sidebar's Tasks row opens the Tasks page's new GitHub scope: the repositories you pin on the left (the
+  ones found in your thread and terminal folders are offered to pin; a dot shows each default branch's CI), their
+  open pull requests in the centre in GitHub's list style (the open mark, CI ✓ / ✗ / ● beside the title, labels in
+  their own colours, `#number · when · author · review state`) with only the tabs All and Review requested, and their
+  recent Actions runs above their latest releases (Latest, and the commits the default branch has since) on the
+  right. Each column scrolls inside itself; a pull request opens the Tasks drawer (Start in thread, Open in browser).
+  It reads on open, on window focus, on ⟳ and every 5 minutes, as the account that owns each repository, through the
+  same `gh` runner, cache and rate limits as Tasks › 나, and changes nothing on GitHub. (BOUNDARY rule 51;
+  `apps/omher/src/tasks/DashView.tsx`, `apps/omher/src/tasks/dash.ts`, `apps/omher/src-tauri/src/gh_dash.rs`)
+
 - **TUI: a `/model` form Hermes runs itself waits for the turn instead of being refused.** During a turn, `/model`
   ran at once whenever every `--` word was `--refresh`, `--provider` or `--session`, so `/model --provider copilot`,
   `/model gpt-5.4 --refresh`, `/model --session`, `/model gpt-5.4 -g` and `/model gpt-5.4 extra` went straight to

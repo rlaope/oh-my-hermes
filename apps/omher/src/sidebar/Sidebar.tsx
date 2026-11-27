@@ -29,7 +29,7 @@ import { useEdgeFade } from "./edgeFade";
 import { SplitDivider, useSideSplit } from "./SideSplit";
 import { SidebarResizer } from "./SidebarResizer";
 import { useAutoSplit } from "./autoSplit";
-import { TasksBar } from "../tasks/TasksBar";
+import { GhDashBar, TasksBar } from "../tasks/TasksBar";
 import { DiskChip } from "./DiskChip";
 import { PLATFORMS_POLL_MS } from "../platforms/platforms";
 
@@ -135,6 +135,7 @@ export function Sidebar() {
         />
       </label>
       <TasksBar />
+      <GhDashBar />
       <NeedsStrip asks={asks} prs={failing} />
       <section ref={botSec} className={`side-sec${needle && bots.length === 0 ? " side-sec-fit" : ""}`} data-testid="side-bots" style={needle ? undefined : split.bots}>
         <div className="side-sh">{t("nav.bots")}</div>

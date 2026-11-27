@@ -2,7 +2,8 @@
 // Inc.; ported, not copied): a list mark and "Tasks", and on its right the GitHub, GitLab and Linear marks, each
 // opening the Tasks page on that source. Right-click: "Hide from sidebar" (Settings › General shows it again). With
 // GitHub accounts chosen, a badge counts the reviews asked of me (summed over the accounts the "나" chip shows); the
-// row keeps their lists read while omher runs (me.ts startMePolling).
+// row keeps their lists read while omher runs (me.ts startMePolling). With a github.com account chosen, a GitHub row
+// under it opens the Tasks page on the GitHub dashboard (DashView.tsx) in one click.
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../state/store";
 import { t } from "../i18n";
@@ -31,7 +32,7 @@ export function TasksBar() {
     return () => document.removeEventListener("mousedown", down);
   }, [menu]);
   if (!tk.bar) return null;
-  const on = s.ui.view === "tasks";
+  const on = s.ui.view === "tasks" && tk.scope !== "gh";
   const reviews = tk.accounts.length ? reviewBadge(me.lists, shownAccounts(tk.accounts, tk.meAccount)) : 0;
   const open = (src?: TaskSource) => {
     if (src) {
@@ -98,6 +99,32 @@ export function TasksBar() {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/** The sidebar's GitHub row: shown once a github.com account is chosen (Settings › Accounts › GitHub); it opens the
+ *  Tasks page on the GitHub dashboard. */
+export function GhDashBar() {
+  const s = useStore();
+  const tk = useTasks();
+  if (!tk.accounts.some((a) => a.host === "github.com")) return null;
+  const on = s.ui.view === "tasks" && tk.scope === "gh";
+  return (
+    <div className={`tk-bar tk-bar-gh${on ? " on" : ""}`} data-testid="ghdash-bar">
+      <button
+        type="button"
+        className="tk-bar-main"
+        aria-current={on ? "page" : undefined}
+        onClick={() => {
+          setScope("gh");
+          s.openTasks();
+        }}
+        data-testid="ghdash-open"
+      >
+        <SourceMark source="github" size={14} />
+        <span>{t("tasks.gh.bar")}</span>
+      </button>
     </div>
   );
 }
