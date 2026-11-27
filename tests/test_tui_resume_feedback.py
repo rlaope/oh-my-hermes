@@ -1,10 +1,9 @@
-"""Bare `/resume` always says something, and a bare `omh --resume` starts on the session picker.
+"""The launcher's Gateway-only card picker says when a session.list call is in flight.
 
-Reported by the owner on 2026-11-02: `/resume` drew nothing at all. Bare `/resume` has no echo, so until Hermes
-answered `session.list` the screen did not change; during a turn the answer waits behind Hermes' 8-worker pool for
-long calls and `flush_token_counts` (up to 5 s), while the listing itself took 0.02-0.21 s on a 428 MB copy of the
-owner's store. Then, with the list slow during a turn, the prompt typed meanwhile ended up as the picker's filter
-(`Sessions (0/50)`, `no session matches the filter`).
+The bare /resume and /sessions commands instead open the all-profile table
+immediately. These tests cover the launcher's unchanged Gateway picker: while
+Hermes answers the list, the loading row stays visible and typing remains in
+the composer until the person hands the picker its keys.
 """
 
 from __future__ import annotations
@@ -44,8 +43,9 @@ def reply(app: App, client: RecordingClient, result: dict | None = None, error: 
 
 
 def resume(app: App) -> None:
-    type_text(app, "/resume")
-    app._on_input(Key(ENTER))
+    # These tests exercise the launcher's unchanged Gateway-only card picker,
+    # not bare /resume's all-profile table.
+    app._sessions("")
 
 
 class ResumeFeedbackTests(unittest.TestCase):

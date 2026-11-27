@@ -154,7 +154,7 @@ packages = [
   "inference_serving_toolkit/README.md", "inference_serving_toolkit/scripts/vram_kv_calc.py",
 ]
 "omh.skins" = ["*.yaml"]
-"omh.tui" = ["frontend/dist/*.js"]
+"omh.tui" = ["frontend/dist/*.js", "frontend/dist/package.json"]
 "omh.catalogs" = ["*.json"]
 "omh.routing.trigger_packs" = ["*.json"]
 "omh.plugin_bundle.omh" = ["plugin.yaml", "config.yaml", "desktop/*.js"]

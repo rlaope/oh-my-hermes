@@ -2697,9 +2697,10 @@ class SessionSwitchTests(AppTestCase):
         startup, listing = run.calls("session.list")  # the fresh session's last-session lookup, then /sessions
         self.assertEqual((startup["params"], listing["params"]), ({"limit": 3}, {"limit": SESSION_LIST_LIMIT}))
         picker = "\n".join(terminal.captures["picker"])
-        self.assertIn("Reply with ok", picker)  # the `/resume` card: its name, then `● this session · …`
-        self.assertIn("● this session", picker)
-        self.assertIn("2 messages", picker)
+        self.assertIn("Sessions · All local profiles (2)", picker)
+        self.assertRegex(picker, r"Title / preview\s+Source\s+Last active")
+        self.assertRegex(picker, r"default  2 sessions\n.*● Reply with ok\s+tui")  # the bot's block heading
+        self.assertRegex(picker, r"Refactor the router\s+cli")
         methods = [frame.get("method") for frame in run.frames]
         (resume,) = run.calls("session.resume")
         self.assertEqual(resume["params"], {"session_id": OTHER_STORED_ID, "cols": 80})

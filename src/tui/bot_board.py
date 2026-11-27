@@ -133,7 +133,7 @@ from .pager import Pager
 from .prompts import CHOICE_MARK
 from .session_picker import age_text, pointer
 from .style import Line, Span, Style
-from .theme import BLACK, EDGE_CONTRAST, WHITE, Theme, contrast_ratio
+from .theme import BLACK, EDGE_CONTRAST, WHITE, Theme, contrast_ratio, profile_style
 from .width import (
     cell_width, cluster_width, clusters, clusters_as_written, line_width, truncate, truncate_line, wrap_line,
 )
@@ -1394,12 +1394,8 @@ def avatar(name: str, charset: str = "unicode") -> list[str]:
 
 
 def _avatar_style(name: str, theme: Theme) -> Style:
-    """The face's colour: one of the theme's accent steps (its tool hues and the delegation view's word steps, each
-    lifted to 4.5:1 on the background), picked by the name's hash, so it reads on a light page and a dark one."""
-    ramp = [style for style in (*theme.kinds, *theme.dag_words) if style.fg]
-    if not ramp:
-        return theme.text
-    return replace(ramp[hashlib.sha256(name.encode("utf-8", "surrogatepass")).digest()[8] % len(ramp)], bold=False)
+    """The face's colour (`theme.profile_style`): the same colour the sessions table gives this bot's group."""
+    return profile_style(name, theme)
 
 
 def _face_column(name: str, rows: int, theme: Theme, charset: str) -> list[Line]:
