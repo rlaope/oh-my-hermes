@@ -316,6 +316,35 @@ class AdapterSandboxSecurityTests(_RunnerMixin, unittest.TestCase):
         self.assertLess(command.index("--bind-try"), command.index("--ro-bind-try"))
         self.assertEqual(command[command.index("--ro-bind-try"):][:3], ("--ro-bind-try", str(program.resolve()), str(program.resolve())))
 
+    def test_protected_path_ancestors_are_pinned_so_the_tree_cannot_be_moved_aside(self) -> None:
+        # Renaming `cli` inside the writable state root and recreating `cli/_versions` replaced the
+        # program the host launches next; each directory above the protected path is pinned.
+        child = ChildContext(Path("/tmp/scratch"), Path("/tmp/scratch/home"), Path("/tmp/scratch/work"), Path("/tmp/scratch/tmp"), Path("/tmp/scratch/output"), Path("/tmp/scratch/request.json"), Path("/tmp/scratch/output/result.json"), "f" * 64)
+        environment = {"HOME": "/tmp/scratch/home", "PATH": "/usr/bin:/bin", "PYTHONNOUSERSITE": "1"}
+        state = Path("/home/operator/.local/share/devin").resolve()
+        program = state / "cli" / "_versions"
+        with patch("src.quality.cross_harness_adapter_sandbox._trusted_bwrap", return_value="/usr/bin/bwrap"):
+            command = sandbox_command(
+                ("/opt/runtime/bin/tool", "run"), "bwrap", (Path("/opt/fixtures"),), child, False, environment,
+                write_roots=(state,), protected_paths=(program,), allow_broad_file_read=True,
+            )
+        pin = command.index(str(state / "cli"))
+        self.assertEqual(command[pin - 1:pin + 2], ("--bind-try", str(state / "cli"), str(state / "cli")))
+        self.assertLess(command.index(str(state)), pin)
+        self.assertLess(pin, command.index("--ro-bind-try"))
+        policy = sandbox_command(
+            ("/opt/runtime/bin/tool", "run"), "sandbox-exec", (Path("/opt/fixtures"),), child, False, environment,
+            write_roots=(state,), protected_paths=(program,), allow_broad_file_read=True,
+        )[2]
+        self.assertIn(f'(deny file-write-unlink (literal {json.dumps(str(state / "cli"))}))', policy)
+        self.assertIn(f'(deny file-write* (subpath {json.dumps(str(program))}))', policy)
+        # No protected path, no extra rule: every other owner keeps its byte-identical command.
+        plain = sandbox_command(
+            ("/opt/runtime/bin/tool", "run"), "sandbox-exec", (Path("/opt/fixtures"),), child, False, environment,
+            write_roots=(state,), allow_broad_file_read=True,
+        )[2]
+        self.assertNotIn(str(state / "cli"), plain)
+
     def test_linux_owner_state_write_root_is_writable_without_broadening_reads(self) -> None:
         child = ChildContext(Path("/tmp/scratch"), Path("/tmp/scratch/home"), Path("/tmp/scratch/work"), Path("/tmp/scratch/tmp"), Path("/tmp/scratch/output"), Path("/tmp/scratch/request.json"), Path("/tmp/scratch/output/result.json"), "f" * 64)
         environment = {"HOME": "/tmp/scratch/home", "PATH": "/usr/bin:/bin", "PYTHONNOUSERSITE": "1"}

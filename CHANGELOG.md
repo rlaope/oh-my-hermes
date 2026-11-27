@@ -71,7 +71,10 @@ All notable changes will be documented here.
   session ... Read-only file system`. Devin's state tree (`~/.local/share/devin`) is now an owner write root, with
   the installed program inside it (`cli/_versions`) mounted read-only (a new optional `protected_paths` on the
   sandbox command: `--ro-bind-try` on bwrap, a `file-write*` deny on sandbox-exec), and the state home follows the
-  preset instead of the free-form executor id. The preset's `accept-edits` mode also rejected `git add` /
+  preset instead of the free-form executor id. Every directory between the state root and the program (`cli`) is
+  pinned too (its own mount point on bwrap, an unlink deny on sandbox-exec), so a unit cannot rename `cli` aside,
+  recreate `cli/_versions` with its own binary and have the host launch that next time. The preset's `accept-edits`
+  mode also rejected `git add` /
   `git commit` headlessly (`rejected a tool call that requires confirmation`), so a unit could edit but never leave
   the commit it needs; inside an enforced fence Devin now runs `--permission-mode dangerous`, the way Codex's own
   sandbox is already turned off there. Without a fence the preset runs as written. Measured end to end on Linux

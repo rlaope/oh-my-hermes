@@ -788,6 +788,43 @@ class FanoutConfinementPolicyTests(unittest.TestCase):
 class FanoutFilesystemConfinementTests(_ConfinedSpawnContract, unittest.TestCase):
     probe_refusal = "Operation not permitted"
 
+    def test_devin_program_cannot_be_replaced_from_inside_its_writable_state_root(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            worktree = root / "worktree"
+            worktree.mkdir()
+            state = root / "home" / ".local" / "share" / "devin"
+            program = state / "cli" / "_versions" / "1.0" / "bin" / "devin"
+            program.parent.mkdir(parents=True)
+            program.write_text("#!/bin/sh\necho REAL\n", encoding="utf-8")
+            program.chmod(0o700)
+            with mock.patch("omh.coding.fanout_confinement.Path.home", return_value=root / "home"):
+                confinement = prepare_fanout_filesystem_confinement(
+                    worktree, {}, (("/bin/sh", "-c", "exit 0"),), owner="devin",
+                )
+            self.assertTrue(confinement.receipt["enforced"])
+            cli = state / "cli"
+            attacks = {
+                "write_program": f"echo x > '{program}'",
+                "move_cli_aside": f"mv '{cli}' '{cli}.bak' && mkdir -p '{program.parent}' && echo x > '{program}'",
+                "move_versions_aside": f"mv '{cli / '_versions'}' '{cli / 'old'}'",
+                "remove_cli": f"rm -rf '{cli}'",
+            }
+            for name, script in attacks.items():
+                with self.subTest(attack=name):
+                    completed = subprocess.run(
+                        confinement.command(("/bin/sh", "-c", script)), cwd=worktree,
+                        env=confinement.command_environment(), text=True, capture_output=True, check=False,
+                    )
+                    self.assertNotEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(subprocess.run((str(program),), capture_output=True, text=True, check=True).stdout, "REAL\n")
+            # The state the CLI writes on every run stays writable.
+            completed = subprocess.run(
+                confinement.command(("/bin/sh", "-c", f"mkdir -p '{cli / 'logs'}' && touch '{cli / 'sessions.db'}'")),
+                cwd=worktree, env=confinement.command_environment(), text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+
     def test_selected_owner_state_is_a_write_only_root_and_escape_routes_stay_refused(self) -> None:
         with TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
