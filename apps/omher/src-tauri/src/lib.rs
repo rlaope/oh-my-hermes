@@ -898,6 +898,17 @@ async fn codex_conversation(shell: State<'_, Shell>, id: u32) -> Result<Option<S
         .map_err(|e| e.to_string())?
 }
 
+/// The conversation the Antigravity CLI in the foreground of TERMINALS session `id` is on, for the session to continue
+/// it after a restart (rule 11): only the id, checked as a UUID, from Antigravity's own workspace cache for the folder
+/// the session started in, written since it started (`fg::agy_conversation`). The page sends only the session id.
+#[tauri::command]
+async fn agy_conversation(shell: State<'_, Shell>, id: u32) -> Result<Option<String>, String> {
+    let sessions = shell.sessions.clone();
+    tauri::async_runtime::spawn_blocking(move || Ok(sessions.agy_conversation(id, &user_home()?).filter(|c| sessions::is_uuid(c))))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// Whether the shell of terminal session `id` is itself in its foreground now (a fresh look): a Shell row's restore
 /// line is typed only then (rule 11). The page sends only the session id; only true or false comes back.
 #[tauri::command]
@@ -1213,6 +1224,7 @@ pub fn run() {
             conversation_state,
             codex_conversation,
             claude_conversation,
+            agy_conversation,
             session_shell_in_front,
             host_name,
             asks_badge,

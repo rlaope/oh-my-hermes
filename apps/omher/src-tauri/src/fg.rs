@@ -571,6 +571,96 @@ pub fn claude_session_id(home: &Path, pid: u32, started: Option<i64>) -> Option<
     crate::sessions::is_uuid(id).then(|| id.to_ascii_lowercase())
 }
 
+// ---------------------------------------------------------------------------------------------
+// The conversation a TERMINALS Antigravity CLI is on (rule 11)
+// ---------------------------------------------------------------------------------------------
+
+/// Largest `last_conversations.json` read: one id per workspace folder the person ran `agy` in.
+const AGY_CACHE_MAX: u64 = 256 * 1024;
+
+/// Antigravity CLI's own workspace cache, `<home>/.gemini/antigravity-cli/cache/last_conversations.json`: a JSON map
+/// from each absolute workspace folder to the conversation most recently active there (antigravity.google/docs/cli,
+/// Resume command: what `agy --continue` reads).
+pub fn agy_cache_path(home: &Path) -> std::path::PathBuf {
+    home.join(".gemini").join("antigravity-cli").join("cache").join("last_conversations.json")
+}
+
+/// `p` as text, and its resolved form (links followed, Windows' `\\?\` prefix taken off) when that differs.
+fn path_forms(p: &Path) -> Vec<String> {
+    let mut out = Vec::new();
+    if let Some(s) = p.to_str() {
+        out.push(s.to_string());
+    }
+    if let Some(r) = std::fs::canonicalize(p).ok().and_then(|r| r.to_str().map(|s| s.strip_prefix(r"\\?\").unwrap_or(s).to_string())) {
+        if !out.contains(&r) {
+            out.push(r);
+        }
+    }
+    out
+}
+
+/// The conversation `text` (the cache's contents) names for workspace folder `cwd` (as written, or resolved), as a
+/// lowercase UUID: the folder's value is the id, or an object holding it as `conversationId`, `conversation_id` or `id`.
+/// Any other folder, shape or id gives `None`.
+pub fn agy_workspace_conversation(text: &str, cwd: &Path) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(text).ok()?;
+    let map = v.as_object()?;
+    let entry = path_forms(cwd).iter().find_map(|k| map.get(k.as_str()))?;
+    let id = match entry {
+        serde_json::Value::String(s) => s.as_str(),
+        serde_json::Value::Object(o) => ["conversationId", "conversation_id", "id"].iter().find_map(|k| o.get(*k)?.as_str())?,
+        _ => return None,
+    };
+    crate::sessions::is_uuid(id).then(|| id.to_ascii_lowercase())
+}
+
+/// The conversation the Antigravity CLI in the foreground of a TERMINALS `agy` row is on. `fg` (the terminal's
+/// foreground process) must be Antigravity by the allow-list match above, and the cache's entry for `cwd` (the folder
+/// the session started in) must name an id other than `before` (the entry the cache had for that folder right before
+/// the session's program started, [`agy_cache_entry`]) in a cache written since then (`started`, a second's slack for
+/// a coarse clock) ([`agy_cache_conversation`]). So a conversation that was this folder's before this row's Antigravity
+/// started is never taken, even when another folder's entry is what changed the file. Antigravity keeps one id per
+/// folder, so a second Antigravity the person runs in the same folder outside omher, active after this one, can be
+/// named instead: the page asks once, and never for a row while another of its Antigravity rows runs in that folder.
+/// Only the id comes back; nothing else of the file is kept.
+pub fn agy_conversation(fg: u32, home: &Path, cwd: &Path, started: std::time::SystemTime, before: Option<&str>) -> Option<String> {
+    if Probe::default().agent(fg) != Some("agy") {
+        return None;
+    }
+    agy_cache_conversation(home, cwd, started, before)
+}
+
+/// The cache's text when it is a plain file (no link) of at most [`AGY_CACHE_MAX`] bytes, with when it was written.
+fn agy_cache_text(home: &Path) -> Option<(String, std::time::SystemTime)> {
+    use std::io::Read;
+    let f = open_record(&agy_cache_path(home))?;
+    let meta = f.metadata().ok()?;
+    if !meta.is_file() || meta.len() > AGY_CACHE_MAX {
+        return None;
+    }
+    let at = meta.modified().ok()?;
+    let mut text = String::new();
+    f.take(AGY_CACHE_MAX).read_to_string(&mut text).ok()?;
+    Some((text, at))
+}
+
+/// The id the cache names for `cwd` now, whenever it was written: what a new Antigravity row's folder had before its
+/// program started (the one it must not take).
+pub fn agy_cache_entry(home: &Path, cwd: &Path) -> Option<String> {
+    agy_workspace_conversation(&agy_cache_text(home)?.0, cwd)
+}
+
+/// [`agy_conversation`] past the foreground check: the cache's entry for `cwd`, when the cache was written since
+/// `started` and the entry is not `before`.
+pub fn agy_cache_conversation(home: &Path, cwd: &Path, started: std::time::SystemTime, before: Option<&str>) -> Option<String> {
+    let (text, at) = agy_cache_text(home)?;
+    let since = started.checked_sub(std::time::Duration::from_secs(1)).unwrap_or(started);
+    if at < since {
+        return None;
+    }
+    agy_workspace_conversation(&text, cwd).filter(|id| Some(id.as_str()) != before)
+}
+
 /// Open `path` for reading, never through a link: `O_NOFOLLOW` (and `O_NONBLOCK`, so a FIFO in its place is not
 /// waited on) on unix; elsewhere a link is refused by a look first.
 fn open_record(path: &Path) -> Option<std::fs::File> {
@@ -1212,4 +1302,96 @@ mod tests {
         let _ = wrapper.wait();
         let _ = std::fs::remove_dir_all(&home);
     }
+    /// Antigravity's workspace cache names a conversation only for this folder (as written or resolved), only as a
+    /// UUID, in either shape the value may take; nothing else in it counts.
+    #[test]
+    fn the_agy_cache_names_only_this_folders_conversation() {
+        let id = "1F2E3D4C-5B6A-4978-8695-A4B3C2D1E0F9";
+        let low = id.to_ascii_lowercase();
+        let cwd = Path::new("/Users/me/code/app");
+        let at = |v: &str| format!(r#"{{"/Users/me/code/other":"00000000-0000-4000-8000-000000000001","/Users/me/code/app":{v}}}"#);
+        assert_eq!(agy_workspace_conversation(&at(&format!("\"{id}\"")), cwd).as_deref(), Some(low.as_str()));
+        for v in [format!(r#"{{"conversationId":"{id}"}}"#), format!(r#"{{"conversation_id":"{id}","at":1}}"#), format!(r#"{{"id":"{id}"}}"#)] {
+            assert_eq!(agy_workspace_conversation(&at(&v), cwd).as_deref(), Some(low.as_str()), "{v}");
+        }
+        // another folder's, a parent's or a child's entry is not this folder's
+        for other in ["/Users/me/code", "/Users/me/code/app/sub", "/Users/me/code/ap", "/Users/me/code/app/"] {
+            assert_eq!(agy_workspace_conversation(&at(&format!("\"{id}\"")), Path::new(other)), None, "{other}");
+        }
+        // option-shaped, partial or padded ids, and other shapes, give nothing
+        for bad in ["\"--yolo\"", "\"1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f\"", "\" 1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9\"", "\"1f2e3d4c5b6a49788695a4b3c2d1e0f9\"", "42", "null", "[\"1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9\"]", r#"{"other":"1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9"}"#] {
+            assert_eq!(agy_workspace_conversation(&at(bad), cwd), None, "{bad}");
+        }
+        for bad in ["", "not json", "[]", "\"x\""] {
+            assert_eq!(agy_workspace_conversation(bad, cwd), None, "{bad:?}");
+        }
+    }
+
+    /// The folder's entry from before the row's Antigravity started is never taken, even when the cache was written
+    /// since (another folder's Antigravity changed it); a new id for this folder is.
+    #[test]
+    fn the_agy_cache_never_hands_back_the_folders_entry_from_before_the_start() {
+        let home = std::env::temp_dir().join(format!("omher-fg-agy-before-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let cache = agy_cache_path(&home);
+        std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
+        let (a, b) = (home.join("a"), home.join("b"));
+        std::fs::create_dir_all(&a).unwrap();
+        std::fs::create_dir_all(&b).unwrap();
+        let (ka, kb) = (serde_json::to_string(a.to_str().unwrap()).unwrap(), serde_json::to_string(b.to_str().unwrap()).unwrap());
+        let old = "00000000-0000-4000-8000-00000000000a";
+        let new = "00000000-0000-4000-8000-00000000000b";
+        let other = "00000000-0000-4000-8000-00000000000c";
+        // yesterday: folder A's last conversation is `old`
+        std::fs::write(&cache, format!("{{{ka}:\"{old}\"}}")).unwrap();
+        let before = agy_cache_entry(&home, &a);
+        assert_eq!(before.as_deref(), Some(old));
+        let started = std::time::SystemTime::now() - std::time::Duration::from_secs(5);
+        // an Antigravity in folder B writes the cache: A's row must not take A's old id
+        std::fs::write(&cache, format!("{{{ka}:\"{old}\",{kb}:\"{other}\"}}")).unwrap();
+        assert_eq!(agy_cache_conversation(&home, &a, started, before.as_deref()), None);
+        // A's own Antigravity starts its conversation: that one is taken
+        std::fs::write(&cache, format!("{{{ka}:\"{new}\",{kb}:\"{other}\"}}")).unwrap();
+        assert_eq!(agy_cache_conversation(&home, &a, started, before.as_deref()).as_deref(), Some(new));
+        // a folder with no entry before takes the first one written
+        assert_eq!(agy_cache_entry(&home, &home.join("none")), None);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// The cache counts only when it was written since the session started, is a plain file (no link) and is small; a
+    /// process that is not Antigravity names nothing even when the cache does.
+    #[test]
+    fn the_agy_cache_counts_only_when_written_since_the_start_and_only_for_agy() {
+        let home = std::env::temp_dir().join(format!("omher-fg-agy-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let cache = agy_cache_path(&home);
+        std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
+        let cwd = home.join("work");
+        std::fs::create_dir_all(&cwd).unwrap();
+        let id = "5d0f3c2a-9b1e-4c7d-8a6f-0e1d2c3b4a59";
+        let key = serde_json::to_string(cwd.to_str().unwrap()).unwrap();
+        std::fs::write(&cache, format!("{{{key}:\"{id}\"}}")).unwrap();
+        let now = std::time::SystemTime::now();
+        assert_eq!(agy_cache_conversation(&home, &cwd, now - std::time::Duration::from_secs(5), None).as_deref(), Some(id));
+        // written before this session's program started: an older conversation in the folder, never taken
+        assert_eq!(agy_cache_conversation(&home, &cwd, now + std::time::Duration::from_secs(30), None), None);
+        // too big
+        std::fs::write(&cache, format!("{{{key}:\"{id}\",\"pad\":\"{}\"}}", "x".repeat(AGY_CACHE_MAX as usize))).unwrap();
+        assert_eq!(agy_cache_conversation(&home, &cwd, now - std::time::Duration::from_secs(5), None), None);
+        // a link in its place is not followed
+        #[cfg(unix)]
+        {
+            let real = home.join("real.json");
+            std::fs::write(&real, format!("{{{key}:\"{id}\"}}")).unwrap();
+            std::fs::remove_file(&cache).unwrap();
+            std::os::unix::fs::symlink(&real, &cache).unwrap();
+            assert_eq!(agy_cache_conversation(&home, &cwd, now - std::time::Duration::from_secs(5), None), None);
+            std::fs::remove_file(&cache).unwrap();
+        }
+        // this test's own process is no Antigravity: nothing, whatever the cache says
+        std::fs::write(&cache, format!("{{{key}:\"{id}\"}}")).unwrap();
+        assert_eq!(agy_conversation(std::process::id(), &home, &cwd, now - std::time::Duration::from_secs(5), None), None);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
 }
