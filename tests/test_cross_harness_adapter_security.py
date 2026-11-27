@@ -316,6 +316,7 @@ class AdapterSandboxSecurityTests(_RunnerMixin, unittest.TestCase):
         self.assertLess(command.index("--bind-try"), command.index("--ro-bind-try"))
         self.assertEqual(command[command.index("--ro-bind-try"):][:3], ("--ro-bind-try", str(program.resolve()), str(program.resolve())))
 
+    @requires_posix  # bwrap reads the runtime directory by os.getuid(), which Windows lacks
     def test_protected_path_ancestors_are_pinned_so_the_tree_cannot_be_moved_aside(self) -> None:
         # Renaming `cli` inside the writable state root and recreating `cli/_versions` replaced the
         # program the host launches next; each directory above the protected path is pinned.
