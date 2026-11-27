@@ -323,12 +323,18 @@ class ModelCommandTests(unittest.TestCase):
     def test_model_with_a_name_switches_at_once_during_a_turn_and_hermes_own_flags_wait(self) -> None:
         for typed, at_once in (("/model gpt-5.4", True), ("/model gpt-5.4 --provider openai", True),
                                ("/model gpt-5.4 --session", True), ("/model --refresh", True),
-                               ("/model gpt-5.4 --global", False), ("/model gpt-5.4 --once", False)):
+                               ("/model gpt-5.4 --global", False), ("/model gpt-5.4 --once", False),
+                               ("/model --provider copilot", False), ("/model gpt-5.4 --refresh", False),
+                               ("/model --session", False), ("/model gpt-5.4 --provider", False),
+                               ("/model gpt-5.4 -g", False), ("/model gpt-5.4 extra", False)):
             with self.subTest(typed=typed):
                 app, client = make_app(busy=True)
                 send(app, typed)
                 self.assertEqual(not app.queued, at_once)
                 self.assertEqual(bool(client.calls), at_once)
+                if not at_once:
+                    app._on_event(Event("message.complete", SID, {"text": "done"}))
+                    self.assertEqual(client.calls[-1], ("slash.exec", {"command": typed[1:], "session_id": SID}))
 
     def test_a_queued_guarded_model_holds_the_prompt_behind_it_until_its_confirm_is_settled(self) -> None:
         # #2726 review: the confirm opened after config.set was answered, so the prompt went on the old model.

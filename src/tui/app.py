@@ -320,6 +320,7 @@ from .slash import (
     known_names,
     hermes_notice,
     parse_slash,
+    MODEL_REFRESH_ARG,
     plan_invocation,
     runs_during_turn,
     skill_completions,
@@ -509,8 +510,6 @@ REWIND_KEPT_NOTICE = "Hermes did not rewind: {reason}. The screen is back to how
 REWIND_CUT_NOTICE = "Hermes cut the session there but did not take the prompt: {reason}. The prompt is back in the composer."
 REWIND_UNREAD_NOTICE ="Hermes did not send the session's history ({reason}), so the screen stays as it was before you sent."
 REWIND_TURN_BACK_NOTICE = "/{name} went back in the session itself, so the rewind is cancelled."
-# `/model --refresh` as Hermes' own TUI reads it: the picker, over a list Hermes asks the providers for again.
-MODEL_REFRESH_ARG = "--refresh"
 # What a `config.set model` answer says, for `/model` and its picker.
 MODEL_SWITCHED_NOTICE = "This session now runs {model}."
 # Hermes persisted the switch (`scope: "global"`): its typed `/model` does so under `model.persist_switch_by_default`.

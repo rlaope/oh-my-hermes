@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **TUI: a `/model` form Hermes runs itself waits for the turn instead of being refused.** During a turn, `/model`
+  ran at once whenever every `--` word was `--refresh`, `--provider` or `--session`, so `/model --provider copilot`,
+  `/model gpt-5.4 --refresh`, `/model --session`, `/model gpt-5.4 -g` and `/model gpt-5.4 extra` went straight to
+  Hermes' `slash.exec`, which refuses `/model` while the session runs. Only the forms the TUI handles itself (bare,
+  `--refresh` alone, or `<model> [--provider <slug>] [--session]`) run at once now; every other form is queued and
+  sent at the turn's end. (#3267 by @brixtonpham; `src/tui/slash.py`)
+
 - **omher 1.2.4.** Bot fixes across threads, reconnects, SSH bots and Windows, terminals that come back by
   themselves after a restart, and links that open whole.
   - **Threads:** Esc, notifications and unread counts follow the open thread; a thread with unread answers shows a
