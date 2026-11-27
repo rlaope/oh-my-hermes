@@ -349,8 +349,13 @@ test("a Gemini CLI from before --session-id starts once more without it, keeps n
   expect(second.sessionId).toBeUndefined();
   await expect(screen(page)).toContainText("did not take a conversation id");
   await expect(page.locator("[data-testid=terminal] .xterm-rows").last()).toContainText("(mock)");
-  await expect.poll(async () => (await saved(page))?.sessions?.find((s: { id: string }) => s.id === id)).toMatchObject({ agent: "gemini", running: true });
-  expect((await saved(page)).sessions.find((s: { id: string }) => s.id === id).agentSession).toBeUndefined();
+  // the first start's save (with its id) can still be the one stored: wait for the retry's save, which drops it
+  await expect
+    .poll(async () => {
+      const row = (await saved(page))?.sessions?.find((s: { id: string }) => s.id === id);
+      return row && { agent: row.agent, running: row.running, agentSession: row.agentSession ?? null };
+    })
+    .toEqual({ agent: "gemini", running: true, agentSession: null });
   // the next Gemini terminal of this page gets no id at all
   await newTerm(page, "gemini");
   expect((await starts(page)).slice(2)).toEqual([expect.not.objectContaining({ sessionId: expect.anything() })]);
