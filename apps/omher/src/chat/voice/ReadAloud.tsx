@@ -11,13 +11,14 @@ import { allowVoice, TTS_WHERE, voiceAllowed, voiceFailure } from "./voice";
 import { VoiceNotice } from "./VoiceNotice";
 import "./voice.css";
 
-export const SpeakIcon = () => (
+const SpeakIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" />
     <path d="M15.5 9a4 4 0 0 1 0 6" />
     <path d="M18 6.5a7.5 7.5 0 0 1 0 11" />
   </svg>
 );
+/** The Stop square of read aloud and of the composer's microphone. */
 export const SquareIcon = () => (
   <svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true">
     <rect x="5" y="5" width="14" height="14" rx="2.5" fill="currentColor" />

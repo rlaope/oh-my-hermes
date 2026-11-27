@@ -1087,13 +1087,18 @@ def _memory_limit(value, default: int) -> int:
         return default
 
 
-def _memory_on(value) -> bool:
-    """Hermes' `is_truthy_value(value, default=True)`."""
+def _truthy(value, default: bool) -> bool:
+    """Hermes' `is_truthy_value`: None is the default, a string is one of its truthy words, anything else its bool."""
     if value is None:
-        return True
+        return default
     if isinstance(value, str):
         return value.strip().lower() in TRUTHY
     return bool(value)
+
+
+def _memory_on(value) -> bool:
+    """Hermes' `is_truthy_value(value, default=True)`."""
+    return _truthy(value, True)
 
 
 def memory_entries(text: str) -> list[str]:
@@ -3623,7 +3628,6 @@ STT_ONLINE = frozenset({"groq", "openai", "mistral", "xai", "elevenlabs", "deepi
 TTS_LOCAL = frozenset({"neutts", "kittentts", "piper"})
 TTS_ONLINE = frozenset({"elevenlabs", "openai", "deepinfra", "minimax", "xai", "mistral", "gemini", "nous"})
 VOICE_PROVIDER = re.compile(r"[a-z0-9][a-z0-9_.-]{0,40}")
-_TRUE_WORDS = frozenset({"1", "true", "yes", "on"})  # Hermes' `utils.env.TRUTHY_STRINGS`
 
 
 class VoiceError(Exception):
@@ -3633,15 +3637,6 @@ class VoiceError(Exception):
     def __init__(self, code: str, message: str):
         super().__init__(message)
         self.code, self.message = code, message
-
-
-def _truthy(value, default: bool) -> bool:
-    """Hermes' `is_truthy_value`: None is the default, a string is one of its truthy words, anything else its bool."""
-    if value is None:
-        return default
-    if isinstance(value, str):
-        return value.strip().lower() in _TRUE_WORDS
-    return bool(value)
 
 
 def _voice_selection(section) -> str:
@@ -10176,7 +10171,9 @@ class Bridge:
             return "off", "disabled"
         return state, "" if state != "unknown" else "unread"
 
-    def _computer_bot(self, p) -> dict:
+    def _profile_bot(self, p) -> dict:
+        """The page's bot from the bridge's own list, whose name Hermes takes as a profile id: computer use (rule 52)
+        and voice (rule 54) read the bot only through here."""
         bot = self._bot(p.get("bot"))
         if not PROFILE_ID.fullmatch(bot["name"]):
             raise BridgeError("bad_request", f"{bot['name']} is not a profile id Hermes accepts")
@@ -10186,14 +10183,14 @@ class Bridge:
         return await self._computer_read()
 
     async def op_computer_bot(self, p) -> dict:
-        bot = self._computer_bot(p)
+        bot = self._profile_bot(p)
         state, why = await self._computer_switch(bot)
         return {"state": state, "why": why, "code_focus": await asyncio.to_thread(computer_code_focus, bot["path"])}
 
     async def op_computer_toggle(self, p) -> dict:
         """Turn one bot's computer use on or off: `hermes -p <bot> tools enable|disable computer_use`, then the switch
         read back from its gateway. The page sends the bot and `on`; the toolset name is the bridge's own constant."""
-        bot = self._computer_bot(p)
+        bot = self._profile_bot(p)
         name, on = bot["name"], p.get("on")
         if not isinstance(on, bool):
             raise BridgeError("bad_request", "on is true or false")
@@ -10259,12 +10256,6 @@ class Bridge:
     # The address, the path, the profile and the ticket are the bridge's own; only a bot on this computer whose gateway
     # omher is attached to is asked. Nothing of a recording or a text is kept, written or logged.
 
-    def _voice_bot(self, p) -> dict:
-        bot = self._bot(p.get("bot"))
-        if not PROFILE_ID.fullmatch(bot["name"]):
-            raise BridgeError("bad_request", f"{bot['name']} is not a profile id Hermes accepts")
-        return bot
-
     async def _voice_send(self, bot: dict, which: str, build, read=None):
         """One request to the bot's own gateway (voice_request), off the event loop: `build()` checks the page's
         fields and makes the JSON body in the worker thread (a recording is tens of MB), then a ticket is minted for
@@ -10286,14 +10277,14 @@ class Bridge:
 
     async def op_voice_info(self, p) -> dict:
         """What the page says before a first use: whether this Hermes takes voice, and what the bot's config names."""
-        bot = self._voice_bot(p)
+        bot = self._profile_bot(p)
         why = await asyncio.to_thread(voice_supported)
         return {"supported": not why, "line": why, **await asyncio.to_thread(voice_config, bot["path"]),
                 "text_max": SPEAK_TEXT_MAX}
 
     async def op_voice_transcribe(self, p) -> dict:
         """A recording to the bot's Hermes for its transcript: the bytes and the type go out as Hermes' data URL."""
-        bot = self._voice_bot(p)
+        bot = self._profile_bot(p)
         data, mime = p.get("data_base64"), p.get("mime")
         base = mime.split(";", 1)[0].strip().lower() if isinstance(mime, str) else ""
         if not VOICE_MIME.fullmatch(base):
@@ -10315,7 +10306,7 @@ class Bridge:
     async def op_voice_speak(self, p) -> dict:
         """Part `part` of an answer's text (speak_parts) to the bot's Hermes for its audio. An empty part (all of it
         was something Hermes does not read, such as a link) answers `empty` so the page goes on to the next."""
-        bot = self._voice_bot(p)
+        bot = self._profile_bot(p)
         text, part = p.get("text"), p.get("part", 0)
         if not isinstance(text, str):
             raise BridgeError("bad_request", "no text")

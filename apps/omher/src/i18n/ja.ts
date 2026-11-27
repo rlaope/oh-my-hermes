@@ -465,7 +465,7 @@ export const ja: Record<Key, string> = {
   "cu.granted": "許可済み",
   "cu.notGranted": "未許可",
   "cu.notKnown": "不明",
-  "cu.checkOk": "OK",
+  "cu.checkOk": "正常",
   "cu.checkWarn": "警告",
   "cu.checkFail": "失敗",
   "cu.hermesSaid": "Hermes のメッセージ",

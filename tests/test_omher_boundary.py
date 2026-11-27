@@ -653,6 +653,9 @@ RULES = (
     "and a subagent's `computer_use` step shows no line, since Hermes' preview of that call can be the typed text.",
     "a read-only session view shows the call without them and never its result, which can hold a screenshot and the"
     " text of the screen's fields.",
+    "The live chat does show a step's capture as a thumbnail under rule 53, a picture of the screen of the computer the"
+    " bot runs on, which can show text typed there, while the arguments the bot types, Hermes' preview of the call and"
+    " the call's result still stay in the bridge.",
     "so the bridge also reads that one key of the bot's `config.yaml`, read-only and as Hermes'"
     " `parse_config_string_list` reads it, and a switch it names reads off with that reason;",
     "when `HERMES_TUI_TOOLSETS` is set in omher's own environment, the one environment omher can see",
@@ -855,8 +858,9 @@ class DocPins(unittest.TestCase):
         # (voice: the bridge's one HTTP use, Hermes' own `POST /api/audio/transcribe` and `POST /api/audio/speak` on the
         # bot's own gateway's loopback `api_origin`, a one-use `native-http` ticket per request, no Origin, no proxy, no
         # redirect, never `voice-config`; the microphone opened only on a press and closed on stop, cancel, error, chat
-        # switch, hide and unmount; nothing kept; on Linux only, WebKitGTK's media stream on and the microphone alone
-        # allowed; a peer bot and a server refused). The rules stay numbered 1..n with no gap or repeat.
+        # switch, hide and unmount; no recording or audio kept, the transcript left in the draft like typed text; on
+        # Linux only, WebKitGTK's media stream on and the microphone alone allowed; a peer bot and a server refused).
+        # The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
         self.assertTrue(6 <= len(rules) <= 54, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
@@ -3684,7 +3688,7 @@ class ComputerUseThroughHermesOwnCommands(unittest.TestCase):
     """Rule 52: Settings › Computer runs four fixed Hermes argvs (`computer-use permissions status --json`, `install`,
     `permissions grant`, and a bot's `tools enable|disable computer_use`) through rule 41's runner; the page sends a bot
     name and on/off only; a switch is read back from the bot's own gateway; a peer bot and a server are refused; a chat
-    step carries the action and the app, never what the bot types nor a screenshot."""
+    step carries the action and the app, never what the bot types; a capture's thumbnail is rule 53's."""
 
     OPS = ("op_computer_status", "op_computer_bot", "op_computer_toggle", "op_computer_install", "op_computer_grant")
 
@@ -3738,7 +3742,7 @@ class ComputerUseThroughHermesOwnCommands(unittest.TestCase):
 
     def test_the_page_sends_a_bot_and_on_off_and_nothing_else(self) -> None:
         reads, other = set(), []
-        for name in self.OPS + ("_computer_bot", "_computer_driver", "_computer_read", "_computer_run", "_computer_switch"):
+        for name in self.OPS + ("_profile_bot", "_computer_driver", "_computer_read", "_computer_run", "_computer_switch"):
             fn = self.fns[name]
             parent = {child: node for node in ast.walk(fn) for child in ast.iter_child_nodes(node)}
             for node in ast.walk(fn):
@@ -3750,7 +3754,7 @@ class ComputerUseThroughHermesOwnCommands(unittest.TestCase):
                     reads.add(parent[up].args[0].value)
                 elif isinstance(up, ast.Subscript) and up.value is node and isinstance(up.slice, ast.Constant):
                     reads.add(up.slice.value)
-                elif isinstance(up, ast.Call) and ast.unparse(up.func) == "self._computer_bot" and up.args == [node]:
+                elif isinstance(up, ast.Call) and ast.unparse(up.func) == "self._profile_bot" and up.args == [node]:
                     continue  # its own reads are scanned here too
                 else:
                     # `**p`, `p.items()`, `dict(p)`, `p` handed on: any other use could carry what the page sent
@@ -3767,8 +3771,8 @@ class ComputerUseThroughHermesOwnCommands(unittest.TestCase):
         toggle = self._body("op_computer_toggle")
         self.assertIn("if not isinstance(on, bool):", toggle)
         self.assertIn("await self._computer_run('enable' if on else 'disable', name)", toggle)
-        self.assertIn("bot = self._computer_bot(p)", toggle)
-        self.assertIn("if not PROFILE_ID.fullmatch(bot['name']):", self._body("_computer_bot"))
+        self.assertIn("bot = self._profile_bot(p)", toggle)
+        self.assertIn("if not PROFILE_ID.fullmatch(bot['name']):", self._body("_profile_bot"))
         # the driver ops run a fixed verb each; the grant only on macOS
         self.assertEqual(self._body("op_computer_install"), "return await self._computer_driver('install')")
         grant = self._body("op_computer_grant")
@@ -4182,7 +4186,7 @@ class BotPageReadsPersonaAndMemoryOnly(unittest.TestCase):
     forwarded to its own bridge."""
 
     READER = ("read_bot_page", "read_page_file", "_open_fixed", "_is_link", "memory_entries", "_memory_limit",
-              "_memory_on")
+              "_memory_on", "_truthy")
 
     def setUp(self) -> None:
         self.source = BRIDGE.read_text(encoding="utf-8")
@@ -4861,8 +4865,8 @@ class NewBotThroughHermesOwnCreate(unittest.TestCase):
 class VoiceThroughHermesOwnAudioRoutes(unittest.TestCase):
     """Rule 54: voice goes through Hermes' own two audio routes on the bot's own gateway, from the bridge only; the page
     sends a bot, a recording's bytes and type, or an answer's text and a part; the ticket is Hermes' own one-use mint;
-    nothing is kept; a peer bot and a server are refused; on Linux only, the shell turns on WebKitGTK's media stream and
-    allows the microphone alone."""
+    no recording or audio is kept and the transcript stays in the draft; a peer bot and a server are refused; on Linux
+    only, the shell turns on WebKitGTK's media stream and allows the microphone alone."""
 
     OPS = ("op_voice_info", "op_voice_transcribe", "op_voice_speak")
     SHELL_ROOT = ROOT / "apps" / "omher" / "src-tauri"
@@ -4883,7 +4887,7 @@ class VoiceThroughHermesOwnAudioRoutes(unittest.TestCase):
 
     def test_the_ops_take_no_url_path_host_or_header_from_the_page(self) -> None:
         read: set[str] = set()
-        for name in (*self.OPS, "_voice_bot"):
+        for name in (*self.OPS, "_profile_bot"):
             for c in ast.walk(self.fns[name]):
                 if (isinstance(c, ast.Call) and ast.unparse(c.func) == "p.get" and c.args
                         and isinstance(c.args[0], ast.Constant)):
@@ -4891,6 +4895,10 @@ class VoiceThroughHermesOwnAudioRoutes(unittest.TestCase):
                 if isinstance(c, ast.Subscript) and ast.unparse(c.value) == "p":
                     read.add(ast.unparse(c.slice))
         self.assertEqual(read, {"bot", "data_base64", "mime", "text", "part"})
+        # each op takes its bot through the one helper rule 52's ops use, which checks Hermes' profile id
+        for name in self.OPS:
+            self.assertIn("bot = self._profile_bot(p)", self._body(name), name)
+        self.assertIn("if not PROFILE_ID.fullmatch(bot['name']):", self._body("_profile_bot"))
         # the request is built from the bot the bridge found, Hermes' discovery and mint, and the bridge's own constants
         send = self._body("_voice_send")
         # the page's fields are checked and the body made in the worker thread, then a ticket minted for this request;

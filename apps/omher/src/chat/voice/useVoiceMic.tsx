@@ -22,6 +22,7 @@ import {
   voiceAllowed,
   voiceFailure,
 } from "./voice";
+import { SquareIcon } from "./ReadAloud";
 import { VoiceNotice } from "./VoiceNotice";
 import "./voice.css";
 
@@ -30,11 +31,6 @@ const MicIcon = () => (
     <rect x="9" y="3" width="6" height="11" rx="3" />
     <path d="M5.5 11a6.5 6.5 0 0 0 13 0" />
     <path d="M12 17.5V21" />
-  </svg>
-);
-const StopIcon = () => (
-  <svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true">
-    <rect x="5" y="5" width="14" height="14" rx="2.5" fill="currentColor" />
   </svg>
 );
 
@@ -268,7 +264,7 @@ export function useVoiceMic({ bot, offline, insert, focusBox }: {
       data-testid="mic"
       data-state={off ? "off" : phase.kind}
     >
-      {recording ? <StopIcon /> : <MicIcon />}
+      {recording ? <SquareIcon /> : <MicIcon />}
     </button>
   );
   const cancelBtn = (
