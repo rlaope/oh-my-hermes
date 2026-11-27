@@ -192,7 +192,8 @@ RULES = (
     "The browser sign-in happens inside the CLI: omher never asks for, accepts, reads, copies or shows a token or key.",
     "deletes only `~/.omher/accounts/<cli>/<id>/`. An account switch never stops a running session.",
     "Besides rule 21's one GitHub CLI read, rule 24's one `hermes -p <bot> cron create` for the briefing, the Hermes"
-    " commands of rules 29, 41 and 44 (`hermes -p default profile create <name> --no-alias`), and the read-only `omh` of"
+    " commands of rules 29, 41, 44 (`hermes -p default profile create <name> --no-alias`) and 52 (`hermes computer-use`"
+    " and `hermes tools enable|disable computer_use`), and the read-only `omh` of"
     " rules 43 and 44, the only program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`,",
     # rule 44: a new bot through Hermes' own profile create, on a press, the name by Hermes' rule, and OMH's templates
     "omher makes a new bot only when the person presses Create under the sidebar `+` › New bot, and only through Hermes'"
@@ -410,10 +411,11 @@ RULES = (
     "The provider id is checked against `^[a-z0-9][a-z0-9_-]{0,40}$` and passed as one argument;",
     "Hermes asks for the key in that terminal and stores it itself: omher never sees the key.",
     "never runs this in its own pseudo-terminal, so no keystroke passes through omher.",
-    "There are four exceptions. The first two are a bot's automations and plugins, which omher changes only by asking"
+    "There are five exceptions. The first two are a bot's automations and plugins, which omher changes only by asking"
     " that bot's own gateway (rules 24 and 25); omher writes no file of either itself, with one exception of its own:",
     "never signals a process (the exceptions are its own runs past their time, stopped through `_stop_run`, which only"
-    " two functions call: `_run_hermes_argv`, for rule 41's `hermes mcp` run and rule 44's `hermes profile create` run,"
+    " two functions call: `_run_hermes_argv`, for rule 41's `hermes mcp` run, rule 44's `hermes profile create` run and"
+    " rule 52's computer-use runs,"
     " and `run_omh_read`, for rule 43's and rule 44's `omh` reads), never calls a service manager",
     "The fourth is a new bot (rule 44): on the person's press, Hermes' own `hermes -p default profile create <name>"
     " --no-alias` makes a new profile with its folder and files; omher writes none of them, and it changes no profile"
@@ -437,7 +439,7 @@ RULES = (
     " folder) and never sets it up again.",
     "omher sets up exactly one briefing job by itself (rule 24), writing only the collector copy"
     " `scripts/channel_watch_omher-brief.py` and its config `channel_watch/omher-brief.json`",
-    "rule 24's one `hermes -p <bot> cron create` for the briefing, the Hermes commands of rules 29, 41 and 44",
+    "rule 24's one `hermes -p <bot> cron create` for the briefing, the Hermes commands of rules 29, 41, 44",
     "omher changes a bot's plugins only through Hermes' own `plugins.manage` on that bot's gateway (`list`, `toggle`,"
     " `inspect`, `install` from the curated catalog by name, `update`, `remove`), only when the person presses a button,",
     "`install` carries the pin `inspect` returned.",
@@ -588,6 +590,41 @@ RULES = (
     " computer) and only while a bot of this computer is online to take it; with none, nothing is read.",
     "so nothing read from a repository can add a line to the message; a worktree the bridge no longer finds is said to"
     " be gone and nothing is sent.",    "\"Hand to <bot>\" (rule 10) starts its thread the same way;",
+    # rule 52: Settings › Computer through Hermes' own computer-use commands, a switch read back, a chat step without
+    # what the bot types
+    "Settings › Computer shows whether a bot may click and type in this computer's apps through Hermes' own"
+    " `computer_use` toolset, and sets it up only through Hermes' own commands, only when the person presses a button;",
+    "To show This computer the bridge runs one fixed argv, `hermes -p default computer-use permissions status --json`"
+    " (`computer.status`), when the page opens and on Check again.",
+    "Hermes exits 1 whenever the computer is not ready, so the answer is the JSON it prints, not its exit code,",
+    "Install runs `hermes -p default computer-use install`, and Grant access, offered only where Hermes says macOS can"
+    " grant and refused by the bridge on any other system, runs `hermes -p default computer-use permissions grant`,",
+    "only on a gateway omher is already attached to, so a read never starts one and an offline bot reads as cannot tell;",
+    "Flipping the switch runs `hermes -p <bot> tools enable computer_use` or `hermes -p <bot> tools disable"
+    " computer_use` (`computer.toggle`),",
+    "Hermes exits 0 whatever happened, so the bridge reads the switch back from the gateway and reports the change only"
+    " when it reads as asked, else Hermes' own lines.",
+    "The page sends only the bot's name and on or off: the toolset name is the bridge's own constant, and no toolset,"
+    " command, platform or argument from the page reaches Hermes.",
+    "after 60 seconds for the status read and a switch, 600 for an install and 180 for a grant;",
+    "so omher does not apply it there: the page says a change reaches the bot's new threads at once and its main chat"
+    " after the person restarts the bot (rule 29).",
+    "for every bot in remote-only mode (rule 47: the page's filter refuses every `computer.*` op on a server),",
+    "Outside Hermes' own approval request, whose line names an input action and shows the start of the text for"
+    " `type` and the keys for `key`, so the person sees what they approve, what the bot types (`text`, `value`,"
+    " `keys`) never leaves the bridge, nor does Hermes' own preview of the call;",
+    "and a subagent's `computer_use` step shows no line, since Hermes' preview of that call can be the typed text.",
+    "a read-only session view shows the call without them and never its result, which can hold a screenshot and the"
+    " text of the screen's fields.",
+    "so the bridge also reads that one key of the bot's `config.yaml`, read-only and as Hermes'"
+    " `parse_config_string_list` reads it, and a switch it names reads off with that reason;",
+    "when `HERMES_TUI_TOOLSETS` is set in omher's own environment, the one environment omher can see",
+    "When a bot's config sets `agent.coding_context` to `focus` (Hermes' default is `auto`), a chat of that bot in a"
+    " code folder uses Hermes' coding tool set, which leaves computer use out;",
+    "the bridge reads that one key of the bot's `config.yaml` the same way, read-only, and the page says so for that"
+    " bot only.",
+    "The fifth is a bot's computer use (rule 52): on the person's press, Hermes' own `hermes -p <bot> tools"
+    " enable|disable computer_use` writes that profile's `config.yaml`; omher itself writes none of it.",
 )
 TAURI_CONF = ROOT / "apps" / "omher" / "src-tauri" / "tauri.conf.json"
 CAPABILITIES = ROOT / "apps" / "omher" / "src-tauri" / "capabilities" / "default.json"
@@ -733,10 +770,12 @@ class DocPins(unittest.TestCase):
         # picker; every other command waits in the steer queue); 49: rule 49 (a run stopped past its time ends its whole
         # process tree on Windows through one fixed `taskkill /T /F /PID`); 50: rule 50 (an Antigravity session's
         # conversation id from its own workspace cache, read-only); 51: rule 51 (Tasks › GitHub: pinned repositories'
-        # open pull requests, runs and releases through rule 33's runner as a chosen account, six fixed read argv).
-        # The rules stay numbered 1..n with no gap or repeat.
+        # open pull requests, runs and releases through rule 33's runner as a chosen account, six fixed read argv); 52:
+        # rule 52 (Settings › Computer: Hermes' own computer-use status read, install and macOS grant, and a bot's
+        # `hermes -p <bot> tools enable|disable computer_use` read back from its gateway; a chat step names only the
+        # action and the app). The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 51, len(rules))
+        self.assertTrue(6 <= len(rules) <= 52, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -1149,10 +1188,11 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         self.assertIn("wait = min(wait * 2, RECOVER_POLL[1])", recover)
 
     def test_profile_writes_are_only_name_and_picture(self) -> None:
-        """Every Hermes profile method the bridge names is a read, except set_asset (the avatar)."""
+        """Every Hermes profile method the bridge names is a read, except set_asset (the avatar). `profiles.describe` is
+        rule 52's read of a bot's computer_use switch."""
         names = {n.value for n in ast.walk(self.tree)
                  if isinstance(n, ast.Constant) and isinstance(n.value, str) and n.value.startswith("profiles.")}
-        self.assertTrue(names <= {"profiles.list", "profiles.set_asset"}, sorted(names))
+        self.assertTrue(names <= {"profiles.list", "profiles.set_asset", "profiles.describe"}, sorted(names))
         writes = {n.value for n in ast.walk(self.tree)
                   if isinstance(n, ast.Constant) and n.value in {"profiles.configure", "profiles.create", "profile.yaml"}}
         self.assertEqual(writes, {"profile.yaml"})  # named only by the display-name writer
@@ -2942,7 +2982,9 @@ class SshPeersOnlyOverTheOwnSsh(unittest.TestCase):
 
     def test_the_bridge_refuses_this_computers_ops_and_probes_read_only(self) -> None:
         refused = self.bridge.split("PEER_REFUSED = {", 1)[1].split("\n}\n", 1)[0]
-        self.assertEqual(re.findall(r'^    "([a-z.]+)":', refused, re.M), ["folder.open", "folder.close", "folder.resume", "bots.restart"])
+        # rule 52: a peer bot's computer use would act on that computer's screen
+        self.assertEqual(re.findall(r'^    "([a-z.]+)":', refused, re.M),
+                         ["folder.open", "folder.close", "folder.resume", "bots.restart", "computer.bot", "computer.toggle"])
         forward = self.bridge.split("PEER_FORWARD = frozenset({", 1)[1].split("})", 1)[0]
         for op in ("folder.open", "folder.close", "folder.resume", "bots.restart", "accounts.list", "sessions.start", "usage.read"):
             self.assertNotIn(f'"{op}"', forward, op)
@@ -3519,6 +3561,181 @@ class TerminalLinksAndBotRequests(unittest.TestCase):
         self.assertIn('export const SPLITS_KEY = "omher.splits";', split)
 
 
+class ComputerUseThroughHermesOwnCommands(unittest.TestCase):
+    """Rule 52: Settings › Computer runs four fixed Hermes argvs (`computer-use permissions status --json`, `install`,
+    `permissions grant`, and a bot's `tools enable|disable computer_use`) through rule 41's runner; the page sends a bot
+    name and on/off only; a switch is read back from the bot's own gateway; a peer bot and a server are refused; a chat
+    step carries the action and the app, never what the bot types nor a screenshot."""
+
+    OPS = ("op_computer_status", "op_computer_bot", "op_computer_toggle", "op_computer_install", "op_computer_grant")
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.src = BRIDGE.read_text(encoding="utf-8")
+        cls.tree = ast.parse(cls.src)
+        cls.fns = {f.name: f for f in ast.walk(cls.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+    def _body(self, name: str) -> str:
+        fn = self.fns[name]
+        return ast.unparse(ast.Module(body=fn.body[1:] if ast.get_docstring(fn) else fn.body, type_ignores=[]))
+
+    def _const(self, name: str):
+        return next(n.value for n in self.tree.body if isinstance(n, ast.Assign)
+                    and any(getattr(t, "id", "") == name for t in n.targets))
+
+    def _callers(self, name: str) -> list[str]:
+        return sorted(n for n, f in self.fns.items() if n != name
+                      and any(isinstance(c, ast.Name) and c.id == name for c in ast.walk(f)))
+
+    def test_four_fixed_argvs_with_a_checked_profile(self) -> None:
+        self.assertEqual(ast.literal_eval(self._const("COMPUTER_TOOLSET")), "computer_use")
+        self.assertEqual(ast.literal_eval(self._const("COMPUTER_VERBS")), ("status", "install", "grant", "enable", "disable"))
+        body = self._body("computer_argv")
+        self.assertIn("if verb not in COMPUTER_VERBS:", body)
+        self.assertIn("PROFILE_ID.fullmatch(bot)", body)
+        self.assertIn("return [hermes, '-p', bot, 'tools', verb, COMPUTER_TOOLSET]", body)
+        self.assertIn("if bot != 'default':", body)
+        for argv in ("[hermes, '-p', 'default', 'computer-use', 'permissions', 'status', '--json']",
+                     "[hermes, '-p', 'default', 'computer-use', 'install']",
+                     "[hermes, '-p', 'default', 'computer-use', 'permissions', 'grant']"):
+            self.assertIn(f"return {argv}", body)
+        for bad in ("post-setup", "doctor", "--upgrade", "--platform", "screen", "shell"):
+            self.assertNotIn(f"'{bad}'", body, bad)
+        # the only lists naming `computer-use` or `tools` are computer_argv's, and only run_hermes_computer builds one
+        lists = {n for n, f in self.fns.items() for lst in ast.walk(f) if isinstance(lst, ast.List)
+                 and any(isinstance(c, ast.Constant) and c.value in ("computer-use", "tools") for c in lst.elts)}
+        self.assertEqual(lists, {"computer_argv"})
+        self.assertEqual(self._callers("computer_argv"), ["run_hermes_computer"])
+        self.assertEqual(self._body("run_hermes_computer"), "return _run_hermes_argv(computer_argv(hermes, verb, bot), home, timeout)")
+        self.assertEqual(self._callers("run_hermes_computer"), ["_computer_run"])
+        self.assertEqual(ast.literal_eval(self._const("COMPUTER_TIMEOUT")),
+                         {"status": 60.0, "install": 600.0, "grant": 180.0, "enable": 60.0, "disable": 60.0})
+
+    def test_one_run_at_a_time_with_hermes_from_this_computer(self) -> None:
+        run = self._body("_computer_run")
+        self.assertLess(run.index("if self._computer_busy:"), run.index("self._computer_busy = True"))
+        self.assertIn("run_hermes_computer, hermes, verb, bot, self.home, COMPUTER_TIMEOUT[verb]", run)
+        self.assertIn("hermes = hermes_path()", run)
+
+    def test_the_page_sends_a_bot_and_on_off_and_nothing_else(self) -> None:
+        reads, other = set(), []
+        for name in self.OPS + ("_computer_bot", "_computer_driver", "_computer_read", "_computer_run", "_computer_switch"):
+            fn = self.fns[name]
+            parent = {child: node for node in ast.walk(fn) for child in ast.iter_child_nodes(node)}
+            for node in ast.walk(fn):
+                if not (isinstance(node, ast.Name) and node.id == "p"):
+                    continue
+                up = parent.get(node)
+                if isinstance(up, ast.Attribute) and up.attr == "get" and isinstance(parent.get(up), ast.Call) \
+                        and isinstance(parent[up].args[0], ast.Constant) and len(parent[up].args) == 1:
+                    reads.add(parent[up].args[0].value)
+                elif isinstance(up, ast.Subscript) and up.value is node and isinstance(up.slice, ast.Constant):
+                    reads.add(up.slice.value)
+                elif isinstance(up, ast.Call) and ast.unparse(up.func) == "self._computer_bot" and up.args == [node]:
+                    continue  # its own reads are scanned here too
+                else:
+                    # `**p`, `p.items()`, `dict(p)`, `p` handed on: any other use could carry what the page sent
+                    other.append(f"{name}: {ast.unparse(up) if up is not None else 'p'}")
+        self.assertEqual(reads, {"bot", "on"})
+        self.assertEqual(other, [])
+        # the scan itself: a handler that spreads or walks the page's params is caught
+        toy = ast.parse("def op_x(self, p):\n    a = run(**p)\n    b = [k for k in p.items()]\n    c = p.get('bot')\n")
+        fn = toy.body[0]
+        parent = {child: node for node in ast.walk(fn) for child in ast.iter_child_nodes(node)}
+        uses = [ast.unparse(parent[n]) for n in ast.walk(fn) if isinstance(n, ast.Name) and n.id == "p"
+                and not (isinstance(parent[n], ast.Attribute) and parent[n].attr == "get")]
+        self.assertEqual(len(uses), 2, uses)
+        toggle = self._body("op_computer_toggle")
+        self.assertIn("if not isinstance(on, bool):", toggle)
+        self.assertIn("await self._computer_run('enable' if on else 'disable', name)", toggle)
+        self.assertIn("bot = self._computer_bot(p)", toggle)
+        self.assertIn("if not PROFILE_ID.fullmatch(bot['name']):", self._body("_computer_bot"))
+        # the driver ops run a fixed verb each; the grant only on macOS
+        self.assertEqual(self._body("op_computer_install"), "return await self._computer_driver('install')")
+        grant = self._body("op_computer_grant")
+        self.assertLess(grant.index("if sys.platform != 'darwin':"), grant.index("self._computer_driver('grant')"))
+        ops = next(n.value for n in ast.walk(self.tree) if isinstance(n, ast.Assign) and ast.unparse(n.targets[0]) == "self.ops")
+        handlers = {k.value: v.attr for k, v in zip(ops.keys, ops.values)}
+        self.assertEqual({k: v for k, v in handlers.items() if k.startswith("computer.")},
+                         {"computer.status": "op_computer_status", "computer.bot": "op_computer_bot",
+                          "computer.toggle": "op_computer_toggle", "computer.install": "op_computer_install",
+                          "computer.grant": "op_computer_grant"})
+
+    def test_a_switch_is_read_back_from_the_bots_own_gateway_never_dialled(self) -> None:
+        switch = self._body("_computer_switch")
+        self.assertIn("conn = self.conns.get(name)", switch)
+        self.assertIn("if conn is None or not conn.connected:", switch)
+        self.assertIn("self._call(conn, 'profiles.describe', name=name)", switch)
+        self.assertNotIn("self._conn(", switch)
+        toggle = self._body("op_computer_toggle")
+        self.assertLess(toggle.index("before, why = await self._computer_switch(bot)"), toggle.index("got = await self._computer_run("))
+        self.assertLess(toggle.index("got = await self._computer_run("), toggle.index("after, after_why = await self._computer_switch(bot)"))
+        self.assertIn("if after == want:", toggle)
+        self.assertIn("if computer_pinned():", toggle)
+        # the shown state is the one a new session gets: a switch agent.disabled_toolsets names reads off, from one key of
+        # the profile's config, read-only
+        self.assertIn("if state == 'on' and await asyncio.to_thread(computer_suppressed, bot['path']):", switch)
+        suppressed = self._body("computer_suppressed")
+        self.assertIn("_load_yaml(profile_dir / 'config.yaml').get('agent')", suppressed)
+        self.assertIn("_skill_names(agent.get('disabled_toolsets') or [])", suppressed)
+        for bad in ("write", "open(", "save", "dump"):
+            self.assertNotIn(bad, suppressed, bad)
+        # the code-folder note reads one more key the same way: agent.coding_context, as Hermes normalizes it
+        focus = self._body("computer_code_focus")
+        self.assertIn("_load_yaml(profile_dir / 'config.yaml').get('agent')", focus)
+        self.assertIn("str(agent.get('coding_context', 'auto')).strip().lower() in CODING_FOCUS", focus)
+        self.assertEqual(ast.literal_eval(self._const("CODING_FOCUS").args[0]), {"focus", "strict", "lean"})
+        for bad in ("write", "open(", "save", "dump"):
+            self.assertNotIn(bad, focus, bad)
+        # with no Hermes to run, a flip is refused, never reported as Hermes leaving the switch
+        self.assertIn("raise BridgeError('no_hermes', 'Hermes is not on this computer.')", toggle)
+        # of Hermes' describe answer only the one switch is kept (its persona and the rest are dropped)
+        self.assertIn("row.get('name') == COMPUTER_TOOLSET", self._body("computer_switch"))
+        # the status payload is read from the JSON Hermes printed; its exit code decides nothing there
+        read = self._body("_computer_read")
+        self.assertIn("status = computer_status(output)", read)
+        self.assertNotIn("code == 0", read)
+
+    def test_a_peer_bot_and_a_server_are_refused(self) -> None:
+        refused = ast.literal_eval(self._const("PEER_REFUSED"))
+        forward = ast.literal_eval(self._const("PEER_FORWARD").args[0])
+        for op in ("computer.bot", "computer.toggle"):
+            self.assertIn("own screen", refused[op])
+        for op in ("computer.status", "computer.bot", "computer.toggle", "computer.install", "computer.grant"):
+            self.assertNotIn(op, forward)
+        ops = (UI_SRC / "lib" / "remoteOps.ts").read_text(encoding="utf-8")
+        for op in ("computer.status", "computer.bot", "computer.toggle", "computer.install", "computer.grant"):
+            self.assertIn(f'"{op}": {{ send: "never", key: SCREEN,', ops)
+        self.assertIn('const SCREEN: Key = "cu.offRemote";', ops)
+        store = (UI_SRC / "state" / "store.ts").read_text(encoding="utf-8")
+        self.assertIn('computerToggle: (bot, on) => bridge.request("computer.toggle", { bot, on }),', store)
+        self.assertIn('computerBot: (bot) => bridge.request("computer.bot", { bot }),', store)
+
+    def test_a_chat_step_names_the_action_and_the_app_only(self) -> None:
+        self.assertEqual(ast.literal_eval(self._const("COMPUTER_TYPED")), ("text", "value", "keys"))
+        detail = self._body("tool_detail")
+        self.assertTrue(detail.startswith("if tool == COMPUTER_TOOL:\n    return computer_step(args)[1]"), detail[:80])
+        step = self._body("computer_step")
+        for key in ("'text'", "'value'", "'keys'", "context"):
+            self.assertNotIn(key, step, key)
+        main = ast.unparse(self.fns["_main_event"])
+        self.assertIn("extra['action'] = computer_step(args)[0]", main)
+        # a tool's end carries its id, name, outcome and time: never its result (a capture's screenshot is in it)
+        ends = [c for c in ast.walk(self.fns["_main_event"]) if isinstance(c, ast.Call) and ast.unparse(c.func) == "out"
+                and c.args and isinstance(c.args[0], ast.Constant) and c.args[0].value == "tool.end"]
+        self.assertEqual(len(ends), 1)
+        self.assertEqual({k.arg for k in ends[0].keywords}, {"tool_id", "name", "ok", "ms"})
+        # a read-only session view drops what was typed and the whole result (a screenshot, the screen's field text)
+        self.assertIn("shown, res = (computer_args(shown), '')", ast.unparse(self.fns["hermes_read"]))
+        # a subagent's computer_use step carries no line: Hermes' fallback preview of it is the typed text
+        sub = self._body("subagent_fields")
+        self.assertIn("if tool != COMPUTER_TOOL and isinstance(step, str) and step.strip():", sub)
+        self.assertEqual(sub.count("out['step'] ="), 2)  # the tool branch above, and the progress batch of tool names
+        page = (UI_SRC / "chat" / "activity" / "computerSteps.ts").read_text(encoding="utf-8")
+        for bad in (".text", ".value", ".keys", "args"):
+            self.assertNotIn(bad, page, bad)
+
+
 class DiskTrayAndKeepAwake(unittest.TestCase):
     """Rules 35-37: one free-space statistic a minute and nothing deleted; the close hides to the tray and quitting
     stays explicit; keep awake holds only an idle-sleep assertion, released on quit."""
@@ -3596,8 +3813,9 @@ class AppsThroughTheBotsOwnHermes(unittest.TestCase):
 
     def test_one_run_with_no_shell_nothing_on_stdin_and_a_timeout(self) -> None:
         self.assertEqual(self._body("run_hermes_mcp"), "return _run_hermes_argv(mcp_argv(hermes, bot, verb, name), home, timeout)")
-        # the runner rule 44's profile create shares: it takes only an argv one of the two checked builders made
-        self.assertEqual(self._callers("_run_hermes_argv"), ["run_hermes_mcp", "run_hermes_profile_create"])
+        # the runner rule 44's profile create and rule 52's computer-use commands share: it takes only an argv one of the
+        # three checked builders made
+        self.assertEqual(self._callers("_run_hermes_argv"), ["run_hermes_computer", "run_hermes_mcp", "run_hermes_profile_create"])
         body = self._body("_run_hermes_argv")
         self.assertIn("proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, env=env, **kw)", body)
         self.assertIn("k not in _GATEWAY_MARKERS and k != 'HERMES_TUI_GATEWAY_URL'", body)

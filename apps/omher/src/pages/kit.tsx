@@ -120,31 +120,41 @@ export function AskBox({
   );
 }
 
-/** On/off: on is a light track with a white knob on the right, off a dark outlined track. */
+/** On/off: on is a light track with a white knob on the right, off a dark outlined track. `locked`: off for a stated
+ *  reason, which `describedBy` names, but still focusable so that reason is read (aria-disabled, the press does
+ *  nothing); `mixed`: the state is not known, announced as such rather than as off. */
 export function Toggle({
   on,
   label,
   onChange,
   disabled,
+  locked,
+  mixed,
+  describedBy,
   testId,
 }: {
   on: boolean;
   label: string;
   onChange: (on: boolean) => void;
   disabled?: boolean;
+  locked?: boolean;
+  mixed?: boolean;
+  describedBy?: string;
   testId?: string;
 }) {
   return (
     <button
       type="button"
       role="switch"
-      aria-checked={on}
+      aria-checked={mixed ? "mixed" : on}
       aria-label={label}
+      aria-describedby={describedBy}
+      aria-disabled={locked || undefined}
       className="pg-tog"
       disabled={disabled}
       onClick={(e) => {
         e.stopPropagation();
-        onChange(!on);
+        if (!locked) onChange(!on);
       }}
       data-testid={testId}
     >

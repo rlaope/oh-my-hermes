@@ -1,0 +1,54 @@
+/* Settings › Computer: the driver's rows, its buttons and each bot's switch */
+.cu-st.ok {
+  color: var(--ok);
+}
+.cu-st.warn {
+  color: var(--w4);
+}
+.cu-st.fail {
+  color: var(--danger);
+}
+.cu-st.skip {
+  color: var(--quiet);
+}
+.cu-acts {
+  flex-wrap: wrap;
+}
+.cu-ready {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.cu-ready.ready {
+  color: var(--ok);
+}
+.cu-ready.notReady {
+  color: var(--w4);
+}
+.cu-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+.cu-bot .st-k b {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.cu-bot .st-k > span {
+  padding-left: 25px;
+}
+.cu-bot + .cu-bot {
+  border-top: 1px solid var(--line);
+}
+.cu-result {
+  margin: 0;
+  padding: 0 12px 9px 37px;
+}
+.cu-said {
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

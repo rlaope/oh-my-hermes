@@ -3193,7 +3193,8 @@ def _windows_kill_tree(pid: int) -> None:
 
 
 def _stop_run(proc, windows: bool | None = None, tree_killer=None) -> None:
-    """End a run the bridge started past its time (rule 41's `hermes mcp`, rule 43's `omh` read, rule 44's `hermes profile create`): on POSIX its whole
+    """End a run the bridge started past its time (rule 41's `hermes mcp`, rule 43's `omh` read, rule 44's `hermes profile create`, rule 52's
+    computer-use commands): on POSIX its whole
     process group (it was started in a session of its own, so this reaches nothing else), on Windows its whole process tree
     (rule 49; the child is a launcher such as hermes.cmd) and then the child itself. `windows` and `tree_killer` are for tests.
     The wait after is bounded, so the run's bot is never left busy."""
@@ -3220,8 +3221,9 @@ def run_hermes_profile_create(hermes: str, name: str, home: Path, timeout: float
 
 def _run_hermes_argv(argv: list[str], home: Path, timeout: float) -> tuple[int | None, str]:
     """Run one pinned Hermes argv and return (exit code, its output); the code is None for a run stopped at *timeout*
-    (`_stop_run`), whose output so far is still returned. Only run_hermes_mcp and run_hermes_profile_create call it,
-    each with its own checked argv (mcp_argv, profile_create_argv). No shell, nothing on stdin (so Hermes asks nothing:
+    (`_stop_run`), whose output so far is still returned. Only run_hermes_mcp, run_hermes_profile_create and
+    run_hermes_computer call it, each with its own checked argv (mcp_argv, profile_create_argv, computer_argv). No
+    shell, nothing on stdin (so Hermes asks nothing:
     a value it needs is refused in its own words), the Hermes root as HERMES_HOME, none of the gateway's own markers
     and no TUI gateway address (so Hermes acts here, not through a gateway the address names), and UTF-8 output on
     every system. The output goes to a temporary file, not a pipe, so a helper Hermes left running (a browser it
@@ -3452,6 +3454,136 @@ class PrStates:
             pr.update(got.get((pr.get("repo"), pr["number"]), {"state": "unknown", "checks": "none"}))
             out[n["id"]] = pr
         return out
+
+
+# ---------------------------------------------------------------- computer use (Settings › Computer, BOUNDARY rule 52)
+# Hermes' `computer_use` toolset drives this computer through its `cua-driver`. The page reads the driver and the OS
+# permissions through Hermes' read-only `computer-use permissions status --json` and each bot's switch through its
+# gateway's `profiles.describe`. A press runs one of four fixed argvs; the page sends a bot name and on/off, nothing else.
+COMPUTER_TOOLSET = "computer_use"
+COMPUTER_VERBS = ("status", "install", "grant", "enable", "disable")
+# seconds one run may take: the status read runs the driver's own doctor (12 s) and permission read (10 s); an install
+# fetches the driver; a grant waits while macOS shows its dialog
+COMPUTER_TIMEOUT = {"status": 60.0, "install": 600.0, "grant": 180.0, "enable": 60.0, "disable": 60.0}
+COMPUTER_CHECKS = 16    # driver checks kept
+COMPUTER_DESCRIBE_TIMEOUT = 15.0    # seconds a bot's gateway may take to answer `profiles.describe`
+COMPUTER_PLATFORM = re.compile(r"[a-z0-9]{1,16}")
+
+
+def computer_argv(hermes: str, verb: str, bot: str = "default") -> list[str]:
+    """One of Hermes' own computer-use commands as a fixed argv: `hermes -p <bot> tools enable|disable computer_use`
+    for a bot's switch, and `hermes -p default computer-use permissions status --json`, `... computer-use install` and
+    `... computer-use permissions grant` for the driver, which Hermes keeps once for the whole computer. The profile is
+    checked here and is one argv element; nothing else varies. `-p` always: without it Hermes follows its sticky
+    `active_profile` file."""
+    if verb not in COMPUTER_VERBS:
+        raise ValueError(f"not a computer-use command omher runs: {verb!r}")
+    if not isinstance(bot, str) or not PROFILE_ID.fullmatch(bot):
+        raise ValueError(f"not a profile id: {bot!r}")
+    if verb in ("enable", "disable"):
+        return [hermes, "-p", bot, "tools", verb, COMPUTER_TOOLSET]
+    if bot != "default":
+        raise ValueError("the driver commands run through the main profile")
+    if verb == "status":
+        return [hermes, "-p", "default", "computer-use", "permissions", "status", "--json"]
+    if verb == "install":
+        return [hermes, "-p", "default", "computer-use", "install"]
+    return [hermes, "-p", "default", "computer-use", "permissions", "grant"]
+
+
+def run_hermes_computer(hermes: str, verb: str, bot: str, home: Path, timeout: float) -> tuple[int | None, str]:
+    """Rule 52: one computer-use command (computer_argv) through `_run_hermes_argv`."""
+    return _run_hermes_argv(computer_argv(hermes, verb, bot), home, timeout)
+
+
+def _json_payload(output: str) -> dict | None:
+    """The readiness object Hermes printed (one with a boolean `installed`), found at the start of a line, or None. Its
+    stderr shares the output, so a warning, a JSON one too, may come first: any other object is passed over."""
+    text = output or ""
+    decoder = json.JSONDecoder()
+    at = 0
+    while at < len(text):
+        if text.startswith("{", at):
+            with contextlib.suppress(ValueError):
+                got, _ = decoder.raw_decode(text, at)
+                if isinstance(got, dict) and isinstance(got.get("installed"), bool):
+                    return got
+        nl = text.find("\n", at)
+        if nl < 0:
+            return None
+        at = nl + 1
+    return None
+
+
+def _tri(value) -> bool | None:
+    return value if isinstance(value, bool) else None
+
+
+def computer_status(output: str) -> dict | None:
+    """Hermes' readiness payload (`tools/computer_use/permissions.py` `computer_use_status`), kept field by field, or
+    None when the output holds none. The exit code says nothing here: Hermes exits 1 whenever the computer is not ready,
+    with the same payload. Kept: the platform, whether it is supported, whether the driver is installed and its version,
+    whether it is ready, whether macOS can grant, each of the driver's checks (label, state, Hermes' message), Hermes'
+    error and the two macOS grants; text on one line, clipped, without escape or control characters. `source` (where
+    the grants were read) is not kept."""
+    data = _json_payload(output)
+    if data is None:
+        return None
+    plat = data.get("platform")
+    checks = []
+    for c in data.get("checks") if isinstance(data.get("checks"), list) else []:
+        if isinstance(c, dict) and len(checks) < COMPUTER_CHECKS:
+            checks.append({"label": _platform_text(c.get("label"), 80), "status": _platform_text(c.get("status"), 24),
+                           "message": _platform_text(c.get("message"), 300)})
+    version = _platform_text(data.get("version"), 120)
+    error = _platform_text(data.get("error"), 300)
+    return {"platform": plat if isinstance(plat, str) and COMPUTER_PLATFORM.fullmatch(plat) else "",
+            "platform_supported": data.get("platform_supported") is True, "installed": data["installed"],
+            "version": version or None, "ready": _tri(data.get("ready")), "can_grant": data.get("can_grant") is True,
+            "checks": checks, "error": error or None,
+            "accessibility": _tri(data.get("accessibility")), "screen_recording": _tri(data.get("screen_recording"))}
+
+
+def computer_pinned(environ=None) -> bool:
+    """Whether `HERMES_TUI_TOOLSETS` is set in omher's own environment, the one environment omher can see. A Hermes
+    started with it builds a chat's tools from that list, not from the switch, whenever one entry of it is valid
+    (tui_gateway/agent_factory.py `_load_enabled_toolsets`); which entries Hermes takes depends on its plugins and the
+    profile's MCP servers, so omher does not judge them and only says the variable is set. A gateway started
+    elsewhere may run with another environment."""
+    environ = os.environ if environ is None else environ
+    return bool((environ.get("HERMES_TUI_TOOLSETS") or "").strip())
+
+
+def computer_suppressed(profile_dir: Path) -> bool:
+    """Whether the profile's `agent.disabled_toolsets` names `computer_use`, read as Hermes' `parse_config_string_list`
+    reads it (a list, a quoted list, or one name). Hermes drops what it names from every new session, whatever
+    `platform_toolsets.cli` says (tui_gateway/agent_factory.py `_load_disabled_toolsets`); `tools enable` takes the
+    name out of it again (hermes_cli/tools_config.py `_save_platform_tools`). A config that does not read names
+    nothing."""
+    agent = _load_yaml(profile_dir / "config.yaml").get("agent")
+    return isinstance(agent, dict) and COMPUTER_TOOLSET in _skill_names(agent.get("disabled_toolsets") or [])
+
+
+# `agent.coding_context` values Hermes reads as `focus` (agent/coding_context.py `_MODE_ALIASES`)
+CODING_FOCUS = frozenset({"focus", "strict", "lean"})
+
+
+def computer_code_focus(profile_dir: Path) -> bool:
+    """Whether the profile's `agent.coding_context` is `focus` as Hermes normalizes it (agent/coding_context.py
+    `_coding_mode`): only then does a session in a code folder take Hermes' coding tool set, which leaves computer use
+    out (`coding_selection`); the shipped default, `auto`, keeps the configured tools. Same cached read as above."""
+    agent = _load_yaml(profile_dir / "config.yaml").get("agent")
+    return isinstance(agent, dict) and str(agent.get("coding_context", "auto")).strip().lower() in CODING_FOCUS
+
+
+def computer_switch(described) -> str:
+    """A bot's `computer_use` switch from Hermes' `profiles.describe` answer: `on`, `off`, or `unknown` when the answer
+    does not list it (or is not that answer)."""
+    rows = described.get("toolsets") if isinstance(described, dict) else None
+    for row in rows if isinstance(rows, list) else []:
+        if isinstance(row, dict) and row.get("name") == COMPUTER_TOOLSET and isinstance(row.get("enabled"), bool):
+            return "on" if row["enabled"] else "off"
+    return "unknown"
 
 
 # ---------------------------------------------------------------- runs: Hermes delegate_task fan-outs (read-only)
@@ -4941,8 +5073,11 @@ class NodeSessions:
                         continue
                     name = str(fn.get("name") or "tool")
                     res = results.get(str(tc.get("id") or tc.get("call_id") or ""), "")
-                    items.append({"type": "step", "tool": name, "input": _ns_args(fn.get("arguments")),
-                                  "result": _ns_clip(res), "ok": _ns_ok(res), "ts": ts})
+                    shown, ok = fn.get("arguments"), _ns_ok(res)
+                    if name == COMPUTER_TOOL:
+                        shown, res = computer_args(shown), ""
+                    items.append({"type": "step", "tool": name, "input": _ns_args(shown),
+                                  "result": _ns_clip(res), "ok": ok, "ts": ts})
                     if name == "delegate_task":
                         for c in children:
                             if c["ref"] not in placed and (c["started"] or 0) >= (ts or 0) - 5:
@@ -5614,8 +5749,40 @@ _DETAIL_ARG = {
 }
 
 
+# computer_use (rule 52): the step names its action and the app, nothing else. What the bot types (`text`, `value`,
+# `keys`) can be a password and never leaves the bridge, and Hermes' own `context` preview can carry it, so for this
+# tool it is never used. Its result is never passed on: a capture's screenshot is a `data:` URL in it, and the screen's
+# element list can quote what a text field holds (an AX label `= "value"`).
+COMPUTER_TOOL = "computer_use"
+COMPUTER_ACTIONS = frozenset({"capture", "click", "double_click", "right_click", "middle_click", "drag", "scroll", "type",
+                              "key", "set_value", "wait", "list_apps", "list_windows", "focus_app"})
+COMPUTER_TYPED = ("text", "value", "keys")
+COMPUTER_APP_MAX = 60
+
+
+def computer_step(args: dict) -> tuple[str, str]:
+    """(action, app) of one computer_use call: the action only when it is one of Hermes' own, the app on one line."""
+    if not isinstance(args, dict):
+        return "", ""
+    action = args.get("action")
+    return (action if action in COMPUTER_ACTIONS else ""), _platform_text(args.get("app"), COMPUTER_APP_MAX)
+
+
+def computer_args(raw_args) -> dict:
+    """A computer_use call's arguments as a read-only session view shows them: without what the bot typed. Its result
+    is not shown at all (see above)."""
+    try:
+        args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+    except ValueError:
+        args = None
+    return {k: v for k, v in args.items() if k not in COMPUTER_TYPED} if isinstance(args, dict) else {}
+
+
 def tool_detail(tool: str, args: dict, context: str, n: int = 160) -> str:
-    """One readable line for a tool call: the real command / path / query when the args carry it."""
+    """One readable line for a tool call: the real command / path / query when the args carry it. For computer_use only
+    the app (computer_step), never what it types nor Hermes' preview."""
+    if tool == COMPUTER_TOOL:
+        return computer_step(args)[1]
     value = None
     for key in _DETAIL_ARG.get(tool, ()):
         v = args.get(key)
@@ -5668,10 +5835,13 @@ def subagent_fields(typ: str, p: dict) -> dict | None:
         return out
     out["state"] = SUBAGENT_STATE[typ]
     if typ == "subagent.tool":
-        if isinstance(p.get("tool_name"), str) and p["tool_name"]:
-            out["tool"] = _one_line(p["tool_name"], 40)
+        tool = p.get("tool_name") if isinstance(p.get("tool_name"), str) else ""
+        if tool:
+            out["tool"] = _one_line(tool, 40)
         step = p.get("tool_preview") or p.get("text")
-        if isinstance(step, str) and step.strip():
+        # computer_use (rule 52): Hermes builds no preview for it, so its fallback preview of a `type` call is the typed
+        # text, and the relay carries no arguments to word a safe line from: a child's computer_use step has no line
+        if tool != COMPUTER_TOOL and isinstance(step, str) and step.strip():
             out["step"] = _one_line(step, SUBAGENT_STEP)
     elif typ == "subagent.progress" and isinstance(p.get("text"), str) and p["text"].strip():
         out["step"] = _one_line(p["text"].lstrip("🔀 "), SUBAGENT_STEP)
@@ -6311,6 +6481,8 @@ PEER_REFUSED = {
     "folder.close": "Folder chats run in a folder on this computer; {label}'s bots run on another one.",
     "folder.resume": "Folder chats run in a folder on this computer; {label}'s bots run on another one.",
     "bots.restart": "omher does not restart Hermes on another computer. Restart it on {label} itself.",
+    "computer.bot": "Computer use would act on {label}'s own screen, so omher does not set it up from here.",
+    "computer.toggle": "Computer use would act on {label}'s own screen, so omher does not set it up from here.",
 }
 
 
@@ -7045,6 +7217,9 @@ class Bridge:
             "plugins.remove": self.op_plugins_remove, "plugins.reload": self.op_plugins_reload,
             "apps.list": self.op_apps_list, "apps.install": self.op_apps_install, "apps.login": self.op_apps_login,
             "apps.remove": self.op_apps_remove,
+            "computer.status": self.op_computer_status, "computer.bot": self.op_computer_bot,
+            "computer.toggle": self.op_computer_toggle, "computer.install": self.op_computer_install,
+            "computer.grant": self.op_computer_grant,
             "bots.restart": self.op_bots_restart, "bots.restart_scope": self.op_bots_restart_scope,
             "peers.probe": self.op_peers_probe, "peers.attach": self.op_peers_attach, "peers.detach": self.op_peers_detach,
         }
@@ -7053,6 +7228,7 @@ class Bridge:
         self.announce_media = False  # amain: tell the app (stdout) which files it may open
         self._restarting: set[str] = set()      # bots whose restart command runs now
         self._apps_busy: set[str] = set()       # bots whose `hermes mcp` run (rule 41) runs now
+        self._computer_busy = False             # a computer-use command (rule 52) runs now
         self._creating = False                  # a `hermes profile create` (rule 44) runs now
         self._refused: dict[str, float] = {}     # bot -> when Hermes last refused its restart (live work)
         self._reattaching: set[str] = set()     # bots that omher's own restart attaches again (`_reattach`)
@@ -7456,6 +7632,8 @@ class Bridge:
                 parts = dag_parts(args)
                 if parts:
                     extra["dag"] = parts
+            elif tool == COMPUTER_TOOL and computer_step(args)[0]:
+                extra["action"] = computer_step(args)[0]
             await out("tool.start", tool_id=tool_id, name=tool, detail=tool_detail(tool, args, context), **extra)
             if tool in ("skill_view", "skill_use"):
                 args = p.get("args") if isinstance(p.get("args"), dict) else {}
@@ -9309,6 +9487,141 @@ class Bridge:
         else:
             line = said or f"Hermes exited with code {code}."
         return {"outcome": "failed", "line": line, "state": state}
+
+    # ------------------------------------------------------------ computer use (BOUNDARY rule 52)
+    # Reads: the driver and the OS permissions through Hermes' `computer-use permissions status --json`, and a bot's
+    # switch through its gateway's `profiles.describe`, only on a gateway omher is attached to already (a read never
+    # starts one). A press runs one fixed computer_argv, one at a time; a switch's outcome is read back, never taken
+    # from Hermes' exit code (`hermes tools enable|disable` exits 0 whatever happened).
+
+    async def _computer_run(self, verb: str, bot: str = "default") -> tuple[int | None, str] | None:
+        """One computer-use command (exit code, output), or None when Hermes is not on this computer."""
+        if self._computer_busy:
+            raise BridgeError("busy", "omher is still running a computer-use command")
+        hermes = hermes_path()
+        if not hermes:
+            return None
+        self._computer_busy = True
+        try:
+            return await asyncio.to_thread(run_hermes_computer, hermes, verb, bot, self.home, COMPUTER_TIMEOUT[verb])
+        finally:
+            self._computer_busy = False
+
+    async def _computer_read(self) -> dict:
+        """The page's "This computer": Hermes' payload as computer_status keeps it, or `read: false` with the reason."""
+        got = await self._computer_run("status")
+        if got is None:
+            return {"read": False, "pinned": computer_pinned(), "line": "Hermes is not on this computer."}
+        code, output = got
+        status = computer_status(output)
+        if status is None:
+            said = hermes_said(output)
+            line = (f"Hermes did not finish in {int(COMPUTER_TIMEOUT['status'])} seconds." if code is None
+                    else said or f"Hermes exited with code {code}.")
+            return {"read": False, "pinned": computer_pinned(), "line": line}
+        return {"read": True, "pinned": computer_pinned(), **status}
+
+    async def _computer_switch(self, bot: dict) -> tuple[str, str]:
+        """(state, why) of a bot's switch as a new session gets it: `on` or `off`, else `unknown` with why `offline` (no
+        gateway omher is attached to) or `unread` (its gateway did not answer the read, or the answer does not list
+        the toolset). Hermes' `profiles.describe` reads a saved `platform_toolsets.cli` alone, while a new session
+        also drops what the profile's `agent.disabled_toolsets` names: such a switch reads `off`, why `disabled`."""
+        name = bot["name"]
+        conn = self.conns.get(name)
+        if conn is None or not conn.connected:
+            return "unknown", "offline"
+        try:
+            res = await asyncio.wait_for(self._call(conn, "profiles.describe", name=name), COMPUTER_DESCRIBE_TIMEOUT)
+        except BridgeError as e:
+            return "unknown", "offline" if e.code == "bot_offline" else "unread"
+        except (asyncio.TimeoutError, TimeoutError):
+            return "unknown", "unread"
+        except Exception as e:
+            if _named(e, "GatewayRPCError"):
+                return "unknown", "unread"
+            raise
+        state = computer_switch(res)
+        if state == "on" and await asyncio.to_thread(computer_suppressed, bot["path"]):
+            return "off", "disabled"
+        return state, "" if state != "unknown" else "unread"
+
+    def _computer_bot(self, p) -> dict:
+        bot = self._bot(p.get("bot"))
+        if not PROFILE_ID.fullmatch(bot["name"]):
+            raise BridgeError("bad_request", f"{bot['name']} is not a profile id Hermes accepts")
+        return bot
+
+    async def op_computer_status(self, p) -> dict:
+        return await self._computer_read()
+
+    async def op_computer_bot(self, p) -> dict:
+        bot = self._computer_bot(p)
+        state, why = await self._computer_switch(bot)
+        return {"state": state, "why": why, "code_focus": await asyncio.to_thread(computer_code_focus, bot["path"])}
+
+    async def op_computer_toggle(self, p) -> dict:
+        """Turn one bot's computer use on or off: `hermes -p <bot> tools enable|disable computer_use`, then the switch
+        read back from its gateway. The page sends the bot and `on`; the toolset name is the bridge's own constant."""
+        bot = self._computer_bot(p)
+        name, on = bot["name"], p.get("on")
+        if not isinstance(on, bool):
+            raise BridgeError("bad_request", "on is true or false")
+        if computer_pinned():
+            raise BridgeError("pinned", "HERMES_TUI_TOOLSETS is set in omher's environment, so omher does not change this switch")
+        before, why = await self._computer_switch(bot)
+        if before == "unknown":
+            word = "is offline" if why == "offline" else "did not say"
+            raise BridgeError("cannot_tell", f"omher cannot tell whether {bot['display_name']} may use this computer "
+                                         f"({bot['display_name']} {word}), so it changes nothing")
+        want = "on" if on else "off"
+        if before == want:
+            return {"outcome": "ok", "state": want, "why": why}
+        got = await self._computer_run("enable" if on else "disable", name)
+        if got is None:  # nothing was run: a refusal, not a flip Hermes declined
+            raise BridgeError("no_hermes", "Hermes is not on this computer.")
+        code, output = got
+        after, after_why = await self._computer_switch(bot)
+        if after == want:
+            return {"outcome": "ok", "state": after, "why": after_why}
+        said = hermes_said(output)
+        if code is None:
+            line = f"Hermes did not finish in {int(COMPUTER_TIMEOUT['enable'])} seconds." + (f"\n{said}" if said else "")
+        elif after == "unknown":
+            line = f"omher could not read {bot['display_name']}'s switch back." + (f"\n{said}" if said else "")
+        else:
+            line = said or f"Hermes left computer use {after} for {bot['display_name']}."
+        return {"outcome": "failed", "state": after, "why": after_why, "line": line}
+
+    async def _computer_driver(self, verb: str) -> dict:
+        """Install the driver or ask macOS for its grants, then read "This computer" again for the page."""
+        got = await self._computer_run(verb)
+        if got is None:
+            return {"outcome": "failed", "line": "Hermes is not on this computer.", "status": None}
+        code, output = got
+        try:
+            status = await self._computer_read()
+        except BridgeError:  # another press took the one run slot first: the page reads again on its own
+            status = None
+        # read back: an install counts once the driver reads as installed; a state omher could not read after Hermes'
+        # zero exit is an install it cannot confirm (`unconfirmed`), not a failure
+        unread = status is None or not status.get("read")
+        if code == 0 and (verb != "install" or unread or status.get("installed") is True):
+            return {"outcome": "ok", "status": status, **({"unconfirmed": True} if unread else {})}
+        said = hermes_said(output)
+        if code is None:
+            line = f"Hermes did not finish in {int(COMPUTER_TIMEOUT[verb])} seconds." + (f"\n{said}" if said else "")
+        else:
+            line = said or f"Hermes exited with code {code}."
+        return {"outcome": "failed", "line": line, "status": status}
+
+    async def op_computer_install(self, p) -> dict:
+        return await self._computer_driver("install")
+
+    async def op_computer_grant(self, p) -> dict:
+        # the grants are macOS' (Accessibility, Screen Recording); Windows and Linux have none to ask for
+        if sys.platform != "darwin":
+            raise BridgeError("bad_request", "Only macOS asks for computer-use permissions.")
+        return await self._computer_driver("grant")
 
     def poll_routines(self) -> list[tuple[str, dict]]:
         """Compare each profile's cron/jobs.json to the last look; returns (bot, job) for each new run. A changed

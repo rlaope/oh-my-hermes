@@ -301,6 +301,20 @@ Rules the code keeps:
   `hermes -p <bot> mcp install|login|remove <name>` (`BOUNDARY.md` rule 41); the sign-in is Hermes' own browser page,
   a value an install asks for is typed in a terminal, and omher never sees a key or a token. Skills only show their
   state.
+- **Computer use through Hermes' own commands.** Settings › Computer (`src/settings/computer/`) says whether a bot may
+  click and type in this computer's apps with Hermes' `computer_use` toolset. This computer shows the system, Hermes'
+  cua-driver and its version, each of the driver's checks, the macOS grants (Accessibility, Screen Recording) and
+  one ready line, read through `hermes -p default computer-use permissions status --json`; Install runs Hermes'
+  `computer-use install`, Grant access (macOS only) its `computer-use permissions grant`, and Check again reads it
+  again. Bots has one switch per bot, read from the bot's own gateway and the profile's `agent.disabled_toolsets`;
+  flipping it runs `hermes -p <bot> tools enable|disable computer_use` and reads the switch back, and a failed flip
+  says whether Hermes left it as it was, omher cannot tell, or nothing was asked. A change reaches the bot's new
+  threads at once and its main chat after the bot restarts. For a bot whose config sets `agent.coding_context:
+  focus`, the row says its chats in a code folder get Hermes' coding tools, without computer use. A bot on another computer, every bot while omher uses a server, `HERMES_TUI_TOOLSETS` set in omher's
+  own environment and an offline bot each show the switch off with the reason. In a chat a computer-use step reads as
+  its action and app ("Clicked in Safari"); outside Hermes' own approval card, which shows the start of what a `type`
+  or `key` action will enter so the person sees what they approve, what the bot types never reaches the page.
+  `BOUNDARY.md` rule 52.
 - **A bot's page** (Settings › Bots › the bot; the row menu's Edit bot, or Edit in the Details panel): its picture and
   name (editable), then who it is, read-only. Persona is the profile's `SOUL.md` as plain text with its size; Memory is
   Hermes' built-in `memories/MEMORY.md` and `memories/USER.md`, each as its entries with its characters against the

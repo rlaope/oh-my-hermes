@@ -10,6 +10,7 @@ import { useClock } from "../../app/clock";
 import { t, t as tr, tx, type Key } from "../../i18n";
 import { FanoutCard, rowMs } from "./Subagents";
 import { DiffView, PlanList, ThinkingText } from "./Work";
+import { COMPUTER_TOOL, computerLine } from "./computerSteps";
 import "./activity.css";
 
 /** A fan-out still counts as running this long after its last event, though its turn ended (background). */
@@ -17,7 +18,8 @@ const FANOUT_QUIET_MS = 10 * 60_000;
 
 export const slot = "activity";
 
-/** Plain verbs for the detail rows. Unknown tools read as their own name, with underscores spaced. */
+/** Plain verbs for the detail rows. Unknown tools read as their own name, with underscores spaced. A computer_use step
+ *  reads as one sentence of its action and app (computerSteps.ts), never what the bot typed. */
 const VERBS: Record<string, Key> = {
   terminal: "act.ran",
   read_file: "act.read",
@@ -141,6 +143,7 @@ export function StepRow({ step, live, now, io }: { step: Step; live: boolean; no
   const ms = (step.endedAt ?? now) - step.startedAt;
   const diff = step.diff?.length ? step.diff : null;
   const opens = !!diff || !!io;
+  const cu = step.name === COMPUTER_TOOL ? computerLine(step.action, step.detail, false) : null;
   const row = (
     <div
       className={`act-step${failed ? " fail" : ""}${stopped ? " stopped" : ""}${opens ? " has-diff" : ""}${diffOpen ? " open" : ""}`}
@@ -163,8 +166,10 @@ export function StepRow({ step, live, now, io }: { step: Step; live: boolean; no
         : {})}
     >
       {stopped && <span className="act-ic interrupted" aria-hidden>■</span>}
-      <span className="k">{stopped ? tr("act.stoppedVerb") : stepVerb(step.name)}</span>
-      {step.detail &&
+      <span className="k">{stopped ? tr("act.stoppedVerb") : (cu ?? stepVerb(step.name))}</span>
+      {cu !== null
+        ? stopped && <span className="v prose">{cu}</span>
+        : step.detail &&
         (isCode(step.name) ? (
           <code className="v" title={step.detail}>
             {step.detail}

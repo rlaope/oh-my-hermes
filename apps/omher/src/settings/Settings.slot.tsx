@@ -26,17 +26,18 @@ import { DISK_WARN_CHOICES, diskWarn, setDiskWarn } from "../lib/disk";
 import { Toggle } from "../pages/kit";
 import { awakeEnabled, closeHides, isMacPlatform, setAwakeEnabled, setCloseHides } from "../lib/power";
 import { AgentsPage } from "./agents/AgentsPage";
+import { ComputerPage } from "./computer/ComputerPage";
 import { AvatarEditor, BotFacts, NameEditor, PictureActions, placeName, useBotInfo, usePictureEditor } from "./BotIdentity";
 import { BotSections } from "./BotSections";
 
 export const slot = "settings";
 
-const APP_PAGES: { id: string; label: Key; soon?: boolean }[] = [
+const APP_PAGES: { id: string; label: Key }[] = [
   { id: "general", label: "set.general" },
   { id: "terminal", label: "set.terminal" },
   { id: "agents", label: "set.agents" },
   { id: "providers", label: "set.providers" },
-  { id: "computer", label: "set.computer", soon: true },
+  { id: "computer", label: "set.computer" },
 ];
 
 const STATUS: Record<string, Key> = { online: "bot.online", offline: "bot.offline", starting: "bot.starting" };
@@ -77,7 +78,6 @@ export default function Settings({ page }: SlotProps["settings"]) {
         {APP_PAGES.map((p) => (
           <NavItem key={p.id} id={p.id} current={current} onPick={s.openSettings}>
             {t(p.label)}
-            {p.soon && <span className="nav-soon">{t("set.soon")}</span>}
           </NavItem>
         ))}
       </nav>
@@ -252,9 +252,9 @@ function BotPage({ bot }: { bot: Bot }) {
           <Value>{t("set.inHermes")}</Value>
         </Row>
         <Row title={t("set.useComputer")} hint={t("set.useComputerHint")}>
-          <Value>
-            <span className="st-soon">{t("set.soon")}</span>
-          </Value>
+          <button type="button" className="st-btn" onClick={() => s.openSettings("computer")} data-testid="bot-computer">
+            {t("set.computerOpen")}
+          </button>
         </Row>
       </div>
     </div>
@@ -649,21 +649,6 @@ function ServerBlock() {
           {err}
         </p>
       )}
-    </div>
-  );
-}
-
-function ComputerPage() {
-  return (
-    <div className="st-page">
-      <div className="st-gh st-gh0">{t("set.computer")}</div>
-      <div className="st-grp">
-        <Row title={t("set.useComputer")} hint={t("set.useComputerHint2")}>
-          <Value>
-            <span className="st-soon">{t("set.soon")}</span>
-          </Value>
-        </Row>
-      </div>
     </div>
   );
 }

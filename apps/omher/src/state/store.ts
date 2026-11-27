@@ -6,6 +6,7 @@ import { BridgeClient, type BridgeStatus } from "../lib/bridge";
 import { createNoteGate, noteFor, sessionNote, sessionRings, showNote, watchMissedNote, windowWatched, type SessionNote } from "../lib/notify";
 import { appSounds, soundFor, type SoundBoard } from "../lib/sounds";
 import { promptText } from "../chat/parts/attachFiles";
+import { COMPUTER_TOOL, computerLine } from "../chat/activity/computerSteps";
 import { findTokens, toWire } from "../chat/parts/skillTokens";
 import { forBots, parseResume, RESUME_KEY, type ResumeSnap } from "../app/resume";
 import { getDraft } from "../app/drafts";
@@ -53,6 +54,9 @@ import type {
   OpMap,
   PluginRow,
   AppRun,
+  ComputerDriverRun,
+  ComputerStatus,
+  ComputerToggle,
   DiffFile,
   PlanItem,
   Msg,
@@ -78,6 +82,8 @@ export interface Step {
   late?: { ok: boolean; endedAt: number; ms: number };
   /** delegate_task: the dag parts this call handed out (one plain line each in the activity details). */
   dag?: { run: string; node: string }[];
+  /** computer_use: Hermes' action (click, capture, type…); `detail` is then the app (rule 52). */
+  action?: string;
   /** A file edit's change, per file (SESSIONS agents), for the step's diff view. */
   diff?: DiffFile[];
   /** Read back from a record with no later timestamp (a child's session): its length is unknown, none is shown. */
@@ -462,8 +468,10 @@ const VERBS: Record<string, Key> = {
   skill_use: "live.usingSkill",
 };
 
-/** "<Verb> <detail>" for a tool call, the verb in the current language; unknown tools keep their own name. */
-export function activityText(name: string, detail: string): string {
+/** "<Verb> <detail>" for a tool call, the verb in the current language; unknown tools keep their own name. A
+ *  computer_use call reads as its action in the app (`action`, rule 52): "Clicking in Safari". */
+export function activityText(name: string, detail: string, action?: string): string {
+  if (name === COMPUTER_TOOL) return computerLine(action, detail, true);
   const verb = VERBS[name] ? tr(VERBS[name]) : name;
   const d = (detail ?? "").trim();
   return d ? `${verb} ${d}` : verb;
@@ -498,7 +506,7 @@ export function parsePlan(items: unknown): PlanItem[] {
 export function liveLabel(t: Turn): { verb: string; code?: string } {
   const status = t.status || WORKING;
   const last = t.steps[t.steps.length - 1];
-  if (last && last.detail && status === activityText(last.name, last.detail)) {
+  if (last && last.detail && last.name !== COMPUTER_TOOL && status === activityText(last.name, last.detail)) {
     return { verb: activityText(last.name, ""), code: last.detail };
   }
   return { verb: status };
@@ -666,7 +674,7 @@ function doneWaiting(c: Chat): Chat {
   if (!t || (t.status !== tr("live.waitApproval") && t.status !== tr("live.waitAnswer"))) return c;
   if (c.items.some((i) => (i.kind === "approval" || i.kind === "clarify") && askOpen(c.items, i))) return c;
   const last = t.steps[t.steps.length - 1];
-  return patchTurn(c, (x) => ({ ...x, status: last && last.endedAt === undefined ? activityText(last.name, last.detail) : "" }));
+  return patchTurn(c, (x) => ({ ...x, status: last && last.endedAt === undefined ? activityText(last.name, last.detail, last.action) : "" }));
 }
 
 /** The agent took back the person's last message: it and everything after it leave the chat. */
@@ -1172,13 +1180,20 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
         const ask = ev.name === "clarify";
         return patchTurn(c, (t) => ({
           ...t,
-          status: activityText(ev.name, ev.detail),
+          status: activityText(ev.name, ev.detail, ev.action),
           ...(ask ? { askNote: hideSplitBlocks(t.streaming.slice(t.cut ?? 0).trim()) } : {}),
           // what was written before this call was commentary on it, not the answer
           cut: t.streaming.length,
           steps: [
             ...t.steps,
-            { id: ev.tool_id, name: ev.name, detail: ev.detail, startedAt: now, ...(ev.dag?.length ? { dag: ev.dag } : {}) },
+            {
+              id: ev.tool_id,
+              name: ev.name,
+              detail: ev.detail,
+              startedAt: now,
+              ...(ev.dag?.length ? { dag: ev.dag } : {}),
+              ...(ev.action ? { action: ev.action } : {}),
+            },
           ],
         }));
       });
@@ -2076,6 +2091,12 @@ export interface Actions {
    *  of `hermes -p <bot> mcp install|login|remove <name>`. */
   appsList(bot: string): Promise<OpMap["apps.list"]["result"]>;
   appsRun(verb: "install" | "login" | "remove", bot: string, name: string): Promise<AppRun>;
+  /** Computer use (BOUNDARY rule 52): "This computer" through Hermes' own read-only status command, and each bot's
+   *  switch from its gateway; a press runs one of Hermes' fixed computer-use commands. Only a bot name and on/off go out. */
+  computerStatus(): Promise<ComputerStatus>;
+  computerBot(bot: string): Promise<OpMap["computer.bot"]["result"]>;
+  computerToggle(bot: string, on: boolean): Promise<ComputerToggle>;
+  computerDriver(verb: "install" | "grant"): Promise<ComputerDriverRun>;
   /** Settings › General › Language: saved on this computer, applied at once (no restart). */
   setLanguage(lang: Lang): void;
   loadModels(bot?: string): Promise<void>;
@@ -3092,6 +3113,10 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         : verb === "login"
           ? bridge.request("apps.login", { bot, name })
           : bridge.request("apps.remove", { bot, name }),
+    computerStatus: () => bridge.request("computer.status", {}),
+    computerBot: (bot) => bridge.request("computer.bot", { bot }),
+    computerToggle: (bot, on) => bridge.request("computer.toggle", { bot, on }),
+    computerDriver: (verb) => (verb === "install" ? bridge.request("computer.install", {}) : bridge.request("computer.grant", {})),
     setLanguage(lang) {
       try {
         if (typeof localStorage !== "undefined") localStorage.setItem(LANG_KEY, lang);

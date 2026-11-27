@@ -4,6 +4,14 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: Settings › Computer sets up Hermes' computer use.** The page was a "Soon" line. It now shows whether this
+  computer has Hermes' desktop driver and the access macOS asks for, with Install, Grant access and Check again, and
+  one switch per bot for the `computer_use` toolset. Every button runs Hermes' own command; a switch is decided by
+  reading it back, since the command exits 0 either way, and the page says a change reaches new threads at once and
+  the main chat after a restart. A bot on another computer and remote-only mode are off with the reason. In chat, a
+  computer step names the action and the app only: what the bot types stays in the bridge, outside Hermes' own
+  approval request. (`docs/OMHER-BOUNDARY.md` rule 52; `apps/omher/src/settings/computer/`)
+
 - **TUI: Enter in `/sessions` can resume a session found first in local history.** The picker waits for Hermes
   and checks up to five older pages for the same conversation in the connected profile before opening read-only
   history. Sessions Hermes marks read-only and sessions in other profiles are not taken over. (Follow-up to #3257.)

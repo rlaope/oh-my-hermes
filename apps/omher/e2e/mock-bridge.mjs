@@ -18,6 +18,12 @@
 // mock.pluginLoad {load: "live"|"reload"|"restart"|"failed"} (what the next plugin install / reload says),
 // mock.apps {bot, name, state} (one Apps entry's state for a bot), mock.appsNext {verb, line} (the next apps.<verb> run
 // fails with Hermes' text), mock.appsDelay {verb, ms} (how long an apps.<verb> run takes),
+// mock.computer {status?, bots?, next?, ms?, busy?} (Settings › Computer, rule 52: `status` merges into what
+// computer.status answers, `bots` sets bots' computer_use switches ({name: "on"|"off"|"unknown"|"disabled"}), `next`
+// {verb, line, unknown?} makes the next computer.<verb> run (install, grant, toggle) fail with Hermes' text, the switch
+// left as it was (with `unknown`, left unreadable); `ms` is how long a run takes; `busy` n: the next n computer.status
+// asks answer `busy`; status fields `codeFocus` [names] (bots whose config sets agent.coding_context: focus) and
+// `noHermes` (a toggle finds no Hermes to run) shape computer.bot and computer.toggle),
 // mock.botStatus {bot, status} (a bot goes offline or online),
 // mock.manual {bot, on} (a message to that bot, or to its folder chats, starts a turn that runs no script: the test
 // drives it with mock.emit),
@@ -717,6 +723,17 @@ const APP_SKILL_SEED = {
   ],
 };
 let notReady = new Map();
+// Computer use (computer.*, BOUNDARY rule 52): what Hermes' `computer-use permissions status --json` answers (kept as the
+// bridge keeps it), each bot's computer_use switch, the next failing run, and how long a run takes.
+let computerState, computerBots, computerNext, computerMs, computerBusy;
+const COMPUTER_READY = () => ({
+  read: true, pinned: false, platform: "darwin", platform_supported: true, installed: true, version: "cua-driver 0.4.2",
+  ready: true, can_grant: true, error: null, accessibility: true, screen_recording: true,
+  checks: [
+    { label: "Driver version", status: "ok", message: "Matches the version Hermes pins" },
+    { label: "Bundle identity", status: "ok", message: "com.trycua.driver" },
+  ],
+});
 // Add bot › New bot (rule 44): what `omh --hermes-home <root> profile bot-templates --json` answers, and the next create's failure line.
 let templatesOmh = "ok";
 let createNext = null;
@@ -975,6 +992,11 @@ function reset() {
   appsNext = {};
   appsDelay = {};
   appsHold = new Map(); // bot -> { arrived, release }: its next apps.list waits for mock.appsRelease
+  computerState = COMPUTER_READY();
+  computerBots = new Map(); // bot -> "on" | "off" | "unknown" (absent: off)
+  computerNext = {};
+  computerMs = 200;
+  computerBusy = 0;
   notReady = new Map(); // bot -> the sign-in provider that now passes its strict check ("" = none)
   idSeq = 0;
   calls = [];
@@ -1189,6 +1211,37 @@ function needStr(p, k) {
 // One `hermes -p <bot> mcp install|login|remove <name>` as the bridge runs it: the name from the catalog, refusals
 // before anything runs, Hermes' own text when it did not work, and the state read back after.
 const APP_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+// Computer use: a bot on another computer is refused with the bridge's reason; a switch reads `unknown` for an offline
+// bot (the bridge asks only a gateway it is attached to); a toggle is refused when that cannot be told or the toolsets
+// are pinned; a run that fails leaves the switch as it was (Hermes' readback disagreed) with Hermes' text, or, with
+// `unknown`, leaves it unreadable. A switch set to "disabled" reads off (the profile's agent.disabled_toolsets), and
+// turning it on clears that, as Hermes' `tools enable` does. `busy` n: the next n computer.status asks find the one run
+// slot taken (another window's install).
+const computerRefusal = (b) =>
+  new OpError("remote_bot", `Computer use would act on ${b.host?.label ?? "that computer"}'s own screen, so omher does not set it up from here.`);
+function computerSwitch(b) {
+  if (b.status === "offline") return { state: "unknown", why: "offline" };
+  const state = computerBots.get(b.name) ?? "off";
+  if (state === "disabled") return { state: "off", why: "disabled" };
+  return { state, why: state === "unknown" ? "unread" : "" };
+}
+// the bots whose config sets agent.coding_context: focus (mock.computer {codeFocus: [names]})
+const computerFocus = (b) => (computerState.codeFocus ?? []).includes(b.name);
+const computerWait = () => new Promise((r) => setTimeout(r, computerMs));
+function computerDriver(verb) {
+  return computerWait().then(() => {
+    const fail = computerNext[verb];
+    delete computerNext[verb];
+    if (fail) return { outcome: "failed", line: fail.line, status: structuredClone(computerState) };
+    if (verb === "install") Object.assign(computerState, { installed: true, version: "cua-driver 0.4.2" });
+    // `grantPending`: Hermes' grant command returned while macOS' dialog still waits on the person
+    else if (!computerState.grantPending) Object.assign(computerState, { accessibility: true, screen_recording: true });
+    if (computerState.can_grant) computerState.ready = computerState.accessibility === true && computerState.screen_recording === true;
+    else computerState.ready = computerState.installed;
+    return { outcome: "ok", status: structuredClone(computerState) };
+  });
+}
+
 function appRun(p, verb) {
   const b = needBotAny(p);
   if (typeof p.name !== "string" || !APP_NAME.test(p.name)) throw new OpError("bad_request", "need an app from Hermes' MCP catalog");
@@ -1751,6 +1804,46 @@ const OPS = {
   "apps.install": (p) => appRun(p, "install"),
   "apps.login": (p) => appRun(p, "login"),
   "apps.remove": (p) => appRun(p, "remove"),
+  "computer.status": () => {
+    if (computerBusy > 0) {
+      computerBusy -= 1;
+      throw new OpError("busy", "omher is still running a computer-use command");
+    }
+    return computerWait().then(() => structuredClone(computerState));
+  },
+  "computer.bot": (p) => {
+    const b = needBotAny(p);
+    if (b.host) throw computerRefusal(b);
+    return { ...computerSwitch(b), code_focus: computerFocus(b) };
+  },
+  "computer.toggle": (p) => {
+    const b = needBotAny(p);
+    if (b.host) throw computerRefusal(b);
+    if (typeof p.on !== "boolean") throw new OpError("bad_request", "on is true or false");
+    if (computerState.pinned) throw new OpError("pinned", "HERMES_TUI_TOOLSETS is set in omher's environment, so omher does not change this switch");
+    const before = computerSwitch(b);
+    if (before.state === "unknown")
+      throw new OpError("cannot_tell", `omher cannot tell whether ${b.display_name} may use this computer, so it changes nothing`);
+    const want = p.on ? "on" : "off";
+    if (before.state === want) return { outcome: "ok", state: want, why: before.why };
+    if (computerState.noHermes) throw new OpError("no_hermes", "Hermes is not on this computer.");
+    return computerWait().then(() => {
+      const fail = computerNext.toggle;
+      delete computerNext.toggle;
+      if (fail?.unknown) {
+        computerBots.set(b.name, "unknown");
+        return { outcome: "failed", state: "unknown", why: "unread", line: fail.line };
+      }
+      if (fail) return { outcome: "failed", state: before.state, why: before.why, line: fail.line };
+      computerBots.set(b.name, want);
+      return { outcome: "ok", state: want, why: "" };
+    });
+  },
+  "computer.install": () => computerDriver("install"),
+  "computer.grant": () => {
+    if (computerState.platform !== "darwin") throw new OpError("bad_request", "Only macOS asks for computer-use permissions.");
+    return computerDriver("grant");
+  },
   "tasks.linear": (p) => {
     const server = linearMcp.get(needBot(p).name);
     return server ? { configured: true, server } : { configured: false, server: "" };
@@ -2347,6 +2440,14 @@ const OPS = {
   },
   "mock.appsDelay": (p) => {
     appsDelay[String(p.verb)] = Number(p.ms);
+    return {};
+  },
+  "mock.computer": (p) => {
+    if (p.status && typeof p.status === "object") Object.assign(computerState, p.status);
+    if (p.bots && typeof p.bots === "object") for (const [k, v] of Object.entries(p.bots)) computerBots.set(k, String(v));
+    if (p.next && typeof p.next === "object") computerNext[String(p.next.verb)] = { line: String(p.next.line), unknown: p.next.unknown === true };
+    if (typeof p.ms === "number") computerMs = p.ms;
+    if (typeof p.busy === "number") computerBusy = p.busy;
     return {};
   },
   "mock.appsNext": (p) => {
