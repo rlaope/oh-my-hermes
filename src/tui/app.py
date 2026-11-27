@@ -6600,7 +6600,7 @@ class App(ModesMixin, AgentViewMixin):
 
     def _on_interrupt_refused(self, error: dict[str, Any]) -> bool:
         """Hermes did not stop the turn: the spinner comes back, and the refusal is said as any refused call is."""
-        self.interrupting = False
+        self.interrupting = self.command_cut_in = False
         return False
 
     def _interrupt_or_exit(self) -> None:
@@ -7262,10 +7262,8 @@ class App(ModesMixin, AgentViewMixin):
         if self.interrupting and self.command_cut_in and self.queued and self.queued[0].command is not None:
             # The person sent a queued command now: it runs first, then the queue goes on behind it, as behind a
             # cut-in prompt. Steers the turn had not read go back right behind the command.
-            self.interrupting = self.command_cut_in = False
-            command = self.queued.popleft()
             self._requeue_unread_steers()
-            self.queued.appendleft(command)
+            self.interrupting = self.command_cut_in = False
             self._drain_queue()
             self._check_default()
             return
@@ -7626,6 +7624,7 @@ class App(ModesMixin, AgentViewMixin):
 
     def _take_back_queue(self, composer: Composer) -> None:
         """Put the queue's next lines into the empty `composer`, as `_recall_queue` says; the hold ends with the queue."""
+        self.command_cut_in = False
         taken = [self.queued.popleft()]
         while self.queued and not taken[0].alone and not self.queued[0].alone:
             taken.append(self.queued.popleft())
@@ -7679,7 +7678,7 @@ class App(ModesMixin, AgentViewMixin):
         head = self.queued[0] if self.queued else None
         typed_command = head is not None and head.command is not None and not head.command.for_plan_mode
         cuts_in = head is not None and not head.shell and not head.typed and (bool(head.images) or typed_command)
-        return cuts_in and bool(self.sid) and self.cut_in is None
+        return cuts_in and bool(self.sid) and self.cut_in is None and not self.command_cut_in
 
     def _send_queued_now(self) -> None:
         """The send-now key: the oldest queued prompt leaves the queue and goes into the running turn as a steer, or,
@@ -7935,9 +7934,13 @@ class App(ModesMixin, AgentViewMixin):
         held, self.hermes_queued = self.hermes_queued, []
         unread = [*self.sent_now, *(SentNow(line, block) for block, line in held if line is not None)]
         self.sent_now = []
+        command = (self.queued.popleft()
+                   if self.command_cut_in and self.queued and self.queued[0].command is not None else None)
         for sent in reversed(unread):
             self.queued.appendleft(sent.line)
             self.transcript.steer_answered(sent.block, STEER_REFUSED, SENT_NOW_DROPPED_OUTCOME)
+        if command is not None:
+            self.queued.appendleft(command)
         for block, line in held:
             if line is None:
                 self.transcript.steer_answered(block, STEER_REFUSED, STEER_DROPPED_OUTCOME)

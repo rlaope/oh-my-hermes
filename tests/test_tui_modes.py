@@ -1443,6 +1443,41 @@ class BusyQueueTests(unittest.TestCase):
                                  [{"command": "stop", "session_id": SID}] if stop == "/stop" else [])
                 self.assertEqual(client.named("prompt.submit"), [])
 
+    def test_a_command_cut_in_runs_ahead_of_an_unread_sent_now_steer(self) -> None:
+        app, client = make_app(busy=True)
+        for text in ("first", "/compress", "second"):
+            type_text(app, text)
+            app._on_input(Key(ENTER))
+        app._on_input(CTRL_ENTER)
+        answer(app, client, {"status": "queued", "text": "first"})
+        app._on_input(CTRL_ENTER)
+        self.assertTrue(app.command_cut_in)
+        self.assertFalse(app._queue_head_sends_now())
+        app._on_input(CTRL_ENTER)
+        self.assertEqual(client.named("session.interrupt"), [{"session_id": SID}])
+        app._on_event(Event("message.complete", SID, {"text": "half", "status": "interrupted"}))
+        self.assertEqual(client.calls[-1], ("slash.exec", {"command": "compress", "session_id": SID}))
+        self.assertFalse(app.queue_held)
+        self.assertEqual(app.composer.text, "")
+        self.assertEqual([line.text for line in app.queued], ["first", "second"])
+        answer(app, client, {"output": "Compressed 40 messages."})
+        self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "first", "queued": True}])
+
+    def test_up_after_the_send_now_key_cancels_the_command_cut_in(self) -> None:
+        app, client = make_app(busy=True)
+        for text in ("/compress", "/context"):
+            type_text(app, text)
+            app._on_input(Key(ENTER))
+        app._on_input(CTRL_ENTER)
+        self.assertTrue(app.command_cut_in)
+        app._on_input(Key(UP))
+        self.assertEqual(app.composer.text, "/compress")
+        self.assertFalse(app.command_cut_in)
+        app._on_event(Event("message.complete", SID, {"text": "half", "status": "interrupted"}))
+        self.assertEqual(client.named("slash.exec"), [])
+        self.assertTrue(app.queue_held)
+        self.assertEqual([line.text for line in app.queued], ["/context"])
+
     def test_the_send_now_key_leaves_a_plan_mode_command_waiting(self) -> None:
         app, client = make_app(busy=True)
         show_mode(app, MODE_PLAN)
