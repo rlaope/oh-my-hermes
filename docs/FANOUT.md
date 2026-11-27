@@ -1321,6 +1321,11 @@ the unit fails and says so; OMH does not retry in a looser permission mode.
 | `aider` | `aider` | `aider --yes-always --message {prompt}` | `--model {model}` | no |
 | `goose` | `goose` | `goose run -t {prompt}` | `--model {model}` | no |
 
+- **Inside an enforced fence** (`bwrap` / `sandbox-exec`) the `devin` row runs `--permission-mode dangerous`
+  instead of `accept-edits`: `accept-edits` rejects every shell call headlessly, so a unit could edit files but
+  never `git commit`. The fence is the write boundary, as for Codex. Its state directory
+  (`~/.local/share/devin`) is writable with the installed program (`cli/_versions`) mounted read-only. With
+  `--allow-unconfined` or on a backend without a fence the row runs exactly as written above.
 - Devin runs the Devin CLI **locally** (`devin -p ...`). The preset never emits
   `--cloud`.
 - Devin alone declares a session export (`--export {session_file}`) and resume
