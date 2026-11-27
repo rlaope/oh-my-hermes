@@ -83,9 +83,9 @@ NEXT_ADVANCE_NEXT_ITEM = "advance_next_item"
 NEXT_RUN_RECOVERY = "run_recovery"
 
 # Failure kinds that retrying under the same conditions cannot clear: the
-# account said no, or the credentials did. These are recorded as blocked with
-# their reason, never re-dispatched.
-_BLOCKED_FAILURE_KINDS = frozenset({"limit_shaped", "auth_shaped"})
+# account said no, the credentials did, or the fence hid a working keyring
+# login. These are recorded as blocked with their reason, never re-dispatched.
+_BLOCKED_FAILURE_KINDS = frozenset({"limit_shaped", "auth_shaped", "credential_hidden"})
 
 
 

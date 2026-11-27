@@ -67,6 +67,7 @@ from ..workflows.observation_journal import project_run_executor_session, read_o
 from .fanout_failure_diagnostics import build_failure_diagnostic
 from ..workflows.observation_journal import project_run_failure_diagnostic
 from ..system.paths import OmhPaths, find_project_root
+from ..quality.cross_harness_adapter_sandbox import user_session_bus_hidden
 from ._hermes_child_process import terminate_process_group
 from .action_gate import recheck_safety_profile_revision
 from .cause_recovery import attempt_conditions, limit_reset_text, plan_summary_line, recovery_plan
@@ -85,6 +86,7 @@ from .dispatch_failure_recovery import (
     ON_FAILURE_REPORT,
     ON_FAILURE_WAIT,
     FAILURE_KIND_AUTH_SHAPED,
+    FAILURE_KIND_CREDENTIAL_HIDDEN,
     FAILURE_KIND_BINARY_MISSING,
     FAILURE_KIND_CRASH,
     FAILURE_KIND_LIMIT_SHAPED,
@@ -92,6 +94,7 @@ from .dispatch_failure_recovery import (
     FAILURE_RECOVERY_CLAIM_BOUNDARY,
     FAILURE_RECOVERY_SCHEMA_VERSION,
     auth_shaped_label,
+    credential_hidden_by_fence,
     build_repair_card,
     classify_failure_kind,
     clear_auth_failure_signal,
@@ -6360,11 +6363,20 @@ def _dispatch_unit(
     duration_seconds = round(time.monotonic() - started_clock, 3)
     limit_label = _limit_shaped_label(output_tail, stderr_tail) if exit_code != 0 else ""
     auth_label = auth_shaped_label(output_tail, stderr_tail) if exit_code != 0 else ""
+    # A keyring login the fence hid (#3253) is not a rejected credential: no
+    # auth cooldown, and a card that names the fence.
+    credential_hidden = exit_code != 0 and bool(argv) and credential_hidden_by_fence(
+        str(argv[0]),
+        bus_hidden=_fence_hides_user_bus(confinement),
+        auth_label=auth_label,
+        output_tail=output_tail,
+        stderr_tail=stderr_tail,
+    )
     # One closed-enum answer per failed unit, derived once so the envelope, the
     # persisted signal, and the recovery interview cannot disagree about what
     # kind of failure this was.
     failure_kind = classify_failure_kind(
-        exit_code=exit_code, limit_label=limit_label, auth_label=auth_label
+        exit_code=exit_code, limit_label=limit_label, auth_label=auth_label, credential_hidden=credential_hidden
     )
     # Auth takes the persisted signal when both shapes match, for the same
     # reason it takes the enum: a credential rejection filed as a limit would be
@@ -6397,6 +6409,8 @@ def _dispatch_unit(
     summary = f"unit {unit_id} exit {exit_code} after {duration_seconds}s"
     if failure_kind == FAILURE_KIND_AUTH_SHAPED:
         summary = f"auth-shaped failure ({auth_label}); {summary}"
+    elif failure_kind == FAILURE_KIND_CREDENTIAL_HIDDEN:
+        summary = f"credential hidden by the fence (keyring over the user D-Bus session); {summary}"
     elif limit_label:
         summary = f"limit-shaped failure ({limit_label}); {summary}"
     unit_result = _intake_unit_result(
@@ -6723,7 +6737,7 @@ def _dispatch_unit(
     if failure_kind == FAILURE_KIND_AUTH_SHAPED:
         result["auth_shaped"] = True
         result["auth_pattern"] = auth_label
-    if failure_kind in {FAILURE_KIND_AUTH_SHAPED, FAILURE_KIND_LIMIT_SHAPED}:
+    if failure_kind in {FAILURE_KIND_AUTH_SHAPED, FAILURE_KIND_LIMIT_SHAPED, FAILURE_KIND_CREDENTIAL_HIDDEN}:
         result["repair_card"] = build_repair_card(
             owner=owner,
             failure_kind=failure_kind,
@@ -7705,6 +7719,15 @@ def _resume_hold(
 
 def _worktree_path(repo_root: Path, unit_id: str) -> Path:
     return repo_root.parent / f"{repo_root.name}-fanout-{unit_id}"
+
+
+def _fence_hides_user_bus(confinement: FanoutFilesystemConfinement | None) -> bool:
+    """Whether this unit ran inside an enforced fence that hid the user D-Bus session (#3253)."""
+    return (
+        confinement is not None
+        and confinement.receipt.get("enforced") is True
+        and user_session_bus_hidden(confinement.selected)
+    )
 
 
 def _limit_shaped_label(output_tail: str, stderr_tail: str) -> str:

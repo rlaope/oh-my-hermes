@@ -404,8 +404,21 @@ def sandbox_command(
 
 
 def _user_runtime_directory() -> Path | None:
-    directory = Path("/run/user") / str(os.getuid())
+    getuid = getattr(os, "getuid", None)
+    if getuid is None:  # Windows: no per-user runtime directory, and no bwrap
+        return None
+    directory = Path("/run/user") / str(getuid())
     return directory if directory.is_dir() else None
+
+
+def user_session_bus_hidden(tool: str) -> bool:
+    """Whether a fence built with `tool` hides the user's runtime directory, and with it the D-Bus session.
+
+    True for bwrap on a host that has the directory: `sandbox_command` mounts an empty read-only tmpfs over it
+    (`_hidden_user_runtime_directory`). The Secret Service keyring is reached over that bus, so a CLI that keeps its
+    login in the keyring cannot read it inside such a fence.
+    """
+    return tool == "bwrap" and _user_runtime_directory() is not None
 
 
 def _hidden_user_runtime_directory() -> tuple[str, ...]:

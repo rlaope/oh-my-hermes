@@ -390,6 +390,25 @@ class AdapterSandboxSecurityTests(_RunnerMixin, unittest.TestCase):
         self.assertEqual(command, expected)
 
     @requires_posix
+    def test_only_bwrap_with_a_runtime_directory_hides_the_session_bus(self) -> None:
+        from src.quality.cross_harness_adapter_sandbox import user_session_bus_hidden
+
+        with patch("src.quality.cross_harness_adapter_sandbox._user_runtime_directory", return_value=Path("/run/user/1000")):
+            self.assertTrue(user_session_bus_hidden("bwrap"))
+            self.assertFalse(user_session_bus_hidden("sandbox-exec"))
+        with patch("src.quality.cross_harness_adapter_sandbox._user_runtime_directory", return_value=None):
+            self.assertFalse(user_session_bus_hidden("bwrap"))
+
+    def test_a_host_without_getuid_has_no_runtime_directory(self) -> None:
+        # Windows: `os.getuid` does not exist, so asking must answer None, not raise.
+        import types
+
+        from src.quality import cross_harness_adapter_sandbox as sandbox
+
+        with patch.object(sandbox, "os", types.SimpleNamespace()):
+            self.assertIsNone(sandbox._user_runtime_directory())
+            self.assertFalse(sandbox.user_session_bus_hidden("bwrap"))
+
     def test_linux_broad_read_command_skips_an_absent_runtime_directory_and_honors_strict_flags(self) -> None:
         child = ChildContext(Path("/tmp/scratch"), Path("/tmp/scratch/home"), Path("/tmp/scratch/work"), Path("/tmp/scratch/tmp"), Path("/tmp/scratch/output"), Path("/tmp/scratch/request.json"), Path("/tmp/scratch/output/result.json"), "f" * 64)
         environment = {"HOME": "/tmp/scratch/home", "PATH": "/usr/bin:/bin"}

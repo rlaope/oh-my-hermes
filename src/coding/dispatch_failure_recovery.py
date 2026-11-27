@@ -92,6 +92,12 @@ FAILURE_KIND_WORKSPACE_BLOCKED = "workspace_blocked"
 # set, such a unit carried a status and a reason but no failure signal, and
 # `omh coding fanout dispatch` reported the batch as a success.
 FAILURE_KIND_CAPABILITY_GATE = "capability_gate"
+# A credential rejection the fence caused, not the provider (#3253): the CLI keeps
+# its login in the Secret Service keyring, reached over the user's D-Bus session,
+# and the bwrap fence hides `/run/user/<uid>` and so the bus. The login is fine,
+# so no auth cooldown is recorded and the card names the fence rather than
+# asking the operator to re-authenticate a working login.
+FAILURE_KIND_CREDENTIAL_HIDDEN = "credential_hidden"
 FAILURE_KIND_CRASH = "crash"
 
 FAILURE_KINDS: tuple[str, ...] = (
@@ -101,6 +107,7 @@ FAILURE_KINDS: tuple[str, ...] = (
     FAILURE_KIND_BINARY_MISSING,
     FAILURE_KIND_WORKSPACE_BLOCKED,
     FAILURE_KIND_CAPABILITY_GATE,
+    FAILURE_KIND_CREDENTIAL_HIDDEN,
     FAILURE_KIND_CRASH,
 )
 # Kinds the dispatcher assigns before any spawn. The classifier never answers
@@ -116,7 +123,7 @@ DISPATCHER_ASSIGNED_FAILURE_KINDS: frozenset[str] = frozenset(
 # guaranteed not to clear, which is why it is refused before the spawn rather
 # than offered a retry after one.
 RECOVERABLE_FAILURE_KINDS: frozenset[str] = frozenset(
-    {FAILURE_KIND_AUTH_SHAPED, FAILURE_KIND_LIMIT_SHAPED}
+    {FAILURE_KIND_AUTH_SHAPED, FAILURE_KIND_LIMIT_SHAPED, FAILURE_KIND_CREDENTIAL_HIDDEN}
 )
 
 FAILURE_KIND_PRECEDENCE = (
@@ -124,7 +131,9 @@ FAILURE_KIND_PRECEDENCE = (
     "workspace preflight found a blocker in the unit's isolation, so no process exists and no "
     "output can be classified. Among the kinds a finished process can produce, binary_missing "
     "(synthetic exit 127) and timeout (synthetic exit 124) are the dispatcher's own observations of "
-    "the process and classify before any text match. Text then classifies as auth_shaped before "
+    "the process and classify before any text match. A credential rejection from a CLI whose login the fence "
+    "hid (keyring over the user D-Bus session, bwrap) is credential_hidden, not auth_shaped. "
+    "Text then classifies as auth_shaped before "
     "limit_shaped: an invalid credential must be repaired before any attempt can succeed, while a "
     "limit clears on its own, so an overlapping message belongs in the lane that waiting cannot "
     "clear. Everything else is crash."
@@ -157,6 +166,35 @@ _AUTH_SHAPED_PATTERNS: tuple[tuple[str, str], ...] = (
 )
 
 
+# CLIs whose default Linux login lives in the Secret Service keyring, by executable
+# name. Antigravity documents keyring sign-in as its default headless credential
+# (alternatives: `AGY_ADC_AUTH` with Google Cloud ADC, or an API key through
+# `modelProvider`). Only these can be refused by the fence hiding the bus; every
+# other CLI keeps its login in a file the fence leaves readable.
+KEYRING_CREDENTIAL_CLIS: frozenset[str] = frozenset({"agy"})
+# What such a CLI prints when its login cannot be read. Matched only for the CLIs
+# above, so it widens nothing for any other owner.
+_KEYRING_REFUSAL_PATTERNS: tuple[str, ...] = ("authentication required",)
+
+
+def credential_hidden_by_fence(
+    executable: str, *, bus_hidden: bool, auth_label: str, output_tail: str, stderr_tail: str
+) -> bool:
+    """Whether a failed spawn's credential refusal is the fence's doing (#3253).
+
+    All three must hold: the CLI is one that keeps its login in the keyring, the
+    fence that ran it hid the user's D-Bus session, and the tails read as a
+    credential refusal (an auth shape, or the keyring CLI's own "authentication
+    required").
+    """
+    if not bus_hidden or Path(str(executable or "")).name not in KEYRING_CREDENTIAL_CLIS:
+        return False
+    if auth_label:
+        return True
+    haystack = f"{output_tail}\n{stderr_tail}".casefold()
+    return any(pattern in haystack for pattern in _KEYRING_REFUSAL_PATTERNS)
+
+
 def auth_shaped_label(output_tail: str, stderr_tail: str) -> str:
     """The auth shape a failed spawn's tails match, or an empty string."""
     haystack = f"{output_tail}\n{stderr_tail}".casefold()
@@ -166,14 +204,21 @@ def auth_shaped_label(output_tail: str, stderr_tail: str) -> str:
     return ""
 
 
-def classify_failure_kind(*, exit_code: int, limit_label: str = "", auth_label: str = "") -> str:
-    """The closed-enum kind of one observed unit failure. See FAILURE_KIND_PRECEDENCE."""
+def classify_failure_kind(
+    *, exit_code: int, limit_label: str = "", auth_label: str = "", credential_hidden: bool = False
+) -> str:
+    """The closed-enum kind of one observed unit failure. See FAILURE_KIND_PRECEDENCE.
+
+    `credential_hidden` is `credential_hidden_by_fence(...)` for this spawn.
+    """
     if exit_code == 0:
         return ""
     if exit_code == 127:
         return FAILURE_KIND_BINARY_MISSING
     if exit_code == 124:
         return FAILURE_KIND_TIMEOUT
+    if credential_hidden:
+        return FAILURE_KIND_CREDENTIAL_HIDDEN
     if auth_label:
         return FAILURE_KIND_AUTH_SHAPED
     if limit_label:
@@ -346,6 +391,27 @@ def build_repair_card(
                 "action": (
                     "Re-run the dispatch for this unit once the CLI answers as authenticated. "
                     "The observed signal is re-checked, not trusted, on the next attempt."
+                ),
+                "command": "omh coding fanout dispatch <fanout-id> --unit <unit-id> --goal-file <file>",
+            },
+        ]
+    elif failure_kind == FAILURE_KIND_CREDENTIAL_HIDDEN:
+        card["repair_steps"] = [
+            {
+                "id": "pass_a_non_keyring_credential",
+                "action": (
+                    f"The {owner} login is in the Secret Service keyring, which the fence hides with the user "
+                    "D-Bus session; the login itself was not rejected, so do not re-authenticate. Give the unit a "
+                    "credential that does not need the bus (for agy: AGY_ADC_AUTH with Google Cloud ADC, or an API "
+                    "key) through the child environment policy. omh never reads the value."
+                ),
+                "command": f"omh coding fanout dispatch <fanout-id> --unit <unit-id> --goal-file <file> --owner-env {owner}:<NAME>",
+            },
+            {
+                "id": "redispatch_or_retarget",
+                "action": (
+                    "Or choose another coding owner explicitly. The bus stays hidden: exposing it would hand the "
+                    "worker the whole keyring."
                 ),
                 "command": "omh coding fanout dispatch <fanout-id> --unit <unit-id> --goal-file <file>",
             },

@@ -4,6 +4,16 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Fanout: a keyring login the fence hid is `credential_hidden`, not a rejected credential.** On Linux, `agy`
+  (Antigravity) keeps its login in the Secret Service keyring, reached over the user D-Bus session, and the bwrap
+  fence mounts an empty read-only tmpfs over `/run/user/<uid>`. Inside the fence `agy` said `authentication required`
+  and the unit was filed as a crash (or `auth_shaped`, with a six-hour spawn cooldown), sending the operator to
+  re-authenticate a working login. Such a refusal now classifies as `credential_hidden`: no auth-failure signal or
+  cooldown is recorded, and the repair card says not to re-authenticate and names a credential the fence can read
+  (`AGY_ADC_AUTH` or an API key, granted by name with `--owner-env agy:<NAME>`) or another owner. The bus stays
+  hidden. `_user_runtime_directory` answers None where `os.getuid` does not exist (Windows). (#3253 by @yqecea;
+  `src/coding/dispatch_failure_recovery.py`, `src/coding/cause_recovery.py`, `docs/FANOUT.md`)
+
 - **TUI: `/sessions` lists every local Hermes profile's conversations, one block per bot.** Bare `/sessions` (and
   `/resume`, Ctrl+X) opens a table of the conversations stored by every registered profile on this computer, not only
   what the connected gateway lists, so a chat started in Hermes Desktop or another client is findable here. Each bot
