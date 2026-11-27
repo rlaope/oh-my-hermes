@@ -1480,7 +1480,8 @@ funnel into the same engine.
 
 - **`failure_kind` is a closed enum on every failed unit envelope**:
   `auth_shaped`, `limit_shaped`, `timeout`, `binary_missing`,
-  `workspace_blocked`, or `crash` as the fallback. Precedence is fixed and
+  `workspace_blocked`, `capability_gate`, `credential_hidden`, or `crash` as
+  the fallback. Precedence is fixed and
   deterministic. `workspace_blocked` outranks everything because it is decided
   before the spawn (see **Workspace preflight** above): there is no process, no
   exit code and no output to classify, and it is never offered a recovery
@@ -1498,6 +1499,19 @@ funnel into the same engine.
   patterns are: a bare `401`, `token`, or `auth` matches ordinary CLI narration.
   Only the boolean and the matched label are ever persisted, never the matched
   text. The existing `limit_shaped` / `limit_pattern` fields are unchanged.
+- **`credential_hidden` is a login the fence hid, not one the provider
+  rejected** (#3253). A CLI that keeps its Linux login in the Secret Service
+  keyring (today `agy`, Antigravity) reads it over the user D-Bus session, and
+  the bwrap fence mounts an empty read-only tmpfs over `/run/user/<uid>`, which
+  removes the bus. Such a CLI, refused inside an enforced bwrap fence (an auth
+  shape, or its own `authentication required`), classifies as
+  `credential_hidden` instead of `auth_shaped`: no auth-failure signal or spawn
+  cooldown is recorded, and the repair card says not to re-authenticate. It
+  names a credential the fence can read instead, granted by name through the
+  child environment policy (`--owner-env agy:<NAME>`, for agy `AGY_ADC_AUTH`
+  with Google Cloud ADC or an API key), or another owner. The bus stays hidden:
+  exposing it would hand the worker the whole keyring. macOS (sandbox-exec)
+  keeps the keychain reachable and is unaffected.
 - **Auth-failure signals persist per owner**, in
   `~/.omh/runtime/executor-auth-failure-signals.json`
   (`executor_auth_failure_signals/v1`), a sibling of the limit signals rather
@@ -1508,7 +1522,7 @@ funnel into the same engine.
   clears them, exactly like limit signals. These are **not** the presence
   markers in `executor_auth_signals`: a marker is absent for every legitimate
   API-key install and never vetoes anything.
-- **Repair cards** ride every `auth_shaped` and `limit_shaped` unit entry
+- **Repair cards** ride every `auth_shaped`, `limit_shaped` and `credential_hidden` unit entry
   (`dispatch_failure_repair_card/v1`). An auth card names re-authentication then
   re-dispatch, with the owner's own login command where this repo has verified
   one and a neutral "re-authenticate the `<owner>` CLI" instruction where it has
@@ -1527,7 +1541,8 @@ funnel into the same engine.
   blocks its dependents and journals as `not_attempted`, so a later resume
   re-attempts it.
 - **The recovery interview offers three actions, and never picks one.** After
-  the run, each unit that failed as `auth_shaped` or `limit_shaped` gets a
+  the run, each unit that failed as `auth_shaped`, `limit_shaped` or
+  `credential_hidden` gets a
   numbered choice: **[1] retarget** to another coding owner, ranked from
   `executor_choice_context` with the failed owner excluded; **[2] Hermes
   subagent**, re-running the unit through the `omh coding hermes-child dispatch`
@@ -1631,6 +1646,7 @@ on the prose.
 | `auth_shaped` | `reauthenticate_then_redispatch` | `credential_repaired` |
 | `binary_missing` | `install_binary_then_redispatch` | `binary_present` |
 | `capability_gate` | `record_capability_evidence_then_redispatch` | `capability_evidence_recorded` |
+| `credential_hidden` | `pass_fence_readable_credential_then_redispatch` | `credential_reachable` |
 | `timeout`, `crash` | `report_or_choose_recovery` | always (existing behaviour, unchanged) |
 | nothing recorded | `report_only` | always — no cause-specific repair is claimed |
 

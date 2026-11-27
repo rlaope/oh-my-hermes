@@ -108,6 +108,7 @@ CAUSE_AUTH_INVALID = "auth_invalid"
 CAUSE_BINARY_MISSING = "binary_missing"
 CAUSE_TIMEOUT = "timeout"
 CAUSE_CAPABILITY_GATE = "capability_gate"
+CAUSE_CREDENTIAL_HIDDEN = "credential_hidden"
 CAUSE_CRASH = "crash"
 CAUSE_UNKNOWN = "unknown"
 
@@ -121,6 +122,7 @@ ACTION_ANSWER_OR_CANCEL = "answer_or_cancel"
 ACTION_REAUTHENTICATE_THEN_REDISPATCH = "reauthenticate_then_redispatch"
 ACTION_INSTALL_BINARY_THEN_REDISPATCH = "install_binary_then_redispatch"
 ACTION_RECORD_CAPABILITY_EVIDENCE_THEN_REDISPATCH = "record_capability_evidence_then_redispatch"
+ACTION_PASS_FENCE_READABLE_CREDENTIAL_THEN_REDISPATCH = "pass_fence_readable_credential_then_redispatch"
 ACTION_REPORT_OR_CHOOSE_RECOVERY = "report_or_choose_recovery"
 ACTION_REPORT_ONLY = "report_only"
 
@@ -133,6 +135,7 @@ REQUIRE_CONDITIONS_CHANGED = "conditions_changed"
 REQUIRE_CREDENTIAL_REPAIRED = "credential_repaired"
 REQUIRE_BINARY_PRESENT = "binary_present"
 REQUIRE_CAPABILITY_EVIDENCE_RECORDED = "capability_evidence_recorded"
+REQUIRE_CREDENTIAL_REACHABLE = "credential_reachable"
 
 
 class RecoveryRow(NamedTuple):
@@ -237,6 +240,23 @@ RECOVERY_ROWS: tuple[RecoveryRow, ...] = (
         blocks_new_worker=False,
         resumes_single_unit=True,
         reason="the stored credential was rejected; re-running before it is repaired repeats the rejection",
+    ),
+    # The login is fine but the fence hid it (#3253): a keyring credential over
+    # the user D-Bus session, which the bwrap fence hides. Re-authenticating
+    # changes nothing and a rerun repeats the refusal; a credential the fence
+    # can read (agy: AGY_ADC_AUTH or an API key, granted by name) does. Another
+    # owner carries its own credential, so a retarget is not blocked.
+    RecoveryRow(
+        cause=CAUSE_CREDENTIAL_HIDDEN,
+        action=ACTION_PASS_FENCE_READABLE_CREDENTIAL_THEN_REDISPATCH,
+        requires=(REQUIRE_CREDENTIAL_REACHABLE,),
+        never_rerun=False,
+        blocks_new_worker=False,
+        resumes_single_unit=True,
+        reason=(
+            "the CLI's keyring login sits behind the user D-Bus session the fence hides; the login was not "
+            "rejected, and a rerun without a fence-readable credential repeats the refusal"
+        ),
     ),
     # The dispatcher's own exit 127. Re-running with the binary still absent
     # from PATH is the same pointless attempt.
@@ -569,6 +589,8 @@ def _requirement_met(
         return unit.get("binary_present") is True
     if requirement == REQUIRE_CAPABILITY_EVIDENCE_RECORDED:
         return unit.get("capability_evidence_recorded") is True
+    if requirement == REQUIRE_CREDENTIAL_REACHABLE:
+        return unit.get("credential_reachable") is True
     return False
 
 

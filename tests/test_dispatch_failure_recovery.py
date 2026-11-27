@@ -28,6 +28,7 @@ from omh.coding.dispatch_failure_recovery import (  # noqa: E402
     FAILURE_KIND_BINARY_MISSING,
     DISPATCHER_ASSIGNED_FAILURE_KINDS,
     FAILURE_KIND_CAPABILITY_GATE,
+    FAILURE_KIND_CREDENTIAL_HIDDEN,
     FAILURE_KIND_CRASH,
     FAILURE_KIND_LIMIT_SHAPED,
     FAILURE_KIND_TIMEOUT,
@@ -39,6 +40,7 @@ from omh.coding.dispatch_failure_recovery import (  # noqa: E402
     auth_shaped_label,
     build_repair_card,
     classify_failure_kind,
+    credential_hidden_by_fence,
     clear_auth_failure_signal,
     last_auth_failure_signal,
     parse_on_failure,
@@ -128,6 +130,7 @@ class FailureKindClassificationTests(unittest.TestCase):
             classify_failure_kind(exit_code=1, auth_label="http_401"),
             classify_failure_kind(exit_code=1, limit_label="rate_limit"),
             classify_failure_kind(exit_code=1),
+            classify_failure_kind(exit_code=1, credential_hidden=True),
         }
         # `workspace_blocked` and `capability_gate` are the kinds the classifier
         # can never answer: both are assigned before the spawn, when there is
@@ -1358,6 +1361,83 @@ class FailureRecoveryCliTests(unittest.TestCase):
             summary = json.loads(stdout)
             self.assertNotIn("failure_recovery", summary)
 
+
+
+_KEYRING_REFUSAL = "Error: authentication required. Run 'agy' to log in, then retry."
+
+
+class CredentialHiddenByFenceTests(unittest.TestCase):
+    """#3253: a keyring login the bwrap fence hid is not a rejected credential."""
+
+    def test_only_a_keyring_cli_inside_a_bus_hiding_fence_qualifies(self) -> None:
+        for executable, bus_hidden, expected in (
+            ("agy", True, True),
+            ("/home/u/.local/bin/agy", True, True),
+            ("agy", False, False),  # macOS sandbox-exec, or no fence: the keyring is reachable
+            ("codex", True, False),  # a file-backed login the fence leaves readable
+        ):
+            with self.subTest(executable=executable, bus_hidden=bus_hidden):
+                self.assertIs(
+                    credential_hidden_by_fence(
+                        executable, bus_hidden=bus_hidden, auth_label="", output_tail="", stderr_tail=_KEYRING_REFUSAL
+                    ),
+                    expected,
+                )
+
+    def test_it_needs_a_credential_refusal_in_the_tails(self) -> None:
+        self.assertFalse(
+            credential_hidden_by_fence(
+                "agy", bus_hidden=True, auth_label="", output_tail="", stderr_tail="panic: index out of range"
+            )
+        )
+        self.assertTrue(
+            credential_hidden_by_fence(
+                "agy", bus_hidden=True, auth_label="not_logged_in", output_tail="", stderr_tail=""
+            )
+        )
+        # The keyring CLI's own wording is not an auth shape for anyone else.
+        self.assertEqual(auth_shaped_label("", _KEYRING_REFUSAL), "")
+
+    def test_it_classifies_after_the_synthetic_exits_and_before_auth(self) -> None:
+        self.assertEqual(
+            classify_failure_kind(exit_code=1, auth_label="not_logged_in", credential_hidden=True),
+            FAILURE_KIND_CREDENTIAL_HIDDEN,
+        )
+        self.assertEqual(
+            classify_failure_kind(exit_code=127, credential_hidden=True), FAILURE_KIND_BINARY_MISSING
+        )
+        self.assertEqual(classify_failure_kind(exit_code=0, credential_hidden=True), "")
+        self.assertIn(FAILURE_KIND_CREDENTIAL_HIDDEN, RECOVERABLE_FAILURE_KINDS)
+
+    def test_the_card_names_the_fence_and_never_asks_to_re_authenticate(self) -> None:
+        card = build_repair_card(owner="agy", failure_kind=FAILURE_KIND_CREDENTIAL_HIDDEN, detail="unit core")
+        self.assertEqual(card["reason_code"], FAILURE_KIND_CREDENTIAL_HIDDEN)
+        steps = card["repair_steps"]
+        self.assertEqual([step["id"] for step in steps], ["pass_a_non_keyring_credential", "redispatch_or_retarget"])
+        self.assertIn("D-Bus", steps[0]["action"])
+        self.assertIn("do not re-authenticate", steps[0]["action"])
+        self.assertIn("--owner-env agy:", steps[0]["command"])
+        self.assertNotIn("reauthenticate_owner", [step["id"] for step in steps])
+
+    def test_a_dispatch_records_no_auth_cooldown_for_a_hidden_credential(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = OmhPaths(omh_home=root / ".omh", hermes_home=root / ".hermes")
+            repo, sha = _make_repo(root)
+            contract = write_fanout_contract(paths, build_fanout_contract(_GOAL, list(_UNITS)))
+            with mock.patch("omh.coding.fanout_dispatch._fence_hides_user_bus", return_value=True), mock.patch(
+                "omh.coding.fanout_dispatch.credential_hidden_by_fence", return_value=True
+            ):
+                summary = dispatch_fanout(
+                    paths, contract, goal_text=_GOAL, repo_root=repo, base_sha=sha,
+                    runner=_runner({"codex": _FakeCompleted(1, _AUTH_FAILURE_TEXT)}), readiness=_ready,
+                )
+            core = summary["units"][0]
+            self.assertEqual(core["failure_kind"], FAILURE_KIND_CREDENTIAL_HIDDEN)
+            self.assertNotIn("auth_shaped", core)
+            self.assertEqual(core["repair_card"]["reason_code"], FAILURE_KIND_CREDENTIAL_HIDDEN)
+            # The login was not rejected: no auth-failure signal, so no spawn cooldown on the next dispatch.
+            self.assertEqual(last_auth_failure_signal(paths, "codex"), {})
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
