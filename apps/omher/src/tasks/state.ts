@@ -2,15 +2,18 @@
 // shows, whether the sidebar shows the Tasks row, and the repositories the person used (newest first). Saved on this
 // computer in `omher.tasks` (no token, no item text: only these words). The GitHub accounts the person chose in
 // Settings › Accounts (host, login and a colour: never a token) are kept here too, as omher's own setting; gh's own
-// config is never written.
+// config is never written. So are the GitHub dashboard's pinned repositories (`owner/repo` names only), its
+// repository filter and its tab.
 import { useSyncExternalStore } from "react";
-import type { ChosenAccount, CliSource, TaskFilter, TaskKind, TaskSource } from "./types";
-import { FILTERS, KINDS, SOURCES, accountId, accountIdOk, repoOk } from "./types";
+import type { ChosenAccount, CliSource, DashTab, TaskFilter, TaskKind, TaskSource } from "./types";
+import { DASH_TABS, FILTERS, KINDS, SOURCES, accountId, accountIdOk, repoOk } from "./types";
 
 /** The colours an account's dot can take, in the order new accounts get them. */
 export const ACCOUNT_COLORS: readonly string[] = ["#4c8dff", "#f2994a", "#3fb68b", "#b07cff", "#e5534b", "#d4a72c"];
 
-export type TaskScope = "repo" | "me";
+export type TaskScope = "repo" | "me" | "gh";
+/** The most repositories the GitHub dashboard pins. */
+export const MAX_PINS = 12;
 export type MeGroup = "section" | "repo";
 
 export interface TasksState {
@@ -26,7 +29,7 @@ export interface TasksState {
   recent: Record<CliSource, string[]>;
   /** repository -> the folder on this computer it was found in (a cloned repository: \"Open terminal here\") */
   folders: Record<string, string>;
-  /** "이 저장소" (one repository) or "나" (me, across repositories) */
+  /** "이 저장소" (one repository), "나" (me, across repositories) or "GitHub" (the dashboard of pinned repositories) */
   scope: TaskScope;
   /** the "나" list grouped by section or by repository */
   group: MeGroup;
@@ -38,6 +41,12 @@ export interface TasksState {
   accounts: ChosenAccount[];
   /** "이 저장소" on GitHub: the chosen account it reads as (null: picked for the repository, else gh's active one) */
   repoAccount: string | null;
+  /** the GitHub dashboard's pinned repositories (github.com `owner/repo`), in the order pinned */
+  pins: string[];
+  /** the dashboard's repository filter: "all" or one pin */
+  dashRepo: string;
+  /** the dashboard's pull request tab */
+  dashTab: DashTab;
 }
 
 const KEY = "omher.tasks";
@@ -58,6 +67,9 @@ function fresh(): TasksState {
     mentionsOpen: false,
     accounts: [],
     repoAccount: null,
+    pins: [],
+    dashRepo: "all",
+    dashTab: "all",
   };
 }
 
@@ -78,7 +90,7 @@ function read(): TasksState {
     }
     if (v.folders && typeof v.folders === "object")
       for (const [k, f] of Object.entries(v.folders)) if (typeof f === "string" && f.startsWith("/")) s.folders[k] = f;
-    if (v.scope === "me") s.scope = "me";
+    if (v.scope === "me" || v.scope === "gh") s.scope = v.scope;
     if (v.group === "repo") s.group = "repo";
     if (v.mentionsOpen === true) s.mentionsOpen = true;
     if (Array.isArray(v.accounts))
@@ -90,6 +102,10 @@ function read(): TasksState {
     const ids = s.accounts.map(accountId);
     if (typeof v.meAccount === "string" && ids.includes(v.meAccount)) s.meAccount = v.meAccount;
     if (typeof v.repoAccount === "string" && ids.includes(v.repoAccount)) s.repoAccount = v.repoAccount;
+    if (Array.isArray(v.pins))
+      for (const p of v.pins) if (typeof p === "string" && repoOk("github", p) && !s.pins.includes(p) && s.pins.length < MAX_PINS) s.pins.push(p);
+    if (typeof v.dashRepo === "string" && s.pins.includes(v.dashRepo)) s.dashRepo = v.dashRepo;
+    if (v.dashTab && DASH_TABS.includes(v.dashTab)) s.dashTab = v.dashTab;
   } catch {
     // a broken record starts fresh
   }
@@ -161,6 +177,25 @@ export function setMentionsOpen(open: boolean) {
 /** "이 저장소": read as this chosen account (null: the automatic pick). */
 export function setRepoAccount(id: string | null) {
   if (id === null || state.accounts.some((a) => accountId(a) === id)) set({ repoAccount: id, page: 0 });
+}
+
+/** Pin a github.com repository on the GitHub dashboard (checked; at most MAX_PINS). */
+export function pinRepo(repo: string) {
+  const r = repo.trim();
+  if (!repoOk("github", r) || state.pins.includes(r) || state.pins.length >= MAX_PINS) return false;
+  set({ pins: [...state.pins, r] });
+  return true;
+}
+/** Unpin a repository (the filter goes back to every repository when it was the one shown). */
+export function unpinRepo(repo: string) {
+  set({ pins: state.pins.filter((p) => p !== repo), dashRepo: state.dashRepo === repo ? "all" : state.dashRepo });
+}
+/** The dashboard's repository filter: "all" or one pin. */
+export function setDashRepo(repo: string) {
+  if (repo === "all" || state.pins.includes(repo)) set({ dashRepo: repo });
+}
+export function setDashTab(tab: DashTab) {
+  if (DASH_TABS.includes(tab)) set({ dashTab: tab });
 }
 
 /** Choose a GitHub account gh is signed in to (Settings › Accounts › GitHub "Add"); it gets the next free colour. */

@@ -774,3 +774,493 @@
 .tk-badge:hover {
   background: var(--hover);
 }
+
+/* ---- Tasks › GitHub: the dashboard (DashView.tsx). One screen, three columns that each scroll inside themselves;
+   GitHub's list conventions (an open pull request's green mark, CI ✓ ✗ ● beside the title, labels as pills in their
+   own colour, "◯ N Open") in omher's tokens, so it reads in dark and light. ---- */
+.tk-bar-gh {
+  margin-top: -6px;
+}
+.tk-bar-gh .tk-bar-main svg {
+  width: 18px;
+  height: 14px;
+}
+.tk-dash {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.tk-dash-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 4px 18px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.tk-dash-bar .tk-me-note {
+  margin: 0;
+}
+.tk-dash-sp {
+  flex: 1;
+}
+.tk-dash-at {
+  font-size: 11.5px;
+  color: var(--quiet);
+}
+.tk-dash-cols {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(190px, 0.9fr) minmax(0, 2.4fr) minmax(220px, 1.1fr);
+}
+.tk-dash-col {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.tk-dash-col + .tk-dash-col {
+  border-left: 1px solid var(--line-soft);
+}
+.tk-dash-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.tk-dash-h {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 12px 14px 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.tk-dash-count {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--quiet);
+  font-variant-numeric: tabular-nums;
+}
+.tk-dash-none {
+  padding: 18px 14px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* left: repositories */
+.tk-dash-repos .tk-dash-scroll {
+  padding: 0 6px 8px;
+}
+.tk-dash-repo-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.tk-dash-repo {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--r);
+  text-align: left;
+  color: var(--body);
+}
+.tk-dash-repo:hover {
+  background: var(--hover);
+}
+.tk-dash-repo.on {
+  background: var(--raise2);
+  color: var(--ink);
+}
+.tk-dash-av {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-sm);
+  background: var(--raise);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: 11px;
+  color: var(--muted);
+}
+.tk-dash-rn {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.tk-dash-rn b,
+.tk-dash-rn small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tk-dash-rn b {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.tk-dash-rn small {
+  font-size: 11px;
+  color: var(--quiet);
+}
+.tk-dash-ci {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--quiet);
+}
+.tk-dash-ci[data-ci="passed"] {
+  background: var(--ok);
+}
+.tk-dash-ci[data-ci="failed"] {
+  background: var(--danger);
+}
+.tk-dash-ci[data-ci="pending"] {
+  background: var(--src-slack);
+}
+.tk-dash-x.ui-ib {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  color: var(--quiet);
+  opacity: 0;
+}
+.tk-dash-repo-row:hover .tk-dash-x,
+.tk-dash-pr:hover .tk-dash-x,
+.tk-dash-x:focus-visible {
+  opacity: 1;
+}
+.tk-dash-sug {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft);
+}
+.tk-dash-sh {
+  padding: 2px 8px 4px;
+  font-size: 11px;
+  color: var(--quiet);
+}
+.tk-dash-sug-b {
+  width: 100%;
+  display: flex;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: var(--r);
+  font-size: 12px;
+  color: var(--muted);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tk-dash-sug-b:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.tk-dash-pin {
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--line-soft);
+}
+.tk-dash-pin input {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--r);
+  background: var(--search-bg);
+  border: 0;
+  outline: 0;
+  color: var(--ink);
+  font-size: 12px;
+  font-family: var(--mono);
+}
+.tk-dash-pin input:focus {
+  box-shadow: inset 0 0 0 1px var(--muted);
+}
+
+/* centre: pull requests */
+.tk-dash-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.tk-dash-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.tk-dash-tabs button:hover {
+  color: var(--ink);
+}
+.tk-dash-tabs button.on {
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+.tk-dash-tabs .tk-dash-count {
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--raise2);
+  line-height: 18px;
+}
+.tk-dash-lh {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 14px 0;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  border-radius: var(--r) var(--r) 0 0;
+  background: var(--side);
+  font-size: 12.5px;
+  color: var(--ink);
+}
+.tk-dash-prs .tk-dash-scroll {
+  margin: 0 14px 14px;
+  border: 1px solid var(--line);
+  border-radius: 0 0 var(--r) var(--r);
+}
+.tk-dash-prs .tk-me-note {
+  margin: 6px 14px 0;
+}
+.tk-dash-pr {
+  display: flex;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--line-soft);
+}
+.tk-dash-pr:last-child {
+  border-bottom: 0;
+}
+.tk-dash-pr:hover {
+  background: var(--hover);
+}
+.tk-dash-pr.on {
+  background: var(--raise2);
+}
+.tk-dash-pr .tk-dash-x {
+  margin: 8px 8px 0 0;
+}
+.tk-dash-pr-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 8px;
+  padding: 8px 4px 8px 12px;
+  text-align: left;
+}
+.tk-dash-pr-ic {
+  padding-top: 2px;
+  flex: none;
+}
+.tk-dash-pr-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.tk-dash-pr-l1 {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  min-width: 0;
+}
+.tk-dash-pr-repo {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.tk-dash-pr-title {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.tk-dash-pr-main:hover .tk-dash-pr-title {
+  color: var(--link);
+}
+.tk-dash-pr-l2 {
+  font-size: 11.5px;
+  color: var(--quiet);
+}
+.tk-dash-mark {
+  flex: none;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--quiet);
+}
+.tk-dash-mark[data-ci="passed"] {
+  color: var(--ok);
+}
+.tk-dash-mark[data-ci="failed"] {
+  color: var(--danger);
+}
+.tk-dash-mark[data-ci="pending"] {
+  color: var(--src-slack);
+}
+.tk-pill {
+  display: inline-block;
+  max-width: 160px;
+  padding: 0 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 17px;
+  color: var(--ink);
+  color: color-mix(in srgb, var(--lc, var(--ink)) 62%, var(--ink));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tk-dash-rv[data-tone="ok"] {
+  color: var(--ok);
+}
+.tk-dash-rv[data-tone="fail"] {
+  color: var(--danger);
+}
+.tk-dash-rv[data-tone="asked"] {
+  color: #d4a72c;
+}
+
+/* right: Actions above Releases */
+.tk-dash-box {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.tk-dash-box + .tk-dash-box {
+  border-top: 1px solid var(--line-soft);
+}
+.tk-dash-box .tk-dash-scroll {
+  padding: 0 6px 8px;
+}
+.tk-dash-run,
+.tk-dash-rel {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--r);
+  text-align: left;
+  color: var(--body);
+}
+.tk-dash-run:hover:not(:disabled),
+.tk-dash-rel:hover:not(:disabled) {
+  background: var(--hover);
+}
+.tk-dash-run .tk-dash-mark {
+  width: 12px;
+  text-align: center;
+}
+.tk-dash-run-b {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.tk-dash-run-b b,
+.tk-dash-run-b small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tk-dash-run-b b {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.tk-dash-run-b small,
+.tk-dash-when small,
+.tk-dash-rel small {
+  font-size: 11px;
+  color: var(--quiet);
+}
+.tk-dash-when {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.tk-dash-rel {
+  flex-direction: column;
+  gap: 2px;
+}
+.tk-dash-rel-l1 {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tk-dash-rel-l1 b {
+  font-size: 12.5px;
+  font-family: var(--mono);
+  color: var(--ink);
+}
+.tk-dash-latest,
+.tk-dash-pre {
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  line-height: 16px;
+  border: 1px solid currentColor;
+}
+.tk-dash-latest {
+  color: var(--ok);
+}
+.tk-dash-pre {
+  color: #d4a72c;
+}
+.tk-dash-rel-l2 {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* a pull request's drawer slides over the right of the columns */
+.tk-dash-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(460px, 46%);
+  display: flex;
+  box-shadow: var(--pop-shadow);
+  z-index: 3;
+}
+.tk-dash-drawer .tk-drawer {
+  flex: 1;
+  min-width: 0;
+}
+
+/* a narrow window: the right column goes under the pull requests' room, still one screen */
+@media (max-width: 1040px) {
+  .tk-dash-cols {
+    grid-template-columns: minmax(170px, 0.9fr) minmax(0, 2fr) minmax(200px, 1fr);
+  }
+}

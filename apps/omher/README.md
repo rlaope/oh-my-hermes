@@ -202,6 +202,11 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   week's mentions, for the GitHub accounts you add in Settings › Accounts › GitHub (the ones your `gh` is signed in
   to), with what needs action first; the sidebar's Tasks row counts the review requests. A non-active `gh` account is
   read with its token passed only to that one `gh` call (`BOUNDARY.md` rules 18 and 33).
+  The "GitHub" scope (`src/tasks/DashView.tsx`, `src-tauri/src/gh_dash.rs`), one click from the sidebar's GitHub row
+  once a github.com account is added, is a dashboard on one screen: the repositories you pin (and ones found in your
+  folders to pin) on the left, their open pull requests in GitHub's list style with the tabs All and Review requested
+  in the centre, and their recent Actions runs above their latest releases (with the commits the default branch has
+  since) on the right. Read-only, as the account that owns each repository (`BOUNDARY.md` rule 51).
 - **A thread's pull requests** (`src/threads/prs.ts`, `src/threads/ThreadPrs.tsx`, the bridge's `thread.prs`): when a
   bot's answer in a thread links a pull request by its full `https://github.com/<owner>/<repo>/pull/<n>` address
   (whoever's PR it is), the thread's row shows the newest one's number, state (open, draft, merged, closed) and, for

@@ -504,6 +504,12 @@ fn now_secs() -> i64 {
 }
 
 impl Me {
+    /// Tests: a `Me` that runs the stand-in `gh` at `gh` (gh_dash.rs's tests).
+    #[cfg(test)]
+    pub(crate) fn with_gh(gh: PathBuf) -> Me {
+        Me { gh: Some(gh), ..Default::default() }
+    }
+
     /// Run one gh child (tasks.rs's runner: no shell, nothing on stdin, at most 20 seconds), every one without `SCRUB`.
     fn run(&self, exe: &Path, argv: &[String], env: &[(&str, &str)]) -> Result<Ran, String> {
         let inherited: Vec<(&str, &str)> = self.inherited.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();

@@ -453,7 +453,7 @@ fn gh_check_state(c: &Value) -> &'static str {
     }
 }
 
-fn gh_checks(v: &Value) -> Option<(Checks, Vec<Check>)> {
+pub(crate) fn gh_checks(v: &Value) -> Option<(Checks, Vec<Check>)> {
     let rows = v.get("statusCheckRollup")?.as_array()?;
     let mut sum = Checks::default();
     let mut list = Vec::new();

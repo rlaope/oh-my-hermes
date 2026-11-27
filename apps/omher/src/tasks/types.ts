@@ -155,3 +155,53 @@ export function accountIdOk(id: string): boolean {
   const hostOk = host.length <= 253 && host.split(".").length >= 2 && host.split(".").every((p) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(p));
   return /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(login) && hostOk;
 }
+
+// ---- Tasks › GitHub (the dashboard): pinned repositories' open pull requests, Actions and Releases on one screen -----
+// (src-tauri/src/gh_dash.rs; BOUNDARY rule 51)
+
+/** A workflow run (`gh run list`): its state is `pending` until it completes. */
+export interface DashRun {
+  id: number;
+  workflow: string;
+  title: string;
+  branch: string;
+  event: string;
+  state: "passed" | "failed" | "pending" | "cancelled" | "skipped";
+  /** seconds since the epoch (0: unknown) */
+  created: number;
+  started: number;
+  updated: number;
+  url: string;
+}
+
+/** A published release (`gh release list --exclude-drafts`). */
+export interface DashRelease {
+  tag: string;
+  name: string;
+  /** GitHub's Latest release */
+  latest: boolean;
+  prerelease: boolean;
+  published: number;
+  url: string;
+}
+
+/** One pinned repository as the shell read it. */
+export interface DashRepo {
+  repo: string;
+  /** the default branch ("" when it could not be read) */
+  branch: string;
+  /** the default branch's CI */
+  ci: "" | "passed" | "failed" | "pending";
+  /** the open pull requests, newest update first; `asked`: my review is asked for */
+  prs: MeItem[];
+  runs: DashRun[];
+  releases: DashRelease[];
+  /** commits the default branch has since the latest release (null: no release, or not read) */
+  ahead: number | null;
+  /** GitHub's rate limit stopped one of the reads */
+  rate: boolean;
+}
+
+/** The centre column's tabs: every open pull request, or the ones asking for my review. */
+export type DashTab = "all" | "asked";
+export const DASH_TABS: readonly DashTab[] = ["all", "asked"];
