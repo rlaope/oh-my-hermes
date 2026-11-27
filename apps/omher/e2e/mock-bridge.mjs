@@ -2701,6 +2701,7 @@ function startTurn(bot, text, folder) {
   if (text.startsWith("/clarify")) return scriptClarify(bot);
   if (text.startsWith("/interview")) return schedule(bot, [[150, () => raiseInterview(bot, 0)]]);
   if (text.startsWith("/delegate")) return scriptDelegate(bot);
+  if (text.startsWith("/browser")) return scriptBrowser(bot);
   if (peerAsk(text)) return scriptPeer(bot, text);
   scriptNormal(bot, text);
 }
@@ -2836,6 +2837,55 @@ function scriptNormal(bot, text) {
 // real turn sent them (bridge/tests/fixtures/real-subagent-turn.json): spawn, start, thinking, a tool, then complete.
 // Like the real background fan-out, the children outlive the turn: the turn ends at 600 ms, the first child returns
 // at 1.6 s, the second at 2.6 s (`/delegate fail` makes it fail). The UI events are the bridge's `subagent` shape.
+// `/browser`: a turn of browser and computer steps (BOUNDARY rule 53). Each call is what Hermes sends (`args` with the
+// code, the CDP params and the text a dialog types, here the secret BROWSER_TYPED), and the event is what the bridge
+// makes of it (bridgeStep, omher_bridge.browser_step / computer_step): a `browser_exec` label, a CDP method, a dialog's
+// or vault's action, a computer action and app, never the rest. A step Hermes names a capture for gets `tool.shot`
+// with the image, as the bridge sends it once it read the file.
+const BROWSER_TYPED = "hunter2-typed-in-page";
+const SHOT_BLUE =
+  "iVBORw0KGgoAAAANSUhEUgAAAEAAAAAoCAIAAADBrGu+AAAAPUlEQVR42u3PQQkAAAgEsEtnJiMayww+hcEKLNXzWgQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQELhYwOzzi5l4FjQAAAABJRU5ErkJggg==";
+const SHOT_ORANGE =
+  "iVBORw0KGgoAAAANSUhEUgAAAEAAAAAoCAIAAADBrGu+AAAAPUlEQVR42u3PQQkAAAgEsEtnJiMayww+hcEKLNP1WgQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQELhZY0Tzik6vxGQAAAABJRU5ErkJggg==";
+// The bridge's label (omher_bridge.browser_label) as far as these scripted calls need it: the first line when it is a
+// `#` comment (not `#!`), whitespace folded, control characters dropped, trimmed, clipped to 60 with "…"; the bridge
+// also masks secret-shaped text (mask_secrets), which no scripted label here holds. CDP methods: the bridge's
+// BROWSER_CDP_METHOD.
+const LABEL_MAX = 60;
+const CDP_METHOD = /^[A-Z][A-Za-z]{0,39}\.[a-z][A-Za-z]{0,59}$/;
+function bridgeStep(name, args) {
+  if (name === "browser_exec") {
+    const first = (String(args.code ?? "").trimStart().split(/\r?\n/)[0] ?? "").trim();
+    if (!first.startsWith("#") || first.startsWith("#!")) return { detail: "" };
+    const text = first.replace(/^#+/, "").split(/\s+/).join(" ").replace(/[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩]/g, "").trim();
+    return { detail: text.length <= LABEL_MAX ? text : `${text.slice(0, LABEL_MAX - 1).trimEnd()}…` };
+  }
+  if (name === "browser_cdp") return { detail: typeof args.method === "string" && CDP_METHOD.test(args.method) ? args.method : "" };
+  if (name === "browser_dialog" || name === "browser_vault") return { detail: "", action: args.action };
+  if (name === "computer_use") return { detail: args.app ?? "", action: args.action };
+  return { detail: "" };
+}
+function scriptBrowser(bot) {
+  const calls = [
+    { id: "br1", name: "browser_exec", args: { code: `# Opening the shop's login page\nnew_tab('https://shop.example/login')\nfill_input('#password', '${BROWSER_TYPED}')\ncapture_screenshot()` }, shot: SHOT_BLUE },
+    { id: "br2", name: "browser_exec", args: { code: `fill_input('#search', '${BROWSER_TYPED}')\nprint(page_info())` } },
+    { id: "br3", name: "browser_cdp", args: { method: "Input.insertText", params: { text: BROWSER_TYPED } } },
+    { id: "br4", name: "browser_dialog", args: { action: "accept", prompt_text: BROWSER_TYPED } },
+    { id: "br5", name: "browser_vault", args: { action: "fill", handle: "h_7f2c" } },
+    { id: "br6", name: "computer_use", args: { action: "capture", app: "Safari" }, shot: SHOT_ORANGE },
+  ];
+  const steps = calls.flatMap((c, i) => {
+    const at = 80 + i * 120;
+    const out = [
+      [at, () => ev(bot, "tool.start", { tool_id: c.id, name: c.name, ...bridgeStep(c.name, c.args) })],
+      [at + 60, () => ev(bot, "tool.end", { tool_id: c.id, name: c.name, ok: true, ms: 60 })],
+    ];
+    if (c.shot) out.push([at + 70, () => ev(bot, "tool.shot", { tool_id: c.id, mime: "image/png", data_base64: c.shot })]);
+    return out;
+  });
+  schedule(bot, [...steps, [880, () => say(bot, "Logged in and checked the cart.")], [960, () => endTurn(bot, "done")]]);
+}
+
 function scriptDelegate(bot) {
   const dag = [
     { run: "codex-coexist-live", node: "t3-doctor" },

@@ -899,6 +899,9 @@ export type BridgeEvent =
       action?: string;
     })
   | (EventBase & { event: "tool.end"; tool_id: string; name: string; ok: boolean; ms: number })
+  /** The screenshot a browser_exec or computer_use step captured (BOUNDARY rule 53): read by the bridge from the file
+   *  Hermes named, when the step ended. `mime` is what its first bytes say. Kept in memory only (SHOTS_KEPT a chat). */
+  | (EventBase & { event: "tool.shot"; tool_id: string; mime: string; data_base64: string })
   /** A subagent's latest state, in ONE agent-neutral shape: Hermes' `subagent.*` events of a bot's turn (clipped by the
    *  bridge), and every SESSIONS agent's subagents (Claude Code Agent/Task, Codex sub-agent threads, OmO `task`; any
    *  later agent emits the same). The same `id` updates the same row; `delegation` groups one fan-out. */

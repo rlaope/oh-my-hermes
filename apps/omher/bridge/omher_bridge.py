@@ -28,6 +28,7 @@ import base64
 import binascii
 import contextlib
 import errno
+import hashlib
 import hmac
 import inspect
 import json
@@ -5076,6 +5077,9 @@ class NodeSessions:
                     shown, ok = fn.get("arguments"), _ns_ok(res)
                     if name == COMPUTER_TOOL:
                         shown, res = computer_args(shown), ""
+                    elif browser_quiet(name):  # rule 53: the label, method or action only, and no result
+                        shown, res = browser_args(name, shown), ""
+                    res = _ns_unimage(res)
                     items.append({"type": "step", "tool": name, "input": _ns_args(shown),
                                   "result": _ns_clip(res), "ok": ok, "ts": ts})
                     if name == "delegate_task":
@@ -5745,7 +5749,7 @@ _DETAIL_ARG = {
     "terminal": ("command",), "read_file": ("path", "file_path"), "write_file": ("path", "file_path"),
     "patch": ("path", "file_path"), "search_files": ("pattern", "query"), "web_search": ("query",),
     "web_extract": ("urls", "url"), "delegate_task": ("goal",), "skill_view": ("name",), "skill_use": ("name",),
-    "browser_navigate": ("url",),
+    "browser_navigate": ("url",),    # an older Hermes' browser tool; current Hermes has the four of BROWSER_TOOLS
 }
 
 
@@ -5778,11 +5782,289 @@ def computer_args(raw_args) -> dict:
     return {k: v for k, v in args.items() if k not in COMPUTER_TYPED} if isinstance(args, dict) else {}
 
 
+# The browser tools (rule 53): `browser_exec` runs Python against the browser (tools/browser_use_cli.py), and the URLs,
+# selectors and text it types are literals in its `code`; `browser_cdp` sends one raw CDP `method` whose `params` can
+# hold typed text, cookies or a script; `browser_dialog` answers a page dialog, with `prompt_text` typed into a prompt
+# dialog; `browser_vault` fills a saved login by an opaque `handle`. Hermes masks typed text in `code` for display only
+# in part (agent/redact_browser_input.py) and not at all in `params` or `prompt_text`, and its `context` preview of a
+# `browser_exec` call without a label is the code on one line. So a step carries only the `# label` the model wrote for
+# the UI (the first line of `code` when it is a comment), the CDP method's name, or the dialog's or vault's action, and
+# never Hermes' preview. Every other `browser_*` name (an older Hermes' `browser_type`, `browser_click`…) carries no
+# line either; the old `browser_navigate`, whose one argument is the url, keeps it.
+BROWSER_TOOLS = frozenset({"browser_exec", "browser_cdp", "browser_dialog", "browser_vault"})
+BROWSER_LABEL_MAX = 60    # Hermes asks the model for a label of at most 60 characters (tools/browser_use_cli.py)
+BROWSER_CDP_METHOD = re.compile(r"[A-Z][A-Za-z]{0,39}\.[a-z][A-Za-z]{0,59}")    # `Domain.method`, as CDP names them
+BROWSER_DIALOG_ACTIONS = frozenset({"accept", "dismiss"})
+BROWSER_VAULT_ACTIONS = frozenset({"list", "fill", "save_login", "enter_code", "unlock"})
+
+
+def browser_quiet(tool: str) -> bool:
+    """Whether a tool's Hermes preview, arguments and result stay in the bridge: every `browser_*` tool but the old
+    `browser_navigate`."""
+    return tool.startswith("browser_") and tool != "browser_navigate"
+
+
+def browser_label(code) -> str:
+    """The step label a `browser_exec` call's code starts with: its first line when that line is a `#` comment (not a
+    `#!` line), without the `#`, the model's own words as Hermes shows them but with secret-shaped text masked
+    (mask_secrets, the Plans view's mask, so every path shows the same label), on one line, cleaned of escape and
+    control characters, trimmed and clipped to 60 characters; "" otherwise. Nothing else of the code is read."""
+    if not isinstance(code, str):
+        return ""
+    first = next(iter(code.lstrip().splitlines()), "").strip()
+    if not first.startswith("#") or first.startswith("#!"):
+        return ""
+    # cleaned first (a control character stripped can leave a space at either end), then masked, trimmed, clipped
+    text = mask_secrets(_platform_text(first.lstrip("#"), 4096)).strip()
+    return text if len(text) <= BROWSER_LABEL_MAX else text[: BROWSER_LABEL_MAX - 1].rstrip() + "…"
+
+
+def browser_step(tool: str, args) -> tuple[str, str]:
+    """(action, detail) of one browser call: `browser_exec`'s label as the detail, `browser_cdp`'s method name as the
+    detail, `browser_dialog`'s and `browser_vault`'s action when it is one of Hermes' own; ("", "") for anything else."""
+    if not isinstance(args, dict):
+        return "", ""
+    if tool == "browser_exec":
+        return "", browser_label(args.get("code"))
+    if tool == "browser_cdp":
+        method = args.get("method")
+        return "", method if isinstance(method, str) and BROWSER_CDP_METHOD.fullmatch(method) else ""
+    action = args.get("action") if isinstance(args.get("action"), str) else ""
+    if tool == "browser_dialog" and action in BROWSER_DIALOG_ACTIONS:
+        return action, ""
+    if tool == "browser_vault" and action in BROWSER_VAULT_ACTIONS:
+        return action, ""
+    return "", ""
+
+
+def browser_args(tool: str, raw_args) -> dict:
+    """A browser call's arguments as a read-only session view shows them: the label, the method or the action, and
+    nothing else (never `code`, `params`, `prompt_text`, a vault handle or label). Its result is not shown."""
+    try:
+        args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+    except ValueError:
+        args = None
+    action, detail = browser_step(tool, args)
+    key = {"browser_exec": "label", "browser_cdp": "method"}.get(tool)
+    return {"action": action} if action else ({key: detail} if key and detail else {})
+
+
+_DATA_IMAGE = re.compile(r"data:image/[A-Za-z0-9.+-]{1,40};base64,[A-Za-z0-9+/=]*")
+
+
+def _ns_unimage(text: str) -> str:
+    """A stored result with every base64 image in it (a multimodal row's `data:` URL) replaced by `[image]`, so a clip
+    never shows a run of base64."""
+    return _DATA_IMAGE.sub("[image]", text) if "data:image/" in text else text
+
+
+# A browser or computer step's screenshot (rule 53). Hermes names the file a `browser_exec` or `computer_use` call
+# captured in `tool.complete`'s `image_path` (agent/terminal_image.py `tool_image_path`, tui_gateway/tool_progress.py);
+# the bridge reads it at that event, because browser-harness' default capture file (`<tmp>/p-<hash>/shot.png`) is
+# overwritten by the next capture, and hands the page its bytes for that step. For browser_exec Hermes names the last
+# image path the call's own code printed, when that file exists and is new (tools/browser_use_cli.py `_find_screenshot`);
+# omher takes the path from the event alone and parses none itself. Read-only, at most SHOT_MAX bytes, a regular file
+# with one name reached through no link, a PNG, JPEG, GIF or WebP by its first bytes, and only under the places Hermes
+# writes these files for this bot (shot_roots); anything else is not shown. omher writes none of it anywhere.
+SHOT_TOOLS = frozenset({"browser_exec", COMPUTER_TOOL})
+# 5 MB: a viewport capture at twice the pixel density and a computer_use capture (scaled to at most 1456 px) are well
+# under it. It is lower than rule 13's 25 MB because this read happens on every capture with no click, and the bytes
+# ride one event to the page, which keeps them in memory
+SHOT_MAX = 5 * 1024 * 1024
+_SHOT_MAGIC = ((b"\x89PNG\r\n\x1a\n", "image/png"), (b"\xff\xd8\xff", "image/jpeg"), (b"GIF87a", "image/gif"),
+               (b"GIF89a", "image/gif"))
+
+
+def shot_mime(head: bytes) -> str | None:
+    """The image type its first bytes say (PNG, JPEG, GIF, WebP), or None; never the file's name."""
+    for magic, mime in _SHOT_MAGIC:
+        if head.startswith(magic):
+            return mime
+    return "image/webp" if len(head) >= 12 and head[:4] == b"RIFF" and head[8:12] == b"WEBP" else None
+
+
+def harness_tmp_root(environ=None) -> Path:
+    """browser-harness' tmp folder as Hermes gives it to a `browser_exec` run (tools/browser_harness_dirs.py
+    `namespace_harness_dirs` and `_harness_home`): `BH_TMP_DIR`, else `<harness home>/tmp`, the home being `BH_HOME`,
+    `BROWSER_HARNESS_HOME`, `<XDG_CONFIG_HOME>/browser-harness`, or `<HOME, else the user's home>/.config/browser-harness`.
+    Hermes adds one `p-<hash>` folder per profile under it (harness_shot_root). Read from omher's own environment, the
+    one it can see."""
+    env = os.environ if environ is None else environ
+    if env.get("BH_TMP_DIR"):
+        return Path(env["BH_TMP_DIR"]).expanduser()
+    root = env.get("BH_HOME") or env.get("BROWSER_HARNESS_HOME")
+    if not root:
+        xdg = env.get("XDG_CONFIG_HOME")
+        root = str(Path(xdg) / "browser-harness") if xdg else str(
+            Path(env.get("HOME") or Path.home()) / ".config" / "browser-harness")
+    return Path(root).expanduser() / "tmp"
+
+
+def _hermes_home_key(profile_dir: Path) -> str | None:
+    """Hermes' own key for a profile's home (hermes_constants.hermes_home_key), the tag its browser-harness folder is
+    named after; None when the installed Hermes has none to import."""
+    try:
+        from hermes_constants import hermes_home_key
+    except ImportError:
+        return None
+    return hermes_home_key(profile_dir)
+
+
+def harness_shot_root(profile_dir: Path, environ=None) -> Path | None:
+    """This bot's own browser-harness tmp folder: harness_tmp_root and, under it, the `p-` folder Hermes gives the
+    profile, the first 12 hex digits of the sha256 of its home key (tools/browser_harness_dirs.py
+    `namespace_harness_dirs`, tagged with `hermes_home_key()`); None when the key cannot be had. Another bot's captures
+    are in another folder."""
+    key = _hermes_home_key(profile_dir)
+    if not isinstance(key, str) or not key:
+        return None
+    return harness_tmp_root(environ) / f"p-{hashlib.sha256(key.encode()).hexdigest()[:12]}"
+
+
+def shot_roots(profile_dir: Path, environ=None) -> tuple[Path, ...]:
+    """Where a step's screenshot may be read from: the bot's own `cache/` (computer_use's `cache/images`, browser_exec's
+    `cache/browser-use/workspace/<task>`), its `image_cache/` (the older name Hermes' `get_hermes_dir` still writes
+    `cache/images` to when it holds files) and its own browser-harness tmp folder (harness_shot_root)."""
+    harness = harness_shot_root(profile_dir, environ)
+    return (profile_dir / "cache", profile_dir / "image_cache") + ((harness,) if harness is not None else ())
+
+
+def _shot_link(path: str) -> bool:
+    """Whether *path* is a symbolic link, or a junction on Windows."""
+    return os.path.islink(path) or getattr(os.path, "isjunction", lambda _p: False)(path)
+
+
+def _shot_root_too_wide(real_base: str) -> bool:
+    """A root that is a filesystem root, the user's home or a folder above it is never read from: a broad environment
+    value must not open the whole disk."""
+    if os.path.dirname(real_base) == real_base:
+        return True
+    base, home = os.path.normcase(real_base), os.path.normcase(os.path.realpath(os.path.expanduser("~")))
+    try:
+        return os.path.commonpath([base, home]) == base
+    except ValueError:  # another drive on Windows
+        return False
+
+
+def _shot_file(path, roots) -> tuple[str, tuple[int, int]] | None:
+    """(real path, (device, inode)) of *path* when it names a regular file inside one of *roots* that no link leads to
+    (neither the file nor any folder between the root and it, nor the root folder itself, is a symbolic link or a
+    junction), else None. A folder above a root may be a link (a Hermes home moved elsewhere); a root that is a
+    filesystem root, the home or above it counts as none. Paths are compared as the system compares them (case and
+    separators on Windows), and a path on another drive is outside. The device and inode are the file's as checked,
+    for the open to match."""
+    if not isinstance(path, str) or not path or "\x00" in path or len(path) > 4096:
+        return None
+    given = os.path.expanduser(path)
+    if not os.path.isabs(given):
+        return None
+    given = os.path.normpath(given)
+    try:
+        st = os.lstat(given)
+        if not stat.S_ISREG(st.st_mode):  # a link, a folder, a device, a pipe
+            return None
+        real = os.path.realpath(given)
+    except (OSError, ValueError):
+        return None
+    for root in roots:
+        try:
+            real_base = os.path.realpath(os.path.abspath(str(root)))
+            rel = os.path.relpath(real, real_base)
+        except (OSError, ValueError):  # ValueError: another drive on Windows
+            continue
+        if rel in (os.curdir, os.pardir) or rel.startswith(os.pardir + os.sep) or os.path.isabs(rel):
+            continue
+        if _shot_root_too_wide(real_base):
+            continue
+        # walk back up the path as Hermes spelled it, one folder per part below the root: none may be a link, and the
+        # folder reached must be the root, itself no link (a folder above it may be one)
+        at = given
+        for _ in rel.split(os.sep):
+            if _shot_link(at):
+                break
+            at = os.path.dirname(at)
+        else:
+            try:
+                if not _shot_link(at) and os.path.normcase(os.path.realpath(at)) == os.path.normcase(real_base):
+                    return real, (st.st_dev, st.st_ino)
+            except (OSError, ValueError):
+                continue
+    return None
+
+
+def read_step_shot(path, roots) -> dict | None:
+    """{mime, data_base64} of the screenshot Hermes named for a step, or None when it is not one omher shows (see
+    above). Opened without following a link where the system can say so, then checked on the open file: the same file
+    that was checked (device and inode, so a folder swapped for a link in between is refused), a regular file with one
+    name (a hard link to a file elsewhere has two), at most SHOT_MAX bytes; read once. Every refusal is a debug log
+    line without the path."""
+    found = _shot_file(path, roots)
+    if found is None:
+        log.debug("step screenshot not shown: not a file under the capture folders")
+        return None
+    real, checked = found
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0)
+    try:
+        fd = os.open(real, flags)
+    except OSError as e:
+        log.debug("step screenshot not shown: open failed (%s)", type(e).__name__)
+        return None
+    with os.fdopen(fd, "rb") as f:
+        st = os.fstat(f.fileno())
+        if (st.st_dev, st.st_ino) != checked or not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
+            log.debug("step screenshot not shown: not the file that was checked, or not a file with one name")
+            return None
+        if st.st_size > SHOT_MAX:
+            log.debug("step screenshot not shown: larger than %d bytes", SHOT_MAX)
+            return None
+        try:
+            data = f.read(SHOT_MAX + 1)
+        except OSError as e:
+            log.debug("step screenshot not shown: read failed (%s)", type(e).__name__)
+            return None
+    mime = shot_mime(data[:12])
+    if len(data) > SHOT_MAX or mime is None:  # grew since the check, or not an image by its bytes
+        log.debug("step screenshot not shown: too large or not an image")
+        return None
+    return {"mime": mime, "data_base64": base64.b64encode(data).decode("ascii")}
+
+
+def step_shot(path, profile_dir: Path) -> dict | None:
+    """read_step_shot under this bot's shot_roots. Resolving the roots asks Hermes for the profile's home key, which
+    resolves paths (a link loop raises RuntimeError on Python 3.11); any such failure shows no screenshot, never an
+    error."""
+    try:
+        roots = shot_roots(profile_dir)
+    except (ImportError, OSError, RuntimeError, ValueError) as e:
+        log.debug("step screenshot not shown: its folders could not be resolved (%s)", type(e).__name__)
+        return None
+    return read_step_shot(path, roots)
+
+
+def peer_shot(fields: dict) -> dict | None:
+    """A `tool.shot` another computer's bridge sent (rule 31's link), checked again here: a tool id, at most SHOT_MAX
+    bytes of valid base64, and the image type its first bytes say; only those fields (and the thread's session) pass."""
+    tool_id, data, session = fields.get("tool_id"), fields.get("data_base64"), fields.get("session")
+    if not isinstance(tool_id, str) or not tool_id or not isinstance(data, str) or len(data) > (SHOT_MAX + 2) // 3 * 4:
+        return None
+    try:
+        raw = base64.b64decode(data, validate=True)
+    except (ValueError, binascii.Error):
+        return None
+    mime = shot_mime(raw[:12])
+    if len(raw) > SHOT_MAX or mime is None:
+        return None
+    return {"tool_id": tool_id, "mime": mime, "data_base64": data, **({"session": session} if session is not None else {})}
+
+
 def tool_detail(tool: str, args: dict, context: str, n: int = 160) -> str:
     """One readable line for a tool call: the real command / path / query when the args carry it. For computer_use only
-    the app (computer_step), never what it types nor Hermes' preview."""
+    the app (computer_step), never what it types nor Hermes' preview; for a browser tool only its label or method
+    (browser_step), never its code, params or Hermes' preview."""
     if tool == COMPUTER_TOOL:
         return computer_step(args)[1]
+    if browser_quiet(tool):
+        return browser_step(tool, args)[1]
     value = None
     for key in _DETAIL_ARG.get(tool, ()):
         v = args.get(key)
@@ -5840,8 +6122,10 @@ def subagent_fields(typ: str, p: dict) -> dict | None:
             out["tool"] = _one_line(tool, 40)
         step = p.get("tool_preview") or p.get("text")
         # computer_use (rule 52): Hermes builds no preview for it, so its fallback preview of a `type` call is the typed
-        # text, and the relay carries no arguments to word a safe line from: a child's computer_use step has no line
-        if tool != COMPUTER_TOOL and isinstance(step, str) and step.strip():
+        # text, and the relay carries no arguments to word a safe line from: a child's computer_use step has no line.
+        # A browser tool's neither (rule 53): `browser_exec`'s preview is its label or, without one, its code, and the
+        # relay does not say which
+        if tool != COMPUTER_TOOL and not browser_quiet(tool) and isinstance(step, str) and step.strip():
             out["step"] = _one_line(step, SUBAGENT_STEP)
     elif typ == "subagent.progress" and isinstance(p.get("text"), str) and p["text"].strip():
         out["step"] = _one_line(p["text"].lstrip("🔀 "), SUBAGENT_STEP)
@@ -7634,6 +7918,8 @@ class Bridge:
                     extra["dag"] = parts
             elif tool == COMPUTER_TOOL and computer_step(args)[0]:
                 extra["action"] = computer_step(args)[0]
+            elif tool in BROWSER_TOOLS and browser_step(tool, args)[0]:
+                extra["action"] = browser_step(tool, args)[0]
             await out("tool.start", tool_id=tool_id, name=tool, detail=tool_detail(tool, args, context), **extra)
             if tool in ("skill_view", "skill_use"):
                 args = p.get("args") if isinstance(p.get("args"), dict) else {}
@@ -7642,9 +7928,17 @@ class Bridge:
                     await out("skill", name=skill)
         elif typ == "tool.complete":
             dur = p.get("duration_s")
-            await out("tool.end", tool_id=str(p.get("tool_id") or p.get("tool_call_id") or ""),
-                      name=str(p.get("name") or p.get("tool_name") or "tool"),
+            tool_id = str(p.get("tool_id") or p.get("tool_call_id") or "")
+            tool = str(p.get("name") or p.get("tool_name") or "tool")
+            # the step's end first: the screenshot is extra, and the end never waits on it or is lost to it
+            await out("tool.end", tool_id=tool_id, name=tool,
                       ok=not p.get("is_error"), ms=int(round(dur * 1000)) if isinstance(dur, (int, float)) else 0)
+            # rule 53: the capture Hermes names is read now, within this event, so before the next frame (and before the
+            # turn's end) and before a later capture is likely to overwrite it; the path comes only from this event
+            if tool in SHOT_TOOLS and isinstance(p.get("image_path"), str) and not p.get("is_error"):
+                shot = await asyncio.to_thread(step_shot, p["image_path"], conn.bot["path"])
+                if shot is not None:
+                    await out("tool.shot", tool_id=tool_id, **shot)
         elif typ.startswith("subagent."):
             # a background fan-out outlives the turn that started it: these never open a turn
             fields = subagent_fields(typ, p)
@@ -9938,6 +10232,10 @@ class Bridge:
         elif event == "bot.status" and f.get("running") is False:
             link.running.discard(bot)
         fields = {k: v for k, v in f.items() if k not in ("event", "bot")}
+        if event == "tool.shot":  # rule 53: a capture read on that computer, checked again here under the same cap
+            fields = peer_shot(fields)
+            if fields is None:
+                return
         await self.emit(event, f"{link.peer}:{bot}", **fields)
 
     async def _peer_turns_end(self, link: PeerLink, reason: str) -> None:

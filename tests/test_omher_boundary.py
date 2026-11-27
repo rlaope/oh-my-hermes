@@ -283,7 +283,6 @@ RULES = (
     " other program for it.",
     "The command is fixed in the shell; nothing from the page reaches it.",
     "omher shows a file from disk only when the bot named it in a `MEDIA:` line of its own answer,",
-    "the desktop app opens only a file the bridge just served this way.",
     "omher reads OMH dag run records (`<omh home>/runtime/dag/*/*.json`) and their handoff files only for runs whose\n    session is in the bot's own `state.db`",
     "never settles, retries or cancels a run; the Plans tab (these runs, listed as plans) is read-only.",
     "For the Plans graph omher also reads, never writes, Hermes' delegate_task folders",
@@ -625,6 +624,44 @@ RULES = (
     " bot only.",
     "The fifth is a bot's computer use (rule 52): on the person's press, Hermes' own `hermes -p <bot> tools"
     " enable|disable computer_use` writes that profile's `config.yaml`; omher itself writes none of it.",
+    # rule 13 names the one other file the page shows: a step's screenshot, under rule 53
+    "or when Hermes names it as the screenshot of a browser or computer step under rule 53's limits; the desktop app"
+    " opens only a file the bridge just served through `media.read`.",
+    # rule 53: a browser step's label, method or action only; a step's capture read once, bounded, from Hermes' own
+    # capture folders, in the page's memory only; no live view
+    "A `browser_exec` step shows only the label the bot wrote for it: the first line of its `code` when that line is a"
+    " `#` comment (not a `#!` line), the model's own words as Hermes itself shows them, with secret-shaped text masked"
+    " as the session view masks it, on one line, cleaned of escape and control characters, trimmed and clipped to 60"
+    " characters, and otherwise the plain line \"Used the browser\".",
+    "A `browser_cdp` step shows only its method's name (`Domain.method`), a `browser_dialog` step only whether it"
+    " accepted or dismissed the page's dialog, and a `browser_vault` step only its action (list, fill, save a login,"
+    " enter a code, unlock), never a handle or a label.",
+    "so the code, the params, the typed text and Hermes' own preview of the call (which, for a `browser_exec` without a"
+    " label, is its code) never leave the bridge: not in the main chat's steps, not in a subagent's step,",
+    "not in a read-only session view, which shows the label, the method or the action and never the call's result,",
+    "Every other `browser_*` tool of an older Hermes shows no detail either; the old `browser_navigate` keeps its url.",
+    "A session view shows any tool's stored base64 image as `[image]`.",
+    "When a `tool.complete` of a chat of rule 3 names an `image_path` for a `browser_exec` or `computer_use` step, the"
+    " bridge reads that file at that event, because browser-harness' default capture file is overwritten by the next"
+    " capture:",
+    "read-only, and only the path Hermes names in that event (for `browser_exec`, the last image path the call's own"
+    " code printed, when that file exists and is new); omher itself takes no path from the page and parses none from a"
+    " bot's text, and whatever Hermes names is shown only if it passes every check here.",
+    "It must be inside the bot's own `cache/` or `image_cache/` folder or the bot's own browser-harness folder as Hermes"
+    " resolves it (the `p-` folder named after the bot's home key,",
+    "and such a folder is never one that is itself a link, a filesystem root, the user's home or a folder above it.",
+    "It must be a regular file that is not a symbolic link or junction and that no link or junction between that folder"
+    " and it leads to, the same file when opened as when checked (device and inode), with one name (no hard link), of"
+    " at most 5 MB, and a PNG, JPEG, GIF or WebP by its first bytes; anything else is not shown, and the bridge log"
+    " notes each refusal at debug level, without the path.",
+    "The page shows a small thumbnail in that step's row of the step list, which opens rule 13's lightbox, and keeps the"
+    " newest 8 screenshots of a chat, and the newest 16 across all its chats and threads, in memory only; omher writes"
+    " none of them anywhere, so after the app reloads, and for a chat read back from Hermes, the steps have none. A"
+    " subagent's captures are not shown.",
+    "For a bot on another computer (rule 31) that computer's bridge reads the file under the same rules and sends it"
+    " over the link, and this computer checks it again (at most 5 MB, an image by its first bytes)",
+    "omher shows no live view of the browser, because Hermes offers none: no stream of the page and no read of its"
+    " address or title, so there is no Browser tab and no current-page line.",
 )
 TAURI_CONF = ROOT / "apps" / "omher" / "src-tauri" / "tauri.conf.json"
 CAPABILITIES = ROOT / "apps" / "omher" / "src-tauri" / "capabilities" / "default.json"
@@ -773,9 +810,13 @@ class DocPins(unittest.TestCase):
         # open pull requests, runs and releases through rule 33's runner as a chosen account, six fixed read argv); 52:
         # rule 52 (Settings › Computer: Hermes' own computer-use status read, install and macOS grant, and a bot's
         # `hermes -p <bot> tools enable|disable computer_use` read back from its gateway; a chat step names only the
-        # action and the app). The rules stay numbered 1..n with no gap or repeat.
+        # action and the app); 53: rule 53 (a browser step names only its label, CDP method or action, never its code,
+        # params or typed text, on the main chat, a subagent's step and the Plans session view; a browser or computer
+        # step's capture read once at its `tool.complete` from Hermes' own capture folders, 5 MB at most, no link, an
+        # image by its bytes, kept in the page's memory only; no live view, since Hermes offers none). The rules stay
+        # numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 52, len(rules))
+        self.assertTrue(6 <= len(rules) <= 53, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -3729,11 +3770,164 @@ class ComputerUseThroughHermesOwnCommands(unittest.TestCase):
         self.assertIn("shown, res = (computer_args(shown), '')", ast.unparse(self.fns["hermes_read"]))
         # a subagent's computer_use step carries no line: Hermes' fallback preview of it is the typed text
         sub = self._body("subagent_fields")
-        self.assertIn("if tool != COMPUTER_TOOL and isinstance(step, str) and step.strip():", sub)
+        # (rule 53 adds the browser tools to the same condition)
+        self.assertIn("if tool != COMPUTER_TOOL and (not browser_quiet(tool)) and isinstance(step, str) and step.strip():", sub)
         self.assertEqual(sub.count("out['step'] ="), 2)  # the tool branch above, and the progress batch of tool names
         page = (UI_SRC / "chat" / "activity" / "computerSteps.ts").read_text(encoding="utf-8")
         for bad in (".text", ".value", ".keys", "args"):
             self.assertNotIn(bad, page, bad)
+
+
+class BrowserStepsAndTheirScreenshots(unittest.TestCase):
+    """Rule 53: a browser step carries its label, CDP method or action and never its code, params or typed text, on the
+    main chat, a subagent's step and the Plans session view; a browser or computer step's capture is read once at its
+    `tool.complete`, from the path in that event only, under Hermes' own capture folders, through no link, at most
+    SHOT_MAX bytes and an image by its bytes, and the page keeps a bounded number in memory."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.src = BRIDGE.read_text(encoding="utf-8")
+        cls.tree = ast.parse(cls.src)
+        cls.fns = {f.name: f for f in ast.walk(cls.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+    def _body(self, name: str) -> str:
+        fn = self.fns[name]
+        return ast.unparse(ast.Module(body=fn.body[1:] if ast.get_docstring(fn) else fn.body, type_ignores=[]))
+
+    def _const(self, name: str):
+        return next(n.value for n in self.tree.body if isinstance(n, ast.Assign)
+                    and any(getattr(t, "id", "") == name for t in n.targets))
+
+    def _callers(self, name: str) -> list[str]:
+        return sorted(n for n, f in self.fns.items() if n != name
+                      and any(isinstance(c, ast.Name) and c.id == name for c in ast.walk(f)))
+
+    def test_the_read_roots_are_hermes_own_capture_folders(self) -> None:
+        self.assertEqual(self._body("shot_roots"),
+                         "harness = harness_shot_root(profile_dir, environ)\n"
+                         "return (profile_dir / 'cache', profile_dir / 'image_cache') + ((harness,) if harness is not None else ())")
+        # the harness folder is this bot's own leaf: Hermes' own home key, the leaf as browser_harness_dirs names it
+        self.assertIn("return harness_tmp_root(environ) / f'p-{hashlib.sha256(key.encode()).hexdigest()[:12]}'",
+                      self._body("harness_shot_root"))
+        self.assertEqual(self._body("_hermes_home_key"),
+                         "try:\n    from hermes_constants import hermes_home_key\nexcept ImportError:\n    return None\n"
+                         "return hermes_home_key(profile_dir)")
+        # no root that is a filesystem root, the home or above it
+        wide = self._body("_shot_root_too_wide")
+        self.assertIn("if os.path.dirname(real_base) == real_base:", wide)
+        self.assertIn("return os.path.commonpath([base, home]) == base", wide)
+        self.assertIn("if _shot_root_too_wide(real_base):\n        continue", self._body("_shot_file"))
+        root = self._body("harness_tmp_root")
+        # as tools/browser_harness_dirs.py resolves it: BH_TMP_DIR, else <harness home>/tmp
+        for part in ("env.get('BH_TMP_DIR')", "env.get('BH_HOME') or env.get('BROWSER_HARNESS_HOME')",
+                     "env.get('XDG_CONFIG_HOME')", "Path(env.get('HOME') or Path.home()) / '.config' / 'browser-harness'",
+                     "return Path(root).expanduser() / 'tmp'"):
+            self.assertIn(part, root)
+        # the one profile folder is the event's own bot's, and the only caller of the read is the chat event handler
+        self.assertEqual(self._callers("read_step_shot"), ["step_shot"])
+        self.assertEqual(self._callers("shot_roots"), ["step_shot"])
+        self.assertEqual(self._callers("step_shot"), ["_main_event"])
+        main = ast.unparse(self.fns["_main_event"])
+        self.assertIn("shot = await asyncio.to_thread(step_shot, p['image_path'], conn.bot['path'])", main)
+        self.assertIn("if tool in SHOT_TOOLS and isinstance(p.get('image_path'), str) and (not p.get('is_error')):", main)
+        # the step's end goes out first, and the read stays inside the event (so a shot comes before the turn's end)
+        self.assertLess(main.index("await out('tool.end'"), main.index("await asyncio.to_thread(step_shot"))
+        # resolving the folders fails closed: no screenshot, never an error that would drop the event
+        self.assertIn("except (ImportError, OSError, RuntimeError, ValueError) as e:", self._body("step_shot"))
+        self.assertEqual(ast.literal_eval(self._const("SHOT_TOOLS").args[0].elts[0]), "browser_exec")
+        self.assertEqual(ast.unparse(self._const("SHOT_TOOLS")), "frozenset({'browser_exec', COMPUTER_TOOL})")
+
+    def test_no_link_a_size_cap_and_an_image_by_its_bytes(self) -> None:
+        self.assertEqual(ast.unparse(self._const("SHOT_MAX")), "5 * 1024 * 1024")
+        found = self._body("_shot_file")
+        self.assertIn("if not os.path.isabs(given):", found)
+        self.assertIn("st = os.lstat(given)\n    if not stat.S_ISREG(st.st_mode):", found)
+        self.assertIn("return (real, (st.st_dev, st.st_ino))", found)
+        self.assertIn("if _shot_link(at):", found)
+        self.assertIn("if not _shot_link(at) and os.path.normcase(os.path.realpath(at)) == os.path.normcase(real_base):", found)
+        self.assertIn("rel.startswith(os.pardir + os.sep)", found)
+        self.assertEqual(self._body("_shot_link"), "return os.path.islink(path) or getattr(os.path, 'isjunction', lambda _p: False)(path)")
+        read = self._body("read_step_shot")
+        self.assertLess(read.index("found = _shot_file(path, roots)"), read.index("os.open(real, flags)"))
+        self.assertIn("getattr(os, 'O_NOFOLLOW', 0)", read)
+        # the open file is the checked one (a folder swapped for a link in between is refused) and has one name
+        self.assertIn("if (st.st_dev, st.st_ino) != checked or not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:", read)
+        self.assertIn("if st.st_size > SHOT_MAX:", read)
+        # every refusal is logged at debug level, never with the path
+        self.assertEqual(read.count("log.debug("), 6)
+        self.assertNotIn("real)", read.split("os.open(real, flags)")[1])
+        self.assertIn("data = f.read(SHOT_MAX + 1)", read)
+        self.assertIn("mime = shot_mime(data[:12])", read)
+        self.assertIn("if len(data) > SHOT_MAX or mime is None:", read)
+        # read-only: opened for reading, once, and nothing written, moved or removed
+        self.assertIn("flags = os.O_RDONLY |", read)
+        self.assertIn("with os.fdopen(fd, 'rb') as f:", read)
+        for bad in ("O_WRONLY", "O_RDWR", "O_CREAT", "O_TRUNC", ".write", "unlink", "remove", "rename", "'wb'", "'ab'"):
+            self.assertNotIn(bad, read, bad)
+        # the type is what the bytes say, never the name
+        self.assertNotIn("ext", self._body("shot_mime"))
+        # a peer's capture is checked again here, and only its step, type, bytes and thread pass
+        peer = self._body("_peer_event")
+        self.assertIn("if event == 'tool.shot':\n    fields = peer_shot(fields)\n    if fields is None:\n        return", peer)
+        again = self._body("peer_shot")
+        self.assertIn("raw = base64.b64decode(data, validate=True)", again)
+        self.assertIn("if len(raw) > SHOT_MAX or mime is None:", again)
+        # a tool's end still carries its id, name, outcome and time; the capture goes in a `tool.shot` of its own
+        outs = {c.args[0].value: {k.arg for k in c.keywords} for c in ast.walk(self.fns["_main_event"])
+                if isinstance(c, ast.Call) and ast.unparse(c.func) == "out" and c.args and isinstance(c.args[0], ast.Constant)}
+        self.assertEqual(outs["tool.end"], {"tool_id", "name", "ok", "ms"})
+        self.assertEqual(outs["tool.shot"], {"tool_id", None})  # `**shot`: read_step_shot's mime and data_base64
+
+    def test_no_code_params_or_typed_text_on_any_path(self) -> None:
+        detail = self._body("tool_detail")
+        self.assertTrue(detail.startswith("if tool == COMPUTER_TOOL:\n    return computer_step(args)[1]\n"
+                                          "if browser_quiet(tool):\n    return browser_step(tool, args)[1]"), detail[:160])
+        self.assertEqual(self._body("browser_quiet"), "return tool.startswith('browser_') and tool != 'browser_navigate'")
+        step = self._body("browser_step")
+        self.assertIn("return ('', browser_label(args.get('code')))", step)
+        for bad in ("params", "prompt_text", "handle", "'label'", "context", "target"):
+            self.assertNotIn(bad, step, bad)
+        label = self._body("browser_label")
+        self.assertIn("first = next(iter(code.lstrip().splitlines()), '').strip()", label)
+        self.assertIn("if not first.startswith('#') or first.startswith('#!'):", label)
+        # secret-shaped text masked as the session view masks it, after cleaning, then trimmed and clipped
+        self.assertIn("text = mask_secrets(_platform_text(first.lstrip('#'), 4096)).strip()", label)
+        self.assertIn("return text if len(text) <= BROWSER_LABEL_MAX else text[:BROWSER_LABEL_MAX - 1].rstrip() + '…'", label)
+        self.assertEqual(ast.literal_eval(self._const("BROWSER_LABEL_MAX")), 60)
+        self.assertNotIn("args.get", self._body("browser_args"))
+        # the main chat: only tool_detail's line and browser_step's action
+        main = ast.unparse(self.fns["_main_event"])
+        self.assertIn("extra['action'] = browser_step(tool, args)[0]", main)
+        # a subagent's step: no line for a browser tool
+        sub = self._body("subagent_fields")
+        self.assertIn("if tool != COMPUTER_TOOL and (not browser_quiet(tool)) and isinstance(step, str) and step.strip():", sub)
+        # the Plans session view: the label, method or action, and no result; any stored image as a marker
+        read = ast.unparse(self.fns["hermes_read"])
+        self.assertIn("shown, res = (browser_args(name, shown), '')", read)
+        self.assertIn("res = _ns_unimage(res)", read)
+        self.assertLess(read.index("res = _ns_unimage(res)"), read.index("'result': _ns_clip(res)"))
+        # the page's code names no code, params or typed text either (its comments say why)
+        page = re.sub(r"/\*.*?\*/|//[^\n]*", "", (UI_SRC / "chat" / "activity" / "browserSteps.ts").read_text(encoding="utf-8"), flags=re.S)
+        for bad in (".code", "params", "prompt_text", "handle", "args"):
+            self.assertNotIn(bad, page, bad)
+
+    def test_the_page_keeps_a_bounded_number_in_memory_only(self) -> None:
+        store = (UI_SRC / "state" / "store.ts").read_text(encoding="utf-8")
+        self.assertIn("export const SHOTS_KEPT = 8;", store)
+        self.assertIn("export const SHOTS_TOTAL = 16;", store)
+        self.assertIn("return [...(shots ?? []).filter((s) => s.id !== id), { id, url, n }].slice(-SHOTS_KEPT);", store)
+        self.assertIn("if (kept.length <= SHOTS_TOTAL) return next;", store)
+        self.assertIn("return { ...state, chats: withShot(state.chats, bot, ev.tool_id, `data:${ev.mime};base64,${ev.data_base64}`) };", store)
+        case = store.split('case "tool.shot": {', 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("!c?.turn?.steps.some((s) => s.id === ev.tool_id)", case)
+        for bad in ("localStorage", "bridge.request", "saveSnap", "writeFile"):
+            self.assertNotIn(bad, case, bad)
+        row = (UI_SRC / "chat" / "activity" / "Activity.slot.tsx").read_text(encoding="utf-8")
+        self.assertIn('data-testid="activity-step-shot"', row)
+        self.assertIn('aria-label={tr("act.shotOpen", { step: line })}', row)
+        # the lightbox shows the image it opened with until the person closes it
+        self.assertIn("onClick={() => setViewing(url)}", row)
+        self.assertIn("{viewing && <Lightbox url={viewing} name={name} onClose={() => setViewing(null)} />}", row)
 
 
 class DiskTrayAndKeepAwake(unittest.TestCase):

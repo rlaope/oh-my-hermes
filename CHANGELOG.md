@@ -4,6 +4,16 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: a bot's browser steps say what it did, with the screenshot.** omher knew one browser tool,
+  `browser_navigate`, which current Hermes no longer has, so a step of today's `browser_exec` showed Hermes' preview,
+  which without a label is the code on one line, text typed into the page included. A browser step now reads as the
+  label the bot wrote for it ("Used the browser" without one), a CDP call as its method, and a page dialog and a saved
+  login as what was done; the code, CDP params and dialog text stay in the bridge in the main chat, a subagent's step
+  and the Plans session view. A browser or computer-use step whose screenshot Hermes names shows a small thumbnail
+  that opens full size: the bridge reads the file when the step ends, only from Hermes' own capture folders, and the
+  page keeps the newest few in memory. There is no live browser view, because Hermes sends no stream, address or
+  title of the page it drives. (`docs/OMHER-BOUNDARY.md` rule 53; `apps/omher/src/chat/activity/browserSteps.ts`)
+
 - **omher: Settings › Computer sets up Hermes' computer use.** The page was a "Soon" line. It now shows whether this
   computer has Hermes' desktop driver and the access macOS asks for, with Install, Grant access and Check again, and
   one switch per bot for the `computer_use` toolset. Every button runs Hermes' own command; a switch is decided by

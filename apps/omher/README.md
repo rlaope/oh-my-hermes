@@ -134,6 +134,22 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
 - **While it answers** (Settings › General): a message sent while a bot is answering waits in the steer queue until
   the turn ends (the default), or, set to Steer, is steered into the running answer at once, as its Steer button
   would; a message behind another held one still waits its turn (`e2e/steer-queue.spec.ts`).
+- **Browser steps and their screenshots** (`src/chat/activity/browserSteps.ts`, `e2e/browser-steps.spec.ts`): in a
+  chat's step list ("Worked for … · N steps") a bot's `browser_exec` step reads as the label the bot wrote for it
+  ("Opening the shop's login page"), or "Used the browser" when it wrote none; a `browser_cdp` step as "Ran browser
+  command" and its CDP method; a page dialog as accepted or dismissed; a saved login as what was done (filled, saved,
+  a code entered). The code, the CDP params, the text typed into a dialog and the calls' results stay in the bridge,
+  in the main chat, a subagent's step and the Plans session view alike; a label keeps the bot's own words with
+  secret-shaped text masked. When Hermes names the screenshot a browser or computer-use step captured, the bridge
+  reads that file at the step's end (Hermes' default capture file is overwritten by the next capture), only from the
+  bot's own `cache/` and `image_cache/` folders and its own browser-harness tmp folder, as a regular PNG, JPEG, GIF or
+  WebP of at most 5 MB with one name, reached through no link, and the step's row shows a small thumbnail that opens
+  the image full size. A bot whose `cache/` (or `image_cache/`) folder is itself a symbolic link shows no
+  screenshots: such a folder is not read through. The page keeps the newest 8 a chat and 16 in all, in memory only:
+  after the app reloads, and for a chat read back from Hermes, the steps have no screenshot. For a bot on another computer that computer's bridge
+  reads the file and sends it over the SSH link, checked again here. There is no live view of the browser: Hermes
+  sends no stream of the page and no address or title, so omher has nothing to show while it works.
+  `BOUNDARY.md` rule 53.
 - **New bot** (`src/addbot/NewBot.tsx`, BOUNDARY rule 44): the sidebar `+` › New bot lists oh-my-hermes' bot
   templates (`omh --hermes-home <root> profile bot-templates --json`, through rule 43's `omh` runner) beside No
   template; Create checks the name against Hermes' own profile rule and runs Hermes' `hermes -p default profile create
