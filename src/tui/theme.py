@@ -386,6 +386,16 @@ def agent_style(handle: str, theme: Theme, index: int | None = None) -> Style:
     return theme.agents[int.from_bytes(digest, "big") % len(theme.agents)]
 
 
+def profile_style(name: str, theme: Theme) -> Style:
+    """A Hermes profile's (bot's) colour: one of the theme's accent steps (its tool hues and the delegation view's word
+    steps, each lifted to 4.5:1 on the background), picked by the name's sha256, so a bot reads the same colour on the
+    bot board (its face) and in the sessions table (its group heading), on a light page and a dark one."""
+    ramp = [style for style in (*theme.kinds, *theme.dag_words) if style.fg]
+    if not ramp:
+        return theme.text
+    return replace(ramp[hashlib.sha256(name.encode("utf-8", "surrogatepass")).digest()[8] % len(ramp)], bold=False)
+
+
 def tool_family(name: str) -> str:
     """The family a tool's name belongs to (`TOOL_FAMILIES`), or "" for none."""
     if name.startswith("browser_"):

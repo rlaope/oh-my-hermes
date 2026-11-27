@@ -53,7 +53,7 @@ from .fuzzy import subsequence_tail
 from .keys import BACKSPACE, CHAR, DOWN, ENTER, ESCAPE, PAGE_DOWN, PAGE_UP, TAB, UP, Key, Paste, list_nav_step
 from .prompts import CHOICE_MARK
 from .style import Line, Span, Style
-from .theme import Theme
+from .theme import Theme, profile_style
 from .width import cell_width, truncate, truncate_line, wrap
 
 PICK = "pick"
@@ -505,6 +505,13 @@ class SessionPicker:
                 rows = [row for row in rows if any(_matches(needle, value) for value in
                         (row.title, row.preview, row.id, *row.lineage))]
             shown = sorted(rows, key=lambda row: (not self._current(row), -(row.activity_at or row.started_at)))
+            if not scope:
+                # One block per bot: the order its first row has above (the current session's bot, then the bot
+                # active most recently), so a bot's sessions sit together and never interleave with another's.
+                groups: dict[str, list[SessionRow]] = {}
+                for row in shown:
+                    groups.setdefault(row.profile, []).append(row)
+                shown = [row for group in groups.values() for row in group]
             self._table_cache = cache_key, shown
             return shown
         kept = subsequence_tail(self.rows, self.query, lambda row: (row.title, row.preview, row.id))
@@ -693,6 +700,10 @@ class SessionPicker:
         return frame.lines
 
     def _table(self, width: int, theme: Theme, max_rows: int, now: float) -> list[Line]:
+        """The all-profile table. Under All local profiles each bot is a block: a blank row before every block but the
+        first, the bot's name in its own colour (`profile_style`, the bot board's face colour) with its session
+        count, then its sessions, newest first. One bot's scope (Tab) is the plain list under the column header. A
+        turn running in another session says `running` in the Last active column, in the running blue."""
         shown = self.visible()
         self.index = min(self.index, max(len(shown) - 1, 0))
         scope = self.scoped_profile
@@ -704,52 +715,76 @@ class SessionPicker:
             status = f"Rename {renamed.label}"
         inset = cell_width(CHOICE_MARK) + 2
         columns = []
-        if not scope and width >= 36:
-            columns.append(("Profile", min(18, max(7, width // 6))))
         if width >= 52 or (scope and width >= 39):
             columns.append(("Source", min(18, width // 7)))
         if width >= 28:
             columns.append(("Last active" if width >= 48 else "Active", 11 if width >= 48 else 8))
         title_width = width - inset - sum(size + 2 for _, size in columns)
 
-        def cells(label: str, facts: list[str], style: Style) -> Line:
+        def cells(label: str, facts: list[tuple[str, Style]], style: Style) -> Line:
             value = truncate(label, max(title_width, 1))
             parts = [Span(value, style)]
-            for fact, (_, size) in zip(facts, columns):
+            for (fact, fact_style), (_, size) in zip(facts, columns):
                 value = truncate(fact, size)
                 padding = max(title_width - cell_width(parts[0].text), 0) if len(parts) == 1 else 0
-                parts.append(Span(" " * (padding + 2) + value + " " * (size - cell_width(value)), theme.muted))
+                parts.append(Span(" " * (padding + 2), theme.muted))
+                parts.append(Span(value + " " * (size - cell_width(value)), fact_style))
             return tuple(parts)
 
+        # the list: a session row, or a bot's heading (its name), or the blank row between two bots
+        entries: list[SessionRow | tuple[str, str]] = []
+        counts: dict[str, int] = {}
+        for row in shown:
+            counts[row.profile] = counts.get(row.profile, 0) + 1
+        for row in shown:
+            if not scope and (not entries or isinstance(entries[-1], SessionRow) and entries[-1].profile != row.profile):
+                if entries:
+                    entries.append(("blank", ""))
+                entries.append(("bot", row.profile))
+            entries.append(row)
+        highlighted = entries.index(shown[self.index]) if shown else 0
+
         def row_line(number: int) -> Line:
-            row = shown[number]
-            highlighted = number == self.index
+            entry = entries[number]
+            if not isinstance(entry, SessionRow):
+                kind, profile = entry
+                if kind == "blank":
+                    return ()
+                name = profile or "Unknown profile"
+                count = counts.get(profile, 0)
+                return (Span(" " * inset), Span(name, replace(profile_style(name, theme), bold=True)),
+                        Span(f"  {count} session{'' if count == 1 else 's'}", theme.muted))
+            row = entry
+            on = number == highlighted
             mark = CURRENT_MARK if self._current(row) else " "
-            style = theme.menu_current if highlighted else theme.menu
+            style = theme.menu_current if on else theme.menu
             note = self.notes.get(row.id) or (DELETE_CONFIRM if row.id and row.id == self.arming else self.out.get(row.id))
             if note:
-                return picker_row(highlighted, f"{mark} ", row.label, note, width, theme, theme.warn)
-            facts = {"Profile": row.profile or "Unknown", "Source": row.source or "—"}
-            age = age_text(row.activity_at or row.started_at, now) or "—"
-            label = f"{row.label} · turn running" if row.running and not self._current(row) else row.label
-            return (pointer(highlighted, theme), Span(f"{mark} ", style),
-                    *cells(label, [facts.get(name, age) for name, _ in columns], style))
+                return picker_row(on, f"{mark} ", row.label, note, width, theme, theme.warn)
+            if row.running and not self._current(row):
+                active = ("running", theme.running)
+            else:
+                active = (age_text(row.activity_at or row.started_at, now) or "—", theme.muted)
+            facts = {"Source": (row.source or "—", theme.muted)}
+            return (pointer(on, theme), Span(f"{mark} ", style),
+                    *cells(row.label, [facts.get(name, active) for name, _ in columns], style))
 
         headers = max_rows >= 5
         extra_status = bool(status and max_rows >= 6)
         if status and not extra_status:
             head = f" Partial ·{head}" if self.partial else f"{head} · {status}"
-        frame = picker_frame((Span(head, theme.heading),), len(shown), self.index, row_line,
+        frame = picker_frame((Span(head, theme.heading),), len(entries), highlighted, row_line,
                              " No matching sessions" if self.query else " No sessions in this view",
                              self.title if renamed is not None else self.query, width, theme,
                              max_rows - int(headers) - int(extra_status),
+                             heading=lambda number: not isinstance(entries[number], SessionRow),
                              placeholder=RENAME_PLACEHOLDER if renamed else
                              WAITING_PLACEHOLDER if self.waiting else FILTER_PLACEHOLDER)
         prefix: list[Line] = []
         if extra_status:
             prefix.append(truncate_line((Span(f" {status}", theme.warn),), width))
         if headers:
-            prefix.append(truncate_line((Span(" " * inset), *cells("Title / preview", [name for name, _ in columns],
+            prefix.append(truncate_line((Span(" " * inset), *cells("Title / preview", [(name, theme.muted) for name, _ in columns],
                                                                   theme.muted)), width))
         frame.lines[1:1] = prefix
         self.page = frame.page

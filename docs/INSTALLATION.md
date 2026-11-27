@@ -1452,8 +1452,9 @@ wake pipe on real Windows pipes.
   Esc twice with text clears it, keeping it in this session's input history
   (not in Hermes' history file, since it was never sent).
 - `/sessions` (also `/resume`, `/switch`, `/session`, or Ctrl+X) opens a compact table of
-  sessions across **All local profiles**, with title or preview, profile,
-  source and last activity as room allows. Type to filter; Tab and Shift+Tab
+  sessions across **All local profiles**, one block per bot (its name in the
+  colour of its face on the bot board, a blank row between bots), each
+  session with its title or preview, source and last activity as room allows. Type to filter; Tab and Shift+Tab
   cycle profiles without clearing the filter. Ctrl+G loads older gateway
   sessions when available. The footer tells you whether Enter switches to the
   selected session or opens its read-only history. Only sessions authorized

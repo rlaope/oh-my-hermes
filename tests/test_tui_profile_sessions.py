@@ -86,7 +86,7 @@ class ProfileSessionsTests(unittest.TestCase):
             self.assertTrue(all(line_width(line) <= width for line in lines))
             self.assertIn("All local profiles", line_text(lines[0]))
             if width >= 80:
-                self.assertIn("Profile", line_text(lines[1]))
+                self.assertNotIn("Profile", line_text(lines[1]))  # each bot is a block under its own heading
                 self.assertIn("Last active", line_text(lines[1]))
                 self.assertIn("Enter switches", picker.keys()[0])  # local scan did not steal the highlight
 
@@ -203,11 +203,14 @@ class ProfileSessionsTests(unittest.TestCase):
         ]})
         self.assertTrue(app.picker.rows[0].running)
         self.assertFalse(app.picker.rows[1].running)
-        self.assertIn("turn running", "\n".join(map(line_text, app.picker.lines(100, DEFAULT_THEME, 12, 450))))
+        drawn = app.picker.lines(100, DEFAULT_THEME, 12, 450)
+        busy = next(line for line in drawn if "Working" in line_text(line))
+        self.assertEqual(line_text(busy).split()[-1], "running")  # in Last active, not glued to the title
+        self.assertEqual(next(span.style for span in busy if span.text.strip() == "running"), DEFAULT_THEME.running)
         self.assertIn("Turn running", app.picker.keys()[0])
         app.picker.handle_key(Key(DOWN))
         self.assertNotIn("Turn running", app.picker.keys()[0])
-        self.assertIn("Working · turn running", "\n".join(map(line_text, app.picker.lines(100, DEFAULT_THEME, 12, 450))))
+        self.assertNotIn("turn running", "\n".join(map(line_text, app.picker.lines(100, DEFAULT_THEME, 12, 450))))
         self.assertTrue(app.picker.rows[0].resumable)  # a running turn is not a second-viewer authorization verdict
 
     def test_running_status_survives_an_older_gateway_lineage_page(self) -> None:
@@ -343,3 +346,43 @@ class ProfileSessionsTests(unittest.TestCase):
         self.assertEqual(set(self.root.glob("state.db*")), {self.default, sidecar})
         self.assertEqual(self.default.read_bytes(), before)
         self.assertEqual(sidecar.read_bytes(), b"synthetic orphan")
+
+    def test_all_profiles_is_one_block_per_bot_in_its_board_colour(self) -> None:
+        from omh.tui.bot_board import _avatar_style
+        from omh.tui.theme import profile_style
+
+        def row(sid: str, profile: str, activity: int) -> SessionRow:
+            return SessionRow(sid, f"{profile} {sid}", "", activity, 1, activity, profile=profile,
+                              lineage=frozenset({sid}), local=object(), resumable=False)
+
+        picker = SessionPicker([], current="", profiles=())
+        # activity interleaves the two bots; the table must not
+        picker.add_local(["kami", "friren"], [row("a", "kami", 500), row("b", "friren", 400), row("c", "kami", 300),
+                                              row("d", "friren", 200)])
+        self.assertEqual([r.id for r in picker.visible()], ["a", "c", "b", "d"])
+        lines = picker.lines(100, DEFAULT_THEME, 16, 600)
+        texts = [line_text(line).strip() for line in lines]
+        kami, friren = texts.index("kami  2 sessions"), texts.index("friren  2 sessions")
+        self.assertLess(kami, friren)
+        self.assertEqual(texts[friren - 1], "")  # a blank row sets one bot's block off from the next
+        for name, at in (("kami", kami), ("friren", friren)):
+            span = next(span for span in lines[at] if span.text == name)
+            self.assertEqual(span.style.fg, profile_style(name, DEFAULT_THEME).fg)
+            self.assertEqual(span.style.fg, _avatar_style(name, DEFAULT_THEME).fg)  # the bot board's face colour
+        # one bot's scope is the plain list: no headings, no blank rows
+        picker.handle_key(Key(TAB))
+        scoped = [line_text(line).strip() for line in picker.lines(100, DEFAULT_THEME, 16, 600)]
+        self.assertNotIn("kami  2 sessions", scoped)
+        self.assertNotIn("", scoped[3:-2])
+
+    def test_the_tuis_own_runtime_profile_is_no_bot_here_either(self) -> None:
+        from omh.skin_pack import TUI_PROFILE
+        from omh.tui.profile_sessions import _homes
+
+        for name in ("night", TUI_PROFILE):
+            with closing(create_store(self.root / "profiles" / name / "state.db")) as db:
+                insert(db, f"{name}-1", f"{name} chat")
+        names = [name for name, _ in _homes(self.env)]
+        self.assertIn("night", names)
+        self.assertNotIn(TUI_PROFILE, names)
+        self.assertNotIn(TUI_PROFILE, Inventory.read(self.env).profiles)

@@ -175,8 +175,9 @@ what it has.
 ## Leaving a session, approvals and session settings
 
 Bare `/sessions` also reads a local inventory on a foreground TUI worker. It
-enumerates the default and registered named homes (including parked and
-standalone profiles, excluding tombstones), and projects up to 500 recent
+enumerates the same homes as the bot board (`board_homes`: the default and
+registered named homes with a profile marker, excluding tombstones and the
+TUI's own runtime profile, at most `PROFILE_CAP`), and projects up to 500 recent
 eligible stored segments per profile from `state.db`, grouped by conversation.
 It excludes hidden, archived, empty and background runs. The reader uses the
 bot board's read-only SQLite strategy: immutable for idle databases and a
@@ -185,9 +186,12 @@ the filesystem check and SQLite open are not atomic if the last writer closes
 at the same time. A failed profile read or a local
 limit is shown alongside the authenticated gateway results.
 
-The table starts on All local profiles. Tab and Shift+Tab cycle profiles in
-either direction without clearing the search; Ctrl+G loads older gateway rows
-when offered. Rows marked `turn running` report only the gateway's current
+The table starts on All local profiles, one block per bot: a blank row
+between blocks, the bot's name in its bot-board face colour with its session
+count, then its sessions newest first; the current session's bot comes first,
+then the bot active most recently. Tab and Shift+Tab cycle profiles in
+either direction without clearing the search (one profile is a plain list); Ctrl+G loads older gateway rows
+when offered. A Last active cell that reads `running` reports only the gateway's current
 turn state; they do not establish that another client holds the session.
 Only the gateway list can authorize a switch, rename or delete.
 It is matched to local rows by the gateway-reported profile and session lineage;

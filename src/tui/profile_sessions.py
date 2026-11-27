@@ -14,8 +14,7 @@ from typing import Any, TypeVar
 
 from ..plugin_bundle.omh.live_session import conversation_segments
 from ..plugin_bundle.omh.sqlite_readonly import connect_readonly
-from .bot_board import DELETED_PROFILES, PROFILE_MARKERS, _columns, _no_connection_open
-from .history import history_path
+from .bot_board import _columns, _no_connection_open, board_homes
 from .markdown import clean_text
 from .session_picker import SessionRow, session_rows
 
@@ -28,24 +27,20 @@ _T = TypeVar("_T")
 
 
 def _homes(environ: Mapping[str, str]) -> Iterator[tuple[str, Path]]:
-    history = history_path(environ)
-    if history is None:
+    """The bot board's homes (`board_homes`: the root as `default`, then each named profile with a marker file and no
+    tombstone, the TUI's own runtime profile left out, at most `PROFILE_CAP`), so `/sessions` and `/bots` list the same
+    bots. This reader also refuses a linked profiles directory and skips a linked or oddly named profile, because it
+    opens each one's `state.db`."""
+    _current, homes = board_homes(environ)
+    if not homes:
         return
-    current = history.parent
-    root = current.parent.parent if current.parent.name == "profiles" else current
-    yield "default", root
-    profiles = root / "profiles"
-    if profiles.is_symlink():
+    root = homes[0][1]
+    if (root / "profiles").is_symlink():
         raise OSError("linked profiles directory")
-    try:
-        entries = sorted(profiles.iterdir())
-    except FileNotFoundError:
-        return
-    for home in entries:
-        if (_PROFILE.fullmatch(home.name) and home.name != "default" and not home.is_symlink() and home.is_dir()
-                and not (profiles / DELETED_PROFILES / home.name).exists()
-                and any((home / marker).is_file() or (home / marker).is_symlink() for marker in PROFILE_MARKERS)):
-            yield home.name, home
+    for number, (name, home) in enumerate(homes):
+        if number and (not _PROFILE.fullmatch(name) or home.is_symlink()):
+            continue
+        yield name, home
 
 
 @contextmanager

@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **TUI: `/sessions` lists every local Hermes profile's conversations, one block per bot.** Bare `/sessions` (and
+  `/resume`, Ctrl+X) opens a table of the conversations stored by every registered profile on this computer, not only
+  what the connected gateway lists, so a chat started in Hermes Desktop or another client is findable here. Each bot
+  is a block under its name, in the colour its face has on the bot board (`/bots`), with a blank row between bots; Tab
+  and Shift+Tab show one bot at a time without clearing the search. Only sessions the gateway lists can be switched
+  to, renamed or deleted; another profile's session opens its history read-only. A turn running elsewhere reads
+  `running` in the Last active column. The TUI's own runtime profile (`omh-tui`) is not listed, as on `/bots`.
+  (#3257 by @DanRioDev; `src/tui/profile_sessions.py`, `src/tui/session_picker.py`, `theme.profile_style`)
+
 - **omher: SSH bots' threads reconnect, a failed thread open retries, and refusals say why.** An SSH bot's thread
   key `fold:<peer>:<name>:<thread>` was split at its first colon, so the bot read as `<peer>`: after a reconnect its
   thread was not held stale, a held message never went out, and Send now / Steer reached the wrong bot. The key is
