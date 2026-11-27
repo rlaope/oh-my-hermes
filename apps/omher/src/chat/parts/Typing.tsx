@@ -14,7 +14,7 @@ export function awaitingFirstToken(chat: Chat | undefined): boolean {
   if (!t || answerSoFar(t)) return false;
   const since = t.startedAt / 1000;
   for (const i of chat.items) {
-    if (i.kind === "assistant" && i.ts >= since) return false;
+    if (i.kind === "assistant" && !i.command && i.ts >= since) return false; // a mid-turn command's answer is none
     if ((i.kind === "approval" || i.kind === "clarify") && askOpen(chat.items, i)) return false;
   }
   return true;

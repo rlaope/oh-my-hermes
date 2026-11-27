@@ -506,7 +506,6 @@ REWIND_KEPT_NOTICE = "Hermes did not rewind: {reason}. The screen is back to how
 REWIND_CUT_NOTICE = "Hermes cut the session there but did not take the prompt: {reason}. The prompt is back in the composer."
 REWIND_UNREAD_NOTICE ="Hermes did not send the session's history ({reason}), so the screen stays as it was before you sent."
 REWIND_TURN_BACK_NOTICE = "/{name} went back in the session itself, so the rewind is cancelled."
-MODEL_BUSY_NOTICE = "Hermes switches the model between turns: let this one end, or interrupt it with Esc."
 # `/model --refresh` as Hermes' own TUI reads it: the picker, over a list Hermes asks the providers for again.
 MODEL_REFRESH_ARG = "--refresh"
 # What a `config.set model` answer says, for `/model` and its picker.
@@ -2545,6 +2544,7 @@ class App(ModesMixin, AgentViewMixin):
         self.list_asked_draft: str | None = None
         self.sent_now: list[SentNow] = []  # sent-now steers Hermes took and the turn has not read yet
         self.cut_in: CutIn | None = None  # a prompt with images sent now: it goes once the turn it stopped ends
+        self.command_cut_in = False  # the send-now key stopped the turn for the queued command at the queue's head
         self.unread_steers: list[SteerBlock] = []  # every steer into the main turn Hermes took and it has not read
         # Redirects Hermes answered `queued`: its own next prompt, read only after the turn and cleared by a stop, so
         # no tool finishing settles them (`_track_sent_now`); the line, for a sent-now one.
@@ -3138,7 +3138,7 @@ class App(ModesMixin, AgentViewMixin):
         self.transcript.cwd = cwd or str(self._create_params().get("cwd", ""))
         self.turn_pending = resumed_running(result)
         self.authority_epoch = result.get("authority_epoch")
-        self.interrupting = self.queue_held = self.stop_asked = False  # all were about the session being left
+        self.interrupting = self.queue_held = self.stop_asked = self.command_cut_in = False  # about the session left
         self.sent_now = []  # steers into the session being left: theirs to settle
         self._settle_unread_steers(STEER_TAKEN)
         self._settle_hermes_queued()
@@ -4600,7 +4600,7 @@ class App(ModesMixin, AgentViewMixin):
                 steer_next = self._settle_steers_at_turn_end() and not self.stop_asked and status != "interrupted"
                 # A stop the person asked for in no way (Esc, `/stop`) is Hermes' own.
                 self.transcript.hermes_interrupted = not (self.interrupting or self.stop_asked)  # `_turn_ended` spends it
-                self.transcript.cut_in_stop = self.cut_in is not None  # a cut-in's stop ends the turn quietly
+                self.transcript.cut_in_stop = self.cut_in is not None or self.command_cut_in  # a cut-in's stop is quiet
                 self._note_turn(self._turn_end(payload))
                 self.transcript.hermes_resuming = self._arm_auto_continue(payload)
             self.transcript.apply(event)
@@ -6021,9 +6021,11 @@ class App(ModesMixin, AgentViewMixin):
         """`/model <name> [--provider <slug>]` switches this session as Hermes' own TUI does (`config.set model`).
 
         Bare, or with `--refresh` alone, it opens a picker of what Hermes
-        offers this session (typed during a turn it waits for the turn's end, `_run_slash`), asked again of the providers for
+        offers this session, at once even during a turn (Claude Code's `/model` does; a pick then is Hermes' deferred
+        switch, `MODEL_DEFERRED_NOTICE`), asked again of the providers for
         `--refresh`. Any other flag (`--global`, `--once`) is Hermes' own
-        `/model` as typed, which a shared gateway refuses (`_on_slash_refused`).
+        `/model` as typed, which a shared gateway refuses (`_on_slash_refused`); typed during a turn it waits for the
+        turn's end (`slash.model_runs_during_turn`).
         """
         refresh = arg.strip() == MODEL_REFRESH_ARG
         value = typed_switch_value(arg) if arg and not refresh else ""
@@ -6403,12 +6405,10 @@ class App(ModesMixin, AgentViewMixin):
                                               NOTICE_WARN))
 
     def _open_model_picker(self, sid: str, result: dict[str, Any], query: str = "") -> None:
-        """The list came: it opens unless the session was left, a turn started meanwhile, or a picker is open.
+        """The list came: it opens unless the session was left or a picker is open, during a turn too, as Claude
+        Code's `/model` does: a pick then is Hermes' deferred switch, from the next turn (`MODEL_DEFERRED_NOTICE`).
         `query` is what was typed into the picker while it loaded."""
         if sid != self.sid or self.model_picker is not None:
-            return
-        if self._busy():
-            self.transcript.add_aside(NoticeBlock(MODEL_BUSY_NOTICE, NOTICE_WARN))
             return
         if self._picker_taken("/model"):
             return
@@ -6581,6 +6581,7 @@ class App(ModesMixin, AgentViewMixin):
             if self.queued and not self.queue_held:
                 self._hold_queue(INTERRUPTED_WHY)
             return
+        self.command_cut_in = False  # a stop asked again: the queue waits for the person, the cut-in command with it
         if self.sid:
             self.interrupting = True
             self._note_turn(TURN_STOPPED)
@@ -7247,6 +7248,17 @@ class App(ModesMixin, AgentViewMixin):
             self._send_cut_in()
             self._check_default()
             return
+        if self.interrupting and self.command_cut_in and self.queued and self.queued[0].command is not None:
+            # The person sent a queued command now: it runs first, then the queue goes on behind it, as behind a
+            # cut-in prompt. Steers the turn had not read go back right behind the command.
+            self.interrupting = self.command_cut_in = False
+            command = self.queued.popleft()
+            self._requeue_unread_steers()
+            self.queued.appendleft(command)
+            self._drain_queue()
+            self._check_default()
+            return
+        self.command_cut_in = False
         if self.interrupting:
             self.interrupting = False
             self._hold_queue(INTERRUPTED_WHY)
@@ -7647,28 +7659,47 @@ class App(ModesMixin, AgentViewMixin):
 
     def _queue_head_sends_now(self) -> bool:
         """Whether the send-now key can send the oldest queued line now: a prompt it steers with
-        (`_queue_head_steers`), or a typed prompt with images, which cuts in (`_cut_in`) as the same key does on a
-        prompt with images in the composer. Enter queued it (a steer is text alone); the queue row says the key sends
-        it now, as Claude Code's does."""
+        (`_queue_head_steers`), or a typed prompt with images or a slash command, which cut in (`_cut_in`) as the same
+        key does on a prompt with images in the composer: the turn stops and the line runs the moment it ends, as
+        Claude Code's `ctrl+x ctrl+s` runs a queued `/context`. Enter queued it; the queue row says the key sends it
+        now, as Claude Code's does. A queued `!` line and a prompt a command built (a skill's) still wait."""
         if self._queue_head_steers():
             return True
         head = self.queued[0] if self.queued else None
-        return head is not None and bool(head.images) and not head.shell and head.command is None and not head.typed \
-            and bool(self.sid) and self.cut_in is None
+        typed_command = head is not None and head.command is not None and not head.command.for_plan_mode
+        cuts_in = head is not None and not head.shell and not head.typed and (bool(head.images) or typed_command)
+        return cuts_in and bool(self.sid) and self.cut_in is None
 
     def _send_queued_now(self) -> None:
         """The send-now key: the oldest queued prompt leaves the queue and goes into the running turn as a steer, or,
-        with images, cuts in (`_cut_in`): the turn stops and the prompt goes with its images when it ends.
+        with images or as a slash command, cuts in (`_cut_in`): the turn stops and the line goes when it ends.
 
         A steer Hermes does not take goes back to the head of the queue as
         it was (`_steer_refused`); one it took but had not read when the turn
         stopped goes back there too (`_requeue_unread_steers`).
         """
         line = self.queued.popleft()
+        if line.command is not None:  # with its images too: the queue runs it as it would have (`_cut_in_command`)
+            self._cut_in_command(line)
+            return
         if line.images:
             self._cut_in(line.text, line.shown, line.chips, line.images)
             return
         self._steer(line.text, line)
+
+    def _cut_in_command(self, line: QueuedLine) -> None:
+        """The send-now key on a queued slash command: stop the turn and run the command first when it ends, ahead of
+        the rest of the queue, as Claude Code's `ctrl+x ctrl+s` does with a queued `/context`. It runs then as the
+        queue runs it (`_run_queued_command`); its row stays where it was meanwhile, at the queue's head, so Up, a
+        stop or a switch treat it as any queued line. With nothing to stop after all it runs now."""
+        self.queued.appendleft(line)
+        if not self._busy():
+            self._drain_queue()
+            return
+        self._interrupt()
+        # Still running: the turn's end runs it (`_turn_ended`). Not (only a prompt not sent yet was stopped): the
+        # queue went where any stop sends it (`_hold_queue`), the command with it.
+        self.command_cut_in = self._busy()
 
     def _steer_or_submit(
         self, text: str, shown: str = "", chips: tuple[tuple[str, str], ...] = (), images: Sequence[Attachment] = (),
@@ -8072,6 +8103,7 @@ class App(ModesMixin, AgentViewMixin):
             echo = self.transcript.command
             if invocation.name.lower() == "stop" and self._busy():
                 self.stop_asked = True  # the turn it interrupts ends `interrupted`: the person's stop
+                self.command_cut_in = False  # the queue waits for the person, a cut-in command with it
                 self._note_turn(TURN_STOPPED)
             sid = self.sid
             self._request(

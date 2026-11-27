@@ -362,7 +362,15 @@ export interface BotTemplates {
 export interface BotCreate {
   outcome: "ok" | "unconfirmed" | "failed";
   bot?: string;
+  /** Logs and old callers only: the page words each outcome itself from `reason` and the parts below. */
   line?: string;
+  /** `failed`: `no_hermes` (not installed), `hermes` (Hermes' own words in `line`), `exit` (stopped with `code`).
+   *  `unconfirmed`: `left` (the folders in `leftovers`) or `running` (the gateway may still be making it). */
+  reason?: "no_hermes" | "hermes" | "exit" | "left" | "running";
+  code?: number | null;
+  leftovers?: string[];
+  /** `unconfirmed`: Hermes' own words, if it said any. */
+  said?: string;
   /** `ok` only: Hermes' own `⚠` lines of the create, and whether one says skills, keys or model were not set up
    *  (the page then holds the template back). */
   notes?: string[];
@@ -498,6 +506,9 @@ export interface OpMap {
    *  or Hermes refused). The bridge never sends a refused steer another way. */
   /** queued = taken; rejected = no agent saw it (safe to send normally); uncertain = may already be with the agent */
   "chat.steer": { params: { bot: string; text: string; session?: string }; result: { status: "queued" | "rejected" | "uncertain" } };
+  /** `/usage` or `/status` typed while the chat's turn runs: Hermes' `slash.exec` runs it at once, beside the turn; its
+   *  answer comes as `command.output` (rule 48). */
+  "chat.command": { params: { bot: string; text: string; session?: string }; result: Record<string, never> };
   "approval.respond": {
     params: { bot: string; request_id: string; choice: ApprovalChoice; session?: string };
     result: Record<string, never>;
@@ -848,6 +859,8 @@ export type BridgeEvent =
   | (EventBase & { event: "skill"; name: string })
   | (EventBase & { event: "delta"; text: string })
   | (EventBase & { event: "message"; id: string; text: string; watch?: WatchTag })
+  /** A command's answer that came while a turn runs (`chat.command`): a note in the chat, not the turn's answer. */
+  | (EventBase & { event: "command.output"; id: string; text: string; /** the command as typed, e.g. `/usage` */ command?: string })
   /** A folder chat's name from Hermes (its titler or /title); `session` names the folder chat. */
   | (EventBase & { event: "session.title"; title: string })
   | (EventBase & {

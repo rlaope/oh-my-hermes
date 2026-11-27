@@ -585,6 +585,7 @@ function fakeBridge() {
   // bots.list status per bot (default online); the real bridge reads "offline" for any profile not yet attached
   const listed = new Map<string, string>();
   let running = false;
+  let names = ["kami", "friren"];
   const bridge: BridgeLike = {
     connect: async () => {
       statusH?.("open");
@@ -598,7 +599,7 @@ function fakeBridge() {
           return { bridge: "mock", version: "0.1.0", hermes: { home: "/h" } };
         case "bots.list":
           return {
-            bots: ["kami", "friren"].map((name) => ({
+            bots: names.map((name) => ({
               name, display_name: name, is_default: false, model: "m", provider: "p", description: "", status: listed.get(name) ?? "online", running: false,
             })),
           };
@@ -633,6 +634,7 @@ function fakeBridge() {
     setOffline: (bot: string) => offline.add(bot),
     setListedStatus: (bot: string, status: string) => listed.set(bot, status),
     setRunning: (r: boolean) => (running = r),
+    setBotNames: (n: string[]) => (names = n),
   };
 }
 
@@ -687,6 +689,29 @@ describe("store", () => {
     expect(s.ui.roster).toEqual(["friren"]);
     expect(s.ui.pinned).toEqual([]);
     expect(s.selectedBot).toBe("friren");
+  });
+
+  it("reloadBots: the open bot is gone (its computer removed): the first listed bot opens; a chat moves, Settings stays", async () => {
+    const f = fakeBridge();
+    const store = createStore(f.bridge, { now: () => T0 });
+    await store.actions.init();
+    await store.actions.selectBot("friren");
+    f.setBotNames(["kami"]);
+    await store.actions.reloadBots();
+    expect(store.getState().selectedBot).toBe("kami");
+    expect(store.getState().ui.view).toBe("chat");
+    expect(store.getState().chats.kami.loaded).toBe(true);
+
+    f.setBotNames(["kami", "friren"]);
+    await store.actions.reloadBots();
+    await store.actions.selectBot("friren");
+    store.actions.openSettings("general");
+    const view = store.getState().ui.view;
+    expect(view).not.toBe("chat");
+    f.setBotNames(["kami"]);
+    await store.actions.reloadBots();
+    expect(store.getState().selectedBot).toBe("kami");
+    expect(store.getState().ui.view).toBe(view);
   });
 
   it("roster: bots hidden before the roster never enter it", async () => {
@@ -1221,5 +1246,17 @@ describe("a reopened chat keeps the words before a question once", () => {
     const msgs = [...opened().messages, { id: "a1", role: "assistant" as const, text: note, ts: T0 / 1000 + 0.5 }];
     const again = reduce(s, { type: "chat.opened", bot: "kami", res: opened({ running: true, messages: msgs }), now: T0 + 5000 });
     expect(said(again)).toEqual([note]);
+  });
+});
+
+describe("the answered-interview line", () => {
+  it("is built from an i18n key in every language, never English-only", async () => {
+    const { t } = await import("../i18n");
+    for (const l of ["en", "ko", "zh", "ja"] as const) {
+      const line = t("card.givenOfTotal", { given: "2", n: "3" }, l);
+      expect(line).toContain("2");
+      expect(line).toContain("3");
+      if (l !== "en") expect(line).not.toContain(" of ");
+    }
   });
 });

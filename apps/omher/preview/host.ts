@@ -417,6 +417,7 @@ const OPS: Record<string, (p: Json) => unknown> = {
     return { ok: true, provider: String(p.provider ?? b.provider), model: b.model, error: "" };
   },
   "chat.steer": (p) => (need(p), { status: "queued" }),
+  "chat.command": (p) => (need(p), {}),
   "runs.node_session": (p) => (need(p), { session: null }),
   "tasks.linear": (p) => (need(p), { configured: false, server: "" }),
   "apps.list": (p) => {
