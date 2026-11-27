@@ -4,6 +4,12 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: a thread with unread answers shows a count, so the Dock or taskbar count can be found.** A thread that
+  answered while it was not open counted in the Dock count and the Windows taskbar dot, but its sidebar row showed
+  only its state (the green check), and the bot row counted only the bot's main chat: the count stayed up with no
+  row saying where. A thread row now carries the bot row's unread count (bold title, an accessible label), an open
+  question keeps its place as on the bot row, and the threads hidden past "Show N more" count on the bot row and on
+  that line until they show. Opening the thread clears the count, as before. (`apps/omher/src/threads/ThreadTree.tsx`)
 - **Fanout: a keyring login the fence hid is `credential_hidden`, not a rejected credential.** On Linux, `agy`
   (Antigravity) keeps its login in the Secret Service keyring, reached over the user D-Bus session, and the bwrap
   fence mounts an empty read-only tmpfs over `/run/user/<uid>`. Inside the fence `agy` said `authentication required`

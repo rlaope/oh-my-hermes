@@ -339,7 +339,8 @@ test("a thread row is a chat card: bubble with its state badge inside, title and
   await expect(go).toBeVisible();
   await expect.poll(() => row(ids.slack).evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
   // named for a screen reader, opened with Enter
-  await expect(row(ids.slack).getByTestId("thread-open")).toHaveAttribute("aria-label", "Open thread Slack 알림 문구 다듬기");
+  // the seeded answer in this thread is unread (it was not open): the label names the count the row shows
+  await expect(row(ids.slack).getByTestId("thread-open")).toHaveAttribute("aria-label", "Open thread Slack 알림 문구 다듬기 · 1 unread");
   await row(ids.slack).getByTestId("thread-open").focus();
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("thread-chat")).toHaveAttribute("data-thread", ids.slack);

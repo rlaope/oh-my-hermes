@@ -1597,6 +1597,7 @@ export const en = {
   "thread.list": "Threads of {name}",
   "thread.more": "Show {n} more",
   "thread.less": "Show fewer",
+  "thread.unread": "{n} unread",
   "thread.remove": "Remove thread {title}",
   "thread.removeAsk": "Remove this thread? It is archived in Hermes and can be restored.",
   "thread.removeRunning": "It is still working. Stop it and remove?",

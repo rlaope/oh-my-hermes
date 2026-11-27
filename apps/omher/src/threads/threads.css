@@ -483,3 +483,27 @@
 .th-prc-refresh:disabled {
   opacity: 0.5;
 }
+/* unread answers (the Dock or taskbar counts them): the bot row's count (the accent badge, never the amber of an open
+   question) on line 2's right, the title in bold and the second line at body strength, as an unread bot row reads */
+.th-unread {
+  grid-column: 3;
+  grid-row: 2;
+  justify-self: end;
+  margin-left: 0;
+}
+.th-row.unread .th-title {
+  font-weight: 600;
+}
+.th-row.unread .th-sub {
+  color: var(--body);
+}
+/* on hover or focus the count gives way to the ›, as the time gives way to the x */
+.th-row:hover .th-unread,
+.th-row:focus-within .th-unread {
+  visibility: hidden;
+}
+/* "Show N more" (a flex line) counts the unread answers of the threads it hides, right after its words */
+.th-more-unread {
+  margin-left: 6px;
+  align-self: center;
+}

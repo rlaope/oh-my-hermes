@@ -1594,6 +1594,7 @@ export const zh: Record<Key, string> = {
   "thread.list": "{name} 的线程",
   "thread.more": "再显示 {n} 个",
   "thread.less": "收起",
+  "thread.unread": "{n} 条未读",
   "thread.remove": "移除线程 {title}",
   "thread.removeAsk": "移除这个线程?它会在 Hermes 中归档,之后可以恢复。",
   "thread.removeRunning": "它还在工作。停止并移除?",
