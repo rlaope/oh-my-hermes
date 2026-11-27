@@ -12,6 +12,7 @@ import type { Terminal } from "@xterm/xterm";
 import type { WebglAddon } from "@xterm/addon-webgl";
 import { canRetry, probeWebgl, recordLoss } from "./engine-policy";
 import { hideRows, showRows } from "./engine-hidden";
+import { markRestored, restoredEnd } from "./engine-restored";
 import { cannotPark, carriedOf, dueToPark, extras, innerOf, limits, putCarried, type Carried } from "./park";
 import { onTermSettings, type TermSettings } from "./settings";
 import { attachLinks } from "./engine-links";
@@ -100,6 +101,8 @@ interface Parked {
   paste: boolean;
   /** it showed Kitty placeholders: their pictures are dropped with it, and the one made again blanks their cells */
   placeholders: boolean;
+  /** the buffer line of the divider under the text kept from before a restart (engine-restored.ts), -1: none */
+  restored: number;
 }
 const parked = new Map<Terminal, Parked>();
 /** a parked terminal that was made again: the one that replaced it */
@@ -405,6 +408,7 @@ export function live(term: Terminal): Terminal {
   if (!s)
     next.write(p.snapshot, () => {
       putCarried(next, p.carried);
+      if (p.restored >= 0) markRestored(next, p.restored);
       restoring.delete(next);
     });
   else {
@@ -412,6 +416,7 @@ export function live(term: Terminal): Terminal {
     // the write callback runs before xterm parses the next write, so the program's next bytes see it all
     const took = () => {
       putCarried(next, p.carried);
+      if (p.restored >= 0) markRestored(next, p.restored);
       restoring.delete(next);
       s.pending--;
     };
@@ -493,7 +498,7 @@ function park(s: State, Serialize: typeof import("@xterm/addon-serialize").Seria
   }
   const title = (term as unknown as { _core?: { _inputHandler?: { _windowTitle?: unknown } } })._core?._inputHandler?._windowTitle;
   if (typeof title === "string" && title) snapshot += `\x1b]2;${title}\x07`;
-  parked.set(term, { snapshot: utf8.encode(snapshot), carried, cols: term.cols, rows: term.rows, remake: s.remake!, hiddenAt: s.hiddenAt, lastOut: s.lastOut, gpuLast: s.gpuLast, gaveUp: s.gaveUp, losses: s.losses, paste: inner.modes.bracketedPasteMode, placeholders: virtualImages(term)?.seen ?? false });
+  parked.set(term, { snapshot: utf8.encode(snapshot), carried, cols: term.cols, rows: term.rows, remake: s.remake!, hiddenAt: s.hiddenAt, lastOut: s.lastOut, gpuLast: s.gpuLast, gaveUp: s.gaveUp, losses: s.losses, paste: inner.modes.bracketedPasteMode, placeholders: virtualImages(term)?.seen ?? false, restored: restoredEnd(term) });
   // a find bar left open on it (the bottom panel keeps one while hidden) closes: its terminal is going
   s.el.dispatchEvent(new CustomEvent(FIND_EVENT, { bubbles: true, detail: null }));
   s.undo();

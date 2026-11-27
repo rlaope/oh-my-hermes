@@ -303,7 +303,9 @@ describe("update confirm: the running line", () => {
     );
     expect(sp(runningLine([rec("s1", "pi", "/w/p", "running")], mode))).toBe("1 session running: p (pi). It comes back with a Resume button.");
     expect(sp(runningLine([rec("s1", "claude", "/w/a", "running", "u"), rec("s2", "grok", "/w/g", "starting")], mode))).toBe(
-      "2 sessions running: a (Claude Code), g (Grok). Claude Code, Codex and OmO resume after the restart; the others come back with a Resume button.",
+      "2 sessions running: a (Claude Code), g (Grok). Some resume after the restart; the others come back with a Resume button.",
     );
+    // a terminal that continues its own conversation (an id omher gave or learned) comes back by itself too
+    expect(sp(runningLine([rec("s1", "grok", "/w/g", "running", "0e2c5a8e-6c1b-4f7e-9a3d-2b1c4d5e6f70")], mode))).toBe("1 session running: g (Grok). It resumes after the restart.");
   });
 });

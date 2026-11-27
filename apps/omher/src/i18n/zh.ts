@@ -142,7 +142,7 @@ export const zh: Record<Key, string> = {
   "update.thenAuto": "重启后会自动继续。",
   "update.thenManual1": "重启后可用“继续”按钮恢复。",
   "update.thenManual": "重启后可用“继续”按钮恢复。",
-  "update.thenMixed": "Claude Code、Codex 和 OmO 会自动继续，其他会话可用“继续”按钮恢复。",
+  "update.thenMixed": "部分会话会自动继续，其他会话可用“继续”按钮恢复。",
   "update.cancel": "取消",
   "update.confirm": "更新并重启",
   "resume.paused": "omher 重启时已暂停",

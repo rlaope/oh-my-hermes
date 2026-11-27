@@ -143,7 +143,7 @@ export const en = {
   "update.thenAuto": "They resume after the restart.",
   "update.thenManual1": "It comes back with a Resume button.",
   "update.thenManual": "They come back with a Resume button.",
-  "update.thenMixed": "Claude Code, Codex and OmO resume after the restart; the others come back with a Resume button.",
+  "update.thenMixed": "Some resume after the restart; the others come back with a Resume button.",
   "update.cancel": "Cancel",
   "update.confirm": "Update and restart",
   "resume.paused": "Paused when omher restarted",

@@ -50,7 +50,7 @@ async function setup(page: Page, folders: string[] = []) {
         calls.push("relaunch");
       },
     };
-    w.__omherMockAgents = ["claude", "codex", "omh", "pi", "grok"];
+    w.__omherMockAgents = ["claude", "codex", "omh", "pi", "grok", "omp", "agy"];
     // the next folder the native picker "returns" (one per session started)
     const queue = [...folders];
     Object.defineProperty(w, "__omherPickFolder", { configurable: true, get: () => queue.shift() ?? "/home/you/code/x" });
@@ -306,21 +306,21 @@ test.skip("after a restart: Claude Code and Codex continue by themselves, pi wai
   expect((await sessionCalls(page)).filter((c) => c.op === "chat.start")).toHaveLength(3);
 });
 
-test("a terminal session that was running comes back paused and starts only on Resume", async ({ page }) => {
+test("a terminal session that was running and cannot continue by itself comes back paused and starts only on Resume", async ({ page }) => {
   await setup(page, ["/home/you/code/g"]);
-  await startTerminal(page, "grok");
+  await startTerminal(page, "omp");
   await expect(page.getByTestId("terminal")).toBeVisible();
   await expect(page.locator(".xterm-rows")).toContainText("(mock)");
   await expect.poll(async () => (await saved(page))?.sessions?.[0]?.running).toBe(true);
   await page.evaluate(() => sessionStorage.setItem("__kept", "1"));
   await page.reload();
-  await expect(page.getByTestId("session-agent")).toHaveText("Grok");
+  await expect(page.getByTestId("session-agent")).toHaveText("oh-my-pi");
   await expect(page.getByTestId("session-paused")).toBeVisible();
   await expect(page.getByTestId("terminal")).toHaveCount(0);
   expect((await sessionCalls(page)).filter((c) => c.op === "start")).toEqual([]);
   await page.getByTestId("session-resume").click();
   await expect(page.locator(".xterm-rows")).toContainText("(mock)");
-  expect((await sessionCalls(page)).filter((c) => c.op === "start")).toEqual([expect.objectContaining({ agent: "grok", cwd: "/home/you/code/g" })]);
+  expect((await sessionCalls(page)).filter((c) => c.op === "start")).toEqual([expect.objectContaining({ agent: "omp", cwd: "/home/you/code/g" })]);
 });
 
 // chat-mode CLI sessions replaced by bot threads (2026-11-16: terminals kept)

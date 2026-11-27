@@ -4,6 +4,16 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: Antigravity, Gemini CLI, Qwen Code, Grok, Copilot CLI and pi terminals come back by themselves after a
+  restart, and the restored scrollback can be selected.** Only Claude Code, Codex and oh-my-hermes terminals continued
+  their conversation after an update or a quit; an Antigravity terminal came back paused, and Resume started a fresh
+  Antigravity under the old scrollback. A TERMINALS Antigravity session now learns its conversation from Antigravity's
+  own workspace cache (boundary rule 50) and continues it with `agy --conversation <id>`; Gemini CLI, Qwen Code, Grok,
+  Copilot CLI and pi start under an id omher makes (`--session-id`) and continue it with `--resume` or the same
+  `--session-id`. OpenCode, Kimi Code, Cline, oh-my-pi and OmO still come back paused, as their ids cannot be tied to
+  one terminal; the update confirm now counts the terminals that come back by themselves. Text written back above
+  the "restored" divider could not be selected once the new program turned mouse reporting on (Antigravity's TUI
+  does): a drag there now selects it, and below the divider the program still gets the mouse. (`apps/omher/src/sessions/sessions.ts`, `apps/omher/src/sessions/term/engine-restored.ts`)
 - **omher: SSH bots' threads reconnect, a failed thread open retries, and refusals say why.** An SSH bot's thread
   key `fold:<peer>:<name>:<thread>` was split at its first colon, so the bot read as `<peer>`: after a reconnect its
   thread was not held stale, a held message never went out, and Send now / Steer reached the wrong bot. The key is

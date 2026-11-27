@@ -142,7 +142,7 @@ export const ja: Record<Key, string> = {
   "update.thenAuto": "再起動後に続きから再開します。",
   "update.thenManual1": "再起動後は「再開」ボタンで戻せます。",
   "update.thenManual": "再起動後は「再開」ボタンで戻せます。",
-  "update.thenMixed": "Claude Code、Codex、OmO は自動で再開し、その他は「再開」ボタンで戻せます。",
+  "update.thenMixed": "一部は自動で再開し、その他は「再開」ボタンで戻せます。",
   "update.cancel": "キャンセル",
   "update.confirm": "アップデートして再起動",
   "resume.paused": "omher の再起動で一時停止",

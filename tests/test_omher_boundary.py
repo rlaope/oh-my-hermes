@@ -457,10 +457,12 @@ RULES = (
     "When the app starts, the page asks the shell once for this computer's name (`host_name`, read from the system, no"
     " program run), which it uses only to accept OSC 7 folders from this computer in any terminal (below); it is not"
     " kept or sent anywhere.",
-    "a new Claude Code terminal gets `--session-id <id>`, a random UUID omher makes and keeps with the session once its"
-    " CLI started,",
-    "Restart on a TERMINALS Claude Code or Codex session that has ended and has its conversation id continues it the"
-    " same way.",
+    # the agents beyond Claude Code and Codex that a restart continues (rule 11, harness resume)
+    "a new Claude Code, Gemini CLI, Qwen Code, Grok, Copilot CLI or pi terminal gets `--session-id <id>`, a random UUID"
+    " omher makes and keeps with the session once its CLI started,",
+    "Restart on such a session that has ended and has its conversation id continues it the same way.",
+    "OpenCode, Kimi Code, Cline, oh-my-pi and OmO terminals get no id: their CLIs make it and keep it where omher cannot"
+    " tell one terminal's from another's, so they come back paused and start on Resume as a new conversation, as before.",
     "A Claude Code conversation with no file that nobody used (no key was pressed in it and it has no title of its own;"
     " Claude Code writes the file on the first message) is not continued: its terminal starts again with `--session-id`"
     " and the same id, and when Claude Code refuses that id as one it already has (`Session ID <id> is already in use`),"
@@ -477,8 +479,9 @@ RULES = (
     " one also offers Start a new conversation, which forgets the id and starts the agent as a new terminal does.",
     "A continued CLI that ends any other way, one that waited for input (a login) and was left later included, goes on"
     " as the login shell without its id, as a new one does.",
+    # `--session-id` now goes to the six agents of `TERM_GIVES_ID` (rule 11, harness resume)
     "The page sends only the id; the shell (`sessions::terminal_args`) checks it is a UUID, gives `--session-id` to"
-    " Claude Code only, never sends both, and refuses every other agent or shape.",
+    " those six agents only, never sends both, and refuses every other agent or shape.",
     "omher also listens for three escapes a shell or CLI sends by itself, and puts no hook, script or variable into the"
     " shell for them:",
     "None of these is kept beyond the open terminal or sent anywhere, and nothing is run, opened or read from the"
@@ -730,7 +733,7 @@ class DocPins(unittest.TestCase):
         # picker; every other command waits in the steer queue); 49: rule 49 (a run stopped past its time ends its whole
         # process tree on Windows through one fixed `taskkill /T /F /PID`). The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 49, len(rules))
+        self.assertTrue(6 <= len(rules) <= 50, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -2072,14 +2075,54 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         self.assertIn("start_agent(&agent, std::path::Path::new(&cwd), session_id.as_deref(), resume.as_deref(), link.as_deref()", body)
         self.assertNotIn(".spawn(", body)
 
-    def test_terminal_args_are_only_a_checked_claude_or_codex_conversation_id(self) -> None:
-        # rule 11: a new Claude Code terminal gets `--session-id`, a restarted Claude Code / Codex one `--resume` /
-        # `resume`; each id is a UUID, never both, no other agent or shape
+    def test_terminal_args_are_only_a_checked_conversation_id_per_agent(self) -> None:
+        # rule 11: a new Claude Code, Gemini CLI, Qwen Code, Grok, Copilot CLI or pi terminal gets `--session-id`; a
+        # restarted one continues with its own flag (`--resume`, `resume`, `--conversation`, `--session`); each id is a
+        # UUID (one check covers both paths, so no id reads as an option), never both, no other agent or shape. The
+        # two branches were folded into one id check when the agents beyond Claude Code and Codex were added.
         tf = self.prod.split("pub fn terminal_args", 1)[1].split("\n}\n", 1)[0]
-        for needle in ('(Some(s), None) => {', 'if id != "claude" {', 'Ok(vec!["--session-id".into(), s.into()])',
-                       'Ok(vec!["resume".into(), r.into()])', '(Some(_), Some(_)) => Err('):
+        for needle in ('(Some(s), None) => {', 'if !TERM_GIVES_ID.contains(&id) {', '("--session-id", s)',
+                       'terminal_resume_flag(id).ok_or_else(', '(Some(_), Some(_)) => return Err(',
+                       'if !is_uuid(conv) {', 'Ok(vec![flag.into(), conv.into()])'):
             self.assertIn(needle, tf)
-        self.assertEqual(tf.count("is_uuid("), 2)
+        self.assertEqual(tf.count("is_uuid("), 1)
+        self.assertIn('pub const TERM_GIVES_ID: [&str; 6] = ["claude", "gemini", "qwen", "grok", "copilot", "pi"];', self.prod)
+        flags = self.prod.split("fn terminal_resume_flag(", 1)[1].split("\n}\n", 1)[0]
+        for needle in ('"claude" | "gemini" | "qwen" | "grok" => "--resume",', '"codex" => "resume",',
+                       '"agy" => "--conversation",', '"omo" => "--session",', "_ => return None,"):
+            self.assertIn(needle, flags)
+        self.assertEqual(flags.count("=>"), 5)
+
+    def test_an_antigravity_terminal_reads_only_its_folders_id_from_its_own_cache(self) -> None:
+        # rule 50: only when the foreground is Antigravity, one fixed file, no link, capped, written since the session
+        # started, only this folder's entry, only a UUID; the page sends only the session id and the shell never writes it
+        text = _flat(DOC.read_text(encoding="utf-8"))
+        self.assertIn("50. For a TERMINALS Antigravity CLI (`agy`) session that has no conversation id yet, the shell reads, when the page asks (`agy_conversation`, only the session id goes out), one file of Antigravity's own: its workspace cache `<home>/.gemini/antigravity-cli/cache/last_conversations.json`", text)
+        self.assertIn("an Antigravity the person runs in that folder outside omher, active after this one started, can be named instead", text)
+        fg = (SHELL / "fg.rs").read_text(encoding="utf-8").split("#[cfg(test)]\nmod tests", 1)[0]
+        self.assertIn('home.join(".gemini").join("antigravity-cli").join("cache").join("last_conversations.json")', fg)
+        self.assertIn("const AGY_CACHE_MAX: u64 = 256 * 1024;", fg)
+        own = fg.split("pub fn agy_conversation(fg: u32, home: &Path, cwd: &Path, started: std::time::SystemTime)", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn('if Probe::default().agent(fg) != Some("agy") {', own)
+        read = fg.split("pub fn agy_cache_conversation(", 1)[1].split("\n}\n", 1)[0]
+        for needle in ("open_record(&agy_cache_path(home))?", "meta.len() > AGY_CACHE_MAX", ".take(AGY_CACHE_MAX)",
+                       "if meta.modified().ok()? < since {", "agy_workspace_conversation(&text, cwd)"):
+            self.assertIn(needle, read)
+        entry = fg.split("pub fn agy_workspace_conversation(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("crate::sessions::is_uuid(id).then(|| id.to_ascii_lowercase())", entry)
+        for body in (own, read, entry):
+            for banned in ("Command::new", "fs::write", "OpenOptions", "remove_file", "read_dir"):
+                self.assertNotIn(banned, body, banned)
+        sig = re.search(r"async fn agy_conversation\((.*?)\) -> ", self.lib, re.S)
+        self.assertIsNotNone(sig)
+        self.assertEqual(sig.group(1).strip(), "shell: State<'_, Shell>, id: u32")
+        self.assertIn("Ok(sessions.agy_conversation(id, &user_home()?).filter(|c| sessions::is_uuid(c)))", self.lib)
+        # the page asks only for its own Antigravity row, and not while another runs in the same folder
+        ui = (UI_SRC / "sessions" / "sessions.ts").read_text(encoding="utf-8")
+        conv = (UI_SRC / "sessions" / "termConv.ts").read_text(encoding="utf-8")
+        self.assertIn('export const ONE_PER_FOLDER: readonly AgentId[] = ["agy"];', conv)
+        self.assertIn('export const GIVES_ID: readonly AgentId[] = ["claude", "gemini", "qwen", "grok", "copilot", "pi"];', conv)
+        self.assertIn("const got = shared ? null : await askOf(agent)!.call(host, pty).catch(() => null);", ui)
 
     def test_only_an_omh_terminal_and_a_shell_row_get_their_checked_link_as_one_variable(self) -> None:
         # rule 11: an oh-my-hermes terminal and a TERMINALS Shell row are told their row's link id (OMHER_TERMINAL_LINK)

@@ -142,7 +142,7 @@ export const ko: Record<Key, string> = {
   "update.thenAuto": "다시 시작한 뒤 이어서 실행돼요.",
   "update.thenManual1": "다시 시작한 뒤 이어하기 버튼으로 이어 갈 수 있어요.",
   "update.thenManual": "다시 시작한 뒤 이어하기 버튼으로 이어 갈 수 있어요.",
-  "update.thenMixed": "Claude Code, Codex, OmO는 이어서 실행되고, 나머지는 다시 시작한 뒤 이어하기 버튼으로 이어 갈 수 있어요.",
+  "update.thenMixed": "일부는 이어서 실행되고, 나머지는 다시 시작한 뒤 이어하기 버튼으로 이어 갈 수 있어요.",
   "update.cancel": "취소",
   "update.confirm": "업데이트하고 다시 시작",
   "resume.paused": "omher가 다시 시작되면서 멈춤",
