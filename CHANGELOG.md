@@ -4,6 +4,76 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: SSH bots' threads reconnect, a failed thread open retries, and refusals say why.** An SSH bot's thread
+  key `fold:<peer>:<name>:<thread>` was split at its first colon, so the bot read as `<peer>`: after a reconnect its
+  thread was not held stale, a held message never went out, and Send now / Steer reached the wrong bot. The key is
+  now read against the known bot names. A thread whose automatic open failed (the 48-open cap, a gateway timeout)
+  read unreachable until the next reconnect; a click opens it again. Two re-reads of a bot's threads at once (a
+  resync and a restart) no longer send two `thread.open` for one thread. A refused `./thread` typed inside a thread
+  now keeps the typed text, as in the main chat. New bot names a reserved name or `omh-tui` instead of the name rule,
+  boundary rule 41 defers to rule 49 for the Windows stop, a task's thread starts through the same create as `+`,
+  and a skipped resume spec is gone. (`apps/omher/src/state/store.ts`)
+- **Slash commands typed while a turn runs follow Claude Code, in the OMH TUI and in omher's bot chats.** Measured
+  on Claude Code 2.1.332: `/usage` (`/cost`) and `/status` now answer at once beside the running turn, and `/model`
+  opens its picker (or switches to the model it names) at once; a pick made mid-turn is Hermes' deferred switch, so
+  the running turn ends on its model and the next one uses the new one. `/context`, `/compress`, `/export`, `/new`,
+  `/resume`, a skill and every other command still wait for the turn. A queued command was stuck behind the turn
+  with no way to hurry it: its send-now key (TUI `ctrl+enter`, omher's ↵) now stops the turn once and runs the
+  command first, ahead of the rest of the queue, as Claude Code's `ctrl+x ctrl+s` does; in omher the ↵ of a queued
+  command no longer steers it into the answer as plain text. omher shows the mid-turn command's answer under its
+  command's line, never as the turn's reply, with the typing dots going on below it; the bridge runs it through
+  Hermes' own `slash.exec` (`chat.command`, `/usage` and `/status` only; omher boundary rule 48).
+  (`src/tui/app.py`, `src/tui/slash.py`, `apps/omher/src/state/store.ts`, `apps/omher/bridge/omher_bridge.py`)
+
+- **omher: after a reconnect or a restart, bots and threads show what Hermes is really doing.** When the link to the
+  bridge dropped (sleep/wake, a bridge restart), an approval Hermes still waited on read "Not answered" for good: the
+  outage ended the turn here, and the bridge's replay of the same ask was dropped as a duplicate. A replayed ask in a
+  turn Hermes says still runs now comes back answerable, in Needs you. A thread that finished during the outage now
+  reads done instead of a red "Connection to Hermes lost" when its re-read shows the answer, and a thread's held
+  message waits for that thread's re-read (it went out before `thread.list` and failed "no such folder chat"). After
+  omher itself starts again, a thread Hermes runs or that waits on an approval was shown idle until clicked:
+  `thread.list` now reads such a thread's live status from Hermes' `session.active_list`, and the app opens those
+  threads at once so their rows run and their asks reach Needs you. (`apps/omher/src/state/store.ts`,
+  `apps/omher/bridge/omher_bridge.py`)
+- **omher on Windows: stopping a long Hermes run stops all of it.** A `hermes profile create` past its 330 s limit, or a
+  `hermes mcp install`/`login` or `omh` read past its time, was stopped by killing only `cmd.exe` (Hermes starts through
+  `hermes.cmd`), so Hermes kept running. The bridge now ends the whole process tree with one fixed
+  `taskkill /T /F /PID <pid>` (boundary rule 49) and then the child; macOS and Linux still stop the run's process
+  group. The bot-draft Add test and two terminal resume specs run again against the current UI, and the README says the
+  bridge tests need websockets, pyyaml and ruamel.yaml. (`apps/omher/bridge/omher_bridge.py`)
+- **omher SSH bots: only the actions that work are offered, and removing a computer leaves a bot open.** The row
+  menu offered Restart (and an offline chat offered Start) for a bot on another computer, which the bridge always
+  refuses; they are no longer shown for it. Removing the computer whose bot was open left the "Pick a bot" pane:
+  the first listed bot opens now (a chat moves to it, Settings stays). Cancelling the Connect over SSH card while
+  Check was still running left its ssh tunnel up until the next check; it ends when the check answers.
+  `apps/omher/src/state/store.ts`, `apps/omher/src/peers/AttachCard.tsx`.
+- **omher threads: what you do in an open thread acts on that thread.** Esc with a thread open interrupted the
+  bot's main chat (and did nothing when only the thread ran); it now stops the open thread's turn and leaves the main
+  chat alone. Thread rows sit inside their bot's sidebar row, so a slow press on a thread or its × lifted the bot for
+  a drag, and ⌥↑/⌥↓ on a focused thread reordered the bots; presses and keys inside the thread list no longer start
+  either. The open thread counted as off screen: its answers still rang and notified, while the main chat's answers
+  drew no unread, sound or notification. A thread's or folder chat's unread (`fold:` keys, summed into the Dock
+  count) was never cleared, so the Dock count only went up; it now clears when that chat is opened or removed.
+  (`apps/omher/src/state/store.ts`, `apps/omher/src/app/shortcuts.ts`, `apps/omher/src/sidebar/useRowDrag.ts`)
+- **omher: starting a thread makes one thread, or says why not.** A double press on a bot's hover + made two
+  "Untitled" threads (a fresh key per press), and a refused `thread.create` (a gateway error, the 48-open-thread cap),
+  a refused Task / Hand to bot start or a failed thread Stop showed nothing: the error only reached cards and the
+  model picker. A second press now reuses the create in flight, each failure puts a line where the person acted, and
+  `./thread <task>` gives the typed task back when the create is refused. `apps/omher/src/state/store.ts`.
+- **omher bot management: Remove from list, rename and the row menu behave, with the keyboard too.** Remove from
+  list on the open bot switched the view to the chat and threw the person out of Settings or Automations; the chat
+  behind now follows the next bot and the view stays. A renamed bot's threads kept the old name in Needs you and in
+  system notifications (their route label was fixed when the list loaded); renaming rebuilds them. The rename
+  editor's Cancel left a failed save's error for the next pencil press. Closing a bot row's menu (Escape or a pick)
+  dropped the keyboard to the page; it returns to the row's ⋯. The ContextMenu key (or Shift+F10) opened the menu at
+  the window's top-left; it opens under the row. The handover card opened from a Worktrees row gave no way back, so
+  focus was lost on close; it returns to that row. Main files: `apps/omher/src/state/store.ts`,
+  `apps/omher/src/sidebar/BotRow.tsx`.
+- **omher bots page: platform status and bot templates read the live omh.** Dock-launched omher (short PATH), and
+  Windows (where `which` finds `omh.cmd` and it is rejected), fell back to `<data>/omh/venv`, the pre-generation env
+  an update leaves behind (omh 2.0.0 here), so `platforms` and `bot-templates` failed with "invalid choice".
+  `omh_path` now tries `<data>/omh/current/venv/{bin,Scripts}/omh[.exe]` (and `~/.local/bin/omh` on macOS and Linux)
+  before the old venv, with `%LOCALAPPDATA%` first on Windows. `apps/omher/bridge/omher_bridge.py`.
 - **omher: the New bot card, the answered-interview line and `HTTPS://` links read and work in every language.** The
   bridge sent English sentences ("unconfirmed", "Hermes is not on this computer.", the `busy` and `exists`
   refusals, which also covers a leftover `profiles/<name>/` without config.yaml) and the card showed them in ko/zh/ja,
@@ -53,6 +123,14 @@ All notable changes will be documented here.
   - **Model picker:** models read by name ("Opus 5.5"), the current one is found and scrolled to, and the maker chips
     stay on one row (#3231).
   - **Sidebar:** drag its right edge to make it wider or narrower; the width is kept (#3235).
+
+- **A small dag-ulw job can run fast: the parent settles its verify node itself, and several nodes settle in one call.**
+  `omh_dag define fast=true` accepts a graph of at most 3 build nodes and 6 nodes in all, with one verify node that
+  runs no full suite and names no identity, not `local`, and no baseline or `owner` node; the verify node is handed out
+  under `for_parent` on the parent lane and never reaches a `delegate_task` call. An ineligible graph is defined as a
+  normal run with `fast_ineligible:<reasons>` in its lint, and a non-fast graph that qualifies gets `fast_eligible`.
+  `settle settles=[...]` closes accepted, failed or blocked nodes together, all-or-nothing: an item refused writes nothing.
+  (`src/plugin_bundle/omh/dag_run.py`, `src/plugin_bundle/omh/tools/dag_tool.py`, `src/skills/dag_ulw_skill.py`)
 
 ## 5.0.1 - 2026-11-26
 

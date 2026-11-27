@@ -99,8 +99,9 @@ export interface RowMenu {
   pinned: boolean;
   onPin: () => void;
   onEdit: () => void;
-  /** Restart that bot (Start when it is offline), through Hermes' own command; restart.ts holds what follows. */
-  onRestart: () => void;
+  /** Restart that bot (Start when it is offline), through Hermes' own command; restart.ts holds what follows.
+   *  Absent for a bot on another computer: the bridge refuses bots.restart for it (rule 31), so no item. */
+  onRestart?: () => void;
   /** The bot is offline: the row reads "Start". */
   offline?: boolean;
   /** Take the bot out of the sidebar list (the profile stays; it is offered under + again). Absent for the last
@@ -111,27 +112,27 @@ export interface RowMenu {
 /** Right-click or ⋯ menu of a bot row: New thread · <name> first, in a group of its own (its icon, a divider under
  *  it: it is work with the bot, not managing the bot; owner, 2026-11-18), then Pin to top, Edit bot, Restart (Start
  *  when offline), Remove from list. Nothing that would create, stop or delete a Hermes profile, and no "restart all". */
-function Menu({ menu, onClose, name, bot, at }: { menu: RowMenu; onClose: () => void; name: string; bot: string; at: { x: number; y: number } }) {
+function Menu({ menu, onClose, name, bot, at }: { menu: RowMenu; onClose: (restoreFocus?: boolean) => void; name: string; bot: string; at: { x: number; y: number } }) {
   const ref = useRef<HTMLDivElement>(null);
   // Restart restarts the gateway process that serves this bot: say who else goes down with it, before the press
   const mates = useMates(bot);
   useEffect(() => {
     ref.current?.querySelector<HTMLButtonElement>("button")?.focus();
     const onDown = (e: globalThis.MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose(false);
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
   }, [onClose]);
   const run = (fn: () => void) => () => {
-    onClose();
+    onClose(true);
     fn();
   };
   const items: [string, (() => void) | undefined][] = [
     ...(menu.onNewThread ? ([[t("thread.new", { name }), menu.onNewThread]] as [string, () => void][]) : []),
     [menu.pinned ? t("row.unpin") : t("row.pin"), menu.onPin],
     [t("row.edit"), menu.onEdit],
-    [menu.offline ? t("row.start") : t("row.restart"), menu.onRestart],
+    ...(menu.onRestart ? ([[menu.offline ? t("row.start") : t("row.restart"), menu.onRestart]] as [string, () => void][]) : []),
     [t("row.remove"), menu.onRemove],
   ];
   return (
@@ -145,7 +146,7 @@ function Menu({ menu, onClose, name, bot, at }: { menu: RowMenu; onClose: () => 
       onKeyDown={(e) => {
         if (e.key === "Escape") {
           e.preventDefault();
-          onClose();
+          onClose(true);
           return;
         }
         if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
@@ -156,8 +157,9 @@ function Menu({ menu, onClose, name, bot, at }: { menu: RowMenu; onClose: () => 
       }}
     >
       {items.map(([label, fn], at) => {
-        // the fixed items keep their places (Restart is 2, Remove 3) after the New thread line
-        const i = at - (menu.onNewThread ? 1 : 0);
+        // the fixed items keep their places (Restart is 2, Remove 3; 2 when there is no Restart) after the New thread line
+        const i0 = at - (menu.onNewThread ? 1 : 0);
+        const i = !menu.onRestart && i0 === 2 ? 3 : i0;
         return i === -1 && fn ? (
           <div key={label} role="none" className="row-mg">
             <button type="button" role="menuitem" className="row-mi row-mi-new" onClick={run(fn)} data-testid="row-new-thread">
@@ -232,6 +234,7 @@ export function BotRow({
   const [at, setAt] = useState<{ x: number; y: number } | null>(null);
   const open = at !== null;
   const wrap = useRef<HTMLDivElement>(null);
+  const more = useRef<HTMLButtonElement>(null);
   const place = (x: number, y: number) => {
     const side = wrap.current?.closest(".side")?.getBoundingClientRect();
     const right = (side?.right ?? window.innerWidth) - 6;
@@ -251,7 +254,10 @@ export function BotRow({
   const onContext = (e: MouseEvent) => {
     if (!menu) return;
     e.preventDefault();
-    place(e.clientX, e.clientY);
+    // the ContextMenu key or Shift+F10 reports no pointer (0, 0): the menu opens under the row, as ⋯ does
+    if (e.clientX || e.clientY) return place(e.clientX, e.clientY);
+    const row = wrap.current?.getBoundingClientRect();
+    if (row) place(row.right - MENU_W, row.bottom + 2);
   };
   return (
     <div
@@ -341,6 +347,7 @@ export function BotRow({
       {menu && (
         <button
           type="button"
+          ref={more}
           className="bot-more"
           aria-label={t("row.more", { name: bot.display_name })}
           aria-haspopup="menu"
@@ -360,7 +367,19 @@ export function BotRow({
           </svg>
         </button>
       )}
-      {menu && at && <Menu menu={menu} at={at} name={bot.display_name} bot={bot.name} onClose={() => setAt(null)} />}
+      {menu && at && (
+        <Menu
+          menu={menu}
+          at={at}
+          name={bot.display_name}
+          bot={bot.name}
+          onClose={(restoreFocus) => {
+            setAt(null);
+            // the menu's focused item goes with it: the keyboard returns to ⋯ (or the row) instead of the page
+            if (restoreFocus) (more.current ?? wrap.current?.querySelector<HTMLElement>("button.bot"))?.focus();
+          }}
+        />
+      )}
       <RestartLine bot={bot} testId={`restart-line-${bot.name}`} pop />
       {children}
     </div>

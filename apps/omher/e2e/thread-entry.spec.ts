@@ -128,6 +128,22 @@ test("inside a thread, ./thread opens a sibling thread under the same bot", asyn
   await expect(page.getByTestId("threads-kami").locator("[data-thread]")).toHaveCount(2);
 });
 
+test("inside a thread, a refused ./thread <task> keeps the typed task", async ({ page }) => {
+  await setup(page);
+  await page.getByTestId("bot-kami").click({ button: "right" });
+  await page.getByTestId("row-new-thread").click();
+  await created(page);
+  await mock("mock.threadCreate", { line: "Too many threads are open (48)" });
+  const box = page.getByTestId("thread-chat").getByTestId("composer");
+  await box.click();
+  await page.keyboard.type("./thread 다음 일");
+  await page.keyboard.press("Enter");
+  await expect.poll(async () => (await calls("thread.create")).length).toBe(2);
+  await expect(page.getByText("Too many threads are open (48)")).toBeVisible();
+  await expect(box).toHaveValue("./thread 다음 일");
+  expect(await calls("chat.send")).toEqual([]);
+});
+
 test("no New thread line under a bot: the tree holds only its threads; the row's + is the way in", async ({ page }) => {
   await setup(page);
   // demo (2026-11-19): a "+ New thread" line always under the bot is too much. Kami is open with no threads: nothing
@@ -232,4 +248,33 @@ test("shots: sidebar with threads (no New thread line), the ./th picker, the row
     await page.screenshot({ path: join(SHOTS, `thread-entry-menu-${theme}.png`), animations: "disabled", caret: "initial" });
     await page.keyboard.press("Escape");
   }
+});
+
+test("a double press on a bot's hover + makes one thread", async ({ page }) => {
+  await setup(page);
+  await mock("mock.threadCreate", { delay_ms: 400 }); // the create is still out at the second press
+  await page.getByTestId("bot-row-kami").hover();
+  await page.getByTestId("bot-new-kami").dblclick();
+  await created(page);
+  await page.waitForTimeout(700);
+  expect(await calls("thread.create")).toHaveLength(1);
+  await expect(page.getByTestId("threads-kami").locator("[data-thread]")).toHaveCount(1);
+});
+
+test("a refused thread.create says so and ./thread <task> keeps the typed task", async ({ page }) => {
+  await setup(page);
+  await mock("mock.threadCreate", { line: "Too many threads are open (48)" });
+  const box = page.getByTestId("composer");
+  await box.click();
+  await page.keyboard.type("./thread 이 일을 해줘");
+  await page.keyboard.press("Enter");
+  await expect.poll(async () => (await calls("thread.create")).length).toBe(1);
+  await expect(page.getByText("Too many threads are open (48)")).toBeVisible();
+  await expect(box).toHaveValue("./thread 이 일을 해줘");
+  expect(await calls("chat.send")).toEqual([]);
+  // the + on the row: the line shows too
+  await page.getByTestId("bot-row-kami").hover();
+  await page.getByTestId("bot-new-kami").click();
+  await expect.poll(async () => (await calls("thread.create")).length).toBe(2);
+  await expect(page.getByText("Too many threads are open (48)")).toHaveCount(2);
 });

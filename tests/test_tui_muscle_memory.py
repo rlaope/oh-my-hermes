@@ -302,21 +302,42 @@ class ModelCommandTests(unittest.TestCase):
         self.assertNotIn("unsupported", said.lower())
         self.assertIn("hermes model", said)
 
-    def test_bare_model_waits_in_the_queue_and_opens_the_picker_once_the_turn_ends(self) -> None:
-        # A pick switches the session, which Hermes does between turns: the whole command waits for the turn's end.
+    def test_bare_model_opens_the_picker_at_once_during_a_turn_and_a_pick_waits_for_the_next_turn(self) -> None:
+        # Claude Code's /model opens its picker mid-turn and the running turn finishes on the old model (2.1.332). A
+        # pick here is Hermes' `config.set model`, which it holds for the next turn while one runs (`deferred`).
         app, client = make_app(busy=True)
         send(app, "/model")
-        self.assertEqual(client.calls, [])
-        self.assertEqual([line.text for line in app.queued], ["/model"])
-        app._on_event(Event("message.complete", SID, {"text": "done"}))
-        self.assertEqual(client.calls[-1], ("model.options", {"session_id": SID}))
         self.assertEqual(app.queued, deque())
+        self.assertEqual(client.calls, [("model.options", {"session_id": SID})])
+        answer(app, client, OPTIONS)
+        self.assertIsNotNone(app.model_picker)
+        for char in "opus-5-5":
+            app._on_input(Key(CHAR, char))
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.calls[-1][0], "config.set")
+        self.assertNotIn("session.interrupt", [method for method, _params in client.calls])
+        answer(app, client, {"key": "model", "value": "claude-opus-5-5", "deferred": True, "scope": "session"})
+        self.assertIn(app_module.MODEL_DEFERRED_NOTICE.format(model="claude-opus-5-5"), notices(app))
+        self.assertTrue(app._busy())  # the running turn goes on
+
+    def test_model_with_a_name_switches_at_once_during_a_turn_and_hermes_own_flags_wait(self) -> None:
+        for typed, at_once in (("/model gpt-5.4", True), ("/model gpt-5.4 --provider openai", True),
+                               ("/model gpt-5.4 --session", True), ("/model --refresh", True),
+                               ("/model gpt-5.4 --global", False), ("/model gpt-5.4 --once", False)):
+            with self.subTest(typed=typed):
+                app, client = make_app(busy=True)
+                send(app, typed)
+                self.assertEqual(not app.queued, at_once)
+                self.assertEqual(bool(client.calls), at_once)
 
     def test_a_queued_guarded_model_holds_the_prompt_behind_it_until_its_confirm_is_settled(self) -> None:
         # #2726 review: the confirm opened after config.set was answered, so the prompt went on the old model.
         now = [100.0]
         app, client = make_app(busy=True, clock=lambda: now[0])
-        send(app, "/model claude-opus-5-5")
+        # A /model the queue runs (one queued before this change, or held by a stop): the prompt behind it waits for
+        # its switch. Typed during a turn, /model runs at once instead (`slash.model_runs_during_turn`).
+        app.queued.append(app_module.QueuedLine("/model claude-opus-5-5",
+                                                command=slash.parse_slash("/model claude-opus-5-5")))
         send(app, "go on with it")
         app._on_event(Event("message.complete", SID, {"text": "done"}))
         self.assertEqual(client.calls[-1][0], "config.set")
@@ -333,9 +354,10 @@ class ModelCommandTests(unittest.TestCase):
         self.assertEqual(client.named("prompt.submit"), [{"session_id": SID, "text": "go on with it", "queued": True}])
 
     def test_a_queued_bare_model_holds_the_prompt_through_its_pick_and_the_confirm_it_asks(self) -> None:
+        # A bare /model queued before this change (or one a stopped turn held) still runs in order from the queue.
         now = [100.0]
         app, client = make_app(busy=True, clock=lambda: now[0])
-        send(app, "/model")
+        app.queued.append(app_module.QueuedLine("/model", command=slash.parse_slash("/model")))
         send(app, "go on with it")
         app._on_event(Event("message.complete", SID, {"text": "done"}))
         answer(app, client, OPTIONS)

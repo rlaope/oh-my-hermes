@@ -12,6 +12,8 @@
 // at start and on every reset), mock.botMade {bot, kind: routine|plugin} (the bot made an automation or installed a
 // plugin from its chat: the bridge's poll would emit routines.update + routine.added, or plugin.added + plugins.update),
 // mock.offline {bot, on} (a bot's gateway down for the Automations / Plugins writes),
+// mock.threadCreate {delay_ms?, line?} (thread.create takes delay_ms to answer and/or is refused with `line`, as the
+// gateway's error or the 48-open-thread cap; no params = back to normal),
 // mock.restart {bot, outcome: "ok"|"refused"|"failed"|"slow", work?, line?} (what Hermes' restart answers next),
 // mock.pluginLoad {load: "live"|"reload"|"restart"|"failed"} (what the next plugin install / reload says),
 // mock.apps {bot, name, state} (one Apps entry's state for a bot), mock.appsNext {verb, line} (the next apps.<verb> run
@@ -46,7 +48,7 @@
 // mock.steerMode {bot, mode: "accept"|"reject"} (what chat.steer answers while a turn runs, in the main chat or with
 // `session` a folder chat / thread; with no turn it is
 // always rejected, as Hermes' session.steer), mock.endTurn {bot, outcome?} (a manual turn ends, as Hermes ends it),
-// mock.steers (every steer the mock took),
+// mock.steers (every steer the mock took), mock.commands (every mid-turn /usage or /status),
 // mock.ready {bot, ok, signIn?} (what `bots.ready` answers for a bot: ok false = Hermes says it cannot answer; with
 // signIn: the strict check for that provider passes, as after `hermes auth add <id>`, and its models show in
 // models.options),
@@ -639,6 +641,7 @@ let bots, history, models, turns, pending, idSeq, queues, avatars, folders, runs
 let automations, plugins, inspected, offlineWrites;
 /** bots.restart: what the next restart answers per bot, which bot refused last (for "Restart anyway"). */
 let restartNext, restartRefused, pluginLoadNext;
+let threadCreateRule = null; // mock.threadCreate: {delay_ms, line}
 const STANDALONE = new Set(["omh-tui"]);
 const gatewayOf = (name) => (STANDALONE.has(name) ? name : "default");
 const gatewayBots = (gw) => Object.values(bots).filter((x) => gatewayOf(x.name) === gw);
@@ -658,6 +661,8 @@ let manual;
 // chat.steer: per bot "accept" (default) or "reject" (mock.steerMode), and every steer taken (mock.steers)
 let steerMode = new Map();
 let steers = [];
+// chat.command: every mid-turn /usage or /status the mock ran (mock.commands)
+let commands = [];
 // #3123: a turn Hermes lost when its gateway was killed (`mock.lostTurn`), chat key (the bot, or its thread's
 // folderTurnKey) -> [{ id, text }], and the messages Hermes keeps queued behind it, chat key -> [{ id, text, ts }].
 // Nothing runs until `chat.discard`.
@@ -945,6 +950,7 @@ function reset() {
   inspected = new Map(); // `<bot>:<catalog name>` -> the sha plugins.inspect handed out
   offlineWrites = new Set();
   restartNext = new Map();
+  threadCreateRule = null;
   for (const h of restartTimers) clearTimeout(h);
   restartTimers.clear();
   restartRefused = new Set();
@@ -955,6 +961,7 @@ function reset() {
   manual = new Set();
   steerMode = new Map();
   steers = [];
+  commands = [];
   lostTurns = new Map();
   lostQueue = new Map();
   noSkills = new Set();
@@ -1418,6 +1425,19 @@ const OPS = {
     return { session: was[0], stored, cwd, model: m.model, provider: m.provider, reasoning: m.reasoning, messages: [], running: false };
   },
   "thread.create": (p) => {
+    const rule = threadCreateRule;
+    if (rule && (rule.delay_ms || rule.line)) {
+      // mock.threadCreate: the create takes a while and/or is refused, as a gateway error or the 48-open-thread cap
+      return new Promise((resolve, reject) =>
+        setTimeout(() => {
+          if (rule.line) return reject(new OpError("thread_limit", rule.line));
+          resolve(OPS["thread.create.now"](p));
+        }, rule.delay_ms || 0),
+      );
+    }
+    return OPS["thread.create.now"](p);
+  },
+  "thread.create.now": (p) => {
     const b = needBot(p);
     // a peer's bot: its thread is a session on that computer's gateway; a folder here is refused, as the bridge does
     if (b.host && p.cwd !== undefined) throw remoteRefusal(b, "folder.open");
@@ -1576,6 +1596,17 @@ const OPS = {
     if (!turns[key] || steerMode.get(b.name) === "reject") return { status: "rejected" };
     steers.push({ bot: b.name, text, ...(p.session !== undefined ? { session: p.session } : {}) });
     return { status: "queued" };
+  },
+  // a /usage or /status typed mid-turn: its answer at once, as a note beside the running turn (rule 48)
+  "chat.command": (p) => {
+    const b = needBot(p);
+    const text = needStr(p, "text");
+    const name = /^\/([\w-]+)(?:\s|$)/.exec(text.trim())?.[1]?.toLowerCase();
+    if (name !== "usage" && name !== "status") throw new OpError("bad_request", "only /usage and /status run during a turn");
+    const key = p.session !== undefined ? (needFolder(p, b), folderTurnKey(b.name, p.session)) : b.name;
+    commands.push({ bot: b.name, text, ...(p.session !== undefined ? { session: p.session } : {}) });
+    setTimeout(() => ev(key, "command.output", { id: `cmd-${commands.length}`, command: text.trim(), text: name === "usage" ? "Session tokens: 1,234 in · 567 out" : "Model: sonnet · gateway: running" }), 30);
+    return {};
   },
   "chat.interrupt": (p) => {
     const b = needBot(p);
@@ -2141,6 +2172,10 @@ const OPS = {
     restartNext.set(p.bot, { outcome: p.outcome, work: p.work, line: p.line });
     return {};
   },
+  "mock.threadCreate": (p) => {
+    threadCreateRule = p.delay_ms || p.line ? { delay_ms: p.delay_ms, line: p.line } : null;
+    return {};
+  },
   "mock.restartDone": (p) => {
     const held = restartNext.get(needStr(p, "bot"));
     if (held?.back) {
@@ -2222,6 +2257,7 @@ const OPS = {
     return {};
   },
   "mock.steers": () => ({ steers: steers.map((x) => ({ ...x })) }),
+  "mock.commands": () => ({ commands: commands.map((x) => ({ ...x })) }),
   "mock.ready": (p) => {
     const b = needBotAny(p);
     if (p.ok) notReady.delete(b.name);

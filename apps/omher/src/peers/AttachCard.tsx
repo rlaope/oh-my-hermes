@@ -76,6 +76,7 @@ export function AttachCard({ seed, onClose, onDone }: { seed: AttachSeed; onClos
   const [err, setErr] = useState("");
   const box = useRef<HTMLDivElement>(null);
   const checkId = useRef<string | null>(null);
+  const gone = useRef(false);
 
   useEffect(() => {
     void getPeersHost()
@@ -88,12 +89,14 @@ export function AttachCard({ seed, onClose, onDone }: { seed: AttachSeed; onClos
   }, [seed.host]);
 
   // a Check tunnel the card opened ends when the card closes without Connect
-  useEffect(
-    () => () => {
+  // (a Check still running at that moment ends its own tunnel when it resolves: see check())
+  useEffect(() => {
+    gone.current = false;
+    return () => {
+      gone.current = true;
       if (checkId.current) void getPeersHost().checkClose(checkId.current).catch(() => undefined);
-    },
-    [],
-  );
+    };
+  }, []);
 
   const close = useRef(onClose);
   close.current = onClose;
@@ -134,6 +137,11 @@ export function AttachCard({ seed, onClose, onDone }: { seed: AttachSeed; onClos
     try {
       if (checkId.current) await getPeersHost().checkClose(checkId.current).catch(() => undefined);
       const c = await getPeersHost().check(h, seed.port);
+      if (gone.current) {
+        // the card closed while the check ran: nobody will Connect, so the tunnel it just opened ends now
+        void getPeersHost().checkClose(c.check).catch(() => undefined);
+        return;
+      }
       checkId.current = c.check;
       const p = await probe(c.url, shownLabel);
       setStep({ at: "found", check: c, probe: p });

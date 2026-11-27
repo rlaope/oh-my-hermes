@@ -32,6 +32,7 @@ export const REMOTE_OPS: Record<PageOp, OpRule> = {
   "chat.interrupt": ok("bot and session ids"),
   "chat.discard": ok("bot and session ids"),
   "chat.steer": ok("text the person typed"),
+  "chat.command": ok("a /usage or /status the person typed"),
   "approval.respond": ok("a card's request id and the person's choice"),
   "clarify.respond": ok("the person's answers"),
   "folder.open": { send: "never", key: FOLDER, why: "cwd is a folder of this computer" },

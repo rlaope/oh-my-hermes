@@ -1889,16 +1889,22 @@ before Hermes answered stays, with the prompt's row under it.
 Typed during a turn, a command waits in the queue (`⧗`, as a prompt Enter cannot steer does, whatever Hermes'
 `display.busy_input_mode` says) and runs when the turn ends, in the order you sent it: a prompt queued after a
 `/compress` goes once Hermes has answered the `/compress`, and the lines queued after a `/new` or a
-`/sessions <id>` go into the session it opens. A command that opens a picker or a question (bare `/model`, a
-guarded model's confirm) holds the queue until you answer it. Up takes a queued command back on its own, its paste
-chips as you typed them, and the send-now key
-never sends one into the turn. Only these run at once during a turn: `/stop` and `/steer`, which are for the
-running turn, `/queue`, `/btw` and `/bg`, which Hermes runs beside it, the commands about this terminal (`/help`,
-`/keys`, `/whats-new`, `/redraw`, `/history`, `/todos`, `/details`, `/logs`, `/dag`, `/bots`, `/copy`, `/theme`,
-`/wallpaper`, `/image`, `/paste`), `/gateway restart`, which asks first and lets running turns finish, `/quit`,
-`/yolo`, `/effort <level>` and `/reasoning <level>`, the typed forms of Shift+Tab and Ctrl+T, which set the session
-and leave the turn as it is, and the ones that only say where they run. Bare `/reasoning`, or with anything but a
-level, is Hermes' own and waits. Interrupting is Esc or
+`/sessions <id>` go into the session it opens. A command that opens a question (a guarded model's confirm) holds
+the queue until you answer it. Up takes a queued command back on its own, its paste chips as you typed them. The
+send-now key on a queued command stops the turn and runs the command the moment it ends, ahead of the rest of the
+queue, which then goes on behind it, as Claude Code's `ctrl+x ctrl+s` runs a queued `/context`; Esc or `/stop`
+before the turn ends takes that back, and the queue is held as after any stop. Which commands run at once follows
+Claude Code (measured on 2.1.332): `/usage` (`/cost`) and `/status` print beside the running turn, and `/model`
+opens its picker at once (bare or with `--refresh`) or switches to the model it names, which Hermes holds for the
+next turn while one runs, so the running turn ends on the model it started with; `/model` with any other flag
+(`--global`, `--once`) is Hermes' own form and waits. `/context`, `/compress` (`/compact`), `/export`, `/new`
+(`/clear`), `/resume`, a skill and every other Hermes command wait, as they do in Claude Code. Also at once:
+`/stop` and `/steer`, which are for the running turn, `/queue`, `/btw` and `/bg`, which Hermes runs beside it, the
+commands about this terminal (`/help`, `/keys`, `/whats-new`, `/redraw`, `/history`, `/todos`, `/details`,
+`/logs`, `/dag`, `/bots`, `/copy`, `/theme`, `/wallpaper`, `/image`, `/paste`), `/gateway restart`, which asks
+first and lets running turns finish, `/quit`, `/yolo`, `/effort <level>` and `/reasoning <level>`, the typed forms
+of Shift+Tab and Ctrl+T, which set the session and leave the turn as it is, and the ones that only say where they
+run. Bare `/reasoning`, or with anything but a level, is Hermes' own and waits. Interrupting is Esc or
 `/stop`, never Enter. The echo and output of a command run during a turn wait under what is running and are
 written after it, as a steer is, so a command never cuts off a running tool call or splits a reply; one Hermes has not finished
 answering when the turn ends is written above that turn's done line with what it printed so far, and

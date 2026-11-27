@@ -140,6 +140,9 @@ DEFINITION = SkillDefinition(
         "depends_on, write_scope and role (`build` by default; `baseline`, `verify`, `review`); "
         "fix every refusal and read the lint before going on. Never `delegate_task` "
         "before `define` returns its calls. The saved goal reaches every native task; local VERIFY does not replace goal acceptance.",
+        "Small job (at most 3 build and 6 nodes in all, one verify node with no full suite, identity or `local`, no baseline or `owner` node): "
+        "define with `fast=true`; the parent runs the verify node's check itself and settles it, saving a child and a turn. Guards stay; "
+        "full-suite or multi-lane work uses a normal run. Several nodes back in one turn: batch `settles`.",
         f"Keep the plan todo as the run's layers in ONE tool: `{NATIVE_TODO_TOOL}` when "
         f"{native_tool_presence_clause(NATIVE_TODO_TOOL, code=True)} (OMH mirrors it), else `omh_todo`; an accepted plan stays in `omh_todo`. One item per "
         "layer, named for what it delivers, never a list of its nodes (the panel draws those); advance it as each "
@@ -319,6 +322,40 @@ stronger model. Settle it `outcome=escalated reason=<that question>` and dispatc
 comes back one category up (quick, unspecified-low, unspecified-high, ultrabrain), at most twice, briefed with
 the question. Never answer the question yourself and accept. A node pinned to an `identity` keeps
 that identity's model chain, so it cannot escalate; pick another identity for it instead.
+
+## Fast path
+
+`define` with `fast=true` runs a small graph with the verify node done by the parent. The engine checks once, at
+define, that the graph has at most 3 build nodes and 6 nodes in all, exactly one verify node (`role=verify`) whose
+prompt names no full suite, with no `identity` and not `local`, no `role=baseline` node, and no node with `owner`.
+An ineligible graph is still defined as a normal run; the reply says why (`fast_ineligible:<reasons>` in lint:
+`too_many_build_nodes`, `too_many_nodes`, `verify_nodes`, `verify_full_suite`, `verify_identity`, `verify_local`,
+`baseline_node`, `owner_node`). Without `fast`, a graph that would qualify gets the advisory lint `fast_eligible`.
+
+In a fast run the verify node never goes to `delegate_task`. `ready` and `settle` return it under `for_parent`, on
+the parent lane, with the criteria token when the run has criteria. Run its VERIFY commands yourself, write the
+handoff at the path the `say` gives, then settle it like any node. With criteria, write one line per criterion:
+
+    CRITERION <id> #<token>: met | unmet | unobserved - <the command it ran and what it showed>
+
+The acceptance rules are unchanged: the verify node is accepted only with its handoff read and every criterion met.
+A verify node with `read_only` or a `write_scope` keeps that guard on the parent lane: while its attempt is out,
+writes to the workspace are held to it, and only its handoff (inside the run's runtime dir) is free. One parent
+check is out at a time per conversation: while one is open, another ready one (a second fast run, or two verify
+nodes in one extend) is listed in `held_for_parent`; settle the open one, then call `ready`. Worktree isolation
+turned on after define holds the child calls only; the parent check is still handed out. Repair and
+extend keep a fast run's verify work with the parent, so they refuse a verify node that names an `identity` or is
+`local` (`fast_verify_identity`, `fast_verify_local`): this session applies neither, and the work needs a new run
+without `fast` or those fields removed. A fast run drops the `no_review_node`, `no_judgement_node` and (at define)
+`no_goal_criteria` lint.
+
+Batch settle: `action=settle settles=[{node, outcome, reason?, provider_error?}, ...]` closes several nodes in one
+call. Outcomes are `accepted`, `failed` or `blocked` only; `parked` and `escalated` stay single-node settles. The
+batch is all-or-nothing: every item is checked first, and if one is refused nothing is settled and the `say` names
+it. A batch that closes while the next wave cannot be scheduled (a selected identity is gone, a one-shot child
+budget is spent) still answers `ok`: `settled` names what closed, and `next_refused` holds `reason` and `say`.
+Those settlements are on disk, so do not settle them again. `node` or `outcome` with `settles` in the same call is
+refused as `invalid_settles`.
 
 ## Goal criteria
 

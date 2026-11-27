@@ -10,7 +10,7 @@ import { AgentConfirmCard } from "../../settings/agents/AgentsPage";
 import { getHost } from "../../sessions/host";
 import { getSessions } from "../../sessions/sessions";
 import { whyText, type CustomPreview } from "../../sessions/custom";
-import { getStore } from "../../state/store";
+import { botNames, getStore } from "../../state/store";
 import { t } from "../../i18n";
 import { draftBot, draftsAllowed, parseDrafts, type DraftBlock } from "./agentDraft";
 
@@ -41,8 +41,9 @@ function AgentChip({ chatKey, block }: { chatKey: string; block: DraftBlock }) {
     setBusy(true);
     try {
       const p = await getHost().customBotPreview(d.name, d.program, d.args, d.install);
-      const bot = draftBot(chatKey);
-      setCard({ ...p, by: getStore().getState().bots.find((b) => b.name === bot)?.display_name || bot });
+      const st = getStore().getState();
+      const bot = draftBot(chatKey, botNames(st));
+      setCard({ ...p, by: st.bots.find((b) => b.name === bot)?.display_name || bot });
       setErr("");
     } catch (e) {
       setErr(whyText(e));

@@ -487,7 +487,12 @@ SKILL_INDEX_LINE_CHAR_LIMIT = 99
 # pattern plus the description "Coding owner: built-in or configured id." (the export owner
 # takes the same pattern). Measured by per_turn_context.plugin_tool_schema_chars_by_tool()
 # against the schema before this change. No headroom.
-PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 64019
+# 64019 -> 64613: the dag-ulw fast path (+594 in all). omh_dag define takes the opt-in `fast` flag (+215: one
+# optional boolean with its description, and the sentence naming it) and settle takes the batched `settles`
+# (+379: one array of {node, outcome, reason?, provider_error?} with its description, and its sentence), so a
+# small run's verify node is the parent's own turn and several nodes close in one call. Measured by
+# per_turn_context.plugin_tool_schema_chars_by_tool() against the schema before this change. No headroom.
+PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 64613
 # PRE_LLM_CALL_CONTEXT_CHAR_LIMIT, PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT: moved with
 # their history to src/plugin_bundle/omh/turn_budget.py; imported at the top of this file.
 # 340000 -> 349637: three capability-skill sections were added by the domain

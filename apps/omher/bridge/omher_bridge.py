@@ -32,6 +32,7 @@ import hmac
 import inspect
 import json
 import logging
+import ntpath
 import os
 import re
 import signal
@@ -79,6 +80,10 @@ READY_RETRY = (0.5, 1.0, None)
 RUNNING_STATUSES = frozenset({"working", "streaming", "waiting", "starting"})
 # `/goal …` as the person typed it: sent through Hermes' `slash.exec` (Bridge._goal_command), never as a prompt
 GOAL_COMMAND = re.compile(r"/goal(?:\s|$)", re.IGNORECASE)
+# The read commands `chat.command` runs at once during a turn, through the same `slash.exec` (Claude Code runs its
+# `/cost` and `/status` mid-turn); every other command waits for the turn in the app's queue.
+COMMAND_NAME = re.compile(r"/([\w-]+)(?:\s|$)")
+RUN_NOW_COMMANDS = frozenset({"usage", "status"})
 MAX_ELSEWHERE = 20
 MAX_OPEN_MESSAGES = 200
 PEEK_CHARS = 400
@@ -1158,12 +1163,16 @@ def omh_path(which=None, environ=None, windows: bool | None = None) -> str | Non
         return found
     home = Path.home()
     data = Path(environ["XDG_DATA_HOME"]) if os.path.isabs(environ.get("XDG_DATA_HOME") or "") else home / ".local" / "share"
+    # `<data>/omh/current/venv` is the live generation; `<data>/omh/venv` is the pre-generation env, kept only as a
+    # fallback (an older omh, without the reads this page needs), so it is tried last
     if windows:
         local = environ.get("LOCALAPPDATA") or ""
-        found_in = [Path(local, "omh", "venv", "Scripts", "omh.exe")] if local else []
-        found_in.append(data / "omh" / "venv" / "Scripts" / "omh.exe")
+        roots = ([Path(local, "omh")] if local else []) + [data / "omh"]
+        found_in = [root / "current" / "venv" / "Scripts" / "omh.exe" for root in roots]
+        found_in += [root / "venv" / "Scripts" / "omh.exe" for root in roots]
     else:
-        found_in = [data / "omh" / "venv" / "bin" / "omh", home / ".local" / "bin" / "omh"]
+        found_in = [data / "omh" / "current" / "venv" / "bin" / "omh", home / ".local" / "bin" / "omh",
+                    data / "omh" / "venv" / "bin" / "omh"]
     for path in found_in:
         if path.is_file() and os.access(path, os.X_OK):
             return str(path)
@@ -3165,11 +3174,31 @@ MCP_OUTPUT_MAX = 256 * 1024     # bytes of a run's output read back
 MCP_STOP_WAIT = 5.0             # seconds to wait for a stopped run to end
 
 
-def _stop_run(proc) -> None:
+def _windows_taskkill() -> str:
+    """Windows' own taskkill.exe by absolute path (SystemRoot\\System32), never a bare name that CreateProcess would look for in the
+    application's folder or the current directory first."""
+    root = os.environ.get("SystemRoot", "")
+    if not (root and ntpath.isabs(root)):
+        root = "C:\\Windows"
+    return ntpath.join(root, "System32", "taskkill.exe")
+
+
+def _windows_kill_tree(pid: int) -> None:
+    """Rule 49: System32's `taskkill.exe /T /F /PID <pid>`, the run and everything it started. `hermes.cmd` makes cmd.exe the child, so ending it
+    alone leaves Hermes running. One fixed argv, no shell, nothing on stdin, no output kept; best effort, the caller kills the child too."""
+    with contextlib.suppress(OSError, subprocess.SubprocessError):
+        subprocess.run([_windows_taskkill(), "/T", "/F", "/PID", str(int(pid))], stdin=subprocess.DEVNULL,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=MCP_STOP_WAIT,
+                       creationflags=0x08000000)  # CREATE_NO_WINDOW
+
+
+def _stop_run(proc, windows: bool | None = None, tree_killer=None) -> None:
     """End a run the bridge started past its time (rule 41's `hermes mcp`, rule 43's `omh` read, rule 44's `hermes profile create`): on POSIX its whole
-    process group (it was started in a session of its own, so this reaches nothing else), on Windows the process
-    itself (started in a group of its own). The wait after is bounded, so the run's bot is never left busy."""
-    if os.name == "nt":
+    process group (it was started in a session of its own, so this reaches nothing else), on Windows its whole process tree
+    (rule 49; the child is a launcher such as hermes.cmd) and then the child itself. `windows` and `tree_killer` are for tests.
+    The wait after is bounded, so the run's bot is never left busy."""
+    if os.name == "nt" if windows is None else windows:
+        (tree_killer or _windows_kill_tree)(proc.pid)
         with contextlib.suppress(OSError):
             proc.kill()
     else:
@@ -6263,8 +6292,8 @@ PEER_OPEN_TIMEOUT = 15.0
 PEER_PLATFORMS_TIMEOUT = OMH_READ_TIMEOUT + PEER_LIST_TIMEOUT
 # Bot-scoped ops a peer's bot takes: sent to the peer with the bare name, its answer passed back as it came.
 PEER_FORWARD = frozenset({
-    "chat.open", "chat.send", "chat.interrupt", "chat.discard", "chat.steer", "approval.respond", "clarify.respond", "chat.attach", "chat.set_model",
-    "models.options", "bots.ready", "bots.rename", "bots.avatar", "bots.set_avatar", "bots.info", "skills.list",
+    "chat.open", "chat.send", "chat.interrupt", "chat.discard", "chat.steer", "chat.command", "approval.respond", "clarify.respond", "chat.attach",
+    "chat.set_model", "models.options", "bots.ready", "bots.rename", "bots.avatar", "bots.set_avatar", "bots.info", "skills.list",
     "commands.list", "bots.page", "thread.create", "thread.list", "thread.open", "thread.remove",
     "links.places", "tasks.linear", "elsewhere.list", "routines.list", "runs.list", "runs.get", "runs.prs",
     "runs.node_session",
@@ -6274,7 +6303,7 @@ PEER_FORWARD = frozenset({
 })
 # Ops that take ``session=<thread>`` for a peer's bot, forwarded only when the id is one of that bot's threads.
 PEER_SESSION_OPS = frozenset({
-    "chat.send", "chat.interrupt", "chat.steer", "approval.respond", "clarify.respond", "chat.set_model",
+    "chat.send", "chat.interrupt", "chat.steer", "chat.command", "approval.respond", "clarify.respond", "chat.set_model",
 })
 # Ops that need this computer: refused for a peer's bot, with the reason the person reads.
 PEER_REFUSED = {
@@ -6985,7 +7014,7 @@ class Bridge:
         self.ops = {
             "hello": self.op_hello, "bots.list": self.op_bots_list, "chat.open": self.op_chat_open,
             "chat.send": self.op_chat_send, "chat.interrupt": self.op_chat_interrupt,
-            "chat.discard": self.op_chat_discard, "chat.steer": self.op_chat_steer,
+            "chat.discard": self.op_chat_discard, "chat.steer": self.op_chat_steer, "chat.command": self.op_chat_command,
             "approval.respond": self.op_approval_respond, "clarify.respond": self.op_clarify_respond,
             "elsewhere.list": self.op_elsewhere_list,
             "routines.list": self.op_routines_list, "models.options": self.op_models_options,
@@ -7758,12 +7787,30 @@ class Bridge:
         # discarded (chat.discard), so the page shows it waiting, not read
         return {"input_id": input_id, **({"paused": True} if (chat or conn).lost_turns else {})}
 
-    async def _goal_command(self, conn: Conn, main: str, chat: FolderChat | None, text: str) -> str | None:
+    async def op_chat_command(self, p) -> dict:
+        """A read command typed while the chat's turn runs (``RUN_NOW_COMMANDS``: ``/usage``, ``/status``), run at once
+        through Hermes' own ``slash.exec`` beside the turn, as Claude Code runs its ``/cost`` and ``/status`` mid-turn.
+        Its answer shows in the chat (``command.output`` while the turn runs, so the running answer is untouched); the
+        turn, the steer queue and the prompt queue are not touched. Any other command waits for the turn's end in the
+        app's queue and goes through ``chat.send``."""
+        text = p.get("text")
+        found = COMMAND_NAME.match(text.strip()) if isinstance(text, str) else None
+        if found is None or found.group(1).lower() not in RUN_NOW_COMMANDS:
+            raise BridgeError("bad_request", "only /usage and /status run during a turn")
+        conn = await self._conn(p.get("bot"))
+        main, chat = await self._target(conn, p)
+        if await self._goal_command(conn, main, chat, text, aside=text.strip()) is None:
+            raise BridgeError("unsupported", "this Hermes cannot run a command during a turn; send it again once the turn ends")
+        return {}
+
+    async def _goal_command(self, conn: Conn, main: str, chat: FolderChat | None, text: str,
+                            aside: str = "") -> str | None:
         """``/goal`` through Hermes' own ``slash.exec``, as Hermes' TUI and Desktop send it. Sent as a prompt, Hermes
         runs the command as an admitted turn: it answers "Goal set" but puts the goal's first turn on a local queue
         nothing reads, so the goal never starts. ``slash.exec`` hands that turn back instead (``type: send``) for the
         client to submit itself. Its answer shows as the bot's message; returns the turn to submit ("" for none), or
-        None on a gateway without ``slash.exec`` (the command then goes as typed)."""
+        None on a gateway without ``slash.exec`` (the command then goes as typed). ``op_chat_command`` runs the read
+        commands of ``RUN_NOW_COMMANDS`` through it too, during a turn."""
         try:
             res = await self._call(conn, "slash.exec", session_id=main, command=text.strip()[1:])
         except BridgeError:
@@ -7776,11 +7823,16 @@ class Bridge:
         kick = res.get("message") if res.get("type") == "send" and isinstance(res.get("message"), str) else ""
         note = res.get("notice") if res.get("type") == "send" else res.get("output")
         if isinstance(note, str) and note.strip():
-            await self._command_note(conn, chat, note.strip())
+            await self._command_note(conn, chat, note.strip(), aside)
         return kick if kick.strip() else ""
 
-    async def _command_note(self, conn: Conn, chat: FolderChat | None, text: str) -> None:
-        """A command's answer that runs no turn, shown as the bot's message the way its turn used to show it."""
+    async def _command_note(self, conn: Conn, chat: FolderChat | None, text: str, aside: str = "") -> None:
+        """A command's answer that runs no turn, shown as the bot's message the way its turn used to show it.
+        ``aside`` (the command as typed, from ``chat.command`` while the turn runs): ``command.output`` instead, which
+        the app places above the running answer under that command; a ``message`` then would stand for that answer."""
+        if aside and (chat or conn).in_turn:
+            await self._chat_emit(conn, chat, "command.output", id=uuid.uuid4().hex, text=text, command=aside)
+            return
         opened = not (chat or conn).in_turn
         if opened:
             await self._begin_turn(conn, chat)
@@ -8307,6 +8359,21 @@ class Bridge:
         for chat in conn.folders.values():
             if chat.kind == "thread" and chat.id not in out:
                 out[chat.id] = self._thread_row(chat)
+        # a thread not attached in this run (omher started again while Hermes ran on): what Hermes' gateway says that
+        # session is doing now (session.active_list, read only), so its row runs or waits on the person before any
+        # click; the app then opens it (thread.open), which replays its asks. A gateway that cannot tell: idle rows.
+        if any(sid not in conn.folders for sid in out):
+            try:
+                active = (await self._call(conn, "session.active_list")).get("sessions") or []
+            except Exception as e:
+                log.debug("thread.list active_list %s: %s", conn.name, e)
+                active = []
+            for r in active:
+                row = out.get(str(r.get("session_key") or "")) if isinstance(r, dict) else None
+                if row is None or row["thread"] in conn.folders:
+                    continue
+                row["running"] = r.get("status") in ("starting", "working", "waiting", "streaming")
+                row["needs"] = r.get("status") == "waiting"
         # a thread not attached in this run: the folder Hermes saved it with, so its terminal starts there
         bare = [t["thread"] for t in out.values() if not t["cwd"]]
         for sid, cwd in (await asyncio.to_thread(read_session_cwds, conn.bot["path"], bare)).items():

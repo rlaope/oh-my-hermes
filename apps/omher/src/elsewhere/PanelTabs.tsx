@@ -440,9 +440,10 @@ export function WorktreesTab({ bot, onOpenDiff }: { bot: Bot; onOpenDiff: (path:
   // right-click a row: its menu ("Hand to <bot>"), then the handover card at the same place
   const [menu, setMenu] = useState<{ x: number; y: number; w: Worktree } | null>(null);
   const [hand, setHand] = useState<{ at: { x: number; y: number }; from: HandoverFrom } | null>(null);
+  const invoker = useRef<HTMLElement | null>(null); // the row whose menu opened: where the keyboard goes back to
   if (!data) return <Loading error={error} />;
   const list: Worktree[] = data.worktrees;
-  const handCard = hand && <HandoverCard at={hand.at} from={hand.from} onClose={() => setHand(null)} />;
+  const handCard = hand && <HandoverCard at={hand.at} from={hand.from} back={() => (invoker.current?.isConnected ? invoker.current : null)} onClose={() => setHand(null)} />;
   // Hand to <bot> only for a bot of this computer (a bot over SSH lists folders on another computer) and only while a
   // bot of this computer is online to take it; read, not subscribed, when the row is right-clicked
   const canHand = () => !bot.host && handBots(getStore().getSnapshot().bots).length > 0;
@@ -468,6 +469,7 @@ export function WorktreesTab({ bot, onOpenDiff }: { bot: Bot; onOpenDiff: (path:
           onContextMenu={(e) => {
             if (!canHand()) return;
             e.preventDefault();
+            invoker.current = e.currentTarget;
             // the ContextMenu key or Shift+F10 reports no pointer (0, 0): the menu opens under the row instead
             const r = e.currentTarget.getBoundingClientRect();
             const px = e.clientX || e.clientY ? e.clientX : r.left + 12;

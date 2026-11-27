@@ -11,6 +11,8 @@ export function answered(items: TimelineItem[], at: number): MessageItem[] {
     // the bot spoke since. A SESSIONS agent (Claude Code, Codex)
     // sends each text block of one turn as its own bubble, so only the first bubble after the person's messages
     // carries the quote: the ones after it break here.
+    // the answer to a command run mid-turn (`command`) is no answer to these messages: look past it
+    if (it.kind === "assistant" && it.command) continue;
     if (it.kind === "assistant") break;
     // a held message (steer queue) was never sent, and a queued or steer-unknown one was not taken by the agent
     // yet, so no answer replies to them
@@ -34,6 +36,8 @@ const QUOTE_LINES = 3;
  *  between it and the answer (activity, a card, a notice). Several messages sent before one answer, and the answer
  *  says what it replies to: each message's first line. */
 export function quoteFor(items: TimelineItem[], at: number): Quote | null {
+  const self = items[at];
+  if (self?.kind === "assistant" && self.command) return null;
   const asks = answered(items, at);
   if (asks.length < 2) return null;
   const shown = asks.slice(-QUOTE_LINES);

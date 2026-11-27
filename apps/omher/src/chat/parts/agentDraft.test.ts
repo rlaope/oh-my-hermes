@@ -74,6 +74,7 @@ describe("where drafts are read", () => {
     expect(draftsAllowed("agent:s3")).toBe(false);
     expect(draftBot("kami")).toBe("kami");
     expect(draftBot("fold:friren:f1")).toBe("friren");
+    expect(draftBot("fold:p1:friren:f1", ["p1:friren"])).toBe("p1:friren");
   });
 
   it("strips the draft blocks from the shown text, and an unclosed one while streaming", () => {

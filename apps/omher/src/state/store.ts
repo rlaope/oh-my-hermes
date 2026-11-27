@@ -10,6 +10,7 @@ import { findTokens, toWire } from "../chat/parts/skillTokens";
 import { forBots, parseResume, RESUME_KEY, type ResumeSnap } from "../app/resume";
 import { getDraft } from "../app/drafts";
 import { remoteOnly } from "../app/remote";
+import { openModelPicker } from "../lib/modelPickerEvent";
 import { moveInSidebar } from "./order";
 import { lang, LANG_KEY, readLang, setLang, t as tr, type Key, type Lang } from "../i18n";
 import type {
@@ -111,6 +112,8 @@ export interface Turn {
   /** The words written between the last tool call and a `clarify` ask: the question's context, which the cut below
    *  would otherwise drop. Held until the ask arrives, then kept as its own row above the card. */
   askNote?: string;
+  /** Ended here because the bridge went away, not by Hermes: the chat's next read says how it really ended. */
+  connLost?: boolean;
 }
 
 /** One subagent of a fan-out, as its latest event left it. */
@@ -156,6 +159,10 @@ export type MessageItem = {
   text: string;
   /** assistant rows only: the answer to an automation's delivered result, drawn under a "Watch · <name>" line. */
   watch?: { name: string; ts: number };
+  /** assistant rows only: the answer to a `/usage` or `/status` the person ran while a turn ran (`chat.command`),
+   *  drawn under that command's line. It is no answer of the turn: the typing bubble, the reply quote and the face of
+   *  the answer still being written look past it. */
+  command?: string;
   /** user rows only: the send failed (text of the bridge error). */
   error?: string;
   /** user rows only: sent while a turn ran, and the agent has not taken it yet (`queued`), or Stop threw it away
@@ -801,8 +808,18 @@ function touchChat(state: AppState, bot: string, fn: (c: Chat) => Chat): AppStat
   return { ...state, chats: { ...state.chats, [bot]: fn(chat) } };
 }
 
+/** The selected bot's chat the person has open: its open thread's (`fold:<bot>:<thread>`), else its main chat. */
+function openChatKey(state: AppState): string | null {
+  const bot = state.selectedBot;
+  return bot && state.ui.thread ? threadKey(bot, state.ui.thread) : bot;
+}
+
+/** The SESSIONS chat on screen (a folder chat's `fold:<bot>:<session>`, an agent's `agent:<id>`), or null. */
+const sessionChatShown = (state: AppState) => (state.ui.view === "session" ? (sessionKeyOf?.(state.ui.session) ?? null) : null);
+
 function bumpUnread(state: AppState, bot: string): AppState {
-  if (bot === state.selectedBot) return state;
+  // the chat on screen counts nothing: with a thread open that is the thread, so its bot's main chat counts again
+  if (bot === openChatKey(state) || bot === sessionChatShown(state)) return state;
   return { ...state, unread: { ...state.unread, [bot]: (state.unread[bot] ?? 0) + 1 } };
 }
 
@@ -914,6 +931,29 @@ function applyOpened(chat: Chat, res: ChatOpenResult, now: number, bot: string, 
   } else if (!res.running && next.turn && next.turn.startedAt < since) {
     next = endTurn(next, now, "done");
   }
+  // the turn the bridge's outage cut off here finished meanwhile: Hermes runs nothing, lost no turn, and the last row
+  // is the bot's answer to THIS turn (written after it started, or right after the person's row that started it; an
+  // older answer is the previous turn's, when Hermes has not saved this turn's message). It ended as done, not as
+  // "Connection to Hermes lost"; the steps it cut off returned, they were not stopped
+  const cut = next.lastTurn;
+  const said = res.messages.filter((m) => !m.queued);
+  const answer = said.at(-1);
+  const asked = said.slice(0, -1).reverse().find((m) => m.role === "user");
+  const at = cut ? chat.items.findIndex((i) => i.kind === "activity" && i.id === cut.id) : -1;
+  const prompt = [...chat.items.slice(0, Math.max(at, 0))].reverse().find((i): i is MessageItem => i.kind === "user");
+  const ours =
+    !!cut &&
+    !!answer &&
+    (answer.ts * 1000 >= cut.startedAt || (!!asked && !!prompt && (asked.id === prompt.id || asked.text === (prompt.sent ?? prompt.text))));
+  if (!res.running && !res.lost?.length && !next.turn && cut?.connLost && answer?.role === "assistant" && ours) {
+    next = patchTurnById(next, cut.id, (x) => ({
+      ...x,
+      outcome: "done",
+      error: undefined,
+      connLost: undefined,
+      steps: x.steps.map((s) => (s.stopped && s.endedAt === x.endedAt ? { ...s, ok: undefined, stopped: undefined } : s)),
+    }));
+  }
   return next;
 }
 
@@ -925,7 +965,7 @@ export type Action =
   | { type: "hello"; hello: HelloResult }
   | { type: "error"; message: string | null }
   | { type: "bots"; bots: Bot[] }
-  | { type: "select"; bot: string }
+  | { type: "select"; bot: string; keepView?: boolean }
   | { type: "chat.opened"; bot: string; res: ChatOpenResult; now: number; since?: number }
   /** Automation answers that came in while omher was closed (or not attached): `count` more unread. */
   | { type: "watch.missed"; bot: string; count: number }
@@ -1032,13 +1072,18 @@ export const folderKey = (bot: string, session: string) => `fold:${bot}:${sessio
 /** True for a SESSIONS chat key (not a bot's main chat). */
 export const isSessionChat = (key: string) => key.startsWith("fold:") || key.startsWith("agent:");
 /** Where a Hermes chat's words go on the bridge: a bot's main chat (`<bot>`) or its folder chat / thread
- *  (`fold:<bot>:<session>`, the bridge's `session=`). The steer queue sends, steers and stops through this. */
-export function chatTarget(key: string): { bot: string; session?: string } {
+ *  (`fold:<bot>:<session>`, the bridge's `session=`). The steer queue sends, steers and stops through this.
+ *  An SSH bot's name holds a colon (`<peer>:<name>`, bridge `_peer_bots`) and a session id may hold any, so the
+ *  bot is the longest of the `known` bot names the key starts with; with none, a local profile name (no colon). */
+export function chatTarget(key: string, known: Iterable<string> = []): { bot: string; session?: string } {
   if (!key.startsWith("fold:")) return { bot: key };
   const rest = key.slice(5);
-  const at = rest.indexOf(":");
-  return { bot: rest.slice(0, at), session: rest.slice(at + 1) };
+  let bot = rest.slice(0, rest.indexOf(":"));
+  for (const n of known) if (n.length > bot.length && rest.startsWith(`${n}:`)) bot = n;
+  return { bot, session: rest.slice(bot.length + 1) };
 }
+/** The bot names a chat key can start with: the listed bots and the bots whose threads are listed. */
+export const botNames = (s: AppState): string[] => [...s.bots.map((b) => b.name), ...Object.keys(s.threads)];
 
 /** The bots whose "will brief you here" line was already shown (`localStorage["omher.briefNoticed"]`). */
 export function briefNoticed(): string[] {
@@ -1056,6 +1101,20 @@ function saveBriefNoticed(bots: string[]): void {
   } catch {
     /* storage is best effort */
   }
+}
+
+/** An ask Hermes sends again (chat.open replays the ones still waiting) while it runs the chat's turn, whose card here
+ *  reads unanswered only because the turn it was asked in ended here when the bridge went away (`connLost`): that card
+ *  (and a question's context row) goes, and the ask is added again in the running turn, answerable. An open, answered
+ *  or expired card, or one whose turn Hermes itself ended, stays as it is. */
+function reasked(c: Chat, kind: "approval" | "clarify", requestId: string): Chat {
+  const old = c.items.find((i): i is ApprovalItem | ClarifyItem => i.kind === kind && i.request_id === requestId);
+  if (!old || !c.turn || old.expired || (old.kind === "approval" ? !!old.resolved : old.answer !== undefined) || askOpen(c.items, old)) return c;
+  let owner: Turn | undefined;
+  for (const i of c.items) if (i.kind === "activity" && i.turn.startedAt <= old.ts * 1000 + 1) owner = i.turn;
+  if (!owner?.connLost) return c;
+  const note = `clarify-note-${requestId}`;
+  return withItems(c, c.items.filter((i) => i !== old && !(kind === "clarify" && i.kind === "assistant" && i.id === note)));
 }
 
 function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
@@ -1145,6 +1204,16 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
       );
     case "delta":
       return touchChat(state, bot, (c) => patchTurn(c, (t) => ({ ...t, streaming: t.streaming + ev.text })));
+    case "command.output":
+      // a /usage or /status the person ran mid-turn (`chat.command`): Hermes' answer as the bot's message, placed
+      // above the running answer (which goes on below it); the turn and what it streams are untouched
+      return touchChat(state, bot, (c) => {
+        const id = `command-${ev.id}`;
+        if (c.items.some((i) => i.kind === "assistant" && i.id === id)) return c;
+        const msg: MessageItem = { kind: "assistant", id, ts: now / 1000, text: ev.text, command: ev.command || "/" };
+        const slot = answerSlot(c);
+        return withItems(c, [...c.items.slice(0, slot), msg, ...c.items.slice(slot)]);
+      });
     case "message": {
       const next = touchChat(state, bot, (c) => {
         // the answer came: a steer Hermes took by now runs in this turn or right after it (never dropped by a Stop)
@@ -1164,7 +1233,8 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
       return existed ? next : bumpUnread(next, bot);
     }
     case "approval.request":
-      return touchChat(state, bot, (c) => {
+      return touchChat(state, bot, (c0) => {
+        const c = reasked(c0, "approval", ev.request_id);
         // chat.open replays asks that are still waiting; the card is already there.
         if (c.items.some((i) => i.kind === "approval" && i.request_id === ev.request_id)) return c;
         const base = patchTurn(c, (t) => ({ ...t, status: tr("live.waitApproval") }));
@@ -1184,12 +1254,15 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
         return withItems(base, [...base.items, item]);
       });
     case "clarify.request":
-      return touchChat(state, bot, (c) => {
+      return touchChat(state, bot, (c0) => {
+        const c = reasked(c0, "clarify", ev.request_id);
         if (c.items.some((i) => i.kind === "clarify" && i.request_id === ev.request_id)) return c;
         // The words written right before the question are its context. Hermes asks through a tool call, and the
         // commentary beside a tool call is dropped (`cut`, see tool.start), so the card used to arrive alone with
         // the explanation the person was supposed to read gone. Keep that commentary as a row above the card.
-        const note = c.turn?.askNote ?? "";
+        // A question asked again after an outage keeps the context it had (its old row went with its old card).
+        const before = c === c0 ? undefined : c0.items.find((i) => i.kind === "assistant" && i.id === `clarify-note-${ev.request_id}`);
+        const note = c.turn?.askNote || (before?.kind === "assistant" ? before.text : "");
         const asked = patchTurn(c, (t) => ({ ...t, status: tr("live.waitAnswer") }));
         const qs = (ev.questions ?? []).filter((q) => q && typeof q.question === "string" && q.question.trim());
         const item: ClarifyItem = {
@@ -1208,7 +1281,7 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
         const withNote = note ? withItems(asked, [...asked.items, noted]) : asked;
         const base = withItems(withNote, [...withNote.items, item]);
         // the note now lives in its own row: it is not the answer still being written
-        return note ? patchTurn(base, (t) => ({ ...t, streaming: "", cut: undefined, askNote: undefined })) : base;
+        return c.turn?.askNote ? patchTurn(base, (t) => ({ ...t, streaming: "", cut: undefined, askNote: undefined })) : base;
       });
     case "prompt.expired":
       return touchChat(state, bot, (c) =>
@@ -1345,9 +1418,13 @@ export function reduce(state: AppState, a: Action): AppState {
       const chats: AppState["chats"] = {};
       // agent:<id> chats run in the desktop shell, not through Hermes: a bridge outage does not touch them
       for (const [b, c] of Object.entries(state.chats)) {
-        const ended = c.turn && !b.startsWith("agent:") ? endTurn(c, t, "interrupted", tr("live.lost")) : c;
-        // what Hermes runs is not known until the chat is read again: the steer queue waits for that
-        chats[b] = isSessionChat(b) ? ended : { ...ended, stale: true, pendingTurn: null, steeredUnread: undefined, steerAck: null };
+        const ended =
+          c.turn && !b.startsWith("agent:") ? endTurn(patchTurn(c, (x) => ({ ...x, connLost: true })), t, "interrupted", tr("live.lost")) : c;
+        // what Hermes runs is not known until the chat is read again: the steer queue waits for that. A bot's thread
+        // is read again too (rereadThreads), after thread.list: what it holds waits for that read like the main chat
+        const { bot: owner, session } = chatTarget(b, botNames(state));
+        const thread = !!session && !!state.threads[owner]?.some((r) => r.thread === session);
+        chats[b] = isSessionChat(b) && !thread ? ended : { ...ended, stale: true, pendingTurn: null, steeredUnread: undefined, steerAck: null };
       }
       return { ...state, conn: a.status, chats };
     }
@@ -1361,12 +1438,13 @@ export function reduce(state: AppState, a: Action): AppState {
     case "bots":
       return { ...state, bots: a.bots };
     case "select":
-      return { ...state, selectedBot: a.bot, unread: { ...state.unread, [a.bot]: 0 }, ui: { ...state.ui, view: "chat", thread: null } };
+      return { ...state, selectedBot: a.bot, unread: { ...state.unread, [a.bot]: 0 }, ui: { ...state.ui, view: a.keepView ? state.ui.view : "chat", thread: null } };
     case "ui.thread":
       return {
         ...state,
         selectedBot: a.bot,
-        unread: a.thread ? state.unread : { ...state.unread, [a.bot]: 0 },
+        // the chat opened is read: the thread's own key (`fold:<bot>:<thread>`, in the Dock count), or the main chat
+        unread: { ...state.unread, [a.thread ? threadKey(a.bot, a.thread) : a.bot]: 0 },
         ui: { ...state.ui, view: "chat", thread: a.thread },
       };
     case "threads": {
@@ -1409,10 +1487,12 @@ export function reduce(state: AppState, a: Action): AppState {
       if (!list?.some((r) => r.thread === a.thread) && !state.chats[key] && state.ui.thread !== a.thread) return state;
       const chats = { ...state.chats };
       delete chats[key];
+      const { [key]: _gone, ...unread } = state.unread;
       const open = state.selectedBot === a.bot && state.ui.thread === a.thread;
       return {
         ...state,
         chats,
+        unread,
         threads: { ...state.threads, [a.bot]: (list ?? []).filter((r) => r.thread !== a.thread) },
         ui: open ? { ...state.ui, thread: null } : state.ui,
       };
@@ -1585,10 +1665,14 @@ export function reduce(state: AppState, a: Action): AppState {
       const max = runsFull && rest.panelOpen;
       return { ...state, ui: { ...state.ui, ...rest, panelMax: max, ...(session ? { view: "session" as const, session } : {}) } };
     }
-    case "ui.session":
+    case "ui.session": {
+      // a folder chat opened is read (its `fold:` key counts in the Dock until then)
+      const key = a.id ? sessionKeyOf?.(a.id) : null;
+      const unread = key && state.unread[key] ? { ...state.unread, [key]: 0 } : state.unread;
       return a.id
-        ? { ...state, ui: { ...state.ui, view: "session", session: a.id } }
+        ? { ...state, unread, ui: { ...state.ui, view: "session", session: a.id } }
         : { ...state, ui: { ...state.ui, view: state.ui.view === "session" ? "chat" : state.ui.view, session: null } };
+    }
     case "ui.pin": {
       const rest = state.ui.pinned.filter((b) => b !== a.bot);
       return { ...state, ui: { ...state.ui, pinned: a.on ? [...rest, a.bot] : rest } };
@@ -1609,7 +1693,9 @@ export function reduce(state: AppState, a: Action): AppState {
       if (!state.chats[a.bot]) return state;
       const chats = { ...state.chats };
       delete chats[a.bot];
-      return { ...state, chats };
+      // a removed thread's or replaced folder chat's unread goes with it (the Dock count sums every key)
+      const { [a.bot]: _gone, ...unread } = state.unread;
+      return { ...state, chats, unread };
     }
     default:
       return state;
@@ -1918,6 +2004,11 @@ export function selectUnreadTotal(state: AppState): number {
   return Object.values(state.unread).reduce((a, b) => a + b, 0);
 }
 
+/** The commands a bot chat runs at once while its turn runs (`runNow`), as Claude Code runs them mid-turn: name, then
+ *  what follows it. Measured on Claude Code 2.1.332: `/cost`, `/status` and `/model` act at once; `/context`, `/help`,
+ *  `/compact`, `/export` and a skill wait for the turn. */
+const RUN_NOW = /^\/(usage|status|model)(?=\s|$)(.*)$/is;
+
 // ---- store ----------------------------------------------------------------------------------
 
 export interface Actions {
@@ -2221,7 +2312,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
   const threadGone = (key: string) => {
     if (goneThreads.has(key)) return true;
     if (!threadKeys.has(key)) return false;
-    const { bot, session } = chatTarget(key);
+    const { bot, session } = chatTarget(key, botNames(state));
     return !(state.threads[bot] ?? []).some((r) => r.thread === session);
   };
   /** Every chat whose held head can go out now sends it (exactly once: it leaves the queue before the request). */
@@ -2239,7 +2330,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       dispatch({ type: "queue.take", bot, id, now: now() });
       if (!p) return;
       held.delete(id);
-      const to = chatTarget(bot);
+      const to = chatTarget(bot, botNames(state));
       try {
         let wire = p.wire;
         let attachment_ids: string[] = [];
@@ -2293,6 +2384,24 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
    *  Reply there target, a `/` command Hermes runs itself, no turn yet, the bridge coming back, a refused steer ahead
    *  of it) it is held (steer queue, the ↵ ↓ × buttons) and sent when the turn ends. False when nothing runs there:
    *  send it now. */
+  /** A slash command typed while `key`'s turn runs, done at once as Claude Code does it mid-turn: `/usage` and
+   *  `/status` run beside the turn (`chat.command`, their answer shows above the running one) and `/model` opens the
+   *  header's picker (a pick then applies from the next turn). True when it was one of those; every other command
+   *  and any message wait in the queue as before. `/model` with an argument waits too: it is Hermes' own form. */
+  const runNow = (key: string, bot: string, text: string, session?: string): boolean => {
+    const c = state.chats[key];
+    if (!c?.turn) return false;
+    const m = RUN_NOW.exec(text.trim());
+    if (!m) return false;
+    const name = m[1].toLowerCase();
+    if (name === "model") {
+      if (m[2].trim() || session) return false;
+      openModelPicker(bot);
+      return true;
+    }
+    void bridge.request("chat.command", session ? { bot, session, text: text.trim() } : { bot, text: text.trim() }).catch(fail);
+    return true;
+  };
   const holdIfBusy = (key: string, id: string, p: { text: string; wire: string; reply_to?: string; files?: OutFile[] }, row: Extract<Action, { type: "local.user" }>) => {
     if (!mustHold(state, key)) return false;
     held.set(id, { bot: key, ...p });
@@ -2427,7 +2536,10 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       dispatch({ type: "ui.pin", bot, on: false });
       saveList("omher.pinned", state.ui.pinned);
     }
-    if (state.selectedBot === bot) void selectBot(selectSidebarBots(state)[0].name);
+    if (state.selectedBot === bot) {
+      // Settings / Automations stay open: selectBot would switch the view to the chat
+      void selectBot(selectSidebarBots(state)[0].name, state.ui.view !== "chat");
+    }
   };
 
   /** The roster is chosen once, on the first run of this build that sees a bot (seedRoster); when none of its
@@ -2440,10 +2552,10 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     setRoster([...(roster ?? []), ...seed.filter((n) => !roster?.includes(n))]);
   };
 
-  const selectBot = async (bot: string) => {
+  const selectBot = async (bot: string, keepView = false) => {
     // the open chat always has its row: a bot opened from Needs you, an @mention or Settings joins the list
     if (state.ui.roster && state.bots.some((b) => b.name === bot)) listBot(bot, true);
-    dispatch({ type: "select", bot });
+    dispatch({ type: "select", bot, keepView });
     markWatchSeen(bot);
     const jobs: Promise<unknown>[] = [loadElsewhere(bot), loadRoutines(bot), loadModels(bot)];
     if (!state.threads[bot]) jobs.push(loadThreads(bot));
@@ -2458,6 +2570,11 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const r = await bridge.request("bots.list", {});
       dispatch({ type: "bots", bots: r.bots });
       ensureRoster();
+      // the open bot is gone (its computer was removed): the first listed bot takes its place. A chat or thread of
+      // the gone bot moves to the new bot's chat; any other view stays.
+      const gone = state.selectedBot;
+      const next = gone && !state.bots.some((b) => b.name === gone) ? (selectSidebarBots(state)[0] ?? state.bots[0]) : undefined;
+      if (next) void selectBot(next.name, state.ui.view !== "chat");
       // a reconnect whose bots.list failed left chats unread (stale): read them now, so their held rows go out
       const names = new Set(state.bots.map((b) => b.name));
       // a computer attached since, or whose link just went down (rule 45): its bots' platforms now, not at the next
@@ -2465,7 +2582,11 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       if (state.bots.some((b) => b.host && (!before.has(b.name) || (b.status === "offline" && was.get(b.name) !== "offline"))))
         void loadPlatforms();
       const stale = Object.entries(state.chats).filter(([n, c]) => c.stale && c.loaded && names.has(n)).map(([n]) => n);
-      await Promise.allSettled(stale.map(loadChat));
+      // and the bots whose threads it left unread (stale), thread.list first
+      const staleThreads = new Set(
+        Object.entries(state.chats).filter(([n, c]) => c.stale && c.loaded && n.startsWith("fold:")).map(([n]) => chatTarget(n, names).bot),
+      );
+      await Promise.allSettled([...stale.map(loadChat), ...[...staleThreads].filter((b) => names.has(b)).map(rereadThreads)]);
       // a profile that appeared since: ask it too (only new names, so a bots.update storm asks nobody twice)
       await Promise.allSettled(
         selectUnlisted(state).filter((b) => !before.has(b.name) && !state.chats[b.name]?.loaded).map((b) => peekAsks(b.name)),
@@ -2504,7 +2625,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
    *  again knows no thread until `thread.list` has listed it, and refuses `thread.open` of one before then. */
   const rereadThreads = async (bot: string) => {
     await loadThreads(bot);
-    await Promise.allSettled(loadedThreads(bot).map((t) => loadThread(bot, t)));
+    await Promise.allSettled(loadedThreads(bot).map((t) => openOnce(bot, t)));
   };
 
   // ---- threads under a bot (bridge `thread.*`) ----
@@ -2532,11 +2653,38 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     });
     return key;
   };
+  /** A thread's open (thread.open) in flight, per chat key: a click while the automatic open runs waits for it,
+   *  never a second open (two session.resume of one thread at once). */
+  const threadOpens = new Map<string, Promise<void>>();
+  const openOnce = (bot: string, thread: string): Promise<void> => {
+    const key = threadKey(bot, thread);
+    let run = threadOpens.get(key);
+    if (!run) {
+      run = loadThread(bot, thread).finally(() => threadOpens.delete(key));
+      threadOpens.set(key, run);
+    }
+    return run;
+  };
+  /** At most this many automatic thread opens at once per listing (thread.list can list hundreds). */
+  const PEEK_THREADS = 3;
   const loadThreads = async (bot: string) => {
     try {
       const r = await threadReq("thread.list", { bot });
       dispatch({ type: "threads", bot, threads: r.threads });
       for (const row of r.threads) threadRoute(bot, row.thread);
+      // a thread Hermes is running or that waits on the person, not read in this run (omher started again while
+      // Hermes ran on): read it now, as peekAsks asks a bot outside the list, so its row runs and its asks reach
+      // Needs you without a click. One open per thread at a time, PEEK_THREADS at once; the ones already read are
+      // re-read elsewhere.
+      const busy = r.threads.filter((row) => (row.running || row.needs) && !state.chats[threadKey(bot, row.thread)]?.loaded);
+      let next = 0;
+      const peek = async () => {
+        while (next < busy.length) {
+          const row = busy[next++];
+          if (!state.chats[threadKey(bot, row.thread)]?.loaded) await openOnce(bot, row.thread);
+        }
+      };
+      void Promise.all(Array.from({ length: Math.min(PEEK_THREADS, busy.length) }, peek));
     } catch {
       /* an offline bot, or a bridge without threads: the bot row shows none */
     }
@@ -2557,6 +2705,35 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
   /** The thread a `session`-tagged event belongs to, when it is one of the bot's threads. */
   const threadOf = (ev: BridgeEvent) => (ev.session ? (state.threads[ev.bot] ?? []).find((r) => r.thread === ev.session) : undefined);
   let threadSeq = 0;
+  // One thread.create, its row and chat opened; null (and a line where the person acted) when it is refused. A
+  // `title` (a task's) names the thread until Hermes gives it one.
+  const createThread = async (bot: string, title?: string): Promise<string | null> => {
+    try {
+      const key = `t${Date.now().toString(36)}${(threadSeq += 1)}`;
+      const r = await threadReq("thread.create", title === undefined ? { bot, key } : { bot, key, title });
+      const { model, provider, reasoning, ...row } = r;
+      dispatch({ type: "thread.upsert", bot, row: { ...row, ...(title === undefined ? {} : { title: row.title || title }), last: now() / 1000 } });
+      const ck = threadRoute(bot, row.thread);
+      dispatch({ type: "chat.opened", bot: ck, res: { session_id: row.thread, messages: [], running: false, model, provider, reasoning }, now: now() });
+      dispatch({ type: "ui.thread", bot, thread: row.thread });
+      return row.thread;
+    } catch (e) {
+      fail(e);
+      threadNote(bot, tr("thread.newFailed", { error: errText(e) }));
+      return null;
+    }
+  };
+  // a thread create out per bot (see newThread)
+  const newThreads = new Map<string, Promise<string | null>>();
+  // A thread action that failed says so where the person acted: the open chat of that bot (its main chat or the open
+  // thread); from anywhere else the bot's chat opens with the line, since the sidebar + gives no room for one.
+  const threadNote = (bot: string, text: string) => {
+    const here = state.selectedBot === bot && state.ui.view === "chat";
+    const key = here && state.ui.thread ? threadKey(bot, state.ui.thread) : bot;
+    const note = () => dispatch({ type: "system.note", bot: key, text, now: now() });
+    if (here) note();
+    else void selectBot(bot).then(note, note); // the chat's own read must not wipe the line
+  };
 
   const actions: Actions = {
     async init() {
@@ -2687,6 +2864,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const chip = state.replyTo[bot] ?? null;
       const reply = chip ? { source: chip.source, label: chip.place } : undefined;
       const wire = toWire(t, skillNames.get(bot) ?? []);
+      // /usage, /status and /model during a turn: at once, nothing queued (runNow)
+      if (!chip && runNow(bot, bot, t)) return;
       // a turn runs: omher holds it (steer queue) and sends it when the turn ends
       if (holdIfBusy(bot, id, { text: t, wire, ...(chip ? { reply_to: chip.session_id } : {}) }, { type: "local.user", bot, id, text: t, now: now(), reply, sent: wire, skills: tokenNames(t, bot) })) {
         if (chip) dispatch({ type: "reply.set", bot, chip: null });
@@ -2762,7 +2941,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       if (!state.chats[bot]?.turn || interrupting.has(bot)) return;
       interrupting.add(bot);
       try {
-        await bridge.request("chat.interrupt", chatTarget(bot));
+        await bridge.request("chat.interrupt", chatTarget(bot, botNames(state)));
       } catch (e) {
         fail(e);
       } finally {
@@ -2773,6 +2952,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const bot = botArg(which);
       const p = bot ? heldRow(bot, id) : null;
       if (!bot || !p || state.chats[bot]?.steering) return;
+      // a slash command is no text for the running answer: Send now instead (stop it, send this one first)
+      if (state.chats[bot]?.turn && p.wire.trimStart().startsWith("/")) return actions.queueSendNow(id, bot);
       // no turn to steer (it ended), or a message Hermes cannot take as a steer (files, a Reply there target):
       // it goes out next as a normal message
       if (!state.chats[bot]?.turn || p.files?.length || p.reply_to) {
@@ -2783,7 +2964,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       let ok = false;
       let unknown = false;
       try {
-        const status = (await bridge.request("chat.steer", { ...chatTarget(bot), text: p.wire })).status;
+        const status = (await bridge.request("chat.steer", { ...chatTarget(bot, botNames(state)), text: p.wire })).status;
         ok = status === "queued";
         // Hermes could not say whether the agent saw it: the same as no answer, the person decides
         unknown = status === "uncertain";
@@ -2874,20 +3055,9 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     openTasks: () => dispatch({ type: "ui.tasks" }),
     tasksLinear: (bot) => bridge.request("tasks.linear", { bot }),
     async startTaskThread(bot, title, text) {
-      try {
-        const key = `t${Date.now().toString(36)}${(threadSeq += 1)}`;
-        const r = await threadReq("thread.create", { bot, key, title });
-        const { model, provider, reasoning, ...row } = r;
-        dispatch({ type: "thread.upsert", bot, row: { ...row, title: row.title || title, last: now() / 1000 } });
-        const ck = threadRoute(bot, row.thread);
-        dispatch({ type: "chat.opened", bot: ck, res: { session_id: row.thread, messages: [], running: false, model, provider, reasoning }, now: now() });
-        dispatch({ type: "ui.thread", bot, thread: row.thread });
-        await actions.threadSend(bot, row.thread, text);
-        return row.thread;
-      } catch (e) {
-        fail(e);
-        return null;
-      }
+      const thread = await createThread(bot, title);
+      if (thread) await actions.threadSend(bot, thread, text);
+      return thread;
     },
     openPlugins: (bot) => dispatch({ type: "ui.plugins", bot: bot ?? state.ui.pluginsBot ?? state.selectedBot ?? state.bots[0]?.name ?? null }),
     openApps: (bot) => dispatch({ type: "ui.apps", bot: bot ?? state.ui.appsBot ?? state.selectedBot ?? state.bots[0]?.name ?? null }),
@@ -3033,6 +3203,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     async renameBot(bot, name) {
       const r = await bridge.request("bots.rename", { bot, name });
       dispatch({ type: "bots", bots: state.bots.map((b) => (b.name === bot ? { ...b, display_name: r.display_name } : b)) });
+      // the routes' labels carry the bot name (Needs you, notifications): rebuild them with the new one
+      for (const row of state.threads[bot] ?? []) threadRoute(bot, row.thread);
     },
     async setAvatar(bot, data) {
       const r = await bridge.request("bots.set_avatar", data === null ? { bot, clear: true } : { bot, data });
@@ -3116,23 +3288,16 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     restartScope: (bot) => bridge.request("bots.restart_scope", { bot }),
     reloadPlugins: (bot, name) => bridge.request("plugins.reload", name ? { bot, name } : { bot }),
     loadThreads,
-    async newThread(bot) {
-      try {
-        const key = `t${Date.now().toString(36)}${(threadSeq += 1)}`;
-        const r = await threadReq("thread.create", { bot, key });
-        const { model, provider, reasoning, ...row } = r;
-        dispatch({ type: "thread.upsert", bot, row: { ...row, last: now() / 1000 } });
-        const ck = threadRoute(bot, row.thread);
-        dispatch({ type: "chat.opened", bot: ck, res: { session_id: row.thread, messages: [], running: false, model, provider, reasoning }, now: now() });
-        dispatch({ type: "ui.thread", bot, thread: row.thread });
-        return row.thread;
-      } catch (e) {
-        fail(e);
-        return null;
-      }
+    newThread(bot) {
+      // one press = one thread: a second press while the create is out reuses it (a fresh key would make a second thread)
+      const out = newThreads.get(bot);
+      if (out) return out;
+      const made = createThread(bot).finally(() => newThreads.delete(bot));
+      newThreads.set(bot, made);
+      return made;
     },
     async newThreadWith(bot, first) {
-      const thread = await actions.newThread(bot);
+      const thread = await createThread(bot); // not the guarded + press: each submission carries its own first message
       if (thread && first.trim()) await actions.threadSend(bot, thread, first);
       return thread;
     },
@@ -3140,12 +3305,16 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       if (state.ui.roster && state.bots.some((b) => b.name === bot)) listBot(bot, true);
       if (!thread) return selectBot(bot);
       dispatch({ type: "ui.thread", bot, thread });
-      if (!state.chats[threadKey(bot, thread)]?.loaded) await loadThread(bot, thread);
+      // a thread whose open failed (an automatic open refused by the 48-open cap, a gateway timeout) opens again
+      const c = state.chats[threadKey(bot, thread)];
+      if (!c?.loaded || c.openError) await openOnce(bot, thread);
     },
     async threadSend(bot, thread, text) {
       const key = threadRoute(bot, thread);
       const id = `local-${++localSeq}`;
       const t = text.trim();
+      // /usage and /status during the thread's turn: at once, nothing queued (runNow)
+      if (runNow(key, bot, t, thread)) return;
       // typed while the thread's turn runs: the same steer queue as the main chat (held, ↵ ↓ × buttons, sent in order)
       if (holdIfBusy(key, id, { text: t, wire: t }, { type: "local.user", bot: key, id, text: t, now: now() })) return;
       dispatch({ type: "local.user", bot: key, id, text: t, now: now() });
@@ -3170,6 +3339,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         await bridge.request("chat.interrupt", { bot, session: thread });
       } catch (e) {
         fail(e);
+        threadNote(bot, tr("thread.stopFailed", { error: errText(e) }));
       }
     },
     async removeThread(bot, thread) {
@@ -3280,11 +3450,12 @@ export function getStore(): Store {
   }));
 }
 
-/** True while the person sees chat `key`: the window has focus and shows that bot's chat or that session. */
+/** True while the person sees chat `key`: the window has focus and shows that session, or that bot's chat (with a
+ *  thread open: that thread's, not the bot's main chat). */
 function watchingChat(state: AppState, key: string): boolean {
   if (!windowWatched()) return false;
-  if (isSessionChat(key)) return state.ui.view === "session" && sessionKeyOf?.(state.ui.session) === key;
-  return state.ui.view === "chat" && state.selectedBot === key;
+  if (state.ui.view === "session") return sessionChatShown(state) === key;
+  return state.ui.view === "chat" && openChatKey(state) === key;
 }
 
 /** Sounds: your own send (any chat), and a bot's or SESSIONS chat's events. A chat's (re)load and a dropped
