@@ -409,6 +409,7 @@ class AdapterSandboxSecurityTests(_RunnerMixin, unittest.TestCase):
             self.assertIsNone(sandbox._user_runtime_directory())
             self.assertFalse(sandbox.user_session_bus_hidden("bwrap"))
 
+    @requires_posix
     def test_linux_broad_read_command_skips_an_absent_runtime_directory_and_honors_strict_flags(self) -> None:
         child = ChildContext(Path("/tmp/scratch"), Path("/tmp/scratch/home"), Path("/tmp/scratch/work"), Path("/tmp/scratch/tmp"), Path("/tmp/scratch/output"), Path("/tmp/scratch/request.json"), Path("/tmp/scratch/output/result.json"), "f" * 64)
         environment = {"HOME": "/tmp/scratch/home", "PATH": "/usr/bin:/bin"}
