@@ -1594,6 +1594,7 @@ export const ko: Record<Key, string> = {
   "thread.list": "{name}의 스레드",
   "thread.more": "{n}개 더 보기",
   "thread.less": "접기",
+  "thread.unread": "읽지 않음 {n}",
   "thread.remove": "스레드 {title} 빼기",
   "thread.removeAsk": "이 스레드를 목록에서 뺄까요? Hermes에 보관되며 다시 꺼낼 수 있어요.",
   "thread.removeRunning": "아직 작업 중이에요. 멈추고 뺄까요?",

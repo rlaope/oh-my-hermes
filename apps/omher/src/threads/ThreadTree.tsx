@@ -69,6 +69,23 @@ export function rowPreview(state: AppState, bot: string, row: ThreadRow, nowMs: 
   return { text: t("thread.empty"), kind: "none", ts };
 }
 
+/** The rows a bot's tree shows: the first THREADS_SHOWN (every one after "Show N more"), and the open thread wherever
+ *  it is. */
+export function shownThreads(rows: ThreadRow[], openThread: string | null, all: boolean): ThreadRow[] {
+  return all || rows.length <= THREADS_SHOWN ? rows : rows.filter((r, i) => i < THREADS_SHOWN || r.thread === openThread);
+}
+
+/** The thread of `bot` open in the chat, if any. */
+const openThreadOf = (state: AppState, bot: string) => (state.ui.view === "chat" && state.selectedBot === bot ? state.ui.thread : null);
+
+/** Unread answers in the threads of `bot` that its tree does not show (past "Show N more"). Its bot row and the
+ *  "Show N more" line count them, so every answer in the Dock or taskbar count has a row that shows it. */
+export function hiddenThreadUnread(state: AppState, bot: string, all: boolean): number {
+  const rows = state.threads[bot] ?? [];
+  const shown = new Set(shownThreads(rows, openThreadOf(state, bot), all).map((r) => r.thread));
+  return rows.reduce((n, r) => (shown.has(r.thread) ? n : n + (state.unread[threadKey(bot, r.thread)] ?? 0)), 0);
+}
+
 /** A speech bubble, the thread's own mark. */
 function Bubble() {
   return (
@@ -78,19 +95,19 @@ function Bubble() {
   );
 }
 
-/** A bot's threads (nothing when it has none). */
-export function ThreadTree({ bot, id }: { bot: string; id: string }) {
+/** A bot's threads (nothing when it has none). `all`: "Show N more" was pressed (the sidebar holds it, so the bot
+ *  row knows which threads are out of view). */
+export function ThreadTree({ bot, id, all, onAll }: { bot: string; id: string; all: boolean; onAll: (all: boolean) => void }) {
   const s = useStore();
   const rows = s.threads[bot] ?? [];
-  const [all, setAll] = useState(false);
   const [asking, setAsking] = useState<{ thread: string; at: DOMRect } | null>(null);
   // a working thread's "· 2m" moves on (read before any return: the tree stays mounted from 0 threads to 1)
   const nowMs = useNow(rows.some((r) => !!s.chats[threadKey(bot, r.thread)]?.turn), 10_000);
   const name = s.bots.find((b) => b.name === bot)?.display_name ?? bot;
   const remote = !!s.bots.find((b) => b.name === bot)?.host;
-  const openThread = s.ui.view === "chat" && s.selectedBot === bot ? s.ui.thread : null;
+  const openThread = openThreadOf(s, bot);
   // the open thread stays in view even when it is past the first five
-  const shown = all || rows.length <= THREADS_SHOWN ? rows : rows.filter((r, i) => i < THREADS_SHOWN || r.thread === openThread);
+  const shown = shownThreads(rows, openThread, all);
   // the pull request each thread produced (rule 40): rows in view are read, and their mark follows the answers
   const tree = useRef<HTMLUListElement>(null);
   const prs = useThreadPrs();
@@ -98,6 +115,7 @@ export function ThreadTree({ bot, id }: { bot: string; id: string }) {
   if (!rows.length) return null;
   const hidden = rows.length - shown.length;
   const more = hidden > 0 || (all && rows.length > THREADS_SHOWN);
+  const hiddenUnread = hiddenThreadUnread(s, bot, all);
   return (
     <ul ref={tree} className="th-tree" role="group" id={id} aria-label={t("thread.list", { name })} data-testid={`threads-${bot}`}>
       {shown.map((r, i) => {
@@ -107,13 +125,17 @@ export function ThreadTree({ bot, id }: { bot: string; id: string }) {
         const pv = rowPreview(s, bot, r, nowMs);
         const ts = pv.ts;
         const pr = shownPrs(s.chats[threadKey(bot, r.thread)]?.items, prs.get(bot, r.thread))[0];
+        // answers the person has not read (the Dock or taskbar counts them): a count as the bot row shows one; an open
+        // question takes its place, as on the bot row (the amber mark says it)
+        const unread = st === "needs_you" ? 0 : (s.unread[threadKey(bot, r.thread)] ?? 0);
+        const label = pr ? `${t("thread.linkOpen", { title })} · ${prMarkText(pr)}` : t("thread.linkOpen", { title });
         return (
           <li
             key={r.thread}
             role="treeitem"
             aria-level={2}
             aria-selected={openThread === r.thread}
-            className={`th-row${last ? " th-last" : ""}${openThread === r.thread ? " on" : ""}`}
+            className={`th-row${last ? " th-last" : ""}${openThread === r.thread ? " on" : ""}${unread > 0 ? " unread" : ""}`}
             data-state={st}
             data-thread={r.thread}
             data-testid={`thread-row-${r.thread}`}
@@ -123,7 +145,7 @@ export function ThreadTree({ bot, id }: { bot: string; id: string }) {
               type="button"
               className="th-open"
               onClick={() => void s.openThread(bot, r.thread)}
-              aria-label={pr ? `${t("thread.linkOpen", { title })} · ${prMarkText(pr)}` : t("thread.linkOpen", { title })}
+              aria-label={unread > 0 ? `${label} · ${t("thread.unread", { n: unread })}` : label}
               title={title}
               data-testid="thread-open"
             >
@@ -146,6 +168,11 @@ export function ThreadTree({ bot, id }: { bot: string; id: string }) {
                 {pv.text}
               </span>
               {pr && <PrMark pr={pr} remote={remote} />}
+              {unread > 0 && (
+                <span className="badge th-unread" data-testid="thread-unread" aria-hidden="true">
+                  {unread}
+                </span>
+              )}
               <span className="th-go" aria-hidden="true" data-testid="thread-go">
                 <svg width="10" height="10" viewBox="0 0 10 10">
                   <path d="M3.8 2.2 6.6 5 3.8 7.8" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
@@ -185,8 +212,20 @@ export function ThreadTree({ bot, id }: { bot: string; id: string }) {
       {more && (
         <li role="none" className="th-row th-more th-last">
           <span className="th-branch" aria-hidden="true" />
-          <button type="button" className="th-open" onClick={() => setAll((v) => !v)} aria-expanded={all} data-testid="thread-more">
+          <button
+            type="button"
+            className="th-open"
+            onClick={() => onAll(!all)}
+            aria-expanded={all}
+            aria-label={hiddenUnread > 0 ? `${t("thread.more", { n: hidden })} · ${t("thread.unread", { n: hiddenUnread })}` : undefined}
+            data-testid="thread-more"
+          >
             <span className="th-title">{all ? t("thread.less") : t("thread.more", { n: hidden })}</span>
+            {hiddenUnread > 0 && (
+              <span className="badge th-unread th-more-unread" data-testid="thread-more-unread" aria-hidden="true">
+                {hiddenUnread}
+              </span>
+            )}
           </button>
         </li>
       )}

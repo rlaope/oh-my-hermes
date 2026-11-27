@@ -21,7 +21,7 @@ import { UpdateButton } from "./UpdateButton";
 import { FirstRunHint } from "../onboarding/FirstRun";
 import { OmhNotice } from "./OmhNotice";
 import { t } from "../i18n";
-import { ThreadTree } from "../threads/ThreadTree";
+import { hiddenThreadUnread, ThreadTree } from "../threads/ThreadTree";
 import { Dock } from "./Dock";
 import { useBotsAbove } from "./dockState";
 import { revealBotTop, revealPending, wholeTopOf } from "./revealBot";
@@ -65,6 +65,9 @@ export function Sidebar() {
   const closeSessionMenu = useCallback(() => setSessionMenu(null), []);
   const [adding, setAdding] = useState(false);
   const [ssh, setSsh] = useState(false);
+  // the bots whose threads all show ("Show N more" pressed): the rest of a bot's threads are out of view, so their
+  // unread answers count on its row
+  const [allThreads, setAllThreads] = useState<readonly string[]>([]);
   const AddBot = slots.addBot;
   const needle = q.trim().toLowerCase();
   const listed = selectSidebarBots(s);
@@ -143,12 +146,13 @@ export function Sidebar() {
             // own gateway, made by that computer's bridge); an offline bot gets none, as in the menu
             const onNew = b.status === "offline" ? undefined : () => void s.newThread(b.name);
             const groupId = `threads-of-${b.name.replace(/[^A-Za-z0-9_-]/g, "_")}`;
+            const allShown = allThreads.includes(b.name);
             return (
             <BotRow
               key={b.name}
               bot={b}
               chat={s.chats[b.name]}
-              unread={s.unread[b.name] ?? 0}
+              unread={(s.unread[b.name] ?? 0) + hiddenThreadUnread(s, b.name, allShown)}
               active={inChat && s.selectedBot === b.name && !s.ui.thread}
               asks={asks.filter((a) => a.bot === b.name)}
               pinned={pinned}
@@ -171,7 +175,14 @@ export function Sidebar() {
               }}
             >
               {/* its threads; a new one opens from the row's + (hover), its menu, or ./thread */}
-              {hasThreads && <ThreadTree bot={b.name} id={groupId} />}
+              {hasThreads && (
+                <ThreadTree
+                  bot={b.name}
+                  id={groupId}
+                  all={allShown}
+                  onAll={(on) => setAllThreads((was) => (on ? [...was, b.name] : was.filter((n) => n !== b.name)))}
+                />
+              )}
             </BotRow>
             );
           })}

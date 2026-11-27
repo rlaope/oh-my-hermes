@@ -1594,6 +1594,7 @@ export const ja: Record<Key, string> = {
   "thread.list": "{name}のスレッド",
   "thread.more": "さらに{n}件表示",
   "thread.less": "折りたたむ",
+  "thread.unread": "未読 {n}",
   "thread.remove": "スレッド {title} を外す",
   "thread.removeAsk": "このスレッドを外しますか? Hermesにアーカイブされ、あとで戻せます。",
   "thread.removeRunning": "まだ作業中です。止めて外しますか?",
