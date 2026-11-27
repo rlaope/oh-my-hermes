@@ -130,8 +130,7 @@ class SessionRow:
     # The conversation's latest activity, which orders the rows: a listed session is as new as its last message,
     # not as its start.
     activity_at: float = 0.0
-    # False for a session persisted open by a runtime that no longer holds it: its history can be read, but nothing
-    # here may resume, rename or delete it.
+    # The gateway can explicitly deny resume and editing while still supplying history.
     resumable: bool = True
     owner_runtime: str = ""
     source: str = ""  # where it was started (`tui`, `cli`, a messaging platform), as `session.list` names it
@@ -151,7 +150,7 @@ class SessionRow:
 
     @property
     def read_only(self) -> bool:
-        """Whether the row opens its history in a pager instead of resuming the session."""
+        """Whether this row lacks gateway authorization to resume or edit."""
         return self.local is not None or not self.resumable or self.owner_runtime == "other"
 
 
@@ -394,6 +393,10 @@ class SessionPicker:
     inventory_status: str = ""
     gateway_status: str = ""
     history_status: str = ""
+    gateway_loading: bool = False
+    gateway_profile: str = ""
+    opening_local: SessionRow | None = None
+    open_pages_left: int = 0
     deleted_inventory: set[tuple[str, str]] = field(default_factory=set)
     _table_cache: tuple[tuple[str, str, str], list[SessionRow]] | None = field(
         default=None, init=False, repr=False, compare=False)
@@ -412,13 +415,13 @@ class SessionPicker:
         return shown[min(self.index, len(shown) - 1)] if shown else None
 
     @staticmethod
-    def _same_lineage(left: SessionRow, right: SessionRow) -> bool:
+    def same_lineage(left: SessionRow, right: SessionRow) -> bool:
         return bool(left.profile and left.profile == right.profile and left.lineage & right.lineage)
 
     def _restore_selection(self, selected: SessionRow | None) -> None:
         shown = self.visible()
         self.index = next((i for i, row in enumerate(shown) if selected is not None and (
-            row.key == selected.key or self._same_lineage(row, selected))), 0)
+            row.key == selected.key or self.same_lineage(row, selected))), 0)
 
     def add_local(self, profiles: list[str], rows: list[SessionRow]) -> None:
         """Only the authenticated list contributes actions; matching local rows supply display metadata."""
@@ -607,6 +610,10 @@ class SessionPicker:
             self.title += event.char
         return None
 
+    def can_check_resume(self, row: SessionRow) -> bool:
+        return (row.local is not None and bool(self.gateway_profile) and row.profile == self.gateway_profile
+                and (self.gateway_loading or self.loading_older or bool(self.next_page)))
+
     def keys(self) -> tuple[str, ...]:
         """What the info line says its keys are: `RENAME_KEYS` while the filter row is a title, else `KEYS`."""
         if self.renaming:
@@ -614,7 +621,10 @@ class SessionPicker:
         hint = self._older_hint()
         if self.profiles is not None:
             row = self.selected()
-            action = ("Enter opens read-only history" if row.read_only else "Enter switches") if row else ""
+            action = ""
+            if row is not None:
+                action = ("Enter checks for resume" if self.can_check_resume(row)
+                          else "Enter opens read-only history" if row.read_only else "Enter switches")
             activity = "Turn running" if row and row.running and not self._current(row) else ""
             paging = "Loading older…" if self.loading_older else "Ctrl+G older" if self.next_page else ""
             partial = "Partial" if self.partial else ""
