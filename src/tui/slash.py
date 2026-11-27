@@ -313,12 +313,15 @@ def runs_during_turn(invocation: SlashInvocation) -> bool:
 # alone, `<model> --refresh`) is Hermes' own `/model` as typed, which its `slash.exec` refuses while the session runs:
 # that form waits for the turn.
 MODEL = "model"
+# `/model --refresh` as Hermes' own TUI reads it: the picker, over a list Hermes asks the providers for again.
 MODEL_REFRESH_ARG = "--refresh"
 
 
 def model_runs_during_turn(arg: str) -> bool:
     """Whether `/model <arg>` runs at once during a turn: bare or `--refresh` (the picker) or a switch `config.set
-    model` sends (`typed_switch_value`)."""
+    model` sends (`typed_switch_value`). The same three forms `App._model` handles itself; every other form goes to
+    Hermes' `slash.exec`, which refuses `/model` while a turn runs."""
+    # Deferred: model_picker imports session_picker, which reaches back to this module.
     from .model_picker import typed_switch_value
 
     stripped = arg.strip()
