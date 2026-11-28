@@ -3,7 +3,7 @@
 // The reset-first choice follows the idea of spending the quota that resets soonest first from yetone/magpie
 // (commit 5e933e153a87c4017a19502e1d2e87aa714572b9, MIT): concept only, reimplemented here against omher's own code.
 // The threshold, the headroom, the fresh-reading rule, model-scoped weekly limits and Codex's one switch per five
-// minutes follow 2rami/kasaterm (MIT): ideas and numbers only, code written fresh.
+// minutes are written here against omher's own code.
 import type { Account, AccountCli, AccountGroup, UsageProvider, UsageWindow } from "../../lib/protocol";
 import { clock, limitName } from "../../sidebar/usageFormat";
 import type { LoginStatus } from "./native";
@@ -145,7 +145,7 @@ export function accountForNewSessions(groups: AccountGroup[] | null, cli: Accoun
 export const SWITCH_AT_STEPS = [80, 85, 90, 95, 100] as const;
 export const SWITCH_AT_DEFAULT = 90;
 /** The account moved to must be at least this many points under the threshold. Moving at 100% onto a 98% account
- *  meant hitting that one's limit minutes later (kasaterm's own note). */
+ *  meant hitting that one's limit minutes later. */
 export const SWITCH_ROOM = 5;
 /** Codex: one automatic switch at most this often. Its numbers come from session files, written only while a session
  *  runs, so the account just left keeps its old reading for a while; this keeps the switch from bouncing on it. */

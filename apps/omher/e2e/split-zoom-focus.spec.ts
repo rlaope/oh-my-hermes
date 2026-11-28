@@ -1,4 +1,4 @@
-// Split zoom follows focus (kasaterm "칸 머리 조작": the zoom moves with the keyboard; typing never goes to a hidden
+// Split zoom follows focus (the zoom moves with the keyboard; typing never goes to a hidden
 // pane). Zoomed (⌘⇧↩), every way the keyboard moves to another pane of the split shows that pane, still zoomed: ⌘] /
 // ⌘[ (Ctrl+Tab / Ctrl+Shift+Tab off macOS), ⌘⌥arrows, a click on that session's sidebar row, a click on its system
 // notification. Splitting, closing or moving a pane while zoomed shows every pane again (tmux).

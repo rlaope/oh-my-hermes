@@ -268,8 +268,7 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
   nothing moves: a busy cell gets a thin steady edge and a waiting cell a steady amber one. A terminal's bell, OSC 9
   message or progress done is shown as news (an accent dot on its row, that soft edge on its cell), since it may mean
   it finished as well as that it waits; the amber warning sign is kept for a request omher knows about. A terminal that reports no
-  background work never shows the dashed edge. The Plans panel keeps its own split map. The layout card borrows its
-  ideas from kasaterm's sidebar map (2rami/kasaterm, MIT); the code is written fresh.
+  background work never shows the dashed edge. The Plans panel keeps its own split map.
 - **ACP agents** (`src-tauri/src/acp_chat.rs`): one adapter for agents that speak the Agent Client Protocol
   (JSON-RPC on stdio), one table row per agent. OpenCode (`opencode acp`) is the first. omher turns off the
   protocol's file and terminal capabilities, so the agent uses its own tools; its permission requests become

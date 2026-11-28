@@ -1,6 +1,5 @@
 // The sidebar's split card, kept apart from React and the DOM: how tall the card's map is, where each pane's cell sits
 // in it, how a cell lays out its text for its own size, which state its edge shows and the elapsed time in its corner.
-// Ideas from kasaterm's sidebar map (2rami/kasaterm, MIT); written fresh.
 import { t } from "../i18n";
 import { panesOf, paneRects, type Layout } from "../terminal/layout";
 import type { TermStatus } from "./agents";

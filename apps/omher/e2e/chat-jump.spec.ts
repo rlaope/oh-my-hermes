@@ -1,4 +1,4 @@
-// The chat timeline's way back (kasaterm's "Jump to bottom" pill and pinned own message): scrolled up more than a
+// The chat timeline's way back (a "Jump to bottom" pill and the pinned own message): scrolled up more than a
 // screen, a pill bottom-centre takes the view back to the bottom ("· N new" once messages came in meanwhile); End or
 // ⌘↓ / Ctrl+End in the timeline does the same. While the person reads the long answer below their last message, that
 // message stays as one muted line at the top; a click brings the bubble back, and it goes when the bubble is in view.

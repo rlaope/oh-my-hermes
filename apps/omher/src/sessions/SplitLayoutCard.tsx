@@ -6,7 +6,7 @@
 // focused cell), a soft accent edge breathes slowly when it rang unseen (news, not a warning), a danger edge after an
 // error. The motion is CSS keyframes on SVG strokes sized from a ResizeObserver: no
 // per-frame script, and under reduced motion nothing moves. A grip under the card sets its height, kept with the
-// split (splitState mapH). Ideas from kasaterm's sidebar map (2rami/kasaterm, MIT); written fresh.
+// split (splitState mapH).
 //
 // Each cell subscribes to its own session's activity (useTermFace, as a TERMINALS row does), so one terminal's output
 // re-renders its cell only, never the card, the other cells or the list.

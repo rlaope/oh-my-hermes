@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: a program's restart request is safer and works in the bottom terminal panel.** A copy of an earlier
+  restart report printed again (a saved log shown with `cat`, say) no longer brings back a program that had said it
+  no longer wants to be restarted; a different report at the same second still counts. Shells in the bottom terminal
+  panel may now ask too: a tab put back after a restart starts the program again once, as a resumed TERMINALS Shell
+  row does. A gh sign-in tab never may. Settings › Terminal "Programs may ask to restart" turns both off.
+  (`docs/OMHER-BOUNDARY.md` rule 55; `apps/omher/src-tauri/src/program_resume.rs`, `apps/omher/src/terminal/terms.ts`)
+
 - **omher: a Claude Code or Codex session's chat shows what was said and done.** In the Plans session view a Claude
   Code chat no longer shows the harness's own lines as the person's words: reminders, slash command blocks, task
   notices and compaction summaries are left out (a tag the person typed or quoted stays), a paste shows its text, and
@@ -13,8 +20,7 @@ All notable changes will be documented here.
   its code. A file edit's change keeps its old and new line numbers beside each line, with a thin rule between hunks.
   The side panel's git reads now ignore git variables omher inherited that would point them at another repository,
   and never fetch a partial clone's missing objects. (`docs/OMHER-BOUNDARY.md` rule 10;
-  `apps/omher/src/harness/session.ts`, `apps/omher/src/chat/activity/diffLines.ts`; ideas from 2rami/kasaterm (MIT),
-  code written fresh)
+  `apps/omher/src/harness/session.ts`, `apps/omher/src/chat/activity/diffLines.ts`; code written fresh)
 
 - **omher: a link to another computer that keeps dying backs off, and says what happened.** A remote bridge that
   printed its ready line and died right after was retried every 2 seconds forever, running the remote script each
@@ -27,8 +33,7 @@ All notable changes will be documented here.
   port 22 written or not, the default user written or not, or an alias whose `~/.ssh/config` `HostName`, `User` and
   `Port` name the same place, unless a jump host, proxy or other route-changing key makes the same address another
   computer), and the card warns when the host is this computer (`localhost`, a 127.x address, `::1` in any spelling,
-  or this computer's own name). Remote-only mode's link backs off the same way. Ideas from 2rami/kasaterm (MIT), code
-  written fresh. (`docs/OMHER-BOUNDARY.md` rule 31; `apps/omher/src-tauri/src/peers.rs`)
+  or this computer's own name). Remote-only mode's link backs off the same way. Code written fresh. (`docs/OMHER-BOUNDARY.md` rule 31; `apps/omher/src-tauri/src/peers.rs`)
 
 - **omher: the account auto-switch moves before the limit, and only to an account with room.** Settings › Accounts has
   a "Switch at" level under Auto-switch, 90% unless changed (80 to 100 in steps of 5; 100 waits for the limit as
@@ -41,7 +46,7 @@ All notable changes will be documented here.
   are shown as such and count only while a chat uses that model, on the account in use or the one moved to, so a full
   Opus week no longer marks the whole account limited and the switch does not move onto a full Opus week while Opus is
   in use. When no account has room, the bot chat and the Accounts page say so once, until an account has room again or
-  the account in use changes. Ideas from 2rami/kasaterm (MIT), code written fresh.
+  the account in use changes. Code written fresh.
   (`apps/omher/src/settings/accounts/rules.ts`)
 
 - **omher: Continue a conversation is back in the TERMINALS + menu, and finds the ones you had.** Regression fixed:
@@ -56,8 +61,7 @@ All notable changes will be documented here.
   the last thing you or the agent said. A This folder / All folders switch (remembered) lists every folder's
   conversations with each row's own folder, a filter narrows by title, last line or folder, and a long folder path
   Claude Code shortened is listed and opens. Reading stays read-only and bounded: 200 lines of a file's start, its
-  last 1 MB, and at most 20,000 files for one listing, stopping once the list is full. Ideas from 2rami/kasaterm
-  (MIT), code written fresh. (`docs/OMHER-BOUNDARY.md` rule 30; `apps/omher/src-tauri/src/past_chats.rs`,
+  last 1 MB, and at most 20,000 files for one listing, stopping once the list is full. Code written fresh. (`docs/OMHER-BOUNDARY.md` rule 30; `apps/omher/src-tauri/src/past_chats.rs`,
   `apps/omher/src/sessions/SessionsSection.tsx`)
 
 - **omher: a Claude Code or Codex waiting on you in a terminal shows in Needs you.** When a terminal agent stops on its
@@ -144,7 +148,7 @@ All notable changes will be documented here.
   with what is already served passes; a deliberate re-publish of the same version with other contents is a
   `republish` input, off by default), and reads the public `latest.json` back after the upload, failing unless it is
   the one just written.
-  Releases of different tags rewrite that file one at a time. Ideas from 2rami/kasaterm (MIT), code written fresh.
+  Releases of different tags rewrite that file one at a time. Code written fresh.
   (`apps/omher/scripts/release-guard.mjs`, `.github/workflows/omher-release.yml`)
 
 - **omher: Korean names match however macOS composed them.** macOS hands file and folder names over decomposed, so
@@ -154,8 +158,7 @@ All notable changes will be documented here.
   groups a folder by one key in either form (and `C:\Users` with `c:\users` on Windows; macOS and Linux paths keep
   their case), with saved collapsed folders and order found under the new key, and the searches over names and
   folders (sidebar bots and TERMINALS, Settings › Bots, Apps, Tasks) compare composed text, case ignored. Nothing is
-  renamed on disk, and a session still starts in the folder as the system spelled it. Ideas from 2rami/kasaterm
-  (MIT), code written fresh. (`apps/omher/src/sessions/folders.ts`, `apps/omher/src/sessions/term/engine-find.ts`,
+  renamed on disk, and a session still starts in the folder as the system spelled it. Code written fresh. (`apps/omher/src/sessions/folders.ts`, `apps/omher/src/sessions/term/engine-find.ts`,
   `apps/omher/src/lib/textMatch.ts`)
 
 - **TUI: a `/model` form Hermes runs itself waits for the turn instead of being refused.** During a turn, `/model`
@@ -1223,7 +1226,7 @@ All notable changes will be documented here.
   Windows. It needs Windows Terminal or a VT-capable console (an old conhost falls back with one line saying why); a
   Windows user still has to try it.
 
-- **omher: ideas from kasaterm.** Behaviour and numbers borrowed from 2rami/kasaterm (MIT), code written fresh.
+- **omher: terminal behaviour batch.** Code written fresh.
   - **Undo a closed terminal.** Closing a running TERMINALS row can be undone for 10 seconds: the row leaves at
     once, a toast offers Undo (⌘Z / Ctrl+Shift+Z), and the same terminal comes back with its program and scrollback,
     in its split if it was in one. Settings › Terminal › Undo window after closing: Off / 5 s / 10 s (default 10 s).
