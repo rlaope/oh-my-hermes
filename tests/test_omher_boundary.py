@@ -2895,11 +2895,24 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
         self.assertIn("const HEAD: u64 = 256 * 1024;", self.past)
         self.assertIn("const TAIL: u64 = 1024 * 1024;", self.past)
         self.assertIn("pub const MSG_MAX: usize = 40;", self.past)
-        # every file read goes through inside(): the listing and the messages
-        for fn in ("pub fn claude_list(", "pub fn claude_messages(", "pub fn codex_list(", "pub fn codex_messages(", "fn codex_names(",
+        # a listing is bounded by work, not by a window of newest files: at most 20,000 files, 200 lines of a head, the
+        # last 128 KB for the last line, and it stops once the list is full
+        self.assertIn("const FILES_MAX: usize = 20_000;", self.past)
+        self.assertIn("const HEAD_LINES: usize = 200;", self.past)
+        self.assertIn("const LAST_TAIL: u64 = 128 * 1024;", self.past)
+        self.assertIn("let mut r = BufReader::new(f.take(HEAD));", self.past)
+        for fn in ("pub fn claude_list(", "pub fn codex_list("):
+            body = self.past.split(fn, 1)[1].split("\n}\n", 1)[0]
+            self.assertIn("if out.len() >= LIST_MAX + LIST_MARGIN {", body, fn)
+        self.assertIn("codex_rollouts(root, FILES_MAX)", self.past)
+        self.assertIn("if files.len() >= FILES_MAX {", self.past)
+        # every file read goes through inside(): the listing and the messages (a Claude Code conversation's file, by
+        # its id, in its folder's project folder or any other)
+        for fn in ("pub fn claude_list(", "fn claude_path(", "pub fn codex_list(", "pub fn codex_messages(", "fn codex_names(",
                    "pub fn rollout_id("):
             body = self.past.split(fn, 1)[1].split("\n}\n", 1)[0]
             self.assertIn("inside(root, ", body, fn)
+        self.assertIn("let path = claude_path(root, id, cwd).ok_or(", self.past.split("pub fn claude_messages(", 1)[1].split("\n}\n", 1)[0])
         # an id is a UUID before it names a file
         for fn in ("pub fn claude_messages(", "pub fn codex_messages("):
             body = self.past.split(fn, 1)[1].split("\n}\n", 1)[0]
@@ -2908,6 +2921,24 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
         self.assertIn("It refuses a symlink anywhere under those folders (except `conversation_state` below, which only stats names and"
                       " follows links as the CLI does) and any file that is not inside that home once its links are resolved", text)
         self.assertIn("never opens a credential, token or config file of either CLI", text)
+        self.assertIn(
+            "for the folder the TERMINALS + menu starts in or, when the person switches its list to All folders, for every"
+            " folder that agent keeps conversations for in that same home (every project folder under"
+            " `<claude config>/projects`, every rollout under `<codex home>/sessions`), each conversation's folder taken"
+            " from its own file.",
+            text,
+        )
+        self.assertIn(
+            "reads at most the first 256 KB (at most 200 lines) and the last 1 MB of a file, opens at most 20,000 files for"
+            " one listing, newest first, and stops once the list is full",
+            text,
+        )
+        self.assertIn(
+            "the last line the person or the agent said in it (from the last 128 KB of its file), folder and age; picking"
+            " one opens a TERMINALS terminal of that agent in that folder continuing the conversation (`--resume <id>` for"
+            " Claude Code, `codex resume <id>` for Codex, rule 11), where the CLI shows its own history.",
+            text,
+        )
 
     def test_a_conversation_is_looked_for_by_name_only_before_a_terminal_continues_it(self) -> None:
         text = _flat(DOC.read_text(encoding="utf-8"))
@@ -2926,7 +2957,7 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
             self.assertNotIn(banned, look, banned)
 
     def test_the_commands_take_only_an_agent_folders_and_an_id(self) -> None:
-        for cmd, params in (("past_chats_list", "agent: String, cwds: Vec<String>"), ("past_chat_messages", "agent: String, id: String, cwd: String"),
+        for cmd, params in (("past_chats_list", "agent: String, cwds: Vec<String>, all: bool"), ("past_chat_messages", "agent: String, id: String, cwd: String"),
                             ("conversation_state", "agent: String, id: String, account: Option<String>"),
                             ("codex_conversation", "shell: State<'_, Shell>, id: u32"),
                             ("claude_conversation", "shell: State<'_, Shell>, id: u32"),
