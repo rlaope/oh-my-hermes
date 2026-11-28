@@ -504,10 +504,14 @@ export const STEER_REPLY_MS = 8_000;
  *  each read that finds the turn still running doubles the wait (a long quiet tool call), up to TURN_QUIET_MAX_MS. */
 export const TURN_QUIET_MS = 3_000;
 export const TURN_QUIET_MAX_MS = 60_000;
-/** A re-read of a chat (chat.open after a quiet turn, a reconnect or a restart) with no reply after this long is given
- *  up: the chat may be read again (the quiet watch's next wait), and the given-up read's late reply is dropped once a
- *  newer read of that chat has started. Longer than a normal open, which may start the bot. */
-export const CHAT_READ_MS = 20_000;
+/** A read of a chat or a thread (chat.open / thread.open) with no reply after this long is given up: the chat may be
+ *  read again and the given-up read's late reply is dropped. Longer than the bridge's own gateway call limit (Hermes'
+ *  client gives up an RPC after 30 s), so every answer Hermes can still give arrives before it and is used, and a
+ *  second open of the same thread is never sent while the first one may still run in Hermes. Only a reply that is truly
+ *  lost (the socket stayed up, the answer never came) reaches it. */
+export const CHAT_READ_MS = 35_000;
+/** The line a chat that was never read shows when its read is given up (click it again to retry). */
+const READ_LOST = "no answer from Hermes";
 /** How much of a turn's thinking text is kept (the start; the rest is dropped, never shown cut mid-word). */
 export const THINKING_MAX = 20_000;
 
@@ -2519,8 +2523,12 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     const job = new Promise<void>((resolve, reject) => {
       timer = setTimeout(() => {
         // given up: its late reply (or error) must not land in the chat any more, even before the next read starts
-        if (newestRead.get(key) === n) newestRead.delete(key);
-        reject({ code: "timeout", message: "no reply to the chat read" });
+        if (newestRead.get(key) === n) {
+          newestRead.delete(key);
+          // a chat never read would say "Loading…" for good: it says why, and a click reads it again
+          if (!key.startsWith("fold:") && !state.chats[key]?.loaded) dispatch({ type: "chat.failed", bot: key, message: READ_LOST });
+        }
+        reject({ code: "timeout", message: READ_LOST });
       }, CHAT_READ_MS);
       work.then(resolve, reject);
     }).finally(() => {
@@ -2836,7 +2844,11 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       let timer: ReturnType<typeof setTimeout> | undefined;
       const job: Promise<void> = new Promise<void>((resolve) => {
         timer = setTimeout(() => {
-          if (current()) threadOpenGen.delete(key);
+          if (current()) {
+            threadOpenGen.delete(key);
+            // a thread never read would say "Loading…" for good: it says why, and a click opens it again
+            if (!state.chats[key]?.loaded) dispatch({ type: "chat.failed", bot: key, message: READ_LOST });
+          }
           resolve();
         }, CHAT_READ_MS);
         loadThread(bot, thread, current).then(resolve, resolve);
