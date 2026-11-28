@@ -385,6 +385,16 @@
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+/* another app keeping a CPU core busy (src/sidebar/CpuChip.tsx): the disk chip's shape, a warning tint */
+.cpu-chip svg {
+  color: var(--warn, var(--danger));
+}
+.cpu-chip span {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .foot-row {
   position: relative; /* the usage card spans this row */
   display: flex;
@@ -559,6 +569,27 @@ button.upd:hover {
 .upd:focus-visible {
   outline: 2px solid var(--line-strong);
   outline-offset: 2px;
+}
+/* A restart that did not happen: a small card on its own line under "You" (the row wraps), inside the sidebar and
+   not modal, with Restart again / Later. */
+.upd-wait {
+  flex: 1 0 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--pop);
+  border: 1px solid var(--line-strong);
+  font-size: 12px;
+  color: var(--body);
+}
+.upd-wait-b {
+  margin: 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.upd-wait .upd-dlg-f {
+  margin-top: 10px;
+  flex-wrap: wrap;
 }
 /* The update confirm: a small calm card over a dimmed app, the popovers' look (8px radius, --pop, one line). */
 .upd-veil {
