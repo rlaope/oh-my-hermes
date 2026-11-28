@@ -41,3 +41,6 @@ tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 # Linux: the opener plugin's own launcher list, run with the AppImage environment taken out (src/appimage.rs).
 [target.'cfg(target_os = "linux")'.dependencies]
 open = "5"
+# Linux: the webview's `enable-media-stream` setting for the composer's microphone (src/voice.rs); the version wry pins,
+# already in the tree, with only the feature that setting needs
+webkit2gtk = { version = "=2.0.2", features = ["v2_4"] }

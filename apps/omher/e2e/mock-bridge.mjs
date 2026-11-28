@@ -18,6 +18,16 @@
 // mock.pluginLoad {load: "live"|"reload"|"restart"|"failed"} (what the next plugin install / reload says),
 // mock.apps {bot, name, state} (one Apps entry's state for a bot), mock.appsNext {verb, line} (the next apps.<verb> run
 // fails with Hermes' text), mock.appsDelay {verb, ms} (how long an apps.<verb> run takes),
+// mock.computer {status?, bots?, next?, ms?, busy?} (Settings › Computer, rule 52: `status` merges into what
+// computer.status answers, `bots` sets bots' computer_use switches ({name: "on"|"off"|"unknown"|"disabled"}), `next`
+// {verb, line, unknown?} makes the next computer.<verb> run (install, grant, toggle) fail with Hermes' text, the switch
+// left as it was (with `unknown`, left unreadable); `ms` is how long a run takes; `busy` n: the next n computer.status
+// asks answer `busy`; status fields `codeFocus` [names] (bots whose config sets agent.coding_context: focus) and
+// `noHermes` (a toggle finds no Hermes to run) shape computer.bot and computer.toggle),
+// mock.voice {info?, transcript?, provider?, next?, ms?, parts?} (voice, rule 54: `info` merges into what voice.info
+// answers, `transcript` and `provider` are what the next voice.transcribe gives, `next` {op, code, message} makes the
+// next voice.<op> fail with the bridge's code and Hermes' words, `ms` is how long a request takes, `parts` how many
+// parts voice.speak says an answer has),
 // mock.botStatus {bot, status} (a bot goes offline or online),
 // mock.manual {bot, on} (a message to that bot, or to its folder chats, starts a turn that runs no script: the test
 // drives it with mock.emit),
@@ -717,6 +727,40 @@ const APP_SKILL_SEED = {
   ],
 };
 let notReady = new Map();
+// Computer use (computer.*, BOUNDARY rule 52): what Hermes' `computer-use permissions status --json` answers (kept as the
+// bridge keeps it), each bot's computer_use switch, the next failing run, and how long a run takes.
+let computerState, computerBots, computerNext, computerMs, computerBusy;
+// Voice (voice.*, BOUNDARY rule 54): what voice.info answers, the next transcript, the next failure, and the delay.
+let voiceInfo, voiceTranscript, voiceProvider, voiceNext, voiceMs, voiceParts;
+const VOICE_INFO = () => ({
+  supported: true, line: "", stt: { enabled: true, provider: "", where: "auto" }, tts: { provider: "edge", where: "edge" }, text_max: 20000,
+});
+// a tenth of a second of silent 8 kHz WAV as each part's audio: the e2e page stubs playback, so no sound is ever made
+const VOICE_AUDIO = (() => {
+  const n = 800;
+  const wav = Buffer.alloc(44 + n, 128);
+  wav.write("RIFF", 0, "latin1");
+  wav.writeUInt32LE(36 + n, 4);
+  wav.write("WAVEfmt ", 8, "latin1");
+  wav.writeUInt32LE(16, 16);
+  wav.writeUInt16LE(1, 20); // PCM
+  wav.writeUInt16LE(1, 22); // mono
+  wav.writeUInt32LE(8000, 24);
+  wav.writeUInt32LE(8000, 28);
+  wav.writeUInt16LE(1, 32);
+  wav.writeUInt16LE(8, 34);
+  wav.write("data", 36, "latin1");
+  wav.writeUInt32LE(n, 40);
+  return wav.toString("base64");
+})();
+const COMPUTER_READY = () => ({
+  read: true, pinned: false, platform: "darwin", platform_supported: true, installed: true, version: "cua-driver 0.4.2",
+  ready: true, can_grant: true, error: null, accessibility: true, screen_recording: true,
+  checks: [
+    { label: "Driver version", status: "ok", message: "Matches the version Hermes pins" },
+    { label: "Bundle identity", status: "ok", message: "com.trycua.driver" },
+  ],
+});
 // Add bot › New bot (rule 44): what `omh --hermes-home <root> profile bot-templates --json` answers, and the next create's failure line.
 let templatesOmh = "ok";
 let createNext = null;
@@ -975,6 +1019,17 @@ function reset() {
   appsNext = {};
   appsDelay = {};
   appsHold = new Map(); // bot -> { arrived, release }: its next apps.list waits for mock.appsRelease
+  computerState = COMPUTER_READY();
+  computerBots = new Map(); // bot -> "on" | "off" | "unknown" (absent: off)
+  computerNext = {};
+  computerMs = 200;
+  computerBusy = 0;
+  voiceInfo = VOICE_INFO();
+  voiceTranscript = "check the deploy logs";
+  voiceProvider = "local";
+  voiceNext = {};
+  voiceMs = 150;
+  voiceParts = null;
   notReady = new Map(); // bot -> the sign-in provider that now passes its strict check ("" = none)
   idSeq = 0;
   calls = [];
@@ -1189,6 +1244,48 @@ function needStr(p, k) {
 // One `hermes -p <bot> mcp install|login|remove <name>` as the bridge runs it: the name from the catalog, refusals
 // before anything runs, Hermes' own text when it did not work, and the state read back after.
 const APP_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+// Computer use: a bot on another computer is refused with the bridge's reason; a switch reads `unknown` for an offline
+// bot (the bridge asks only a gateway it is attached to); a toggle is refused when that cannot be told or the toolsets
+// are pinned; a run that fails leaves the switch as it was (Hermes' readback disagreed) with Hermes' text, or, with
+// `unknown`, leaves it unreadable. A switch set to "disabled" reads off (the profile's agent.disabled_toolsets), and
+// turning it on clears that, as Hermes' `tools enable` does. `busy` n: the next n computer.status asks find the one run
+// slot taken (another window's install).
+const computerRefusal = (b) =>
+  new OpError("remote_bot", `Computer use would act on ${b.host?.label ?? "that computer"}'s own screen, so omher does not set it up from here.`);
+function computerSwitch(b) {
+  if (b.status === "offline") return { state: "unknown", why: "offline" };
+  const state = computerBots.get(b.name) ?? "off";
+  if (state === "disabled") return { state: "off", why: "disabled" };
+  return { state, why: state === "unknown" ? "unread" : "" };
+}
+// the bots whose config sets agent.coding_context: focus (mock.computer {codeFocus: [names]})
+const computerFocus = (b) => (computerState.codeFocus ?? []).includes(b.name);
+const computerWait = () => new Promise((r) => setTimeout(r, computerMs));
+function voiceOp(p, op, answer) {
+  const b = needBotAny(p);
+  if (b.host) throw new OpError("remote_bot", `Voice works with bots on this computer only; ${b.host.label}'s bots run on another one.`);
+  if (b.status === "offline") throw new OpError("bot_offline", `${b.display_name} is offline, so omher cannot reach its Hermes.`);
+  // refusals answer at once (the dispatcher keeps an OpError's code only when it is thrown here); a result after `ms`
+  const fail = voiceNext[op];
+  delete voiceNext[op];
+  if (fail) throw new OpError(fail.code, fail.message);
+  const result = answer();
+  return new Promise((r) => setTimeout(() => r(result), voiceMs));
+}
+function computerDriver(verb) {
+  return computerWait().then(() => {
+    const fail = computerNext[verb];
+    delete computerNext[verb];
+    if (fail) return { outcome: "failed", line: fail.line, status: structuredClone(computerState) };
+    if (verb === "install") Object.assign(computerState, { installed: true, version: "cua-driver 0.4.2" });
+    // `grantPending`: Hermes' grant command returned while macOS' dialog still waits on the person
+    else if (!computerState.grantPending) Object.assign(computerState, { accessibility: true, screen_recording: true });
+    if (computerState.can_grant) computerState.ready = computerState.accessibility === true && computerState.screen_recording === true;
+    else computerState.ready = computerState.installed;
+    return { outcome: "ok", status: structuredClone(computerState) };
+  });
+}
+
 function appRun(p, verb) {
   const b = needBotAny(p);
   if (typeof p.name !== "string" || !APP_NAME.test(p.name)) throw new OpError("bad_request", "need an app from Hermes' MCP catalog");
@@ -1751,6 +1848,61 @@ const OPS = {
   "apps.install": (p) => appRun(p, "install"),
   "apps.login": (p) => appRun(p, "login"),
   "apps.remove": (p) => appRun(p, "remove"),
+  "computer.status": () => {
+    if (computerBusy > 0) {
+      computerBusy -= 1;
+      throw new OpError("busy", "omher is still running a computer-use command");
+    }
+    return computerWait().then(() => structuredClone(computerState));
+  },
+  "computer.bot": (p) => {
+    const b = needBotAny(p);
+    if (b.host) throw computerRefusal(b);
+    return { ...computerSwitch(b), code_focus: computerFocus(b) };
+  },
+  "computer.toggle": (p) => {
+    const b = needBotAny(p);
+    if (b.host) throw computerRefusal(b);
+    if (typeof p.on !== "boolean") throw new OpError("bad_request", "on is true or false");
+    if (computerState.pinned) throw new OpError("pinned", "HERMES_TUI_TOOLSETS is set in omher's environment, so omher does not change this switch");
+    const before = computerSwitch(b);
+    if (before.state === "unknown")
+      throw new OpError("cannot_tell", `omher cannot tell whether ${b.display_name} may use this computer, so it changes nothing`);
+    const want = p.on ? "on" : "off";
+    if (before.state === want) return { outcome: "ok", state: want, why: before.why };
+    if (computerState.noHermes) throw new OpError("no_hermes", "Hermes is not on this computer.");
+    return computerWait().then(() => {
+      const fail = computerNext.toggle;
+      delete computerNext.toggle;
+      if (fail?.unknown) {
+        computerBots.set(b.name, "unknown");
+        return { outcome: "failed", state: "unknown", why: "unread", line: fail.line };
+      }
+      if (fail) return { outcome: "failed", state: before.state, why: before.why, line: fail.line };
+      computerBots.set(b.name, want);
+      return { outcome: "ok", state: want, why: "" };
+    });
+  },
+  "computer.install": () => computerDriver("install"),
+  // voice: a bot on another computer is refused with the bridge's reason; the rest answer as the bridge does
+  "voice.info": (p) => voiceOp(p, "info", () => structuredClone(voiceInfo)),
+  "voice.transcribe": (p) =>
+    voiceOp(p, "transcribe", () => {
+      if (typeof p.data_base64 !== "string" || !p.data_base64) throw new OpError("bad_request", "no recording");
+      if (typeof p.mime !== "string" || !/^(audio\/|video\/webm)/.test(p.mime)) throw new OpError("bad_request", "the recording's type is not one Hermes takes");
+      return { transcript: voiceTranscript, provider: voiceProvider };
+    }),
+  "voice.speak": (p) =>
+    voiceOp(p, "speak", () => {
+      if (typeof p.text !== "string") throw new OpError("bad_request", "no text");
+      const parts = voiceParts ?? Math.max(1, Math.ceil(p.text.length / 1500));
+      if (!Number.isInteger(p.part) || p.part < 0 || p.part >= parts) throw new OpError("bad_request", `this text has ${parts} parts`);
+      return { part: p.part, parts, cut: false, text_max: 20000, empty: false, mime: "audio/wav", data_base64: VOICE_AUDIO, provider: "edge" };
+    }),
+  "computer.grant": () => {
+    if (computerState.platform !== "darwin") throw new OpError("bad_request", "Only macOS asks for computer-use permissions.");
+    return computerDriver("grant");
+  },
   "tasks.linear": (p) => {
     const server = linearMcp.get(needBot(p).name);
     return server ? { configured: true, server } : { configured: false, server: "" };
@@ -2349,6 +2501,23 @@ const OPS = {
     appsDelay[String(p.verb)] = Number(p.ms);
     return {};
   },
+  "mock.voice": (p) => {
+    if (p.info && typeof p.info === "object") Object.assign(voiceInfo, p.info);
+    if (typeof p.transcript === "string") voiceTranscript = p.transcript;
+    if (typeof p.provider === "string") voiceProvider = p.provider;
+    if (p.next && typeof p.next === "object") voiceNext[String(p.next.op)] = { code: String(p.next.code), message: String(p.next.message) };
+    if (typeof p.ms === "number") voiceMs = p.ms;
+    if (typeof p.parts === "number") voiceParts = p.parts;
+    return {};
+  },
+  "mock.computer": (p) => {
+    if (p.status && typeof p.status === "object") Object.assign(computerState, p.status);
+    if (p.bots && typeof p.bots === "object") for (const [k, v] of Object.entries(p.bots)) computerBots.set(k, String(v));
+    if (p.next && typeof p.next === "object") computerNext[String(p.next.verb)] = { line: String(p.next.line), unknown: p.next.unknown === true };
+    if (typeof p.ms === "number") computerMs = p.ms;
+    if (typeof p.busy === "number") computerBusy = p.busy;
+    return {};
+  },
   "mock.appsNext": (p) => {
     appsNext[String(p.verb)] = { line: String(p.line) };
     return {};
@@ -2600,6 +2769,7 @@ function startTurn(bot, text, folder) {
   if (text.startsWith("/clarify")) return scriptClarify(bot);
   if (text.startsWith("/interview")) return schedule(bot, [[150, () => raiseInterview(bot, 0)]]);
   if (text.startsWith("/delegate")) return scriptDelegate(bot);
+  if (text.startsWith("/browser")) return scriptBrowser(bot);
   if (peerAsk(text)) return scriptPeer(bot, text);
   scriptNormal(bot, text);
 }
@@ -2735,6 +2905,55 @@ function scriptNormal(bot, text) {
 // real turn sent them (bridge/tests/fixtures/real-subagent-turn.json): spawn, start, thinking, a tool, then complete.
 // Like the real background fan-out, the children outlive the turn: the turn ends at 600 ms, the first child returns
 // at 1.6 s, the second at 2.6 s (`/delegate fail` makes it fail). The UI events are the bridge's `subagent` shape.
+// `/browser`: a turn of browser and computer steps (BOUNDARY rule 53). Each call is what Hermes sends (`args` with the
+// code, the CDP params and the text a dialog types, here the secret BROWSER_TYPED), and the event is what the bridge
+// makes of it (bridgeStep, omher_bridge.browser_step / computer_step): a `browser_exec` label, a CDP method, a dialog's
+// or vault's action, a computer action and app, never the rest. A step Hermes names a capture for gets `tool.shot`
+// with the image, as the bridge sends it once it read the file.
+const BROWSER_TYPED = "hunter2-typed-in-page";
+const SHOT_BLUE =
+  "iVBORw0KGgoAAAANSUhEUgAAAEAAAAAoCAIAAADBrGu+AAAAPUlEQVR42u3PQQkAAAgEsEtnJiMayww+hcEKLNXzWgQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQELhYwOzzi5l4FjQAAAABJRU5ErkJggg==";
+const SHOT_ORANGE =
+  "iVBORw0KGgoAAAANSUhEUgAAAEAAAAAoCAIAAADBrGu+AAAAPUlEQVR42u3PQQkAAAgEsEtnJiMayww+hcEKLNP1WgQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQELhZY0Tzik6vxGQAAAABJRU5ErkJggg==";
+// The bridge's label (omher_bridge.browser_label) as far as these scripted calls need it: the first line when it is a
+// `#` comment (not `#!`), whitespace folded, control characters dropped, trimmed, clipped to 60 with "…"; the bridge
+// also masks secret-shaped text (mask_secrets), which no scripted label here holds. CDP methods: the bridge's
+// BROWSER_CDP_METHOD.
+const LABEL_MAX = 60;
+const CDP_METHOD = /^[A-Z][A-Za-z]{0,39}\.[a-z][A-Za-z]{0,59}$/;
+function bridgeStep(name, args) {
+  if (name === "browser_exec") {
+    const first = (String(args.code ?? "").trimStart().split(/\r?\n/)[0] ?? "").trim();
+    if (!first.startsWith("#") || first.startsWith("#!")) return { detail: "" };
+    const text = first.replace(/^#+/, "").split(/\s+/).join(" ").replace(/[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩]/g, "").trim();
+    return { detail: text.length <= LABEL_MAX ? text : `${text.slice(0, LABEL_MAX - 1).trimEnd()}…` };
+  }
+  if (name === "browser_cdp") return { detail: typeof args.method === "string" && CDP_METHOD.test(args.method) ? args.method : "" };
+  if (name === "browser_dialog" || name === "browser_vault") return { detail: "", action: args.action };
+  if (name === "computer_use") return { detail: args.app ?? "", action: args.action };
+  return { detail: "" };
+}
+function scriptBrowser(bot) {
+  const calls = [
+    { id: "br1", name: "browser_exec", args: { code: `# Opening the shop's login page\nnew_tab('https://shop.example/login')\nfill_input('#password', '${BROWSER_TYPED}')\ncapture_screenshot()` }, shot: SHOT_BLUE },
+    { id: "br2", name: "browser_exec", args: { code: `fill_input('#search', '${BROWSER_TYPED}')\nprint(page_info())` } },
+    { id: "br3", name: "browser_cdp", args: { method: "Input.insertText", params: { text: BROWSER_TYPED } } },
+    { id: "br4", name: "browser_dialog", args: { action: "accept", prompt_text: BROWSER_TYPED } },
+    { id: "br5", name: "browser_vault", args: { action: "fill", handle: "h_7f2c" } },
+    { id: "br6", name: "computer_use", args: { action: "capture", app: "Safari" }, shot: SHOT_ORANGE },
+  ];
+  const steps = calls.flatMap((c, i) => {
+    const at = 80 + i * 120;
+    const out = [
+      [at, () => ev(bot, "tool.start", { tool_id: c.id, name: c.name, ...bridgeStep(c.name, c.args) })],
+      [at + 60, () => ev(bot, "tool.end", { tool_id: c.id, name: c.name, ok: true, ms: 60 })],
+    ];
+    if (c.shot) out.push([at + 70, () => ev(bot, "tool.shot", { tool_id: c.id, mime: "image/png", data_base64: c.shot })]);
+    return out;
+  });
+  schedule(bot, [...steps, [880, () => say(bot, "Logged in and checked the cart.")], [960, () => endTurn(bot, "done")]]);
+}
+
 function scriptDelegate(bot) {
   const dag = [
     { run: "codex-coexist-live", node: "t3-doctor" },

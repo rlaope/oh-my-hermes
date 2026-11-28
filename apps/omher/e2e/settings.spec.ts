@@ -189,8 +189,8 @@ test("settings opens and closes; theme Light sets data-theme; bot and provider p
   await expect(page.getByTestId("composer")).toHaveCount(0);
   for (const label of ["Kami", "Friren", "Hermes", "General", "Providers"])
     await expect(view.locator(".st-nav").getByRole("button", { name: label, exact: true })).toBeVisible();
-  // Computer is not built yet, and its nav entry says so
-  await expect(view.locator(".st-nav").getByRole("button", { name: "Computer Soon", exact: true })).toBeVisible();
+  // Computer is a page now (e2e/computer.spec.ts): its nav entry is its name alone
+  await expect(view.locator(".st-nav").getByRole("button", { name: "Computer", exact: true })).toBeVisible();
 
   // General: theme
   await expect(page.getByTestId("settings-nav-general")).toHaveAttribute("aria-current", "page");
@@ -219,7 +219,8 @@ test("settings opens and closes; theme Light sets data-theme; bot and provider p
   await expect(list.locator("input, select, textarea")).toHaveCount(0);
 
   await page.getByTestId("settings-nav-computer").click();
-  await expect(page.getByTestId("settings-page-computer")).toContainText("Soon");
+  await expect(page.getByTestId("settings-page-computer")).toContainText("Let a bot click and type in your apps");
+  await expect(page.getByTestId("settings-page-computer")).not.toContainText("Soon");
 
   // close with the header button
   await page.getByRole("button", { name: "Close settings" }).click();

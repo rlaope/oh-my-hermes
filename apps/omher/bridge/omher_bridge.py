@@ -7,8 +7,9 @@ profile's own gateway through Hermes' ``connect_gateway``.
 
 Prints one line ``OMHER_BRIDGE_READY {"port": N}`` on stdout once listening; everything else goes
 to stderr. Binds 127.0.0.1 only and refuses (403) any connection whose ``token`` query parameter
-differs. Makes no model or network call of its own; the one outside read is a PR's state and check result through
-the person's own `gh` (``runs.prs`` for a plan, ``thread.prs`` for a thread).
+differs. Makes no model call of its own and holds no key; the one outside read is a PR's state and check result
+through the person's own `gh` (``runs.prs`` for a plan, ``thread.prs`` for a thread), and its one HTTP use is voice
+(``voice.transcribe``, ``voice.speak``): one request to the bot's own gateway on loopback (``voice_request``).
 
 Boundary rules the code keeps:
 * One gateway connection per profile, opened lazily (``--eager`` opens them all at start).
@@ -28,6 +29,7 @@ import base64
 import binascii
 import contextlib
 import errno
+import hashlib
 import hmac
 import inspect
 import json
@@ -1085,13 +1087,18 @@ def _memory_limit(value, default: int) -> int:
         return default
 
 
-def _memory_on(value) -> bool:
-    """Hermes' `is_truthy_value(value, default=True)`."""
+def _truthy(value, default: bool) -> bool:
+    """Hermes' `is_truthy_value`: None is the default, a string is one of its truthy words, anything else its bool."""
     if value is None:
-        return True
+        return default
     if isinstance(value, str):
         return value.strip().lower() in TRUTHY
     return bool(value)
+
+
+def _memory_on(value) -> bool:
+    """Hermes' `is_truthy_value(value, default=True)`."""
+    return _truthy(value, True)
 
 
 def memory_entries(text: str) -> list[str]:
@@ -3193,7 +3200,8 @@ def _windows_kill_tree(pid: int) -> None:
 
 
 def _stop_run(proc, windows: bool | None = None, tree_killer=None) -> None:
-    """End a run the bridge started past its time (rule 41's `hermes mcp`, rule 43's `omh` read, rule 44's `hermes profile create`): on POSIX its whole
+    """End a run the bridge started past its time (rule 41's `hermes mcp`, rule 43's `omh` read, rule 44's `hermes profile create`, rule 52's
+    computer-use commands): on POSIX its whole
     process group (it was started in a session of its own, so this reaches nothing else), on Windows its whole process tree
     (rule 49; the child is a launcher such as hermes.cmd) and then the child itself. `windows` and `tree_killer` are for tests.
     The wait after is bounded, so the run's bot is never left busy."""
@@ -3220,8 +3228,9 @@ def run_hermes_profile_create(hermes: str, name: str, home: Path, timeout: float
 
 def _run_hermes_argv(argv: list[str], home: Path, timeout: float) -> tuple[int | None, str]:
     """Run one pinned Hermes argv and return (exit code, its output); the code is None for a run stopped at *timeout*
-    (`_stop_run`), whose output so far is still returned. Only run_hermes_mcp and run_hermes_profile_create call it,
-    each with its own checked argv (mcp_argv, profile_create_argv). No shell, nothing on stdin (so Hermes asks nothing:
+    (`_stop_run`), whose output so far is still returned. Only run_hermes_mcp, run_hermes_profile_create and
+    run_hermes_computer call it, each with its own checked argv (mcp_argv, profile_create_argv, computer_argv). No
+    shell, nothing on stdin (so Hermes asks nothing:
     a value it needs is refused in its own words), the Hermes root as HERMES_HOME, none of the gateway's own markers
     and no TUI gateway address (so Hermes acts here, not through a gateway the address names), and UTF-8 output on
     every system. The output goes to a temporary file, not a pipe, so a helper Hermes left running (a browser it
@@ -3452,6 +3461,453 @@ class PrStates:
             pr.update(got.get((pr.get("repo"), pr["number"]), {"state": "unknown", "checks": "none"}))
             out[n["id"]] = pr
         return out
+
+
+# ---------------------------------------------------------------- computer use (Settings › Computer, BOUNDARY rule 52)
+# Hermes' `computer_use` toolset drives this computer through its `cua-driver`. The page reads the driver and the OS
+# permissions through Hermes' read-only `computer-use permissions status --json` and each bot's switch through its
+# gateway's `profiles.describe`. A press runs one of four fixed argvs; the page sends a bot name and on/off, nothing else.
+COMPUTER_TOOLSET = "computer_use"
+COMPUTER_VERBS = ("status", "install", "grant", "enable", "disable")
+# seconds one run may take: the status read runs the driver's own doctor (12 s) and permission read (10 s); an install
+# fetches the driver; a grant waits while macOS shows its dialog
+COMPUTER_TIMEOUT = {"status": 60.0, "install": 600.0, "grant": 180.0, "enable": 60.0, "disable": 60.0}
+COMPUTER_CHECKS = 16    # driver checks kept
+COMPUTER_DESCRIBE_TIMEOUT = 15.0    # seconds a bot's gateway may take to answer `profiles.describe`
+COMPUTER_PLATFORM = re.compile(r"[a-z0-9]{1,16}")
+
+
+def computer_argv(hermes: str, verb: str, bot: str = "default") -> list[str]:
+    """One of Hermes' own computer-use commands as a fixed argv: `hermes -p <bot> tools enable|disable computer_use`
+    for a bot's switch, and `hermes -p default computer-use permissions status --json`, `... computer-use install` and
+    `... computer-use permissions grant` for the driver, which Hermes keeps once for the whole computer. The profile is
+    checked here and is one argv element; nothing else varies. `-p` always: without it Hermes follows its sticky
+    `active_profile` file."""
+    if verb not in COMPUTER_VERBS:
+        raise ValueError(f"not a computer-use command omher runs: {verb!r}")
+    if not isinstance(bot, str) or not PROFILE_ID.fullmatch(bot):
+        raise ValueError(f"not a profile id: {bot!r}")
+    if verb in ("enable", "disable"):
+        return [hermes, "-p", bot, "tools", verb, COMPUTER_TOOLSET]
+    if bot != "default":
+        raise ValueError("the driver commands run through the main profile")
+    if verb == "status":
+        return [hermes, "-p", "default", "computer-use", "permissions", "status", "--json"]
+    if verb == "install":
+        return [hermes, "-p", "default", "computer-use", "install"]
+    return [hermes, "-p", "default", "computer-use", "permissions", "grant"]
+
+
+def run_hermes_computer(hermes: str, verb: str, bot: str, home: Path, timeout: float) -> tuple[int | None, str]:
+    """Rule 52: one computer-use command (computer_argv) through `_run_hermes_argv`."""
+    return _run_hermes_argv(computer_argv(hermes, verb, bot), home, timeout)
+
+
+def _json_payload(output: str) -> dict | None:
+    """The readiness object Hermes printed (one with a boolean `installed`), found at the start of a line, or None. Its
+    stderr shares the output, so a warning, a JSON one too, may come first: any other object is passed over."""
+    text = output or ""
+    decoder = json.JSONDecoder()
+    at = 0
+    while at < len(text):
+        if text.startswith("{", at):
+            with contextlib.suppress(ValueError):
+                got, _ = decoder.raw_decode(text, at)
+                if isinstance(got, dict) and isinstance(got.get("installed"), bool):
+                    return got
+        nl = text.find("\n", at)
+        if nl < 0:
+            return None
+        at = nl + 1
+    return None
+
+
+def _tri(value) -> bool | None:
+    return value if isinstance(value, bool) else None
+
+
+def computer_status(output: str) -> dict | None:
+    """Hermes' readiness payload (`tools/computer_use/permissions.py` `computer_use_status`), kept field by field, or
+    None when the output holds none. The exit code says nothing here: Hermes exits 1 whenever the computer is not ready,
+    with the same payload. Kept: the platform, whether it is supported, whether the driver is installed and its version,
+    whether it is ready, whether macOS can grant, each of the driver's checks (label, state, Hermes' message), Hermes'
+    error and the two macOS grants; text on one line, clipped, without escape or control characters. `source` (where
+    the grants were read) is not kept."""
+    data = _json_payload(output)
+    if data is None:
+        return None
+    plat = data.get("platform")
+    checks = []
+    for c in data.get("checks") if isinstance(data.get("checks"), list) else []:
+        if isinstance(c, dict) and len(checks) < COMPUTER_CHECKS:
+            checks.append({"label": _platform_text(c.get("label"), 80), "status": _platform_text(c.get("status"), 24),
+                           "message": _platform_text(c.get("message"), 300)})
+    version = _platform_text(data.get("version"), 120)
+    error = _platform_text(data.get("error"), 300)
+    return {"platform": plat if isinstance(plat, str) and COMPUTER_PLATFORM.fullmatch(plat) else "",
+            "platform_supported": data.get("platform_supported") is True, "installed": data["installed"],
+            "version": version or None, "ready": _tri(data.get("ready")), "can_grant": data.get("can_grant") is True,
+            "checks": checks, "error": error or None,
+            "accessibility": _tri(data.get("accessibility")), "screen_recording": _tri(data.get("screen_recording"))}
+
+
+def computer_pinned(environ=None) -> bool:
+    """Whether `HERMES_TUI_TOOLSETS` is set in omher's own environment, the one environment omher can see. A Hermes
+    started with it builds a chat's tools from that list, not from the switch, whenever one entry of it is valid
+    (tui_gateway/agent_factory.py `_load_enabled_toolsets`); which entries Hermes takes depends on its plugins and the
+    profile's MCP servers, so omher does not judge them and only says the variable is set. A gateway started
+    elsewhere may run with another environment."""
+    environ = os.environ if environ is None else environ
+    return bool((environ.get("HERMES_TUI_TOOLSETS") or "").strip())
+
+
+def computer_suppressed(profile_dir: Path) -> bool:
+    """Whether the profile's `agent.disabled_toolsets` names `computer_use`, read as Hermes' `parse_config_string_list`
+    reads it (a list, a quoted list, or one name). Hermes drops what it names from every new session, whatever
+    `platform_toolsets.cli` says (tui_gateway/agent_factory.py `_load_disabled_toolsets`); `tools enable` takes the
+    name out of it again (hermes_cli/tools_config.py `_save_platform_tools`). A config that does not read names
+    nothing."""
+    agent = _load_yaml(profile_dir / "config.yaml").get("agent")
+    return isinstance(agent, dict) and COMPUTER_TOOLSET in _skill_names(agent.get("disabled_toolsets") or [])
+
+
+# `agent.coding_context` values Hermes reads as `focus` (agent/coding_context.py `_MODE_ALIASES`)
+CODING_FOCUS = frozenset({"focus", "strict", "lean"})
+
+
+def computer_code_focus(profile_dir: Path) -> bool:
+    """Whether the profile's `agent.coding_context` is `focus` as Hermes normalizes it (agent/coding_context.py
+    `_coding_mode`): only then does a session in a code folder take Hermes' coding tool set, which leaves computer use
+    out (`coding_selection`); the shipped default, `auto`, keeps the configured tools. Same cached read as above."""
+    agent = _load_yaml(profile_dir / "config.yaml").get("agent")
+    return isinstance(agent, dict) and str(agent.get("coding_context", "auto")).strip().lower() in CODING_FOCUS
+
+
+def computer_switch(described) -> str:
+    """A bot's `computer_use` switch from Hermes' `profiles.describe` answer: `on`, `off`, or `unknown` when the answer
+    does not list it (or is not that answer)."""
+    rows = described.get("toolsets") if isinstance(described, dict) else None
+    for row in rows if isinstance(rows, list) else []:
+        if isinstance(row, dict) and row.get("name") == COMPUTER_TOOLSET and isinstance(row.get("enabled"), bool):
+            return "on" if row["enabled"] else "off"
+    return "unknown"
+
+
+# ---------------------------------------------------------------- voice (BOUNDARY rule 54)
+# The bridge's one HTTP use: Hermes' own `POST /api/audio/transcribe` and `POST /api/audio/speak`, served by the same
+# gateway process the bot's chat is attached to, on that gateway's own loopback listener (`api_origin`, which Hermes'
+# `connect_gateway` dials for `/api/ws`). Each request carries a fresh one-use `native-http` ticket in
+# `X-Hermes-Gateway-Ticket` and no `Origin` (hermes_cli/dashboard_auth/native_http.py), goes through no proxy and
+# follows no redirect. The audio and the text live only in the request and its answer: never written, never logged.
+
+VOICE_PATHS = {"transcribe": "/api/audio/transcribe", "speak": "/api/audio/speak"}
+# seconds one request may take: a local faster-whisper loads (or first downloads) its model on first use; one spoken
+# part is one provider call (Hermes gives Edge 60 s per chunk)
+VOICE_TIMEOUT = {"transcribe": 180.0, "speak": 90.0}
+# bytes of an answer read back: a transcript is a short JSON object; one spoken part (SPEAK_PART_MAX characters, about
+# a minute and a half of speech) is a few MB of MP3, or of WAV from a local engine, base64'd in JSON
+VOICE_ANSWER_MAX = {"transcribe": 1024 * 1024, "speak": 24 * 1024 * 1024}
+VOICE_AUDIO_MAX = 25 * 1024 * 1024  # Hermes' own cap on one recording (`_MAX_TRANSCRIPTION_UPLOAD_BYTES`)
+VOICE_AUDIO_B64_MAX = (VOICE_AUDIO_MAX + 2) // 3 * 4
+VOICE_MIME = re.compile(r"(?:audio/[a-z0-9][a-z0-9.+-]{0,40}|video/webm)")  # what Hermes' transcribe route accepts
+VOICE_B64 = re.compile(r"[A-Za-z0-9+/]*={0,2}")
+VOICE_DETAIL = 300       # characters of Hermes' own error text passed on
+TRANSCRIPT_MAX = 20000   # characters of a transcript passed on
+# Read aloud: Hermes' speak route answers with its first audio file only, and on a host without ffmpeg each provider
+# chunk is its own file (Edge 5000, OpenAI 4096, an unknown provider 4000, NeuTTS and KittenTTS 2000 characters:
+# tools/tts_tool_delivery.py), so the bridge sends parts of at most SPEAK_PART_MAX characters, split at sentences, and
+# the page plays them in order. One read-aloud covers at most SPEAK_TEXT_MAX characters of an answer (about 20 minutes
+# of speech), so one press never holds Hermes' TTS, or the online service it names, for longer.
+SPEAK_PART_MAX = 1500
+SPEAK_TEXT_MAX = 20000
+SPEAK_INPUT_MAX = 1024 * 1024  # characters of text the page may send at all
+_SENTENCE_END = re.compile(r"(?<=[.!?…])\s+|(?<=[。！？])")
+# what each provider name means for where the audio or the text goes (tools/transcription_tools.py, tools/tts_tool.py)
+STT_LOCAL = frozenset({"local", "local_command"})
+STT_ONLINE = frozenset({"groq", "openai", "mistral", "xai", "elevenlabs", "deepinfra", "nous"})
+TTS_LOCAL = frozenset({"neutts", "kittentts", "piper"})
+TTS_ONLINE = frozenset({"elevenlabs", "openai", "deepinfra", "minimax", "xai", "mistral", "gemini", "nous"})
+VOICE_PROVIDER = re.compile(r"[a-z0-9][a-z0-9_.-]{0,40}")
+
+
+class VoiceError(Exception):
+    """A voice request that did not work: a code the page tells apart and the words it shows (Hermes' own when it
+    gave any, cleaned and clipped)."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code, self.message = code, message
+
+
+def _voice_selection(section) -> str:
+    """The provider a raw `stt:` or `tts:` section names, as Hermes' `read_selection` reads it: `nous` when
+    `use_gateway` is true, else `provider`, `backend` or `cloud_provider`; "" when it names none."""
+    if not isinstance(section, dict):
+        return ""
+    if _truthy(section.get("use_gateway"), False):
+        return "nous"
+    for key in ("provider", "backend", "cloud_provider"):
+        text = str(section.get(key)).strip().lower() if section.get(key) is not None else ""
+        if text:
+            return text if VOICE_PROVIDER.fullmatch(text) else "other"
+    return ""
+
+
+def voice_config(profile_dir: Path) -> dict:
+    """What the bot's `config.yaml` says about speech, read-only through the cached read: whether STT is on, the STT
+    and TTS providers it names, and where each sends the person's audio or text (`local`, `online`, `auto` when Hermes
+    picks: its local model when installed, else a cloud provider whose key is set; `edge` for Hermes' default TTS,
+    Microsoft's online service; `other` for a name omher does not know). No key or other value is read."""
+    cfg = _load_yaml(profile_dir / "config.yaml")
+    stt, tts = cfg.get("stt"), cfg.get("tts")
+    enabled = _truthy(stt.get("enabled") if isinstance(stt, dict) else None, True)
+    stt_name = _voice_selection(stt)
+    stt_where = ("off" if not enabled else "auto" if not stt_name else "local" if stt_name in STT_LOCAL
+                 else "online" if stt_name in STT_ONLINE else "other")
+    tts_name = _voice_selection(tts) or "edge"
+    tts_where = "edge" if tts_name == "edge" else "local" if tts_name in TTS_LOCAL else "online" if tts_name in TTS_ONLINE else "other"
+    return {"stt": {"enabled": enabled, "provider": stt_name, "where": stt_where},
+            "tts": {"provider": tts_name, "where": tts_where}}
+
+
+def voice_supported() -> str:
+    """Why this Hermes cannot take a voice request, or "" when it can: it needs `mint_ticket` with a `purpose`
+    (hermes_cli/gateway_runtime_attach.py) and the audio routes (hermes_cli/web_routers/audio.py)."""
+    import importlib.util
+    try:
+        from hermes_cli.gateway_runtime_attach import mint_ticket
+        from hermes_cli import gateway_runtime
+        audio = importlib.util.find_spec("hermes_cli.web_routers.audio")
+    except (ImportError, ValueError):
+        return "This Hermes cannot give omher a ticket for its audio routes. Update Hermes to use voice."
+    if "purpose" not in inspect.signature(mint_ticket).parameters or not hasattr(gateway_runtime, "discover_gateway_endpoint"):
+        return "This Hermes cannot give omher a ticket for its audio routes. Update Hermes to use voice."
+    if audio is None:
+        return "This Hermes has no audio routes. Update Hermes to use voice."
+    return ""
+
+
+def voice_ticket_for(home: Path) -> tuple[str, str]:
+    """(api_origin, ticket) for one request: the ready owner Hermes' own discovery finds for this profile (it starts
+    nothing) and one single-use `native-http` ticket minted by that owner's control socket, as Hermes' documented
+    contract says to do for every HTTP request (website/docs/developer-guide/gateway-ssh-clients.md). The ticket is a
+    credential: it is never logged and lives only for this one request."""
+    why = voice_supported()
+    if why:
+        raise VoiceError("voice_unsupported", why)
+    from hermes_cli import gateway_runtime
+    from hermes_cli.gateway_runtime_attach import mint_ticket
+    home = gateway_runtime.gateway_profile_home(home)
+    found = gateway_runtime.discover_gateway_endpoint(home)
+    endpoint = getattr(found, "endpoint", None)
+    if getattr(found, "state", None) != "ready" or endpoint is None:
+        raise VoiceError("voice_not_ready", "This bot's Hermes gateway is not ready yet. Try again in a moment.")
+    try:
+        ticket = mint_ticket(home, endpoint, purpose="native-http")
+    except (RuntimeError, ValueError, OSError) as e:  # Hermes' TicketUnavailable is a RuntimeError with a bounded reason
+        reason = _platform_text(getattr(e, "reason", ""), 80) or type(e).__name__
+        raise VoiceError("voice_refused", f"Hermes did not give omher a ticket for this request ({reason}).")
+    if not isinstance(ticket, str) or not ticket:
+        raise VoiceError("voice_refused", "Hermes did not give omher a ticket for this request.")
+    return str(endpoint.api_origin), ticket
+
+
+def voice_target(origin: str) -> tuple[str, int]:
+    """The (host, port) of a gateway's `api_origin` when it is a plain-HTTP loopback address with a port and nothing
+    else, as Hermes' own discovery checks it; anything else is refused before a socket opens. Hermes' discovery also
+    accepts an `https` origin (hermes_cli/gateway_runtime.py), though its gateway publishes `http`
+    (gateway/webapp_listener.py `dial_origin`); omher has no TLS client for it, so that case is its own refusal."""
+    import ipaddress
+    try:
+        parsed = urlsplit(origin if isinstance(origin, str) else "")
+        host, port = parsed.hostname, parsed.port
+        loopback = bool(host) and ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        loopback, host, port = False, None, None
+    if (not loopback or parsed.scheme not in ("http", "https") or not port or parsed.username is not None
+            or parsed.password is not None or parsed.path not in ("", "/") or parsed.query or parsed.fragment):
+        raise VoiceError("voice_refused", "omher sends voice only to a Hermes gateway on this computer's loopback address.")
+    if parsed.scheme == "https":
+        raise VoiceError("voice_https", "This Hermes serves its gateway listener over https, which omher's voice does not use.")
+    return host, port
+
+
+VOICE_TICKET = re.compile(r"[A-Za-z0-9_-]{1,512}")  # a ticket as Hermes mints it (`secrets.token_urlsafe`)
+
+
+def _voice_cut(held: list, expired: threading.Event) -> None:
+    """The whole exchange ran past its deadline: end its socket, so a server that trickles bytes cannot hold the
+    worker thread (a per-read socket timeout starts again with every byte)."""
+    import socket
+    expired.set()
+    for sock in held:
+        with contextlib.suppress(OSError):
+            sock.shutdown(socket.SHUT_RDWR)
+
+
+def voice_request(origin: str, which: str, profile: str, ticket: str, body: bytes) -> dict:
+    """One POST to Hermes' audio route `which` (`transcribe` or `speak`): the gateway's loopback `api_origin`, the fixed
+    path, `profile` as its query, the ticket header, a JSON body, no `Origin`, no proxy (http.client reads none) and no
+    redirect (http.client follows none). The answer is read up to VOICE_ANSWER_MAX[which] bytes and must be JSON; a
+    status other than 200 becomes a VoiceError with Hermes' own words. Runs in a worker thread."""
+    import http.client
+    path = VOICE_PATHS[which]
+    if not PROFILE_ID.fullmatch(profile or ""):
+        raise VoiceError("bad_request", "not a profile Hermes accepts")
+    if not isinstance(ticket, str) or not VOICE_TICKET.fullmatch(ticket):
+        raise VoiceError("voice_refused", "Hermes' ticket is not one omher can send.")  # never the ticket itself
+    host, port = voice_target(origin)
+    timeout = VOICE_TIMEOUT[which]
+    conn = http.client.HTTPConnection(host, port, timeout=timeout)
+    expired = threading.Event()
+    held: list = []  # the connection's socket, kept here: http.client lets go of it once a response will close
+    watchdog = threading.Timer(timeout, _voice_cut, (held, expired))
+    watchdog.daemon = True
+    watchdog.start()
+    late = VoiceError("voice_timeout", f"Hermes did not answer in {int(timeout)} seconds.")
+    try:
+        conn.connect()
+        held.append(conn.sock)
+        if expired.is_set():
+            raise late
+        conn.request("POST", f"{path}?profile={profile}", body=body, headers={
+            "Content-Type": "application/json", "Accept": "application/json", "X-Hermes-Gateway-Ticket": ticket})
+        resp = conn.getresponse()
+        status, raw = resp.status, bytearray()  # grown in place: a bytes `+=` would copy the whole answer per chunk
+        while len(raw) <= VOICE_ANSWER_MAX[which] and not expired.is_set():
+            chunk = resp.read(min(65536, VOICE_ANSWER_MAX[which] + 1 - len(raw)))
+            if not chunk:
+                break
+            raw += chunk
+    except (TimeoutError, OSError) as e:
+        if expired.is_set() or isinstance(e, TimeoutError) or "timed out" in str(e):
+            raise late
+        raise VoiceError("voice_not_ready", "omher could not reach this bot's Hermes gateway.")
+    except http.client.HTTPException:
+        raise late if expired.is_set() else VoiceError("voice_failed", "Hermes' answer could not be read.")
+    except ValueError:  # http.client refusing a header value: its message would hold the ticket, so it is dropped
+        raise VoiceError("voice_failed", "omher could not build the request to Hermes.")
+    finally:
+        watchdog.cancel()
+        conn.close()
+    if expired.is_set():
+        raise late
+    if len(raw) > VOICE_ANSWER_MAX[which]:
+        raise VoiceError("voice_too_large", "Hermes' answer is larger than omher reads.")
+    try:
+        data = json.loads(raw.decode("utf-8")) if raw else None
+    except ValueError:
+        data = None
+    if status != 200:
+        raise voice_status_error(status, data)
+    if not isinstance(data, dict) or data.get("ok") is not True:
+        raise VoiceError("voice_failed", "Hermes' answer is not one omher knows.")
+    return data
+
+
+def voice_status_error(status: int, data) -> VoiceError:
+    """Hermes' refusal as a code the page tells apart, with Hermes' own `detail` (already redacted by Hermes) on one
+    line, cleaned of escape and control characters and clipped."""
+    detail = data.get("detail") if isinstance(data, dict) else None
+    said = _platform_text(detail, VOICE_DETAIL) if isinstance(detail, str) else ""
+    if status == 503:
+        return VoiceError("voice_not_ready", "This bot's Hermes gateway is not ready yet. Try again in a moment.")
+    if status in (401, 403):
+        return VoiceError("voice_refused", f"Hermes refused omher's request ({said or status}).")
+    if status in (404, 405):
+        return VoiceError("voice_unsupported", "This Hermes has no such audio route. Update Hermes to use voice.")
+    if status == 413:
+        return VoiceError("voice_too_large", said or "The recording is too large for Hermes.")
+    if 300 <= status < 400:
+        return VoiceError("voice_failed", "Hermes answered with a redirect, which omher does not follow.")
+    low = said.lower()
+    if status == 400 and ("no stt provider" in low or "no tts provider" in low):
+        return VoiceError("voice_no_provider", said)
+    if status == 400 and "disabled" in low and "stt" in low:
+        return VoiceError("voice_disabled", said)
+    return VoiceError("voice_failed", said or f"Hermes answered HTTP {status}.")
+
+
+def _voice_text(value) -> str:
+    """A transcript as the page gets it: escapes and control characters out (line breaks kept), clipped."""
+    import unicodedata
+    text = PLATFORM_ESCAPES.sub("", value) if isinstance(value, str) else ""
+    text = "".join(ch for ch in text if ch == "\n" or unicodedata.category(ch) not in ("Cc", "Cf")).strip()
+    return text[:TRANSCRIPT_MAX]
+
+
+def _voice_provider(value) -> str:
+    """The provider Hermes says handled a request, when it is a plain name; else ""."""
+    text = value.strip().lower() if isinstance(value, str) else ""
+    return text if VOICE_PROVIDER.fullmatch(text) else ""
+
+
+SPEAK_DATA_URL = re.compile(r"data:(audio/[a-z0-9][a-z0-9.+-]{0,40});base64,([A-Za-z0-9+/]+={0,2})")
+
+
+def speak_audio(answer: dict) -> tuple[str, str, str]:
+    """(mime, base64 audio, provider) of Hermes' speak answer, when its `data_url` is base64 audio; else a VoiceError.
+    Runs in the worker thread: the audio is up to VOICE_ANSWER_MAX bytes."""
+    url = answer.get("data_url")
+    m = SPEAK_DATA_URL.fullmatch(url) if isinstance(url, str) else None
+    if m is None:
+        raise VoiceError("voice_failed", "Hermes' answer holds no audio omher can play.")
+    return m.group(1), m.group(2), _voice_provider(answer.get("provider"))
+
+
+def _strip_fences(text: str) -> str:
+    """The text without its fenced code blocks (``` or ~~~): code is not read aloud, and Hermes' own cleaner, which
+    drops a whole block, would not see a block cut in two by the split."""
+    out, fence = [], ""
+    for line in text.splitlines():
+        mark = line.lstrip()[:3]
+        if fence:
+            if mark == fence:
+                fence = ""
+            continue
+        if mark in ("```", "~~~"):
+            fence = mark
+            out.append("")
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
+def speak_parts(text: str) -> tuple[list[str], bool]:
+    """An answer's text as the parts read aloud in order, each at most SPEAK_PART_MAX characters, and whether it was
+    cut at SPEAK_TEXT_MAX. Lines stay lines (Hermes' cleaner reads a list item or a heading by its line); a long line
+    splits after a sentence's end (`.`, `!`, `?`, `…` before a space, or `。`, `！`, `？` with or without one), and a
+    sentence longer than a part splits at its last space within the part, else (text without spaces) at the part's
+    length. Parts are joined greedily."""
+    body = _strip_fences(text).strip()
+    cut = len(body) > SPEAK_TEXT_MAX
+    if cut:
+        head = body[:SPEAK_TEXT_MAX]
+        end = max(head.rfind("\n"), *(head.rfind(c) for c in ".!?…。！？"))
+        body = head[: end + 1] if end >= SPEAK_TEXT_MAX - SPEAK_PART_MAX else head
+    pieces: list[tuple[str, str]] = []  # (piece, what joins it to the next)
+    for line in body.split("\n"):
+        for sentence in _SENTENCE_END.split(line):
+            sentence = sentence.strip()
+            while len(sentence) > SPEAK_PART_MAX:
+                at = sentence.rfind(" ", 0, SPEAK_PART_MAX + 1)
+                at = at if at > SPEAK_PART_MAX // 2 else SPEAK_PART_MAX
+                pieces.append((sentence[:at].rstrip(), " "))
+                sentence = sentence[at:].lstrip()
+            if sentence:
+                pieces.append((sentence, " "))
+        if pieces:  # a line ends its last piece; an empty line keeps the paragraph break
+            pieces[-1] = (pieces[-1][0], "\n\n" if not line.strip() else "\n")
+    parts: list[str] = []
+    current = ""
+    for piece, joiner in pieces:
+        if current and len(current) + len(piece) > SPEAK_PART_MAX:
+            parts.append(current.strip())
+            current = ""
+        current += piece + joiner
+    if current.strip():
+        parts.append(current.strip())
+    return parts, cut
 
 
 # ---------------------------------------------------------------- runs: Hermes delegate_task fan-outs (read-only)
@@ -4941,8 +5397,14 @@ class NodeSessions:
                         continue
                     name = str(fn.get("name") or "tool")
                     res = results.get(str(tc.get("id") or tc.get("call_id") or ""), "")
-                    items.append({"type": "step", "tool": name, "input": _ns_args(fn.get("arguments")),
-                                  "result": _ns_clip(res), "ok": _ns_ok(res), "ts": ts})
+                    shown, ok = fn.get("arguments"), _ns_ok(res)
+                    if name == COMPUTER_TOOL:
+                        shown, res = computer_args(shown), ""
+                    elif browser_quiet(name):  # rule 53: the label, method or action only, and no result
+                        shown, res = browser_args(name, shown), ""
+                    res = _ns_unimage(res)
+                    items.append({"type": "step", "tool": name, "input": _ns_args(shown),
+                                  "result": _ns_clip(res), "ok": ok, "ts": ts})
                     if name == "delegate_task":
                         for c in children:
                             if c["ref"] not in placed and (c["started"] or 0) >= (ts or 0) - 5:
@@ -5610,12 +6072,322 @@ _DETAIL_ARG = {
     "terminal": ("command",), "read_file": ("path", "file_path"), "write_file": ("path", "file_path"),
     "patch": ("path", "file_path"), "search_files": ("pattern", "query"), "web_search": ("query",),
     "web_extract": ("urls", "url"), "delegate_task": ("goal",), "skill_view": ("name",), "skill_use": ("name",),
-    "browser_navigate": ("url",),
+    "browser_navigate": ("url",),    # an older Hermes' browser tool; current Hermes has the four of BROWSER_TOOLS
 }
 
 
+# computer_use (rule 52): the step names its action and the app, nothing else. What the bot types (`text`, `value`,
+# `keys`) can be a password and never leaves the bridge, and Hermes' own `context` preview can carry it, so for this
+# tool it is never used. Its result is never passed on: a capture's screenshot is a `data:` URL in it, and the screen's
+# element list can quote what a text field holds (an AX label `= "value"`).
+COMPUTER_TOOL = "computer_use"
+COMPUTER_ACTIONS = frozenset({"capture", "click", "double_click", "right_click", "middle_click", "drag", "scroll", "type",
+                              "key", "set_value", "wait", "list_apps", "list_windows", "focus_app"})
+COMPUTER_TYPED = ("text", "value", "keys")
+COMPUTER_APP_MAX = 60
+
+
+def computer_step(args: dict) -> tuple[str, str]:
+    """(action, app) of one computer_use call: the action only when it is one of Hermes' own, the app on one line."""
+    if not isinstance(args, dict):
+        return "", ""
+    action = args.get("action")
+    return (action if action in COMPUTER_ACTIONS else ""), _platform_text(args.get("app"), COMPUTER_APP_MAX)
+
+
+def computer_args(raw_args) -> dict:
+    """A computer_use call's arguments as a read-only session view shows them: without what the bot typed. Its result
+    is not shown at all (see above)."""
+    try:
+        args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+    except ValueError:
+        args = None
+    return {k: v for k, v in args.items() if k not in COMPUTER_TYPED} if isinstance(args, dict) else {}
+
+
+# The browser tools (rule 53): `browser_exec` runs Python against the browser (tools/browser_use_cli.py), and the URLs,
+# selectors and text it types are literals in its `code`; `browser_cdp` sends one raw CDP `method` whose `params` can
+# hold typed text, cookies or a script; `browser_dialog` answers a page dialog, with `prompt_text` typed into a prompt
+# dialog; `browser_vault` fills a saved login by an opaque `handle`. Hermes masks typed text in `code` for display only
+# in part (agent/redact_browser_input.py) and not at all in `params` or `prompt_text`, and its `context` preview of a
+# `browser_exec` call without a label is the code on one line. So a step carries only the `# label` the model wrote for
+# the UI (the first line of `code` when it is a comment), the CDP method's name, or the dialog's or vault's action, and
+# never Hermes' preview. Every other `browser_*` name (an older Hermes' `browser_type`, `browser_click`…) carries no
+# line either; the old `browser_navigate`, whose one argument is the url, keeps it.
+BROWSER_TOOLS = frozenset({"browser_exec", "browser_cdp", "browser_dialog", "browser_vault"})
+BROWSER_LABEL_MAX = 60    # Hermes asks the model for a label of at most 60 characters (tools/browser_use_cli.py)
+BROWSER_CDP_METHOD = re.compile(r"[A-Z][A-Za-z]{0,39}\.[a-z][A-Za-z]{0,59}")    # `Domain.method`, as CDP names them
+BROWSER_DIALOG_ACTIONS = frozenset({"accept", "dismiss"})
+BROWSER_VAULT_ACTIONS = frozenset({"list", "fill", "save_login", "enter_code", "unlock"})
+
+
+def browser_quiet(tool: str) -> bool:
+    """Whether a tool's Hermes preview, arguments and result stay in the bridge: every `browser_*` tool but the old
+    `browser_navigate`."""
+    return tool.startswith("browser_") and tool != "browser_navigate"
+
+
+def browser_label(code) -> str:
+    """The step label a `browser_exec` call's code starts with: its first line when that line is a `#` comment (not a
+    `#!` line), without the `#`, the model's own words as Hermes shows them but with secret-shaped text masked
+    (mask_secrets, the Plans view's mask, so every path shows the same label), on one line, cleaned of escape and
+    control characters, trimmed and clipped to 60 characters; "" otherwise. Nothing else of the code is read."""
+    if not isinstance(code, str):
+        return ""
+    first = next(iter(code.lstrip().splitlines()), "").strip()
+    if not first.startswith("#") or first.startswith("#!"):
+        return ""
+    # cleaned first (a control character stripped can leave a space at either end), then masked, trimmed, clipped
+    text = mask_secrets(_platform_text(first.lstrip("#"), 4096)).strip()
+    return text if len(text) <= BROWSER_LABEL_MAX else text[: BROWSER_LABEL_MAX - 1].rstrip() + "…"
+
+
+def browser_step(tool: str, args) -> tuple[str, str]:
+    """(action, detail) of one browser call: `browser_exec`'s label as the detail, `browser_cdp`'s method name as the
+    detail, `browser_dialog`'s and `browser_vault`'s action when it is one of Hermes' own; ("", "") for anything else."""
+    if not isinstance(args, dict):
+        return "", ""
+    if tool == "browser_exec":
+        return "", browser_label(args.get("code"))
+    if tool == "browser_cdp":
+        method = args.get("method")
+        return "", method if isinstance(method, str) and BROWSER_CDP_METHOD.fullmatch(method) else ""
+    action = args.get("action") if isinstance(args.get("action"), str) else ""
+    if tool == "browser_dialog" and action in BROWSER_DIALOG_ACTIONS:
+        return action, ""
+    if tool == "browser_vault" and action in BROWSER_VAULT_ACTIONS:
+        return action, ""
+    return "", ""
+
+
+def browser_args(tool: str, raw_args) -> dict:
+    """A browser call's arguments as a read-only session view shows them: the label, the method or the action, and
+    nothing else (never `code`, `params`, `prompt_text`, a vault handle or label). Its result is not shown."""
+    try:
+        args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+    except ValueError:
+        args = None
+    action, detail = browser_step(tool, args)
+    key = {"browser_exec": "label", "browser_cdp": "method"}.get(tool)
+    return {"action": action} if action else ({key: detail} if key and detail else {})
+
+
+_DATA_IMAGE = re.compile(r"data:image/[A-Za-z0-9.+-]{1,40};base64,[A-Za-z0-9+/=]*")
+
+
+def _ns_unimage(text: str) -> str:
+    """A stored result with every base64 image in it (a multimodal row's `data:` URL) replaced by `[image]`, so a clip
+    never shows a run of base64."""
+    return _DATA_IMAGE.sub("[image]", text) if "data:image/" in text else text
+
+
+# A browser or computer step's screenshot (rule 53). Hermes names the file a `browser_exec` or `computer_use` call
+# captured in `tool.complete`'s `image_path` (agent/terminal_image.py `tool_image_path`, tui_gateway/tool_progress.py);
+# the bridge reads it at that event, because browser-harness' default capture file (`<tmp>/p-<hash>/shot.png`) is
+# overwritten by the next capture, and hands the page its bytes for that step. For browser_exec Hermes names the last
+# image path the call's own code printed, when that file exists and is new (tools/browser_use_cli.py `_find_screenshot`);
+# omher takes the path from the event alone and parses none itself. Read-only, at most SHOT_MAX bytes, a regular file
+# with one name reached through no link, a PNG, JPEG, GIF or WebP by its first bytes, and only under the places Hermes
+# writes these files for this bot (shot_roots); anything else is not shown. omher writes none of it anywhere.
+SHOT_TOOLS = frozenset({"browser_exec", COMPUTER_TOOL})
+# 5 MB: a viewport capture at twice the pixel density and a computer_use capture (scaled to at most 1456 px) are well
+# under it. It is lower than rule 13's 25 MB because this read happens on every capture with no click, and the bytes
+# ride one event to the page, which keeps them in memory
+SHOT_MAX = 5 * 1024 * 1024
+_SHOT_MAGIC = ((b"\x89PNG\r\n\x1a\n", "image/png"), (b"\xff\xd8\xff", "image/jpeg"), (b"GIF87a", "image/gif"),
+               (b"GIF89a", "image/gif"))
+
+
+def shot_mime(head: bytes) -> str | None:
+    """The image type its first bytes say (PNG, JPEG, GIF, WebP), or None; never the file's name."""
+    for magic, mime in _SHOT_MAGIC:
+        if head.startswith(magic):
+            return mime
+    return "image/webp" if len(head) >= 12 and head[:4] == b"RIFF" and head[8:12] == b"WEBP" else None
+
+
+def harness_tmp_root(environ=None) -> Path:
+    """browser-harness' tmp folder as Hermes gives it to a `browser_exec` run (tools/browser_harness_dirs.py
+    `namespace_harness_dirs` and `_harness_home`): `BH_TMP_DIR`, else `<harness home>/tmp`, the home being `BH_HOME`,
+    `BROWSER_HARNESS_HOME`, `<XDG_CONFIG_HOME>/browser-harness`, or `<HOME, else the user's home>/.config/browser-harness`.
+    Hermes adds one `p-<hash>` folder per profile under it (harness_shot_root). Read from omher's own environment, the
+    one it can see."""
+    env = os.environ if environ is None else environ
+    if env.get("BH_TMP_DIR"):
+        return Path(env["BH_TMP_DIR"]).expanduser()
+    root = env.get("BH_HOME") or env.get("BROWSER_HARNESS_HOME")
+    if not root:
+        xdg = env.get("XDG_CONFIG_HOME")
+        root = str(Path(xdg) / "browser-harness") if xdg else str(
+            Path(env.get("HOME") or Path.home()) / ".config" / "browser-harness")
+    return Path(root).expanduser() / "tmp"
+
+
+def _hermes_home_key(profile_dir: Path) -> str | None:
+    """Hermes' own key for a profile's home (hermes_constants.hermes_home_key), the tag its browser-harness folder is
+    named after; None when the installed Hermes has none to import."""
+    try:
+        from hermes_constants import hermes_home_key
+    except ImportError:
+        return None
+    return hermes_home_key(profile_dir)
+
+
+def harness_shot_root(profile_dir: Path, environ=None) -> Path | None:
+    """This bot's own browser-harness tmp folder: harness_tmp_root and, under it, the `p-` folder Hermes gives the
+    profile, the first 12 hex digits of the sha256 of its home key (tools/browser_harness_dirs.py
+    `namespace_harness_dirs`, tagged with `hermes_home_key()`); None when the key cannot be had. Another bot's captures
+    are in another folder."""
+    key = _hermes_home_key(profile_dir)
+    if not isinstance(key, str) or not key:
+        return None
+    return harness_tmp_root(environ) / f"p-{hashlib.sha256(key.encode()).hexdigest()[:12]}"
+
+
+def shot_roots(profile_dir: Path, environ=None) -> tuple[Path, ...]:
+    """Where a step's screenshot may be read from: the bot's own `cache/` (computer_use's `cache/images`, browser_exec's
+    `cache/browser-use/workspace/<task>`), its `image_cache/` (the older name Hermes' `get_hermes_dir` still writes
+    `cache/images` to when it holds files) and its own browser-harness tmp folder (harness_shot_root)."""
+    harness = harness_shot_root(profile_dir, environ)
+    return (profile_dir / "cache", profile_dir / "image_cache") + ((harness,) if harness is not None else ())
+
+
+def _shot_link(path: str) -> bool:
+    """Whether *path* is a symbolic link, or a junction on Windows."""
+    return os.path.islink(path) or getattr(os.path, "isjunction", lambda _p: False)(path)
+
+
+def _shot_root_too_wide(real_base: str) -> bool:
+    """A root that is a filesystem root, the user's home or a folder above it is never read from: a broad environment
+    value must not open the whole disk."""
+    if os.path.dirname(real_base) == real_base:
+        return True
+    base, home = os.path.normcase(real_base), os.path.normcase(os.path.realpath(os.path.expanduser("~")))
+    try:
+        return os.path.commonpath([base, home]) == base
+    except ValueError:  # another drive on Windows
+        return False
+
+
+def _shot_file(path, roots) -> tuple[str, tuple[int, int]] | None:
+    """(real path, (device, inode)) of *path* when it names a regular file inside one of *roots* that no link leads to
+    (neither the file nor any folder between the root and it, nor the root folder itself, is a symbolic link or a
+    junction), else None. A folder above a root may be a link (a Hermes home moved elsewhere); a root that is a
+    filesystem root, the home or above it counts as none. Paths are compared as the system compares them (case and
+    separators on Windows), and a path on another drive is outside. The device and inode are the file's as checked,
+    for the open to match."""
+    if not isinstance(path, str) or not path or "\x00" in path or len(path) > 4096:
+        return None
+    given = os.path.expanduser(path)
+    if not os.path.isabs(given):
+        return None
+    given = os.path.normpath(given)
+    try:
+        st = os.lstat(given)
+        if not stat.S_ISREG(st.st_mode):  # a link, a folder, a device, a pipe
+            return None
+        real = os.path.realpath(given)
+    except (OSError, ValueError):
+        return None
+    for root in roots:
+        try:
+            real_base = os.path.realpath(os.path.abspath(str(root)))
+            rel = os.path.relpath(real, real_base)
+        except (OSError, ValueError):  # ValueError: another drive on Windows
+            continue
+        if rel in (os.curdir, os.pardir) or rel.startswith(os.pardir + os.sep) or os.path.isabs(rel):
+            continue
+        if _shot_root_too_wide(real_base):
+            continue
+        # walk back up the path as Hermes spelled it, one folder per part below the root: none may be a link, and the
+        # folder reached must be the root, itself no link (a folder above it may be one)
+        at = given
+        for _ in rel.split(os.sep):
+            if _shot_link(at):
+                break
+            at = os.path.dirname(at)
+        else:
+            try:
+                if not _shot_link(at) and os.path.normcase(os.path.realpath(at)) == os.path.normcase(real_base):
+                    return real, (st.st_dev, st.st_ino)
+            except (OSError, ValueError):
+                continue
+    return None
+
+
+def read_step_shot(path, roots) -> dict | None:
+    """{mime, data_base64} of the screenshot Hermes named for a step, or None when it is not one omher shows (see
+    above). Opened without following a link where the system can say so, then checked on the open file: the same file
+    that was checked (device and inode, so a folder swapped for a link in between is refused), a regular file with one
+    name (a hard link to a file elsewhere has two), at most SHOT_MAX bytes; read once. Every refusal is a debug log
+    line without the path."""
+    found = _shot_file(path, roots)
+    if found is None:
+        log.debug("step screenshot not shown: not a file under the capture folders")
+        return None
+    real, checked = found
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0)
+    try:
+        fd = os.open(real, flags)
+    except OSError as e:
+        log.debug("step screenshot not shown: open failed (%s)", type(e).__name__)
+        return None
+    with os.fdopen(fd, "rb") as f:
+        st = os.fstat(f.fileno())
+        if (st.st_dev, st.st_ino) != checked or not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
+            log.debug("step screenshot not shown: not the file that was checked, or not a file with one name")
+            return None
+        if st.st_size > SHOT_MAX:
+            log.debug("step screenshot not shown: larger than %d bytes", SHOT_MAX)
+            return None
+        try:
+            data = f.read(SHOT_MAX + 1)
+        except OSError as e:
+            log.debug("step screenshot not shown: read failed (%s)", type(e).__name__)
+            return None
+    mime = shot_mime(data[:12])
+    if len(data) > SHOT_MAX or mime is None:  # grew since the check, or not an image by its bytes
+        log.debug("step screenshot not shown: too large or not an image")
+        return None
+    return {"mime": mime, "data_base64": base64.b64encode(data).decode("ascii")}
+
+
+def step_shot(path, profile_dir: Path) -> dict | None:
+    """read_step_shot under this bot's shot_roots. Resolving the roots asks Hermes for the profile's home key, which
+    resolves paths (a link loop raises RuntimeError on Python 3.11); any such failure shows no screenshot, never an
+    error."""
+    try:
+        roots = shot_roots(profile_dir)
+    except (ImportError, OSError, RuntimeError, ValueError) as e:
+        log.debug("step screenshot not shown: its folders could not be resolved (%s)", type(e).__name__)
+        return None
+    return read_step_shot(path, roots)
+
+
+def peer_shot(fields: dict) -> dict | None:
+    """A `tool.shot` another computer's bridge sent (rule 31's link), checked again here: a tool id, at most SHOT_MAX
+    bytes of valid base64, and the image type its first bytes say; only those fields (and the thread's session) pass."""
+    tool_id, data, session = fields.get("tool_id"), fields.get("data_base64"), fields.get("session")
+    if not isinstance(tool_id, str) or not tool_id or not isinstance(data, str) or len(data) > (SHOT_MAX + 2) // 3 * 4:
+        return None
+    try:
+        raw = base64.b64decode(data, validate=True)
+    except (ValueError, binascii.Error):
+        return None
+    mime = shot_mime(raw[:12])
+    if len(raw) > SHOT_MAX or mime is None:
+        return None
+    return {"tool_id": tool_id, "mime": mime, "data_base64": data, **({"session": session} if session is not None else {})}
+
+
 def tool_detail(tool: str, args: dict, context: str, n: int = 160) -> str:
-    """One readable line for a tool call: the real command / path / query when the args carry it."""
+    """One readable line for a tool call: the real command / path / query when the args carry it. For computer_use only
+    the app (computer_step), never what it types nor Hermes' preview; for a browser tool only its label or method
+    (browser_step), never its code, params or Hermes' preview."""
+    if tool == COMPUTER_TOOL:
+        return computer_step(args)[1]
+    if browser_quiet(tool):
+        return browser_step(tool, args)[1]
     value = None
     for key in _DETAIL_ARG.get(tool, ()):
         v = args.get(key)
@@ -5668,10 +6440,15 @@ def subagent_fields(typ: str, p: dict) -> dict | None:
         return out
     out["state"] = SUBAGENT_STATE[typ]
     if typ == "subagent.tool":
-        if isinstance(p.get("tool_name"), str) and p["tool_name"]:
-            out["tool"] = _one_line(p["tool_name"], 40)
+        tool = p.get("tool_name") if isinstance(p.get("tool_name"), str) else ""
+        if tool:
+            out["tool"] = _one_line(tool, 40)
         step = p.get("tool_preview") or p.get("text")
-        if isinstance(step, str) and step.strip():
+        # computer_use (rule 52): Hermes builds no preview for it, so its fallback preview of a `type` call is the typed
+        # text, and the relay carries no arguments to word a safe line from: a child's computer_use step has no line.
+        # A browser tool's neither (rule 53): `browser_exec`'s preview is its label or, without one, its code, and the
+        # relay does not say which
+        if tool != COMPUTER_TOOL and not browser_quiet(tool) and isinstance(step, str) and step.strip():
             out["step"] = _one_line(step, SUBAGENT_STEP)
     elif typ == "subagent.progress" and isinstance(p.get("text"), str) and p["text"].strip():
         out["step"] = _one_line(p["text"].lstrip("🔀 "), SUBAGENT_STEP)
@@ -6311,6 +7088,12 @@ PEER_REFUSED = {
     "folder.close": "Folder chats run in a folder on this computer; {label}'s bots run on another one.",
     "folder.resume": "Folder chats run in a folder on this computer; {label}'s bots run on another one.",
     "bots.restart": "omher does not restart Hermes on another computer. Restart it on {label} itself.",
+    "computer.bot": "Computer use would act on {label}'s own screen, so omher does not set it up from here.",
+    "computer.toggle": "Computer use would act on {label}'s own screen, so omher does not set it up from here.",
+    # rule 54: voice goes to a bot's Hermes on this computer only; recording here for a Hermes there is not built
+    "voice.info": "Voice works with bots on this computer only; {label}'s bots run on another one.",
+    "voice.transcribe": "Voice works with bots on this computer only; {label}'s bots run on another one.",
+    "voice.speak": "Voice works with bots on this computer only; {label}'s bots run on another one.",
 }
 
 
@@ -6983,7 +7766,8 @@ class Conn:
 class Bridge:
     def __init__(self, *, token: str, hermes_home: Path | None = None, gateway_factory=None, eager: bool = False,
                  clock=time.monotonic, poll_s: float = 30.0, elsewhere_poll_s: float = 20.0,
-                 brief_setup: bool = False, omher_home: Path | None = None, brief_runner=None, gateway_probe=None):
+                 brief_setup: bool = False, omher_home: Path | None = None, brief_runner=None, gateway_probe=None,
+                 voice_ticket=None):
         self.token = token
         # the one briefing job omher sets up itself (BOUNDARY rule 24): after the first bots.list, once per run
         self.brief_setup = brief_setup
@@ -6993,6 +7777,8 @@ class Bridge:
         self.home = Path(hermes_home) if hermes_home else default_hermes_home()
         self.gateway_factory = gateway_factory or self._default_connect
         self.gateway_probe = gateway_probe or self._default_probe
+        # rule 54: (api_origin, one-use native-http ticket) for one voice request to the bot's own gateway
+        self.voice_ticket = voice_ticket or voice_ticket_for
         self.eager = eager
         self.clock = clock
         self.poll_s = poll_s
@@ -7045,6 +7831,11 @@ class Bridge:
             "plugins.remove": self.op_plugins_remove, "plugins.reload": self.op_plugins_reload,
             "apps.list": self.op_apps_list, "apps.install": self.op_apps_install, "apps.login": self.op_apps_login,
             "apps.remove": self.op_apps_remove,
+            "computer.status": self.op_computer_status, "computer.bot": self.op_computer_bot,
+            "computer.toggle": self.op_computer_toggle, "computer.install": self.op_computer_install,
+            "computer.grant": self.op_computer_grant,
+            "voice.info": self.op_voice_info, "voice.transcribe": self.op_voice_transcribe,
+            "voice.speak": self.op_voice_speak,
             "bots.restart": self.op_bots_restart, "bots.restart_scope": self.op_bots_restart_scope,
             "peers.probe": self.op_peers_probe, "peers.attach": self.op_peers_attach, "peers.detach": self.op_peers_detach,
         }
@@ -7053,6 +7844,7 @@ class Bridge:
         self.announce_media = False  # amain: tell the app (stdout) which files it may open
         self._restarting: set[str] = set()      # bots whose restart command runs now
         self._apps_busy: set[str] = set()       # bots whose `hermes mcp` run (rule 41) runs now
+        self._computer_busy = False             # a computer-use command (rule 52) runs now
         self._creating = False                  # a `hermes profile create` (rule 44) runs now
         self._refused: dict[str, float] = {}     # bot -> when Hermes last refused its restart (live work)
         self._reattaching: set[str] = set()     # bots that omher's own restart attaches again (`_reattach`)
@@ -7456,6 +8248,10 @@ class Bridge:
                 parts = dag_parts(args)
                 if parts:
                     extra["dag"] = parts
+            elif tool == COMPUTER_TOOL and computer_step(args)[0]:
+                extra["action"] = computer_step(args)[0]
+            elif tool in BROWSER_TOOLS and browser_step(tool, args)[0]:
+                extra["action"] = browser_step(tool, args)[0]
             await out("tool.start", tool_id=tool_id, name=tool, detail=tool_detail(tool, args, context), **extra)
             if tool in ("skill_view", "skill_use"):
                 args = p.get("args") if isinstance(p.get("args"), dict) else {}
@@ -7464,9 +8260,17 @@ class Bridge:
                     await out("skill", name=skill)
         elif typ == "tool.complete":
             dur = p.get("duration_s")
-            await out("tool.end", tool_id=str(p.get("tool_id") or p.get("tool_call_id") or ""),
-                      name=str(p.get("name") or p.get("tool_name") or "tool"),
+            tool_id = str(p.get("tool_id") or p.get("tool_call_id") or "")
+            tool = str(p.get("name") or p.get("tool_name") or "tool")
+            # the step's end first: the screenshot is extra, and the end never waits on it or is lost to it
+            await out("tool.end", tool_id=tool_id, name=tool,
                       ok=not p.get("is_error"), ms=int(round(dur * 1000)) if isinstance(dur, (int, float)) else 0)
+            # rule 53: the capture Hermes names is read now, within this event, so before the next frame (and before the
+            # turn's end) and before a later capture is likely to overwrite it; the path comes only from this event
+            if tool in SHOT_TOOLS and isinstance(p.get("image_path"), str) and not p.get("is_error"):
+                shot = await asyncio.to_thread(step_shot, p["image_path"], conn.bot["path"])
+                if shot is not None:
+                    await out("tool.shot", tool_id=tool_id, **shot)
         elif typ.startswith("subagent."):
             # a background fan-out outlives the turn that started it: these never open a turn
             fields = subagent_fields(typ, p)
@@ -9310,6 +10114,222 @@ class Bridge:
             line = said or f"Hermes exited with code {code}."
         return {"outcome": "failed", "line": line, "state": state}
 
+    # ------------------------------------------------------------ computer use (BOUNDARY rule 52)
+    # Reads: the driver and the OS permissions through Hermes' `computer-use permissions status --json`, and a bot's
+    # switch through its gateway's `profiles.describe`, only on a gateway omher is attached to already (a read never
+    # starts one). A press runs one fixed computer_argv, one at a time; a switch's outcome is read back, never taken
+    # from Hermes' exit code (`hermes tools enable|disable` exits 0 whatever happened).
+
+    async def _computer_run(self, verb: str, bot: str = "default") -> tuple[int | None, str] | None:
+        """One computer-use command (exit code, output), or None when Hermes is not on this computer."""
+        if self._computer_busy:
+            raise BridgeError("busy", "omher is still running a computer-use command")
+        hermes = hermes_path()
+        if not hermes:
+            return None
+        self._computer_busy = True
+        try:
+            return await asyncio.to_thread(run_hermes_computer, hermes, verb, bot, self.home, COMPUTER_TIMEOUT[verb])
+        finally:
+            self._computer_busy = False
+
+    async def _computer_read(self) -> dict:
+        """The page's "This computer": Hermes' payload as computer_status keeps it, or `read: false` with the reason."""
+        got = await self._computer_run("status")
+        if got is None:
+            return {"read": False, "pinned": computer_pinned(), "line": "Hermes is not on this computer."}
+        code, output = got
+        status = computer_status(output)
+        if status is None:
+            said = hermes_said(output)
+            line = (f"Hermes did not finish in {int(COMPUTER_TIMEOUT['status'])} seconds." if code is None
+                    else said or f"Hermes exited with code {code}.")
+            return {"read": False, "pinned": computer_pinned(), "line": line}
+        return {"read": True, "pinned": computer_pinned(), **status}
+
+    async def _computer_switch(self, bot: dict) -> tuple[str, str]:
+        """(state, why) of a bot's switch as a new session gets it: `on` or `off`, else `unknown` with why `offline` (no
+        gateway omher is attached to) or `unread` (its gateway did not answer the read, or the answer does not list
+        the toolset). Hermes' `profiles.describe` reads a saved `platform_toolsets.cli` alone, while a new session
+        also drops what the profile's `agent.disabled_toolsets` names: such a switch reads `off`, why `disabled`."""
+        name = bot["name"]
+        conn = self.conns.get(name)
+        if conn is None or not conn.connected:
+            return "unknown", "offline"
+        try:
+            res = await asyncio.wait_for(self._call(conn, "profiles.describe", name=name), COMPUTER_DESCRIBE_TIMEOUT)
+        except BridgeError as e:
+            return "unknown", "offline" if e.code == "bot_offline" else "unread"
+        except (asyncio.TimeoutError, TimeoutError):
+            return "unknown", "unread"
+        except Exception as e:
+            if _named(e, "GatewayRPCError"):
+                return "unknown", "unread"
+            raise
+        state = computer_switch(res)
+        if state == "on" and await asyncio.to_thread(computer_suppressed, bot["path"]):
+            return "off", "disabled"
+        return state, "" if state != "unknown" else "unread"
+
+    def _profile_bot(self, p) -> dict:
+        """The page's bot from the bridge's own list, whose name Hermes takes as a profile id: computer use (rule 52)
+        and voice (rule 54) read the bot only through here."""
+        bot = self._bot(p.get("bot"))
+        if not PROFILE_ID.fullmatch(bot["name"]):
+            raise BridgeError("bad_request", f"{bot['name']} is not a profile id Hermes accepts")
+        return bot
+
+    async def op_computer_status(self, p) -> dict:
+        return await self._computer_read()
+
+    async def op_computer_bot(self, p) -> dict:
+        bot = self._profile_bot(p)
+        state, why = await self._computer_switch(bot)
+        return {"state": state, "why": why, "code_focus": await asyncio.to_thread(computer_code_focus, bot["path"])}
+
+    async def op_computer_toggle(self, p) -> dict:
+        """Turn one bot's computer use on or off: `hermes -p <bot> tools enable|disable computer_use`, then the switch
+        read back from its gateway. The page sends the bot and `on`; the toolset name is the bridge's own constant."""
+        bot = self._profile_bot(p)
+        name, on = bot["name"], p.get("on")
+        if not isinstance(on, bool):
+            raise BridgeError("bad_request", "on is true or false")
+        if computer_pinned():
+            raise BridgeError("pinned", "HERMES_TUI_TOOLSETS is set in omher's environment, so omher does not change this switch")
+        before, why = await self._computer_switch(bot)
+        if before == "unknown":
+            word = "is offline" if why == "offline" else "did not say"
+            raise BridgeError("cannot_tell", f"omher cannot tell whether {bot['display_name']} may use this computer "
+                                         f"({bot['display_name']} {word}), so it changes nothing")
+        want = "on" if on else "off"
+        if before == want:
+            return {"outcome": "ok", "state": want, "why": why}
+        got = await self._computer_run("enable" if on else "disable", name)
+        if got is None:  # nothing was run: a refusal, not a flip Hermes declined
+            raise BridgeError("no_hermes", "Hermes is not on this computer.")
+        code, output = got
+        after, after_why = await self._computer_switch(bot)
+        if after == want:
+            return {"outcome": "ok", "state": after, "why": after_why}
+        said = hermes_said(output)
+        if code is None:
+            line = f"Hermes did not finish in {int(COMPUTER_TIMEOUT['enable'])} seconds." + (f"\n{said}" if said else "")
+        elif after == "unknown":
+            line = f"omher could not read {bot['display_name']}'s switch back." + (f"\n{said}" if said else "")
+        else:
+            line = said or f"Hermes left computer use {after} for {bot['display_name']}."
+        return {"outcome": "failed", "state": after, "why": after_why, "line": line}
+
+    async def _computer_driver(self, verb: str) -> dict:
+        """Install the driver or ask macOS for its grants, then read "This computer" again for the page."""
+        got = await self._computer_run(verb)
+        if got is None:
+            return {"outcome": "failed", "line": "Hermes is not on this computer.", "status": None}
+        code, output = got
+        try:
+            status = await self._computer_read()
+        except BridgeError:  # another press took the one run slot first: the page reads again on its own
+            status = None
+        # read back: an install counts once the driver reads as installed; a state omher could not read after Hermes'
+        # zero exit is an install it cannot confirm (`unconfirmed`), not a failure
+        unread = status is None or not status.get("read")
+        if code == 0 and (verb != "install" or unread or status.get("installed") is True):
+            return {"outcome": "ok", "status": status, **({"unconfirmed": True} if unread else {})}
+        said = hermes_said(output)
+        if code is None:
+            line = f"Hermes did not finish in {int(COMPUTER_TIMEOUT[verb])} seconds." + (f"\n{said}" if said else "")
+        else:
+            line = said or f"Hermes exited with code {code}."
+        return {"outcome": "failed", "line": line, "status": status}
+
+    async def op_computer_install(self, p) -> dict:
+        return await self._computer_driver("install")
+
+    async def op_computer_grant(self, p) -> dict:
+        # the grants are macOS' (Accessibility, Screen Recording); Windows and Linux have none to ask for
+        if sys.platform != "darwin":
+            raise BridgeError("bad_request", "Only macOS asks for computer-use permissions.")
+        return await self._computer_driver("grant")
+
+    # ------------------------------------------------------------ voice (BOUNDARY rule 54)
+    # The page sends a bot's name and either a recording (its bytes and type) or an answer's text and a part number.
+    # The address, the path, the profile and the ticket are the bridge's own; only a bot on this computer whose gateway
+    # omher is attached to is asked. Nothing of a recording or a text is kept, written or logged.
+
+    async def _voice_send(self, bot: dict, which: str, build, read=None):
+        """One request to the bot's own gateway (voice_request), off the event loop: `build()` checks the page's
+        fields and makes the JSON body in the worker thread (a recording is tens of MB), then a ticket is minted for
+        this one request and the request sent; `read(answer)`, when given, checks Hermes' answer in the same thread
+        (a spoken part is up to VOICE_ANSWER_MAX bytes)."""
+        conn = self.conns.get(bot["name"])
+        if conn is None or not conn.connected:
+            raise BridgeError("bot_offline", f"{bot['display_name']} is offline, so omher cannot reach its Hermes.")
+
+        def exchange() -> dict:
+            body = json.dumps(build()).encode("utf-8")
+            origin, ticket = self.voice_ticket(bot["path"])
+            answer = voice_request(origin, which, bot["name"], ticket, body)
+            return read(answer) if read else answer
+        try:
+            return await asyncio.to_thread(exchange)
+        except VoiceError as e:
+            raise BridgeError(e.code, e.message)
+
+    async def op_voice_info(self, p) -> dict:
+        """What the page says before a first use: whether this Hermes takes voice, and what the bot's config names."""
+        bot = self._profile_bot(p)
+        why = await asyncio.to_thread(voice_supported)
+        return {"supported": not why, "line": why, **await asyncio.to_thread(voice_config, bot["path"]),
+                "text_max": SPEAK_TEXT_MAX}
+
+    async def op_voice_transcribe(self, p) -> dict:
+        """A recording to the bot's Hermes for its transcript: the bytes and the type go out as Hermes' data URL."""
+        bot = self._profile_bot(p)
+        data, mime = p.get("data_base64"), p.get("mime")
+        base = mime.split(";", 1)[0].strip().lower() if isinstance(mime, str) else ""
+        if not VOICE_MIME.fullmatch(base):
+            raise BridgeError("bad_request", "the recording's type is not one Hermes takes")
+        if not isinstance(data, str) or not data:
+            raise BridgeError("bad_request", "no recording")
+        if len(data) > VOICE_AUDIO_B64_MAX:
+            raise BridgeError("voice_too_large", f"A recording may be at most {VOICE_AUDIO_MAX // (1024 * 1024)} MB.")
+        if len(data) % 4:
+            raise BridgeError("bad_request", "the recording is not base64")
+
+        def build() -> dict:  # in the worker thread: a scan of tens of MB would stall every other chat on the loop
+            if not VOICE_B64.fullmatch(data):
+                raise VoiceError("bad_request", "the recording is not base64")
+            return {"data_url": f"data:{base};base64,{data}", "mime_type": base}
+        out = await self._voice_send(bot, "transcribe", build)
+        return {"transcript": _voice_text(out.get("transcript")), "provider": _voice_provider(out.get("provider"))}
+
+    async def op_voice_speak(self, p) -> dict:
+        """Part `part` of an answer's text (speak_parts) to the bot's Hermes for its audio. An empty part (all of it
+        was something Hermes does not read, such as a link) answers `empty` so the page goes on to the next."""
+        bot = self._profile_bot(p)
+        text, part = p.get("text"), p.get("part", 0)
+        if not isinstance(text, str):
+            raise BridgeError("bad_request", "no text")
+        if len(text) > SPEAK_INPUT_MAX:
+            raise BridgeError("voice_too_large", "This answer is too long to read aloud.")
+        if not isinstance(part, int) or isinstance(part, bool) or part < 0:
+            raise BridgeError("bad_request", "part is a number from 0")
+        # in the worker thread: splitting up to SPEAK_INPUT_MAX characters, and below the check of an answer of up to
+        # VOICE_ANSWER_MAX bytes, would stall every other chat on the loop
+        parts, cut = await asyncio.to_thread(speak_parts, text)
+        if not parts:
+            raise BridgeError("voice_empty", "This answer has no text to read aloud.")
+        if part >= len(parts):
+            raise BridgeError("bad_request", f"this text has {len(parts)} parts")
+        head = {"part": part, "parts": len(parts), "cut": cut, "text_max": SPEAK_TEXT_MAX}
+        try:
+            mime, audio, provider = await self._voice_send(bot, "speak", lambda: {"text": parts[part]}, read=speak_audio)
+        except BridgeError as e:
+            if e.code == "voice_failed" and "empty after tts cleanup" in e.message.lower():
+                return {**head, "empty": True}
+            raise
+        return {**head, "empty": False, "mime": mime, "data_base64": audio, "provider": provider}
+
     def poll_routines(self) -> list[tuple[str, dict]]:
         """Compare each profile's cron/jobs.json to the last look; returns (bot, job) for each new run. A changed
         file also queues `routines.update`, and a job id first seen after the baseline queues `routine.added`
@@ -9625,6 +10645,10 @@ class Bridge:
         elif event == "bot.status" and f.get("running") is False:
             link.running.discard(bot)
         fields = {k: v for k, v in f.items() if k not in ("event", "bot")}
+        if event == "tool.shot":  # rule 53: a capture read on that computer, checked again here under the same cap
+            fields = peer_shot(fields)
+            if fields is None:
+                return
         await self.emit(event, f"{link.peer}:{bot}", **fields)
 
     async def _peer_turns_end(self, link: PeerLink, reason: str) -> None:

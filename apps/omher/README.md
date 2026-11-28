@@ -134,6 +134,40 @@ UI (React in a Tauri window)  ⇄  bridge (Python, loopback WebSocket)  ⇄  the
 - **While it answers** (Settings › General): a message sent while a bot is answering waits in the steer queue until
   the turn ends (the default), or, set to Steer, is steered into the running answer at once, as its Steer button
   would; a message behind another held one still waits its turn (`e2e/steer-queue.spec.ts`).
+- **Voice** (`src/chat/voice/`, `e2e/voice.spec.ts`): in a bot's main chat and its threads the composer has a
+  microphone. Press it to record in omher's own window (a dot and the time show while it records), press it again or
+  Enter to stop, Cancel or Escape to throw the recording away; it stops by itself after 3 minutes or 20 MB. The bot's
+  own Hermes turns the recording into text (`POST /api/audio/transcribe` on its gateway), which goes into the draft at
+  the caret like typed text, undo included, and is never sent by omher; a quiet line then names the provider Hermes
+  used, or says no speech was heard. An answer has a speaker beside its copy button: Hermes reads the answer's text
+  aloud (`POST /api/audio/speak`), in parts of at most 1500 characters so a host without ffmpeg still reads all of it,
+  up to the answer's first 20,000 characters, played here with Stop. Stop, starting another answer, switching chats or
+  closing the chat ends what plays and asks for no later part (one already asked for is made by Hermes and dropped
+  when it arrives); while the microphone records or waits for its transcript, read aloud is off. Before the first use
+  per bot a notice says where the recording or the text goes and which provider the bot's config names (Hermes'
+  default text-to-speech, `edge`, is Microsoft's online service); Continue is remembered on this computer, Escape is
+  Cancel. The bridge sends both requests to the bot's own gateway on loopback with a one-use ticket. omher keeps no
+  recording and no audio; a transcript stays in the box like anything typed until it is sent or cleared, and read
+  aloud sends only the answer already in the chat. A Hermes whose gateway listens over https is not used for voice
+  (omher has no TLS client for it). A bot on another computer and remote-only mode have voice off with the reason. On macOS the
+  first press brings up macOS' own microphone dialog; on Windows, WebView2's; on Linux see
+  [`docs/omher-linux.md`](../../docs/omher-linux.md). `BOUNDARY.md` rule 54.
+- **Browser steps and their screenshots** (`src/chat/activity/browserSteps.ts`, `e2e/browser-steps.spec.ts`): in a
+  chat's step list ("Worked for … · N steps") a bot's `browser_exec` step reads as the label the bot wrote for it
+  ("Opening the shop's login page"), or "Used the browser" when it wrote none; a `browser_cdp` step as "Ran browser
+  command" and its CDP method; a page dialog as accepted or dismissed; a saved login as what was done (filled, saved,
+  a code entered). The code, the CDP params, the text typed into a dialog and the calls' results stay in the bridge,
+  in the main chat, a subagent's step and the Plans session view alike; a label keeps the bot's own words with
+  secret-shaped text masked. When Hermes names the screenshot a browser or computer-use step captured, the bridge
+  reads that file at the step's end (Hermes' default capture file is overwritten by the next capture), only from the
+  bot's own `cache/` and `image_cache/` folders and its own browser-harness tmp folder, as a regular PNG, JPEG, GIF or
+  WebP of at most 5 MB with one name, reached through no link, and the step's row shows a small thumbnail that opens
+  the image full size. A bot whose `cache/` (or `image_cache/`) folder is itself a symbolic link shows no
+  screenshots: such a folder is not read through. The page keeps the newest 8 a chat and 16 in all, in memory only:
+  after the app reloads, and for a chat read back from Hermes, the steps have no screenshot. For a bot on another computer that computer's bridge
+  reads the file and sends it over the SSH link, checked again here. There is no live view of the browser: Hermes
+  sends no stream of the page and no address or title, so omher has nothing to show while it works.
+  `BOUNDARY.md` rule 53.
 - **New bot** (`src/addbot/NewBot.tsx`, BOUNDARY rule 44): the sidebar `+` › New bot lists oh-my-hermes' bot
   templates (`omh --hermes-home <root> profile bot-templates --json`, through rule 43's `omh` runner) beside No
   template; Create checks the name against Hermes' own profile rule and runs Hermes' `hermes -p default profile create
@@ -286,7 +320,8 @@ Rules the code keeps:
   calls Hermes' own `image.attach_bytes`, `pdf.attach` or `file.attach` in the main chat, then `chat.send` sends the
   text. 20 files, 100 MB each; if one attach fails, nothing is sent.
 - **Loopback only.** The bridge listens on 127.0.0.1 and talks to the gateway Hermes itself runs on this machine.
-- **No model calls of its own.** Every model call is Hermes'. omher has no API key and no HTTP client.
+- **No model calls of its own.** Every model call is Hermes'. omher has no API key. Its one HTTP use is voice
+  (above): Hermes' own two audio routes on the bot's own gateway, on loopback, which use the provider its config names.
 - **Sessions run only allow-listed agents.** Only when you start one, only `claude`, `codex`, `omo`, `dsh`, `omh`, `pi`,
   `omp`, `grok`, `opencode`, `gemini`, `qwen`, `kimi`, `copilot`, `cline` or `agy` (Antigravity), with no arguments besides the fixed chat mode and a conversation id to continue, in the folder you
   picked; stopped when the session is closed or the app quits.
@@ -301,6 +336,20 @@ Rules the code keeps:
   `hermes -p <bot> mcp install|login|remove <name>` (`BOUNDARY.md` rule 41); the sign-in is Hermes' own browser page,
   a value an install asks for is typed in a terminal, and omher never sees a key or a token. Skills only show their
   state.
+- **Computer use through Hermes' own commands.** Settings › Computer (`src/settings/computer/`) says whether a bot may
+  click and type in this computer's apps with Hermes' `computer_use` toolset. This computer shows the system, Hermes'
+  cua-driver and its version, each of the driver's checks, the macOS grants (Accessibility, Screen Recording) and
+  one ready line, read through `hermes -p default computer-use permissions status --json`; Install runs Hermes'
+  `computer-use install`, Grant access (macOS only) its `computer-use permissions grant`, and Check again reads it
+  again. Bots has one switch per bot, read from the bot's own gateway and the profile's `agent.disabled_toolsets`;
+  flipping it runs `hermes -p <bot> tools enable|disable computer_use` and reads the switch back, and a failed flip
+  says whether Hermes left it as it was, omher cannot tell, or nothing was asked. A change reaches the bot's new
+  threads at once and its main chat after the bot restarts. For a bot whose config sets `agent.coding_context:
+  focus`, the row says its chats in a code folder get Hermes' coding tools, without computer use. A bot on another computer, every bot while omher uses a server, `HERMES_TUI_TOOLSETS` set in omher's
+  own environment and an offline bot each show the switch off with the reason. In a chat a computer-use step reads as
+  its action and app ("Clicked in Safari"); outside Hermes' own approval card, which shows the start of what a `type`
+  or `key` action will enter so the person sees what they approve, what the bot types never reaches the page.
+  `BOUNDARY.md` rule 52.
 - **A bot's page** (Settings › Bots › the bot; the row menu's Edit bot, or Edit in the Details panel): its picture and
   name (editable), then who it is, read-only. Persona is the profile's `SOUL.md` as plain text with its size; Memory is
   Hermes' built-in `memories/MEMORY.md` and `memories/USER.md`, each as its entries with its characters against the
