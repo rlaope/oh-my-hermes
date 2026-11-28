@@ -102,9 +102,20 @@ pub fn cli_home(home: &Path, agent: &str, account_env: &[(String, String)], env:
     Some(picked.or_else(|| env(var).filter(|v| !v.is_empty())).map(PathBuf::from).unwrap_or_else(|| home.join(dir)))
 }
 
-/// Claude Code's project folder for a cwd: every character that is not a letter or a digit becomes `-`.
+/// Claude Code's project folder for a cwd: every character that is not an ASCII letter or digit becomes `-`, once per
+/// UTF-16 unit as Claude Code's own replace counts them (a character outside the BMP, an emoji, is two `-`). The cwd is
+/// taken as given: a decomposed (NFD) Hangul syllable is three characters there, so its slug is longer than the
+/// composed one's ([`claude_dirs`] tries both).
 pub fn claude_slug(cwd: &str) -> String {
-    cwd.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect()
+    let mut out = String::with_capacity(cwd.len());
+    for c in cwd.chars() {
+        if c.is_ascii_alphanumeric() {
+            out.push(c);
+        } else {
+            out.extend(std::iter::repeat('-').take(c.len_utf16()));
+        }
+    }
+    out
 }
 
 /// `p` when it is a real file (not a link) inside `root` once both are resolved; else `None`.
@@ -123,9 +134,45 @@ fn plain_dir(p: &Path) -> bool {
     std::fs::symlink_metadata(p).map(|m| m.is_dir()).unwrap_or(false)
 }
 
+/// One key per folder, by the same rule as the TERMINALS list's `pathKey` (`src/sessions/folders.ts`), so "this
+/// folder" here is the folder the + menu offers: repeated separators made one and a trailing one dropped (the root
+/// stays); a Windows path (`C:\…`, `C:/…`, `\\server\…`) spelled with backslashes; composed Unicode (NFC), since
+/// macOS hands a shell's folder over decomposed; and a drive-letter path case-folded, as Windows compares names. A
+/// macOS or Linux path keeps its case (a macOS volume can be case-sensitive, Linux always is), and so does a
+/// `\\server\share` path. For comparing only, never shown.
+pub fn folder_key(path: &str) -> String {
+    let b = path.as_bytes();
+    let unc = path.starts_with("\\\\");
+    let drive = |b: &[u8]| b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && matches!(b[2], b'\\' | b'/');
+    let windows = unc || drive(b);
+    let mut p = String::with_capacity(path.len() + 1);
+    if unc {
+        p.push('\\');
+    }
+    let mut sep = false;
+    for c in path.chars() {
+        let is_sep = c == '/' || (windows && c == '\\');
+        if is_sep && !sep {
+            p.push(if windows { '\\' } else { '/' });
+        } else if !is_sep {
+            p.push(c);
+        }
+        sep = is_sep;
+    }
+    let root = if windows { drive(p.as_bytes()) && p.len() == 3 } else { p.len() == 1 };
+    if !root && p.ends_with(['/', '\\']) {
+        p.pop();
+    }
+    let p = icu_normalizer::ComposingNormalizerBorrowed::new_nfc().normalize(&p).into_owned();
+    if drive(p.as_bytes()) {
+        p.to_lowercase()
+    } else {
+        p
+    }
+}
+
 fn same_folder(a: &str, b: &str) -> bool {
-    let t = |s: &str| s.trim_end_matches(['/', '\\']).to_string();
-    !a.is_empty() && t(a) == t(b)
+    !a.is_empty() && folder_key(a) == folder_key(b)
 }
 
 fn mtime(p: &Path) -> f64 {
@@ -352,13 +399,26 @@ fn claude_row(path: &Path, cwds: Option<&[String]>) -> Option<PastChat> {
 
 /// The project folders a Claude Code listing walks: every one when `cwds` is `None`, else each folder's own: the one
 /// its slug names and, for a long path, those Claude Code named by the slug's first [`SLUG_MAX`] characters and a
-/// hash (the transcript's own `cwd` still decides). Links are not followed.
+/// hash (the transcript's own `cwd` still decides). Claude Code made the slug from the cwd as its process saw it,
+/// composed or decomposed (macOS hands a shell's folder over decomposed), so the slugs of both forms are looked for.
+/// Links are not followed.
 fn claude_dirs(projects: &Path, cwds: Option<&[String]>) -> Vec<PathBuf> {
     let all: Vec<PathBuf> = std::fs::read_dir(projects).map(|rd| rd.flatten().map(|e| e.path()).filter(|p| plain_dir(p)).collect()).unwrap_or_default();
     let Some(cwds) = cwds else { return all };
-    let mut out: Vec<PathBuf> = Vec::new();
+    let mut slugs: Vec<String> = Vec::new();
     for cwd in cwds {
-        let slug = claude_slug(cwd);
+        for form in [
+            icu_normalizer::ComposingNormalizerBorrowed::new_nfc().normalize(cwd),
+            icu_normalizer::DecomposingNormalizerBorrowed::new_nfd().normalize(cwd),
+        ] {
+            let slug = claude_slug(&form);
+            if !slugs.contains(&slug) {
+                slugs.push(slug);
+            }
+        }
+    }
+    let mut out: Vec<PathBuf> = Vec::new();
+    for slug in slugs {
         let short = (slug.len() > SLUG_MAX).then(|| format!("{}-", &slug[..SLUG_MAX]));
         for d in &all {
             let name = d.file_name().and_then(|x| x.to_str()).unwrap_or("");
@@ -1347,6 +1407,59 @@ mod tests {
         let only = serde_json::json!({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": "<ide_selection>x</ide_selection>"}]}});
         assert!(claude_user_text(&only).is_none());
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn this_folder_is_one_folder_however_it_is_spelled() {
+        // the same rule as folders.ts `pathKey`
+        for (a, b) in [
+            ("/Users/you/code", "/Users/you/code/"),
+            ("/Users/you//code", "/Users/you/code"),
+            ("C:\\x", "c:\\x"),
+            ("C:/x", "C:\\x"),
+            ("C:\\Users\\You\\", "c:/users/you"),
+            ("C:\\", "c:/"),
+            ("/Users/you/\u{1107}\u{1169}\u{1100}\u{1169}\u{1109}\u{1165}", "/Users/you/보고서"),
+            ("\\\\server\\share\\", "\\\\server/share"),
+        ] {
+            assert!(same_folder(a, b), "{a:?} {b:?}");
+            assert_eq!(folder_key(a), folder_key(b));
+        }
+        for (a, b) in [
+            ("/Users/you/Code", "/Users/you/code"),
+            ("/a/b", "/a/b/c"),
+            ("\\\\Server\\Share", "\\\\server\\share"),
+            ("/", ""),
+        ] {
+            assert!(!same_folder(a, b), "{a:?} {b:?}");
+        }
+        assert!(!same_folder("", ""));
+        assert_eq!(folder_key("/"), "/");
+        assert_eq!(folder_key("C:/"), "c:\\");
+        assert_eq!(folder_key("C:\\Work\\보고서"), "c:\\work\\보고서");
+    }
+
+    #[test]
+    fn a_slug_counts_utf16_units_and_a_decomposed_folder_is_found() {
+        assert_eq!(claude_slug("/a/보고서"), "-a----");
+        assert_eq!(claude_slug("/a/\u{1107}\u{1169}\u{1100}\u{1169}\u{1109}\u{1165}"), "-a-------");
+        // an emoji is two UTF-16 units, so two `-` as Claude Code writes it
+        assert_eq!(claude_slug("/x/🚀"), "-x---");
+        // Claude Code ran in the decomposed folder (macOS's spelling); the menu offers the composed one, and back
+        let nfd = "/Users/you/\u{1107}\u{1169}\u{1100}\u{1169}\u{1109}\u{1165}";
+        let nfc = "/Users/you/보고서";
+        for (ran, asked) in [(nfd, nfc), (nfc, nfd)] {
+            let root = tmp("nfd-slug");
+            write(&root.join("projects").join(claude_slug(ran)).join(format!("{C1}.jsonl")), &claude_file(ran, C1));
+            let rows = list(&root, "claude", &[asked.into()], false).unwrap();
+            assert_eq!(rows.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), [C1], "{ran:?} asked as {asked:?}");
+            let _ = std::fs::remove_dir_all(&root);
+        }
+        // Codex compares its recorded cwd by key too
+        let x = tmp("nfd-codex");
+        rollout(&x, &xid(70), &codex_file(&xid(70), nfd), 1);
+        assert_eq!(list(&x, "codex", &[nfc.into()], false).unwrap().len(), 1);
+        let _ = std::fs::remove_dir_all(&x);
     }
 
     #[test]
