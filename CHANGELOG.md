@@ -48,6 +48,14 @@ All notable changes will be documented here.
   same `gh` runner, cache and rate limits as Tasks › 나, and changes nothing on GitHub. (BOUNDARY rule 51;
   `apps/omher/src/tasks/DashView.tsx`, `apps/omher/src/tasks/dash.ts`, `apps/omher/src-tauri/src/gh_dash.rs`)
 
+- **omher releases can no longer move every omher back or publish an update nobody can install.** The release run
+  now checks each update's signature against the key the app pins before it makes the release, refuses to point the
+  in-app updater at a version that is not newer than the one it serves (re-running an old tag, or an older run
+  finishing last, fails with a message; a deliberate re-publish of the same version is a `republish` input, off by
+  default), and reads the public `latest.json` back after the upload, failing unless it is the one just written.
+  Releases of different tags rewrite that file one at a time. Ideas from 2rami/kasaterm (MIT), code written fresh.
+  (`apps/omher/scripts/release-guard.mjs`, `.github/workflows/omher-release.yml`)
+
 - **TUI: a `/model` form Hermes runs itself waits for the turn instead of being refused.** During a turn, `/model`
   ran at once whenever every `--` word was `--refresh`, `--provider` or `--session`, so `/model --provider copilot`,
   `/model gpt-5.4 --refresh`, `/model --session`, `/model gpt-5.4 -g` and `/model gpt-5.4 extra` went straight to

@@ -405,9 +405,28 @@ pnpm tauri build --bundles nsis,msi    # Windows release installers (unsigned)
 ## Release
 
 Bump `version` in `src-tauri/tauri.conf.json` (and `src-tauri/Cargo.toml`, `package.json`), merge, then push a
-tag `omher-v<version>`. `.github/workflows/omher-release.yml` builds the macOS (arm64, x64) and Windows (x64)
-installers, writes `SHA256SUMS.txt` and attaches everything to a GitHub Release of that tag. No Apple Developer
-or Windows signing certificate is involved: macOS builds use an ad-hoc signature (`signingIdentity: "-"`).
+tag `omher-v<version>`. `.github/workflows/omher-release.yml` builds the macOS (arm64, x64), Windows (x64) and
+Linux (x86_64) installers, writes `SHA256SUMS.txt` and attaches everything to a GitHub Release of that tag. No Apple
+Developer or Windows signing certificate is involved: macOS builds use an ad-hoc signature (`signingIdentity: "-"`).
+
+The same run then points the in-app updater at the release by rewriting `latest.json` on the rolling `omher-latest`
+prerelease, which every omher reads. `scripts/release-guard.mjs` (Node built-ins only; its tests run in `pnpm test`)
+guards that write:
+
+- Before the release is made, each updater payload's signature must verify against the key pinned in
+  `src-tauri/tauri.conf.json`, the way the updater checks it, and be signed for the manifest's version. A signing-key
+  mismatch fails the run instead of publishing an update nobody can install.
+- Before the pointer moves, the version it serves now must be lower than the new one (semver, pre-release aware).
+  Re-running an old tag, or an older run finishing last, fails with a message instead of moving every omher back. The
+  first publish (no file yet) passes. To publish the same version again on purpose, run the workflow by hand with the
+  `republish` input checked; a lower version is refused either way.
+- After the upload, the public file is read back (up to 30 times, 10 s apart), and the run fails unless it is the
+  manifest just uploaded.
+
+The `pointer` job does the last two under one concurrency group for every tag, so two releases never rewrite the
+pointer at once, while the builds and each tag's own release still run in parallel. When a third tag queues behind a
+second, GitHub cancels the second's waiting pointer job (its release is already made): re-run it if that version
+should still be the one served.
 
 ## Repository rules
 
