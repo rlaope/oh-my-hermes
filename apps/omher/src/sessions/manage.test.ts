@@ -3,7 +3,8 @@
 import { describe, expect, it } from "vitest";
 import { MockHost, type MockCall, type PastChat } from "./host";
 import { createSessions } from "./sessions";
-import { ageOf, rowMenuItems, sessionMatches } from "./SessionsSection";
+import { ageOf, pastFork, pastMatches, pastSaid, readPastScope, rowMenuItems, savePastScope, sessionMatches } from "./SessionsSection";
+import { termStart } from "./termConv";
 import { createStore, type BridgeLike } from "../state/store";
 import { shortcutFor, stepSession } from "../app/shortcuts";
 import { badgeCount } from "../app/badge";
@@ -82,38 +83,75 @@ describe("the sidebar search", () => {
 describe("continuing a past conversation", () => {
   const past: PastChat = { agent: "claude", id: "bbbbbbbb-1111-4222-8333-444444444444", cwd: "/home/you/code/omher", title: "Remember the word MARIGOLD for later", named: false, at: 1 };
 
-  it("opens a session in its folder with the earlier messages and resumes the agent's own conversation", async () => {
-    const { ss, store, calls } = setup([past]);
-    const id = await ss.continuePast(past);
+  it("opens a TERMINALS row in its folder that continues the agent's own conversation", async () => {
+    const { ss, store } = setup([past]);
+    const id = ss.continuePast(past)!;
     const r = ss.getState().list.find((x) => x.id === id)!;
-    expect(r).toMatchObject({ agent: "claude", cwd: "/home/you/code/omher", agentSession: past.id, promptTitle: past.title, view: "chat" });
+    // a terminal row holding the conversation, as one that continues it after a restart (termStart: --resume)
+    expect(r).toMatchObject({ agent: "claude", cwd: "/home/you/code/omher", agentSession: past.id, used: true, promptTitle: past.title, view: "terminal" });
+    expect(termStart(r, () => "new")).toEqual({ again: true, resume: past.id });
     expect(store.getState().ui).toMatchObject({ view: "session", session: id });
-    const key = ss.chatKey(id)!;
-    expect(store.getState().chats[key].messages.slice(0, 2).map((m) => [m.role, m.text])).toEqual([
-      ["user", "Remember the word MARIGOLD for later"],
-      ["assistant", "Noted: MARIGOLD."],
-    ]);
-    expect(calls().find((c) => c.op === "chat.start")).toMatchObject({ agent: "claude", cwd: "/home/you/code/omher", resume: past.id });
     // the folder becomes a recent one
     expect(ss.getState().recent[0]).toMatchObject({ agent: "claude", cwd: "/home/you/code/omher" });
-    // picking it again opens the same session; nothing starts twice
-    expect(await ss.continuePast(past)).toBe(id);
-    expect(calls().filter((c) => c.op === "chat.start")).toHaveLength(1);
+    // picking it again opens the same row; no second row
+    expect(ss.continuePast(past)).toBe(id);
+    expect(ss.getState().list.filter((x) => x.agentSession === past.id)).toHaveLength(1);
   });
 
-  it("a named conversation keeps its name as the agent's title", async () => {
+  it("a named conversation keeps its name as the agent's title; Codex continues by its resume flag", () => {
     const named: PastChat = { agent: "codex", id: "01a1d060-4ab7-72b2-b02b-1dbee1d5f52c", cwd: "/home/you/code/web-app", title: "Add a dark theme", named: true, at: 1 };
-    const { ss, calls } = setup([named]);
-    const id = await ss.continuePast(named);
-    expect(ss.getState().list.find((x) => x.id === id)).toMatchObject({ agentTitle: "Add a dark theme" });
-    expect(calls().find((c) => c.op === "chat.start")).toMatchObject({ agent: "codex", resume: named.id });
+    const { ss } = setup([named]);
+    const id = ss.continuePast(named);
+    const r = ss.getState().list.find((x) => x.id === id)!;
+    expect(r).toMatchObject({ agentTitle: "Add a dark theme", view: "terminal" });
+    expect(termStart(r, () => "new")).toEqual({ again: true, resume: named.id });
   });
 
-  it("the list asks only for the agent's conversations in the folders given", async () => {
+  it("the list asks only for the agent's conversations in the folders given, or in every folder", async () => {
     const { host, g } = setup();
     const rows = await host.pastChats("claude", ["/home/you/code/omher", "/home/you"]);
     expect(rows.map((r) => r.title)).toEqual(["Remember the word MARIGOLD for later"]);
-    expect(g.__omherPastReads).toEqual([{ op: "list", agent: "claude", cwds: ["/home/you/code/omher", "/home/you"] }]);
+    const every = await host.pastChats("claude", ["/home/you/code/omher"], true);
+    expect(every.map((r) => r.cwd)).toEqual(["/home/you/code/web-app", "/home/you/code/omher"]);
+    expect(g.__omherPastReads).toEqual([
+      { op: "list", agent: "claude", cwds: ["/home/you/code/omher", "/home/you"] },
+      { op: "list", agent: "claude", cwds: ["/home/you/code/omher"], all: true },
+    ]);
+  });
+
+  it("the folder switch starts on This folder and keeps what the person picked", () => {
+    setup();
+    expect(readPastScope()).toBe("here");
+    savePastScope("all");
+    expect(readPastScope()).toBe("all");
+    savePastScope("here");
+    expect(readPastScope()).toBe("here");
+    // storage that throws: This folder, and nothing breaks
+    (globalThis as { localStorage?: unknown }).localStorage = {
+      getItem: () => {
+        throw new Error("blocked");
+      },
+      setItem: () => {
+        throw new Error("blocked");
+      },
+    };
+    expect(readPastScope()).toBe("here");
+    expect(() => savePastScope("all")).not.toThrow();
+  });
+
+  it("a row's last line, a fork's mark and the filter over title, last line and folder", () => {
+    const c: PastChat = { ...past, last: { role: "assistant", text: "Noted: MARIGOLD.", ts: 0 } };
+    expect(pastSaid(c)).toBe("Agent: Noted: MARIGOLD.");
+    expect(pastSaid({ last: { role: "user", text: "and then?", ts: 0 } })).toBe("You: and then?");
+    expect(pastSaid({ last: null })).toBe("");
+    expect(pastSaid({})).toBe("");
+    expect(pastFork({ fork: "Add a dark theme" })).toBe("fork of Add a dark theme");
+    expect(pastFork({ fork: "" })).toBe("fork");
+    expect(pastFork({ fork: null })).toBe("");
+    expect(pastFork({})).toBe("");
+    for (const n of ["", "marigold", "NOTED", "code/omher", "~/code", "/home/you/code/omher"]) expect(pastMatches(c, n, "/home/you"), n).toBe(true);
+    for (const n of ["web-app", "dark", "fork"]) expect(pastMatches(c, n, "/home/you"), n).toBe(false);
+    expect(pastMatches({ ...c, fork: "" }, "fork", "/home/you")).toBe(true);
   });
 
   it("ages read as now, minutes, hours, days", () => {

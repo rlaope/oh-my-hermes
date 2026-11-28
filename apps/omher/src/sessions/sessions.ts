@@ -1128,8 +1128,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
    * TERMINALS +: start `agent` (or the Shell, `SHELL`) in a terminal in `cwd` (none: the last folder used, else home)
    * at once, and open it. Never a chat: an agent that usually opens as omher's chat is opened as its own terminal.
    * A Shell runs `shell` (an id from the shell's list; none: Settings › Terminal › Default shell, else the login shell).
+   * `conv`: the conversation it continues (continuePast), as a row that had it continues it after a restart.
    */
-  const startTerminal = (agent: AgentId, cwd?: string, shell?: string): string | null => {
+  const startTerminal = (agent: AgentId, cwd?: string, shell?: string, conv?: Pick<SessionRec, "agentSession" | "used" | "agentTitle" | "promptTitle">): string | null => {
     const at = cwd || draftFolder(state.recent, state.home);
     if (!at) return null;
     const id = `s${++seq}`;
@@ -1148,6 +1149,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       ...(asTerminal ? { open: "terminal" as const } : {}),
       ...(account ? { account } : {}),
       ...(shellId ? { shell: shellId } : {}),
+      ...conv,
       fgAgent: null,
     };
     const recent = pushRecent(state.recent, { agent, cwd: at, at: startedAt });
@@ -1177,52 +1179,21 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   };
 
   /**
-   * Continue a conversation Claude Code or Codex keeps for a folder (made in its CLI, or anywhere else): a session in
-   * that folder whose chat shows the conversation's last messages, and whose agent continues it (Claude Code
-   * `--resume`, Codex `thread/resume`). A session that already runs that conversation is opened instead.
+   * Continue a conversation Claude Code or Codex keeps (made in its CLI, or anywhere else) as a TERMINALS row: that
+   * agent's own terminal in the conversation's folder, holding the conversation as a row does that continues it after
+   * a restart (termStart: `claude --resume <id>`, `codex resume <id>`; rule 11), so the CLI shows its own history.
+   * The conversation was used (it has the person's words), so a file of it that is gone was deleted and the row says
+   * so instead of starting a new one. A row that already holds that conversation is opened instead (started again
+   * when it ended).
    */
-  const continuePast = async (chat: PastChat): Promise<string> => {
-    const there = state.list.find((r) => r.agent === chat.agent && r.agentSession === chat.id && r.status !== "draft");
+  const continuePast = (chat: PastChat): string | null => {
+    const there = state.list.find((r) => r.agent === chat.agent && r.agentSession === chat.id && isTerminalRec(state.agents, r));
     if (there) {
       store().actions.openSession(there.id);
       if (there.status === "exited" || there.status === "failed") void restart(there.id);
       return there.id;
     }
-    const id = `s${++seq}`;
-    const startedAt = Date.now();
-    const r: SessionRec = {
-      id,
-      linkId: freshLinkId(),
-      agent: chat.agent,
-      cwd: chat.cwd,
-      startedAt,
-      status: "starting",
-      view: "chat",
-      agentSession: chat.id,
-      ...(chat.named ? { agentTitle: chat.title } : { promptTitle: chat.title }),
-    };
-    const recent = pushRecent(state.recent, { agent: chat.agent, cwd: chat.cwd, at: startedAt });
-    try {
-      localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
-    } catch {
-      /* no storage */
-    }
-    set({ list: [r, ...state.list], recent });
-    keys.set(id, `agent:${id}`);
-    registerRoute(id);
-    store().actions.openSession(id);
-    await ready();
-    let msgs: Msg[] = [];
-    try {
-      msgs = (await host.pastMessages(chat.agent, chat.id, chat.cwd)).map((m, i) => ({ id: `p-${i}`, role: m.role, text: m.text, ts: m.ts }));
-    } catch {
-      /* the conversation continues all the same; only its earlier messages are not shown */
-    }
-    if (!rec(id)) return id; // closed meanwhile
-    openChat(id, "", msgs);
-    onAgentSession(id);
-    await startAgentChat(id, chat.id);
-    return id;
+    return startTerminal(chat.agent, chat.cwd, undefined, { agentSession: chat.id, used: true, ...(chat.named ? { agentTitle: chat.title } : { promptTitle: chat.title }) });
   };
 
   /** Show session `id`'s folder in the file manager; a failure is said under its chat. */

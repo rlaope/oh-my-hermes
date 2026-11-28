@@ -320,6 +320,8 @@ function NewSessionMenu({ onClose, trigger, initialFolder }: { onClose: () => vo
     setFolders(false);
   };
   const { recent: recentFolders, home } = folderChoices(ss.recent, ss.home);
+  // the agents whose conversations can be continued, when this computer has them
+  const keeps = PAST_AGENTS.filter((id) => agents?.some((a) => a.id === id && a.path));
   // an agent that is not installed: its install line goes to the clipboard, as text (omher runs nothing)
   const copyInstall = (id: AgentId) => {
     void navigator.clipboard?.writeText(installLine(id)).then(
@@ -378,7 +380,7 @@ function NewSessionMenu({ onClose, trigger, initialFolder }: { onClose: () => vo
   if (past)
     return (
       <Popover open onClose={close} align="left" side={fit?.side ?? "bottom"} width={MENU_W} label={t("ss.past.title", { agent: agentLabel(past, ss.agents) })} className="ss-pop">
-        <PastList agent={past} onBack={() => setPast(null)} onPick={() => close("pick")} />
+        <PastList agent={past} folder={at} onBack={() => setPast(null)} onPick={() => close("pick")} />
       </Popover>
     );
   return (
@@ -516,6 +518,23 @@ function NewSessionMenu({ onClose, trigger, initialFolder }: { onClose: () => vo
           </button>
         )}
         {unfold && parts?.more.map(row)}
+        {keeps.length > 0 && (
+          <>
+            <div className="ss-sep" />
+            <div className="ss-h">{t("ss.past.head")}</div>
+            {keeps.map((id) => (
+              <button key={id} type="button" role="menuitem" className="ss-item" onClick={() => setPast(id)} data-testid={`session-past-${id}`}>
+                <span className="ss-ic">
+                  <AgentMark agent={id} />
+                </span>
+                <span className="ss-n">{agentLabel(id, ss.agents)}</span>
+                <span className="ss-chev" aria-hidden="true">
+                  ›
+                </span>
+              </button>
+            ))}
+          </>
+        )}
         </div>
         {more && (
           <button
@@ -549,32 +568,83 @@ export function ageOf(at: number, nowMs = Date.now()): string {
   return t("unit.d", { n: Math.floor(s / 86_400) });
 }
 
-/** The + menu's second step: `agent`'s recent conversations for the folders the menu offers (the recent ones and
- *  home), newest first. Each row is its title or first words over its folder and age; picking one continues it as
- *  a session. ← (or Esc on the first row's left) goes back to the agents. */
-function PastList({ agent, onBack, onPick }: { agent: PastAgent; onBack: () => void; onPick: () => void }) {
+/** Which conversations the + menu's second step lists: those of the menu's folder, or of every folder. */
+export type PastScope = "here" | "all";
+const PAST_SCOPE_KEY = "omher.past.scope";
+
+/** The scope the person last picked (This folder unless they picked All folders). */
+export function readPastScope(): PastScope {
+  try {
+    return localStorage.getItem(PAST_SCOPE_KEY) === "all" ? "all" : "here";
+  } catch {
+    return "here";
+  }
+}
+
+export function savePastScope(scope: PastScope): void {
+  try {
+    localStorage.setItem(PAST_SCOPE_KEY, scope);
+  } catch {
+    /* no storage: it is asked again next time */
+  }
+}
+
+/** A row's dim line: the last thing said, as "You: …" or "Agent: …"; empty when the file's end held none. */
+export function pastSaid(c: Pick<PastChat, "last">): string {
+  if (!c.last?.text) return "";
+  return t(c.last.role === "user" ? "ss.past.you" : "ss.past.agentSaid", { text: c.last.text });
+}
+
+/** A Codex fork's mark: "fork of <title>" when the conversation it came from is listed, else "fork"; empty when it
+ *  is not a fork. */
+export function pastFork(c: Pick<PastChat, "fork">): string {
+  if (c.fork === undefined || c.fork === null) return "";
+  return c.fork ? t("ss.past.forkOf", { title: c.fork }) : t("ss.past.fork");
+}
+
+/** Whether conversation `c` matches the filter `needle`: by its title, its last line or its folder (as the row shows
+ *  it, or whole), ignoring case. */
+export function pastMatches(c: PastChat, needle: string, home: string | null): boolean {
+  const n = needle.trim().toLowerCase();
+  if (!n) return true;
+  return [c.title, c.last?.text ?? "", c.cwd, tildePath(c.cwd, home), pastFork(c)].some((v) => v.toLowerCase().includes(n));
+}
+
+/** The + menu's second step: `agent`'s recent conversations in the menu's folder (`folder`, its chip), or in every
+ *  folder that agent keeps conversations for (the switch, remembered), newest first. Each row is its title (and a
+ *  Codex fork's mark) over the last thing said and its folder and age; a filter narrows them. Picking one continues it
+ *  as a TERMINALS row. ← (from a row) goes back to the agents. */
+function PastList({ agent, folder, onBack, onPick }: { agent: PastAgent; folder: string; onBack: () => void; onPick: () => void }) {
   const ss = useSessions();
   const box = useRef<HTMLDivElement>(null);
   const [rows, setRows] = useState<PastChat[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { recent, home } = folderChoices(ss.recent, ss.home);
-  const cwds = [...recent, ...(home ? [home] : [])];
-  const key = cwds.join("\n");
+  const [scope, setScope] = useState<PastScope>(readPastScope);
+  const [needle, setNeedle] = useState("");
+  const all = scope === "all";
   useEffect(() => {
     let live = true;
+    setRows(null);
+    setError(null);
     getHost()
-      .pastChats(agent, cwds)
+      .pastChats(agent, folder ? [folder] : [], all)
       .then((r) => live && setRows(r))
       .catch((e: unknown) => live && (setRows([]), setError(e instanceof Error ? e.message : String(e))));
     return () => {
       live = false;
     };
-    // the folders, not the array's identity
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agent, key]);
+  }, [agent, folder, all]);
+  const loaded = rows !== null;
   useEffect(() => {
-    box.current?.querySelector<HTMLButtonElement>(rows?.length ? ".ss-past [role=menuitem]" : "[role=menuitem]")?.focus({ preventScroll: true });
-  }, [rows]);
+    if (!loaded) return;
+    // the filter once the list is there (typing narrows it at once); else the first row
+    (box.current?.querySelector<HTMLElement>(".ss-past-filter input") ?? box.current?.querySelector<HTMLElement>("[role=menuitem]"))?.focus({ preventScroll: true });
+  }, [loaded]);
+  const pick = (s: PastScope) => {
+    savePastScope(s);
+    setScope(s);
+  };
+  const shown = (rows ?? []).filter((c) => pastMatches(c, needle, ss.home));
   const label = agentLabel(agent, ss.agents);
   return (
     <div
@@ -583,13 +653,16 @@ function PastList({ agent, onBack, onPick }: { agent: PastAgent; onBack: () => v
       aria-label={t("ss.past.title", { agent: label })}
       data-testid="session-past-menu"
       onKeyDown={(e) => {
-        if (e.key === "ArrowLeft") {
+        const inField = (e.target as HTMLElement).tagName === "INPUT";
+        if (e.key === "ArrowLeft" && !inField) {
           e.preventDefault();
           onBack();
           return;
         }
-        const items = [...(box.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]") ?? [])];
-        const i = items.indexOf(document.activeElement as HTMLButtonElement);
+        // in the filter only ↓ and ↑ move (the other keys edit it)
+        if (inField && e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+        const items = [...(box.current?.querySelectorAll<HTMLElement>(".ss-past-filter input, [role=menuitem], [role=menuitemradio]") ?? [])];
+        const i = items.indexOf(document.activeElement as HTMLElement);
         const to = e.key === "ArrowDown" ? i + 1 : e.key === "ArrowUp" ? i - 1 : e.key === "Home" ? 0 : e.key === "End" ? items.length - 1 : null;
         if (to === null || !items.length) return;
         e.preventDefault();
@@ -608,35 +681,85 @@ function PastList({ agent, onBack, onPick }: { agent: PastAgent; onBack: () => v
         <span className="ss-n">{label}</span>
       </button>
       <div className="ss-h">{t("ss.past.head")}</div>
-      {rows === null && <div className="ss-empty">{t("ss.past.looking")}</div>}
-      {rows !== null && rows.length === 0 && (
+      <div className="ss-past-scope" role="group" aria-label={t("ss.past.scope")} data-testid="session-past-scope">
+        {(["here", "all"] as const).map((s) => (
+          <button
+            key={s}
+            type="button"
+            role="menuitemradio"
+            aria-checked={scope === s}
+            className={scope === s ? "on" : undefined}
+            title={s === "here" ? folder : undefined}
+            onClick={() => pick(s)}
+            data-testid={`session-past-scope-${s}`}
+          >
+            {t(s === "here" ? "ss.past.here" : "ss.past.all")}
+          </button>
+        ))}
+      </div>
+      {loaded && rows.length > 0 && (
+        <label className="ss-past-filter">
+          <input
+            type="search"
+            value={needle}
+            placeholder={t("ss.past.filter")}
+            aria-label={t("ss.past.filter")}
+            spellCheck={false}
+            onChange={(e) => setNeedle(e.target.value)}
+            data-testid="session-past-filter"
+          />
+        </label>
+      )}
+      {!loaded && <div className="ss-empty">{t("ss.past.looking")}</div>}
+      {loaded && rows.length === 0 && (
         <div className="ss-empty" data-testid="session-past-none" title={error ?? undefined}>
-          {t("ss.past.none", { agent: label })}
+          {all ? t("ss.past.noneAll", { agent: label }) : t("ss.past.none", { agent: label })}
         </div>
       )}
-      {rows !== null && rows.length > 0 && (
+      {loaded && rows.length > 0 && shown.length === 0 && (
+        <div className="ss-empty" data-testid="session-past-nomatch">
+          {t("ss.past.noMatch")}
+        </div>
+      )}
+      {shown.length > 0 && (
         <div className="ss-scroll ss-past" data-testid="session-past-list">
-          {rows.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              role="menuitem"
-              className="ss-item ss-past-row"
-              title={`${c.title}\n${c.cwd}`}
-              onClick={() => {
-                onPick();
-                void getSessions().continuePast(c);
-              }}
-              data-testid={`session-past-row-${c.id}`}
-            >
-              <span className="ss-n ss-n-as">
-                <span className="ss-l">{c.title}</span>
-                <span className="ss-as">
-                  {tildePath(c.cwd, ss.home)} · {ageOf(c.at)}
+          {shown.map((c) => {
+            const said = pastSaid(c);
+            const fork = pastFork(c);
+            return (
+              <button
+                key={c.id}
+                type="button"
+                role="menuitem"
+                className="ss-item ss-past-row"
+                title={[c.title, fork, said, c.cwd].filter(Boolean).join("\n")}
+                onClick={() => {
+                  onPick();
+                  getSessions().continuePast(c);
+                }}
+                data-testid={`session-past-row-${c.id}`}
+              >
+                <span className="ss-n ss-n-as">
+                  <span className="ss-head">
+                    <span className="ss-l">{c.title}</span>
+                    {fork && (
+                      <span className="ss-past-fork" data-testid="session-past-fork">
+                        {fork}
+                      </span>
+                    )}
+                  </span>
+                  {said && (
+                    <span className="ss-as ss-past-said" data-testid="session-past-said">
+                      {said}
+                    </span>
+                  )}
+                  <span className="ss-as">
+                    {tildePath(c.cwd, ss.home)} · {ageOf(c.at)}
+                  </span>
                 </span>
-              </span>
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
