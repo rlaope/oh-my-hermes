@@ -1978,4 +1978,13 @@ export const ja: Record<Key, string> = {
   "remote.notHere": "omher はサーバーを使用中のため、そのボットから見えないこのコンピューターのフォルダーやセッションは読みません。",
   "remote.authOnServer": "omher はサーバーを使用中です。サインインやキーの追加は、サーバーのターミナルで {cmd} を実行してください。",
   "remote.noLocalHermes": "omher はサーバーを使用中のため、このコンピューターの oh-my-hermes は起動しません。再び使うには、このコンピューターを使うに戻してください。",
+  "acc.loginDays": "ログイン: 残り{n}日",
+  "acc.loginDay": "ログイン: 残り1日",
+  "acc.loginHours": "ログイン: 残り{n}時間",
+  "acc.loginExpired": "ログイン: 期限切れ",
+  "upd.waiting": "再起動を待っています",
+  "upd.waitingBody": "omher {version} はインストール済みですが、まだ再起動していません。",
+  "upd.restartAgain": "もう一度再起動",
+  "upd.later": "後で",
+  "upd.restartTo": "{version} で再起動",
 };

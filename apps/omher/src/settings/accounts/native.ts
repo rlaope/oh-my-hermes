@@ -14,6 +14,8 @@ export interface LoginStatus {
   plan: string | null;
   method: string | null;
   last_refresh?: string | null;
+  /** When the Claude login runs out (ISO time), when its status says. */
+  login_expires_at?: string | null;
 }
 
 export type SignInEvent = { kind: "line"; text: string } | { kind: "exit"; code: number | null };

@@ -1982,4 +1982,13 @@ export const en = {
   "remote.notHere": "omher uses a server: this reads a folder or session of this computer, which its bots can’t see.",
   "remote.authOnServer": "omher uses a server: sign in or add keys there, with {cmd} in a terminal on the server.",
   "remote.noLocalHermes": "omher uses a server: oh-my-hermes on this computer isn’t started. Use this computer to run it again.",
+  "acc.loginDays": "Login: {n} days left",
+  "acc.loginDay": "Login: 1 day left",
+  "acc.loginHours": "Login: {n} h left",
+  "acc.loginExpired": "Login: expired",
+  "upd.waiting": "Waiting to restart",
+  "upd.waitingBody": "omher {version} is installed, but omher has not restarted yet.",
+  "upd.restartAgain": "Restart again",
+  "upd.later": "Later",
+  "upd.restartTo": "Restart for {version}",
 };
