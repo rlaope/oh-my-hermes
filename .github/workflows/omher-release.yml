@@ -17,7 +17,13 @@ name: omher release
 #   tauri.conf.json, as the updater checks it, and be signed for the manifest's version;
 # - before the pointer moves, the version it serves must be lower than this one (semver, pre-release aware), so
 #   re-running an old tag or an older run finishing last never moves every omher back; a first publish (404)
-#   passes, and the `republish` input (off by default) allows the same version again, never a lower one;
+#   passes, the same version passes when the served manifest already has these payloads and signatures (a re-run of
+#   the pointer job whose read-back failed), and the `republish` input (off by default) allows the same version with
+#   other contents, never a lower one;
+# - before the pointer moves, every payload (read back from the tag's release) must also verify against the key
+#   pinned at the served version's tag, since an installed omher checks updates with the key of the version it runs;
+#   a tag that changes the pinned key together with the signing secret is refused unless the separate `key_rotation`
+#   input (off by default) is checked;
 # - after the upload, the public file is read back (up to 30 times, 10 s apart) and the job fails unless it is
 #   the manifest just uploaded.
 # The `pointer` job does those last two under one concurrency group for every tag, so two releases never
@@ -40,6 +46,13 @@ on:
         description: >-
           Point omher-latest at this tag again even when it is already the published version (a deliberate
           re-publish). A lower version is refused either way.
+        required: false
+        default: false
+        type: boolean
+      key_rotation:
+        description: >-
+          Point omher-latest at this tag even though its payloads do not verify against the updater key the
+          published version pins (a deliberate key rotation: installed omher builds cannot install this update).
         required: false
         default: false
         type: boolean
@@ -265,8 +278,9 @@ jobs:
       TAG: ${{ inputs.tag || github.ref_name }}
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      # The documented re-publish switch: only from the dispatch input, never on a tag push.
+      # The documented re-publish and key-rotation switches: only from the dispatch inputs, never on a tag push.
       OMHER_RELEASE_REPUBLISH: ${{ inputs.republish && '1' || '' }}
+      OMHER_RELEASE_KEY_ROTATION: ${{ inputs.key_rotation && '1' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -283,10 +297,17 @@ jobs:
         with:
           name: omher-latest-json
           path: dist
-      - name: Refuse a version not newer than the published one
+      # The four updater payloads as the tag's release serves them, for the installed key's check.
+      - name: Download the updater payloads
+        run: |
+          v="${TAG#omher-v}"
+          gh release download "$TAG" --dir dist \
+            --pattern "omher-$v-macos-arm64.app.tar.gz" --pattern "omher-$v-macos-x64.app.tar.gz" \
+            --pattern "omher-$v-windows-x64-setup.exe" --pattern "omher-$v-linux-x64.AppImage"
+      - name: Refuse a version not newer than the published one, or one installed omher builds cannot verify
         run: |
           node src/apps/omher/scripts/release-guard.mjs precheck --config src/apps/omher/src-tauri/tauri.conf.json \
-            --manifest dist/latest.json --repo "$GH_REPO"
+            --manifest dist/latest.json --dir dist --repo "$GH_REPO"
       - name: Point the in-app updater at this release
         run: |
           # The app checks releases/download/omher-latest/latest.json. Keep that one asset current; the

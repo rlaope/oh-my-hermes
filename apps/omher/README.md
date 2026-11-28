@@ -418,8 +418,14 @@ guards that write:
   mismatch fails the run instead of publishing an update nobody can install.
 - Before the pointer moves, the version it serves now must be lower than the new one (semver, pre-release aware).
   Re-running an old tag, or an older run finishing last, fails with a message instead of moving every omher back. The
-  first publish (no file yet) passes. To publish the same version again on purpose, run the workflow by hand with the
-  `republish` input checked; a lower version is refused either way.
+  first publish (no file yet) passes, and so does a re-run of the pointer job whose read-back failed: the same version
+  with the same payloads and signatures changes nothing. To publish the same version with other contents on purpose,
+  run the workflow by hand with the `republish` input checked; a lower version is refused either way.
+- Also before the pointer moves, each payload, as the tag's release serves it, must verify against the key pinned at
+  the served version's tag (`omher-v<served>`, read with `gh api`): an installed omher checks an update with the key
+  of the version it runs, not the new tag's, so changing `plugins.updater.pubkey` together with the signing secret
+  would publish an update no installed omher accepts. A deliberate key rotation is a hand run with the separate
+  `key_rotation` input checked (off by default). The first publish skips this check.
 - After the upload, the public file is read back (up to 30 times, 10 s apart), and the run fails unless it is the
   manifest just uploaded.
 

@@ -9,13 +9,21 @@
 //            the old "the .sig is not empty" check and publish a manifest every client rejects.
 //   precheck before the pointer is rewritten: the version now served must be lower than the new one (semver, pre-release
 //            aware), so re-running an old tag or an older run finishing last never moves every client backwards. No
-//            file yet (404) is a first publish and passes. OMHER_RELEASE_REPUBLISH=1 allows the same version again,
-//            never a lower one; the workflow sets it only from its `republish` dispatch input, off by default.
+//            file yet (404) is a first publish and passes. The same version passes when the served manifest already
+//            has these payloads and signatures (a re-run of the pointer job after its read-back failed: nothing
+//            changes for anyone); with other contents it needs OMHER_RELEASE_REPUBLISH=1, which never allows a lower
+//            version and which the workflow sets only from its `republish` dispatch input, off by default. Then every
+//            payload's signature must also verify against the key pinned at the served version's tag
+//            (`omher-v<served>`, its tauri.conf.json read with `gh api`): an installed omher checks an update with the
+//            key of the version it runs, not the new tag's, so a tag that changes `plugins.updater.pubkey` together
+//            with the signing secret passes `verify` and is refused by every installed client. A deliberate key
+//            rotation passes with OMHER_RELEASE_KEY_ROTATION=1, set only from the separate `key_rotation` dispatch
+//            input, off by default. A first publish has no installed key to match and skips this.
 //   confirm  after the upload: reads the public file back until it is the manifest just uploaded, and fails when it
 //            never is, so a write that did not land does not read as a release.
 //
-// Node built-ins only (crypto has Ed25519 and BLAKE2b-512; fetch is global from Node 18), so the release job needs no
-// package install for it. The pure parts are exported for release-guard.test.mjs, which `pnpm test` runs.
+// Node built-ins only (crypto has Ed25519 and BLAKE2b-512; fetch is global from Node 18), plus the `gh` CLI the
+// workflow already has for one fixed read, so the release job needs no package install for it. The pure parts are exported for release-guard.test.mjs, which `pnpm test` runs.
 //
 // How the updater verifies (tauri-plugin-updater 2.x `verify_signature`, minisign-verify 0.3): the pinned key and the
 // manifest's signature are each base64 of a minisign text file. The key's second line is base64 of 42 bytes: the
@@ -27,6 +35,7 @@
 // `version:<v>` there, and the updater refuses a manifest whose version is not the signed one when it requires that.
 // `tauri build` always signs with the version, so the guard requires it and requires it to equal the manifest's.
 
+import { execFileSync } from "node:child_process";
 import { createHash, createPublicKey, verify as edVerify } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -76,19 +85,24 @@ export function compareSemver(a, b) {
 }
 
 /**
- * Whether `next` may replace `published` as the pointer. `published` null is a first publish. `allowSame` (the
- * documented re-publish switch) lets the same version through again, never a lower one.
+ * Whether `next` may replace `published` as the pointer. `published` null is a first publish. `identical` (the served
+ * manifest has the same payloads and signatures, `samePayloads`) lets the same version through as a re-run that
+ * changes nothing. `allowSame` (the documented re-publish switch) lets the same version through with other contents,
+ * never a lower one.
  */
-export function decidePublish(next, published, allowSame = false) {
+export function decidePublish(next, published, allowSame = false, identical = false) {
   if (published === null) return { ok: true, message: `no latest.json is published yet: first publish of ${next}` };
   const order = compareSemver(next, published);
   if (order > 0) return { ok: true, message: `${next} is newer than the published ${published}` };
+  if (order === 0 && identical) {
+    return { ok: true, message: `${next} is already published with these payloads and signatures: a re-run changes nothing` };
+  }
   if (order === 0 && allowSame) {
     return { ok: true, message: `re-publishing ${next} over the same version (OMHER_RELEASE_REPUBLISH is set)` };
   }
   const why =
     order === 0
-      ? `${next} is already the published version; set the workflow's republish input to publish it again on purpose`
+      ? `${next} is already the published version with other payloads or signatures; set the workflow's republish input to publish it again on purpose`
       : `${next} is older than the published ${published}; publishing it would move every omher back`;
   return { ok: false, message: `refusing to rewrite omher-latest/latest.json: ${why}` };
 }
@@ -231,6 +245,89 @@ export async function fetchPublished(url, fetchImpl = fetch) {
   }
 }
 
+/** The same version with, for every platform, the same payload URL and signature (`notes` and `pub_date` aside). */
+export function samePayloads(a, b) {
+  const entries = (m) =>
+    m && typeof m.platforms === "object" && m.platforms
+      ? Object.keys(m.platforms)
+          .sort()
+          .map((k) => [k, m.platforms[k]?.url, m.platforms[k]?.signature])
+      : null;
+  const x = entries(a);
+  return x !== null && a.version === b?.version && JSON.stringify(x) === JSON.stringify(entries(b));
+}
+
+// ---- the key an installed omher checks with ----
+
+/**
+ * The updater key pinned in tauri.conf.json at `tag` of `repo`, read with the `gh` CLI the workflow already has (its
+ * token; one fixed argv, the raw file). `run` is execFileSync, injectable for tests.
+ */
+export function pinnedKeyAt(repo, tag, run = execFileSync) {
+  const text = run(
+    "gh",
+    ["api", "-H", "Accept: application/vnd.github.raw+json", `repos/${repo}/contents/apps/omher/src-tauri/tauri.conf.json?ref=${tag}`],
+    { encoding: "utf8" },
+  );
+  let conf;
+  try {
+    conf = JSON.parse(text);
+  } catch {
+    throw new GuardError(`tauri.conf.json at ${tag} is not JSON`);
+  }
+  const key = conf?.plugins?.updater?.pubkey;
+  if (typeof key !== "string" || !key) throw new GuardError(`tauri.conf.json at ${tag} pins no updater key`);
+  return key;
+}
+
+/**
+ * Whether every payload in `files` (`{ platform: file name }`) verifies against the key an omher of `published`
+ * checks updates with (`keyAt(tag)`, the key pinned at `omher-v<published>`). `payload(name)` gives a payload's bytes.
+ * A first publish (`published` null) has no installed omher to match and skips the check. `rotate` (the documented
+ * key-rotation switch) lets a mismatch through on purpose.
+ */
+export async function checkInstalledKey(manifest, files, published, { keyAt, payload, rotate = false }) {
+  if (published === null) return { ok: true, message: "first publish: no installed omher pins a key yet" };
+  const tag = `omher-v${published}`;
+  const key = await keyAt(tag);
+  const bad = [];
+  for (const [target, name] of Object.entries(files)) {
+    try {
+      verifySignature(payload(name), manifest.platforms[target].signature, key);
+    } catch (e) {
+      if (!(e instanceof GuardError)) throw e;
+      bad.push(`${target} (${name}): ${e.message}`);
+    }
+  }
+  if (!bad.length) return { ok: true, message: `every payload verifies against the key pinned at ${tag}, which an installed omher ${published} checks with` };
+  if (rotate) {
+    return { ok: true, message: `key rotation (OMHER_RELEASE_KEY_ROTATION is set): an omher ${published} cannot verify this update: ${bad.join("; ")}` };
+  }
+  return {
+    ok: false,
+    message:
+      `refusing to rewrite omher-latest/latest.json: an installed omher ${published} verifies updates with the key ` +
+      `pinned at ${tag}, and ${bad.join("; ")}. To rotate the updater key on purpose, run the workflow by hand with its ` +
+      "key_rotation input checked",
+  };
+}
+
+/**
+ * The precheck, given what it reads: `published` is the served manifest (null when none). Throws GuardError with the
+ * reason when the pointer must not move; resolves with the lines to log.
+ */
+export async function precheck(manifest, files, published, { allowSame = false, rotate = false, keyAt, payload }) {
+  if (published !== null && !parseSemver(published?.version)) {
+    throw new GuardError(`the published latest.json has no semver version (${JSON.stringify(published?.version)}); fix it by hand first`);
+  }
+  const version = published?.version ?? null;
+  const decision = decidePublish(manifest.version, version, allowSame, published !== null && samePayloads(manifest, published));
+  if (!decision.ok) throw new GuardError(decision.message);
+  const key = await checkInstalledKey(manifest, files, version, { keyAt, payload, rotate });
+  if (!key.ok) throw new GuardError(key.message);
+  return [decision.message, key.message];
+}
+
 /** Same manifest by value (key order aside). */
 export function sameManifest(a, b) {
   const norm = (v) =>
@@ -305,6 +402,7 @@ async function main(argv) {
       console.log(`${target}: ${name} verifies against the pinned key, signed for ${signed}`);
     }
   } else if (command === "precheck") {
+    const dir = need(opts, "dir");
     let published;
     for (let i = 1; ; i++) {
       try {
@@ -316,19 +414,20 @@ async function main(argv) {
         await sleep(5_000);
       }
     }
-    if (published !== null && !parseSemver(published?.version)) {
-      throw new GuardError(`the published latest.json has no semver version (${JSON.stringify(published?.version)}); fix it by hand first`);
-    }
-    const decision = decidePublish(manifest.version, published?.version ?? null, process.env.OMHER_RELEASE_REPUBLISH === "1");
-    if (!decision.ok) throw new GuardError(decision.message);
-    console.log(decision.message);
+    const lines = await precheck(manifest, checkManifest(manifest, repo), published, {
+      allowSame: process.env.OMHER_RELEASE_REPUBLISH === "1",
+      rotate: process.env.OMHER_RELEASE_KEY_ROTATION === "1",
+      keyAt: (tag) => pinnedKeyAt(repo, tag),
+      payload: (name) => readFileSync(path.join(dir, name)),
+    });
+    for (const line of lines) console.log(line);
   } else if (command === "confirm") {
     const attempts = Number(opts.attempts ?? 30);
     const delayMs = Number(opts.delay ?? 10) * 1000;
     const n = await confirmPublished(config.endpoint, manifest, { attempts, delayMs, log: console.log });
     console.log(`${config.endpoint} serves ${manifest.version} (read ${n} time${n === 1 ? "" : "s"})`);
   } else {
-    throw new GuardError("usage: release-guard.mjs verify|precheck|confirm --config <tauri.conf.json> --manifest <latest.json> --repo <owner/repo> [--dir <folder>]");
+    throw new GuardError("usage: release-guard.mjs verify|precheck|confirm --config <tauri.conf.json> --manifest <latest.json> --repo <owner/repo> [--dir <payload folder>]");
   }
 }
 

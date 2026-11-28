@@ -99,10 +99,13 @@ All notable changes will be documented here.
   `apps/omher/src/tasks/DashView.tsx`, `apps/omher/src/tasks/dash.ts`, `apps/omher/src-tauri/src/gh_dash.rs`)
 
 - **omher releases can no longer move every omher back or publish an update nobody can install.** The release run
-  now checks each update's signature against the key the app pins before it makes the release, refuses to point the
-  in-app updater at a version that is not newer than the one it serves (re-running an old tag, or an older run
-  finishing last, fails with a message; a deliberate re-publish of the same version is a `republish` input, off by
-  default), and reads the public `latest.json` back after the upload, failing unless it is the one just written.
+  now checks each update's signature against the key the app pins before it makes the release, and again against
+  the key pinned by the version installed omher builds run now (a changed key is refused unless a `key_rotation`
+  input, off by default, is checked), refuses to point the in-app updater at a version that is not newer than the one
+  it serves (re-running an old tag, or an older run finishing last, fails with a message; re-running the pointer job
+  with what is already served passes; a deliberate re-publish of the same version with other contents is a
+  `republish` input, off by default), and reads the public `latest.json` back after the upload, failing unless it is
+  the one just written.
   Releases of different tags rewrite that file one at a time. Ideas from 2rami/kasaterm (MIT), code written fresh.
   (`apps/omher/scripts/release-guard.mjs`, `.github/workflows/omher-release.yml`)
 
