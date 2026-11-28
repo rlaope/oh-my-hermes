@@ -138,7 +138,7 @@
   }
 }
 /* news: it rang unseen (a bell, an OSC 9 message, a progress done). A soft accent edge breathing slowly, never the
-   attention blink: it may as well mean the program finished (kasaterm's "unseen done") */
+   attention blink: it may as well mean the program finished */
 .sc-news {
   stroke: var(--accent);
   stroke-width: 1.5;
@@ -260,7 +260,7 @@
   color: var(--quiet);
   opacity: 0.7;
 }
-/* the height grip under the card (kasaterm's room-card grip): a 10px band, a 28x3 handle */
+/* the height grip under the card: a 10px band, a 28x3 handle */
 .sc-grip {
   height: 10px;
   display: grid;
