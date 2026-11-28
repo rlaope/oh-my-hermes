@@ -241,20 +241,36 @@ export interface SwitchAt {
 export type SwitchCheck = { from: number; to: number; soonest?: number; at?: SwitchAt } | { from: number; to: null; at: SwitchAt };
 
 /**
- * Fill-first with a threshold: when the account in use reaches `threshold` on a window that applies to it (or is
- * limited), the first signed-in account in list order that has a fresh reading at least SWITCH_ROOM points under the
- * threshold on its own windows, and is not limited, takes over. An account with no fresh reading is never a
- * candidate: moving to a login nobody has seen working can leave every new session signed out. When no other account
- * has a fresh reading at all, the rule is the one from before the threshold, so missing readings never strand the
- * person on a limited account: once the one in use is actually limited, the first ready one that is not limited.
- * CLIProxyAPI's logins are never candidates. Returns null when the one in use is under the threshold, or has no other
- * login to move to; `{to: null}` when it should move and no account qualifies.
+ * Fill-first with a threshold. CLIProxyAPI's logins and signed-out ones are never candidates. The decision, for the
+ * account in use (`cur`) and the other signed-in accounts (`others`):
+ *
+ *   cur                              | others                                 | result
+ *   ---------------------------------|----------------------------------------|----------------------------------------
+ *   under the threshold, not limited | any                                    | null (nothing to do)
+ *   at the threshold, not limited    | none has a fresh reading               | null (no early move to a login nobody
+ *                                    |                                        |   has seen working)
+ *   at the threshold, not limited    | some with a fresh reading <= threshold | the first such one in list order (an
+ *   (an early move)                  |   - SWITCH_ROOM, not limited           |   early move, `at` = cur's level)
+ *   at the threshold, not limited    | none of those                          | {to: null, at: cur's level}
+ *   limited                          | some not limited                       | those with a fresh reading first, lowest
+ *                                    |                                        |   percent first (list order on a tie),
+ *                                    |                                        |   then those with no reading in list
+ *                                    |                                        |   order (the fill-first fallback)
+ *   limited                          | all limited                            | {to: null, at: {resets_at?}}
+ *
+ * The headroom rule (SWITCH_ROOM under the threshold, on a fresh reading) is for an early move only: once the account
+ * in use is limited, every new session there fails, so any other account that is not limited is better, however full
+ * (a fresh reading at 100% counts as limited). A model's window applies by `applies`; a candidate is judged on the
+ * models its own sessions use and on those of the account being left, since the sessions started after the move will
+ * use those models there. A TERMINALS session reports no model, so a model's window applies only where a chat row
+ * reports one: a full Opus week on a candidate is not seen while the person runs Opus only in TERMINALS.
+ * Returns null when nothing should move, or when there is no other login to move to.
  *
  * With `resetFirst`, the same candidates are ordered by when their limit resets, compared like with like: the
  * shortest window any candidate reports (the 5-hour one for Codex), and only a window that is not stale and
- * resets in the future. A candidate with no such reset keeps its list position after those that have one, so
- * when nothing is comparable the answer is the fill-first one. `soonest` (its reset time) is set only when this
- * picked a different account than list order would.
+ * resets in the future. A candidate with no such reset keeps its place after those that have one, so when nothing
+ * is comparable the answer is the order above. `soonest` (its reset time) is set only when this picked a different
+ * account than that order would.
  */
 export function switchCheck(
   accounts: Account[],
@@ -266,30 +282,30 @@ export function switchCheck(
   if (from < 0) return null;
   const now = opts.now ?? Date.now() / 1000;
   const threshold = (SWITCH_AT_STEPS as readonly number[]).includes(opts.threshold ?? NaN) ? (opts.threshold as number) : SWITCH_AT_DEFAULT;
-  const modelsOf = (a: Account) => opts.models?.[a.id] ?? [];
-  const read = (a: Account) => reading(usage[a.id] ?? a.usage, modelsOf(a), now);
-  const isLimited = (a: Account) => limited(a, usage, modelsOf(a), now);
   const cur = accounts[from];
-  const curLimited = isLimited(cur);
-  const curReading = read(cur);
+  const left = opts.models?.[cur.id] ?? [];
+  const curLimited = limited(cur, usage, left, now);
+  const curReading = reading(usage[cur.id] ?? cur.usage, left, now);
   // a single signed-in login has nowhere to go and nothing to say
   if (!accounts.some((a, i) => i !== from && a.state !== "login" && !isCpa(a))) return null;
-  const others: number[] = [];
+  // a candidate's own sessions' models and those of the account being left
+  const modelsOf = (a: Account) => [...new Set([...(opts.models?.[a.id] ?? []), ...left])];
+  const others: { i: number; read: { percent: number; resets_at: number } | null; limited: boolean }[] = [];
   accounts.forEach((a, i) => {
-    if (i !== from && a.state === "ready" && !isCpa(a)) others.push(i);
+    if (i === from || a.state !== "ready" || isCpa(a)) return;
+    const m = modelsOf(a);
+    others.push({ i, read: reading(usage[a.id] ?? a.usage, m, now), limited: limited(a, usage, m, now) });
   });
-  const withReading = others.filter((i) => read(accounts[i]) !== null);
   let ready: number[];
-  if (withReading.length === 0) {
-    if (!curLimited) return null;
-    ready = others.filter((i) => !isLimited(accounts[i]));
+  if (curLimited) {
+    const open = others.filter((o) => !o.limited && !(o.read && o.read.percent >= 100));
+    const seen = open.filter((o) => o.read).sort((x, y) => (x.read as { percent: number }).percent - (y.read as { percent: number }).percent || x.i - y.i);
+    ready = [...seen, ...open.filter((o) => !o.read)].map((o) => o.i);
   } else {
-    if (!curLimited && !(curReading && curReading.percent >= threshold)) return null;
-    ready = withReading.filter((i) => !isLimited(accounts[i]) && (read(accounts[i]) as { percent: number }).percent <= threshold - SWITCH_ROOM);
+    if (!curReading || curReading.percent < threshold || !others.some((o) => o.read)) return null;
+    ready = others.filter((o) => !o.limited && o.read && o.read.percent <= threshold - SWITCH_ROOM).map((o) => o.i);
   }
-  const at: SwitchAt | undefined = curLimited
-    ? undefined
-    : { percent: (curReading as { percent: number }).percent, resets_at: (curReading as { resets_at: number }).resets_at };
+  const at: SwitchAt | undefined = curLimited ? undefined : { percent: (curReading as { percent: number }).percent, resets_at: (curReading as { resets_at: number }).resets_at };
   const why = at ? { at } : {};
   if (ready.length === 0) {
     const lifts = typeof cur.resets_at === "number" && cur.resets_at > now ? { resets_at: cur.resets_at } : {};
@@ -331,6 +347,49 @@ export function nextAccount(
 /** Codex is held for CODEX_SWITCH_EVERY_S after its last automatic switch (`last`, seconds); no other CLI is. */
 export function switchHeld(cli: AccountCli, last: number | undefined, now: number): boolean {
   return cli === "codex" && last !== undefined && now - last < CODEX_SWITCH_EVERY_S;
+}
+
+/** When `cli` last switched by itself (seconds), saved on this computer (`omher.lastswitch`) so the Codex hold
+ *  outlives a reload. A time ahead of `now` (a clock set back) is no reading: it would hold the switch for good. */
+export function lastSwitchAt(cli: AccountCli, now: number, store: Pick<Storage, "getItem"> | undefined = globalThis.localStorage): number | undefined {
+  try {
+    const raw = store?.getItem("omher.lastswitch");
+    const v = raw ? (JSON.parse(raw) as Record<string, unknown>)[cli] : undefined;
+    return typeof v === "number" && Number.isFinite(v) && v <= now ? v : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function setLastSwitch(cli: AccountCli, at: number, store: Pick<Storage, "getItem" | "setItem"> | undefined = globalThis.localStorage): void {
+  try {
+    const raw = store?.getItem("omher.lastswitch");
+    const cur = raw ? (JSON.parse(raw) as Record<string, number>) : {};
+    store?.setItem("omher.lastswitch", JSON.stringify({ ...cur, [cli]: at }));
+  } catch {
+    /* no storage */
+  }
+}
+
+/** The "no room" episodes being told: cli -> the account in use that has no account to move to. */
+export type RoomEpisodes = Partial<Record<AccountCli, string>>;
+
+/**
+ * Whether to say "no other account has room" for `cli` after a check (`check`, from `switchCheck`), and the
+ * episodes after it. An episode runs from the check that found no account with room until one qualifies again, the
+ * account in use changes, or it no longer needs to move; inside one it is said once, whichever of its windows is the
+ * fullest at the time (the 5-hour one turning into the weekly one is the same episode).
+ */
+export function roomEpisode(prev: RoomEpisodes, cli: AccountCli, accounts: Account[], check: SwitchCheck | null): { tell: boolean; next: RoomEpisodes } {
+  const next = { ...prev };
+  if (!check || check.to !== null) {
+    delete next[cli];
+    return { tell: false, next };
+  }
+  const id = accounts[check.from].id;
+  if (prev[cli] === id) return { tell: false, next };
+  next[cli] = id;
+  return { tell: true, next };
 }
 
 /** One account's quota about to lapse unused: `key` is the account and the reset time, so it is told once. */
@@ -386,7 +445,7 @@ export function switchNote(g: AccountGroup, from: number, to: number, now: numbe
   return t(early ? "acc.switchedAt" : "acc.switched", args);
 }
 
-/** The line when the account in use should move and no other account has room (told once per window). */
+/** The line when the account in use should move and no other account has room (told once per episode, `roomEpisode`). */
 export function noRoomNote(g: AccountGroup, from: number, now: number, at: SwitchAt): string {
   const a = g.accounts[from];
   const args = { cli: CLI_NAME[g.cli], from: accountName(a, from), reset: resetText(at.resets_at, now) };

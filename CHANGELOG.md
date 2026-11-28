@@ -30,13 +30,16 @@ All notable changes will be documented here.
 
 - **omher: the account auto-switch moves before the limit, and only to an account with room.** Settings › Accounts
   has a "Switch at" level under Auto-switch, 90% unless changed (80 to 100 in steps of 5; 100 waits for the limit as
-  before). When the account new sessions use reaches it, they move to the next account in the list that has a fresh
-  usage reading at least 5 points under the level; an account with no reading, or one whose numbers have passed their
-  reset time, is never moved to. When no other account has a reading at all, the switch waits for a real limit and
-  takes the next ready account, as before. Codex switches at most once every five minutes and counts only its shared
-  limit, never a model's own bucket. Claude Code's weekly Opus and Sonnet limits are shown as such and count only
-  while a chat on that account uses that model, so a full Opus week no longer marks the whole account limited. When
-  no account has room, the bot chat and the Accounts page say so once per limit window. Ideas from 2rami/kasaterm
+  before). When the account new sessions use reaches it before any limit, they move to the next account in the list
+  that has a fresh usage reading at least 5 points under the level; an account with no reading, or one whose numbers
+  have passed their reset time, is not moved to early. Once the account in use is actually limited, any other account
+  that is not limited takes over, the one with the lowest fresh reading first, then one with no reading in list order,
+  so a limited account never keeps every new session. Codex switches at most once every five minutes, also across a
+  reload, and counts only its shared limit, never a model's own bucket. Claude Code's weekly Opus and Sonnet limits are
+  shown as such and count only while a chat uses that model, on the account in use or the one moved to, so a full Opus
+  week no longer marks the whole account limited and the switch does not move onto a full Opus week while Opus is in
+  use. When no account has room, the bot chat and the Accounts page say so once, until an account has room again or
+  the account in use changes. Ideas from 2rami/kasaterm
   (MIT), code written fresh. (`apps/omher/src/settings/accounts/rules.ts`)
 
 - **omher: Continue a conversation is back in the TERMINALS + menu, and finds the ones you had.** Regression fixed:
