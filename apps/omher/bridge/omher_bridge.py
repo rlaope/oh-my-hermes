@@ -1877,7 +1877,10 @@ def claude_accounts(user_home: Path, now: float, default_usage: dict | None) -> 
     """Every Claude login on this computer for the sidebar meter, in the Accounts page's order: Claude Code's own,
     the omher accounts, then a local CLIProxyAPI's other logins (from its auth file names). Each carries only its
     own usage record (`state`, and `resets_at` when limited, else the fullest window's `used_percent` and its
-    `resets_at`); a CLIProxyAPI-only login has none (`no_record`)."""
+    `resets_at`); a CLIProxyAPI-only login has none (`no_record`). Only the account-wide windows count: a model's own
+    window (Opus weekly) neither limits the account nor says when it lifts (as `_omher_rows`), so a full Opus week
+    under a 20% account reads 20%, not "100% used" beside an `ok` state. The model windows stay in the record's
+    `windows` for the meter's detail."""
     rows = _with_cpa(_omher_rows("claude", user_home, now, default_usage, {}, lambda _: None), user_home)
     out = []
     for r in rows:
@@ -1886,7 +1889,7 @@ def claude_accounts(user_home: Path, now: float, default_usage: dict | None) -> 
         u = r.get("usage") or {}
         item = {"email": r["email"], "label": r["label"], "source": r.get("source") or ("cli" if r["id"] == "default" else "omher"),
                 "in_cpa": bool(r.get("in_cpa")), "state": u.get("state") or "no_record"}
-        live = [w for w in u.get("windows") or [] if not w.get("stale")]
+        live = [w for w in u.get("windows") or [] if not w.get("stale") and "model" not in w]
         resets = [w["resets_at"] for w in live if "resets_at" in w]
         pct = [w for w in live if "used_percent" in w]
         if item["state"] == "limited" and resets:
