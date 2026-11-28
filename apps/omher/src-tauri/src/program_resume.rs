@@ -9,7 +9,9 @@
 //!   nothing else ([`Scanner`]). A report is checked in the spec's order: the mac (SHA-256 of the body before `:mac=`,
 //!   then `:`, then the token) and the time (within [`TIME_WINDOW`] of the clock and never earlier than the last
 //!   accepted report of the same pid) first, and a report cut short or longer than [`MAX_BODY`] bytes is **ignored**
-//!   ([`verify`]). Then the strict parse ([`parse`]) and the pid check (alive, this user, the terminal's first process
+//!   ([`verify`]). So is a replay: a body already accepted for that pid at its last time (the spec's own example sends
+//!   `argv` then `clear=1` at one time, so a copy of the first must not undo the second); a different body at that same
+//!   time still applies, in order. Then the strict parse ([`parse`]) and the pid check (alive, this user, the terminal's first process
 //!   or one of its descendants); a failure **rejects** the report and removes its owner's record.
 //! - An accepted report is the terminal's one record ([`Record`]: argv, cwd, pid, its start time, the user), keyed by
 //!   the TERMINALS row's link id, written at once to `~/.omher/resume/resume.json` (dir 0700, file 0600). It goes on
@@ -36,6 +38,8 @@ pub const TOKEN_ENV: &str = "OSC7577_TOKEN";
 pub const MAX_BODY: usize = 4096;
 /// A report's `time` may differ from the clock by at most this many seconds.
 pub const TIME_WINDOW: u64 = 60;
+/// At most this many different reports of one pid are accepted at one time; more are ignored.
+pub const MAX_SAME_TIME: usize = 64;
 /// At most this many argv elements.
 pub const MAX_ARGV: usize = 128;
 /// At most this many records are kept.
@@ -251,6 +255,8 @@ impl Scanner {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Verified {
     pub time: u64,
+    /// the report's mac (64 hex digits): what tells a replay of an accepted body
+    pub mac: String,
     /// the owner, when the body names a usable one (a rejection removes its record)
     pub pid: Option<u32>,
 }
@@ -262,9 +268,10 @@ fn digits(v: &str) -> Option<u64> {
     v.parse().ok()
 }
 
-/// The mac and time checks, before anything else is read: `None` means the report is ignored. `last` is the time of
-/// the last report accepted for a pid.
-pub fn verify(body: &[u8], token: &str, now: u64, last: &dyn Fn(u32) -> Option<u64>) -> Option<Verified> {
+/// The mac and time checks, before anything else is read: `None` means the report is ignored. `stale` says whether a
+/// report of a pid at a time with a mac is not to be applied: earlier than the last one accepted for that pid, or the
+/// same body accepted already at that last time ([`Store::stale`]).
+pub fn verify(body: &[u8], token: &str, now: u64, stale: &dyn Fn(u32, u64, &str) -> bool) -> Option<Verified> {
     if body.len() > MAX_BODY || body == b"?" {
         return None;
     }
@@ -285,12 +292,11 @@ pub fn verify(body: &[u8], token: &str, now: u64, last: &dyn Fn(u32) -> Option<u
         return None;
     }
     let pid = pair("pid").and_then(digits).and_then(|p| u32::try_from(p).ok());
-    if let Some(p) = pid {
-        if last(p).is_some_and(|t| time < t) {
-            return None;
-        }
+    let sent = std::str::from_utf8(sent).ok()?;
+    if pid.is_some_and(|p| stale(p, time, sent)) {
+        return None;
     }
-    Some(Verified { time, pid })
+    Some(Verified { time, mac: sent.to_string(), pid })
 }
 
 /// What a verified report asks.
@@ -464,6 +470,23 @@ pub fn is_root() -> bool {
     false
 }
 
+/// A bottom-panel pane's record key as the page makes it (`panel-` and 1 to 9 digits, no leading zero: the pane id
+/// the panel keeps across a restart, the same id its history is kept under). Only these and TERMINALS link ids are
+/// record keys; a key is never a path.
+pub fn is_panel_key(key: &str) -> bool {
+    key.strip_prefix("panel-").is_some_and(|d| (1..=9).contains(&d.len()) && !d.starts_with('0') && d.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// The record key of a shell start: a TERMINALS Shell row's link id, or a bottom-panel pane's key, each checked;
+/// both at once, or anything else, is none.
+pub fn resume_key<'a>(link: Option<&'a str>, panel: Option<&'a str>) -> Option<&'a str> {
+    match (link, panel) {
+        (Some(l), None) if crate::term_link::is_link_id(l) => Some(l),
+        (None, Some(p)) if is_panel_key(p) => Some(p),
+        _ => None,
+    }
+}
+
 /// Whether this machine takes part: unix, not as root.
 pub fn supported() -> bool {
     cfg!(unix) && !is_root()
@@ -527,8 +550,27 @@ pub struct Store {
 #[derive(Default)]
 struct Inner {
     records: BTreeMap<String, Record>,
-    /// the time of the last accepted report per pid
-    last: HashMap<u32, u64>,
+    /// per pid: the time of the last accepted report, and the macs of the reports accepted at that time
+    last: HashMap<u32, Last>,
+}
+
+#[derive(Default)]
+struct Last {
+    time: u64,
+    macs: Vec<String>,
+}
+
+impl Inner {
+    /// A report of `pid` at `time` with `mac` was accepted: a later time forgets the macs of the one before.
+    fn note(&mut self, pid: u32, time: u64, mac: &str) {
+        let l = self.last.entry(pid).or_default();
+        if l.time != time {
+            *l = Last { time, macs: Vec::new() };
+        }
+        if !l.macs.iter().any(|m| m == mac) {
+            l.macs.push(mac.to_string());
+        }
+    }
 }
 
 #[cfg(unix)]
@@ -591,20 +633,24 @@ impl Store {
         }
     }
 
-    fn last(&self, pid: u32) -> Option<u64> {
-        self.inner.lock().unwrap().last.get(&pid).copied()
+    /// A report of `pid` at `time` with `mac` is not applied: earlier than the last accepted one, the same body as one
+    /// accepted at that time (a replay), or one more than [`MAX_SAME_TIME`] at that time.
+    fn stale(&self, pid: u32, time: u64, mac: &str) -> bool {
+        let g = self.inner.lock().unwrap();
+        let Some(l) = g.last.get(&pid) else { return false };
+        time < l.time || (time == l.time && (l.macs.iter().any(|m| m == mac) || l.macs.len() >= MAX_SAME_TIME))
     }
 
     pub fn get(&self, key: &str) -> Option<Record> {
         self.inner.lock().unwrap().records.get(key).cloned()
     }
 
-    fn put(&self, key: &str, r: Record) -> bool {
+    fn put(&self, key: &str, r: Record, mac: &str) -> bool {
         let mut g = self.inner.lock().unwrap();
         if !g.records.contains_key(key) && g.records.len() >= MAX_RECORDS {
             return false;
         }
-        g.last.insert(r.pid, r.time);
+        g.note(r.pid, r.time, mac);
         g.records.insert(key.to_string(), r);
         self.save(&g.records);
         true
@@ -738,7 +784,7 @@ impl Tap {
         if !supported() {
             return Outcome::Ignored;
         }
-        let Some(v) = verify(body, &self.token, now, &|p| st.store.last(p)) else { return Outcome::Ignored };
+        let Some(v) = verify(body, &self.token, now, &|p, t, m| st.store.stale(p, t, m)) else { return Outcome::Ignored };
         let at = body.windows(5).rposition(|w| w == b":mac=").unwrap_or(0);
         let reject = |why: Reject| {
             if let (Some(k), Some(owner)) = (&st.key, v.pid) {
@@ -759,14 +805,14 @@ impl Tap {
         match report {
             Report::Clear { pid } => {
                 st.store.remove_if(key, |r| r.pid == pid);
-                st.store.inner.lock().unwrap().last.insert(pid, v.time);
+                st.store.inner.lock().unwrap().note(pid, v.time, &v.mac);
                 Outcome::Cleared
             }
             Report::Set { pid, argv, cwd } => {
                 let cwd_reported = cwd.is_some();
                 let cwd = cwd.or_else(|| proc_cwd(pid));
                 let rec = Record { argv, cwd, cwd_reported, pid, start: owner.start, uid, time: v.time, run: st.run };
-                if !st.store.put(key, rec) {
+                if !st.store.put(key, rec, &v.mac) {
                     return reject(Reject::TooMany);
                 }
                 watch_owner(st.clone(), pid, owner.start);
@@ -1117,9 +1163,16 @@ mod tests {
             assert_eq!(t.report(bad.as_bytes(), NOW, &table), Outcome::Ignored, "{bad:.60}");
             assert_eq!(t.state.store.get(key).unwrap().argv[0], "nvim");
         }
-        // the same report again (inside the window, same time) is accepted: not earlier than the last
-        assert_eq!(t.report(ok.as_bytes(), NOW, &table), Outcome::Accepted);
-        // rejections: each removes the owner's record
+        // the same report again (same time, same body) is a replay: ignored, nothing changes
+        assert_eq!(t.report(ok.as_bytes(), NOW, &table), Outcome::Ignored);
+        assert_eq!(t.state.store.get(key).unwrap().argv[0], "nvim");
+        // rejections: each removes the owner's record (each `ok` below is a new body at the same time: a counter
+        // keeps them apart, as a program's later report differs from its earlier one)
+        let mut n = 0;
+        let mut ok = || {
+            n += 1;
+            set(200, NOW, &["nvim", "-S", "/s.vim", &n.to_string()], &format!(":cwd={}", b64("/tmp")))
+        };
         let ctl = set(200, NOW, &["nvim", "a\nb"], "");
         let rel_cwd = set(200, NOW, &["nvim"], &format!(":cwd={}", b64("rel/dir")));
         let rel_first = set(200, NOW, &["bin/nvim"], "");
@@ -1148,7 +1201,7 @@ mod tests {
             (&c1, Reject::BadValue),
         ];
         for (body, why) in cases {
-            assert_eq!(t.report(ok.as_bytes(), NOW, &table), Outcome::Accepted);
+            assert_eq!(t.report(ok().as_bytes(), NOW, &table), Outcome::Accepted);
             assert_eq!(t.report(body.as_bytes(), NOW, &table), Outcome::Rejected(why), "{body:.80}");
             assert!(t.state.store.get(key).is_none(), "a rejection removes the record: {body:.60}");
         }
@@ -1165,6 +1218,58 @@ mod tests {
         for pid in [400, 500, 999] {
             assert_eq!(t.report(set(pid, NOW, &["nvim"], "").as_bytes(), NOW, &table), Outcome::Rejected(Reject::Pid), "{pid}");
         }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn program_resume_key_is_a_link_id_or_a_panel_pane_never_other_text() {
+        assert_eq!(resume_key(Some("abcdefgh23"), None), Some("abcdefgh23"));
+        assert_eq!(resume_key(None, Some("panel-1")), Some("panel-1"));
+        assert_eq!(resume_key(None, Some("panel-999999999")), Some("panel-999999999"));
+        for bad in ["panel-", "panel-0", "panel-01", "panel-1234567890", "panel-1/../x", "panel--1", "panel-1 ", "Panel-1", "s12", "../panel-1", "abcdefgh23"] {
+            assert_eq!(resume_key(None, Some(bad)), None, "{bad}");
+        }
+        for bad in ["panel-1", "ABCDEFGH23", "abcdefgh1", "abcdefgh234", "../../etc/x"] {
+            assert_eq!(resume_key(Some(bad), None), None, "{bad}");
+        }
+        // one start is a row or a pane, never both; neither is none
+        assert_eq!(resume_key(Some("abcdefgh23"), Some("panel-1")), None);
+        assert_eq!(resume_key(None, None), None);
+    }
+
+    #[test]
+    fn program_resume_a_replay_at_the_same_time_never_undoes_a_later_report() {
+        let dir = tmp("replay");
+        let t = tap(&dir, 100);
+        let key = "abcdefgh23";
+        // the spec's own sequence: argv at T, then clear at the same T; a copy of the argv report (a recorded log
+        // printed again inside the window) is ignored and the record stays gone
+        let argv = set(200, NOW, &["nvim"], "");
+        let clear = report_body(&format!("pid=200:time={NOW}:clear=1"), TOKEN);
+        assert_eq!(t.report(argv.as_bytes(), NOW, &table), Outcome::Accepted);
+        assert_eq!(t.report(clear.as_bytes(), NOW, &table), Outcome::Cleared);
+        assert_eq!(t.report(argv.as_bytes(), NOW + 1, &table), Outcome::Ignored);
+        assert!(t.state.store.get(key).is_none(), "the replay brought the cleared record back");
+        // ... and a copy of the clear at that time is ignored too
+        assert_eq!(t.report(clear.as_bytes(), NOW, &table), Outcome::Ignored);
+        // the same report twice at T: the second changes nothing
+        let a = set(200, NOW + 2, &["vim", "a.txt"], "");
+        assert_eq!(t.report(a.as_bytes(), NOW + 2, &table), Outcome::Accepted);
+        assert_eq!(t.report(a.as_bytes(), NOW + 2, &table), Outcome::Ignored);
+        assert_eq!(t.state.store.get(key).unwrap().argv, vec!["vim".to_string(), "a.txt".into()]);
+        // a different report at the same time still applies, in order
+        let b = set(200, NOW + 2, &["vim", "b.txt"], "");
+        assert_eq!(t.report(b.as_bytes(), NOW + 2, &table), Outcome::Accepted);
+        assert_eq!(t.state.store.get(key).unwrap().argv, vec!["vim".to_string(), "b.txt".into()]);
+        // once a later time is accepted, the earlier time's reports stay ignored (earlier), and the later time's
+        // own copy is a replay
+        let c = set(200, NOW + 3, &["vim", "a.txt"], "");
+        assert_eq!(t.report(c.as_bytes(), NOW + 3, &table), Outcome::Accepted);
+        assert_eq!(t.report(a.as_bytes(), NOW + 3, &table), Outcome::Ignored);
+        assert_eq!(t.report(c.as_bytes(), NOW + 3, &table), Outcome::Ignored);
+        assert_eq!(t.state.store.get(key).unwrap().argv, vec!["vim".to_string(), "a.txt".into()]);
+        // another pid keeps its own times and bodies
+        assert_eq!(t.report(set(300, NOW + 2, &["vim", "a.txt"], "").as_bytes(), NOW + 2, &table), Outcome::Accepted);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1201,8 +1306,8 @@ mod tests {
         // restore keeps only the rows still listed
         let s = Store::open(dir.clone());
         let r = Record { argv: vec!["/usr/bin/vim".into()], cwd: None, cwd_reported: false, pid: 1, start: 0, uid: my_uid(), time: NOW, run: 1 };
-        s.put("aaaaaaaaaa", r.clone());
-        s.put("bbbbbbbbbb", r);
+        s.put("aaaaaaaaaa", r.clone(), "a");
+        s.put("bbbbbbbbbb", r, "b");
         assert_eq!(s.restore(&["aaaaaaaaaa".into()]), vec![("aaaaaaaaaa".to_string(), "vim".to_string())]);
         assert_eq!(s.keys(), vec!["aaaaaaaaaa".to_string()]);
         let _ = std::fs::remove_dir_all(&dir);
