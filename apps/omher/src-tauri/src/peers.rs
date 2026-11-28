@@ -240,9 +240,19 @@ fn glob(pattern: &[u8], text: &[u8]) -> bool {
 /// pattern rules its block out) give values, and the first value for each of `HostName`, `User` and `Port` wins; a
 /// `HostName` may name the alias as `%h`. With nothing set, the user is `local_user` (ssh's default) and the port 22.
 ///
-/// `None` when the config could change the answer in a way read here cannot see: a `Match` or `Include` line before
-/// every value was found, a `HostName` with another `%` token, or no local user name. omher reads the file only; it
-/// runs nothing and never asks `ssh -G`.
+/// `None` when the config could change the answer in a way read here cannot see: a `Match` or `Include` line anywhere
+/// (a block read here cannot evaluate could still set any value, a route-changing one included), a `HostName` with
+/// another `%` token, no local user name, or a key that changes the route (below). omher reads the file only; it runs
+/// nothing and never asks `ssh -G`.
+///
+/// The keys treated as changing the route, each by its first value as ssh takes it: `ProxyJump` and `ProxyCommand`
+/// (unless `none`), `ProxyUseFdpass` (`yes`), `BindAddress` and `BindInterface` (the connection leaves through another
+/// address or interface), `CanonicalizeHostname` (unless `no`: ssh rewrites the name and reads the config again), and
+/// `HostKeyAlias` (the person told ssh this name is its own machine). With one of them the same `HostName` does not
+/// mean the same computer: `office-pi` with `HostName 192.168.1.10` and `ProxyJump office-gw` and `home-pi` with
+/// `HostName 192.168.1.10` are two machines on two private networks. A private (RFC 1918) or link-local address is
+/// only one computer as seen from here, so two aliases that resolve to the same such address are the same computer
+/// only when neither has a route-changing key, which is exactly when this answers for both.
 pub fn ssh_target(config: &str, host: &str, port: Option<u16>, local_user: &str) -> Option<Target> {
     let (user, name) = match host.split_once('@') {
         Some((u, h)) => (Some(u.to_string()), h),
@@ -250,8 +260,9 @@ pub fn ssh_target(config: &str, host: &str, port: Option<u16>, local_user: &str)
     };
     let alias = name.trim_end_matches('.').to_ascii_lowercase();
     let (mut host_name, mut cfg_user, mut cfg_port): (Option<String>, Option<String>, Option<u16>) = (None, None, None);
+    // the route keys' first values (ssh's first value wins for these too, so a first `ProxyJump none` holds)
+    let mut route: Vec<(String, String)> = Vec::new();
     let mut applies = true;
-    let mut unsure = false;
     for line in config.lines() {
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') {
@@ -263,8 +274,7 @@ pub fn ssh_target(config: &str, host: &str, port: Option<u16>, local_user: &str)
         };
         let value = rest.split_whitespace().next().unwrap_or("").trim_matches('"');
         if key.eq_ignore_ascii_case("match") || key.eq_ignore_ascii_case("include") {
-            unsure = true;
-            break;
+            return None;
         }
         if key.eq_ignore_ascii_case("host") {
             let mut hit = false;
@@ -291,7 +301,18 @@ pub fn ssh_target(config: &str, host: &str, port: Option<u16>, local_user: &str)
             cfg_user = Some(value.to_string());
         } else if key.eq_ignore_ascii_case("port") && cfg_port.is_none() {
             cfg_port = Some(value.parse().ok()?);
+        } else if ROUTE_KEYS.iter().any(|k| key.eq_ignore_ascii_case(k)) && !route.iter().any(|(k, _)| k.eq_ignore_ascii_case(key)) {
+            route.push((key.to_ascii_lowercase(), value.to_ascii_lowercase()));
         }
+    }
+    let changes_route = |(k, v): &(String, String)| match k.as_str() {
+        "proxyjump" | "proxycommand" => v != "none",
+        "proxyusefdpass" => v == "yes",
+        "canonicalizehostname" => v != "no",
+        _ => true,
+    };
+    if route.iter().any(changes_route) {
+        return None;
     }
     let name = match host_name {
         Some(h) => {
@@ -301,24 +322,22 @@ pub fn ssh_target(config: &str, host: &str, port: Option<u16>, local_user: &str)
             }
             h.trim_end_matches('.').to_ascii_lowercase()
         }
-        None if unsure => return None,
         None => alias,
     };
     let user = match user.or(cfg_user) {
         Some(u) => u,
-        None if unsure || local_user.is_empty() => return None,
+        None if local_user.is_empty() => return None,
         None => local_user.to_string(),
     };
-    let port = match port.or(cfg_port) {
-        Some(p) => p,
-        None if unsure => return None,
-        None => 22,
-    };
-    Some(Target { user, name, port })
+    Some(Target { user, name, port: port.or(cfg_port).unwrap_or(22) })
 }
+
+/// The ssh_config(5) keys [`ssh_target`] treats as changing the route to a host (see there for each one's rule).
+const ROUTE_KEYS: [&str; 7] = ["ProxyJump", "ProxyCommand", "ProxyUseFdpass", "BindAddress", "BindInterface", "CanonicalizeHostname", "HostKeyAlias"];
 
 /// True when `a` and `b` reach the same computer and account: the same text with the host name in any case, or
 /// the same [`ssh_target`] (`mini` with `HostName mini.local` and `User me` is `me@mini.local`; no port is port 22).
+/// Where either target is unknown (a jump host, a proxy, a `Match` or `Include`…) only the text as typed decides.
 pub fn same_target(config: &str, local_user: &str, a: (&str, Option<u16>), b: (&str, Option<u16>)) -> bool {
     let plain = |(h, p): (&str, Option<u16>)| {
         let (u, n) = h.split_once('@').map_or((None, h), |(u, n)| (Some(u), n));
@@ -1752,11 +1771,50 @@ mod tests {
         assert_eq!(ssh_target("Include ~/.ssh/more\n", "mini", None, "me"), None);
         assert_eq!(ssh_target("Host mini\n  HostName %h.%d\n", "mini", None, "me"), None);
         assert_eq!(ssh_target("Host mini\n  Port twenty\n", "mini", None, "me"), None);
-        // ... unless every value was found first, or given in the host itself
-        let cfg = "Host mini\n  HostName mini.local\n  User me\n  Port 22\nMatch all\n  User x\n";
-        assert_eq!(ssh_target(cfg, "mini", None, "local"), Some(Target { user: "me".into(), name: "mini.local".into(), port: 22 }));
+        // ... even after every value was found: a Match block could still set a route-changing key
+        let cfg = "Host mini\n  HostName mini.local\n  User me\n  Port 22\nMatch all\n  ProxyJump gw\n";
+        assert_eq!(ssh_target(cfg, "mini", None, "local"), None);
+        assert_eq!(ssh_target("Host mini\n  HostName mini.local\nInclude more\n", "mini", None, "local"), None);
         assert!(same_target("Match all\n", "me", ("mini", None), ("MINI", None)), "the same text is the same computer whatever the config says");
         assert!(!same_target("Match all\n", "me", ("mini", None), ("me@mini", None)));
+    }
+
+    #[test]
+    fn a_jump_or_proxy_makes_the_same_address_another_computer() {
+        // two private networks with the same address: one reached through a gateway, one directly
+        let cfg = "Host office-pi\n  HostName 192.168.1.10\n  ProxyJump office-gw\nHost home-pi\n  HostName 192.168.1.10\n";
+        assert_eq!(ssh_target(cfg, "office-pi", None, "me"), None);
+        assert_eq!(ssh_target(cfg, "home-pi", None, "me"), Some(Target { user: "me".into(), name: "192.168.1.10".into(), port: 22 }));
+        assert!(!same_target(cfg, "me", ("office-pi", None), ("home-pi", None)));
+        assert!(!same_target(cfg, "me", ("home-pi", None), ("office-pi", None)));
+        // the same alias typed again is still the same row
+        assert!(same_target(cfg, "me", ("office-pi", None), ("OFFICE-PI", None)));
+        // the reverse: two plain aliases of one HostName are one computer
+        let plain = "Host pi-a\n  HostName 192.168.1.10\nHost pi-b\n  HostName 192.168.1.10\n";
+        assert!(same_target(plain, "me", ("pi-a", None), ("pi-b", None)));
+        assert!(same_target(plain, "me", ("pi-a", None), ("192.168.1.10", None)));
+        // each key that changes the route, from any block that applies (Host * included), by its first value
+        for set in [
+            "ProxyJump gw", "ProxyCommand ssh -W %h:%p gw", "ProxyUseFdpass yes", "BindAddress 10.0.0.2", "BindInterface utun3",
+            "CanonicalizeHostname yes", "HostKeyAlias pi-office", "proxyjump=gw",
+        ] {
+            let cfg = format!("Host pi-a\n  HostName 192.168.1.10\nHost *\n  {set}\nHost pi-b\n  HostName 192.168.1.10\n");
+            assert_eq!(ssh_target(&cfg, "pi-a", None, "me"), None, "{set}");
+            assert!(!same_target(&cfg, "me", ("pi-a", None), ("pi-b", None)), "{set}");
+        }
+        // a first `none` / `no` holds over a later value, as ssh reads it
+        for (first, later) in [
+            ("ProxyJump none", "ProxyJump gw"), ("ProxyCommand none", "ProxyCommand nc %h %p"), ("ProxyUseFdpass no", "ProxyUseFdpass yes"),
+            ("CanonicalizeHostname no", "CanonicalizeHostname always"),
+        ] {
+            let cfg = format!("Host pi-a pi-b\n  HostName 192.168.1.10\n  {first}\nHost *\n  {later}\n");
+            assert!(same_target(&cfg, "me", ("pi-a", None), ("pi-b", None)), "{first}");
+            let cfg = format!("Host pi-a pi-b\n  HostName 192.168.1.10\n  {later}\nHost *\n  {first}\n");
+            assert!(!same_target(&cfg, "me", ("pi-a", None), ("pi-b", None)), "{later}");
+        }
+        // a block that does not apply changes nothing
+        let cfg = "Host other\n  ProxyJump gw\nHost pi-a pi-b\n  HostName 192.168.1.10\n";
+        assert!(same_target(cfg, "me", ("pi-a", None), ("pi-b", None)));
     }
 
     #[test]
