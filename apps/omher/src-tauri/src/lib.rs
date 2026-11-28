@@ -404,8 +404,9 @@ async fn session_start(
 
 /// The bottom terminal panel's shell: the person's own login shell (`sessions::shell_argv`, decided by the shell,
 /// never by the page) in `cwd` when that is an existing folder, else home. The page sends a folder and a size only,
-/// and for a TERMINALS Shell row its shell id and its link id (`OMHER_TERMINAL_LINK`, `sessions::terminal_env`); the
-/// session is then written, acknowledged, resized and closed with the `session_*` commands like any other.
+/// and for a TERMINALS Shell row its shell id and its link id (`OMHER_TERMINAL_LINK`, `sessions::terminal_env`), or
+/// for a bottom-panel pane its record key (`panel` and digits: Program Resume only, no variable); the session is then
+/// written, acknowledged, resized and closed with the `session_*` commands like any other.
 #[tauri::command]
 async fn shell_start(
     app: AppHandle,
@@ -413,6 +414,7 @@ async fn shell_start(
     cwd: Option<String>,
     shell_id: Option<String>,
     link: Option<String>,
+    panel: Option<String>,
     resume: Option<bool>,
     cols: u16,
     rows: u16,
@@ -422,10 +424,10 @@ async fn shell_start(
     let sessions = shell.sessions.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let home = user_home()?;
-        // Program Resume (OSC 7577) for a TERMINALS Shell row with its link id while Settings › Terminal allows it
-        // (`resume` set; `true`: bring back the record that row kept, once)
-        let pr = match (resume, link.as_deref()) {
-            (Some(take), Some(key)) if term_link::is_link_id(key) && program_resume::supported() => Some(sessions::ShellResume { key: key.to_string(), store: resume_store(&home), take }),
+        // Program Resume (OSC 7577) for a TERMINALS Shell row with its link id, or a bottom-panel pane with its key,
+        // while Settings › Terminal allows it (`resume` set; `true`: bring back the record that row or pane kept, once)
+        let pr = match (resume, program_resume::resume_key(link.as_deref(), panel.as_deref())) {
+            (Some(take), Some(key)) if program_resume::supported() => Some(sessions::ShellResume { key: key.to_string(), store: resume_store(&home), take }),
             _ => None,
         };
         let started = sessions.start_shell_resumable(cwd.as_deref(), shell_id.as_deref(), link.as_deref(), pr, &home, cols, rows, move |ev| match ev {
@@ -499,8 +501,8 @@ fn resume_store(home: &std::path::Path) -> Arc<program_resume::Store> {
 }
 
 /// After omher started (Settings › Terminal "Programs may ask to restart" on): the TERMINALS Shell rows that came
-/// back (`keep`, link ids; a row whose own CLI comes back by its conversation id is not among them) keep their
-/// records, every other record goes. Each kept row's program name (escaped) comes back; argv, cwd and token never do.
+/// back (`keep`, link ids; a row whose own CLI comes back by its conversation id is not among them) and the
+/// bottom-panel panes put back (`panel-<n>`) keep their records, every other record goes. Each kept row's program name (escaped) comes back; argv, cwd and token never do.
 /// Nothing on Windows or as root.
 #[tauri::command]
 async fn program_resume_records(keep: Vec<String>) -> Result<Vec<(String, String)>, String> {
@@ -508,7 +510,7 @@ async fn program_resume_records(keep: Vec<String>) -> Result<Vec<(String, String
         if !program_resume::supported() {
             return Ok(Vec::new());
         }
-        let keep: Vec<String> = keep.into_iter().filter(|k| term_link::is_link_id(k)).collect();
+        let keep: Vec<String> = keep.into_iter().filter(|k| term_link::is_link_id(k) || program_resume::is_panel_key(k)).collect();
         Ok(resume_store(&user_home()?).restore(&keep))
     })
     .await

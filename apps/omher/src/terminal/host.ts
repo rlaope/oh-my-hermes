@@ -56,11 +56,12 @@ export interface ShellHost {
    *  and that id go to the shell: never a program. */
   /** `link`: a TERMINALS Shell row's link id, which its shell gets as `OMHER_TERMINAL_LINK` (rule 11); none for the
    *  bottom panel's shells. */
-  /** `resume` (a Shell row with `link`, Settings › Terminal "Programs may ask to restart" on): its shell gets an
-   *  `OSC7577_TOKEN` the page never sees; `true` also brings back the program that row kept, once. */
-  start(cwd: string | null, cols: number, rows: number, onData: (d: Uint8Array | string) => void, onExit: (code: number | null) => void, shell?: string, link?: string, resume?: boolean): Promise<ShellStarted>;
-  /** Program Resume after omher started: the rows (link ids) that came back paused keep their records, every other
-   *  record goes; [link id, program name] for each kept one. */
+  /** `resume` (a Shell row with `link`, or a bottom-panel pane with its key `panel`, `panel-<n>`; Settings › Terminal
+   *  "Programs may ask to restart" on): its shell gets an `OSC7577_TOKEN` the page never sees; `true` also brings back
+   *  the program that row or pane kept, once. A panel key gives the shell no variable. */
+  start(cwd: string | null, cols: number, rows: number, onData: (d: Uint8Array | string) => void, onExit: (code: number | null) => void, shell?: string, link?: string, resume?: boolean, panel?: string): Promise<ShellStarted>;
+  /** Program Resume after omher started: the rows (link ids) that came back paused and the panel panes put back
+   *  (`panel-<n>`) keep their records, every other record goes; [key, program name] for each kept one. */
   resumeRecords(keep: string[]): Promise<[string, string][]>;
   /** gh's own sign-in for one more GitHub account (`gh auth login`, `--hostname <host>` when set) in a pseudo-terminal
    *  in the home folder: Settings › Accounts › GitHub. Only the host and a size go to the shell. */
@@ -83,14 +84,15 @@ export interface ShellHost {
 class TauriShellHost implements ShellHost {
   readonly kind = "tauri" as const;
   private core = () => import("@tauri-apps/api/core");
-  async start(cwd: string | null, cols: number, rows: number, onData: (d: Uint8Array) => void, onExit: (c: number | null) => void, shell?: string, link?: string, resume?: boolean) {
+  async start(cwd: string | null, cols: number, rows: number, onData: (d: Uint8Array) => void, onExit: (c: number | null) => void, shell?: string, link?: string, resume?: boolean, panel?: string) {
     const { invoke, Channel } = await this.core();
     const data = new Channel<ArrayBuffer>();
     data.onmessage = (b) => onData(new Uint8Array(b));
     const exit = new Channel<number | null>();
     exit.onmessage = (c) => onExit(c);
     await learnThisHost();
-    return invoke<ShellStarted>("shell_start", { cwd, shellId: shell || null, link: link || null, resume: link && resume !== undefined ? resume : null, cols, rows, onData: data, onExit: exit });
+    const key = link || panel;
+    return invoke<ShellStarted>("shell_start", { cwd, shellId: shell || null, link: link || null, panel: (!link && panel) || null, resume: key && resume !== undefined ? resume : null, cols, rows, onData: data, onExit: exit });
   }
   async resumeRecords(keep: string[]) {
     const { invoke } = await this.core();
@@ -147,7 +149,7 @@ class TauriShellHost implements ShellHost {
 // ---- Mock -----------------------------------------------------------------------------------
 
 export type MockShellCall =
-  | { op: "start"; id: number; cwd: string | null; at: string; cols: number; rows: number; shell?: string; link?: string; resume?: boolean }
+  | { op: "start"; id: number; cwd: string | null; at: string; cols: number; rows: number; shell?: string; link?: string; panel?: string; resume?: boolean }
   | { op: "resume-records"; keep: string[] }
   | { op: "gh-login"; id: number; host: string | null }
   | { op: "write"; id: number; data: string }
@@ -169,7 +171,7 @@ type MockGlobals = {
   __omherMockShells?: ShellInfo[];
 };
 
-/** e2e: the Program Resume records the mock computer keeps (Shell row link id → program name), in this page's storage
+/** e2e: the Program Resume records the mock computer keeps (Shell row link id or `panel-<n>` → program name), in this page's storage
  *  as the shell keeps `resume.json`; a test writes one where a program's report would have. */
 const MOCK_RESUME = "__omherMockResume";
 const mockResume = (): Record<string, string> => {
@@ -235,7 +237,7 @@ export class MockShellHost implements ShellHost {
     saveMockResume(kept);
     return Object.entries(kept);
   }
-  async start(cwd: string | null, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void, shell?: string, link?: string, resume?: boolean) {
+  async start(cwd: string | null, cols: number, rows: number, onData: (d: string) => void, onExit: (c: number | null) => void, shell?: string, link?: string, resume?: boolean, panel?: string) {
     await learnThisHost();
     // as the shell does: the id is looked up in this computer's list again; one that is not there starts the default
     const list = await this.shells();
@@ -250,13 +252,15 @@ export class MockShellHost implements ShellHost {
     const at = ok ? cwd! : home;
     const die = this.g.__omherShellDie;
     if (die?.error) throw new Error(die.error);
-    this.log({ op: "start", id, cwd, at, cols, rows, ...(shell ? { shell } : {}), ...(link ? { link } : {}), ...(link && resume !== undefined ? { resume } : {}) });
+    // as the shell does: a row's link id, else a panel pane's checked key (`panel-` and digits), is the record key
+    const key = link || (panel && /^panel-[1-9][0-9]{0,8}$/.test(panel) ? panel : undefined);
+    this.log({ op: "start", id, cwd, at, cols, rows, ...(shell ? { shell } : {}), ...(link ? { link } : {}), ...(!link && key ? { panel: key } : {}), ...(key && resume !== undefined ? { resume } : {}) });
     // as the shell does: the row's record leaves the store before the shell starts, and comes back as one line
     let back: { resumeLine: string; resumeProgram: string } | undefined;
-    if (link && resume === true) {
+    if (key && resume === true) {
       const all = mockResume();
-      if (all[link]) back = { resumeLine: ` '/mock/omher' --resume-exec '/mock/resume/launch-${id}.json'`, resumeProgram: all[link] };
-      delete all[link];
+      if (all[key]) back = { resumeLine: ` '/mock/omher' --resume-exec '/mock/resume/launch-${id}.json'`, resumeProgram: all[key] };
+      delete all[key];
       saveMockResume(all);
     }
     this.live.set(id, { line: "", cwd: at, out: onData, exit: onExit });

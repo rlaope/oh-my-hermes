@@ -7,7 +7,7 @@ import type { ITerminalInitOnlyOptions, ITerminalOptions, Terminal } from "@xter
 import type { FitAddon } from "@xterm/addon-fit";
 import { afterOpen, bracketedPaste, CELLS_EVENT, feed, isParked, live, onVisible, type Remake } from "../sessions/term/engine";
 import { TERM_INPUT_EVENT } from "../sessions/term/paste-guard";
-import { onCwd } from "../sessions/term/engine-marks";
+import { onCwd, onPrompt } from "../sessions/term/engine-marks";
 import { setTermAgent } from "../sessions/term/engine-input";
 import { applyLook, termOptions } from "../sessions/term/look";
 import { termFontsReady } from "../sessions/term/fonts";
@@ -24,6 +24,10 @@ import { forgetHistory, restoredText, trackHistory } from "../sessions/term/hist
 
 /** A size goes to the shell once it has held this long (a drag gives one per frame). */
 const RESIZE_SETTLE_MS = 32;
+/** Program Resume's line is typed once the shell is ready, as a TERMINALS Shell row's (sessions.ts): its output
+ *  stopped this long, or this long after a prompt mark (OSC 133 `A`) with nothing printed since. */
+const RESTORE_QUIET_MS = 3_000;
+const PROMPT_SETTLE_MS = 1_000;
 const utf8 = new TextEncoder();
 
 type Xterm = [typeof import("@xterm/xterm"), typeof import("@xterm/addon-fit")];
@@ -60,6 +64,8 @@ interface PanelTerm {
   cwdOff?: () => void;
   /** its history keeping (term/history.ts), once its shell started */
   hist?: { touch: () => void; stop: () => void };
+  /** waits to type Program Resume's line: hears each output of the shell */
+  waiting?: () => void;
 }
 
 const terms = new Map<number, PanelTerm>();
@@ -170,8 +176,12 @@ async function start(key: number, p: PanelTerm, want: string | null, restored: b
     if (back) feed(p.term, back);
   }
   p.hist = trackHistory(getHost(), histKey(key), () => (terms.get(key) === p && !isParked(p.raw) ? p.term : null));
+  // Program Resume (Settings › Terminal, on by default): the pane's shell may let its program ask to be started again,
+  // kept under the pane's own key (the id it comes back under after a restart); a pane put back brings that program
+  // back once as its shell starts, as a resumed TERMINALS Shell row does. A gh sign-in tab is never told it may ask.
+  const prog = readTermSettings().programResume ? restored : undefined;
   const begin = (onData: (d: Uint8Array | string) => void, onExit: (code: number | null) => void) =>
-    gh ? host.startGhLogin(gh.host, p.term.cols, p.term.rows, onData, onExit) : host.start(want, p.term.cols, p.term.rows, onData, onExit);
+    gh ? host.startGhLogin(gh.host, p.term.cols, p.term.rows, onData, onExit) : host.start(want, p.term.cols, p.term.rows, onData, onExit, undefined, undefined, prog, prog === undefined ? undefined : histKey(key));
   void begin(
       (d) => {
         // acknowledged once drawn, in order: the shell reads no further ahead of the page than its credit
@@ -181,6 +191,7 @@ async function start(key: number, p: PanelTerm, want: string | null, restored: b
           else host.ack(p.id, bytes);
         });
         p.hist?.touch();
+        p.waiting?.();
       },
       (code) => {
         p.ended = true;
@@ -209,12 +220,42 @@ async function start(key: number, p: PanelTerm, want: string | null, restored: b
         if (p.owed) host.ack(p.id, p.owed);
         p.owed = 0;
         setPaneCwd(key, started.cwd);
+        if (started.resumeLine) typeResume(key, p, started.id, started.resumeLine);
       },
       (e) => {
         p.ended = true;
         feed(p.term, `\x1b[31m${t("termpanel.couldNotStart", { error: e instanceof Error ? e.message : String(e) })}\x1b[0m\r\n`);
       },
     );
+}
+
+/** Type Program Resume's `line` (omher's own program and a one-use launch file the shell made, never the command)
+ *  into pane `key`'s shell `id` once, when the shell is ready and is itself in front. Dropped, never typed late, when
+ *  the person typed first, the shell ended or the pane closed. */
+function typeResume(key: number, p: PanelTerm, id: number, line: string): void {
+  let quiet: ReturnType<typeof setTimeout> | null = null;
+  const still = () => terms.get(key) === p && p.id === id && !p.ended && !p.typed;
+  const done = () => {
+    if (quiet !== null) clearTimeout(quiet);
+    quiet = null;
+    p.waiting = undefined;
+    stopPrompt();
+  };
+  const go = async () => {
+    done();
+    if (!still()) return;
+    const host = getShellHost();
+    const front = await host.shellInFront(id).catch(() => false);
+    if (front && still()) void host.write(id, `${line}\r`).catch(() => undefined);
+  };
+  const later = (ms: number) => {
+    if (!still()) return done();
+    if (quiet !== null) clearTimeout(quiet);
+    quiet = setTimeout(() => void go(), ms);
+  };
+  const stopPrompt = onPrompt(p.el, () => later(PROMPT_SETTLE_MS));
+  p.waiting = () => later(RESTORE_QUIET_MS);
+  later(RESTORE_QUIET_MS);
 }
 
 /** Put pane `key`'s terminal into `box` (made and its shell started the first time). Returns what takes it out. */

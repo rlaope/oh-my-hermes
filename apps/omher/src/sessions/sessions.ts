@@ -2300,6 +2300,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     if (!saved.length) {
       void ready().then(() => host.pruneFiles([]).catch(() => undefined));
       void ready().then(() => pruneHistory(host, savedPanelKeys()));
+      // Program Resume: only the panel panes put back keep their records
+      if (readTermSettings().programResume) void getShellHost().resumeRecords(savedPanelKeys()).catch(() => undefined);
       saveSentFiles({});
       return;
     }
@@ -2417,12 +2419,13 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     }
     set({ list: [...list, ...state.list] });
     for (const r of list) if (keys.has(r.id)) registerRoute(r.id);
-    // Program Resume: a paused Shell row keeps the record its program left (shown on the row; Resume runs it once);
-    // every other record goes, a row that comes back by its own CLI's conversation id included. Off: none is read.
+    // Program Resume: a paused Shell row keeps the record its program left (shown on the row; Resume runs it once), a
+    // bottom-panel pane put back keeps its own (its shell brings it back as it starts); every other record goes, a row
+    // that comes back by its own CLI's conversation id included. Off: none is read.
     if (readTermSettings().programResume) {
       const paused = list.filter((r) => r.paused && isShell(r.agent) && r.linkId);
       void getShellHost()
-        .resumeRecords(paused.map((r) => r.linkId!))
+        .resumeRecords([...paused.map((r) => r.linkId!), ...savedPanelKeys()])
         .then((kept) => {
           for (const [link, program] of kept) {
             const r = state.list.find((x) => x.linkId === link);
