@@ -2777,6 +2777,7 @@ function startTurn(bot, text, folder) {
   if (text.startsWith("/interview")) return schedule(bot, [[150, () => raiseInterview(bot, 0)]]);
   if (text.startsWith("/delegate")) return scriptDelegate(bot);
   if (text.startsWith("/browser")) return scriptBrowser(bot);
+  if (text.startsWith("/diff")) return scriptDiff(bot);
   if (peerAsk(text)) return scriptPeer(bot, text);
   scriptNormal(bot, text);
 }
@@ -2959,6 +2960,23 @@ function scriptBrowser(bot) {
     return out;
   });
   schedule(bot, [...steps, [880, () => say(bot, "Logged in and checked the cart.")], [960, () => endTurn(bot, "done")]]);
+}
+
+// `/diff`: one file edit whose change has two hunks with line numbers (a `tool.diff` the way the SESSIONS adapters send
+// Claude Code's structuredPatch), one with its counts left out, past line 100 so the gutter is three digits wide.
+function scriptDiff(bot) {
+  const files = [{
+    path: "src/calc.py", kind: "update", added: 3, removed: 1,
+    lines: ["@@ -5,3 +5,4 @@", " def sub(a, b):", "-    return a + b", "+    return a - b", "+", " ",
+            "@@ -98 +99,2 @@", " def mul(a, b):", "+    return a * b"],
+  }];
+  schedule(bot, [
+    [80, () => ev(bot, "tool.start", { tool_id: "df1", name: "patch", detail: "src/calc.py" })],
+    [120, () => ev(bot, "tool.diff", { tool_id: "df1", files })],
+    [160, () => ev(bot, "tool.end", { tool_id: "df1", name: "patch", ok: true, ms: 80 })],
+    [220, () => say(bot, "Fixed sub and added mul.")],
+    [300, () => endTurn(bot, "done")],
+  ]);
 }
 
 function scriptDelegate(bot) {
