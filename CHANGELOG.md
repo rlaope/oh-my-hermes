@@ -7,7 +7,7 @@ All notable changes will be documented here.
 - **omher: a Claude Code or Codex waiting on you in a terminal shows in Needs you.** When a terminal agent stops on its
   permission dialog or a choice menu, it appears in Needs you with the bot asks, counts in the Dock badge and marks its
   row. ⌘J (Ctrl+J off macOS) or a click opens that terminal with the keyboard in it, so you answer it there; omher types
-  nothing into it. Settings › Terminal › "Agent questions in Needs you" (on by default) turns it off.
+  nothing into it. Settings › Terminal › "Agent asks in Needs you" (on by default) turns it off.
   (`docs/OMHER-BOUNDARY.md` rule 11; `apps/omher/src/sessions/term/screenAsk.ts`)
 - **omher: see how long your Claude Code login has left.** Settings › Accounts shows "Login: 12 days left" under a
   Claude Code login, hours under a day and "expired" past it, in red from three days out. Codex logins have no expiry

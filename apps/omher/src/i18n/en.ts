@@ -732,7 +732,7 @@ export const en = {
   "term.history": "History",
   "term.keepHistory": "Keep history across restarts",
   "term.keepHistoryHint": "What each terminal showed comes back, dimmed, after omher restarts. Off removes it all.",
-  "term.agentAsks": "Agent questions in Needs you",
+  "term.agentAsks": "Agent asks in Needs you",
   "term.agentAsksHint": "A Claude Code or Codex in a terminal that stops on a permission or choice dialog shows in Needs you, ⌘J and the Dock count.",
   "term.undoClose": "Undo window after closing",
   "term.undoCloseHint": "A closed terminal keeps its program running this long so you can undo the close",

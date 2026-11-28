@@ -139,7 +139,7 @@ test("the Settings › Terminal switch is on by default", async ({ page }) => {
   await page.getByTestId("nav-settings").click();
   await page.getByTestId("settings-nav-terminal").click();
   const row = page.getByTestId("term-agent-asks-row");
-  await expect(row).toContainText("Agent questions in Needs you");
+  await expect(row).toContainText("Agent asks in Needs you");
   await expect(page.getByTestId("term-agent-asks").getByRole("radio", { name: "On" })).toHaveAttribute("aria-checked", "true");
 });
 
