@@ -114,6 +114,11 @@
 .dv-l.more {
   color: var(--quiet);
 }
+/* git's "\ No newline at end of file": not a line of the file, so it reads as a quiet aside, not as code */
+.dv-l.note {
+  color: var(--quiet);
+  font-style: italic;
+}
 /* between two hunks: a thin rule where the lines in between are left out */
 .dv-l.hunk {
   height: 0;

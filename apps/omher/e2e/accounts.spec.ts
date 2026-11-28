@@ -326,9 +326,12 @@ test("auto-switch at the threshold: no account with room keeps the one in use an
   const toast = page.getByTestId("accounts-codex").getByTestId("accounts-toast");
   await expect(toast).toHaveText(/^Codex: no other account has room, so new sessions stay on This computer \(at 93%, resets .+\)$/);
   await expect(row(page, "codex", "default").getByTestId("account-pill")).toHaveText("In use");
-  // another read of the same window: no second line
+  // another read of the same window: no second line. Wait until that read reached the page (the row shows 87%):
+  // the no-room check runs on the same read, in the same chain of resolved promises, before the page is looked at
+  const reads = (await callsOf("accounts.list")).length;
   await mock("mock.accounts", { cli: "codex", usage: { id: "work", windows: [{ label: "5 hours", used_percent: 87, resets_in_min: 200 }] } });
-  await page.waitForTimeout(400);
+  await expect.poll(async () => (await callsOf("accounts.list")).length).toBeGreaterThan(reads);
+  await expect(row(page, "codex", "work")).toContainText("87% used");
   await page.getByTestId("bot-kami").click();
   await expect(page.getByTestId("system-line")).toHaveCount(1);
   expect(await callsOf("accounts.set_active")).toEqual([]);

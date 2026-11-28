@@ -6,6 +6,7 @@ import {
   autoSwitchOn,
   isCpa,
   lapseNotices,
+  lastSwitchAt,
   mergeRow,
   nextAccount,
   pill,
@@ -14,7 +15,9 @@ import {
   noRoomNote,
   pruneSeen,
   resetFirstOn,
+  roomEpisode,
   rowSub,
+  setLastSwitch,
   rowTitle,
   splitGroups,
   switchAt,
@@ -22,6 +25,7 @@ import {
   switchHeld,
   switchNote,
   usageLines,
+  type SwitchCheck,
   CODEX_SWITCH_EVERY_S,
   SWITCH_AT_DEFAULT,
   SWITCH_AT_STEPS,
@@ -213,7 +217,7 @@ describe("nextAccount reset-first", () => {
     const c = acc("c", "ready", { usage: codexUsage([{ label: "5 hours", resets_at: NOW + 2 * HOUR }, { label: "Weekly", resets_at: NOW + 90 * HOUR }]) });
     expect(nextAccount(limitedFirst(b, c), {}, "a", on)).toEqual({ from: 0, to: 2, soonest: NOW + 2 * HOUR });
   });
-  it("orders only accounts with a fresh reading once one has: those without are no candidates at all", () => {
+  it("off a limited account, one with a fresh reading goes before one without", () => {
     const accounts = limitedFirst(acc("b", "ready"), acc("c", "ready"), withReset("d", "5 hours", 2 * HOUR));
     expect(nextAccount(accounts, {}, "a", on)).toEqual({ from: 0, to: 3 });
   });
@@ -246,9 +250,9 @@ describe("nextAccount reset-first", () => {
       return seed / 4294967296;
     };
     const pick = <T,>(xs: T[]): T => xs[Math.floor(rnd() * xs.length)];
-    // fill-first at the default threshold, written out on its own: the first ready account with a fresh reading at
-    // least SWITCH_ROOM under the threshold once the one in use reaches it; with no fresh reading anywhere else, the
-    // first ready one once the one in use is limited
+    // fill-first at the default threshold, written out on its own: once the one in use is limited, the other ready
+    // account that is not limited with the lowest fresh reading, else the first one with no reading; before that, an
+    // early move at the threshold to the first ready account with a fresh reading at least SWITCH_ROOM under it
     const base = (accounts: Account[], usage: Record<string, UsageProvider | null | undefined>, activeId?: string | null) => {
       const from = accounts.findIndex((a) => (activeId ? a.id === activeId : a.state === "active"));
       if (from < 0) return null;
@@ -262,12 +266,14 @@ describe("nextAccount reset-first", () => {
       const others = accounts.flatMap((a, i) => (i !== from && a.state === "ready" && !isCpa(a) ? [i] : []));
       const fresh = others.filter((i) => pct(accounts[i]) !== null);
       const cur = accounts[from];
-      if (fresh.length === 0) {
-        if (!lim(cur)) return null;
-        const to = others.find((i) => !lim(accounts[i]));
+      if (lim(cur)) {
+        const open = others.filter((i) => !lim(accounts[i]) && (pct(accounts[i]) ?? 0) < 100);
+        let to: number | undefined;
+        for (const i of open) if (pct(accounts[i]) !== null && (to === undefined || (pct(accounts[i]) as number) < (pct(accounts[to]) as number))) to = i;
+        to ??= open.find((i) => pct(accounts[i]) === null);
         return to === undefined ? null : { from, to };
       }
-      if (!lim(cur) && (pct(cur) ?? -1) < 90) return null;
+      if (fresh.length === 0 || (pct(cur) ?? -1) < 90) return null;
       const to = fresh.find((i) => !lim(accounts[i]) && (pct(accounts[i]) as number) <= 85);
       return to === undefined ? null : { from, to };
     };
@@ -398,9 +404,57 @@ describe("switch threshold and headroom", () => {
   });
 });
 
+describe("off a limited account: any other account that is not limited, the headroom rule is for an early move only", () => {
+  const opts = { now: NOW };
+  it("limited, Work at 87% and a login with no reading: moves to Work (13% left beats staying limited)", () => {
+    const list = [acc("a", "limited", { resets_at: AT_14 }), at("work", "ready", 87), acc("x", "ready")];
+    expect(switchCheck(list, {}, "a", opts)).toEqual({ from: 0, to: 1 });
+  });
+  it("limited: the lowest fresh reading first, then those with no reading in list order", () => {
+    const list = [acc("a", "limited"), acc("x", "ready"), at("b", "ready", 70), at("c", "ready", 40), at("d", "ready", 40)];
+    expect(nextAccount(list, {}, "a", opts)).toEqual({ from: 0, to: 3 });
+    // a fresh reading at 100% is a limit, and a limited one is skipped: the login with no reading takes over
+    expect(nextAccount([acc("a", "limited"), at("b", "ready", 100), at("c", "limited", 10), acc("x", "ready")], {}, "a", opts)).toEqual({ from: 0, to: 3 });
+  });
+  it("limited, only logins with no reading: the first ready one in list order (the old fill-first)", () => {
+    expect(nextAccount([acc("a", "limited"), acc("l", "login"), acc("x", "ready"), acc("y", "ready")], {}, "a", opts)).toEqual({ from: 0, to: 2 });
+  });
+  it("limited, every other account limited: no move, and the note says it is about a limit", () => {
+    const list = [acc("a", "limited", { resets_at: AT_14 }), acc("b", "limited"), at("c", "ready", 100)];
+    const c = switchCheck(list, {}, "a", opts);
+    expect(c).toEqual({ from: 0, to: null, at: { resets_at: AT_14 } });
+    expect(noRoomNote(group("codex", list, { active: "a" }), 0, NOW, (c as { at: object }).at)).toBe(
+      "Codex: no other account has room, so new sessions stay on #1 (limit reached, resets 14:00)",
+    );
+  });
+  it("at the threshold but not limited: no early move onto 87%, an early move onto 84%", () => {
+    expect(switchCheck([at("a", "active", 92), at("work", "ready", 87), acc("x", "ready")], {}, "a", opts)).toEqual({
+      from: 0,
+      to: null,
+      at: { percent: 92, resets_at: NOW + HOUR },
+    });
+    expect(switchCheck([at("a", "active", 92), at("work", "ready", 84), acc("x", "ready")], {}, "a", opts)).toEqual({
+      from: 0,
+      to: 1,
+      at: { percent: 92, resets_at: NOW + HOUR },
+    });
+  });
+  it("threshold 100: a limited account moves onto 97%, an account at 100% that is not marked limited does not move early onto it", () => {
+    const o = { ...opts, threshold: 100 };
+    expect(nextAccount([acc("a", "limited"), at("b", "ready", 97)], {}, "a", o)).toEqual({ from: 0, to: 1 });
+    expect(nextAccount([at("a", "active", 100), at("b", "ready", 97)], {}, "a", o)).toBeNull();
+  });
+  it("reset-first still orders the candidates off a limited account, and says so when it differs", () => {
+    const soon = (id: string, pct: number, inS: number) => acc(id, "ready", { usage: codexUsage([{ label: "5 hours", used_percent: pct, resets_at: NOW + inS }]) });
+    const list = [acc("a", "limited"), soon("b", 30, 4 * HOUR), soon("c", 88, HOUR / 2)];
+    expect(nextAccount(list, {}, "a", opts)).toEqual({ from: 0, to: 1 });
+    expect(nextAccount(list, {}, "a", { ...opts, resetFirst: true })).toEqual({ from: 0, to: 2, soonest: NOW + HOUR / 2 });
+  });
+});
+
 describe("only an account with a fresh reading is a candidate", () => {
   const opts = { now: NOW };
-  it("skips no record, a stale window, a reset in the past, a window with no reset and one with no percent", () => {
+  it("an early move skips no record, a stale window, a reset in the past, a window with no reset and one with no percent", () => {
     const stale = acc("s", "ready", { usage: codexUsage([{ label: "5 hours", resets_at: NOW - 60, stale: true }]) });
     const past = acc("p", "ready", { usage: codexUsage([{ label: "5 hours", used_percent: 5, resets_at: NOW - 1 }]) });
     const noReset = acc("n", "ready", { usage: codexUsage([{ label: "5 hours", used_percent: 5 }]) });
@@ -410,7 +464,7 @@ describe("only an account with a fresh reading is a candidate", () => {
     expect(nextAccount(list, {}, "a", opts)).toEqual({ from: 0, to: 6 });
     expect(switchCheck(list.slice(0, 6).concat(at("full", "ready", 99)), {}, "a", opts)).toMatchObject({ from: 0, to: null });
   });
-  it("with no other fresh reading anywhere, behaves as before: waits for a real limit, then the first ready one", () => {
+  it("with no other fresh reading anywhere: no early move; once limited, the first ready one", () => {
     const list = (cur: Account) => [cur, acc("x", "ready"), acc("y", "ready", { usage: codexUsage([{ label: "5 hours", resets_at: NOW - 1, stale: true }]) })];
     expect(switchCheck(list(at("a", "active", 99)), {}, "a", opts)).toBeNull();
     expect(nextAccount(list(acc("a", "limited")), {}, "a", opts)).toEqual({ from: 0, to: 1 });
@@ -467,6 +521,41 @@ describe("a model's own weekly limit counts only while a session of the account 
   });
 });
 
+describe("a candidate is also judged on the models in use on the account being left", () => {
+  const claude = (id: string, state: Account["state"], wide: number, opus: number): Account =>
+    acc(id, state, {
+      usage: {
+        id: "claude",
+        state: "ok",
+        source_mtime: NOW - 60,
+        windows: [
+          { label: "Weekly", used_percent: wide, resets_at: NOW + 50 * HOUR },
+          { label: "Weekly (Opus)", used_percent: opus, resets_at: NOW + 20 * HOUR, model: "opus" },
+        ],
+      },
+    });
+  it("leaving at Opus 95% does not move onto an account whose Opus week is full, though nothing of its own runs Opus", () => {
+    const models = { a: ["claude-opus-4-5"] };
+    expect(switchCheck([claude("a", "active", 40, 95), claude("b", "ready", 10, 100)], {}, "a", { now: NOW, models })).toEqual({
+      from: 0,
+      to: null,
+      at: { percent: 95, resets_at: NOW + 20 * HOUR },
+    });
+    // nor onto one without headroom on that window for an early move
+    expect(nextAccount([claude("a", "active", 40, 95), claude("b", "ready", 10, 88)], {}, "a", { now: NOW, models })).toBeNull();
+    expect(nextAccount([claude("a", "active", 40, 95), claude("b", "ready", 10, 50)], {}, "a", { now: NOW, models })).toEqual({ from: 0, to: 1 });
+    // a limited account in use does not move onto a full Opus week either: the next Opus session there is refused
+    const refused = acc("a", "limited", { usage: claude("a", "limited", 40, 100).usage });
+    expect(nextAccount([refused, claude("b", "ready", 10, 100), claude("c", "ready", 60, 30)], {}, "a", { now: NOW, models })).toEqual({ from: 0, to: 2 });
+  });
+  it("no flip-flop: A leaves at Opus 95% for B; once B's Opus sessions run and A's end, B at the threshold does not move back to A", () => {
+    const first = switchCheck([claude("a", "active", 40, 95), claude("b", "ready", 10, 50)], {}, "a", { now: NOW, models: { a: ["claude-opus-4-5"] } });
+    expect(first).toEqual({ from: 0, to: 1, at: { percent: 95, resets_at: NOW + 20 * HOUR } });
+    const second = switchCheck([claude("a", "ready", 40, 95), claude("b", "active", 10, 91)], {}, "b", { now: NOW, models: { b: ["claude-opus-4-5"] } });
+    expect(second).toEqual({ from: 1, to: null, at: { percent: 91, resets_at: NOW + 20 * HOUR } });
+  });
+});
+
 describe("modelsInUse", () => {
   it("collects the models of the running and starting sessions of one CLI, by account (none = the CLI's own)", () => {
     const list = [
@@ -488,6 +577,56 @@ describe("Codex: at most one automatic switch every 300 seconds", () => {
     expect(switchHeld("codex", NOW - 299, NOW)).toBe(true);
     expect(switchHeld("codex", NOW - 300, NOW)).toBe(false);
     expect(switchHeld("claude", NOW - 1, NOW)).toBe(false);
+  });
+});
+
+describe("lastSwitchAt (the Codex hold, kept across a reload)", () => {
+  const disk = () => {
+    const m = new Map<string, string>();
+    return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v) };
+  };
+  it("reads back the time saved before a reload, per CLI, and holds Codex by it", () => {
+    const store = disk();
+    setLastSwitch("codex", NOW - 100, store);
+    setLastSwitch("claude", NOW - 10, store);
+    // a reload: module memory is gone, only the store is left
+    expect(lastSwitchAt("codex", NOW, store)).toBe(NOW - 100);
+    expect(switchHeld("codex", lastSwitchAt("codex", NOW, store), NOW)).toBe(true);
+    expect(switchHeld("codex", lastSwitchAt("codex", NOW + 200, store), NOW + 200)).toBe(false);
+    expect(lastSwitchAt("claude", NOW, store)).toBe(NOW - 10);
+    expect(lastSwitchAt("pi", NOW, store)).toBeUndefined();
+  });
+  it("ignores a time in the future, a bad value and no storage", () => {
+    const store = disk();
+    setLastSwitch("codex", NOW + 60, store);
+    expect(lastSwitchAt("codex", NOW, store)).toBeUndefined();
+    expect(switchHeld("codex", lastSwitchAt("codex", NOW, store), NOW)).toBe(false);
+    expect(lastSwitchAt("codex", NOW, { getItem: () => "not json" })).toBeUndefined();
+    expect(lastSwitchAt("codex", NOW, { getItem: () => '{"codex":"soon"}' })).toBeUndefined();
+    expect(lastSwitchAt("codex", NOW, undefined)).toBeUndefined();
+  });
+});
+
+describe("roomEpisode (the no-room line, once per account and episode)", () => {
+  const accounts = [at("a", "active", 93), at("b", "ready", 88)];
+  const noRoom = (pct: number, resets_at: number): SwitchCheck => ({ from: 0, to: null, at: { percent: pct, resets_at } });
+  it("is told once while no account has room, though the fullest window changes from the 5-hour to the weekly one", () => {
+    let r = roomEpisode({}, "codex", accounts, noRoom(93, NOW + HOUR));
+    expect(r.tell).toBe(true);
+    r = roomEpisode(r.next, "codex", accounts, noRoom(95, NOW + 90 * HOUR));
+    expect(r.tell).toBe(false);
+    expect(r.next).toEqual({ codex: "a" });
+    // another CLI has its own episode
+    expect(roomEpisode(r.next, "claude", accounts, noRoom(93, NOW + HOUR)).tell).toBe(true);
+  });
+  it("ends when an account qualifies, when nothing needs to move, or when the account in use changes", () => {
+    const start = roomEpisode({}, "codex", accounts, noRoom(93, NOW + HOUR)).next;
+    const moved = roomEpisode(start, "codex", accounts, { from: 0, to: 1 });
+    expect(moved).toEqual({ tell: false, next: {} });
+    expect(roomEpisode(moved.next, "codex", accounts, noRoom(93, NOW + HOUR)).tell).toBe(true);
+    expect(roomEpisode(start, "codex", accounts, null).next).toEqual({});
+    const other = [at("a", "ready", 10), at("b", "active", 95)];
+    expect(roomEpisode(start, "codex", other, { from: 1, to: null, at: { percent: 95, resets_at: NOW + HOUR } }).tell).toBe(true);
   });
 });
 

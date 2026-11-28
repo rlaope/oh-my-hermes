@@ -93,6 +93,13 @@ describe("a host that names this computer", () => {
     expect(namesThisComputer("mybox.local", "MyBox")).toBe(true);
   });
 
+  it("catches IPv6's loopback however it is written, and no other IPv6 address", () => {
+    for (const h of ["::1", "[::1]", "me@[::1]", "0:0:0:0:0:0:0:1", "0000:0000:0000:0000:0000:0000:0000:0001", "[0::0:1]", "::0001"])
+      expect(namesThisComputer(h, ""), h).toBe(true);
+    for (const h of ["::", "::2", "fe80::1", "1::", "::1:0", "2001:db8::1", "0:0:0:0:0:0:0:0:1", ":::1", "[::1"])
+      expect(namesThisComputer(h, ""), h).toBe(false);
+  });
+
   it("leaves other computers alone, and a missing name catches only localhost", () => {
     for (const h of ["mini", "demo@host.example", "10.0.0.7", "128.0.0.1", "mybox2", "localhost2", "notlocalhost"])
       expect(namesThisComputer(h, "mybox.local"), h).toBe(false);

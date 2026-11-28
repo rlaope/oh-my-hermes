@@ -2,8 +2,8 @@
 // plus what the desktop app knows (which CLIs are on this computer, each CLI's own login status). The watcher
 // re-reads every minute (and on `accounts.update`); when a CLI's in-use account reaches its switch threshold (or is
 // limited) and auto-switch is on, the next signed-in account with room becomes the one new sessions use, with one
-// quiet line in the bot chat; when none has room, that is said once per window instead. Codex switches at most once
-// every CODEX_SWITCH_EVERY_S. Running sessions are never touched.
+// quiet line in the bot chat; when none has room, that is said once per episode instead. Codex switches at most once
+// every CODEX_SWITCH_EVERY_S, also across a reload. Running sessions are never touched.
 import { useEffect, useSyncExternalStore } from "react";
 import type { AccountCli, AccountGroup } from "../../lib/protocol";
 import { getStore, notifyEnabled, useStore } from "../../state/store";
@@ -17,15 +17,19 @@ import {
   autoSwitchOn,
   isCpa,
   lapseNotices,
+  lastSwitchAt,
   modelsInUse,
   noRoomNote,
   pruneSeen,
   resetFirstOn,
+  roomEpisode,
+  setLastSwitch,
   switchAt,
   switchCheck,
   switchHeld,
   switchNote,
   CLI_NAME,
+  type RoomEpisodes,
 } from "./rules";
 
 const REFRESH_MS = 60_000;
@@ -113,27 +117,31 @@ export function reloadAccounts(): Promise<void> {
   return inflight;
 }
 
-/** When each CLI last switched by itself (seconds; this run of the app only). */
-const lastSwitch: Partial<Record<AccountCli, number>> = {};
 const ROOM_KEY = "omher.roomnoted";
-/** A "no room" line with no known reset time is told again after this long at most. */
-const ROOM_AGAIN_S = 5 * 3600;
+
+function loadEpisodes(): RoomEpisodes {
+  try {
+    const v = JSON.parse(localStorage.getItem(ROOM_KEY) ?? "{}");
+    return v && typeof v === "object" && !Array.isArray(v) ? (v as RoomEpisodes) : {};
+  } catch {
+    return {};
+  }
+}
 
 async function autoSwitch(groups: AccountGroup[]): Promise<void> {
   const now = Date.now() / 1000;
   // the models the person's running sessions use: a model's own weekly limit counts only for its account's sessions
   const list = getSessions().getState().list;
+  let episodes = loadEpisodes();
   for (const g of groups) {
-    if (!autoSwitchOn(g.cli) || switchHeld(g.cli, lastSwitch[g.cli], now)) continue;
+    if (!autoSwitchOn(g.cli) || switchHeld(g.cli, lastSwitchAt(g.cli, now), now)) continue;
     const move = switchCheck(g.accounts, {}, g.active, { resetFirst: resetFirstOn(g.cli), now, threshold: switchAt(g.cli), models: modelsInUse(list, g.cli) });
+    // once per account and episode: from the check that found no room until one has room or the account in use changes
+    const room = roomEpisode(episodes, g.cli, g.accounts, move);
+    episodes = room.next;
     if (!move) continue;
     if (move.to === null) {
-      // once per account and window: the key ends with the reset of the window it is about (pruneSeen's form)
-      const key = `${g.cli}:${g.accounts[move.from].id}:${move.at.resets_at ?? Math.floor(now / ROOM_AGAIN_S + 1) * ROOM_AGAIN_S}`;
-      const seen = loadSeen(ROOM_KEY);
-      if (seen.includes(key)) continue;
-      saveSeen(ROOM_KEY, [...seen, key], now);
-      tell(g.cli, noRoomNote(g, move.from, now, move.at));
+      if (room.tell) tell(g.cli, noRoomNote(g, move.from, now, move.at));
       continue;
     }
     const text = switchNote(g, move.from, move.to, now, move.soonest, move.at);
@@ -142,8 +150,13 @@ async function autoSwitch(groups: AccountGroup[]): Promise<void> {
     } catch {
       continue;
     }
-    lastSwitch[g.cli] = now;
+    setLastSwitch(g.cli, now);
     tell(g.cli, text);
+  }
+  try {
+    localStorage.setItem(ROOM_KEY, JSON.stringify(episodes));
+  } catch {
+    /* no storage */
   }
 }
 

@@ -42,7 +42,7 @@ import { fgHasId, fgLine, isFgCli, isUuid, restoreLine } from "./fgResume";
 import { GIVES_ID, learns, ONE_PER_FOLDER, otherInFolder, TERM_CONTINUES, TERM_REOPENS, termComesBack, termStart, type Learner } from "./termConv";
 import { nextBusySince, termActs } from "./termActivity";
 import { isLinkId, LINK_COPIED_EVENT, newLinkId, termLinkUrl } from "./termLink";
-import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, idInUse, installLine, isBuiltin, isGone, isShell, isTerminalRec, LAST_LINE_MAX, refusedResume, SHELL, termEnd, termMarkAgent, lastPrintedLine, OPEN_KEY, setsUpScreen, UI_BYTES, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, termGroups, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
+import { acpRow, agentDef, agentLabel, continues, draftAgent, draftFolder, draftOpen, hermesOnly, idInUse, installLine, isBuiltin, isGone, isShell, isTerminalRec, LAST_LINE_MAX, refusedResume, dropRecent, SHELL, termEnd, termMarkAgent, lastPrintedLine, OPEN_KEY, setsUpScreen, UI_BYTES, opensAs, parseOpens, parseRecent, pushRecent, RECENT_KEY, registerAcp, sessionMode, termGroups, type AgentId, type AgentInfo, type OpenAs, type Unseen, type Opens, type Recent, type SessionRec } from "./agents";
 import { NAME_MAX, parseTitles, promptTitle, putTitle, TITLES_KEY } from "./titles";
 import { getDraft, setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type ConvState, type PastChat, type SessionHost } from "./host";
@@ -1163,6 +1163,19 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     return id;
   };
 
+  /** Folder `cwd` was found gone: it leaves the recent folders (the + menu's list and the folder a new terminal
+   *  starts in by default), in whatever spelling it was kept. */
+  const forgetFolder = (cwd: string) => {
+    const recent = dropRecent(state.recent, cwd);
+    if (recent.length === state.recent.length) return;
+    try {
+      localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
+    } catch {
+      /* no storage */
+    }
+    set({ recent });
+  };
+
   /** The CLI running in the foreground of session `id`'s terminal (the shell's foreground-process event), or null. */
   const setSessionFg = (id: string, agent: string | null) => {
     const r = rec(id);
@@ -1185,11 +1198,19 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
    * The conversation was used (it has the person's words), so a file of it that is gone was deleted and the row says
    * so instead of starting a new one. A row that already holds that conversation is opened instead, so no second CLI
    * runs on the same id: that agent's own row (started again when it ended), or a Shell row with that CLI in front on
-   * that conversation.
+   * that conversation. A row closed moments ago is still one: its program runs on hidden for the undo window, so the
+   * close is undone and the row opens, instead of a second CLI writing the same conversation.
+   * Only a terminal row counts as the agent's own: a saved chat-mode row of that agent is kept but never listed and
+   * never starts again (`restore`, terminalOnly), and no new chat-mode row can be made (no caller opens a
+   * draft), so no chat-view row can hold a live CLI on that id.
    */
   const continuePast = (chat: PastChat): string | null => {
-    const own = state.list.find((r) => r.agent === chat.agent && r.agentSession === chat.id && isTerminalRec(state.agents, r));
-    const inShell = state.list.find((r) => isShell(r.agent) && r.status === "running" && r.fgAgent === chat.agent && r.fgSession === chat.id);
+    const ownRow = (r: SessionRec) => r.agent === chat.agent && r.agentSession === chat.id && isTerminalRec(state.agents, r);
+    const shellOn = (r: SessionRec) => isShell(r.agent) && r.fgAgent === chat.agent && r.fgSession === chat.id;
+    const held = [...heldRecs.values()].find((r) => ownRow(r) || shellOn(r));
+    if (held && undoClose(held.id)) return held.id;
+    const own = state.list.find(ownRow);
+    const inShell = state.list.find((r) => shellOn(r) && r.status === "running");
     const there = own ?? inShell;
     if (there) {
       store().actions.openSession(there.id);
@@ -1675,6 +1696,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
             patchRec(id, { cwd: at });
           }
           if (r.cwd) setFolderGone(r.cwd, !!at);
+          if (at) forgetFolder(r.cwd);
           // a collapsed group would hide its notice
           if (at) openFolderGroup(r.cwd);
         }
@@ -1709,7 +1731,11 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       // the shell starts nothing in a folder that is gone (`not a folder`): the row and its folder's header say so in
       // the person's words (a conversation continued from the + menu names the folder it ran in, which may be gone)
       const gone = !ofChat && !shell && /^not a folder: /.test(errText(e));
-      if (gone) setFolderGone(r.cwd, true);
+      if (gone) {
+        setFolderGone(r.cwd, true);
+        // the start pushed it to the recent folders: a gone one is taken out, so the next + does not start there
+        forgetFolder(r.cwd);
+      }
       const error = gone ? tr("term.folderGoneNothing", { folder: r.cwd }) : errText(e);
       if (!ofChat) {
         patchRec(id, { status: "failed", error });

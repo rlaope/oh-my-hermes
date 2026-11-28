@@ -102,7 +102,7 @@ describe("auto-switch at the threshold", () => {
     expect(switched).toEqual(["codex:b", "codex:a"]);
   });
 
-  it("no account with room: said once per window, not on every poll, and again for the next window", async () => {
+  it("no account with room: said once per episode, not on every poll nor when the fullest window changes, and again for the next episode", async () => {
     const { reloadAccounts } = await import("./useAccounts");
     setGroup("claude", "a", [used("a", 93), used("b", 88)]);
     await reloadAccounts();
@@ -110,12 +110,43 @@ describe("auto-switch at the threshold", () => {
     expect(switched).toEqual([]);
     expect(notes).toHaveLength(1);
     expect(notes[0]).toMatch(/^Claude Code: no other account has room, so new sessions stay on a \(at 93%, resets .+\)$/);
-    // the window resets and fills again: a new window, told again
+    // the weekly window passes the 5-hour one as the fullest: the same episode, nothing more said
+    setGroup("claude", "a", [used("a", 93, [{ label: "Weekly", used_percent: 96, resets_at: NOW + 90 * 3600 }]), used("b", 88)]);
+    await reloadAccounts();
+    expect(notes).toHaveLength(1);
+    // the window resets (nothing to move), then fills again: a new episode, told again
+    setGroup("claude", "a", [used("a", 5), used("b", 88)]);
+    await reloadAccounts();
     const next = used("a", 94);
     next.usage!.windows[0].resets_at = NOW + 8 * 3600;
     setGroup("claude", "a", [next, used("b", 88)]);
     await reloadAccounts();
     expect(notes).toHaveLength(2);
+  });
+
+  it("Codex: the 300-second hold outlives a reload (saved on this computer), and a saved time in the future holds nothing", async () => {
+    vi.resetModules();
+    let { reloadAccounts } = await import("./useAccounts");
+    setGroup("codex", "a", [used("a", 95), used("b", 10), used("c", 10)]);
+    await reloadAccounts();
+    expect(switched).toEqual(["codex:b"]);
+    // a reload of the app: module memory is gone, the store is kept
+    vi.resetModules();
+    ({ reloadAccounts } = await import("./useAccounts"));
+    setGroup("codex", "b", [used("a", 10), used("b", 95), used("c", 10)]);
+    vi.setSystemTime((NOW + 100) * 1000);
+    await reloadAccounts();
+    expect(switched).toEqual(["codex:b"]);
+    vi.setSystemTime((NOW + 300) * 1000);
+    await reloadAccounts();
+    expect(switched).toEqual(["codex:b", "codex:a"]);
+    // a clock set back: the saved time is ahead of now and is ignored
+    disk.set("omher.lastswitch", JSON.stringify({ codex: NOW + 9999 }));
+    vi.resetModules();
+    ({ reloadAccounts } = await import("./useAccounts"));
+    setGroup("codex", "a", [used("a", 95), used("b", 10), used("c", 10)]);
+    await reloadAccounts();
+    expect(switched).toEqual(["codex:b", "codex:a", "codex:b"]);
   });
 
   it("Claude Code: a full Opus week moves new sessions only while an Opus session runs on that account", async () => {

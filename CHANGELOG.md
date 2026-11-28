@@ -4,55 +4,59 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **omher: a Claude Code or Codex session's chat shows what was said and done.** In the Plans session view a
-  Claude Code chat no longer shows the harness's own lines as the person's words: reminders, slash command blocks,
-  task notices and compaction summaries are left out, a paste shows its text, and an interrupt, a compaction or an
-  API error is one dim line (the error's own words, its status and the retry it is on, for example "API error 529 ·
-  retry 3/10"). A current Codex shell step reads as its command instead of the JavaScript around it ("git status +
-  2 more" for several). A file edit's change keeps its old and new line numbers beside each line, with a thin rule
-  between hunks. The side panel's git reads now ignore git variables omher inherited that would point them at
-  another repository, and never fetch a partial clone's missing objects. (`docs/OMHER-BOUNDARY.md` rule 10;
-  `apps/omher/src/harness/session.ts`, `apps/omher/src/chat/activity/diffLines.ts`; ideas from 2rami/kasaterm (MIT),
-  code written fresh)
+- **omher: a Claude Code or Codex session's chat shows what was said and done.** In the Plans session view a Claude
+  Code chat no longer shows the harness's own lines as the person's words: reminders, slash command blocks, task
+  notices and compaction summaries are left out, a paste shows its text, and an interrupt, a compaction or an API
+  error is one dim line (the error's own words, its status and the retry it is on, for example "API error 529 · retry
+  3/10"). A current Codex shell step that only runs commands reads as its command instead of the JavaScript around it
+  ("git status + 2 more" for several); one that does anything else keeps its code. A file edit's change keeps its old
+  and new line numbers beside each line, with a thin rule between hunks. The side panel's git reads now ignore git
+  variables omher inherited that would point them at another repository, and never fetch a partial clone's missing
+  objects. (`docs/OMHER-BOUNDARY.md` rule 10; `apps/omher/src/harness/session.ts`,
+  `apps/omher/src/chat/activity/diffLines.ts`; ideas from 2rami/kasaterm (MIT), code written fresh)
 
 - **omher: a link to another computer that keeps dying backs off, and says what happened.** A remote bridge that
   printed its ready line and died right after was retried every 2 seconds forever, running the remote script each
   time, because any connect started the count again. Now only a link that stayed up 30 seconds does: a link that
   dies sooner waits 8, 16, 32, then 60 seconds, while a healthy link that drops (a wifi blip) is still tried again
   after 2 seconds. A dead link is noticed in about 15 seconds instead of 45 (`ssh` keepalive every 5 s, three
-  missed). Settings › Remote machines shows how long each link has been up or when it last was, the next try while
-  it waits, and a History of its last eight events (connected, dropped with the reason, retrying in N s, stopped),
-  kept in memory only. Connect refuses a computer already in the list under another spelling (any case, port 22
-  written or not, the default user written or not, or an alias whose `~/.ssh/config` `HostName`, `User` and `Port`
-  name the same place), and the card warns when the host is this computer (`localhost`, a 127.x address, or this
-  computer's own name). Remote-only mode's link backs off the same way. Ideas from 2rami/kasaterm (MIT), code
-  written fresh. (`docs/OMHER-BOUNDARY.md` rule 31; `apps/omher/src-tauri/src/peers.rs`)
+  missed). Settings › Remote machines shows how long each link has been up or when it last was (from its drop), the
+  next try while it waits, and a History of its last eight events (connected, dropped with the reason, retrying in N
+  s, stopped), kept in memory only. Connect refuses a computer already in the list under another spelling (any case,
+  port 22 written or not, the default user written or not, or an alias whose `~/.ssh/config` `HostName`, `User` and
+  `Port` name the same place), and the card warns when the host is this computer (`localhost`, a 127.x address, `::1`
+  in any spelling, or this computer's own name). Remote-only mode's link backs off the same way. Ideas from
+  2rami/kasaterm (MIT), code written fresh. (`docs/OMHER-BOUNDARY.md` rule 31; `apps/omher/src-tauri/src/peers.rs`)
 
-- **omher: the account auto-switch moves before the limit, and only to an account with room.** Settings › Accounts
-  has a "Switch at" level under Auto-switch, 90% unless changed (80 to 100 in steps of 5; 100 waits for the limit as
-  before). When the account new sessions use reaches it, they move to the next account in the list that has a fresh
-  usage reading at least 5 points under the level; an account with no reading, or one whose numbers have passed their
-  reset time, is never moved to. When no other account has a reading at all, the switch waits for a real limit and
-  takes the next ready account, as before. Codex switches at most once every five minutes and counts only its shared
-  limit, never a model's own bucket. Claude Code's weekly Opus and Sonnet limits are shown as such and count only
-  while a chat on that account uses that model, so a full Opus week no longer marks the whole account limited. When
-  no account has room, the bot chat and the Accounts page say so once per limit window. Ideas from 2rami/kasaterm
-  (MIT), code written fresh. (`apps/omher/src/settings/accounts/rules.ts`)
+- **omher: the account auto-switch moves before the limit, and only to an account with room.** Settings › Accounts has
+  a "Switch at" level under Auto-switch, 90% unless changed (80 to 100 in steps of 5; 100 waits for the limit as
+  before). When the account new sessions use reaches it before any limit, they move to the next account in the list
+  that has a fresh usage reading at least 5 points under the level; an account with no reading, or one whose numbers
+  have passed their reset time, is not moved to early. Once the account in use is actually limited, any other account
+  that is not limited takes over, the one with the lowest fresh reading first, then one with no reading in list order,
+  so a limited account never keeps every new session. Codex switches at most once every five minutes, also across a
+  reload, and counts only its shared limit, never a model's own bucket. Claude Code's weekly Opus and Sonnet limits
+  are shown as such and count only while a chat uses that model, on the account in use or the one moved to, so a full
+  Opus week no longer marks the whole account limited and the switch does not move onto a full Opus week while Opus is
+  in use. When no account has room, the bot chat and the Accounts page say so once, until an account has room again or
+  the account in use changes. Ideas from 2rami/kasaterm (MIT), code written fresh.
+  (`apps/omher/src/settings/accounts/rules.ts`)
 
 - **omher: Continue a conversation is back in the TERMINALS + menu, and finds the ones you had.** Regression fixed:
   since SESSIONS became TERMINALS (5073fdc04) the + menu had no way into this list, and continuing a conversation made
   a chat row TERMINALS no longer shows. The menu's last rows open the Claude Code and Codex conversations kept on this
   computer again; picking one opens that agent's terminal in the conversation's folder, continuing it as the CLI's own
-  resume does (picking it again opens that terminal; a folder that is gone starts nothing and says so). The list now skips `codex exec`
-  runs and subagent threads (most of a busy Codex folder), so real conversations no longer fall out of view behind
-  them; a Codex fork reads "fork of" the conversation it came from; titles and lines never come from text the CLI or
-  another agent put in your place (compaction summaries, reminders, teammate and task messages, Codex collaboration
-  turns). Each row shows the last thing you or the agent said. A This folder / All folders switch (remembered) lists
-  every folder's conversations with each row's own folder, a filter narrows by title, last line or folder, and a long
-  folder path Claude Code shortened is listed and opens. Reading stays read-only and bounded: 200 lines of a file's
-  start, its last 1 MB, and at most 20,000 files for one listing, stopping once the list is full. Ideas from
-  2rami/kasaterm (MIT), code written fresh. (`docs/OMHER-BOUNDARY.md` rule 30;
-  `apps/omher/src-tauri/src/past_chats.rs`, `apps/omher/src/sessions/SessionsSection.tsx`)
+  resume does (picking it again opens that terminal, also one closed moments ago, whose close is undone; a folder that
+  is gone starts nothing, says so and leaves the recent folders). The list now skips `codex exec` runs and subagent
+  threads (most of a busy Codex folder), so real conversations no longer fall out of view behind them; a Codex fork
+  reads "fork of" the conversation it came from; titles and lines never come from text the CLI or another agent put in
+  your place (compaction summaries, reminders, teammate and task messages, Codex collaboration turns). Each row shows
+  the last thing you or the agent said. A This folder / All folders switch (remembered) lists every folder's
+  conversations with each row's own folder, a filter narrows by title, last line or folder, and a long folder path
+  Claude Code shortened is listed and opens. Reading stays read-only and bounded: 200 lines of a file's start, its
+  last 1 MB, and at most 20,000 files for one listing, stopping once the list is full. Ideas from 2rami/kasaterm
+  (MIT), code written fresh. (`docs/OMHER-BOUNDARY.md` rule 30; `apps/omher/src-tauri/src/past_chats.rs`,
+  `apps/omher/src/sessions/SessionsSection.tsx`)
 
 - **omher: speak to a bot, and hear its answer.** A microphone in the composer of a bot's main chat and its threads
   records in omher's own window; the bot's own Hermes turns the recording into text, which lands in the draft at the
