@@ -138,3 +138,32 @@ for (const theme of ["dark", "light"] as const) {
     await page.screenshot({ path: join(SHOTS, `dside-plain-shell-${theme}.png`), animations: "disabled" });
   });
 }
+
+test("a conversation resumed in a shell shows its subagents even when the folder's list leaves it out", async ({ page }) => {
+  test.setTimeout(60_000);
+  // its record is from another folder (as one past the list's week is): runs.cli for this folder does not list it,
+  // and the panel reads it by the conversation id the shell named
+  await mock("mock.cliTitle", { agent: "claude", session: A, title: "Fix the login redirect", model: "claude-opus-5-5" });
+  await mock("mock.shellRun", { session: A, cwd: "/home/you/code/elsewhere", title: "Claude Code session", running: true });
+  await openApp(page);
+  const id = await shell(page, "/home/you/code/web-app");
+  await claudeIn(page, id, A);
+  await openFromSidebar(page, id);
+  await page.getByTestId("panel-button").click();
+  await expect(page.getByTestId("session-details-title")).toHaveText("Fix the login redirect", { timeout: 15_000 });
+  await expect(page.getByTestId("run-graph-box")).toHaveAttribute("data-run", `claude:${A}`);
+  await expect(page.getByTestId("plans-empty")).toHaveCount(0);
+});
+
+test("off macOS, Ctrl+. with the keyboard in a terminal opens and closes the panel and types nothing", async ({ page }) => {
+  await openApp(page);
+  test.skip(await platformIsMac(page), "the Ctrl path; run with OMHER_E2E_PLATFORM=Win32");
+  const id = await shell(page, "/home/you/code/web-app");
+  await openFromSidebar(page, id);
+  await term(page, id).locator(".xterm-helper-textarea").focus();
+  await page.keyboard.press("Control+.");
+  await expect(details(page)).toHaveAttribute("data-session", id);
+  await expect(term(page, id).locator(".xterm-helper-textarea")).toBeFocused();
+  await page.keyboard.press("Control+.");
+  await expect(details(page)).toHaveCount(0);
+});

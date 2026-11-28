@@ -1,5 +1,5 @@
 // A SESSIONS chat's right panel: Plans for that session alone. The agent's own record of the subagents this
-// session started (`runs.cli` for its agent and folder, the run whose owner is the session's agent id), drawn with
+// session started (`runs.get` by the session's agent id, else `runs.cli` for its agent and folder), drawn with
 // the same header, graph and node detail as a bot's Plans, re-read while the session works and when a subagent
 // moves. Before the agent's record exists, the subagents the chat has seen are listed from the chat itself.
 // Read-only: nothing here assigns, steers or stops a subagent. A TERMINALS session in a split gets the split drawn
@@ -10,7 +10,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Bot } from "../lib/protocol";
 import type { AgentRun, AgentRunSummary, CliAgent, RunDetail } from "../lib/runs";
-import { CLI_AGENTS } from "../lib/runs";
+import { CLI_AGENTS, countsOf } from "../lib/runs";
 import { getStore, useStore, subagentEnded, type Chat, type SubagentRow } from "../state/store";
 import { CloseIcon, IconButton, Spinner } from "../ui";
 import { useNow } from "../elsewhere/useNow";
@@ -64,6 +64,30 @@ function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] 
   return [ref, w];
 }
 
+type RunReader = Pick<ReturnType<typeof getStore>["actions"], "runsGet" | "runsCli">;
+
+/** A session's run: read by its own id (`runs.get`; a CLI run needs no bot), so a resumed conversation older than any
+ *  list window keeps its subagents; only when that read fails, looked up in its folder's list (`runs.cli`, from
+ *  `since`) and read from there. Null when neither has it. */
+export async function readSessionRun(
+  a: RunReader,
+  runId: string,
+  agent: CliAgent,
+  cwd: string,
+  since?: number,
+): Promise<{ id: string; summary: AgentRunSummary; detail: RunDetail } | null> {
+  try {
+    const detail = await a.runsGet("", runId);
+    const { nodes, ...run } = detail.run;
+    return { id: runId, summary: { ...run, counts: countsOf({ nodes }) }, detail };
+  } catch {
+    const r = await a.runsCli({ agent, cwd, ...(since !== undefined ? { since } : {}) });
+    const summary = r.runs.find((x) => x.id === runId);
+    if (!summary) return null;
+    return { id: runId, summary, detail: await a.runsGet("", runId) };
+  }
+}
+
 /** The session's run from the agent's own files, re-read every few seconds while a subagent works and once more
  *  when one ends. Null until found (the agent writes its record as it goes). */
 function useSessionRun(rec: SessionRec, working: number, moved: string) {
@@ -79,13 +103,8 @@ function useSessionRun(rec: SessionRec, working: number, moved: string) {
     const a = getStore().actions;
     // a conversation typed in a shell (or resumed there) can be older than the row: its own id finds it
     const since = h.inShell ? undefined : Math.floor(rec.startedAt / 1000) - 60;
-    a.runsCli({ agent: h.runAgent as CliAgent, cwd, ...(since !== undefined ? { since } : {}) })
-      .then((r) => {
-        const summary = r.runs.find((x) => x.id === runId);
-        if (!summary) return live && setGot(null);
-        // a CLI run is found by its id alone: no bot is named
-        return a.runsGet("", runId).then((detail) => live && setGot({ id: runId, summary, detail }));
-      })
+    readSessionRun(a, runId, h.runAgent, cwd, since)
+      .then((r) => live && setGot(r))
       .catch(() => undefined);
     return () => {
       live = false;

@@ -4235,6 +4235,27 @@ class CliRunsOps(BridgeCase):
             self.assertEqual(len(r["result"]["run"]["nodes"]), 3)
 
 
+class CliRunById(unittest.TestCase):
+    """`runs.get` for a focused conversation: its transcript by its own id, however old and however many newer ones."""
+
+    def test_a_resumed_conversation_outside_the_list_still_has_its_subagents(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            homes = _cli_home(root)
+            _claude_layout(root)
+            later = FIXED_NOW + 60 * 86400  # resumed two months on: outside the list's week
+            cli = ob.CliRuns(homes, clock=lambda: later)
+            self.assertEqual(cli.list("claude", "/w/web-app")["runs"], [])
+            # the newest-files cap leaves it out of any list, too
+            with mock.patch.object(ob, "CLI_FILES", 0):
+                run = cli.get(f"claude:{CLAUDE_SID}")["run"]
+                self.assertEqual((run["id"], len(run["nodes"])), (f"claude:{CLAUDE_SID}", 3))
+                with self.assertRaises(ob.BridgeError):
+                    cli.get("claude:00000000-0000-4000-8000-000000000000")
+                with self.assertRaises(ob.BridgeError):
+                    cli.get("claude:../-w-web-app/x")
+
+
 class CliTitle(unittest.TestCase):
     """`cli.title`: the name a SESSIONS chat's conversation has in Claude Code's or Codex's own files."""
 
@@ -4298,6 +4319,38 @@ class CliTitle(unittest.TestCase):
         self.assertEqual(cli.about("claude", CLAUDE_SID, "/w/web-app")["model"], "claude-opus-5-5")
         self.assertEqual(cli.about("codex", CODEX_ROOT), {"title": "Harden the API server", "model": ""})
         self.assertEqual(cli.about("pi", CLAUDE_SID), {"title": "", "model": ""})
+
+    def fold(self, *rows: dict) -> dict:
+        st = ob._title_state()
+        for r in rows:
+            ob._title_fold(st, json.dumps(r, separators=(",", ":")).encode() + b"\n")
+        return st
+
+    def test_the_checked_in_transcript_s_model_and_start_are_its_top_level_fields(self):
+        rows = _jsonl(self.main)
+        model = [r["message"]["model"] for r in rows if r.get("type") == "assistant" and not r.get("isSidechain")
+                 and not r["message"]["model"].startswith("<")][-1]
+        got = self.cli().about("claude", CLAUDE_SID, "/w/web-app")
+        self.assertEqual((got["model"], got["started"]), (model, ob._iso_ts(next(r["timestamp"] for r in rows if "timestamp" in r))))
+
+    def test_a_reply_s_model_is_read_in_any_key_order(self):
+        st = self.fold({"type": "assistant", "isSidechain": False,
+                        "message": {"id": "msg_1", "type": "message", "model": "claude-opus-5-5", "content": []}})
+        self.assertEqual(st["model"], "claude-opus-5-5")
+
+    def test_a_nested_assistant_in_a_tool_result_is_not_a_main_thread_reply(self):
+        st = self.fold({"type": "user", "toolUseResult": {"type": "assistant", "message": {"model": "claude-haiku-4-5"}}})
+        self.assertEqual(st["model"], "")
+        # nor a reply's text that spells one
+        st = self.fold({"type": "user", "message": {"role": "user", "content": '{"type":"assistant","message":{"model":"fake"}}'}})
+        self.assertEqual(st["model"], "")
+
+    def test_the_start_is_the_line_s_own_timestamp_never_a_nested_one(self):
+        st = self.fold({"type": "user", "toolUseResult": {"timestamp": "2020-04-01T00:00:00Z"}, "timestamp": "2026-11-28T00:00:00Z"})
+        self.assertEqual(st["started"], ob._iso_ts("2026-11-28T00:00:00Z"))
+        # a first line with only a nested stamp gives none; the next line's own does
+        st = self.fold({"type": "user", "toolUseResult": {"timestamp": "2020-04-01T00:00:00Z"}}, {"type": "user", "timestamp": "2026-11-28T01:00:00Z"})
+        self.assertEqual(st["started"], ob._iso_ts("2026-11-28T01:00:00Z"))
 
     def test_message_text_that_mentions_a_title_is_not_a_title(self):
         rows = [r for r in _jsonl(self.main) if r.get("type") != "ai-title"]

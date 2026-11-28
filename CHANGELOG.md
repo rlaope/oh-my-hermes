@@ -168,12 +168,14 @@ All notable changes will be documented here.
   `settle settles=[...]` closes accepted, failed or blocked nodes together, all-or-nothing: an item refused writes nothing.
   (`src/plugin_bundle/omh/dag_run.py`, `src/plugin_bundle/omh/tools/dag_tool.py`, `src/skills/dag_ulw_skill.py`)
 - **omher: the right panel opens on TERMINALS and shows what runs in the focused pane.** The terminal header has the
-  panel button (⌘. / Ctrl+. as before), and the panel follows the focused pane when you click it, step to it with the
+  panel button (⌘. / Ctrl+., which on Windows and Linux now works with the keyboard in a terminal too: xterm sends
+  nothing for it), and the panel follows the focused pane when you click it, step to it with the
   keyboard or pick its box in the split map. A Shell row with `claude` (or `codex`) typed in it is read as that harness:
   its mark and name, the conversation's own title, the folder, the program, the model from Claude Code's transcript,
   how long it has run, Working / Needs you / Ready, and its subagents as a graph from its own record. A plain shell shows
-  its folder, program and running time; nothing the harness's files did not give is shown. `cli.title` also returns
-  Claude Code's model id and the time of the transcript's first line, matched on the raw line (rule 16).
+  its folder, program and running time; nothing the harness's files did not give is shown. A resumed conversation is
+  read by its own id, so subagents it started weeks ago still show. `cli.title` also returns Claude Code's model id and
+  the time of the transcript's first line, from that line's own top-level fields only (rule 16).
   (`apps/omher/src/sessions/SessionDetails.tsx`, `apps/omher/src/sessions/paneHarness.ts`,
   `apps/omher/bridge/omher_bridge.py`)
 

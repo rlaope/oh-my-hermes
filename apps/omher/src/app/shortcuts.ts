@@ -1,7 +1,7 @@
 // App-wide keyboard shortcuts. ⌘ on macOS, Ctrl elsewhere:
 //   ⌘1…⌘9  open bot 1 to 9 (sidebar order)      ⌘K  focus the bot search (in a terminal on macOS it clears the
 //          terminal instead: engine-input.ts)
-//   ⌘.     show or hide Details                    ⌘,  Settings
+//   ⌘.     show or hide Details (Ctrl+. off macOS, from a focused terminal too: xterm sends nothing for it)  ⌘,  Settings
 //   ⌘J     jump to the next approval or question waiting on you (any bot or SESSIONS chat)
 //   ⌘⇧G   maximise the side panel in place, or restore it (Esc restores; a closed panel opens on Plans)
 //   ⌘N ⌘T  the TERMINALS + menu (Shell or a CLI, in a terminal)
@@ -92,6 +92,15 @@ function stepTerminal(step: 1 | -1) {
   if (to) store.actions.openSession(to);
 }
 
+/** ⌘. / Ctrl+.: the right panel. A SESSIONS chat or terminal has its own (its Plans); anywhere else the bot's chat
+ *  comes back first. */
+function toggleDetails() {
+  const store = getStore();
+  const s = store.getState();
+  if (s.ui.view !== "chat" && s.ui.view !== "session") store.actions.closeSettings();
+  store.actions.togglePanel();
+}
+
 export function useShortcuts(): void {
   useEffect(() => {
     // Close Window (⌘W) from the menu bar: a split pane with the keyboard closes before the window does
@@ -106,6 +115,14 @@ export function useShortcuts(): void {
         e.preventDefault();
         e.stopPropagation();
         stepTerminal(hit.step);
+        return;
+      }
+      // Ctrl+. on Windows and Linux: the side panel, from a focused terminal too. xterm sends no byte for it (its
+      // legacy keys have no control code for "."), so no shell, editor or CLI running there can be given it
+      if (hit?.kind === "details" && !isMac() && inTerminal(e.target)) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!e.repeat) toggleDetails();
         return;
       }
       if (hit?.kind !== "terminal") return;
@@ -183,9 +200,7 @@ export function useShortcuts(): void {
         el?.focus();
         el?.select();
       } else if (hit.kind === "details") {
-        // a SESSIONS chat has its own panel (its Plans); anywhere else the bot's chat comes back first
-        if (s.ui.view !== "chat" && s.ui.view !== "session") a.closeSettings();
-        a.togglePanel();
+        toggleDetails();
       } else if (hit.kind === "settings") {
         if (s.ui.view === "settings") a.closeSettings();
         else a.openSettings();

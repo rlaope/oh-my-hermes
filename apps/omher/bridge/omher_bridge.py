@@ -4506,11 +4506,8 @@ class _LineFeed:
 _SESSION_UUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
 
-# the model id at the head of a main-thread assistant line's message (`"message":{"model":"claude-…"`); `<synthetic>`
-# and anything longer than a model id are not one
-_MSG_MODEL = re.compile(rb'"message"\s*:\s*\{\s*"model"\s*:\s*"([A-Za-z0-9][A-Za-z0-9._:@/-]{0,79})"')
-# a line's own time stamp (`"timestamp":"2026-11-28T03:04:05.678Z"`); a key inside a message's text has escaped quotes
-_LINE_TS = re.compile(rb'"timestamp"\s*:\s*"([0-9][0-9T:.+Z-]{9,39})"')
+# a model id as Claude Code writes it (`claude-opus-5-5`); `<synthetic>` and anything longer than a model id are not one
+_MODEL_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:@/-]{0,79}")
 
 
 def _title_state() -> dict:
@@ -4519,26 +4516,28 @@ def _title_state() -> dict:
 
 def _title_fold(s: dict, raw: bytes) -> None:
     """One transcript line for a Claude Code session's name: its last `custom-title` (the person renamed it in Claude
-    Code) and last `ai-title` (Claude Code's own title). Only lines naming one of the two are parsed. The time of
-    its first stamped line and the model of its last main-thread assistant line are matched on the raw line (`_LINE_TS`;
-    `_MSG_MODEL` on its head); those lines are never parsed."""
-    if s["started"] is None:
-        m = _LINE_TS.search(raw)  # until one is found: a stamp can sit past the head (after a line's own fields)
-        if m:
-            s["started"] = _iso_ts(m.group(1).decode("ascii"))
-    if b'"type":"assistant"' in raw and b'"isSidechain":true' not in raw:
-        m = _MSG_MODEL.search(raw[:CLI_HEAD])
-        if m:
-            s["model"] = m.group(1).decode("ascii")
-        return
-    if b'"custom-title"' not in raw and b'"ai-title"' not in raw:
+    Code) and last `ai-title` (Claude Code's own title); the line's own (top-level) `timestamp` of its first stamped
+    line; and `message.model` of its last main-thread assistant line (top-level `type` assistant, not a sidechain).
+    A key of the same name inside a message or a tool result is not the line's. Only lines that can carry one of
+    these are parsed, and nothing else is kept from them."""
+    start = s["started"] is None and b'"timestamp"' in raw
+    reply = b'"assistant"' in raw and b'"model"' in raw
+    if not (start or reply or b'"custom-title"' in raw or b'"ai-title"' in raw):
         return
     o = json.loads(raw)
     if not isinstance(o, dict):
         return
-    if o.get("type") == "custom-title" and isinstance(o.get("customTitle"), str) and o["customTitle"].strip():
+    if start:
+        s["started"] = _iso_ts(o.get("timestamp"))  # None (look on) when only a nested key had one
+    kind = o.get("type")
+    if kind == "assistant" and o.get("isSidechain") is not True:
+        msg = o.get("message")
+        model = msg.get("model") if isinstance(msg, dict) else None
+        if isinstance(model, str) and _MODEL_ID.fullmatch(model):
+            s["model"] = model
+    elif kind == "custom-title" and isinstance(o.get("customTitle"), str) and o["customTitle"].strip():
         s["custom"] = _one_line(o["customTitle"], CLI_TITLE)
-    elif o.get("type") == "ai-title" and isinstance(o.get("aiTitle"), str) and o["aiTitle"].strip():
+    elif kind == "ai-title" and isinstance(o.get("aiTitle"), str) and o["aiTitle"].strip():
         s["ai"] = _one_line(o["aiTitle"], CLI_TITLE)
 
 
@@ -4952,6 +4951,23 @@ class CliRuns:
             return names
         return (self._cached(idx, read) or {}) if _plain_file(idx) else {}
 
+    def _claude_transcript(self, session: str, cwd: str | None = None) -> Path | None:
+        """A Claude Code session's own transcript (`<claude>/projects/<cwd slug>/<id>.jsonl`, any project folder when
+        the cwd is unknown or moved), a plain file; None when there is none."""
+        root = self.homes["claude"] / "projects"
+        if not _SESSION_UUID.match(session) or not root.is_dir() or root.is_symlink():
+            return None
+        name = f"{session}.jsonl"
+        path = root / claude_slug(cwd) / name if cwd else None
+        if path is not None and _plain_file(path):
+            return path
+        try:
+            with os.scandir(root) as it:
+                return next((Path(d.path) / name for d in it
+                             if d.is_dir(follow_symlinks=False) and _plain_file(Path(d.path) / name)), None)
+        except OSError:
+            return None
+
     def title(self, agent: str, session: str, cwd: str | None = None) -> str:
         """The title a Claude Code session or Codex thread carries in the agent's own files, or "": Claude Code's
         last `custom-title` (a rename in Claude Code) else its last `ai-title`, read from the session's transcript
@@ -4967,18 +4983,7 @@ class CliRuns:
             return {"title": self._codex_titles().get(session, ""), "model": ""}
         if agent != "claude":
             return {"title": "", "model": ""}
-        root = self.homes["claude"] / "projects"
-        if not root.is_dir() or root.is_symlink():
-            return {"title": "", "model": ""}
-        name = f"{session}.jsonl"
-        path = root / claude_slug(cwd) / name if cwd else None
-        if path is None or not _plain_file(path):
-            try:
-                with os.scandir(root) as it:
-                    path = next((Path(d.path) / name for d in it
-                                 if d.is_dir(follow_symlinks=False) and _plain_file(Path(d.path) / name)), None)
-            except OSError:
-                path = None
+        path = self._claude_transcript(session, cwd)
         if path is None:
             return {"title": "", "model": ""}
         st = self._titles.read(path)  # only the lines appended since the last look
@@ -5185,6 +5190,16 @@ class CliRuns:
     def get(self, run_id: str) -> dict:
         agent = run_id.split(":", 1)[0]
         run = self._last.get(run_id)
+        if run is None and agent == "claude":
+            # by its own id, however long ago it started: a resumed conversation keeps its subagents
+            path = self._claude_transcript(run_id.split(":", 1)[1])
+            if path is not None:
+                with self._lock:
+                    run = self._claude_run(path, self.clock())
+                if run is not None and run["id"] == run_id:
+                    self._last[run_id] = run
+                else:
+                    run = None
         if run is None and agent in ("claude", "codex", "omo"):
             self.list(agent, None, 0.0)
             run = self._last.get(run_id)
