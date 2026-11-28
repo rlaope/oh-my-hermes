@@ -385,6 +385,16 @@
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+/* another app keeping a CPU core busy (src/sidebar/CpuChip.tsx): the disk chip's shape, a warning tint */
+.cpu-chip svg {
+  color: var(--warn, var(--danger));
+}
+.cpu-chip span {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .foot-row {
   position: relative; /* the usage card spans this row */
   display: flex;
