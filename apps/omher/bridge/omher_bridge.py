@@ -5291,6 +5291,55 @@ def _ns_norm(text) -> str:
 # the harness's own preamble in a Codex rollout (AGENTS.md, environment): not what the parent said
 _CODEX_PREAMBLE = ("# AGENTS.md", "<environment_context>", "<user_instructions>", "<permissions", "<INSTRUCTIONS>")
 
+# What Claude Code puts into a user turn that nobody typed: reminders, a slash command's name, arguments and output, the
+# caveat before that output, and a background task's notice. Each block is taken out of the person's text; a block that
+# is never closed ends the text where it opens. A paste is wrapped in a `<pasted_content …>` tag whose inner text is
+# what the person pasted, so only the tag goes; an `[Image #N]` line stands for a picture the view does not show.
+_CLAUDE_BLOCKS = ("system-reminder", "command-message", "command-name", "command-args", "local-command-stdout",
+                  "local-command-caveat", "task-notification")
+_CLAUDE_PASTE_TAG = re.compile(r"</?pasted_content\b[^>]*>")
+_CLAUDE_IMAGE_LINE = re.compile(r"\[Image #[0-9]+\]")
+# user lines Claude Code writes itself: injected meta text, a compaction's summary, lines kept for the transcript only
+_CLAUDE_NOT_SAID = ("isMeta", "isCompactSummary", "isVisibleInTranscriptOnly")
+_CLAUDE_COMPACTED = "This session is being continued from a previous conversation"
+_CLAUDE_INTERRUPTED = "[Request interrupted by user"  # also "… for tool use]"
+NS_STATUS = 120  # chars of an API error's own text: enough for a usage limit's reset time
+
+
+def _claude_user_text(text: str) -> str:
+    """A person's words in a Claude Code user turn, without the blocks the harness adds (see _CLAUDE_BLOCKS)."""
+    for name in _CLAUDE_BLOCKS:
+        opener, closer = f"<{name}>", f"</{name}>"
+        while (at := text.find(opener)) >= 0:
+            end = text.find(closer, at + len(opener))
+            text = text[:at] if end < 0 else text[:at] + text[end + len(closer):]
+    text = _CLAUDE_PASTE_TAG.sub("", text)
+    return "\n".join(ln for ln in text.split("\n") if not _CLAUDE_IMAGE_LINE.fullmatch(ln.strip())).strip()
+
+
+def _claude_api_error(o: dict) -> dict:
+    """A Claude Code API error line as one status item: the error's own short text, its HTTP status and the retry it
+    is on when the line says. A `system` line carries `error.formatted` ("529 Overloaded"); an assistant line marked
+    `isApiErrorMessage` carries the words Claude Code showed ("You've hit your weekly limit · resets …")."""
+    item: dict = {"type": "status", "code": "api_error"}
+    err = o.get("error") if isinstance(o.get("error"), dict) else {}
+    status = err.get("status")
+    if o.get("type") == "assistant":
+        msg = o.get("message") if isinstance(o.get("message"), dict) else {}
+        text = " ".join(t for t in _texts(msg.get("content")) if t.strip())
+    else:
+        text = str(err.get("formatted") or err.get("message") or "")
+    text = " ".join(text.split())
+    if isinstance(status, int) and not isinstance(status, bool):
+        item["status"] = status
+        text = text.removeprefix(f"{status} ")
+    if text:
+        item["text"] = _one_line(text, NS_STATUS)
+    for key, field in (("retry", "retryAttempt"), ("retries", "maxRetries")):
+        if isinstance(o.get(field), int) and not isinstance(o.get(field), bool):
+            item[key] = o[field]
+    return item
+
 
 NS_FIND_BEFORE = 60        # a CLI session may start this long before the unit's recorded start…
 NS_FIND_AFTER = 15 * 60    # …and this long after it
@@ -5440,16 +5489,48 @@ class NodeSessions:
 
     @staticmethod
     def _claude_items(path: Path, start_cut: bool = False) -> tuple[list[dict], dict]:
+        """A transcript's chat items: what the person and the agent said, the agent's tool calls, and quiet status
+        items (`interrupted`, `compacted`, `api_error`) for what happened to the session; nothing the harness wrote
+        into a user turn shows as the person's words. Side-chain lines are skipped in a session's own transcript; a
+        subagent's file (`…/subagents/agent-*.jsonl`) is all side chain, so there they are the conversation."""
         items: list[dict] = []
         calls: dict[str, dict] = {}
         info = {"model": "", "started": None, "ended": None, "cwd": ""}
+        own = path.parent.name != "subagents"
+
+        def status(code: str, ts) -> None:  # an interrupt or a compaction shows once, however many lines say it
+            last = items[-1] if items else {}
+            if not (last.get("type") == "status" and last.get("code") == code):
+                items.append({"type": "status", "code": code, "ts": ts})
+
+        def text_item(text: str, user: bool, ts) -> None:
+            if user:
+                lead = text.lstrip()
+                if lead.startswith(_CLAUDE_INTERRUPTED):
+                    return status("interrupted", ts)
+                if lead.startswith(_CLAUDE_COMPACTED):
+                    return status("compacted", ts)
+                text = _claude_user_text(text)
+            text = text.strip()
+            if text:
+                items.append({"type": "user" if user else "assistant", "text": _ns_clip(text, NS_TEXT), "ts": ts})
+
         with open(path, "rb") as fh:
             for raw in fh:
                 try:
                     o = json.loads(raw)
                 except ValueError:
                     continue
-                if not isinstance(o, dict) or o.get("type") not in ("user", "assistant"):
+                if not isinstance(o, dict) or (own and o.get("isSidechain") is True):
+                    continue
+                if o.get("type") == "system":
+                    ts = _iso_ts(o.get("timestamp"))
+                    if o.get("subtype") == "compact_boundary":
+                        status("compacted", ts)
+                    elif o.get("subtype") == "api_error":
+                        items.append({**_claude_api_error(o), "ts": ts})
+                    continue
+                if o.get("type") not in ("user", "assistant"):
                     continue
                 ts = _iso_ts(o.get("timestamp"))
                 info["started"] = info["started"] or ts
@@ -5457,20 +5538,23 @@ class NodeSessions:
                 info["cwd"] = info["cwd"] or str(o.get("cwd") or "")
                 msg = o.get("message") if isinstance(o.get("message"), dict) else {}
                 content = msg.get("content")
-                if o["type"] == "assistant" and isinstance(msg.get("model"), str):
+                user = o["type"] == "user"
+                if user and any(o.get(k) is True for k in _CLAUDE_NOT_SAID):
+                    continue
+                if not user and o.get("isApiErrorMessage") is True:
+                    items.append({**_claude_api_error(o), "ts": ts})
+                    continue
+                if not user and isinstance(msg.get("model"), str):
                     info["model"] = msg["model"]
                 if isinstance(content, str):
-                    if content.strip() and "<task-notification>" not in content:
-                        items.append({"type": "user" if o["type"] == "user" else "assistant",
-                                      "text": _ns_clip(content.strip(), NS_TEXT), "ts": ts})
+                    text_item(content, user, ts)
                     continue
                 for part in content if isinstance(content, list) else []:
                     if not isinstance(part, dict):
                         continue
                     kind = part.get("type")
-                    if kind == "text" and str(part.get("text") or "").strip():
-                        items.append({"type": "user" if o["type"] == "user" else "assistant",
-                                      "text": _ns_clip(part["text"].strip(), NS_TEXT), "ts": ts})
+                    if kind == "text" and isinstance(part.get("text"), str):
+                        text_item(part["text"], user, ts)
                     elif kind == "tool_use":
                         step = {"type": "step", "tool": str(part.get("name") or "tool"), "input": _ns_args(part.get("input")),
                                 "result": "", "ok": True, "ts": ts, "_id": str(part.get("id") or "")}

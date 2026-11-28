@@ -1734,6 +1734,11 @@ export const zh: Record<Key, string> = {
   "harness.none": "尚未找到这一部分的会话。",
   "harness.noCli": "{agent} 负责了这一部分，但它的会话不在这台电脑上。",
   "harness.openChild": "打开 {name}",
+  "harness.status.interrupted": "已中断",
+  "harness.status.compacted": "对话已压缩",
+  "harness.status.apiError": "API 错误",
+  "harness.status.retry": "重试 {n}/{max}",
+  "harness.moreCommands": "{first} 等另 {n} 条",
   "harness.session": "会话",
   // termpanel (the bottom terminal panel, Ctrl+`)
   "termpanel.label": "终端",
