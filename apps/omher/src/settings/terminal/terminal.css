@@ -358,7 +358,7 @@
 }
 .tc-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(208px, 1fr));
   gap: 6px 10px;
 }
 .tc-sw {
@@ -372,7 +372,7 @@
   width: 26px;
   height: 22px;
   padding: 0;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-sm);
   background: none;
   cursor: pointer;
@@ -394,8 +394,8 @@
 }
 .tc-hex {
   flex: none;
-  width: 72px;
-  padding: 2px 6px;
+  width: 66px;
+  padding: 2px 5px;
   font: 12px var(--mono);
   color: var(--ink);
   background: var(--bg);
