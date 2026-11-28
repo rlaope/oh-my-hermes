@@ -1,8 +1,9 @@
 // Shared copy of the Accounts data for the page and the auto-switch watcher: accounts.list from the bridge,
 // plus what the desktop app knows (which CLIs are on this computer, each CLI's own login status). The watcher
-// re-reads every minute (and on `accounts.update`); when a CLI's in-use account is limited and auto-switch is
-// on, the next signed-in account becomes the one new sessions use, with one quiet line in the bot chat.
-// Running sessions are never touched.
+// re-reads every minute (and on `accounts.update`); when a CLI's in-use account reaches its switch threshold (or is
+// limited) and auto-switch is on, the next signed-in account with room becomes the one new sessions use, with one
+// quiet line in the bot chat; when none has room, that is said once per window instead. Codex switches at most once
+// every CODEX_SWITCH_EVERY_S. Running sessions are never touched.
 import { useEffect, useSyncExternalStore } from "react";
 import type { AccountCli, AccountGroup } from "../../lib/protocol";
 import { getStore, notifyEnabled, useStore } from "../../state/store";
@@ -10,7 +11,22 @@ import { showNote } from "../../lib/notify";
 import { t } from "../../i18n";
 import { clock, limitName } from "../../sidebar/usageFormat";
 import { accountHost, type LoginStatus } from "./native";
-import { accountName, autoSwitchOn, isCpa, lapseNotices, nextAccount, pruneSeen, resetFirstOn, switchNote, CLI_NAME } from "./rules";
+import { getSessions } from "../../sessions/sessions";
+import {
+  accountName,
+  autoSwitchOn,
+  isCpa,
+  lapseNotices,
+  modelsInUse,
+  noRoomNote,
+  pruneSeen,
+  resetFirstOn,
+  switchAt,
+  switchCheck,
+  switchHeld,
+  switchNote,
+  CLI_NAME,
+} from "./rules";
 
 const REFRESH_MS = 60_000;
 const ASKS_STATUS: AccountCli[] = ["claude", "codex"];
@@ -97,31 +113,62 @@ export function reloadAccounts(): Promise<void> {
   return inflight;
 }
 
+/** When each CLI last switched by itself (seconds; this run of the app only). */
+const lastSwitch: Partial<Record<AccountCli, number>> = {};
+const ROOM_KEY = "omher.roomnoted";
+/** A "no room" line with no known reset time is told again after this long at most. */
+const ROOM_AGAIN_S = 5 * 3600;
+
 async function autoSwitch(groups: AccountGroup[]): Promise<void> {
   const now = Date.now() / 1000;
+  // the models the person's running sessions use: a model's own weekly limit counts only for its account's sessions
+  const list = getSessions().getState().list;
   for (const g of groups) {
-    if (!autoSwitchOn(g.cli)) continue;
-    const move = nextAccount(g.accounts, {}, g.active, { resetFirst: resetFirstOn(g.cli), now });
+    if (!autoSwitchOn(g.cli) || switchHeld(g.cli, lastSwitch[g.cli], now)) continue;
+    const move = switchCheck(g.accounts, {}, g.active, { resetFirst: resetFirstOn(g.cli), now, threshold: switchAt(g.cli), models: modelsInUse(list, g.cli) });
     if (!move) continue;
-    const text = switchNote(g, move.from, move.to, now, move.soonest);
+    if (move.to === null) {
+      // once per account and window: the key ends with the reset of the window it is about (pruneSeen's form)
+      const key = `${g.cli}:${g.accounts[move.from].id}:${move.at.resets_at ?? Math.floor(now / ROOM_AGAIN_S + 1) * ROOM_AGAIN_S}`;
+      const seen = loadSeen(ROOM_KEY);
+      if (seen.includes(key)) continue;
+      saveSeen(ROOM_KEY, [...seen, key], now);
+      tell(g.cli, noRoomNote(g, move.from, now, move.at));
+      continue;
+    }
+    const text = switchNote(g, move.from, move.to, now, move.soonest, move.at);
     try {
       await getStore().actions.setActiveAccount(g.cli, g.accounts[move.to].id);
     } catch {
       continue;
     }
-    getStore().actions.systemNote(text);
-    set({ note: { cli: g.cli, text, at: Date.now() } });
+    lastSwitch[g.cli] = now;
+    tell(g.cli, text);
   }
+}
+
+/** The auto-switch's one quiet line in the bot chat, and the toast on Settings › Accounts. */
+function tell(cli: AccountCli, text: string): void {
+  getStore().actions.systemNote(text);
+  set({ note: { cli, text, at: Date.now() } });
 }
 
 const SEEN_KEY = "omher.lapsenoted";
 
-function loadSeen(): string[] {
+function loadSeen(key = SEEN_KEY): string[] {
   try {
-    const v = JSON.parse(localStorage.getItem(SEEN_KEY) ?? "[]");
+    const v = JSON.parse(localStorage.getItem(key) ?? "[]");
     return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
   } catch {
     return [];
+  }
+}
+
+function saveSeen(key: string, seen: string[], now: number): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(pruneSeen(seen, now)));
+  } catch {
+    /* no storage */
   }
 }
 
@@ -145,11 +192,7 @@ async function lapseNotice(groups: AccountGroup[]): Promise<void> {
       });
     }
   }
-  try {
-    localStorage.setItem(SEEN_KEY, JSON.stringify(pruneSeen(seen, now)));
-  } catch {
-    /* no storage */
-  }
+  saveSeen(SEEN_KEY, seen, now);
 }
 
 /** The accounts as last read (null before the first read); SESSIONS notes which one a new session runs as. */
