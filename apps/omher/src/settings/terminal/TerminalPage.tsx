@@ -303,6 +303,9 @@ export function TerminalPage() {
         <Row title={t("term.images")} hints={[t("term.imagesHint")]} testId="term-images-row">
           <Seg small label={t("term.images")} value={term.images ? "on" : "off"} options={ON_OFF()} onChange={(v) => set({ images: v === "on" })} testId="term-images" />
         </Row>
+        <Row title={t("term.agentAsks")} hints={[t("term.agentAsksHint")]} testId="term-agent-asks-row">
+          <Seg small label={t("term.agentAsks")} value={term.agentAsks ? "on" : "off"} options={ON_OFF()} onChange={(v) => set({ agentAsks: v === "on" })} testId="term-agent-asks" />
+        </Row>
       </div>
 
       <div className="st-gh">{t("term.clipboard")}</div>

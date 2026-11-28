@@ -72,6 +72,9 @@ export interface TermSettings {
   /** The person's own theme (Settings › Terminal › Import from…: a copy of another terminal app's profile), picked
    *  as `custom` in `themeDark` / `themeLight`. null: none. */
   custom: TermCustomTheme | null;
+  /** A Claude Code or Codex in a TERMINALS row that stops on its permission dialog or a choice menu is an ask in Needs
+   *  you, ⌘J and the Dock count, read off its screen (termAsks.ts). Off: only its row's ring marks it, as before. */
+  agentAsks: boolean;
 }
 
 /** Colour slots a custom theme keeps: the sixteen ANSI ones and the four of the screen. */
@@ -130,6 +133,7 @@ export const TERM_DEFAULTS: TermSettings = {
   undoClose: 10,
   defaultShell: "",
   custom: null,
+  agentAsks: true,
 };
 
 /** A shell id as `shells_available` makes them: a Windows name or `unix:<absolute path>`; anything else is "". */
@@ -194,6 +198,7 @@ export function parseTermSettings(raw: unknown): TermSettings {
     undoClose: TERM_UNDO_CLOSE.includes(o.undoClose as number) ? (o.undoClose as number) : d.undoClose,
     defaultShell: cleanShellId(o.defaultShell),
     custom: parseCustomTheme(o.custom),
+    agentAsks: bool(o.agentAsks, d.agentAsks),
   };
 }
 

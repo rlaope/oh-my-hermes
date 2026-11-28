@@ -1067,6 +1067,13 @@ export function setChatRoute(key: string, route: ChatRoute | null): void {
   else chatRoutes.delete(key);
 }
 export const chatRoute = (key: string): ChatRoute | undefined => chatRoutes.get(key);
+/** The key prefix of a terminal agent's ask (sessions/termAsks.ts): `term:<session id>`. */
+export const TERM_ASK = "term:";
+let termAskOpen: ((session: string) => void) | null = null;
+/** Set by SESSIONS: open a TERMINALS row with the keyboard in its terminal (a terminal ask was picked). */
+export function setTermAskOpen(fn: ((session: string) => void) | null): void {
+  termAskOpen = fn;
+}
 /** Key of a folder chat's events. */
 export const folderKey = (bot: string, session: string) => `fold:${bot}:${session}`;
 /** True for a SESSIONS chat key (not a bot's main chat). */
@@ -3164,6 +3171,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     },
     async jumpToAsk(bot, id) {
       dispatch({ type: "ui.focusAsk", bot, id });
+      // a terminal agent's ask opens its TERMINALS row, the keyboard in its terminal (1/2/3/Enter answer it there)
+      if (bot.startsWith(TERM_ASK)) return termAskOpen?.(bot.slice(TERM_ASK.length));
       // a SESSIONS chat's ask opens that session; a bot's opens the bot's chat
       const route = isSessionChat(bot) ? chatRoute(bot) : undefined;
       if (route) route.open();

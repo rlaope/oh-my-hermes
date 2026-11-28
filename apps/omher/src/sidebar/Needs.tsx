@@ -5,6 +5,9 @@
 // item opens that bot's chat with the card scrolled into view and focused. ⌘J does the same for the next ask. Esc
 // or a click outside closes the list. Past three asks the list ends on the third, whole, and a "+2 more" row shows
 // the rest (then the list scrolls).
+// A Claude Code or Codex in a TERMINALS row stopped on its permission dialog or a choice menu is an ask too
+// (sessions/termAsks.ts), in the same time order: the row's agent mark, the dialog's one line; its item opens that
+// row with the keyboard in its terminal, where 1/2/3 or Enter answer it.
 // A thread whose pull request is open with failing checks is listed too, after the asks, with its own reason
 // ("checks failing on #12", tag Checks); its item opens the thread. It is a display only: the thread's own state is
 // untouched, and ⌘J still steps through the asks alone. It leaves when the checks pass or the PR is merged or closed.
@@ -13,6 +16,8 @@ import { useNow } from "../elsewhere/useNow";
 import { t } from "../i18n";
 import { askFrom, askText, isSessionChat, useStore, type Ask } from "../state/store";
 import { SessionFace } from "../sessions/SessionFace";
+import { AgentMark } from "../sessions/AgentMark";
+import { termAskKey, useTermAsks, type TermAsk } from "../sessions/termAsks";
 import { Avatar, ChevronDown } from "../ui";
 import type { FailingThread } from "../threads/prs";
 
@@ -67,8 +72,11 @@ export function NeedsStrip({ asks, prs = [] }: { asks: Ask[]; prs?: FailingThrea
   const [open, setOpen] = useState(false);
   const [all, setAll] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const now = useNow(asks.length > 0, 5_000);
-  const total = asks.length + prs.length;
+  const terms = useTermAsks();
+  const now = useNow(asks.length + terms.length > 0, 5_000);
+  // bot asks and terminal agents' asks, oldest first
+  const entries: ({ bot: Ask } | { term: TermAsk })[] = [...asks.map((a) => ({ bot: a, ts: a.ts })), ...terms.map((x) => ({ term: x, ts: x.ts }))].sort((a, b) => a.ts - b.ts);
+  const total = entries.length + prs.length;
   useEffect(() => {
     if (!open) setAll(false);
   }, [open]);
@@ -90,10 +98,10 @@ export function NeedsStrip({ asks, prs = [] }: { asks: Ask[]; prs?: FailingThrea
   if (!total) return null;
   const name = (bot: string) => askFrom(s, bot);
   const n = total;
-  const shown = all || asks.length <= SHOW ? asks : asks.slice(0, SHOW);
-  const shownPrs = all || asks.length + prs.length <= SHOW ? prs : prs.slice(0, Math.max(0, SHOW - shown.length));
+  const shown = all || entries.length <= SHOW ? entries : entries.slice(0, SHOW);
+  const shownPrs = all || entries.length + prs.length <= SHOW ? prs : prs.slice(0, Math.max(0, SHOW - shown.length));
   // who waits, in the list's order (asks oldest first, then the failing pull requests)
-  const line = stripText(n, [...asks.map((a) => name(a.bot)), ...prs.map((f) => prWho(s, f, name(f.bot)))]);
+  const line = stripText(n, [...entries.map((e) => ("bot" in e ? name(e.bot.bot) : e.term.name)), ...prs.map((f) => prWho(s, f, name(f.bot)))]);
   const key = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘J" : "Ctrl+J";
   return (
     <div
@@ -132,33 +140,69 @@ export function NeedsStrip({ asks, prs = [] }: { asks: Ask[]; prs?: FailingThrea
           aria-label={t("needs.list")}
           data-testid="needs-list"
         >
-          {shown.map((a) => (
-            <button
-              key={`${a.bot}:${a.item.id}`}
-              type="button"
-              role="listitem"
-              className="needs-item"
-              data-testid="needs-item"
-              onClick={() => {
-                setOpen(false);
-                void s.jumpToAsk(a.bot, a.item.id);
-              }}
-            >
-              {isSessionChat(a.bot) ? <SessionFace chatKey={a.bot} size={20} /> : <Avatar bot={a.bot} size={20} />}
-              <span className="needs-m">
-                <span className="needs-r1">
-                  <span className="needs-b">{name(a.bot)}</span>
-                  <span className="needs-tag" data-testid="needs-tag">
-                    {a.item.kind === "approval" ? t("needs.approve") : t("needs.question")}
+          {shown.map((e) => {
+            if ("term" in e) {
+              const x = e.term;
+              return (
+                <button
+                  key={termAskKey(x.session)}
+                  type="button"
+                  role="listitem"
+                  className="needs-item"
+                  data-testid="needs-item"
+                  data-term={x.session}
+                  onClick={() => {
+                    setOpen(false);
+                    void s.jumpToAsk(termAskKey(x.session), x.id);
+                  }}
+                >
+                  <span className="ss-face" style={{ width: 20, height: 20 }} data-testid="session-face">
+                    <AgentMark agent={x.agent} size={11} />
                   </span>
-                  <span className="needs-age">{age(a.ts, now)}</span>
+                  <span className="needs-m">
+                    <span className="needs-r1">
+                      <span className="needs-b">{x.name}</span>
+                      <span className="needs-tag" data-testid="needs-tag">
+                        {x.kind === "approve" ? t("needs.approve") : t("needs.question")}
+                      </span>
+                      <span className="needs-age">{age(x.ts, now)}</span>
+                    </span>
+                    <span className="needs-q" title={x.title}>
+                      {x.title}
+                    </span>
+                  </span>
+                </button>
+              );
+            }
+            const a = e.bot;
+            return (
+              <button
+                key={`${a.bot}:${a.item.id}`}
+                type="button"
+                role="listitem"
+                className="needs-item"
+                data-testid="needs-item"
+                onClick={() => {
+                  setOpen(false);
+                  void s.jumpToAsk(a.bot, a.item.id);
+                }}
+              >
+                {isSessionChat(a.bot) ? <SessionFace chatKey={a.bot} size={20} /> : <Avatar bot={a.bot} size={20} />}
+                <span className="needs-m">
+                  <span className="needs-r1">
+                    <span className="needs-b">{name(a.bot)}</span>
+                    <span className="needs-tag" data-testid="needs-tag">
+                      {a.item.kind === "approval" ? t("needs.approve") : t("needs.question")}
+                    </span>
+                    <span className="needs-age">{age(a.ts, now)}</span>
+                  </span>
+                  <span className="needs-q" title={askText(a.item)}>
+                    <AskLine text={askText(a.item)} />
+                  </span>
                 </span>
-                <span className="needs-q" title={askText(a.item)}>
-                  <AskLine text={askText(a.item)} />
-                </span>
-              </span>
-            </button>
-          ))}
+              </button>
+            );
+          })}
           {shownPrs.map((f) => (
             <button
               key={`pr:${f.bot}:${f.thread}`}
