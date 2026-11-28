@@ -3981,9 +3981,10 @@ class CliRunsClaude(unittest.TestCase):
         with open(self.main, "a", encoding="utf-8") as fh:
             fh.write(line[:40])  # mid-write
         self.assertEqual(cli.list("claude", None, 0.0)["runs"][0]["counts"]["nodes"], 3)
+        run = cli.get(f"claude:{CLAUDE_SID}")["run"]  # by id too: the half-written line waits
+        self.assertEqual(len(run["nodes"]), 3)
         with open(self.main, "a", encoding="utf-8") as fh:
             fh.write(line[40:])
-        run = cli.get(f"claude:{CLAUDE_SID}")["run"]
         self.assertEqual(cli.list("claude", None, 0.0)["runs"][0]["counts"]["nodes"], 4)
         self.assertIn("Trace the slow query", [n["label"] for n in cli.get(f"claude:{CLAUDE_SID}")["run"]["nodes"]])
         self.assertEqual(len(run["nodes"]), 3)  # the earlier object is not mutated by the later read
@@ -4254,6 +4255,31 @@ class CliRunById(unittest.TestCase):
                     cli.get("claude:00000000-0000-4000-8000-000000000000")
                 with self.assertRaises(ob.BridgeError):
                     cli.get("claude:../-w-web-app/x")
+
+    def test_follow_up_reads_on_one_reader_see_the_transcript_grow(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            homes = _cli_home(root)
+            path = _claude_layout(root) / f"{CLAUDE_SID}.jsonl"
+            cli = ob.CliRuns(homes, clock=lambda: FIXED_NOW)
+            run_id = f"claude:{CLAUDE_SID}"
+            self.assertEqual(len(cli.get(run_id)["run"]["nodes"]), 3)
+            base = {"isSidechain": False, "cwd": "/w/web-app", "sessionId": CLAUDE_SID, "timestamp": "2026-11-03T00:00:00Z"}
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps({**base, "type": "assistant", "message": {"model": "claude-opus-5-5", "content": [{
+                    "type": "tool_use", "id": "toolu_grown_subagent", "name": "Agent",
+                    "input": {"description": "Subagent started after the first read", "subagent_type": "general-purpose"}}]}}) + "\n")
+            os.utime(path, (FIXED_NOW, FIXED_NOW))
+            node = next(n for n in cli.get(run_id)["run"]["nodes"] if n["id"].endswith("toolu_grown_subagent"))
+            self.assertEqual(node["state"], "running")
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps({**base, "type": "user", "message": {"role": "user", "content": [{
+                    "tool_use_id": "toolu_grown_subagent", "type": "tool_result",
+                    "content": [{"type": "text", "text": "Grown subagent finished."}]}]}}) + "\n")
+            nodes = cli.get(run_id)["run"]["nodes"]
+            self.assertEqual(len(nodes), 4)
+            node = next(n for n in nodes if n["id"].endswith("toolu_grown_subagent"))
+            self.assertEqual(node["state"], "done")
 
 
 class CliTitle(unittest.TestCase):

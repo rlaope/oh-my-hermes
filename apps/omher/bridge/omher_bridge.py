@@ -5189,17 +5189,23 @@ class CliRuns:
 
     def get(self, run_id: str) -> dict:
         agent = run_id.split(":", 1)[0]
-        run = self._last.get(run_id)
-        if run is None and agent == "claude":
-            # by its own id, however long ago it started: a resumed conversation keeps its subagents
-            path = self._claude_transcript(run_id.split(":", 1)[1])
+        run = None
+        if agent == "claude":
+            # by its own id on every read, however long ago it started: a resumed conversation keeps its subagents, and
+            # a transcript that grew since the last read shows its new subagents and their ends (the line feed reads
+            # only the lines appended since, the subagent files only when their stamp moved)
+            # its folder from the last read first, so a follow-up read looks in one folder, not every one
+            known = self._last.get(run_id)
+            path = self._claude_transcript(run_id.split(":", 1)[1], (known or {}).get("cwd") or None)
             if path is not None:
                 with self._lock:
                     run = self._claude_run(path, self.clock())
-                if run is not None and run["id"] == run_id:
-                    self._last[run_id] = run
-                else:
-                    run = None
+                    if run is not None and run["id"] == run_id:
+                        self._last[run_id] = run
+                    else:
+                        run = None
+        if run is None:
+            run = self._last.get(run_id)
         if run is None and agent in ("claude", "codex", "omo"):
             self.list(agent, None, 0.0)
             run = self._last.get(run_id)
