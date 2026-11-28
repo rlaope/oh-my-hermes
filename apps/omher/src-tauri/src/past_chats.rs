@@ -281,16 +281,17 @@ pub fn iso_secs(t: &str) -> Option<f64> {
 // ---- Claude Code ------------------------------------------------------------------------------
 
 /// The text of a Claude Code user line the person typed (not a tool result, a subagent's, or a line Claude Code marks
-/// as its own: meta, a compaction summary, one shown only in the transcript).
+/// as its own: meta, a compaction summary, one shown only in the transcript). In a list of text blocks each block is
+/// judged on its own, as for Codex: an editor's context block written before the prompt (`<ide_opened_file>…`,
+/// `<ide_selection>…`) is passed over and the prompt after it kept.
 fn claude_user_text(o: &Value) -> Option<String> {
     let flag = |k: &str| o.get(k).and_then(Value::as_bool) == Some(true);
     if s(o, "type") != "user" || ["isMeta", "isSidechain", "isCompactSummary", "isVisibleInTranscriptOnly"].iter().any(|k| flag(k)) {
         return None;
     }
-    let c = &o["message"]["content"];
-    let text = match c {
+    let text = match &o["message"]["content"] {
         Value::String(t) => t.clone(),
-        Value::Array(blocks) => blocks.iter().filter(|b| s(b, "type") == "text").map(|b| s(b, "text")).collect::<Vec<_>>().join("\n"),
+        Value::Array(blocks) => blocks.iter().filter(|b| s(b, "type") == "text").map(|b| s(b, "text")).filter(|t| typed(t)).collect::<Vec<_>>().join("\n"),
         _ => return None,
     };
     typed(&text).then_some(text)
@@ -532,15 +533,26 @@ fn exec_marked(path: &Path) -> bool {
     line.windows(EXEC_MARK.len()).any(|w| w == EXEC_MARK)
 }
 
+/// The lines of rollout `path` a listing reads: up to the first words, and no further than the first line when that
+/// is not a conversation's meta or names a folder not in `cwds` (when given). A rollout's meta line carries the whole
+/// system prompt, and the instruction items after it are as long again, so another folder's conversation costs that
+/// one line, not everything up to its first words.
+fn codex_head(path: &Path, cwds: Option<&[String]>) -> Vec<Value> {
+    head_lines(path, HEAD_LINES, &|seen| match codex_meta(seen) {
+        None => true,
+        Some(m) if cwds.is_some_and(|cwds| !cwds.iter().any(|c| same_folder(&m.cwd, c))) => true,
+        Some(_) => seen.last().and_then(codex_user_text).is_some(),
+    })
+}
+
 /// One Codex rollout as a list row, when it is a conversation the person had (they said something in it) in one of
 /// `cwds` (any folder when `None`). Only its first [`HEAD_LINES`] lines are read, and the read stops once its folder
-/// and first words are known.
+/// and first words are known ([`codex_head`]).
 fn codex_row(path: &Path, cwds: Option<&[String]>, names: &std::collections::HashMap<String, String>) -> Option<PastChat> {
     if exec_marked(path) {
         return None;
     }
-    // stop at a first line that is not a conversation's, or at the first words
-    let first = head_lines(path, HEAD_LINES, &|seen| codex_meta(seen).is_none() || seen.last().and_then(codex_user_text).is_some());
+    let first = codex_head(path, cwds);
     let meta = codex_meta(&first)?;
     let cwd = match cwds {
         Some(cwds) => cwds.iter().find(|c| same_folder(&meta.cwd, c))?.as_str(),
@@ -1288,6 +1300,53 @@ mod tests {
         assert_eq!(cli_home(h, "claude", &acct, &env), Some(PathBuf::from("/home/you/.omher/accounts/claude/work")));
         assert_eq!(cli_home(h, "omo", &[], &none), None);
         assert!(lists("claude") && lists("codex") && !lists("omo") && !lists("../claude"));
+    }
+
+    #[test]
+    fn a_scoped_codex_listing_stops_reading_another_folders_rollout_at_its_meta() {
+        let root = tmp("codex-other-folder");
+        let id = xid(60);
+        // another folder's conversation: its meta, then many instruction items before the first words
+        let mut lines = codex_file(&id, "/elsewhere")[..3].to_vec();
+        for _ in 0..100 {
+            lines.push(serde_json::json!({"type": "response_item", "payload": {"type": "message", "role": "developer", "content": [{"type": "input_text", "text": "rules"}]}}));
+        }
+        lines.push(codex_file(&id, "/elsewhere")[3].clone());
+        let p = rollout(&root, &id, &lines, 1);
+        // every line is JSON, so the lines kept are the lines read
+        assert_eq!(codex_head(&p, Some(&["/w".into()])).len(), 1, "only the meta line is read");
+        let names = std::collections::HashMap::new();
+        assert!(codex_row(&p, Some(&["/w".into()]), &names).is_none());
+        // the same rollout in its own folder, or with no folder scope, is read to its first words and listed
+        assert_eq!(codex_head(&p, Some(&["/elsewhere/".into()])).len(), lines.len());
+        assert_eq!(codex_head(&p, None).len(), lines.len());
+        assert!(codex_row(&p, Some(&["/elsewhere/".into()]), &names).is_some());
+        assert!(codex_row(&p, None, &names).is_some());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_claude_turn_that_starts_with_an_editor_context_block_is_still_the_persons() {
+        let root = tmp("ide-block");
+        let cwd = "/w";
+        let mut lines = claude_file(cwd, C1);
+        lines[2] = serde_json::json!({"type": "user", "cwd": cwd, "message": {"role": "user", "content": [
+            {"type": "text", "text": "<ide_opened_file>The user opened the file /w/src/main.rs in the IDE.</ide_opened_file>"},
+            {"type": "text", "text": "<ide_selection>fn main() {}</ide_selection>"},
+            {"type": "text", "text": "Why does main return nothing?"},
+            {"type": "image", "source": {"type": "base64", "data": "AAAA"}},
+        ]}, "timestamp": "2026-11-12T10:00:02.000Z"});
+        lines.truncate(8); // no title: the first words name it
+        lines.push(serde_json::json!({"type": "user", "cwd": cwd, "message": {"role": "user", "content": [
+            {"type": "text", "text": "<ide_opened_file>/w/README.md</ide_opened_file>"}, {"type": "text", "text": "and the readme?"}]}}));
+        write(&root.join("projects").join(claude_slug(cwd)).join(format!("{C1}.jsonl")), &lines);
+        let r = &list(&root, "claude", &[cwd.into()], false).unwrap()[0];
+        assert_eq!((r.title.as_str(), r.named), ("Why does main return nothing?", false));
+        assert_eq!(r.last.as_ref().map(|l| (l.role, l.text.as_str())), Some(("user", "and the readme?")));
+        // a turn of context blocks only is nobody's words
+        let only = serde_json::json!({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": "<ide_selection>x</ide_selection>"}]}});
+        assert!(claude_user_text(&only).is_none());
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
