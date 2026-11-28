@@ -289,16 +289,10 @@ test("a split's sessions are its card's cells (the focused one marked, a split o
   await expect(page.getByTestId("split-card")).not.toHaveAttribute("data-away", "true");
   await expect(cell(page, c)).toHaveCount(0);
   await expect(page.getByTestId(`session-${c}`)).toBeVisible();
-  // Plans: two boxes side by side, b filled. ⌘. works with the keyboard in a pane; off macOS Ctrl+. typed in a
-  // terminal is the program's (src/app/shortcuts.ts), in a split as in one terminal, so it is pressed outside it
-  if (await platformIsMac(page)) await page.keyboard.press("Meta+.");
-  else {
-    await page.keyboard.press("Control+.");
-    await page.waitForTimeout(300);
-    await expect(page.getByTestId("split-map")).toHaveCount(0);
-    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-    await page.keyboard.press("Control+.");
-  }
+  // Plans: two boxes side by side, b filled. ⌘. on macOS, Ctrl+. elsewhere, opens it with the keyboard in a pane:
+  // a terminal in its legacy key mode sends nothing for Ctrl+., so the app takes it (src/app/shortcuts.ts; in Kitty
+  // key mode it is the program's, e2e/reverify-terminal-key.spec.ts)
+  await page.keyboard.press((await platformIsMac(page)) ? "Meta+." : "Control+.");
   await expect(page.getByTestId("split-map")).toBeVisible();
   await expect(page.getByTestId("split-map-box")).toHaveCount(2);
   const boxA = page.locator(`[data-testid="split-map-box"][data-session="${a}"]`);
