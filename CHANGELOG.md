@@ -4,6 +4,12 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: a program's restart request is safer and works in the bottom terminal panel.** A copy of an earlier
+  restart report printed again (a saved log shown with `cat`, say) no longer brings back a program that had said it
+  no longer wants to be restarted; a different report at the same second still counts. Shells in the bottom terminal
+  panel may now ask too: a tab put back after a restart starts the program again once, as a resumed TERMINALS Shell
+  row does. A gh sign-in tab never may. Settings › Terminal "Programs may ask to restart" turns both off.
+  (`docs/OMHER-BOUNDARY.md` rule 55; `apps/omher/src-tauri/src/program_resume.rs`, `apps/omher/src/terminal/terms.ts`)
 - **omher: a Claude Code or Codex waiting on you in a terminal shows in Needs you.** When a terminal agent stops on its
   permission dialog or a choice menu, it appears in Needs you with the bot asks, counts in the Dock badge and marks its
   row. ⌘J (Ctrl+J off macOS) or a click opens that terminal with the keyboard in it, so you answer it there; omher types
@@ -1145,7 +1151,7 @@ All notable changes will be documented here.
   Windows. It needs Windows Terminal or a VT-capable console (an old conhost falls back with one line saying why); a
   Windows user still has to try it.
 
-- **omher: ideas from kasaterm.** Behaviour and numbers borrowed from 2rami/kasaterm (MIT), code written fresh.
+- **omher: terminal behaviour batch.** Code written fresh.
   - **Undo a closed terminal.** Closing a running TERMINALS row can be undone for 10 seconds: the row leaves at
     once, a toast offers Undo (⌘Z / Ctrl+Shift+Z), and the same terminal comes back with its program and scrollback,
     in its split if it was in one. Settings › Terminal › Undo window after closing: Off / 5 s / 10 s (default 10 s).

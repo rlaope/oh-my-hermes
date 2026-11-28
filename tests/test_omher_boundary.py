@@ -41,9 +41,12 @@ RULES = (
     " value is dropped, never shown",
     # rule 20: a restart that does not happen never installs again
     "a retry saves what is open and relaunches again and never downloads or installs again.",
-    # rule 55: Program Resume
+    # rule 55: Program Resume, for Shell rows and bottom-panel shells only
+    "A program in a TERMINALS Shell row or a bottom-panel shell can ask to be started again after omher restarts",
     "No command hands it to the page, a token omher inherited is never passed on, and no other program omher starts"
-    " gets one.",
+    " gets one: not a gh sign-in tab, not an agent row (an agent comes back by its own CLI's conversation id, rule 11).",
+    "is not a copy of a body already accepted at that time,",
+    "keyed by the row's checked link id or the pane's `panel-<n>` (digits only, never a path):",
     "No shell source is built from any element. Not as root, not on Windows, not for another uid, not when a reported"
     " cwd is gone.",
     # rule 56: the CPU warning
@@ -879,8 +882,8 @@ class DocPins(unittest.TestCase):
         # redirect, never `voice-config`; the microphone opened only on a press and closed on stop, cancel, error, chat
         # switch, hide and unmount; no recording or audio kept, the transcript left in the draft like typed text; on
         # Linux only, WebKitGTK's media stream on and the microphone alone allowed; a peer bot and a server refused).
-        # 55: rule 55 (Program Resume: a Shell row's program asks with an OSC 7577 report signed over a per-start
-        # token; records under ~/.omher/resume, 0700/0600; Resume runs it once through `omher --resume-exec`, each
+        # 55: rule 55 (Program Resume: a Shell row's or bottom-panel shell's program asks with an OSC 7577 report
+        # signed over a per-start token; records under ~/.omher/resume, 0700/0600; Resume runs it once through `omher --resume-exec`, each
         # element one argument, no shell); 56: rule 56 (CPU warning: the CPU time of the person's own processes every
         # 5 s while the switch is on, no program run, nothing killed or sent).
         # The rules stay numbered 1..n with no gap or repeat.
@@ -3296,6 +3299,16 @@ class BotThreads(unittest.TestCase):
         self.assertIn("shell_id: Option<String>,", lib)
         # rule 55: the Shell row starts through the resumable start, which adds the Program Resume key (`pr`) only
         self.assertIn("sessions.start_shell_resumable(cwd.as_deref(), shell_id.as_deref(), link.as_deref(), pr, &home, cols, rows,", lib)
+        # rule 55: the record key is a checked link id or a checked bottom-panel `panel-<n>`, never other text; the
+        # panel key gives the shell no variable (only `link` reaches `terminal_env`)
+        self.assertIn("program_resume::resume_key(link.as_deref(), panel.as_deref())", lib)
+        self.assertIn("term_link::is_link_id(k) || program_resume::is_panel_key(k)", lib)
+        pr = (self.APP / "src-tauri" / "src" / "program_resume.rs").read_text(encoding="utf-8")
+        self.assertIn('key.strip_prefix("panel-").is_some_and(|d| (1..=9).contains(&d.len()) && !d.starts_with(\'0\') && d.bytes().all(|b| b.is_ascii_digit()))', pr)
+        # a gh sign-in tab never asks; a panel shell asks only with the setting on
+        terms = (self.APP / "src" / "terminal" / "terms.ts").read_text(encoding="utf-8")
+        self.assertIn("gh ? host.startGhLogin(gh.host, p.term.cols, p.term.rows, onData, onExit) : host.start(want,", terms)
+        self.assertIn("const prog = readTermSettings().programResume ? restored : undefined;", terms)
         rs = (self.APP / "src-tauri" / "src" / "sessions.rs").read_text(encoding="utf-8")
         self.assertIn("pub fn shells_available<E, X>(env: &E, etc_shells: &str, is_program: X, os: Os) -> Vec<ShellEntry>", rs)
         self.assertIn("#[serde(skip)]\n    pub args: Vec<&'static str>,", rs)
