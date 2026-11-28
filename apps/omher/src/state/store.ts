@@ -2517,7 +2517,11 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     const work = key.startsWith("fold:") ? rereadThreads(chatTarget(key, botNames(state)).bot) : loadChat(key, () => newestRead.get(key) === n);
     let timer: ReturnType<typeof setTimeout> | undefined;
     const job = new Promise<void>((resolve, reject) => {
-      timer = setTimeout(() => reject({ code: "timeout", message: "no reply to the chat read" }), CHAT_READ_MS);
+      timer = setTimeout(() => {
+        // given up: its late reply (or error) must not land in the chat any more, even before the next read starts
+        if (newestRead.get(key) === n) newestRead.delete(key);
+        reject({ code: "timeout", message: "no reply to the chat read" });
+      }, CHAT_READ_MS);
       work.then(resolve, reject);
     }).finally(() => {
       clearTimeout(timer);
@@ -2817,11 +2821,30 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
   /** A thread's open (thread.open) in flight, per chat key: a click while the automatic open runs waits for it,
    *  never a second open (two session.resume of one thread at once). */
   const threadOpens = new Map<string, Promise<void>>();
+  /** Per thread chat: the number of the open whose answer still counts (a given-up open's late answer is dropped). */
+  const threadOpenGen = new Map<string, number>();
+  let threadOpenSeq = 0;
   const openOnce = (bot: string, thread: string): Promise<void> => {
     const key = threadKey(bot, thread);
     let run = threadOpens.get(key);
     if (!run) {
-      run = loadThread(bot, thread).finally(() => threadOpens.delete(key));
+      // an open with no answer after CHAT_READ_MS is given up like a chat read: it frees the thread for the next
+      // open (the quiet watch, a reconnect or a click ask again) and its late answer is dropped
+      const n = ++threadOpenSeq;
+      threadOpenGen.set(key, n);
+      const current = () => threadOpenGen.get(key) === n;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const job: Promise<void> = new Promise<void>((resolve) => {
+        timer = setTimeout(() => {
+          if (current()) threadOpenGen.delete(key);
+          resolve();
+        }, CHAT_READ_MS);
+        loadThread(bot, thread, current).then(resolve, resolve);
+      }).finally(() => {
+        clearTimeout(timer);
+        if (threadOpens.get(key) === job) threadOpens.delete(key);
+      });
+      run = job;
       threadOpens.set(key, run);
     }
     return run;
@@ -2850,17 +2873,19 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       /* an offline bot, or a bridge without threads: the bot row shows none */
     }
   };
-  const loadThread = async (bot: string, thread: string) => {
+  /** `current`: false once this open was given up (openOnce), and then its answer is dropped. */
+  const loadThread = async (bot: string, thread: string, current: () => boolean = () => true) => {
     const key = threadRoute(bot, thread);
     const since = now();
     try {
       const res = await threadReq("thread.open", { bot, thread });
+      if (!current()) return;
       dispatch({ type: "chat.opened", bot: key, res: { ...res, session_id: res.thread }, now: now(), since });
       // the folder the open thread runs in (a restored row may have listed none): the terminal's next tab starts there
       const row = (state.threads[bot] ?? []).find((r) => r.thread === thread);
       if (row && res.cwd && res.cwd !== row.cwd) dispatch({ type: "thread.upsert", bot, row: { ...row, cwd: res.cwd } });
     } catch (e) {
-      dispatch({ type: "chat.failed", bot: key, message: errText(e) });
+      if (current()) dispatch({ type: "chat.failed", bot: key, message: errText(e) });
     }
   };
   /** The thread a `session`-tagged event belongs to, when it is one of the bot's threads. */
