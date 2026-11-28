@@ -408,6 +408,31 @@ class AttendedSessionTests(_Home):
         # Whatever the verb: the bot reads the grant through omh_status, never the CLI.
         self.assertIsNotNone(self.terminal("omh capability-policy pr-delivery show"))
 
+    def test_a_bare_glob_outside_runtime_is_not_the_store(self):
+        # A `*` with no letter of the store's name is SQL or a plain listing, not the grant's store.
+        session_attendance.note_session_platform(SESSION, "cli")
+        for command in ('echo "select count(*) from t"', "ls *", "cat [a-z]*",
+                        'docker compose exec db mysql -e "select a, count(*) from t group by 1;"'):
+            with self.subTest(command=command):
+                self.assertIsNone(self.terminal(command))
+        for command in ("echo pr_*", "ls pr_deliver?", "rm -rf ~/.omh/runtime/*",
+                        "cd ~/.omh/runtime && rm -rf *", "cat ~/.omh/runtime/*y/grant.json"):
+            with self.subTest(command=command):
+                self.assertIsNotNone(self.terminal(command))
+
+    def test_a_bare_glob_that_still_reaches_the_store_is_refused(self):
+        # #3271 review: a bare glob is the store when it sits under a glob `runtime` matches, or the command is in the
+        # OMH home; a brace list naming the store is the store. Each of these got past the first relaxation.
+        session_attendance.note_session_platform(SESSION, "cli")
+        for command in ("cd ~/.omh && rm -rf */*", "rm -rf ~/.omh/*/*", "rm -rf ~/.omh/r*/*",
+                        "find ~/.omh -name '*' -delete", "cd $OMH_HOME/run*; rm -rf *",
+                        "rm -rf ~/.omh/runtime/{pr_delivery,x}", "tee -a ~/.omh/*/*/opened-x.jsonl"):
+            with self.subTest(command=command):
+                self.assertIsNotNone(self.terminal(command))
+        for command in ("ls src/*/*.py", "rm -rf build/*", "grep -r TODO src/*", "cat ~/.omh/memory/*.md"):
+            with self.subTest(command=command):
+                self.assertIsNone(self.terminal(command))
+
     def test_a_file_tool_write_into_the_store_is_refused(self):
         target = self.home / "runtime" / "pr_delivery" / "grant-0123456789abcdef.json"
         directive = self.pre("write_file", {"path": str(target), "content": "{}"})

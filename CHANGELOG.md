@@ -27,6 +27,14 @@ All notable changes will be documented here.
 - **omher: edit your terminal's colours.** Settings › Terminal › Customize colours edits the 16 ANSI colours,
   background, text, cursor, selection and the split-pane border, with a live preview. Each app theme (dark, light) keeps
   its own set, open terminals restyle at once, and "Reset to <theme>" goes back. (`docs/OMHER-BOUNDARY.md` rule 11)
+- **PR delivery gate: a bare `*` is no longer the grant store, unless it can still reach it.** The gate that keeps a
+  bot from turning the PR delivery grant on or off read any glob part `pr_delivery` matched as the store, a bare `*`
+  included, so `mysql -e "select count(*) ..."` and `ls *` were refused with "Only the person turns the PR delivery
+  grant on or off". A glob part now names the store when it keeps a letter of the store's name (`pr_*`, `*y`) or a
+  brace list names it (`{pr_delivery,x}`, missed before), or when a bare glob sits where the store can be under it:
+  below `runtime` or a glob `runtime` matches (`~/.omh/*/*`, `~/.omh/r*/*`), or in a command that names `runtime`,
+  `.omh` or `$OMH_HOME` (`cd ~/.omh && rm -rf */*`, `find ~/.omh -name '*' -delete`). (#3271 by @probepark;
+  `src/plugin_bundle/omh/pr_delivery_gate.py`)
 
 - **omher: speak to a bot, and hear its answer.** A microphone in the composer of a bot's main chat and its threads
   records in omher's own window; the bot's own Hermes turns the recording into text, which lands in the draft at the
