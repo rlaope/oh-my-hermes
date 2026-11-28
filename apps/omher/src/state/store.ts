@@ -14,6 +14,8 @@ import { getDraft } from "../app/drafts";
 import { remoteOnly } from "../app/remote";
 import { openModelPicker } from "../lib/modelPickerEvent";
 import { moveInSidebar } from "./order";
+import { handoffStep } from "../handoff/card";
+import { givenMessage } from "../handoff/message";
 import { lang, LANG_KEY, readLang, setLang, t as tr, type Key, type Lang } from "../i18n";
 import type {
   PlatformsRead,
@@ -317,6 +319,24 @@ export type ThreadRouteItem = {
   done?: "sent" | "kept";
   error?: string;
 };
+/** Where a handed-over answer's thread is (BOUNDARY rule 56): working, waiting on the person there, done (its answer
+ *  came), stopped (its turn ended otherwise) or gone (the thread was removed). */
+export type HandoffPhase = "working" | "waiting" | "done" | "stopped" | "gone";
+/** "Handed to <bot>" under an answer the person handed to another bot: `thread` of `bot` and how its first turn went
+ *  (src/handoff/card.ts). `answer`: that turn's answer once done; `given`: the person gave it back. Page only. */
+export type HandoffItem = {
+  kind: "handoff";
+  id: string;
+  ts: number;
+  bot: string;
+  thread: string;
+  phase: HandoffPhase;
+  answer?: string;
+  /** stopped: how the turn ended (`interrupted`, `ended`, `error`, or `done` with an error) and Hermes' error. */
+  outcome?: string;
+  error?: string;
+  given?: boolean;
+};
 export type ChatItem =
   | MessageItem
   | ActivityItem
@@ -328,7 +348,8 @@ export type ChatItem =
   | SystemItem
   | BriefNoticeItem
   | ThreadLinkItem
-  | ThreadRouteItem;
+  | ThreadRouteItem
+  | HandoffItem;
 export type TimelineItem = ChatItem;
 
 export interface Chat {
@@ -466,6 +487,8 @@ export interface AppState {
   replyTo: Record<string, ReplyChip | null>;
   /** Per bot: its threads (bridge `thread.list`), newest first; absent until read. */
   threads: Record<string, ThreadRow[]>;
+  /** Answers handed to another bot (rule 56): the target thread's chat key → the chat and id of its card. Never kept. */
+  handoffs: Record<string, { chat: string; id: string }>;
   ui: Ui;
 }
 
@@ -682,6 +705,7 @@ export function initialState(): AppState {
     models: {},
     replyTo: {},
     threads: {},
+    handoffs: {},
     ui: {
       panelOpen: false,
       panelTab: "details",
@@ -875,6 +899,15 @@ function lateStepEnd(chat: Chat, ev: EventOf<"tool.end">, now: number): Chat {
 function touchChat(state: AppState, bot: string, fn: (c: Chat) => Chat): AppState {
   const chat = state.chats[bot] ?? emptyChat();
   return { ...state, chats: { ...state.chats, [bot]: fn(chat) } };
+}
+
+/** The handoff card `link` points at, changed by `fn`; the state as it was when that chat or card is not there. */
+function withHandoff(state: AppState, link: { chat: string; id: string }, fn: (h: HandoffItem) => HandoffItem): AppState {
+  const c = state.chats[link.chat];
+  const old = c?.items.find((i): i is HandoffItem => i.kind === "handoff" && i.id === link.id);
+  const next = old && fn(old);
+  if (!c || !old || next === old) return state;
+  return { ...state, chats: { ...state.chats, [link.chat]: withItems(c, c.items.map((i) => (i === old ? next! : i))) } };
 }
 
 /** The selected bot's chat the person has open: its open thread's (`fold:<bot>:<thread>`), else its main chat. */
@@ -1108,7 +1141,11 @@ export type Action =
   /** A link line or a route card under the main-chat answer `message` of `bot` (once per id). */
   | { type: "thread.note"; bot: string; message: string; item: ThreadLinkItem | ThreadRouteItem }
   /** The person answered a route card. */
-  | { type: "thread.routed"; bot: string; id: string; done?: "sent" | "kept"; error?: string };
+  | { type: "thread.routed"; bot: string; id: string; done?: "sent" | "kept"; error?: string }
+  /** The answer `message` of chat `chat` was handed to `bot`'s new `thread` (rule 56): its card goes under the answer. */
+  | { type: "handoff.add"; chat: string; message: string; bot: string; thread: string; now: number }
+  /** The person gave that thread's answer back (one press, one message). */
+  | { type: "handoff.given"; chat: string; id: string };
 
 // ---- chats that are not a bot's main chat ------------------------------------------------------
 //
@@ -1568,6 +1605,26 @@ export function reduce(state: AppState, a: Action): AppState {
           c.items.map((i) => (i.kind === "threadRoute" && i.id === a.id ? { ...i, done: a.done, error: a.error } : i)),
         ),
       );
+    case "handoff.add": {
+      const id = `handoff-${a.bot}-${a.thread}`;
+      const next = touchChat(state, a.chat, (c) => {
+        if (c.items.some((i) => i.id === id)) return c;
+        // the answer's own time: no time line between them, and a re-read of the chat keeps the card under it
+        const ts = c.items.find((i) => i.id === a.message)?.ts ?? a.now / 1000;
+        const item: HandoffItem = { kind: "handoff", id, ts, bot: a.bot, thread: a.thread, phase: "working" };
+        // right under the answer and the cards already under it, as thread.note places its lines
+        let at = c.items.findIndex((i) => i.id === a.message);
+        if (at < 0) at = c.items.length;
+        else {
+          at += 1;
+          while (at < c.items.length && ["threadLink", "threadRoute", "handoff"].includes(c.items[at].kind)) at += 1;
+        }
+        return withItems(c, [...c.items.slice(0, at), item, ...c.items.slice(at)]);
+      });
+      return { ...next, handoffs: { ...next.handoffs, [threadKey(a.bot, a.thread)]: { chat: a.chat, id } } };
+    }
+    case "handoff.given":
+      return withHandoff(state, { chat: a.chat, id: a.id }, (h) => (h.phase === "done" ? { ...h, given: true } : h));
     case "thread.gone": {
       const list = state.threads[a.bot];
       const key = threadKey(a.bot, a.thread);
@@ -1576,13 +1633,16 @@ export function reduce(state: AppState, a: Action): AppState {
       delete chats[key];
       const { [key]: _gone, ...unread } = state.unread;
       const open = state.selectedBot === a.bot && state.ui.thread === a.thread;
-      return {
+      const out = {
         ...state,
         chats,
         unread,
         threads: { ...state.threads, [a.bot]: (list ?? []).filter((r) => r.thread !== a.thread) },
         ui: open ? { ...state.ui, thread: null } : state.ui,
       };
+      // a card that handed an answer to this thread now says the thread is gone
+      const link = state.handoffs[key];
+      return link ? withHandoff(out, link, (h) => ({ ...h, phase: "gone" })) : out;
     }
     case "watch.missed":
       return a.count > 0 && a.bot !== state.selectedBot
@@ -1641,8 +1701,13 @@ export function reduce(state: AppState, a: Action): AppState {
     case "queue.pause":
     case "queue.clear":
       return state.chats[a.bot] ? touchChat(state, a.bot, (c) => reduceQueue(c, a)) : state;
-    case "event":
-      return reduceEvent(state, a.ev, a.now);
+    case "event": {
+      const next = reduceEvent(state, a.ev, a.now);
+      // an event of a thread an answer was handed to moves that answer's card (rule 56)
+      const key = a.ev.session ? folderKey(a.ev.bot, a.ev.session) : a.ev.bot;
+      const link = next.handoffs[key];
+      return link ? withHandoff(next, link, (h) => handoffStep(h, a.ev, next.chats[key])) : next;
+    }
     case "approval.resolved":
       return touchChat(state, a.bot, (c) =>
         doneWaiting(
@@ -2178,8 +2243,13 @@ export interface Actions {
   openTasks(): void;
   /** Tasks › Linear: whether `bot`'s config names a Linear MCP server (bridge `tasks.linear`, config only). */
   tasksLinear(bot: string): Promise<{ configured: boolean; server: string }>;
-  /** Tasks › Start in thread: a new thread under `bot` titled `title`, opened, whose first message is `text`. */
-  startTaskThread(bot: string, title: string, text: string): Promise<string | null>;
+  /** Tasks › Start in thread: a new thread under `bot` titled `title`, opened, whose first message is `text`. With
+   *  `from` (an answer handed to `bot`, rule 56) the person stays in chat `from.chat`, where a refusal is noted, and a
+   *  card under the answer `from.message` follows the thread. */
+  startTaskThread(bot: string, title: string, text: string, from?: { chat: string; message: string }): Promise<string | null>;
+  /** That card's Give to <bot>: the thread's answer goes once into the card's chat as the person's own message,
+   *  through the chat's normal send (a busy bot holds it in the steer queue). */
+  handoffGive(chat: string, id: string): Promise<void>;
   /** Open `bot`'s main chat and send `text` there (the pages' "say it in words" box, Run now). */
   sendTo(bot: string, text: string): Promise<void>;
   /** The bot's own `cron.manage` through the bridge: pause, resume or remove one job, or add one. Rejects with
@@ -2844,8 +2914,9 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
   const threadOf = (ev: BridgeEvent) => (ev.session ? (state.threads[ev.bot] ?? []).find((r) => r.thread === ev.session) : undefined);
   let threadSeq = 0;
   // One thread.create, its row and chat opened; null (and a line where the person acted) when it is refused. A
-  // `title` (a task's) names the thread until Hermes gives it one.
-  const createThread = async (bot: string, title?: string): Promise<string | null> => {
+  // `title` (a task's) names the thread until Hermes gives it one. `stay`: the chat the person is in, which stays open
+  // and takes a refusal's line (an answer handed to another bot).
+  const createThread = async (bot: string, title?: string, stay?: string): Promise<string | null> => {
     try {
       const key = `t${Date.now().toString(36)}${(threadSeq += 1)}`;
       const r = await threadReq("thread.create", title === undefined ? { bot, key } : { bot, key, title });
@@ -2853,11 +2924,12 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       dispatch({ type: "thread.upsert", bot, row: { ...row, ...(title === undefined ? {} : { title: row.title || title }), last: now() / 1000 } });
       const ck = threadRoute(bot, row.thread);
       dispatch({ type: "chat.opened", bot: ck, res: { session_id: row.thread, messages: [], running: false, model, provider, reasoning }, now: now() });
-      dispatch({ type: "ui.thread", bot, thread: row.thread });
+      if (!stay) dispatch({ type: "ui.thread", bot, thread: row.thread });
       return row.thread;
     } catch (e) {
       fail(e);
-      threadNote(bot, tr("thread.newFailed", { error: errText(e) }));
+      if (stay) dispatch({ type: "system.note", bot: stay, text: tr("thread.newFailed", { error: errText(e) }), now: now() });
+      else threadNote(bot, tr("thread.newFailed", { error: errText(e) }));
       return null;
     }
   };
@@ -3203,10 +3275,23 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     },
     openTasks: () => dispatch({ type: "ui.tasks" }),
     tasksLinear: (bot) => bridge.request("tasks.linear", { bot }),
-    async startTaskThread(bot, title, text) {
-      const thread = await createThread(bot, title);
+    async startTaskThread(bot, title, text, from) {
+      const thread = await createThread(bot, title, from?.chat);
+      // the card first, so the thread's first events already move it
+      if (thread && from) dispatch({ type: "handoff.add", chat: from.chat, message: from.message, bot, thread, now: now() });
       if (thread) await actions.threadSend(bot, thread, text);
       return thread;
+    },
+    async handoffGive(chat, id) {
+      const card = state.chats[chat]?.items.find((i): i is HandoffItem => i.kind === "handoff" && i.id === id);
+      if (!card || card.phase !== "done" || card.given || !card.answer?.trim()) return;
+      const name = state.bots.find((b) => b.name === card.bot)?.display_name || card.bot;
+      // marked first: a second press never sends a second message
+      dispatch({ type: "handoff.given", chat, id });
+      const { bot, session } = chatTarget(chat, botNames(state));
+      const text = givenMessage(name, card.answer);
+      if (session) await actions.threadSend(bot, session, text);
+      else await actions.sendTo(bot, text);
     },
     openPlugins: (bot) => dispatch({ type: "ui.plugins", bot: bot ?? state.ui.pluginsBot ?? state.selectedBot ?? state.bots[0]?.name ?? null }),
     openApps: (bot) => dispatch({ type: "ui.apps", bot: bot ?? state.ui.appsBot ?? state.selectedBot ?? state.bots[0]?.name ?? null }),

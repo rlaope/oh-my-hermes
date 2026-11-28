@@ -689,6 +689,23 @@ RULES = (
     " remote-only mode (rule 47: the page's filter refuses both on a server):",
     "omher never runs `hermes fallback` (it needs a terminal), never sets `fallback_model` or any other key, never writes"
     " a provider's key, address or API mode, and never tries a backup model itself.",
+    # rule 56: an answer handed to another bot and its answer given back, each only on a press, through existing ops
+    "56. One bot's answer goes to another bot only when the person presses Hand over, and that bot's answer comes back"
+    " only when the person presses Give to <bot>; nothing else carries text between bots.",
+    "Hand over starts a new thread under the picked bot through the existing `thread.create` and sends it one first"
+    " message through the existing `chat.send` with that thread as `session`, the path Start in thread takes"
+    " (`startTaskThread`); it adds no op and no Hermes command, and the person stays in the chat they are in.",
+    "That message holds the person's note as one printable line, a line naming the bot whose answer it is, and the"
+    " answer with each of its lines quoted, cut to its first 6,000 characters with a line saying so;",
+    "An `@name` of another bot in an answer only shows a chip that opens the same picker with that bot chosen; the chip"
+    " and the mention send nothing.",
+    "once done, Give to <bot> sends that answer, under the same cap, once into the chat that holds the card as the"
+    " person's own message, through that chat's normal send (`chat.send`, or the steer queue while a turn runs there).",
+    "Nothing returns by itself and nothing chains: an answer never goes on to a third bot, or back, without a press.",
+    "A bot on another computer is offered, because its bridge already takes `thread.create` and a thread's `chat.send`"
+    " (rule 31); in remote-only mode (rule 47) both bots run on the server, and the text goes only to that server's"
+    " bridge.",
+    "The card and its link to the thread are kept in the page's memory only and are gone after a reload;",
     # rule 13 names the one other file the page shows: a step's screenshot, under rule 53
     "or when Hermes names it as the screenshot of a browser or computer step under rule 53's limits; the desktop app"
     " opens only a file the bridge just served through `media.read`.",
@@ -887,10 +904,12 @@ class DocPins(unittest.TestCase):
         # rule 55 (a bot's backup models: Hermes' own `fallback_providers` read from its config.yaml, provider and model
         # only, and set through one fixed `hermes -p <bot> config set fallback_providers <flow list>` on a press, a list
         # written in Hermes' config never rewritten; Hermes' `fallback` status kept as one row in that chat; a peer bot
-        # and a server refused).
+        # and a server refused); 56: rule 56 (one bot's answer handed to another bot's new thread, and that bot's answer
+        # given back, each only on a press, through the existing `thread.create` and `chat.send`, no new op; a mention
+        # only suggests; nothing returns or chains by itself; the card kept in the page's memory only).
         # The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 55, len(rules))
+        self.assertTrue(6 <= len(rules) <= 56, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -3380,7 +3399,8 @@ class TasksReadOnly(unittest.TestCase):
         start = store.split("async startTaskThread(", 1)[1].split("\n    },\n", 1)[0]
         # the task's thread starts through the store's one createThread (the + press's), its only request thread.create
         self.assertEqual(re.findall(r'(threadReq|bridge\.request)\("([a-z.]+)"', start), [])
-        self.assertIn("const thread = await createThread(bot, title);", start)
+        # (`from`, an answer handed to another bot under rule 56, only keeps the person in their chat)
+        self.assertIn("const thread = await createThread(bot, title, from?.chat);", start)
         self.assertIn("await actions.threadSend(bot, thread, text);", start)
         create = store.split("const createThread = async (", 1)[1].split("\n  };\n", 1)[0]
         self.assertEqual(re.findall(r'(threadReq|bridge\.request)\("([a-z.]+)"', create), [("threadReq", "thread.create")])
@@ -3513,6 +3533,92 @@ class HandToBotAddsNoRead(unittest.TestCase):
         unsafe = self.msg.split("const UNSAFE = /[", 1)[1].split("]/g;", 1)[0]
         for part in ("\\u0000-\\u001f", "\\u007f-\\u009f", "\\u2028\\u2029", "\\u200e\\u200f", "\\u202a-\\u202e", "\\u2066-\\u2069"):
             self.assertIn(part, unsafe, part)
+
+
+class HandAnAnswerToAnotherBot(unittest.TestCase):
+    """Rule 56: an answer reaches another bot only through Hand over (the store's `startTaskThread`: `thread.create`,
+    then one `chat.send` there), its answer comes back only through Give (the chat's own send), a mention only opens the
+    picker, the bridge gained no op for it, and the card is kept in the page only."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.dir = UI_SRC / "handoff"
+        cls.files = {p.name: p.read_text(encoding="utf-8") for p in sorted(cls.dir.iterdir()) if p.suffix in (".ts", ".tsx") and ".test." not in p.name}
+        cls.store = (UI_SRC / "state" / "store.ts").read_text(encoding="utf-8")
+
+    def _action(self, name: str) -> str:
+        """The body of one store action (`async <name>(` up to the next action at the same indent)."""
+        body = self.store.split(f"\n    async {name}(", 1)[1]
+        return body.split("\n    },\n", 1)[0]
+
+    def test_the_module_reaches_no_bridge_op_and_keeps_nothing(self) -> None:
+        self.assertEqual(set(self.files), {"HandoffAction.tsx", "HandoffCard.tsx", "card.ts", "message.ts"})
+        for name, src in self.files.items():
+            for bad in ("bridge.request", "invoke(", "@tauri-apps", "fetch(", "localStorage", "sessionStorage", "indexedDB", "getHost("):
+                self.assertNotIn(bad, src, f"{name}: {bad}")
+        # the popover's one action is Hand over; the card's are Open thread and Give
+        self.assertEqual(re.findall(r"\bs\.(\w+)\(", self.files["HandoffAction.tsx"]), ["startTaskThread"])
+        self.assertEqual(sorted(set(re.findall(r"\bs\.(\w+)\(", self.files["HandoffCard.tsx"]))), ["handoffGive", "openThread"])
+        for name in ("card.ts", "message.ts"):
+            self.assertEqual(re.findall(r"\bs\.(\w+)\(", self.files[name]), [], name)
+
+    def test_the_store_sends_through_thread_create_and_chat_send_only(self) -> None:
+        start = self._action("startTaskThread")
+        self.assertIn("const thread = await createThread(bot, title, from?.chat);", start)
+        self.assertIn("if (thread) await actions.threadSend(bot, thread, text);", start)
+        give = self._action("handoffGive")
+        # once: marked given before anything goes, only a done card with an answer, through the chat's own send
+        self.assertIn('if (!card || card.phase !== "done" || card.given || !card.answer?.trim()) return;', give)
+        self.assertLess(give.index('dispatch({ type: "handoff.given"'), give.index("actions.threadSend("))
+        self.assertIn("if (session) await actions.threadSend(bot, session, text);", give)
+        self.assertIn("else await actions.sendTo(bot, text);", give)
+        for body in (start, give):
+            self.assertNotIn("bridge.request", body)
+        create = self.store.split("const createThread = async (", 1)[1].split("\n  };\n", 1)[0]
+        self.assertIn('threadReq("thread.create"', create)
+        self.assertIn('if (!stay) dispatch({ type: "ui.thread"', create)
+        send = self._action("threadSend")
+        self.assertEqual(re.findall(r'bridge\.request\("([\w.]+)"', send), ["chat.send"])
+        # no event of a thread ever sends: the reducer only moves the card
+        self.assertNotIn("handoffGive", self.store.split("export function reduce(", 1)[1].split("\n// ---- store", 1)[0])
+
+    def test_the_bridge_and_protocol_gained_no_op_and_peers_already_forward_both(self) -> None:
+        bridge = BRIDGE.read_text(encoding="utf-8")
+        ops = re.findall(r"def op_(\w+)\(", bridge)
+        self.assertFalse([o for o in ops if "hand" in o or "relay" in o], ops)
+        # the page's op tables name no such op either
+        for table in (UI_SRC / "lib" / "protocol.ts", UI_SRC / "threads" / "types.ts"):
+            names = re.findall(r'^\s+"([a-z_]+\.[\w.]+)": \{ params', table.read_text(encoding="utf-8"), re.M)
+            self.assertIn("thread.create" if table.name == "types.ts" else "chat.send", names)
+            self.assertFalse([n for n in names if "hand" in n or "relay" in n], names)
+        forward = bridge.split("PEER_FORWARD = frozenset({", 1)[1].split("})", 1)[0]
+        for op in ('"thread.create"', '"chat.send"'):
+            self.assertIn(op, forward)
+        self.assertIn('"chat.send"', bridge.split("PEER_SESSION_OPS = frozenset({", 1)[1].split("})", 1)[0])
+
+    def test_the_text_is_quoted_capped_and_the_note_one_line(self) -> None:
+        msg = self.files["message.ts"]
+        self.assertIn("export const ANSWER_CHARS = 6000;", msg)
+        self.assertIn(".split(/\\r\\n|[\\r\\n\\u2028\\u2029]/)", msg)
+        self.assertIn('.map((l) => (l ? `> ${l}` : ">"))', msg)
+        self.assertEqual(msg.count("const note = goalLine(f.note);"), 2)
+        self.assertIn("if (a.cut) parts.push(cutLine(a.cut));", msg)
+
+    def test_a_mention_only_opens_the_picker(self) -> None:
+        act = self.files["HandoffAction.tsx"]
+        chips = act.split("function HandoffChips(", 1)[1].split("\nconst W = ", 1)[0]
+        self.assertIn("onClick={(e) => onPick(b.name, e.currentTarget)}", chips)
+        self.assertNotIn("startTaskThread", chips)
+        self.assertEqual(act.count("startTaskThread("), 1)
+        self.assertIn("const send = async () => {", act.split("function HandoffPopover(", 1)[1])
+
+    def test_the_card_lives_in_the_page_only(self) -> None:
+        resume = (UI_SRC / "app" / "resume.ts").read_text(encoding="utf-8")
+        self.assertNotIn("handoff", resume.lower())
+        self.assertIn("handoffs: {},", self.store)
+        for line in self.store.splitlines():
+            if "handoff" in line.lower():
+                self.assertNotIn("localStorage", line)
 
 
 class GithubMeReadOnly(unittest.TestCase):

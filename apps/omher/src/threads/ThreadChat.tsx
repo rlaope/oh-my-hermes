@@ -52,6 +52,7 @@ export function ThreadChat({ bot, thread }: { bot: Bot; thread: string }) {
           face={<Avatar bot={bot.name} size={28} />}
           connectionNotice={false}
           speak={bot}
+          handoff={bot}
           afterAnswer={(it) =>
             cards
               .filter((c) => c.at === it.id)

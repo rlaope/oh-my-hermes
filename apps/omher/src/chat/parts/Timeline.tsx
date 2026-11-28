@@ -20,6 +20,7 @@ import { liveFaceRow } from "./liveFace";
 import { ActivityFallback, CardFallback, RoutineFallback } from "./fallbacks";
 import { PluginAddedCard, RoutineAddedCard } from "../../pages/ChatCards";
 import { ThreadLinkLine, ThreadRouteCard } from "../cards/ThreadNotes";
+import { HandoffCard } from "../../handoff/HandoffCard";
 import { BriefNotice, WatchLine } from "../../routines/WatchLine";
 import { t } from "../../i18n";
 import { Avatar } from "../../ui";
@@ -50,6 +51,7 @@ export function Timeline({
   emptyHint,
   afterAnswer,
   speak,
+  handoff,
 }: {
   bot: Bot;
   face?: ReactNode;
@@ -62,6 +64,8 @@ export function Timeline({
   afterAnswer?: (it: MessageItem) => ReactNode;
   /** A bot's main chat or thread: its answers can be read aloud through this bot's own Hermes (BOUNDARY rule 54). */
   speak?: Bot;
+  /** The same chats: their answers can be handed to another bot (BOUNDARY rule 56); the bot they are from. */
+  handoff?: Bot;
 }) {
   const s = useStore();
   const items = selectTimeline(s, bot.name);
@@ -172,13 +176,23 @@ export function Timeline({
           return (
             <>
               <WatchLine name={it.watch.name} ts={it.watch.ts} text={it.text} />
-              <Bubble item={it} bot={bot.name} face faceEl={face} speak={speak} />
+              <Bubble item={it} bot={bot.name} face faceEl={face} speak={speak} handId={handoff && it.id} handFrom={handoff?.name} />
               {afterAnswer?.(it)}
             </>
           );
         return (
           <>
-            <Bubble item={it} bot={bot.name} face={!botSpoke(prev)} faceEl={face} quote={quoteFor(items, at)} onQuote={showMessage} speak={speak} />
+            <Bubble
+              item={it}
+              bot={bot.name}
+              face={!botSpoke(prev)}
+              faceEl={face}
+              quote={quoteFor(items, at)}
+              onQuote={showMessage}
+              speak={speak}
+              handId={handoff && it.id}
+              handFrom={handoff?.name}
+            />
             {afterAnswer?.(it)}
           </>
         );
@@ -203,6 +217,8 @@ export function Timeline({
         return <ThreadLinkLine item={it} />;
       case "threadRoute":
         return <ThreadRouteCard item={it} />;
+      case "handoff":
+        return <HandoffCard chat={bot.name} item={it} />;
       case "briefNotice":
         return <BriefNotice bot={bot} />;
       case "system":

@@ -43,7 +43,7 @@ export function Chat() {
     <>
       <Header bot={bot} chat={chat} />
       <div className="pane" data-pane={bot.name}>
-        <Timeline bot={bot} speak={bot} />
+        <Timeline bot={bot} speak={bot} handoff={bot} />
         {/* Hermes says the bot cannot answer (no AI account): one quiet block above the composer, so a long chat
             that loses its account still shows it without scrolling */}
         <ConnectBlock bot={bot} />

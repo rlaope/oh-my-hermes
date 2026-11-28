@@ -13,6 +13,17 @@ All notable changes will be documented here.
   `.omh` or `$OMH_HOME` (`cd ~/.omh && rm -rf */*`, `find ~/.omh -name '*' -delete`). (#3271 by @probepark;
   `src/plugin_bundle/omh/pr_delivery_gate.py`)
 
+- **omher: hand a bot's answer to another bot, and bring that bot's answer back.** Bots in omher could not work
+  together: an `@bot` in an answer only opened that bot's chat. A finished answer in a bot's main chat or thread now
+  has Hand to bot beside copy and read aloud: pick another bot, add a one-line note if you like, and Hand over starts
+  a new thread there with your note and the answer quoted (cut, and saying so, past 6,000 characters), while you stay
+  where you are. An answer that names another bot with `@name` shows a quiet "Hand this to <bot>" chip, which only
+  opens the same picker. A card under the answer follows that thread: working, waiting for you there, its answer when
+  done, or how it stopped, with Open thread; Give to <bot> then sends that answer back once as your own message (a
+  busy bot holds it in the waiting line). Nothing goes between bots without a press, nothing comes back by itself,
+  and the card lasts until a reload; the thread stays in the bot's list. omher adds no bridge op for it.
+  (`docs/OMHER-BOUNDARY.md` rule 56; `apps/omher/src/handoff/`)
+
 - **omher: a bot's backup model, set from Settings and named when Hermes switches.** Hermes can go on with another
   model when a bot's own cannot respond (rate limits, outages, failed sign-ins), but omher neither showed nor set that
   list. A bot's page now has Backup model under its model: the list in Hermes' order, Remove on each, and Add backup

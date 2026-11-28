@@ -18,6 +18,7 @@ import { hhmm } from "../../app/time";
 import { QueueMark, type QueueChoice, type QueueOffReasons } from "./QueueMark";
 import type { Quote } from "./answers";
 import { koText } from "./textLang";
+import { useHandoff } from "../../handoff/HandoffAction";
 
 /** Messenger bubble, filled on both sides. Bot text renders markdown; user text stays plain. Files the bot
  * sent (`MEDIA:` lines) leave the text and show under it in the same column as the bubble, in order; while
@@ -42,6 +43,8 @@ export const Bubble = memo(function Bubble({
   quote,
   onQuote,
   speak,
+  handId,
+  handFrom,
 }: {
   item: Pick<MessageItem, "kind" | "text" | "error" | "reply" | "files" | "skills" | "wait" | "held" | "steered" | "readAt" | "steerReply" | "steerUnknown" | "steerUnused" | "autoSteer" | "waiting">;
   streaming?: boolean;
@@ -77,6 +80,9 @@ export const Bubble = memo(function Bubble({
   onQuote?: (id: string) => void;
   /** A bot answer in that bot's main chat or one of its threads: read aloud through this bot's own Hermes (rule 54). */
   speak?: Bot;
+  /** The same answers: their id and their bot's name, for Hand to bot (rule 56); `bot` is the chat's key. */
+  handId?: string;
+  handFrom?: string;
 }) {
   if (item.kind === "user") {
     // one being steered into the running answer reads as a plain sent message (messenger style), not a held one
@@ -204,7 +210,12 @@ export const Bubble = memo(function Bubble({
           was only a draft block shows its chip alone */}
       <div className="msg-col">
         {(shown || streaming || (paths.length === 0 && shown === text)) && (
-          <AnswerText text={shown} streaming={!!streaming} speak={streaming ? undefined : speak} />
+          <AnswerText
+            text={shown}
+            streaming={!!streaming}
+            speak={streaming ? undefined : speak}
+            hand={streaming || !bot ? undefined : { chat: bot, id: handId, from: handFrom }}
+          />
         )}
         {bot && !streaming && paths.length > 0 && <MediaList bot={bot} paths={paths} />}
         {/* an `omher-peer` draft in a finished reply: its Connect over SSH chip (a bot's main chat only) */}
@@ -240,9 +251,11 @@ export const Bubble = memo(function Bubble({
 });
 
 /** An answer's text in its bubble, with its quiet copy control and, in a bot's main chat or thread (`speak`), its read
- *  aloud control (BOUNDARY rule 54), whose notice and state go under the bubble. */
-function AnswerText({ text, streaming, speak }: { text: string; streaming: boolean; speak?: Bot }) {
+ *  aloud control (BOUNDARY rule 54), whose notice and state go under the bubble, and its Hand to bot (`hand`, rule 56),
+ *  whose chips and popover do too. */
+function AnswerText({ text, streaming, speak, hand }: { text: string; streaming: boolean; speak?: Bot; hand?: { chat: string; id?: string; from?: string } }) {
   const voice = useReadAloud(speak && text.trim() ? speak : undefined, text);
+  const handoff = useHandoff(hand?.chat ?? "", hand?.id, hand?.from, text);
   return (
     <>
       <div className="b md" lang={koText(text)}>
@@ -250,8 +263,10 @@ function AnswerText({ text, streaming, speak }: { text: string; streaming: boole
         {/* copy the answer: beside the bubble's last line, on hover; it takes no room */}
         {!streaming && text.trim() && <CopyButton className="msg-copy" text={() => text} testId="copy-answer" />}
         {voice.button}
+        {handoff.button}
       </div>
       {voice.note}
+      {handoff.under}
     </>
   );
 }
