@@ -160,8 +160,11 @@ test("the closed panel takes no focus; it comes after the chat in tab order", as
   await page.goto("/");
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
   await expect(page.getByTestId("details")).toHaveAttribute("inert", "");
-  // from the composer (focused on open), Tab leaves the page instead of entering the hidden panel
+  // from the composer (focused on open), Tab reaches the composer's own microphone (rule 54), then leaves the page
+  // instead of entering the hidden panel
   await expect(page.getByTestId("composer")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.getByTestId("mic")).toBeFocused();
   await page.keyboard.press("Tab");
   expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
   await page.keyboard.press("Tab");

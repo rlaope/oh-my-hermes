@@ -1,0 +1,139 @@
+/* Voice (BOUNDARY rule 54): the composer's microphone and an answer's read-aloud control. */
+
+/* the microphone sits in the composer's row, drawn like the + beside it */
+.voice-mic[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: default;
+}
+.voice-mic.on {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* one quiet line above the text: recording, transcribing, or how the last one went */
+.voice-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  padding: 0 2px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.voice-line.quiet {
+  color: var(--quiet);
+}
+.voice-line.err b {
+  color: var(--danger);
+  font-weight: 600;
+}
+.voice-said {
+  color: var(--body);
+  overflow-wrap: anywhere;
+}
+.voice-by {
+  color: var(--quiet);
+}
+.voice-time {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.voice-dot {
+  align-self: center;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--danger);
+  animation: voice-pulse 1.2s ease-in-out infinite;
+}
+@keyframes voice-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .voice-dot {
+    animation: none;
+  }
+}
+.voice-link {
+  color: var(--accent);
+  font-size: inherit;
+}
+.voice-link:hover {
+  text-decoration: underline;
+}
+
+/* the first-use notice: where the recording or the text goes, Continue and Cancel */
+.voice-notice {
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r);
+  background: var(--pop);
+  font-size: 12px;
+  color: var(--body);
+  max-width: 520px;
+}
+.voice-notice p {
+  margin: 4px 0 0;
+}
+.voice-notice-h {
+  color: var(--ink);
+  font-weight: 600;
+}
+.voice-keep {
+  color: var(--muted);
+}
+.voice-notice-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+}
+.voice-btn {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line-strong);
+  color: var(--body);
+  font-size: 12px;
+}
+.voice-btn:hover {
+  background: var(--raise2);
+}
+.voice-btn.primary {
+  background: var(--g-accent);
+  border-color: transparent;
+  color: #fff;
+}
+
+/* read aloud: right above the copy button of an answer, in the same narrow column beside the bubble (so it never
+   reaches past where copy does and the chat never scrolls sideways), on hover; shown while it plays */
+.msg-speak {
+  position: absolute;
+  left: 100%;
+  bottom: 26px;
+  margin-left: 4px;
+}
+.msg.a:hover .msg-speak,
+.msg-speak.on,
+.msg-speak[data-state="loading"] {
+  opacity: 1;
+}
+.msg-speak.on {
+  color: var(--accent);
+}
+[data-bubbles="open"] .msg-speak {
+  left: auto;
+  right: 26px;
+  bottom: -22px;
+}
+.msg-col > .voice-line,
+.msg-col > .voice-notice {
+  margin-top: 6px;
+}
+@media (hover: none) {
+  .msg-speak {
+    opacity: 1;
+  }
+}

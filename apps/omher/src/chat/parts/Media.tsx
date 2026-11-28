@@ -85,7 +85,9 @@ export function ImageTile({ url, name }: { url: string; name: string }) {
   );
 }
 
-function Lightbox({ url, name, onClose }: { url: string; name: string; onClose: () => void }) {
+/** The full-size image over the page: a click or Escape closes it, the wheel zooms. A step screenshot (rule 53) opens
+ *  it too. */
+export function Lightbox({ url, name, onClose }: { url: string; name: string; onClose: () => void }) {
   const [zoom, setZoom] = useState(1);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

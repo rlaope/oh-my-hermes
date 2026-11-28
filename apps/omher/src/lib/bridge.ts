@@ -78,11 +78,12 @@ export class BridgeClient {
     if (mayRefuse(op) && !modeIsKnown()) return modeKnown().then(() => this.request(op, params));
     if (remoteOnly()) {
       const why = remoteRefusal(op, params as Record<string, unknown> | undefined);
-      if (why) return Promise.reject<OpResult<K>>({ code: "remote_only", message: t(why) });
+      if (why) return Promise.reject<OpResult<K>>({ code: "remote_only", message: t(why), sent: false });
     }
     const ws = this.ws;
     if (!ws || ws.readyState !== 1) {
-      return Promise.reject<OpResult<K>>({ code: "disconnected", message: "bridge is not connected" });
+      // `sent: false`: refused here, so the bridge never saw it (a request lost with the socket has no such mark)
+      return Promise.reject<OpResult<K>>({ code: "disconnected", message: "bridge is not connected", sent: false });
     }
     const id = `r${++this.seq}`;
     return new Promise<OpResult<K>>((resolve, reject) => {

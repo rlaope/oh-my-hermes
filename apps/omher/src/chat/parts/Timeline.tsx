@@ -49,6 +49,7 @@ export function Timeline({
   queue,
   emptyHint,
   afterAnswer,
+  speak,
 }: {
   bot: Bot;
   face?: ReactNode;
@@ -59,6 +60,8 @@ export function Timeline({
   emptyHint?: ReactNode;
   /** what goes under a bot answer (a thread's pull request cards) */
   afterAnswer?: (it: MessageItem) => ReactNode;
+  /** A bot's main chat or thread: its answers can be read aloud through this bot's own Hermes (BOUNDARY rule 54). */
+  speak?: Bot;
 }) {
   const s = useStore();
   const items = selectTimeline(s, bot.name);
@@ -162,20 +165,20 @@ export function Timeline({
               <div className="line sys" data-testid="command-line">
                 <span className="line-t">{it.command}</span>
               </div>
-              <Bubble item={it} bot={bot.name} face faceEl={face} />
+              <Bubble item={it} bot={bot.name} face faceEl={face} speak={speak} />
             </>
           );
         if (it.watch)
           return (
             <>
               <WatchLine name={it.watch.name} ts={it.watch.ts} text={it.text} />
-              <Bubble item={it} bot={bot.name} face faceEl={face} />
+              <Bubble item={it} bot={bot.name} face faceEl={face} speak={speak} />
               {afterAnswer?.(it)}
             </>
           );
         return (
           <>
-            <Bubble item={it} bot={bot.name} face={!botSpoke(prev)} faceEl={face} quote={quoteFor(items, at)} onQuote={showMessage} />
+            <Bubble item={it} bot={bot.name} face={!botSpoke(prev)} faceEl={face} quote={quoteFor(items, at)} onQuote={showMessage} speak={speak} />
             {afterAnswer?.(it)}
           </>
         );

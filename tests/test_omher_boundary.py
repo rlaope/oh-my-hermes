@@ -142,7 +142,45 @@ RULES = (
     " attached the same way, without the person opening it,",
     "the bridge reads that chat's own history (`session.history`) after the turn and nothing else.",
     "omher talks only to the person's own Hermes gateway on this machine, over loopback,",
-    "omher makes no LLM or API call itself. Every model call is Hermes'.",
+    "omher makes no LLM call itself, calls no provider's API and holds no API key. Every model call is Hermes'.",
+    "Its one HTTP request is rule 54's, to the person's own Hermes gateway on this machine over loopback;",
+    "and for voice through one HTTP request to that same gateway (rule 54).",
+    # rule 54: voice through Hermes' own two audio routes on the bot's own gateway, loopback, a one-use ticket, no Origin
+    "The bridge sends exactly two requests, Hermes' own `POST /api/audio/transcribe` (`voice.transcribe`) and `POST"
+    " /api/audio/speak` (`voice.speak`), and nothing else: never `/api/audio/voice-config`, which can hand a client the"
+    " provider's keys, never the audio WebSocket routes, never any other path.",
+    "An origin that is not plain HTTP on a loopback address with a port is refused before a socket opens; an `https`"
+    " origin, which Hermes' discovery accepts though its gateway publishes `http`, is refused with its own reason, since"
+    " omher's voice has no TLS client.",
+    "omher does not compare that answer with the connection it is attached to (Hermes' client keeps no identity of the"
+    " owner it dialed), and the request is authenticated only by a ticket that owner mints over its own control socket.",
+    "a single-use `native-http` ticket minted for that one request through Hermes' own `mint_ticket` in the"
+    " `X-Hermes-Gateway-Ticket` header, as Hermes' contract for a local client says, and no `Origin` header;",
+    "a ticket of another shape than Hermes mints is never sent, and an error that could hold it is dropped; it goes"
+    " through no proxy (an environment proxy is never read), follows no redirect, gives the whole exchange at most 180"
+    " seconds for a transcript and 90 for a spoken part (a deadline that ends the socket however slowly an answer comes),"
+    " and reads at most 1 MB of a transcript's answer and 24 MB of a spoken part's.",
+    "ends what plays and asks for no later part; a part already asked for ahead is still made by Hermes and dropped when"
+    " it arrives.",
+    "While the composer's microphone opens, records or waits for a transcript, read aloud is off with that reason, and"
+    " pressing the microphone stops what plays.",
+    "The page sends only the bot's name and either the recording's bytes and type or an answer's text and a part number;"
+    " it names no address, path, host, header or profile.",
+    "The microphone opens only when the person presses it, in omher's own window, and every track is stopped on stop,"
+    " cancel, an error, a chat switch, the window being hidden and the composer going away;",
+    "a recording stops by itself after 3 minutes or 20 MB (Hermes takes at most 25 MB), and its transcript goes into the"
+    " draft at the caret as typed text would, and omher never sends it.",
+    "An answer is read in parts of at most 1500 characters split at sentences,",
+    "and only its first 20,000 characters;",
+    "omher writes no recording and no audio to disk, logs neither them nor the text, keeps no recording after its"
+    " transcript comes back and no audio after its part has played, and never sees a provider's key; the transcript it"
+    " puts in the box is kept like any draft until the person sends or clears it, and the text sent for read aloud is"
+    " the answer already in the chat, so nothing new is stored.",
+    "On Linux the desktop shell turns on the webview's `enable-media-stream` setting and answers the webview's permission"
+    " requests with Allow for the microphone only and the webview's own default, a refusal, for everything else",
+    "Voice is off, with its reason, for a bot on another computer (rule 31: `voice.info`, `voice.transcribe` and"
+    " `voice.speak` are refused for it) and for every bot in remote-only mode (rule 47: the page's filter refuses every"
+    " `voice.*` op on a server);",
     "The bridge listens on 127.0.0.1 only and refuses any connection that lacks the random token",
     "The app starts the bridge as a child process and stops it when the app exits.",
     "A bridge that stops on its own after it was ready is started again, on a new port with a new token,",
@@ -192,7 +230,8 @@ RULES = (
     "The browser sign-in happens inside the CLI: omher never asks for, accepts, reads, copies or shows a token or key.",
     "deletes only `~/.omher/accounts/<cli>/<id>/`. An account switch never stops a running session.",
     "Besides rule 21's one GitHub CLI read, rule 24's one `hermes -p <bot> cron create` for the briefing, the Hermes"
-    " commands of rules 29, 41 and 44 (`hermes -p default profile create <name> --no-alias`), and the read-only `omh` of"
+    " commands of rules 29, 41, 44 (`hermes -p default profile create <name> --no-alias`) and 52 (`hermes computer-use`"
+    " and `hermes tools enable|disable computer_use`), and the read-only `omh` of"
     " rules 43 and 44, the only program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`,",
     # rule 44: a new bot through Hermes' own profile create, on a press, the name by Hermes' rule, and OMH's templates
     "omher makes a new bot only when the person presses Create under the sidebar `+` › New bot, and only through Hermes'"
@@ -282,7 +321,6 @@ RULES = (
     " other program for it.",
     "The command is fixed in the shell; nothing from the page reaches it.",
     "omher shows a file from disk only when the bot named it in a `MEDIA:` line of its own answer,",
-    "the desktop app opens only a file the bridge just served this way.",
     "omher reads OMH dag run records (`<omh home>/runtime/dag/*/*.json`) and their handoff files only for runs whose\n    session is in the bot's own `state.db`",
     "never settles, retries or cancels a run; the Plans tab (these runs, listed as plans) is read-only.",
     "For the Plans graph omher also reads, never writes, Hermes' delegate_task folders",
@@ -410,10 +448,11 @@ RULES = (
     "The provider id is checked against `^[a-z0-9][a-z0-9_-]{0,40}$` and passed as one argument;",
     "Hermes asks for the key in that terminal and stores it itself: omher never sees the key.",
     "never runs this in its own pseudo-terminal, so no keystroke passes through omher.",
-    "There are four exceptions. The first two are a bot's automations and plugins, which omher changes only by asking"
+    "There are five exceptions. The first two are a bot's automations and plugins, which omher changes only by asking"
     " that bot's own gateway (rules 24 and 25); omher writes no file of either itself, with one exception of its own:",
     "never signals a process (the exceptions are its own runs past their time, stopped through `_stop_run`, which only"
-    " two functions call: `_run_hermes_argv`, for rule 41's `hermes mcp` run and rule 44's `hermes profile create` run,"
+    " two functions call: `_run_hermes_argv`, for rule 41's `hermes mcp` run, rule 44's `hermes profile create` run and"
+    " rule 52's computer-use runs,"
     " and `run_omh_read`, for rule 43's and rule 44's `omh` reads), never calls a service manager",
     "The fourth is a new bot (rule 44): on the person's press, Hermes' own `hermes -p default profile create <name>"
     " --no-alias` makes a new profile with its folder and files; omher writes none of them, and it changes no profile"
@@ -437,7 +476,7 @@ RULES = (
     " folder) and never sets it up again.",
     "omher sets up exactly one briefing job by itself (rule 24), writing only the collector copy"
     " `scripts/channel_watch_omher-brief.py` and its config `channel_watch/omher-brief.json`",
-    "rule 24's one `hermes -p <bot> cron create` for the briefing, the Hermes commands of rules 29, 41 and 44",
+    "rule 24's one `hermes -p <bot> cron create` for the briefing, the Hermes commands of rules 29, 41, 44",
     "omher changes a bot's plugins only through Hermes' own `plugins.manage` on that bot's gateway (`list`, `toggle`,"
     " `inspect`, `install` from the curated catalog by name, `update`, `remove`), only when the person presses a button,",
     "`install` carries the pin `inspect` returned.",
@@ -588,6 +627,82 @@ RULES = (
     " computer) and only while a bot of this computer is online to take it; with none, nothing is read.",
     "so nothing read from a repository can add a line to the message; a worktree the bridge no longer finds is said to"
     " be gone and nothing is sent.",    "\"Hand to <bot>\" (rule 10) starts its thread the same way;",
+    # rule 52: Settings › Computer through Hermes' own computer-use commands, a switch read back, a chat step without
+    # what the bot types
+    "Settings › Computer shows whether a bot may click and type in this computer's apps through Hermes' own"
+    " `computer_use` toolset, and sets it up only through Hermes' own commands, only when the person presses a button;",
+    "To show This computer the bridge runs one fixed argv, `hermes -p default computer-use permissions status --json`"
+    " (`computer.status`), when the page opens and on Check again.",
+    "Hermes exits 1 whenever the computer is not ready, so the answer is the JSON it prints, not its exit code,",
+    "Install runs `hermes -p default computer-use install`, and Grant access, offered only where Hermes says macOS can"
+    " grant and refused by the bridge on any other system, runs `hermes -p default computer-use permissions grant`,",
+    "only on a gateway omher is already attached to, so a read never starts one and an offline bot reads as cannot tell;",
+    "Flipping the switch runs `hermes -p <bot> tools enable computer_use` or `hermes -p <bot> tools disable"
+    " computer_use` (`computer.toggle`),",
+    "Hermes exits 0 whatever happened, so the bridge reads the switch back from the gateway and reports the change only"
+    " when it reads as asked, else Hermes' own lines.",
+    "The page sends only the bot's name and on or off: the toolset name is the bridge's own constant, and no toolset,"
+    " command, platform or argument from the page reaches Hermes.",
+    "after 60 seconds for the status read and a switch, 600 for an install and 180 for a grant;",
+    "so omher does not apply it there: the page says a change reaches the bot's new threads at once and its main chat"
+    " after the person restarts the bot (rule 29).",
+    "for every bot in remote-only mode (rule 47: the page's filter refuses every `computer.*` op on a server),",
+    "Outside Hermes' own approval request, whose line names an input action and shows the start of the text for"
+    " `type` and the keys for `key`, so the person sees what they approve, what the bot types (`text`, `value`,"
+    " `keys`) never leaves the bridge, nor does Hermes' own preview of the call;",
+    "and a subagent's `computer_use` step shows no line, since Hermes' preview of that call can be the typed text.",
+    "a read-only session view shows the call without them and never its result, which can hold a screenshot and the"
+    " text of the screen's fields.",
+    "The live chat does show a step's capture as a thumbnail under rule 53, a picture of the screen of the computer the"
+    " bot runs on, which can show text typed there, while the arguments the bot types, Hermes' preview of the call and"
+    " the call's result still stay in the bridge.",
+    "so the bridge also reads that one key of the bot's `config.yaml`, read-only and as Hermes'"
+    " `parse_config_string_list` reads it, and a switch it names reads off with that reason;",
+    "when `HERMES_TUI_TOOLSETS` is set in omher's own environment, the one environment omher can see",
+    "When a bot's config sets `agent.coding_context` to `focus` (Hermes' default is `auto`), a chat of that bot in a"
+    " code folder uses Hermes' coding tool set, which leaves computer use out;",
+    "the bridge reads that one key of the bot's `config.yaml` the same way, read-only, and the page says so for that"
+    " bot only.",
+    "The fifth is a bot's computer use (rule 52): on the person's press, Hermes' own `hermes -p <bot> tools"
+    " enable|disable computer_use` writes that profile's `config.yaml`; omher itself writes none of it.",
+    # rule 13 names the one other file the page shows: a step's screenshot, under rule 53
+    "or when Hermes names it as the screenshot of a browser or computer step under rule 53's limits; the desktop app"
+    " opens only a file the bridge just served through `media.read`.",
+    # rule 53: a browser step's label, method or action only; a step's capture read once, bounded, from Hermes' own
+    # capture folders, in the page's memory only; no live view
+    "A `browser_exec` step shows only the label the bot wrote for it: the first line of its `code` when that line is a"
+    " `#` comment (not a `#!` line), the model's own words as Hermes itself shows them, with secret-shaped text masked"
+    " as the session view masks it, on one line, cleaned of escape and control characters, trimmed and clipped to 60"
+    " characters, and otherwise the plain line \"Used the browser\".",
+    "A `browser_cdp` step shows only its method's name (`Domain.method`), a `browser_dialog` step only whether it"
+    " accepted or dismissed the page's dialog, and a `browser_vault` step only its action (list, fill, save a login,"
+    " enter a code, unlock), never a handle or a label.",
+    "so the code, the params, the typed text and Hermes' own preview of the call (which, for a `browser_exec` without a"
+    " label, is its code) never leave the bridge: not in the main chat's steps, not in a subagent's step,",
+    "not in a read-only session view, which shows the label, the method or the action and never the call's result,",
+    "Every other `browser_*` tool of an older Hermes shows no detail either; the old `browser_navigate` keeps its url.",
+    "A session view shows any tool's stored base64 image as `[image]`.",
+    "When a `tool.complete` of a chat of rule 3 names an `image_path` for a `browser_exec` or `computer_use` step, the"
+    " bridge reads that file at that event, because browser-harness' default capture file is overwritten by the next"
+    " capture:",
+    "read-only, and only the path Hermes names in that event (for `browser_exec`, the last image path the call's own"
+    " code printed, when that file exists and is new); omher itself takes no path from the page and parses none from a"
+    " bot's text, and whatever Hermes names is shown only if it passes every check here.",
+    "It must be inside the bot's own `cache/` or `image_cache/` folder or the bot's own browser-harness folder as Hermes"
+    " resolves it (the `p-` folder named after the bot's home key,",
+    "and such a folder is never one that is itself a link, a filesystem root, the user's home or a folder above it.",
+    "It must be a regular file that is not a symbolic link or junction and that no link or junction between that folder"
+    " and it leads to, the same file when opened as when checked (device and inode), with one name (no hard link), of"
+    " at most 5 MB, and a PNG, JPEG, GIF or WebP by its first bytes; anything else is not shown, and the bridge log"
+    " notes each refusal at debug level, without the path.",
+    "The page shows a small thumbnail in that step's row of the step list, which opens rule 13's lightbox, and keeps the"
+    " newest 8 screenshots of a chat, and the newest 16 across all its chats and threads, in memory only; omher writes"
+    " none of them anywhere, so after the app reloads, and for a chat read back from Hermes, the steps have none. A"
+    " subagent's captures are not shown.",
+    "For a bot on another computer (rule 31) that computer's bridge reads the file under the same rules and sends it"
+    " over the link, and this computer checks it again (at most 5 MB, an image by its first bytes)",
+    "omher shows no live view of the browser, because Hermes offers none: no stream of the page and no read of its"
+    " address or title, so there is no Browser tab and no current-page line.",
 )
 TAURI_CONF = ROOT / "apps" / "omher" / "src-tauri" / "tauri.conf.json"
 CAPABILITIES = ROOT / "apps" / "omher" / "src-tauri" / "capabilities" / "default.json"
@@ -733,10 +848,21 @@ class DocPins(unittest.TestCase):
         # picker; every other command waits in the steer queue); 49: rule 49 (a run stopped past its time ends its whole
         # process tree on Windows through one fixed `taskkill /T /F /PID`); 50: rule 50 (an Antigravity session's
         # conversation id from its own workspace cache, read-only); 51: rule 51 (Tasks › GitHub: pinned repositories'
-        # open pull requests, runs and releases through rule 33's runner as a chosen account, six fixed read argv).
+        # open pull requests, runs and releases through rule 33's runner as a chosen account, six fixed read argv); 52:
+        # rule 52 (Settings › Computer: Hermes' own computer-use status read, install and macOS grant, and a bot's
+        # `hermes -p <bot> tools enable|disable computer_use` read back from its gateway; a chat step names only the
+        # action and the app); 53: rule 53 (a browser step names only its label, CDP method or action, never its code,
+        # params or typed text, on the main chat, a subagent's step and the Plans session view; a browser or computer
+        # step's capture read once at its `tool.complete` from Hermes' own capture folders, 5 MB at most, no link, an
+        # image by its bytes, kept in the page's memory only; no live view, since Hermes offers none); 54: rule 54
+        # (voice: the bridge's one HTTP use, Hermes' own `POST /api/audio/transcribe` and `POST /api/audio/speak` on the
+        # bot's own gateway's loopback `api_origin`, a one-use `native-http` ticket per request, no Origin, no proxy, no
+        # redirect, never `voice-config`; the microphone opened only on a press and closed on stop, cancel, error, chat
+        # switch, hide and unmount; no recording or audio kept, the transcript left in the draft like typed text; on
+        # Linux only, WebKitGTK's media stream on and the microphone alone allowed; a peer bot and a server refused).
         # The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 51, len(rules))
+        self.assertTrue(6 <= len(rules) <= 54, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -1149,10 +1275,11 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         self.assertIn("wait = min(wait * 2, RECOVER_POLL[1])", recover)
 
     def test_profile_writes_are_only_name_and_picture(self) -> None:
-        """Every Hermes profile method the bridge names is a read, except set_asset (the avatar)."""
+        """Every Hermes profile method the bridge names is a read, except set_asset (the avatar). `profiles.describe` is
+        rule 52's read of a bot's computer_use switch."""
         names = {n.value for n in ast.walk(self.tree)
                  if isinstance(n, ast.Constant) and isinstance(n.value, str) and n.value.startswith("profiles.")}
-        self.assertTrue(names <= {"profiles.list", "profiles.set_asset"}, sorted(names))
+        self.assertTrue(names <= {"profiles.list", "profiles.set_asset", "profiles.describe"}, sorted(names))
         writes = {n.value for n in ast.walk(self.tree)
                   if isinstance(n, ast.Constant) and n.value in {"profiles.configure", "profiles.create", "profile.yaml"}}
         self.assertEqual(writes, {"profile.yaml"})  # named only by the display-name writer
@@ -1322,14 +1449,49 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
             self.assertEqual(users, [] if name == "image.attach" else ["op_chat_attach"], name)
 
     def test_bridge_has_no_http_or_llm_client(self) -> None:
+        """Rule 5 and rule 54: no LLM client and no HTTP library; the bridge's one HTTP use is `voice_request`, the one
+        `http.client` import and the one connection, plain HTTP to the bot's own gateway's loopback origin, on Hermes'
+        two audio routes only, with no proxy and no redirect (http.client reads no proxy and follows no redirect)."""
         banned = {"requests", "httpx", "aiohttp", "urllib3", "openai", "anthropic", "urllib.request", "http.client"}
-        imported = set()
+        imported: list[tuple[str, str]] = []
+        fns = {f.name: f for f in ast.walk(self.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))}
+        owner = {id(n): name for name, f in fns.items() for n in ast.walk(f)}
         for node in ast.walk(self.tree):
-            if isinstance(node, ast.Import):
-                imported.update(a.name for a in node.names)
-            elif isinstance(node, ast.ImportFrom):
-                imported.add(node.module or "")
-        self.assertEqual(sorted(i for i in imported if i in banned or i.split(".")[0] in banned), [])
+            names = [a.name for a in node.names] if isinstance(node, ast.Import) else [node.module or ""] if isinstance(node, ast.ImportFrom) else []
+            for name in names:
+                if name in banned or name.split(".")[0] in banned:
+                    imported.append((name, owner.get(id(node), "<module>")))
+        self.assertEqual(imported, [("http.client", "voice_request")])
+        conns = [(owner.get(id(c), "<module>"), ast.unparse(c.func)) for c in ast.walk(self.tree) if isinstance(c, ast.Call)
+                 and ast.unparse(c.func).split(".")[-1] in ("HTTPConnection", "HTTPSConnection", "urlopen", "build_opener", "Request")]
+        self.assertEqual(conns, [("voice_request", "http.client.HTTPConnection")])
+        for word in ("HTTPSConnection", "ProxyHandler", "set_tunnel", "urlopen", "HTTPRedirectHandler", "voice-config",
+                     "transcribe-stream", "speak-stream", "voice-live"):
+            self.assertNotIn(word, self.source, word)
+        body = ast.unparse(ast.Module(body=fns["voice_request"].body[1:], type_ignores=[]))  # the code, without its docstring
+        self.assertIn("path = VOICE_PATHS[which]", body)
+        self.assertIn("host, port = voice_target(origin)", body)
+        self.assertIn("conn.request('POST', f'{path}?profile={profile}', body=body, headers={'Content-Type': 'application/json',"
+                      " 'Accept': 'application/json', 'X-Hermes-Gateway-Ticket': ticket})", body)
+        self.assertNotIn("Origin", body)
+        self.assertIn("chunk = resp.read(min(65536, VOICE_ANSWER_MAX[which] + 1 - len(raw)))", body)
+        # one deadline for the whole exchange, which ends the socket; a ticket of another shape is never sent, and an
+        # http.client refusal of a header value (its message holds the value) is dropped
+        self.assertIn("watchdog = threading.Timer(timeout, _voice_cut, (held, expired))", body)
+        self.assertIn("if not isinstance(ticket, str) or not VOICE_TICKET.fullmatch(ticket):", body)
+        self.assertIn("except ValueError:\n    raise VoiceError('voice_failed', 'omher could not build the request to Hermes.')", body)
+        self.assertIn("sock.shutdown(socket.SHUT_RDWR)", ast.unparse(fns["_voice_cut"]))
+        self.assertLess(body.index("host, port = voice_target(origin)"), body.index("http.client.HTTPConnection("))
+        target = ast.unparse(fns["voice_target"])
+        self.assertIn("ipaddress.ip_address(host).is_loopback", target)
+        self.assertIn("parsed.scheme not in ('http', 'https')", target)
+        # https is refused with its own reason: there is no TLS client
+        self.assertIn("if parsed.scheme == 'https':\n        raise VoiceError('voice_https',", target)
+        paths = next(n.value for n in self.tree.body if isinstance(n, ast.Assign) and getattr(n.targets[0], "id", "") == "VOICE_PATHS")
+        self.assertEqual(ast.literal_eval(paths), {"transcribe": "/api/audio/transcribe", "speak": "/api/audio/speak"})
+        # the one caller hands it the origin and ticket from Hermes' own discovery and mint, never from the page
+        callers = sorted(n for n, f in fns.items() if n != "voice_request" and any(isinstance(c, ast.Name) and c.id == "voice_request" for c in ast.walk(f)))
+        self.assertEqual(callers, ["_voice_send", "exchange"])  # `exchange` is the worker-thread step inside _voice_send
 
     def test_the_only_gh_call_is_the_fixed_pr_view(self) -> None:
         """Rule 21: one `gh` call site, in gh_pr_view, with a fixed argv, a 3 s timeout, no prompt, and a repo and
@@ -2942,7 +3104,10 @@ class SshPeersOnlyOverTheOwnSsh(unittest.TestCase):
 
     def test_the_bridge_refuses_this_computers_ops_and_probes_read_only(self) -> None:
         refused = self.bridge.split("PEER_REFUSED = {", 1)[1].split("\n}\n", 1)[0]
-        self.assertEqual(re.findall(r'^    "([a-z.]+)":', refused, re.M), ["folder.open", "folder.close", "folder.resume", "bots.restart"])
+        # rule 52: a peer bot's computer use would act on that computer's screen; rule 54: voice is for a bot here only
+        self.assertEqual(re.findall(r'^    "([a-z.]+)":', refused, re.M),
+                         ["folder.open", "folder.close", "folder.resume", "bots.restart", "computer.bot", "computer.toggle",
+                          "voice.info", "voice.transcribe", "voice.speak"])
         forward = self.bridge.split("PEER_FORWARD = frozenset({", 1)[1].split("})", 1)[0]
         for op in ("folder.open", "folder.close", "folder.resume", "bots.restart", "accounts.list", "sessions.start", "usage.read"):
             self.assertNotIn(f'"{op}"', forward, op)
@@ -3519,6 +3684,334 @@ class TerminalLinksAndBotRequests(unittest.TestCase):
         self.assertIn('export const SPLITS_KEY = "omher.splits";', split)
 
 
+class ComputerUseThroughHermesOwnCommands(unittest.TestCase):
+    """Rule 52: Settings › Computer runs four fixed Hermes argvs (`computer-use permissions status --json`, `install`,
+    `permissions grant`, and a bot's `tools enable|disable computer_use`) through rule 41's runner; the page sends a bot
+    name and on/off only; a switch is read back from the bot's own gateway; a peer bot and a server are refused; a chat
+    step carries the action and the app, never what the bot types; a capture's thumbnail is rule 53's."""
+
+    OPS = ("op_computer_status", "op_computer_bot", "op_computer_toggle", "op_computer_install", "op_computer_grant")
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.src = BRIDGE.read_text(encoding="utf-8")
+        cls.tree = ast.parse(cls.src)
+        cls.fns = {f.name: f for f in ast.walk(cls.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+    def _body(self, name: str) -> str:
+        fn = self.fns[name]
+        return ast.unparse(ast.Module(body=fn.body[1:] if ast.get_docstring(fn) else fn.body, type_ignores=[]))
+
+    def _const(self, name: str):
+        return next(n.value for n in self.tree.body if isinstance(n, ast.Assign)
+                    and any(getattr(t, "id", "") == name for t in n.targets))
+
+    def _callers(self, name: str) -> list[str]:
+        return sorted(n for n, f in self.fns.items() if n != name
+                      and any(isinstance(c, ast.Name) and c.id == name for c in ast.walk(f)))
+
+    def test_four_fixed_argvs_with_a_checked_profile(self) -> None:
+        self.assertEqual(ast.literal_eval(self._const("COMPUTER_TOOLSET")), "computer_use")
+        self.assertEqual(ast.literal_eval(self._const("COMPUTER_VERBS")), ("status", "install", "grant", "enable", "disable"))
+        body = self._body("computer_argv")
+        self.assertIn("if verb not in COMPUTER_VERBS:", body)
+        self.assertIn("PROFILE_ID.fullmatch(bot)", body)
+        self.assertIn("return [hermes, '-p', bot, 'tools', verb, COMPUTER_TOOLSET]", body)
+        self.assertIn("if bot != 'default':", body)
+        for argv in ("[hermes, '-p', 'default', 'computer-use', 'permissions', 'status', '--json']",
+                     "[hermes, '-p', 'default', 'computer-use', 'install']",
+                     "[hermes, '-p', 'default', 'computer-use', 'permissions', 'grant']"):
+            self.assertIn(f"return {argv}", body)
+        for bad in ("post-setup", "doctor", "--upgrade", "--platform", "screen", "shell"):
+            self.assertNotIn(f"'{bad}'", body, bad)
+        # the only lists naming `computer-use` or `tools` are computer_argv's, and only run_hermes_computer builds one
+        lists = {n for n, f in self.fns.items() for lst in ast.walk(f) if isinstance(lst, ast.List)
+                 and any(isinstance(c, ast.Constant) and c.value in ("computer-use", "tools") for c in lst.elts)}
+        self.assertEqual(lists, {"computer_argv"})
+        self.assertEqual(self._callers("computer_argv"), ["run_hermes_computer"])
+        self.assertEqual(self._body("run_hermes_computer"), "return _run_hermes_argv(computer_argv(hermes, verb, bot), home, timeout)")
+        self.assertEqual(self._callers("run_hermes_computer"), ["_computer_run"])
+        self.assertEqual(ast.literal_eval(self._const("COMPUTER_TIMEOUT")),
+                         {"status": 60.0, "install": 600.0, "grant": 180.0, "enable": 60.0, "disable": 60.0})
+
+    def test_one_run_at_a_time_with_hermes_from_this_computer(self) -> None:
+        run = self._body("_computer_run")
+        self.assertLess(run.index("if self._computer_busy:"), run.index("self._computer_busy = True"))
+        self.assertIn("run_hermes_computer, hermes, verb, bot, self.home, COMPUTER_TIMEOUT[verb]", run)
+        self.assertIn("hermes = hermes_path()", run)
+
+    def test_the_page_sends_a_bot_and_on_off_and_nothing_else(self) -> None:
+        reads, other = set(), []
+        for name in self.OPS + ("_profile_bot", "_computer_driver", "_computer_read", "_computer_run", "_computer_switch"):
+            fn = self.fns[name]
+            parent = {child: node for node in ast.walk(fn) for child in ast.iter_child_nodes(node)}
+            for node in ast.walk(fn):
+                if not (isinstance(node, ast.Name) and node.id == "p"):
+                    continue
+                up = parent.get(node)
+                if isinstance(up, ast.Attribute) and up.attr == "get" and isinstance(parent.get(up), ast.Call) \
+                        and isinstance(parent[up].args[0], ast.Constant) and len(parent[up].args) == 1:
+                    reads.add(parent[up].args[0].value)
+                elif isinstance(up, ast.Subscript) and up.value is node and isinstance(up.slice, ast.Constant):
+                    reads.add(up.slice.value)
+                elif isinstance(up, ast.Call) and ast.unparse(up.func) == "self._profile_bot" and up.args == [node]:
+                    continue  # its own reads are scanned here too
+                else:
+                    # `**p`, `p.items()`, `dict(p)`, `p` handed on: any other use could carry what the page sent
+                    other.append(f"{name}: {ast.unparse(up) if up is not None else 'p'}")
+        self.assertEqual(reads, {"bot", "on"})
+        self.assertEqual(other, [])
+        # the scan itself: a handler that spreads or walks the page's params is caught
+        toy = ast.parse("def op_x(self, p):\n    a = run(**p)\n    b = [k for k in p.items()]\n    c = p.get('bot')\n")
+        fn = toy.body[0]
+        parent = {child: node for node in ast.walk(fn) for child in ast.iter_child_nodes(node)}
+        uses = [ast.unparse(parent[n]) for n in ast.walk(fn) if isinstance(n, ast.Name) and n.id == "p"
+                and not (isinstance(parent[n], ast.Attribute) and parent[n].attr == "get")]
+        self.assertEqual(len(uses), 2, uses)
+        toggle = self._body("op_computer_toggle")
+        self.assertIn("if not isinstance(on, bool):", toggle)
+        self.assertIn("await self._computer_run('enable' if on else 'disable', name)", toggle)
+        self.assertIn("bot = self._profile_bot(p)", toggle)
+        self.assertIn("if not PROFILE_ID.fullmatch(bot['name']):", self._body("_profile_bot"))
+        # the driver ops run a fixed verb each; the grant only on macOS
+        self.assertEqual(self._body("op_computer_install"), "return await self._computer_driver('install')")
+        grant = self._body("op_computer_grant")
+        self.assertLess(grant.index("if sys.platform != 'darwin':"), grant.index("self._computer_driver('grant')"))
+        ops = next(n.value for n in ast.walk(self.tree) if isinstance(n, ast.Assign) and ast.unparse(n.targets[0]) == "self.ops")
+        handlers = {k.value: v.attr for k, v in zip(ops.keys, ops.values)}
+        self.assertEqual({k: v for k, v in handlers.items() if k.startswith("computer.")},
+                         {"computer.status": "op_computer_status", "computer.bot": "op_computer_bot",
+                          "computer.toggle": "op_computer_toggle", "computer.install": "op_computer_install",
+                          "computer.grant": "op_computer_grant"})
+
+    def test_a_switch_is_read_back_from_the_bots_own_gateway_never_dialled(self) -> None:
+        switch = self._body("_computer_switch")
+        self.assertIn("conn = self.conns.get(name)", switch)
+        self.assertIn("if conn is None or not conn.connected:", switch)
+        self.assertIn("self._call(conn, 'profiles.describe', name=name)", switch)
+        self.assertNotIn("self._conn(", switch)
+        toggle = self._body("op_computer_toggle")
+        self.assertLess(toggle.index("before, why = await self._computer_switch(bot)"), toggle.index("got = await self._computer_run("))
+        self.assertLess(toggle.index("got = await self._computer_run("), toggle.index("after, after_why = await self._computer_switch(bot)"))
+        self.assertIn("if after == want:", toggle)
+        self.assertIn("if computer_pinned():", toggle)
+        # the shown state is the one a new session gets: a switch agent.disabled_toolsets names reads off, from one key of
+        # the profile's config, read-only
+        self.assertIn("if state == 'on' and await asyncio.to_thread(computer_suppressed, bot['path']):", switch)
+        suppressed = self._body("computer_suppressed")
+        self.assertIn("_load_yaml(profile_dir / 'config.yaml').get('agent')", suppressed)
+        self.assertIn("_skill_names(agent.get('disabled_toolsets') or [])", suppressed)
+        for bad in ("write", "open(", "save", "dump"):
+            self.assertNotIn(bad, suppressed, bad)
+        # the code-folder note reads one more key the same way: agent.coding_context, as Hermes normalizes it
+        focus = self._body("computer_code_focus")
+        self.assertIn("_load_yaml(profile_dir / 'config.yaml').get('agent')", focus)
+        self.assertIn("str(agent.get('coding_context', 'auto')).strip().lower() in CODING_FOCUS", focus)
+        self.assertEqual(ast.literal_eval(self._const("CODING_FOCUS").args[0]), {"focus", "strict", "lean"})
+        for bad in ("write", "open(", "save", "dump"):
+            self.assertNotIn(bad, focus, bad)
+        # with no Hermes to run, a flip is refused, never reported as Hermes leaving the switch
+        self.assertIn("raise BridgeError('no_hermes', 'Hermes is not on this computer.')", toggle)
+        # of Hermes' describe answer only the one switch is kept (its persona and the rest are dropped)
+        self.assertIn("row.get('name') == COMPUTER_TOOLSET", self._body("computer_switch"))
+        # the status payload is read from the JSON Hermes printed; its exit code decides nothing there
+        read = self._body("_computer_read")
+        self.assertIn("status = computer_status(output)", read)
+        self.assertNotIn("code == 0", read)
+
+    def test_a_peer_bot_and_a_server_are_refused(self) -> None:
+        refused = ast.literal_eval(self._const("PEER_REFUSED"))
+        forward = ast.literal_eval(self._const("PEER_FORWARD").args[0])
+        for op in ("computer.bot", "computer.toggle"):
+            self.assertIn("own screen", refused[op])
+        for op in ("computer.status", "computer.bot", "computer.toggle", "computer.install", "computer.grant"):
+            self.assertNotIn(op, forward)
+        ops = (UI_SRC / "lib" / "remoteOps.ts").read_text(encoding="utf-8")
+        for op in ("computer.status", "computer.bot", "computer.toggle", "computer.install", "computer.grant"):
+            self.assertIn(f'"{op}": {{ send: "never", key: SCREEN,', ops)
+        self.assertIn('const SCREEN: Key = "cu.offRemote";', ops)
+        store = (UI_SRC / "state" / "store.ts").read_text(encoding="utf-8")
+        self.assertIn('computerToggle: (bot, on) => bridge.request("computer.toggle", { bot, on }),', store)
+        self.assertIn('computerBot: (bot) => bridge.request("computer.bot", { bot }),', store)
+
+    def test_a_chat_step_names_the_action_and_the_app_only(self) -> None:
+        self.assertEqual(ast.literal_eval(self._const("COMPUTER_TYPED")), ("text", "value", "keys"))
+        detail = self._body("tool_detail")
+        self.assertTrue(detail.startswith("if tool == COMPUTER_TOOL:\n    return computer_step(args)[1]"), detail[:80])
+        step = self._body("computer_step")
+        for key in ("'text'", "'value'", "'keys'", "context"):
+            self.assertNotIn(key, step, key)
+        main = ast.unparse(self.fns["_main_event"])
+        self.assertIn("extra['action'] = computer_step(args)[0]", main)
+        # a tool's end carries its id, name, outcome and time: never its result (a capture's screenshot is in it)
+        ends = [c for c in ast.walk(self.fns["_main_event"]) if isinstance(c, ast.Call) and ast.unparse(c.func) == "out"
+                and c.args and isinstance(c.args[0], ast.Constant) and c.args[0].value == "tool.end"]
+        self.assertEqual(len(ends), 1)
+        self.assertEqual({k.arg for k in ends[0].keywords}, {"tool_id", "name", "ok", "ms"})
+        # a read-only session view drops what was typed and the whole result (a screenshot, the screen's field text)
+        self.assertIn("shown, res = (computer_args(shown), '')", ast.unparse(self.fns["hermes_read"]))
+        # a subagent's computer_use step carries no line: Hermes' fallback preview of it is the typed text
+        sub = self._body("subagent_fields")
+        # (rule 53 adds the browser tools to the same condition)
+        self.assertIn("if tool != COMPUTER_TOOL and (not browser_quiet(tool)) and isinstance(step, str) and step.strip():", sub)
+        self.assertEqual(sub.count("out['step'] ="), 2)  # the tool branch above, and the progress batch of tool names
+        page = (UI_SRC / "chat" / "activity" / "computerSteps.ts").read_text(encoding="utf-8")
+        for bad in (".text", ".value", ".keys", "args"):
+            self.assertNotIn(bad, page, bad)
+
+
+class BrowserStepsAndTheirScreenshots(unittest.TestCase):
+    """Rule 53: a browser step carries its label, CDP method or action and never its code, params or typed text, on the
+    main chat, a subagent's step and the Plans session view; a browser or computer step's capture is read once at its
+    `tool.complete`, from the path in that event only, under Hermes' own capture folders, through no link, at most
+    SHOT_MAX bytes and an image by its bytes, and the page keeps a bounded number in memory."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.src = BRIDGE.read_text(encoding="utf-8")
+        cls.tree = ast.parse(cls.src)
+        cls.fns = {f.name: f for f in ast.walk(cls.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+    def _body(self, name: str) -> str:
+        fn = self.fns[name]
+        return ast.unparse(ast.Module(body=fn.body[1:] if ast.get_docstring(fn) else fn.body, type_ignores=[]))
+
+    def _const(self, name: str):
+        return next(n.value for n in self.tree.body if isinstance(n, ast.Assign)
+                    and any(getattr(t, "id", "") == name for t in n.targets))
+
+    def _callers(self, name: str) -> list[str]:
+        return sorted(n for n, f in self.fns.items() if n != name
+                      and any(isinstance(c, ast.Name) and c.id == name for c in ast.walk(f)))
+
+    def test_the_read_roots_are_hermes_own_capture_folders(self) -> None:
+        self.assertEqual(self._body("shot_roots"),
+                         "harness = harness_shot_root(profile_dir, environ)\n"
+                         "return (profile_dir / 'cache', profile_dir / 'image_cache') + ((harness,) if harness is not None else ())")
+        # the harness folder is this bot's own leaf: Hermes' own home key, the leaf as browser_harness_dirs names it
+        self.assertIn("return harness_tmp_root(environ) / f'p-{hashlib.sha256(key.encode()).hexdigest()[:12]}'",
+                      self._body("harness_shot_root"))
+        self.assertEqual(self._body("_hermes_home_key"),
+                         "try:\n    from hermes_constants import hermes_home_key\nexcept ImportError:\n    return None\n"
+                         "return hermes_home_key(profile_dir)")
+        # no root that is a filesystem root, the home or above it
+        wide = self._body("_shot_root_too_wide")
+        self.assertIn("if os.path.dirname(real_base) == real_base:", wide)
+        self.assertIn("return os.path.commonpath([base, home]) == base", wide)
+        self.assertIn("if _shot_root_too_wide(real_base):\n        continue", self._body("_shot_file"))
+        root = self._body("harness_tmp_root")
+        # as tools/browser_harness_dirs.py resolves it: BH_TMP_DIR, else <harness home>/tmp
+        for part in ("env.get('BH_TMP_DIR')", "env.get('BH_HOME') or env.get('BROWSER_HARNESS_HOME')",
+                     "env.get('XDG_CONFIG_HOME')", "Path(env.get('HOME') or Path.home()) / '.config' / 'browser-harness'",
+                     "return Path(root).expanduser() / 'tmp'"):
+            self.assertIn(part, root)
+        # the one profile folder is the event's own bot's, and the only caller of the read is the chat event handler
+        self.assertEqual(self._callers("read_step_shot"), ["step_shot"])
+        self.assertEqual(self._callers("shot_roots"), ["step_shot"])
+        self.assertEqual(self._callers("step_shot"), ["_main_event"])
+        main = ast.unparse(self.fns["_main_event"])
+        self.assertIn("shot = await asyncio.to_thread(step_shot, p['image_path'], conn.bot['path'])", main)
+        self.assertIn("if tool in SHOT_TOOLS and isinstance(p.get('image_path'), str) and (not p.get('is_error')):", main)
+        # the step's end goes out first, and the read stays inside the event (so a shot comes before the turn's end)
+        self.assertLess(main.index("await out('tool.end'"), main.index("await asyncio.to_thread(step_shot"))
+        # resolving the folders fails closed: no screenshot, never an error that would drop the event
+        self.assertIn("except (ImportError, OSError, RuntimeError, ValueError) as e:", self._body("step_shot"))
+        self.assertEqual(ast.literal_eval(self._const("SHOT_TOOLS").args[0].elts[0]), "browser_exec")
+        self.assertEqual(ast.unparse(self._const("SHOT_TOOLS")), "frozenset({'browser_exec', COMPUTER_TOOL})")
+
+    def test_no_link_a_size_cap_and_an_image_by_its_bytes(self) -> None:
+        self.assertEqual(ast.unparse(self._const("SHOT_MAX")), "5 * 1024 * 1024")
+        found = self._body("_shot_file")
+        self.assertIn("if not os.path.isabs(given):", found)
+        self.assertIn("st = os.lstat(given)\n    if not stat.S_ISREG(st.st_mode):", found)
+        self.assertIn("return (real, (st.st_dev, st.st_ino))", found)
+        self.assertIn("if _shot_link(at):", found)
+        self.assertIn("if not _shot_link(at) and os.path.normcase(os.path.realpath(at)) == os.path.normcase(real_base):", found)
+        self.assertIn("rel.startswith(os.pardir + os.sep)", found)
+        self.assertEqual(self._body("_shot_link"), "return os.path.islink(path) or getattr(os.path, 'isjunction', lambda _p: False)(path)")
+        read = self._body("read_step_shot")
+        self.assertLess(read.index("found = _shot_file(path, roots)"), read.index("os.open(real, flags)"))
+        self.assertIn("getattr(os, 'O_NOFOLLOW', 0)", read)
+        # the open file is the checked one (a folder swapped for a link in between is refused) and has one name
+        self.assertIn("if (st.st_dev, st.st_ino) != checked or not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:", read)
+        self.assertIn("if st.st_size > SHOT_MAX:", read)
+        # every refusal is logged at debug level, never with the path
+        self.assertEqual(read.count("log.debug("), 6)
+        self.assertNotIn("real)", read.split("os.open(real, flags)")[1])
+        self.assertIn("data = f.read(SHOT_MAX + 1)", read)
+        self.assertIn("mime = shot_mime(data[:12])", read)
+        self.assertIn("if len(data) > SHOT_MAX or mime is None:", read)
+        # read-only: opened for reading, once, and nothing written, moved or removed
+        self.assertIn("flags = os.O_RDONLY |", read)
+        self.assertIn("with os.fdopen(fd, 'rb') as f:", read)
+        for bad in ("O_WRONLY", "O_RDWR", "O_CREAT", "O_TRUNC", ".write", "unlink", "remove", "rename", "'wb'", "'ab'"):
+            self.assertNotIn(bad, read, bad)
+        # the type is what the bytes say, never the name
+        self.assertNotIn("ext", self._body("shot_mime"))
+        # a peer's capture is checked again here, and only its step, type, bytes and thread pass
+        peer = self._body("_peer_event")
+        self.assertIn("if event == 'tool.shot':\n    fields = peer_shot(fields)\n    if fields is None:\n        return", peer)
+        again = self._body("peer_shot")
+        self.assertIn("raw = base64.b64decode(data, validate=True)", again)
+        self.assertIn("if len(raw) > SHOT_MAX or mime is None:", again)
+        # a tool's end still carries its id, name, outcome and time; the capture goes in a `tool.shot` of its own
+        outs = {c.args[0].value: {k.arg for k in c.keywords} for c in ast.walk(self.fns["_main_event"])
+                if isinstance(c, ast.Call) and ast.unparse(c.func) == "out" and c.args and isinstance(c.args[0], ast.Constant)}
+        self.assertEqual(outs["tool.end"], {"tool_id", "name", "ok", "ms"})
+        self.assertEqual(outs["tool.shot"], {"tool_id", None})  # `**shot`: read_step_shot's mime and data_base64
+
+    def test_no_code_params_or_typed_text_on_any_path(self) -> None:
+        detail = self._body("tool_detail")
+        self.assertTrue(detail.startswith("if tool == COMPUTER_TOOL:\n    return computer_step(args)[1]\n"
+                                          "if browser_quiet(tool):\n    return browser_step(tool, args)[1]"), detail[:160])
+        self.assertEqual(self._body("browser_quiet"), "return tool.startswith('browser_') and tool != 'browser_navigate'")
+        step = self._body("browser_step")
+        self.assertIn("return ('', browser_label(args.get('code')))", step)
+        for bad in ("params", "prompt_text", "handle", "'label'", "context", "target"):
+            self.assertNotIn(bad, step, bad)
+        label = self._body("browser_label")
+        self.assertIn("first = next(iter(code.lstrip().splitlines()), '').strip()", label)
+        self.assertIn("if not first.startswith('#') or first.startswith('#!'):", label)
+        # secret-shaped text masked as the session view masks it, after cleaning, then trimmed and clipped
+        self.assertIn("text = mask_secrets(_platform_text(first.lstrip('#'), 4096)).strip()", label)
+        self.assertIn("return text if len(text) <= BROWSER_LABEL_MAX else text[:BROWSER_LABEL_MAX - 1].rstrip() + '…'", label)
+        self.assertEqual(ast.literal_eval(self._const("BROWSER_LABEL_MAX")), 60)
+        self.assertNotIn("args.get", self._body("browser_args"))
+        # the main chat: only tool_detail's line and browser_step's action
+        main = ast.unparse(self.fns["_main_event"])
+        self.assertIn("extra['action'] = browser_step(tool, args)[0]", main)
+        # a subagent's step: no line for a browser tool
+        sub = self._body("subagent_fields")
+        self.assertIn("if tool != COMPUTER_TOOL and (not browser_quiet(tool)) and isinstance(step, str) and step.strip():", sub)
+        # the Plans session view: the label, method or action, and no result; any stored image as a marker
+        read = ast.unparse(self.fns["hermes_read"])
+        self.assertIn("shown, res = (browser_args(name, shown), '')", read)
+        self.assertIn("res = _ns_unimage(res)", read)
+        self.assertLess(read.index("res = _ns_unimage(res)"), read.index("'result': _ns_clip(res)"))
+        # the page's code names no code, params or typed text either (its comments say why)
+        page = re.sub(r"/\*.*?\*/|//[^\n]*", "", (UI_SRC / "chat" / "activity" / "browserSteps.ts").read_text(encoding="utf-8"), flags=re.S)
+        for bad in (".code", "params", "prompt_text", "handle", "args"):
+            self.assertNotIn(bad, page, bad)
+
+    def test_the_page_keeps_a_bounded_number_in_memory_only(self) -> None:
+        store = (UI_SRC / "state" / "store.ts").read_text(encoding="utf-8")
+        self.assertIn("export const SHOTS_KEPT = 8;", store)
+        self.assertIn("export const SHOTS_TOTAL = 16;", store)
+        self.assertIn("return [...(shots ?? []).filter((s) => s.id !== id), { id, url, n }].slice(-SHOTS_KEPT);", store)
+        self.assertIn("if (kept.length <= SHOTS_TOTAL) return next;", store)
+        self.assertIn("return { ...state, chats: withShot(state.chats, bot, ev.tool_id, `data:${ev.mime};base64,${ev.data_base64}`) };", store)
+        case = store.split('case "tool.shot": {', 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("!c?.turn?.steps.some((s) => s.id === ev.tool_id)", case)
+        for bad in ("localStorage", "bridge.request", "saveSnap", "writeFile"):
+            self.assertNotIn(bad, case, bad)
+        row = (UI_SRC / "chat" / "activity" / "Activity.slot.tsx").read_text(encoding="utf-8")
+        self.assertIn('data-testid="activity-step-shot"', row)
+        self.assertIn('aria-label={tr("act.shotOpen", { step: line })}', row)
+        # the lightbox shows the image it opened with until the person closes it
+        self.assertIn("onClick={() => setViewing(url)}", row)
+        self.assertIn("{viewing && <Lightbox url={viewing} name={name} onClose={() => setViewing(null)} />}", row)
+
+
 class DiskTrayAndKeepAwake(unittest.TestCase):
     """Rules 35-37: one free-space statistic a minute and nothing deleted; the close hides to the tray and quitting
     stays explicit; keep awake holds only an idle-sleep assertion, released on quit."""
@@ -3596,8 +4089,9 @@ class AppsThroughTheBotsOwnHermes(unittest.TestCase):
 
     def test_one_run_with_no_shell_nothing_on_stdin_and_a_timeout(self) -> None:
         self.assertEqual(self._body("run_hermes_mcp"), "return _run_hermes_argv(mcp_argv(hermes, bot, verb, name), home, timeout)")
-        # the runner rule 44's profile create shares: it takes only an argv one of the two checked builders made
-        self.assertEqual(self._callers("_run_hermes_argv"), ["run_hermes_mcp", "run_hermes_profile_create"])
+        # the runner rule 44's profile create and rule 52's computer-use commands share: it takes only an argv one of the
+        # three checked builders made
+        self.assertEqual(self._callers("_run_hermes_argv"), ["run_hermes_computer", "run_hermes_mcp", "run_hermes_profile_create"])
         body = self._body("_run_hermes_argv")
         self.assertIn("proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, env=env, **kw)", body)
         self.assertIn("k not in _GATEWAY_MARKERS and k != 'HERMES_TUI_GATEWAY_URL'", body)
@@ -3692,7 +4186,7 @@ class BotPageReadsPersonaAndMemoryOnly(unittest.TestCase):
     forwarded to its own bridge."""
 
     READER = ("read_bot_page", "read_page_file", "_open_fixed", "_is_link", "memory_entries", "_memory_limit",
-              "_memory_on")
+              "_memory_on", "_truthy")
 
     def setUp(self) -> None:
         self.source = BRIDGE.read_text(encoding="utf-8")
@@ -4366,3 +4860,153 @@ class NewBotThroughHermesOwnCreate(unittest.TestCase):
         # the skill check first, then the send, and the pending offer cleared only after a send that went out
         at = [pending.index(x) for x in ("if (!(await hasApplySkill(bot)", "actions.sendTo(bot, text)", "clearPendingTemplate(bot);\n  return true;")]
         self.assertEqual(at, sorted(at))
+
+
+class VoiceThroughHermesOwnAudioRoutes(unittest.TestCase):
+    """Rule 54: voice goes through Hermes' own two audio routes on the bot's own gateway, from the bridge only; the page
+    sends a bot, a recording's bytes and type, or an answer's text and a part; the ticket is Hermes' own one-use mint;
+    no recording or audio is kept and the transcript stays in the draft; a peer bot and a server are refused; on Linux
+    only, the shell turns on WebKitGTK's media stream and allows the microphone alone."""
+
+    OPS = ("op_voice_info", "op_voice_transcribe", "op_voice_speak")
+    SHELL_ROOT = ROOT / "apps" / "omher" / "src-tauri"
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.src = BRIDGE.read_text(encoding="utf-8")
+        cls.tree = ast.parse(cls.src)
+        cls.fns = {f.name: f for f in ast.walk(cls.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+    def _body(self, name: str) -> str:
+        fn = self.fns[name]
+        return ast.unparse(ast.Module(body=fn.body[1:] if ast.get_docstring(fn) else fn.body, type_ignores=[]))
+
+    def _const(self, name: str):
+        return next(n.value for n in self.tree.body if isinstance(n, ast.Assign)
+                    and any(getattr(t, "id", "") == name for t in n.targets))
+
+    def test_the_ops_take_no_url_path_host_or_header_from_the_page(self) -> None:
+        read: set[str] = set()
+        for name in (*self.OPS, "_profile_bot"):
+            for c in ast.walk(self.fns[name]):
+                if (isinstance(c, ast.Call) and ast.unparse(c.func) == "p.get" and c.args
+                        and isinstance(c.args[0], ast.Constant)):
+                    read.add(c.args[0].value)
+                if isinstance(c, ast.Subscript) and ast.unparse(c.value) == "p":
+                    read.add(ast.unparse(c.slice))
+        self.assertEqual(read, {"bot", "data_base64", "mime", "text", "part"})
+        # each op takes its bot through the one helper rule 52's ops use, which checks Hermes' profile id
+        for name in self.OPS:
+            self.assertIn("bot = self._profile_bot(p)", self._body(name), name)
+        self.assertIn("if not PROFILE_ID.fullmatch(bot['name']):", self._body("_profile_bot"))
+        # the request is built from the bot the bridge found, Hermes' discovery and mint, and the bridge's own constants
+        send = self._body("_voice_send")
+        # the page's fields are checked and the body made in the worker thread, then a ticket minted for this request;
+        # Hermes' answer is checked in the same thread (a spoken part's audio, `speak_audio`)
+        self.assertIn("body = json.dumps(build()).encode('utf-8')\n    origin, ticket = self.voice_ticket(bot['path'])\n"
+                      "    answer = voice_request(origin, which, bot['name'], ticket, body)\n"
+                      "    return read(answer) if read else answer", send)
+        speak = self._body("op_voice_speak")
+        self.assertIn("parts, cut = await asyncio.to_thread(speak_parts, text)", speak)
+        self.assertIn("read=speak_audio", speak)
+        self.assertIn("return await asyncio.to_thread(exchange)", send)
+        self.assertIn("if conn is None or not conn.connected:", send)
+        self.assertNotIn("self._conn(", send)
+        ops = next(n.value for n in ast.walk(self.tree) if isinstance(n, ast.Assign) and ast.unparse(n.targets[0]) == "self.ops")
+        handlers = {k.value: v.attr for k, v in zip(ops.keys, ops.values)}
+        self.assertEqual({k: v for k, v in handlers.items() if k.startswith("voice.")},
+                         {"voice.info": "op_voice_info", "voice.transcribe": "op_voice_transcribe", "voice.speak": "op_voice_speak"})
+        self.assertIn("self.voice_ticket = voice_ticket or voice_ticket_for", self.src)
+
+    def test_the_ticket_is_hermes_own_one_use_native_http_mint(self) -> None:
+        body = self._body("voice_ticket_for")
+        self.assertIn("found = gateway_runtime.discover_gateway_endpoint(home)", body)
+        self.assertIn("ticket = mint_ticket(home, endpoint, purpose='native-http')", body)
+        self.assertIn("return (str(endpoint.api_origin), ticket)", body)
+        self.assertNotIn("ensure_gateway_runtime", body)  # a request never starts a gateway
+        self.assertNotIn("log", body)
+        supported = self._body("voice_supported")
+        self.assertIn("'purpose' not in inspect.signature(mint_ticket).parameters", supported)
+        self.assertIn("importlib.util.find_spec('hermes_cli.web_routers.audio')", supported)
+        # a request carries the recording and the text in memory only: no file, no log line in any voice function
+        for name in ("voice_request", "voice_ticket_for", "_voice_send", *self.OPS, "speak_parts", "_strip_fences"):
+            body = self._body(name)
+            for bad in ("open(", "write", "tempfile", "log.", "print(", "Path("):
+                self.assertNotIn(bad, body, f"{name}: {bad}")
+        # the bounds the rule names
+        for needle in ("VOICE_TIMEOUT = {'transcribe': 180.0, 'speak': 90.0}",
+                       "VOICE_ANSWER_MAX = {'transcribe': 1024 * 1024, 'speak': 24 * 1024 * 1024}",
+                       "VOICE_AUDIO_MAX = 25 * 1024 * 1024", "SPEAK_PART_MAX = 1500", "SPEAK_TEXT_MAX = 20000"):
+            self.assertIn(needle, ast.unparse(self.tree), needle)
+        config = self._body("voice_config")
+        self.assertIn("cfg = _load_yaml(profile_dir / 'config.yaml')", config)
+        for bad in ("api_key", "key", "write", "save", "dump"):
+            self.assertNotIn(f"'{bad}'", config, bad)
+
+    def test_a_peer_bot_and_a_server_are_refused(self) -> None:
+        refused = ast.literal_eval(self._const("PEER_REFUSED"))
+        forward = ast.literal_eval(self._const("PEER_FORWARD").args[0])
+        for op in ("voice.info", "voice.transcribe", "voice.speak"):
+            self.assertIn("bots on this computer only", refused[op])
+            self.assertNotIn(op, forward)
+        ops = (UI_SRC / "lib" / "remoteOps.ts").read_text(encoding="utf-8")
+        for op in ("voice.info", "voice.transcribe", "voice.speak"):
+            self.assertIn(f'"{op}": {{ send: "never", key: VOICE,', ops)
+        self.assertIn('const VOICE: Key = "voice.offRemote";', ops)
+        store = (UI_SRC / "state" / "store.ts").read_text(encoding="utf-8")
+        self.assertIn('voiceTranscribe: (bot, data_base64, mime) => bridge.request("voice.transcribe", { bot, data_base64, mime }),', store)
+        self.assertIn('voiceSpeak: (bot, text, part) => bridge.request("voice.speak", { bot, text, part }),', store)
+        # the page offers voice only for a bot here: a peer bot and a server show it off with the reason, sending nothing
+        for name in ("useVoiceMic.tsx", "ReadAloud.tsx"):
+            ui = (UI_SRC / "chat" / "voice" / name).read_text(encoding="utf-8")
+            self.assertIn('bot.host ? "voice.offPeer" : remote ? "voice.offRemote"', ui, name)
+
+    def test_the_microphone_opens_on_a_press_and_closes_on_every_way_out(self) -> None:
+        mic = (UI_SRC / "chat" / "voice" / "useVoiceMic.tsx").read_text(encoding="utf-8")
+        self.assertEqual(mic.count("getUserMedia("), 1)
+        self.assertEqual(mic.count("void open()"), 2)  # a press, or Continue on the first-use notice
+        self.assertIn("k.stream.getTracks().forEach((tr) => tr.stop());", mic)
+        self.assertIn('document.addEventListener("visibilitychange", away);', mic)
+        self.assertIn('window.addEventListener("pagehide", gone);', mic)
+        for limit in ("export const RECORD_MAX_MS = 3 * 60_000;", "export const RECORD_MAX_BYTES = 20 * 1024 * 1024;"):
+            self.assertIn(limit, (UI_SRC / "chat" / "voice" / "voice.ts").read_text(encoding="utf-8"))
+        # the transcript joins the draft; the composer never sends it on its own
+        composer = (UI_SRC / "chat" / "parts" / "Composer.tsx").read_text(encoding="utf-8")
+        insert = composer.split("const insertWords = ", 1)[1].split("\n  };\n", 1)[0]
+        for bad in ("send(", "onSend", "chat.send"):
+            self.assertNotIn(bad, insert, bad)
+        self.assertIn('document.execCommand?.("insertText", false, put.insert)', insert)
+        # nothing of a recording is kept in the page's storage: only the bots the person said Continue for
+        for name in ("voice.ts", "useVoiceMic.tsx", "ReadAloud.tsx", "speech.ts"):
+            ui = (UI_SRC / "chat" / "voice" / name).read_text(encoding="utf-8")
+            self.assertNotIn("indexedDB", ui, name)
+            self.assertEqual(ui.count("setItem("), 1 if name == "voice.ts" else 0, name)
+
+    def test_the_linux_permission_answer_allows_the_microphone_only(self) -> None:
+        voice = (self.SHELL_ROOT / "src" / "voice.rs").read_text(encoding="utf-8")
+        code = voice.split("#[cfg(test)]", 1)[0]
+        answer = code.split("pub fn microphone_only(", 1)[1].split("\n}\n", 1)[0]
+        self.assertEqual(re.findall(r"PermissionKind::(\w+) => PermissionResponse::(\w+)", answer), [("Microphone", "Allow")])
+        self.assertIn("_ => PermissionResponse::Default,", answer)
+        self.assertEqual(code.count("PermissionResponse::Allow"), 1)
+        # the media-stream setting and its use exist only on Linux
+        self.assertIn('#[cfg(target_os = "linux")]\npub fn enable_media_stream(', code)
+        self.assertIn("settings.set_enable_media_stream(true);", code)
+        lib = (SHELL / "lib.rs").read_text(encoding="utf-8")
+        self.assertEqual(lib.count("on_permission_request"), 1)
+        self.assertIn('#[cfg(target_os = "linux")]\n    let builder = builder.on_permission_request(|_webview, kind| voice::microphone_only(kind));', lib)
+        self.assertIn('#[cfg(target_os = "linux")]\n            if let Some(w) = app.get_webview_window("main") {\n                voice::enable_media_stream(&w);', lib)
+        self.assertEqual(lib.count("enable_media_stream"), 1)
+        cargo = (self.SHELL_ROOT / "Cargo.toml").read_text(encoding="utf-8")
+        linux = cargo.split("[target.'cfg(target_os = \"linux\")'.dependencies]", 1)[1].split("\n[", 1)[0]
+        self.assertIn('webkit2gtk = { version = "=2.0.2", features = ["v2_4"] }', linux)
+        self.assertEqual(cargo.count("webkit2gtk"), 1)
+        # macOS: the dialog's reason and the microphone entitlement, the app still ad-hoc signed
+        plist = (self.SHELL_ROOT / "Info.plist").read_text(encoding="utf-8")
+        self.assertIn("<key>NSMicrophoneUsageDescription</key>", plist)
+        ent = (self.SHELL_ROOT / "Entitlements.plist").read_text(encoding="utf-8")
+        self.assertEqual(re.findall(r"<key>([^<]+)</key>", ent), ["com.apple.security.device.audio-input"])
+        import json
+        conf = json.loads((self.SHELL_ROOT / "tauri.conf.json").read_text(encoding="utf-8"))
+        self.assertEqual(conf["bundle"]["macOS"]["entitlements"], "Entitlements.plist")
+        self.assertEqual(conf["bundle"]["macOS"]["signingIdentity"], "-")

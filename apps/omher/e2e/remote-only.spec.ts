@@ -475,6 +475,51 @@ test("on a server provider sign-in is the server's: no Add key or Nous button, t
   }
 });
 
+test("on a server Settings › Computer sets nothing up: it says why and sends no computer op", async ({ page }) => {
+  await stub(page, { mode: "remote", host: "demo@vps", label: "VPS" });
+  const ops = sentOps(page);
+  await mockOp("mock.reset");
+  try {
+    await page.goto("/");
+    await expect(page.getByTestId("bot-kami")).toBeVisible();
+    await page.getByTestId("nav-settings").click();
+    await page.getByTestId("settings-nav-computer").click();
+    await expect(page.getByTestId("computer-remote")).toContainText("computer use would act on the server’s screen");
+    await expect(page.getByTestId("computer-bots")).toHaveCount(0);
+    await expect(page.getByTestId("computer-install")).toHaveCount(0);
+    expect(ops.filter((o) => o.op.startsWith("computer."))).toEqual([]);
+  } finally {
+    await mockOp("mock.reset");
+  }
+});
+
+test("on a server voice is off: the microphone and read aloud say why and no voice op is sent", async ({ page }) => {
+  await stub(page, { mode: "remote", host: "demo@vps", label: "VPS" });
+  const ops = sentOps(page);
+  await mockOp("mock.reset");
+  try {
+    await mockOp("mock.answer", { bot: "kami", text: "The server's nightly job finished." });
+    await page.goto("/");
+    await expect(page.getByTestId("bot-kami")).toBeVisible();
+    await page.getByTestId("bot-kami").click();
+    const mic = page.getByTestId("mic");
+    await expect(mic).toHaveAttribute("aria-disabled", "true");
+    await expect(mic).toHaveAttribute("title", /omher uses a server: voice works only with a Hermes on this computer/);
+    await mic.click({ force: true });
+    await expect(page.getByTestId("mic-error")).toContainText("omher uses a server");
+    await page.getByTestId("composer").fill("nightly job?");
+    await page.keyboard.press("Enter");
+    const said = page.getByTestId("bubble-bot").filter({ hasText: "nightly job finished" }).last();
+    await expect(said).toBeVisible();
+    await said.hover();
+    await said.getByTestId("read-aloud").click({ force: true });
+    await expect(page.getByTestId("read-error")).toContainText("omher uses a server");
+    expect(ops.filter((o) => o.op.startsWith("voice."))).toEqual([]);
+  } finally {
+    await mockOp("mock.reset");
+  }
+});
+
 test("on a server a saved oh-my-hermes terminal is not started, by itself or by Resume; a Shell row never types omh", async ({ page }) => {
   await stub(page, { mode: "remote", host: "demo@vps", label: "VPS" });
   // verify.md finding 4: OMH installed here, a running TERMINALS omh row, and a Shell row that had omh in front

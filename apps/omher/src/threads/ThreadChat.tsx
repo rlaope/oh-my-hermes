@@ -50,6 +50,7 @@ export function ThreadChat({ bot, thread }: { bot: Bot; thread: string }) {
           bot={as}
           face={<Avatar bot={bot.name} size={28} />}
           connectionNotice={false}
+          speak={bot}
           afterAnswer={(it) =>
             cards
               .filter((c) => c.at === it.id)
@@ -67,6 +68,7 @@ export function ThreadChat({ bot, thread }: { bot: Bot; thread: string }) {
         <Composer
           key={key}
           bot={as}
+          voice={bot}
           running={!!chat?.turn}
           asking={selectAsks(s).some((a) => a.bot === key)}
           history={promptsOf(chat?.items)}
