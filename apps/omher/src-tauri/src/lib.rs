@@ -6,6 +6,7 @@ mod app_menu;
 mod appimage;
 mod bridge;
 mod claude_usage;
+mod cpu;
 mod custom_agents;
 mod disk;
 mod dsh_chat;
@@ -1258,7 +1259,8 @@ pub fn run() {
             power_busy,
             window_prefs,
             term_link::term_link_take,
-            disk::disk_watch
+            disk::disk_watch,
+            cpu::cpu_watch
         ])
         .setup(|app| {
             let bridge = Bridge::new();
@@ -1285,6 +1287,8 @@ pub fn run() {
             app.manage(Arc::new(gh_me::Me::default()));
             // free space on the home folder's volume, read once a minute (disk.rs)
             app.manage(disk::Disk::start(app.handle().clone(), user_home().ok()));
+            // another app keeping a CPU core busy, read every 5 s once the page turns it on (cpu.rs)
+            app.manage(cpu::Cpu::start(app.handle().clone()));
             // close = hide to the tray / menu bar, and the keep-awake assertion's worker (tray.rs, power.rs)
             app.manage(tray::TrayState::default());
             app.manage(power::Power::start());
