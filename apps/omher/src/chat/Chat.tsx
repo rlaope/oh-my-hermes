@@ -3,6 +3,7 @@ import { selectAsks, useStore } from "../state/store";
 import { Header } from "./parts/Header";
 import { Timeline } from "./parts/Timeline";
 import { Composer } from "./parts/Composer";
+import { QueueBar } from "./parts/QueueBar";
 import { promptsOf } from "./parts/promptHistory";
 import { OmhPromptLine } from "../onboarding/OmhPromptLine";
 import { ConnectBlock } from "./connect/ConnectBlock";
@@ -60,6 +61,7 @@ export function Chat() {
           skills
           plugins
           history={promptsOf(chat?.items)}
+          queueBar={<QueueBar chat={chat} onPause={(p) => s.queuePause(p, bot.name)} onClear={() => s.queueClear(bot.name)} />}
           onSend={(text) => void s.send(text)}
           onSendFiles={remote ? undefined : (text, files) => s.sendWithFiles(text, files)}
           foot={

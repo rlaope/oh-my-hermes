@@ -158,3 +158,64 @@ test("a Send now mark is used up by the turn's end: a later Stop still throws aw
   expect(t.row("D")).toMatchObject({ wait: "dropped" });
   expect(sends(t.inputs)).toEqual(["first", "C"]);
 });
+
+test("the queue bar: paused, nothing waiting goes out at the turn's end; Resume sends the head at once, then one per turn", async () => {
+  const t = await setup();
+  await t.ss.send(t.id, "B");
+  await t.ss.send(t.id, "C");
+  t.ss.queuePause(t.id, true);
+  t.end();
+  await t.tick();
+  expect(sends(t.inputs)).toEqual(["first"]);
+  expect(t.row("B")?.held).toBe(true);
+  // typed while paused: it joins behind, held
+  await t.ss.send(t.id, "D");
+  expect(t.row("D")?.held).toBe(true);
+  expect(sends(t.inputs)).toEqual(["first"]);
+  t.ss.queuePause(t.id, false);
+  await t.tick();
+  expect(sends(t.inputs)).toEqual(["first", "B"]);
+  t.end();
+  await t.tick();
+  t.end();
+  await t.tick();
+  expect(sends(t.inputs)).toEqual(["first", "B", "C", "D"]);
+});
+
+test("the queue bar: Send now on one row while paused sends only that row; the rest stay paused", async () => {
+  const t = await setup();
+  await t.ss.send(t.id, "B");
+  await t.ss.send(t.id, "C");
+  t.ss.queuePause(t.id, true);
+  await t.ss.queuePick(t.id, t.row("C")!.id, "now");
+  await t.tick();
+  expect(sends(t.inputs)).toEqual(["first", "C"]);
+  expect(t.chat().queuePaused).toBe(true);
+  t.end();
+  await t.tick();
+  expect(sends(t.inputs)).toEqual(["first", "C"]);
+  expect(t.row("B")?.held).toBe(true);
+});
+
+test("the queue bar: Clear deletes every held message, sends none of them, and ends the pause", async () => {
+  const t = await setup();
+  await t.ss.send(t.id, "B");
+  await t.ss.send(t.id, "C");
+  t.ss.queuePause(t.id, true);
+  t.ss.queueClear(t.id);
+  expect(t.row("B")).toBeUndefined();
+  expect(t.row("C")).toBeUndefined();
+  expect(t.chat().queue ?? []).toEqual([]);
+  expect(t.chat().queuePaused).toBe(false);
+  t.end();
+  await t.tick();
+  expect(sends(t.inputs)).toEqual(["first"]);
+});
+
+test("the queue bar: the pause ends when the last held message is deleted", async () => {
+  const t = await setup();
+  await t.ss.send(t.id, "B");
+  t.ss.queuePause(t.id, true);
+  await t.ss.queuePick(t.id, t.row("B")!.id, "delete");
+  expect(t.chat().queuePaused).toBe(false);
+});

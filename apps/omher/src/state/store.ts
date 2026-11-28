@@ -355,6 +355,11 @@ export interface Chat {
   stale?: boolean;
   /** The held row being steered right now: nothing goes out until Hermes answers. */
   steering?: string | null;
+  /** The person paused the steer queue (the queue bar): nothing waiting goes out on its own, and a message typed now
+   *  joins the queue instead of being steered in. Ends with the last waiting row; never kept across a reload. */
+  queuePaused?: boolean;
+  /** A waiting row the person sent by hand (Send now, Steer with no turn) while paused: only it may go out. */
+  queueRelease?: string | null;
   /** Rows steered into the running turn that it has not read yet (no tool step ended and no message came since):
    *  a Stop or Send now before then makes Hermes drop them, so they are marked not used (Send / Delete). */
   steeredUnread?: string[];
@@ -1611,6 +1616,8 @@ export function reduce(state: AppState, a: Action): AppState {
     case "queue.steered":
     case "queue.resend":
     case "queue.idle":
+    case "queue.pause":
+    case "queue.clear":
       return state.chats[a.bot] ? touchChat(state, a.bot, (c) => reduceQueue(c, a)) : state;
     case "event":
       return reduceEvent(state, a.ev, a.now);
@@ -1782,7 +1789,11 @@ export type QueueAction =
   /** Send, on a steer whose answer never came: it goes out next as a normal message. */
   | { type: "queue.resend"; bot: string; id: string }
   /** A send whose turn never started (Hermes ran no turn for it): stop waiting on it. */
-  | { type: "queue.idle"; bot: string; id: string };
+  | { type: "queue.idle"; bot: string; id: string }
+  /** The queue bar's Pause / Resume: while paused nothing waiting goes out on its own. */
+  | { type: "queue.pause"; bot: string; paused: boolean; id?: undefined }
+  /** The queue bar's Clear: these waiting rows (waitingIds) are dropped, as Delete drops one. */
+  | { type: "queue.clear"; bot: string; ids: string[]; id?: undefined };
 
 const toEnd = (c: Chat, id: string, patch: (m: MessageItem) => MessageItem): Chat => {
   const row = c.items.find((i): i is MessageItem => i.kind === "user" && i.id === id);
@@ -1867,17 +1878,39 @@ function nextBefore(c: Chat, id: string): string | undefined {
   return c.items.slice(at + 1).find((i) => i.kind === "user" && !i.steered)?.id;
 }
 
+/** The rows that still wait in omher (the queue bar's count, what Clear drops): held, not being steered in, and not
+ *  the one steering right now. */
+export function waitingIds(c: Chat | undefined): string[] {
+  if (!c?.queue?.length) return [];
+  return c.queue.filter((id) => id !== c.steering && c.items.some((i) => i.kind === "user" && i.id === id && i.held && !i.autoSteer));
+}
+
 export function reduceQueue(c: Chat, a: QueueAction): Chat {
+  const next = queueStep(c, a);
+  // a pause ends with the last waiting row: a chat never stays paused with nothing to resume
+  return next.queuePaused && !waitingIds(next).length ? { ...next, queuePaused: false, queueRelease: null } : next;
+}
+
+function queueStep(c: Chat, a: QueueAction): Chat {
   const queue = c.queue ?? [];
   const without = queue.filter((x) => x !== a.id);
+  // a row the person sends by hand while paused: it alone goes out, the rest stay paused
+  const release = (id: string) => (c.queuePaused ? { queueRelease: id } : {});
   switch (a.type) {
     case "queue.take": {
       if (!queue.includes(a.id)) return c;
       const moved = toEnd(c, a.id, ({ held: _h, autoSteer: _a, ...m }) => ({ ...m, ts: a.now / 1000 }));
-      return { ...moved, queue: without, pendingTurn: a.id };
+      return { ...moved, queue: without, pendingTurn: a.id, ...(c.queueRelease === a.id ? { queueRelease: null } : {}) };
     }
     case "queue.front":
-      return queue.includes(a.id) ? { ...c, queue: [a.id, ...without] } : c;
+      return queue.includes(a.id) ? { ...c, queue: [a.id, ...without], ...release(a.id) } : c;
+    case "queue.pause":
+      if (a.paused === !!c.queuePaused || (a.paused && !waitingIds(c).length)) return c;
+      return { ...c, queuePaused: a.paused, queueRelease: null };
+    case "queue.clear": {
+      const waiting = waitingIds(c);
+      return a.ids.filter((id) => waiting.includes(id)).reduce((x, id) => queueStep(x, { type: "queue.drop", bot: a.bot, id }), c);
+    }
     case "queue.drop": {
       const unknown = c.items.some((i) => i.kind === "user" && i.id === a.id && i.steerUnknown);
       if (!queue.includes(a.id) && !unknown) return c;
@@ -1890,6 +1923,7 @@ export function reduceQueue(c: Chat, a: QueueAction): Chat {
       return {
         ...withItems(c, c.items.map((i) => (i.kind === "user" && i.id === a.id ? (({ steerUnknown: _u, steerUnused: _n, ...m }) => ({ ...m, held: true }))(i) : i))),
         queue: [a.id, ...without],
+        ...release(a.id),
       };
     case "queue.steering":
       return { ...c, steering: a.id };
@@ -1928,6 +1962,8 @@ export function reduceQueue(c: Chat, a: QueueAction): Chat {
 export function queueReady(state: AppState, bot: string): string | null {
   const c = state.chats[bot];
   if (!c?.queue?.length || state.conn !== "open" || !c.loaded || c.turn || c.pendingTurn || c.stale || c.steering) return null;
+  // paused (the queue bar): only a row the person sent by hand goes out
+  if (c.queuePaused && c.queue[0] !== c.queueRelease) return null;
   return c.queue[0];
 }
 
@@ -2097,6 +2133,10 @@ export interface Actions {
   /** Take it out of the queue and put its text back into the composer. */
   queueEdit(id: string, bot?: string): void;
   queueDelete(id: string, bot?: string): void;
+  /** The queue bar of chat `bot`: pause (nothing waiting goes out on its own) or resume (it drains as before). */
+  queuePause(paused: boolean, bot?: string): void;
+  /** The queue bar's Clear: every waiting row of chat `bot` is deleted, as Delete deletes one. */
+  queueClear(bot?: string): void;
   respondApproval(requestId: string, choice: ApprovalChoice, bot?: string): Promise<void>;
   /** A text answer for one question, or every answer of an interview at once (one `clarify.respond`). */
   respondClarify(requestId: string, answer: string | ClarifyAnswers, bot?: string): Promise<void>;
@@ -2479,7 +2519,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     const c = state.chats[key];
     // only behind rows that are themselves being steered in: never ahead of one that waits
     const ahead = (c?.queue ?? []).every((q) => c?.items.some((i) => i.kind === "user" && i.id === q && i.autoSteer));
-    const steer = !!c?.turn && !c.stale && !p.files?.length && !p.reply_to && !p.wire.trimStart().startsWith("/") && ahead;
+    // a paused queue (the queue bar): it joins the queue behind the others instead
+    const steer = !!c?.turn && !c.stale && !c.queuePaused && !p.files?.length && !p.reply_to && !p.wire.trimStart().startsWith("/") && ahead;
     dispatch({ ...row, held: true, ...(steer ? { steer } : {}) });
     steerNext(key);
     return true;
@@ -3067,6 +3108,17 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       if (!bot || !(heldRow(bot, id) || unknownRow(bot, id))) return;
       held.delete(id);
       dispatch({ type: "queue.drop", bot, id });
+    },
+    queuePause(paused, which) {
+      const bot = botArg(which);
+      if (bot) dispatch({ type: "queue.pause", bot, paused });
+    },
+    queueClear(which) {
+      const bot = botArg(which);
+      const ids = waitingIds(bot ? state.chats[bot] : undefined);
+      if (!bot || !ids.length) return;
+      for (const id of ids) held.delete(id);
+      dispatch({ type: "queue.clear", bot, ids });
     },
     async interrupt() {
       const bot = state.selectedBot;

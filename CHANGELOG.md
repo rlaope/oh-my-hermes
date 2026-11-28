@@ -13,6 +13,16 @@ All notable changes will be documented here.
   `.omh` or `$OMH_HOME` (`cd ~/.omh && rm -rf */*`, `find ~/.omh -name '*' -delete`). (#3271 by @probepark;
   `src/plugin_bundle/omh/pr_delivery_gate.py`)
 
+- **omher: pause, resume and clear a chat's waiting messages.** Messages typed while a bot answers, and not steered
+  in, wait in omher and went out one by one when the turn ended, with no way to hold them all or drop them at once. A
+  quiet bar above the composer now shows how many wait, with Pause and Clear. Paused, nothing waiting goes out when
+  the turn ends and a new message joins the line instead of being steered in; the running answer is not stopped, and
+  Resume sends them in order as before. A row's own Send now still sends just that one, and the rest stay paused.
+  Clear asks for a second press within a few seconds and then deletes every waiting message with its files; a message
+  Hermes already took, or one being steered in, is left alone. The pause ends by itself when nothing is left waiting,
+  and never survives a reload. The same bar works in threads and SESSIONS agent chats. omher sends nothing new for it.
+  (`apps/omher/src/chat/parts/QueueBar.tsx`)
+
 - **omher: speak to a bot, and hear its answer.** A microphone in the composer of a bot's main chat and its threads
   records in omher's own window; the bot's own Hermes turns the recording into text, which lands in the draft at the
   caret and is never sent by omher. A recording stops by itself after 3 minutes. An answer's new speaker button, beside

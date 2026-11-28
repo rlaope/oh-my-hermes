@@ -151,6 +151,7 @@ export function Timeline({
             queueOff={off ?? undefined}
             last={it.id === lastSent}
             paused={!!chat?.lost?.length}
+            queuePaused={!!chat?.queuePaused}
           />
         );
       }

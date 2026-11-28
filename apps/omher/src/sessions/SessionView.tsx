@@ -15,6 +15,7 @@ import { useResolvedTheme } from "../app/theme";
 import { Timeline } from "../chat/parts/Timeline";
 import { LostTurnBlock } from "../chat/parts/LostTurnBlock";
 import { Composer } from "../chat/parts/Composer";
+import { QueueBar } from "../chat/parts/QueueBar";
 import { CheckIcon } from "../chat/model/CheckIcon";
 import { Seg } from "../chat/model/Seg";
 import "../chat/model/model.css";
@@ -198,6 +199,7 @@ function ChatPane({ rec, chatKey }: { rec: SessionRec; chatKey: string }) {
         asking={selectAsks(s).some((a) => a.bot === chatKey)}
         offline={rec.status !== "running"}
         offlineText={offlineText}
+        queueBar={takesFiles && <QueueBar chat={chat} onPause={(p) => getSessions().queuePause(rec.id, p)} onClear={() => getSessions().queueClear(rec.id)} />}
         onSend={(t) => void getSessions().send(rec.id, t)}
         onSendFiles={takesFiles ? (t, files) => getSessions().sendFiles(rec.id, t, files) : undefined}
         onStop={() => void getSessions().interrupt(rec.id)}
