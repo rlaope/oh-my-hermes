@@ -14,6 +14,8 @@ import { getDraft, setDraft } from "../../app/drafts";
 import { t, tx } from "../../i18n";
 import { composing as imeComposing } from "../../lib/ime";
 import { newer, older, onFirstLine, onLastLine, type Recall, type Step } from "./promptHistory";
+import { useVoiceMic } from "../voice/useVoiceMic";
+import { insertTranscript } from "../voice/voice";
 
 const MAX_H = 200;
 
@@ -32,7 +34,9 @@ const appliedDrafts = new WeakSet<object>();
  * hoisted to the front as `/name` (store `send`). `/name` and `./name` go out as typed, except `./thread` at the start
  * when `onNewThread` is given: `./` opens a one-row picker for it, and a send makes a new thread of this bot with the
  * rest of the message as its first message (threadCommand.ts); the token never reaches the bot.
- * ArrowUp on the first line and ArrowDown on the last walk the person's earlier prompts of this chat (promptHistory.ts). */
+ * ArrowUp on the first line and ArrowDown on the last walk the person's earlier prompts of this chat (promptHistory.ts).
+ * With `voice` (a bot's main chat or thread) a microphone records in this window and the bot's own Hermes puts what was
+ * said in the draft at the caret, unsent (BOUNDARY rule 54); Enter stops a recording, Escape cancels it. */
 export function Composer({
   bot,
   running,
@@ -53,6 +57,7 @@ export function Composer({
   heldNote,
   onNewThread,
   history,
+  voice,
 }: {
   bot: Bot;
   running: boolean;
@@ -87,6 +92,8 @@ export function Composer({
   onNewThread?: (first: string) => void | Promise<unknown>;
   /** The person's earlier prompts of this chat, oldest first (promptHistory.ts): ArrowUp/ArrowDown recall them. */
   history?: string[];
+  /** The bot whose own Hermes turns the composer's recordings into text (a bot's main chat or one of its threads). */
+  voice?: Bot;
 }) {
   // unsent text survives switching chats and restarts (drafts.ts; the composer is keyed by its chat)
   const [text, setText] = useState(() => getDraft(bot.name));
@@ -327,6 +334,24 @@ export function Composer({
 
   const overlay = useDropZone(wrap, !offline && !!onSendFiles, add);
 
+  /** A transcript joins the draft as typed text would: at the caret (over a selection), through the textarea's own
+   *  insert so undo takes it back and the change goes through onChange like a keystroke. */
+  const insertWords = (words: string) => {
+    const el = ref.current;
+    const cur = el?.value ?? text;
+    const start = el ? el.selectionStart : cur.length;
+    const end = el ? el.selectionEnd : cur.length;
+    const put = insertTranscript(cur, start, end, words);
+    if (el && !el.disabled) {
+      el.focus();
+      el.setSelectionRange(start, end);
+      if (document.execCommand?.("insertText", false, put.insert) && el.value === put.text) return;
+    }
+    placeCaret.current = put.caret;
+    edit(put.text);
+  };
+  const mic = useVoiceMic({ bot: voice, offline, insert: insertWords, focusBox: () => ref.current?.focus() });
+
   const send = async () => {
     if (!has || offline || sending) return;
     if (threadCmd && onNewThread) {
@@ -374,7 +399,18 @@ export function Composer({
   const showStop = running && !has;
 
   return (
-    <div className="cw" ref={wrap}>
+    <div
+      className="cw"
+      ref={wrap}
+      onKeyDown={(e) => {
+        // Escape cancels a recording (or its transcription) here, before it could stop the bot's running answer; an open
+        // picker took it first
+        if (e.key === "Escape" && mic.busy && !e.defaultPrevented && !imeComposing(e)) {
+          e.preventDefault();
+          mic.cancel();
+        }
+      }}
+    >
       {overlay}
       {threadPicking && <ThreadPicker bot={bot.display_name} active onPick={pickThread} popRef={tPop} />}
       {picking && <SkillPicker items={items} active={at} onPick={pick} onHover={setActive} popRef={pop} />}
@@ -388,6 +424,7 @@ export function Composer({
         </div>
       )}
       <div className={`composer${has ? " has" : ""}`} data-testid="composer-box">
+        {mic.line}
         <Chips chips={chips} onRemove={remove} />
         {err && (
           <div className="att-err" role="alert" data-testid="attach-error">
@@ -536,6 +573,12 @@ export function Composer({
                     return;
                   }
                 }
+                if (e.key === "Enter" && !e.shiftKey && !composing && mic.recording) {
+                  // Enter ends the recording; the transcript lands in the draft and nothing is sent
+                  e.preventDefault();
+                  mic.stop();
+                  return;
+                }
                 if (e.key === "Enter" && !e.shiftKey && !composing) {
                   e.preventDefault();
                   void send();
@@ -546,6 +589,7 @@ export function Composer({
               }}
             />
           </div>
+          {mic.button}
           {tools}
           {action ? (
             action

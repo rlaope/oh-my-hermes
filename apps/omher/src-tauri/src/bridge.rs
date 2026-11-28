@@ -3,7 +3,8 @@
 //! The app spawns the bridge with Hermes' own Python, reads its `OMHER_BRIDGE_READY {"port": N}` line
 //! and hands the UI a loopback `ws://` URL carrying a per-launch random token. The child's stdin stays
 //! open for the life of the app: the bridge runs with `--exit-on-stdin-eof`, so it also stops if this
-//! process dies without cleaning up. The app makes no model or network call of its own.
+//! process dies without cleaning up. The app makes no model call of its own; the bridge's one HTTP use is voice, to
+//! the person's own Hermes gateway on loopback (BOUNDARY rule 54).
 //!
 //! A bridge that stops on its own after it was ready is started again, on a new port with a new token, after a
 //! short wait that doubles with each quick death in a row ([`revive_plan`]); after too many in a row the failure

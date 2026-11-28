@@ -22,6 +22,8 @@ const ok = (why: string): OpRule => ({ send: "always", why });
 const FOLDER: Key = "remote.noFolderChat";
 const FILES: Key = "remote.noFiles";
 const HERE: Key = "remote.notHere";
+const SCREEN: Key = "cu.offRemote";
+const VOICE: Key = "voice.offRemote";
 
 /** The audit: each op, the field that could carry this computer, and whether it goes to a server. */
 export const REMOTE_OPS: Record<PageOp, OpRule> = {
@@ -63,6 +65,16 @@ export const REMOTE_OPS: Record<PageOp, OpRule> = {
   "apps.install": ok("a catalog name the server listed"),
   "apps.login": ok("a catalog name the server listed"),
   "apps.remove": ok("a catalog name the server listed"),
+  // rule 52: computer use acts on the screen of the computer Hermes runs on, the server's, so none of it is set up from here
+  "computer.status": { send: "never", key: SCREEN, why: "reads the server's screen driver and permissions" },
+  "computer.bot": { send: "never", key: SCREEN, why: "a bot's computer use would act on the server's screen" },
+  "computer.toggle": { send: "never", key: SCREEN, why: "turns on computer use on the server's screen" },
+  "computer.install": { send: "never", key: SCREEN, why: "installs a screen driver on the server" },
+  "computer.grant": { send: "never", key: SCREEN, why: "asks the server's macOS for screen permissions" },
+  // rule 54: voice is built for a bot's Hermes on this computer only; a recording here would go to the server
+  "voice.info": { send: "never", key: VOICE, why: "voice is for a Hermes on this computer only" },
+  "voice.transcribe": { send: "never", key: VOICE, why: "data_base64 is a recording made on this computer" },
+  "voice.speak": { send: "never", key: VOICE, why: "voice is for a Hermes on this computer only" },
   "models.options": ok("bot name only"),
   "bots.ready": ok("bot and provider ids"),
   "chat.set_model": ok("model, provider and level ids the server listed"),
