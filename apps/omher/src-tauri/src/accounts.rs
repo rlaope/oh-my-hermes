@@ -160,6 +160,8 @@ pub struct LoginStatus {
     /// `claude.ai`, `chatgpt`, `api_key`, …
     pub method: Option<String>,
     pub last_refresh: Option<String>,
+    /// When the Claude login runs out (`loginExpiresAt`), kept only when it is a plain ISO-8601 time.
+    pub login_expires_at: Option<String>,
 }
 
 /// The fields of `claude auth status --json` omher reads; serde skips every other one.
@@ -171,6 +173,40 @@ struct ClaudeStatus {
     plan_tier: Option<String>,
     subscription_type: Option<String>,
     auth_method: Option<String>,
+    #[serde(default, deserialize_with = "string_or_none")]
+    login_expires_at: Option<String>,
+}
+
+/// `s` when it is an ISO-8601 UTC/offset time like `2026-12-07T05:24:39.079Z`, else `None` (nothing else is echoed).
+fn iso_time(s: Option<String>) -> Option<String> {
+    let v = s?.trim().to_string();
+    let b = v.as_bytes();
+    if b.len() < 20 || b.len() > 35 {
+        return None;
+    }
+    let digits = |r: std::ops::Range<usize>| b[r].iter().all(|c| c.is_ascii_digit());
+    let num = |r: std::ops::Range<usize>| v[r].parse::<u32>().unwrap_or(99);
+    let head = digits(0..4) && b[4] == b'-' && digits(5..7) && b[7] == b'-' && digits(8..10) && b[10] == b'T'
+        && digits(11..13) && b[13] == b':' && digits(14..16) && b[16] == b':' && digits(17..19);
+    if !head || !(1..=12).contains(&num(5..7)) || !(1..=31).contains(&num(8..10)) || num(11..13) > 23 || num(14..16) > 59 || num(17..19) > 60 {
+        return None;
+    }
+    let mut i = 19;
+    if b[i] == b'.' {
+        let start = i + 1;
+        i = start;
+        while i < b.len() && b[i].is_ascii_digit() {
+            i += 1;
+        }
+        if i == start || i - start > 9 {
+            return None;
+        }
+    }
+    let tail = &v[i..];
+    let tb = tail.as_bytes();
+    let zone = tail == "Z"
+        || (tb.len() == 6 && matches!(tb[0], b'+' | b'-') && tb[1..3].iter().all(u8::is_ascii_digit) && tb[3] == b':' && tb[4..6].iter().all(u8::is_ascii_digit));
+    zone.then_some(v)
 }
 
 fn short(s: Option<String>, n: usize) -> Option<String> {
@@ -186,6 +222,7 @@ pub fn parse_claude_status(stdout: &str) -> Option<LoginStatus> {
         plan: if logged_in { short(s.plan_tier.or(s.subscription_type), 40) } else { None },
         method: short(s.auth_method, 40),
         last_refresh: None,
+        login_expires_at: if logged_in { iso_time(s.login_expires_at) } else { None },
     })
 }
 
@@ -199,7 +236,7 @@ pub fn parse_codex_status(code: Option<i32>, stderr: &str) -> LoginStatus {
     } else {
         None
     };
-    LoginStatus { logged_in: code == Some(0) && method.is_some(), email: None, plan: None, method, last_refresh: None }
+    LoginStatus { logged_in: code == Some(0) && method.is_some(), email: None, plan: None, method, last_refresh: None, login_expires_at: None }
 }
 
 /// The two fields of Codex's `auth.json` omher may read when the CLI has no status command. The `tokens`
@@ -230,7 +267,7 @@ pub fn codex_status_from_file(path: &Path) -> LoginStatus {
                 .filter(|m| m.len() <= 24 && m.bytes().all(|c| c.is_ascii_lowercase() || c == b'_'));
             let refresh = short(f.last_refresh, 40)
                 .filter(|r| r.bytes().all(|c| c.is_ascii_digit() || matches!(c, b'-' | b':' | b'.' | b'T' | b'Z' | b'+')));
-            LoginStatus { logged_in: method.is_some(), email: None, plan: None, method, last_refresh: refresh }
+            LoginStatus { logged_in: method.is_some(), email: None, plan: None, method, last_refresh: refresh, login_expires_at: None }
         }
         Err(_) => LoginStatus::default(),
     }
@@ -754,7 +791,8 @@ mod tests {
                 email: Some("owner@example.com".into()),
                 plan: Some("max_20x".into()),
                 method: Some("claude.ai".into()),
-                last_refresh: None
+                last_refresh: None,
+                login_expires_at: Some("2026-12-07T05:24:39.079Z".into())
             }
         );
         let out = serde_json::to_string(&s).unwrap();
@@ -764,6 +802,32 @@ mod tests {
         let signed_out = parse_claude_status(r#"{"loggedIn":false,"authMethod":"none","email":"x@y.z"}"#).unwrap();
         assert!(!signed_out.logged_in && signed_out.email.is_none());
         assert!(parse_claude_status("not json").is_none());
+    }
+
+    #[test]
+    fn claude_login_expiry_is_kept_only_as_a_plain_time() {
+        let with = |v: &str| parse_claude_status(&format!(r#"{{"loggedIn":true,"loginExpiresAt":{v}}}"#)).unwrap().login_expires_at;
+        assert_eq!(with(r#""2026-12-07T05:24:39.079Z""#).as_deref(), Some("2026-12-07T05:24:39.079Z"));
+        assert_eq!(with(r#""2026-12-07T05:24:39Z""#).as_deref(), Some("2026-12-07T05:24:39Z"));
+        assert_eq!(with(r#""2026-12-07T14:24:39+09:00""#).as_deref(), Some("2026-12-07T14:24:39+09:00"));
+        // a secret, a wrong type, a nested token, a bad date or trailing text is dropped, never echoed
+        for bad in [
+            format!(r#""{SECRET}""#),
+            "1765085079".to_string(),
+            format!(r#"{{"access_token":"{SECRET}"}}"#),
+            r#""2026-13-07T05:24:39Z""#.to_string(),
+            r#""2026-12-07 05:24:39""#.to_string(),
+            format!(r#""2026-12-07T05:24:39Z{SECRET}""#),
+            "null".to_string(),
+        ] {
+            let s = parse_claude_status(&format!(r#"{{"loggedIn":true,"loginExpiresAt":{bad}}}"#)).unwrap();
+            assert_eq!(s.login_expires_at, None, "{bad}");
+            let out = serde_json::to_string(&s).unwrap();
+            assert!(!out.contains(SECRET) && !out.contains("access_token"), "{out}");
+        }
+        // signed out: no expiry either
+        let out = parse_claude_status(r#"{"loggedIn":false,"loginExpiresAt":"2026-12-07T05:24:39Z"}"#).unwrap();
+        assert_eq!(out.login_expires_at, None);
     }
 
     #[test]
