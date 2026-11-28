@@ -28,6 +28,17 @@ All notable changes will be documented here.
   computer's own name). Remote-only mode's link backs off the same way. Ideas from 2rami/kasaterm (MIT), code
   written fresh. (`docs/OMHER-BOUNDARY.md` rule 31; `apps/omher/src-tauri/src/peers.rs`)
 
+- **omher: the account auto-switch moves before the limit, and only to an account with room.** Settings › Accounts
+  has a "Switch at" level under Auto-switch, 90% unless changed (80 to 100 in steps of 5; 100 waits for the limit as
+  before). When the account new sessions use reaches it, they move to the next account in the list that has a fresh
+  usage reading at least 5 points under the level; an account with no reading, or one whose numbers have passed their
+  reset time, is never moved to. When no other account has a reading at all, the switch waits for a real limit and
+  takes the next ready account, as before. Codex switches at most once every five minutes and counts only its shared
+  limit, never a model's own bucket. Claude Code's weekly Opus and Sonnet limits are shown as such and count only
+  while a chat on that account uses that model, so a full Opus week no longer marks the whole account limited. When
+  no account has room, the bot chat and the Accounts page say so once per limit window. Ideas from 2rami/kasaterm
+  (MIT), code written fresh. (`apps/omher/src/settings/accounts/rules.ts`)
+
 - **omher: speak to a bot, and hear its answer.** A microphone in the composer of a bot's main chat and its threads
   records in omher's own window; the bot's own Hermes turns the recording into text, which lands in the draft at the
   caret and is never sent by omher. A recording stops by itself after 3 minutes. An answer's new speaker button, beside

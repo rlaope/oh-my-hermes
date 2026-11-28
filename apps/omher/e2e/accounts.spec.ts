@@ -119,7 +119,7 @@ test("This computer: Claude's own login from its status: email, then source · p
   await expect(page.getByTestId("accounts-codex").getByTestId("account-pill")).toHaveText(["In use"]);
   // one switch per CLI with more than one login, with its sentence
   await expect(page.getByTestId("autoswitch-codex")).toHaveAttribute("role", "switch");
-  await expect(page.getByTestId("autoswitch-row-codex")).toContainText("When this account hits its limit, new turns use the next one.");
+  await expect(page.getByTestId("autoswitch-row-codex")).toContainText("When this account reaches the level below, new sessions use the next one with room.");
   await expect(page.getByTestId("autoswitch-claude")).toHaveCount(0);
   // + Add account only where omher can run the CLI's own sign-in
   await expect(page.getByTestId("add-account-claude")).toBeVisible();
@@ -283,6 +283,55 @@ test("auto-switch: the in-use account hits its limit → the next one, a toast a
   await expect(line).toHaveCount(1);
   await expect(line).toHaveText(/^Switched Codex to Work/);
   expect(await callsOf("chat.send")).toEqual([]);
+});
+
+test("switch threshold: 90% by default under Auto-switch, steps 80 to 100 saved per CLI, on the switches' text column", async ({ page }) => {
+  await openAccounts(page);
+  const seg = page.getByTestId("switchat-codex");
+  await expect(seg).toHaveAttribute("role", "radiogroup");
+  await expect(seg).toHaveAttribute("aria-label", "Switch Codex at");
+  await expect(seg.getByRole("radio")).toHaveText(["80%", "85%", "90%", "95%", "100%"]);
+  await expect(seg.getByRole("radio", { checked: true })).toHaveText("90%");
+  await expect(page.getByTestId("switchat-row-codex")).toContainText("Moves before the limit, only to an account with at least 5 points more room.");
+  const y = async (id: string) => (await page.getByTestId(id).boundingBox())!.y;
+  expect(await y("switchat-row-codex")).toBeGreaterThan(await y("autoswitch-row-codex"));
+  expect(await y("resetfirst-row-codex")).toBeGreaterThan(await y("switchat-row-codex"));
+  const left = (id: string) => page.getByTestId(id).evaluate((r) => Math.round(r.querySelector(".acc-auto-t > b")!.getBoundingClientRect().left));
+  expect(await left("switchat-row-codex")).toBe(await left("autoswitch-row-codex"));
+  await seg.getByRole("radio", { name: "95%" }).click();
+  await expect(seg.getByRole("radio", { checked: true })).toHaveText("95%");
+  expect(await page.evaluate(() => localStorage.getItem("omher.switchat"))).toBe('{"codex":95}');
+  // Auto-switch off: the threshold cannot be changed
+  await page.getByTestId("autoswitch-codex").click();
+  await expect(seg.getByRole("radio", { name: "80%" })).toBeDisabled();
+});
+
+test("auto-switch at the threshold: the account in use at 92% moves before its limit to one with room, said once", async ({ page }) => {
+  await openAccounts(page);
+  await mock("mock.accounts", { cli: "codex", usage: { id: "work", windows: [{ label: "5 hours", used_percent: 20, resets_in_min: 200 }] } });
+  await expect(row(page, "codex", "default").getByTestId("account-pill")).toHaveText("In use");
+  await mock("mock.accounts", { cli: "codex", usage: { id: "default", windows: [{ label: "5 hours", used_percent: 92, resets_in_min: 60 }] } });
+  await expect(row(page, "codex", "work").getByTestId("account-pill")).toHaveText("In use");
+  // not limited: the line names the level, not a limit
+  await expect(row(page, "codex", "default").getByTestId("account-pill")).toHaveCount(0);
+  const toast = page.getByTestId("accounts-codex").getByTestId("accounts-toast");
+  await expect(toast).toHaveText(/^Switched Codex to Work for new sessions \(This computer at 92%, resets .+\)$/);
+  expect((await callsOf("accounts.set_active")).map((c) => c.params)).toEqual([{ cli: "codex", account: "work" }]);
+});
+
+test("auto-switch at the threshold: no account with room keeps the one in use and says so once", async ({ page }) => {
+  await openAccounts(page);
+  await mock("mock.accounts", { cli: "codex", usage: { id: "work", windows: [{ label: "5 hours", used_percent: 88, resets_in_min: 200 }] } });
+  await mock("mock.accounts", { cli: "codex", usage: { id: "default", windows: [{ label: "5 hours", used_percent: 93, resets_in_min: 60 }] } });
+  const toast = page.getByTestId("accounts-codex").getByTestId("accounts-toast");
+  await expect(toast).toHaveText(/^Codex: no other account has room, so new sessions stay on This computer \(at 93%, resets .+\)$/);
+  await expect(row(page, "codex", "default").getByTestId("account-pill")).toHaveText("In use");
+  // another read of the same window: no second line
+  await mock("mock.accounts", { cli: "codex", usage: { id: "work", windows: [{ label: "5 hours", used_percent: 87, resets_in_min: 200 }] } });
+  await page.waitForTimeout(400);
+  await page.getByTestId("bot-kami").click();
+  await expect(page.getByTestId("system-line")).toHaveCount(1);
+  expect(await callsOf("accounts.set_active")).toEqual([]);
 });
 
 test("auto-switch off: a limit does not move the account in use", async ({ page }) => {
