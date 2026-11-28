@@ -2155,7 +2155,7 @@ export interface Actions {
   threadPrs(bot: string, thread: string, fresh: boolean): Promise<ThreadOps["thread.prs"]["result"]>;
   runsCli(params?: { agent?: CliAgent; cwd?: string; since?: number }): Promise<{ runs: AgentRunSummary[] }>;
   /** A SESSIONS chat's title from the agent's own session files (`cli.title`). */
-  cliTitle(agent: "claude" | "codex", session: string, cwd?: string): Promise<{ title: string }>;
+  cliTitle(agent: "claude" | "codex", session: string, cwd?: string): Promise<{ title: string; model?: string; started?: number }>;
   /** Subscription usage meters (sidebar); the meter keeps its own copy. */
   usage(): Promise<{ providers: UsageProvider[] }>;
   /** Settings › Accounts (the page keeps its own copy). */

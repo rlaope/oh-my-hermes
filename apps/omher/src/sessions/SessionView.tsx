@@ -1060,6 +1060,8 @@ export function SessionView() {
         )}
         {termHead && (
           <div className="head-right ss-head-right">
+            {/* the right panel follows the focused pane: what runs in it (its harness, model, subagents) */}
+            {!remote && <PanelToggle working={0} />}
             <button
               type="button"
               className="ss-toggle"

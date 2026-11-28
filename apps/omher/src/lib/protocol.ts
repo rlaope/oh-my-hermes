@@ -629,7 +629,7 @@ export interface OpMap {
     result: { runs: AgentRunSummary[]; agents: Record<CliAgent, CliAgentStatus> };
   };
   /** The title a Claude Code or Codex conversation has in the agent's own session files (`""` when none yet). */
-  "cli.title": { params: { agent: "claude" | "codex"; session: string; cwd?: string }; result: { title: string } };
+  "cli.title": { params: { agent: "claude" | "codex"; session: string; cwd?: string }; result: { title: string; model?: string; started?: number } };
   /** Subscription usage of the CLIs on this machine, from their own session files (read-only). */
   "usage.read": { params: Record<string, never>; result: { providers: UsageProvider[] } };
   /** The coding CLIs on this computer with their logins: the CLI's own home first, then omher's added ones. */

@@ -6,7 +6,9 @@
 //
 // Without --token it accepts `e2e` (playwright.config.ts) and `dev` (the UI's built-in default URL).
 // Test-control ops (not part of the protocol): mock.calls, mock.submits, mock.emit {events}, mock.reset,
-// mock.cliTitle {agent, session, title} (the title a CLI wrote in its own session files),
+// mock.cliTitle {agent, session, title, model?, started?} (the title, Claude Code's model and first line's time a CLI
+// wrote in its own session files), mock.shellRun {session, cwd, title, running?} (a Claude Code conversation typed in a
+// Shell row wrote its record with two subagents),
 // mock.ask {bot, kind: approval|clarify|interview, timeout_ms?} (raise an ask on any bot, e.g. one not open),
 // mock.demo (Kami's live "Docs dark mode" plan on top of his list, its nodes' PRs in mixed states; `--demo` seeds it
 // at start and on every reset), mock.botMade {bot, kind: routine|plugin} (the bot made an automation or installed a
@@ -1842,7 +1844,8 @@ const OPS = {
     if (p.agent !== "claude" && p.agent !== "codex") throw new OpError("bad_request", "agent must be claude or codex");
     if (typeof p.session !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(p.session))
       throw new OpError("bad_request", "session must be the agent's session id");
-    return { title: cliTitles.get(`${p.agent}:${p.session}`) ?? "" };
+    const got = cliTitles.get(`${p.agent}:${p.session}`);
+    return got ? { ...got } : { title: "", model: "" };
   },
   "runs.node_session": (p) => nodeSessionOp(p),
   "runs.get": (p) => {
@@ -2269,7 +2272,11 @@ const OPS = {
     return {};
   },
   "mock.cliTitle": (p) => {
-    cliTitles.set(`${p.agent}:${p.session}`, String(p.title ?? ""));
+    cliTitles.set(`${p.agent}:${p.session}`, {
+      title: String(p.title ?? ""),
+      model: typeof p.model === "string" ? p.model : "",
+      ...(typeof p.started === "number" ? { started: p.started } : {}),
+    });
     return {};
   },
   "mock.calls": () => ({ calls: calls.map((c) => ({ ...c })) }),
@@ -2280,6 +2287,23 @@ const OPS = {
     return { count: p.events.length };
   },
   // mock.sessionRun: the MockHost Claude session's own record appears (as the agent writes it during "/subagents")
+  "mock.shellRun": (p) => {
+    const sid = needStr(p, "session");
+    const t = now() - 300;
+    const node = (id, label, started, ended, summary) => ({
+      id, label, deps: [], layer: 0, state: ended === undefined ? "running" : "done", model: "claude-fable-5-2", executor: "claude",
+      lane: "general-purpose", started, attempts: [{ n: 1, outcome: ended === undefined ? "open" : "completed", started, ...(ended === undefined ? {} : { ended }) }],
+      ...(ended === undefined ? {} : { summary, ended }),
+    });
+    const running = p.running === true;
+    const nodes = [node("sa-1", "Map the API routes", t + 20, t + 140, "12 routes"), node("sa-2", "Check the tests", t + 30, running ? undefined : t + 200, "all pass")];
+    cliRuns = [
+      ...cliRuns.filter((r) => r.id !== `claude:${sid}`),
+      { id: `claude:${sid}`, kind: "claude-task", agent: "claude", owner: { type: "session", id: sid }, title: String(p.title ?? "Claude Code session"),
+        cwd: needStr(p, "cwd"), state: running ? "running" : "done", started: t, updated: running ? now() : t + 200, ...(running ? {} : { ended: t + 200 }), nodes },
+    ];
+    return { ok: true };
+  },
   "mock.sessionRun": (p) => {
     const ago = typeof p.ago === "number" ? p.ago : undefined;
     cliRuns = [...cliRuns.filter((r) => r.owner?.type !== "session"), p.agent === "omo" ? (p.batch ? omoBatchRun({ ago }) : omoSessionRun({ ago })) : sessionRun({ ago, hold: p.hold === true })];

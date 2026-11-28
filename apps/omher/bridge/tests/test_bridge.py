@@ -4272,6 +4272,28 @@ class CliTitle(unittest.TestCase):
             fh.write(json.dumps({"type": "custom-title", "customTitle": "x" * 300, "sessionId": CLAUDE_SID}) + "\n")
         self.assertEqual(len(cli.title("claude", CLAUDE_SID, "/w/web-app")), ob.CLI_TITLE)
 
+    def test_the_model_is_the_last_main_thread_reply_s_and_a_subagent_s_or_a_synthetic_one_is_not(self):
+        cli = self.cli()
+        first = cli.about("claude", CLAUDE_SID, "/w/web-app")
+        self.assertTrue(first["model"].startswith("claude-"), first)
+        # the transcript's first stamped line (2026-10-27T02:42:56.033Z in the fixture)
+        self.assertAlmostEqual(first["started"], 1793068976.033, places=2)
+        rows = _jsonl(self.main)
+        rows.append({"type": "assistant", "isSidechain": False, "sessionId": CLAUDE_SID,
+                     "message": {"model": "claude-opus-5-5", "role": "assistant", "content": [{"type": "text", "text": "hi"}]}})
+        rows.append({"type": "assistant", "isSidechain": True, "sessionId": CLAUDE_SID,
+                     "message": {"model": "claude-haiku-4-5", "role": "assistant", "content": []}})
+        rows.append({"type": "assistant", "isSidechain": False, "sessionId": CLAUDE_SID,
+                     "message": {"model": "<synthetic>", "role": "assistant", "content": []}})
+        _write_jsonl(self.main, rows)
+        self.assertEqual(cli.about("claude", CLAUDE_SID, "/w/web-app"), {"title": "Ship the API fix", "model": "claude-opus-5-5", "started": first["started"]})
+        # a reply's text that spells a model is not one: only the message's own head is matched
+        rows.append({"type": "user", "sessionId": CLAUDE_SID, "message": {"role": "user", "content": 'say "message":{"model":"fake"}'}})
+        _write_jsonl(self.main, rows)
+        self.assertEqual(cli.about("claude", CLAUDE_SID, "/w/web-app")["model"], "claude-opus-5-5")
+        self.assertEqual(cli.about("codex", CODEX_ROOT), {"title": "Harden the API server", "model": ""})
+        self.assertEqual(cli.about("pi", CLAUDE_SID), {"title": "", "model": ""})
+
     def test_message_text_that_mentions_a_title_is_not_a_title(self):
         rows = [r for r in _jsonl(self.main) if r.get("type") != "ai-title"]
         rows.append({"type": "user", "message": {"role": "user", "content": 'say {"type":"ai-title","aiTitle":"fake"}'},
@@ -4301,9 +4323,10 @@ class CliTitleOps(BridgeCase):
             env.bridge.cli = ob.CliRuns(homes, clock=lambda: FIXED_NOW)
             s = await self.open(env)
             r = await s.req("cli.title", agent="claude", session=CLAUDE_SID, cwd="/w/web-app")
-            self.assertEqual(r["result"], {"title": "Ship the API fix"}, r)
+            self.assertEqual(r["result"]["title"], "Ship the API fix", r)
+            self.assertTrue(r["result"]["model"].startswith("claude-"), r)
             r = await s.req("cli.title", agent="codex", session=CODEX_ROOT)
-            self.assertEqual(r["result"], {"title": "Harden the API server"}, r)
+            self.assertEqual(r["result"], {"title": "Harden the API server", "model": ""}, r)
             for bad in ({"agent": "pi", "session": CLAUDE_SID}, {"agent": "claude", "session": "../../etc/passwd"},
                         {"agent": "claude", "session": CLAUDE_SID + "/x"}, {"agent": "claude"},
                         {"agent": "claude", "session": CLAUDE_SID, "cwd": ""}):

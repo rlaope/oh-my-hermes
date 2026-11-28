@@ -292,6 +292,7 @@ RULES = (
     "the CLI agents' own session files on this machine",
     "never a prompt or a message body, skips symlinked folders and files, and never starts, resumes or stops a CLI session.",
     "For a SESSIONS row omher reads the same files for one more thing, the title of the conversation that row runs",
+    "and from the same Claude Code transcript the model id at the head of its last main-thread reply and the time of its first stamped line, each matched on the raw line without parsing it,",
     "A `claude`, `codex` or `grok` session gets one more environment variable, the home folder of the account",
     "omher's own `active.json`; \"This computer\" adds nothing, and no login file or token is read for it.",
     "A chat session of the same agent gets the same single variable from the same lookup, and nothing else.",
@@ -670,6 +671,19 @@ class SubagentEvents(unittest.TestCase):
         for w in ("fs::write", "create_dir", "remove_file", "OpenOptions", "children"):
             self.assertNotIn(w, body, w)
         self.assertEqual(code.count("omo_record("), 2)
+
+    def test_the_session_title_read_takes_the_model_without_parsing_a_message(self) -> None:
+        # rule 16: `cli.title` keeps a Claude Code session's title lines and the model id at the head of its last
+        # main-thread reply, matched on the raw bytes; the reply line itself is never loaded as JSON
+        src = BRIDGE.read_text(encoding="utf-8")
+        fold = src[src.index("def _title_fold("):src.index("def _claude_state(")]
+        head, rest = fold.split("    if b'\"custom-title\"' not in raw", 1)
+        self.assertIn("_MSG_MODEL.search(raw[:CLI_HEAD])", head)
+        self.assertIn("_LINE_TS.search(raw)", head)
+        self.assertNotIn("json.loads", head)
+        self.assertIn('b\'"isSidechain":true\' not in raw', head)
+        self.assertEqual(rest.count("json.loads(raw)"), 1)
+        self.assertIn('out = {"title": st["custom"] or st["ai"], "model": st["model"]}', src)
 
     def test_session_adapters_send_no_subagent_control(self) -> None:
         # a session's subagents are only shown: no adapter writes a message that assigns, steers or stops one
