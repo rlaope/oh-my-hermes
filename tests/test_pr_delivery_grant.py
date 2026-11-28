@@ -420,6 +420,19 @@ class AttendedSessionTests(_Home):
             with self.subTest(command=command):
                 self.assertIsNotNone(self.terminal(command))
 
+    def test_a_bare_glob_that_still_reaches_the_store_is_refused(self):
+        # #3271 review: a bare glob is the store when it sits under a glob `runtime` matches, or the command is in the
+        # OMH home; a brace list naming the store is the store. Each of these got past the first relaxation.
+        session_attendance.note_session_platform(SESSION, "cli")
+        for command in ("cd ~/.omh && rm -rf */*", "rm -rf ~/.omh/*/*", "rm -rf ~/.omh/r*/*",
+                        "find ~/.omh -name '*' -delete", "cd $OMH_HOME/run*; rm -rf *",
+                        "rm -rf ~/.omh/runtime/{pr_delivery,x}", "tee -a ~/.omh/*/*/opened-x.jsonl"):
+            with self.subTest(command=command):
+                self.assertIsNotNone(self.terminal(command))
+        for command in ("ls src/*/*.py", "rm -rf build/*", "grep -r TODO src/*", "cat ~/.omh/memory/*.md"):
+            with self.subTest(command=command):
+                self.assertIsNone(self.terminal(command))
+
     def test_a_file_tool_write_into_the_store_is_refused(self):
         target = self.home / "runtime" / "pr_delivery" / "grant-0123456789abcdef.json"
         directive = self.pre("write_file", {"path": str(target), "content": "{}"})

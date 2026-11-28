@@ -296,6 +296,9 @@ _GRANT_COMMAND: Final = "pr-delivery"
 _STORE_GLOB: Final = frozenset("*?[{")
 _STORE_DIR: Final = pr_delivery.STORE_DIRNAME
 _GLOB_CLASS: Final = re.compile(r"\[[^\]]*\]")  # a `[...]` class: its letters are alternatives, not literals
+_RUNTIME_DIR: Final = "runtime"  # the store's parent, `<omh_home>/runtime/pr_delivery`
+# A command naming one of these is near the store, so a bare glob in it may expand to the store (folded, lowercase).
+_NEAR_STORE_WORDS: Final = (_RUNTIME_DIR, ".omh", "omh_home")
 
 _BLOCK_SUFFIX: Final = "A blocked call did not run."
 
@@ -921,27 +924,37 @@ def _process_data(tool_input: object) -> str | None:
     return None
 
 
-def _glob_names_store(part: str, after_runtime: bool) -> bool:
+def _glob_names_store(part: str, parent: str, near_store: bool) -> bool:
     """Whether one glob path part would expand to the store's directory.
 
-    A part with no literal letter of the store's name (`*`, `?`, `[a-z]*` -- SQL
-    `count(*)`, `ls *`) names the store only when it sits in `runtime/` or the
-    command mentions `runtime`; `pr_*`, `pr_deliver?`, `*y` always do.
+    `pr_*`, `pr_deliver?`, `*y` and a brace list naming it (`{pr_delivery,x}`)
+    always do. A part with no literal letter of the store's name (`*`, `?`,
+    `[a-z]*` -- SQL `count(*)`, `ls *`) does only where the store can be under
+    it: its parent part is `runtime` or a glob `runtime` matches (`*/*`,
+    `r*/*`), or the command names `runtime`, `.omh` or `$OMH_HOME`
+    (`cd ~/.omh && rm -rf */*`, `find ~/.omh -name '*' -delete`).
     """
-    if not any(mark in part for mark in _STORE_GLOB) or not fnmatch.fnmatchcase(_STORE_DIR, part):
+    if not any(mark in part for mark in _STORE_GLOB):
+        return False
+    if _STORE_DIR in part:
+        return True
+    if not fnmatch.fnmatchcase(_STORE_DIR, part):
         return False
     literal = _GLOB_CLASS.sub("", part)
-    return after_runtime or any(ch in _STORE_DIR for ch in literal if ch not in _STORE_GLOB)
+    if any(ch in _STORE_DIR for ch in literal if ch not in _STORE_GLOB):
+        return True
+    under_runtime = parent == _RUNTIME_DIR or (
+        any(mark in parent for mark in _STORE_GLOB) and fnmatch.fnmatchcase(_RUNTIME_DIR, parent))
+    return near_store or under_runtime
 
 
-def _names_store(token: str, near_runtime: bool = False) -> bool:
+def _names_store(token: str, near_store: bool = False) -> bool:
     lowered = token.lower()
     if "pr_delivery/" in lowered or lowered.endswith("/pr_delivery") or _STORE_PATH.search(lowered):
         return True
     # A glob that the shell would expand to the store's directory (`pr_deliver?/`, `pr_*`, `runtime/*`).
     parts = lowered.split("/")
-    return any(_glob_names_store(part, near_runtime or (i > 0 and parts[i - 1] == "runtime"))
-               for i, part in enumerate(parts))
+    return any(_glob_names_store(part, parts[i - 1] if i else "", near_store) for i, part in enumerate(parts))
 
 
 def _names_grant_change(command: str, depth: int = 0) -> bool:
@@ -954,8 +967,9 @@ def _names_grant_change(command: str, depth: int = 0) -> bool:
     if not tokens:
         lowered = command.lower()
         return _GRANT_COMMAND in lowered or "pr_delivery" in lowered
-    near_runtime = "runtime" in folded  # `cd ~/.omh/runtime && rm -rf *` still names the store
-    if any(_names_store(token, near_runtime) for token in tokens):  # redirection targets included
+    # `cd ~/.omh/runtime && rm -rf *`, `cd ~/.omh && rm -rf */*`: a bare glob there still names the store.
+    near_store = any(word in folded for word in _NEAR_STORE_WORDS)
+    if any(_names_store(token, near_store) for token in tokens):  # redirection targets included
         return True
     for segment in _segments(tokens):
         lowered = [token.lower() for token in segment]
