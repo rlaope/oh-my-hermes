@@ -8,9 +8,10 @@ import unittest
 from unittest.mock import patch
 
 from _tui_lines import line_text
-from test_tui_modes import make_app, type_text
+from test_tui_modes import answer, make_app, type_text
 from test_tui_resume_feedback import reply
 
+from omh.tui.app import LOCAL_RESUME_PAGE_LIMIT
 from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, TAB, Key
 from omh.tui.profile_sessions import Inventory
 from omh.tui.session_picker import DELETE, PickerAction, SessionPicker, SessionRow, session_rows
@@ -264,20 +265,87 @@ class ProfileSessionsTests(unittest.TestCase):
             self.assertEqual(wal.read_bytes(), wal_bytes)
             self.assertEqual(self.default.read_bytes(), before)
 
-    def test_late_gateway_page_and_local_transcript_do_not_take_over_a_closed_picker(self) -> None:
+    def test_enter_before_gateway_list_arrives_resumes_when_authorized(self) -> None:
         with closing(create_store(self.named)) as db:
             insert(db, "local-open", "Locally open")
         app, client = self.open_picker()
         self.take_inventory(app)
-        reply(app, client, {"sessions": [], "next_page": "older"})
+        self.assertIn("Enter checks for resume", app.picker.keys()[0])
         app._on_input(Key(ENTER))
-        app._on_input(Key(CHAR, "g", ctrl=True))
-        app._on_input(Key(ESCAPE))
+        self.assertEqual([method for method, _ in client.calls], ["session.list"])
+        self.assertIsNone(app.profile_history)
+        reply(app, client, {"sessions": [{"id": "local-open"}]})
+        self.assertEqual(client.calls[-1], ("session.resume", {"session_id": "local-open", "cols": 80}))
+        self.assertEqual(app.sid, "live-1")
+        answer(app, client, {"session_id": "live-2", "stored_session_id": "local-open", "messages": []})
+        self.assertEqual((app.sid, app.stored_id), ("live-2", "local-open"))
+        self.assertIsNone(app.pager)
+
+    def test_enter_loads_older_pages_and_uses_gateway_lineage(self) -> None:
+        with closing(create_store(self.named)) as db:
+            insert(db, "local-tip", "Selected session")
+        for read_only in (False, True):
+            with self.subTest(read_only=read_only):
+                app, client = self.open_picker()
+                self.take_inventory(app)
+                reply(app, client, {"sessions": [], "next_page": "older"})
+                app._on_input(Key(ENTER))
+                self.assertEqual(client.calls[-1], ("session.list", {"page": "older"}))
+                reply(app, client, {"sessions": [{"id": "unrelated", "title": "Selected session"}], "next_page": "last"})
+                self.assertEqual(client.calls[-1], ("session.list", {"page": "last"}))
+                reply(app, client, {"sessions": [{"id": "local-owner", "resolved_id": "local-tip",
+                                                  "owner_runtime": "other" if read_only else ""}]})
+                method, params = client.calls[-1]
+                self.assertEqual(method, "session.transcript" if read_only else "session.resume")
+                self.assertEqual(params["session_id"], "local-owner")
+
+    def test_enter_bounds_the_gateway_search_then_shows_local_history(self) -> None:
+        with closing(create_store(self.named)) as db:
+            insert(db, "local-open", "Locally open")
+        app, client = self.open_picker()
+        self.take_inventory(app)
+        reply(app, client, {"sessions": [], "next_page": "0"})
+        app._on_input(Key(ENTER))
+        for page in range(LOCAL_RESUME_PAGE_LIMIT):
+            self.assertEqual(client.calls[-1], ("session.list", {"page": str(page)}))
+            reply(app, client, {"sessions": [], "next_page": str(page + 1)})
+        self.assertEqual(len(client.calls), LOCAL_RESUME_PAGE_LIMIT + 1)
+        self.assertTrue(all(method == "session.list" for method, _ in client.calls))
         app.profile_history[2].result(5)
         app._take_profile_sessions()
-        reply(app, client, {"sessions": [{"id": "local-open"}]})
-        self.assertIsNone(app.pager)
-        self.assertIsNone(app.picker)
+        self.assertEqual(app.sid, "live-1")
+        self.assertIn("Locally open fixture message", "\n".join(map(line_text, app.pager.lines)))
+
+    def test_enter_on_another_profile_does_not_check_the_connected_gateway(self) -> None:
+        with closing(create_store(self.default)) as db:
+            insert(db, "same-id", "Default session")
+        app, client = self.open_picker()
+        self.take_inventory(app)
+        app._on_input(Key(ENTER))
+        reply(app, client, {"sessions": [{"id": "same-id"}], "next_page": "older"})
+        self.assertEqual([method for method, _ in client.calls], ["session.list"])
+        app.profile_history[2].result(5)
+        app._take_profile_sessions()
+        self.assertIn("Default session fixture message", "\n".join(map(line_text, app.pager.lines)))
+
+    def test_late_gateway_page_does_not_resume_after_selection_is_cancelled(self) -> None:
+        with closing(create_store(self.named)) as db:
+            insert(db, "local-open", "Locally open", activity=300)
+            insert(db, "other", "Another local session")
+        for key in (ESCAPE, DOWN):
+            with self.subTest(key=key):
+                app, client = self.open_picker()
+                self.take_inventory(app)
+                reply(app, client, {"sessions": [], "next_page": "older"})
+                app._on_input(Key(ENTER))
+                app._on_input(Key(key))
+                reply(app, client, {"sessions": [{"id": "local-open"}]})
+                self.assertEqual([method for method, _ in client.calls], ["session.list", "session.list"])
+                self.assertIsNone(app.pager)
+                if key == ESCAPE:
+                    self.assertIsNone(app.picker)
+                else:
+                    self.assertEqual(app.picker.selected().label, "Another local session")
 
     def test_stale_picker_actions_do_not_delete_current_or_cover_another_pager(self) -> None:
         with closing(create_store(self.named)) as db:

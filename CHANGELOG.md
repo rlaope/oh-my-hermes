@@ -4,6 +4,10 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **TUI: Enter in `/sessions` can resume a session found first in local history.** The picker waits for Hermes
+  and checks up to five older pages for the same conversation in the connected profile before opening read-only
+  history. Sessions Hermes marks read-only and sessions in other profiles are not taken over. (Follow-up to #3257.)
+
 - **omher: a GitHub dashboard on one screen.** Once a GitHub account is added in Settings › Accounts, a GitHub row
   under the sidebar's Tasks row opens the Tasks page's new GitHub scope: the repositories you pin on the left (the
   ones found in your thread and terminal folders are offered to pin; a dot shows each default branch's CI), their

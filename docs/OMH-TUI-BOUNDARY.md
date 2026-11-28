@@ -195,13 +195,15 @@ when offered. A Last active cell that reads `running` reports only the gateway's
 turn state; they do not establish that another client holds the session.
 Only the gateway list can authorize a switch, rename or delete.
 It is matched to local rows by the gateway-reported profile and session lineage;
-an unknown gateway profile stays unknown. Enter on a local-only row reads the
-newest user and assistant messages of its listed segment into a read-only
-pager. The picker supplies an in-memory handle, and the reader checks the
-registered profile, store identity and row eligibility again. It sends no
-RPC, writes no transcript, and cannot resume or change that session. Bare
-`/resume` and Ctrl+X use this table; the launcher's resume picker keeps its
-gateway-only scope. Exact-title lookups still go through the gateway.
+an unknown gateway profile stays unknown. Enter on a local row in the gateway's
+profile waits for the in-flight list and checks up to five more gateway pages.
+A matching gateway row is opened according to its resume permission. With no
+match, or for a local row from a different profile, Enter opens the newest
+user and assistant messages in a read-only pager. That local read uses an
+in-memory handle and rechecks the registered profile, store identity and row
+eligibility; it writes no transcript and cannot resume or change the session.
+Bare `/resume` and Ctrl+X use this table; the launcher's resume picker keeps
+its gateway-only scope. Exact-title lookups still go through the gateway.
 
 Leaving a session (`/new`, a switch) declines that session's open requests and
 says so in the new transcript. Shift+Tab is the one key that changes what
