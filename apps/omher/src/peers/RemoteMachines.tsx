@@ -1,18 +1,49 @@
 // Settings › Remote machines: each computer omher reaches over SSH, its host and link state, Retry for a failed
 // link and Remove (asks once). Adding one is the same card as the sidebar's Connect over SSH.
+// Under the host, a line with when the link last came up and, while it waits to reconnect, when the next try is;
+// History opens the link's last few events (connected, dropped and why, retrying in N s, stopped), newest first, as
+// the shell keeps them in memory.
 import { useState } from "react";
 import { t } from "../i18n";
+import { busyFor } from "../app/time";
+import { useNow } from "../elsewhere/useNow";
 import { AttachCard } from "./AttachCard";
 import { linkText, SshIcon } from "./SshMarker";
 import { removePeer, retryPeer, usePeers } from "./links";
+import type { LinkEvent, PeerStatus } from "./host";
 import { useServerMode } from "../app/remote";
 import "./peers.css";
+
+/** "now" under 10 s, else "3m ago". */
+function ago(at: number, now: number): string {
+  const ms = Math.max(0, now - at);
+  return ms < 10_000 ? t("time.nowShort") : t("peer.ago", { t: busyFor(ms) });
+}
+
+function eventText(e: LinkEvent): string {
+  if (e.what === "retrying") return t("peer.ev.retrying", { n: e.wait ?? 0 });
+  return t(`peer.ev.${e.what}` as const);
+}
+
+/** The row's detail line: the next try while reconnecting, then how long it has been up or when it last was. */
+export function linkLine(p: PeerStatus, now: number): string {
+  const bits: string[] = [];
+  if (p.state === "reconnecting" && p.retry_at) bits.push(t("peer.nextTry", { t: busyFor(Math.max(0, p.retry_at - now)) }));
+  if (p.connected_at) {
+    const up = busyFor(Math.max(0, now - p.connected_at));
+    bits.push(p.state === "connected" ? t("peer.upFor", { t: up }) : t("peer.lastUp", { t: up }));
+  }
+  return bits.join(" · ");
+}
 
 export function RemoteMachines() {
   const peers = usePeers();
   const [asking, setAsking] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [err, setErr] = useState("");
+  const [open, setOpen] = useState<string | null>(null);
+  // a countdown ticks each second; "up for" and "ago" every ten
+  const now = useNow(peers.some((p) => !!p.connected_at || !!p.events?.length), peers.some((p) => p.state === "reconnecting" && !!p.retry_at) ? 1000 : 10_000);
   // on a server (rule 47) other computers are that server's to reach: no peer link starts from here
   const remote = useServerMode().mode === "remote";
   return (
@@ -39,6 +70,33 @@ export function RemoteMachines() {
                 <i className={`peer-dot ${p.state}`} aria-hidden="true" />
                 {linkText(p) || t("peer.connected")}
               </span>
+              {(linkLine(p, now) || !!p.events?.length) && (
+                <span className="peer-row-l" data-testid={`remote-line-${p.id}`}>
+                  {linkLine(p, now)}
+                  {!!p.events?.length && (
+                    <button
+                      type="button"
+                      className="peer-hist-b"
+                      aria-expanded={open === p.id}
+                      onClick={() => setOpen(open === p.id ? null : p.id)}
+                      data-testid={`remote-history-${p.id}`}
+                    >
+                      {t("peer.history")} ({p.events.length})
+                    </button>
+                  )}
+                </span>
+              )}
+              {open === p.id && !!p.events?.length && (
+                <ol className="peer-hist" data-testid={`remote-events-${p.id}`}>
+                  {[...p.events].reverse().map((e, i) => (
+                    <li key={`${e.at}-${i}`} data-what={e.what}>
+                      <span className="peer-hist-t">{ago(e.at, now)}</span>
+                      <span className="peer-hist-w">{eventText(e)}</span>
+                      {e.reason && <span className="peer-line">{e.reason}</span>}
+                    </li>
+                  ))}
+                </ol>
+              )}
               {p.state === "failed" && p.kind === "auth" && <code className="peer-cmd sm">ssh-copy-id {p.host}</code>}
             </div>
             <div className="st-v peer-acts">

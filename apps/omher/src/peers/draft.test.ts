@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { labelFor, parsePeerDrafts, peerDraftsAllowed, stripPeerDrafts, validHost, validLabel } from "./draft";
+import { labelFor, namesThisComputer, parsePeerDrafts, peerDraftsAllowed, stripPeerDrafts, validHost, validLabel } from "./draft";
 import { Bubble } from "../chat/parts/Bubble";
 
 const fence = (body: string) => "```omher-peer\n" + body + "\n```";
@@ -82,5 +82,21 @@ describe("omher-peer drafts", () => {
     expect(peerDraftsAllowed("mini:demo-kami")).toBe(true);
     expect(peerDraftsAllowed("fold:kami:f1")).toBe(false);
     expect(peerDraftsAllowed("agent:s3")).toBe(false);
+  });
+});
+
+describe("a host that names this computer", () => {
+  it("catches localhost, loopback and this computer's own name in any spelling", () => {
+    for (const h of ["localhost", "LOCALHOST", "me@localhost", "localhost.", "app.localhost", "localhost.localdomain", "127.0.0.1", "me@127.1.2.3", "0.0.0.0"])
+      expect(namesThisComputer(h, ""), h).toBe(true);
+    for (const h of ["mybox", "MyBox.local", "me@mybox.local.", "mybox."]) expect(namesThisComputer(h, "mybox.local"), h).toBe(true);
+    expect(namesThisComputer("mybox.local", "MyBox")).toBe(true);
+  });
+
+  it("leaves other computers alone, and a missing name catches only localhost", () => {
+    for (const h of ["mini", "demo@host.example", "10.0.0.7", "128.0.0.1", "mybox2", "localhost2", "notlocalhost"])
+      expect(namesThisComputer(h, "mybox.local"), h).toBe(false);
+    expect(namesThisComputer("mybox", "")).toBe(false);
+    expect(namesThisComputer("", "mybox")).toBe(false);
   });
 });

@@ -40,6 +40,20 @@ export function labelFor(host: string): string {
   return [...first].slice(0, 40).join("");
 }
 
+/** True when `host` names this computer by name alone: `localhost` (and `*.localhost`), a 127.x.x.x or 0.0.0.0
+ *  address, or this computer's own name (`thisName`, as the shell reads it), each in any case, with or without a
+ *  trailing dot and macOS's `.local`. Nothing is looked up: an ssh config alias or a LAN address of this computer is
+ *  not caught. The card warns on it; the shell still connects if the person goes on. */
+export function namesThisComputer(host: string, thisName: string): boolean {
+  const norm = (n: string) => n.trim().toLowerCase().replace(/\.$/, "").replace(/\.local$/, "");
+  const name = norm(host.split("@").pop() ?? host);
+  if (!name) return false;
+  if (name === "localhost" || name.endsWith(".localhost") || name === "localhost.localdomain") return true;
+  if (/^127(\.\d{1,3}){3}$/.test(name) || name === "0.0.0.0") return true;
+  const me = norm(thisName);
+  return !!me && name === me;
+}
+
 /** A ```omher-peer fence (or ~~~), from its opening line to its closing one; or an inline one-line ```omher-peer {...}```. */
 const FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*omher-peer[ \t]*\r?\n([\s\S]*?)\r?\n {0,3}\1[ \t]*$/gm;
 const INLINE = /(`{3,})omher-peer[ \t]+(\{[^`\n]*\})[ \t]*\1/g;

@@ -18,6 +18,22 @@ export interface PeerStatus {
   /** The last line ssh or the remote printed. */
   reason?: string;
   attempt: number;
+  /** When the link last came up (ms since the epoch); kept across drops. */
+  connected_at?: number;
+  /** While reconnecting: when the next try starts (ms since the epoch). */
+  retry_at?: number;
+  /** The link's recent history, oldest first, at most 8 (the shell keeps it in memory only). */
+  events?: LinkEvent[];
+}
+
+/** One thing that happened to a link (peers.rs `LinkEvent`). */
+export interface LinkEvent {
+  at: number;
+  what: "connected" | "dropped" | "retrying" | "failed";
+  kind?: FailKind;
+  reason?: string;
+  /** retrying: the wait in seconds */
+  wait?: number;
 }
 
 /** What Check found: the exact command omher runs, and the remote Hermes' Python. */
@@ -48,6 +64,8 @@ export interface PeersHost {
   add(label: string, host: string, port: number | undefined, check: string | undefined): Promise<PeerStatus>;
   remove(id: string): Promise<void>;
   retry(id: string): Promise<void>;
+  /** This computer's name (`host_name`, empty when the system gives none), for the card's "this computer" warning. */
+  thisName(): Promise<string>;
 }
 
 const inTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -83,6 +101,9 @@ class TauriPeers implements PeersHost {
   }
   retry(id: string) {
     return this.call<void>("peers_retry", { id });
+  }
+  thisName() {
+    return this.call<string>("host_name");
   }
 }
 
@@ -170,6 +191,10 @@ class MockPeers implements PeersHost {
   async retry(id: string) {
     const p = this.peers.find((x) => x.id === id);
     if (p) this.tell({ ...p, state: "connected", url: mockPeerUrl() });
+  }
+  /** The mock computer's name, as the terminal host's mock reports it (macOS, with `.local`). */
+  async thisName() {
+    return (globalThis as { __omherShellHost?: string }).__omherShellHost ?? "mybox.local";
   }
   /** e2e: a link changes state (`mock.peerState` in the page). */
   set(id: string, patch: Partial<PeerStatus>) {
