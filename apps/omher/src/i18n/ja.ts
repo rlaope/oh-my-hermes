@@ -148,6 +148,8 @@ export const ja: Record<Key, string> = {
   "resume.paused": "omher の再起動で一時停止",
   "resume.pausedShort": "一時停止",
   "resume.resume": "再開",
+  "resume.program": "再開で {program} をもう一度起動します",
+  "resume.programTip": "このターミナルのプログラムが、omher の再起動後にもう一度起動するよう求めました。再開を押すとそのフォルダーでシェルを開き、{program} を渡された引数のまま一度だけ起動します(シェルのコマンドとしては読みません)。Windows では使えません。",
 
   // sidebar nav (the foot of the sidebar) and its search
   "nav.automations": "オートメーション",
@@ -608,6 +610,8 @@ export const ja: Record<Key, string> = {
   "term.osc52": "プログラムのコピーを許可",
   "term.osc52Hint": "ターミナルでキーを押した直後に、そのターミナルのプログラムがクリップボードにテキストを置けます(OSC 52:tmux や Neovim のヤンク、SSH 越しのコピー)。クリップボードを読むことはできません。",
   "term.osc52Refused": "プログラムがコピーしようとしましたが、このターミナルにキーボードがないか、直前のキー操作がないため止められました。ここでもう一度コピーのキーを押してください。",
+  "term.programResume": "プログラムの再起動リクエストを許可",
+  "term.programResumeHint": "TERMINALS のシェル内のプログラム(エディター、エージェント)が、omher の再起動後にもう一度起動するよう求められます(OSC 7577)。そのシェルだけに渡される秘密の値で、そのターミナルで動いていることを証明します。omher はコマンドを自分だけが読める ~/.omher/resume に保存し、再開を押したときに一度だけ実行します。Windows では使えません。",
   "paste.label": "貼り付けの確認",
   "paste.title": "{n}行を貼り付けますか?",
   "paste.titleOne": "改行で終わるテキストを貼り付けますか?",

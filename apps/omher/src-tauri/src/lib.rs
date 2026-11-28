@@ -473,6 +473,7 @@ struct SessionFg {
 
 /// A started terminal-panel shell: its session id and the folder it started in.
 #[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ShellStarted {
     id: u32,
     cwd: String,

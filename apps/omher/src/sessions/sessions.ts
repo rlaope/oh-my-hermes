@@ -322,6 +322,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   /** TERMINALS Shell rows put back after a restart with Claude Code, Codex or oh-my-hermes in front: the line their
    *  next start types once its shell is ready (once; fgResume.ts `restoreLine`). */
   const fgBack = new Map<string, string>();
+  /** Paused Shell rows whose program asked to be started again (Program Resume): their next start (Resume) asks the
+   *  shell to bring that program back, once. */
+  const progBack = new Set<string>();
   /** TERMINALS sessions put back after a restart whose kept history goes into their terminal before their program's
    *  first output (once). */
   const histBack = new Set<string>();
@@ -1557,7 +1560,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       typing = true;
       void typeRestore(id, t, run);
     };
-    const stopPrompt = t.restore ? onPrompt(t.el, () => readyIn(PROMPT_SETTLE_MS)) : null;
+    let stopPrompt = t.restore ? onPrompt(t.el, () => readyIn(PROMPT_SETTLE_MS)) : null;
     const { cols, rows } = t.term;
     let marked = 0;
     // this program's pty id once known, and what was drawn of its output before that
@@ -1684,8 +1687,19 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       await learnThisHost();
       let hostId: number;
       if (shell) {
-        const got = await getShellHost().start(r.cwd || null, cols, rows, onData, onExit, rec(id)?.shell, link);
+        // Program Resume (Settings › Terminal, on by default): a Shell row's shell may let its program ask to be started
+        // again; a paused row whose program asked brings it back on Resume, once (the shell takes the record out first)
+        const prog = link && readTermSettings().programResume ? progBack.has(id) : undefined;
+        progBack.delete(id);
+        const got = await getShellHost().start(r.cwd || null, cols, rows, onData, onExit, rec(id)?.shell, link, prog);
         hostId = got.id;
+        // the line the shell made (omher's own program and a one-use file: never the command) is typed once the shell
+        // is at its first prompt, as a CLI put back after a restart is (typeRestore)
+        if (got.resumeLine && t.run === run && !t.restore) {
+          t.restore = got.resumeLine;
+          stopPrompt = onPrompt(t.el, () => readyIn(PROMPT_SETTLE_MS));
+          readyIn(RESTORE_QUIET_MS);
+        }
         if (got.missing && t.run === run) {
           // the shell it was made with is gone from this computer: the default one runs, and the row says so once
           feed(t.term, `\x1b[33m${tr("term.shellMissing", { shell: got.missing })}\x1b[0m\r\n`);
@@ -2201,8 +2215,10 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         patchRec(id, { error: tr("remote.noLocalHermes") });
         return;
       }
+      // a Shell row whose program asked to be started again: this start brings it back (once)
+      if (r.resumeProgram) progBack.add(id);
       // the terminal view starts the program when it mounts
-      patchRec(id, { paused: undefined, status: "starting", error: undefined, exitCode: null });
+      patchRec(id, { paused: undefined, status: "starting", error: undefined, exitCode: null, resumeProgram: undefined });
       return;
     }
     // oh-my-hermes on a server: nothing of this folder is sent; the row stays paused with why (rule 47)
@@ -2354,6 +2370,20 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     }
     set({ list: [...list, ...state.list] });
     for (const r of list) if (keys.has(r.id)) registerRoute(r.id);
+    // Program Resume: a paused Shell row keeps the record its program left (shown on the row; Resume runs it once);
+    // every other record goes, a row that comes back by its own CLI's conversation id included. Off: none is read.
+    if (readTermSettings().programResume) {
+      const paused = list.filter((r) => r.paused && isShell(r.agent) && r.linkId);
+      void getShellHost()
+        .resumeRecords(paused.map((r) => r.linkId!))
+        .then((kept) => {
+          for (const [link, program] of kept) {
+            const r = state.list.find((x) => x.linkId === link);
+            if (r?.paused && isShell(r.agent)) patchRec(r.id, { resumeProgram: program });
+          }
+        })
+        .catch(() => undefined);
+    }
     // the saved copies of sessions that are gone go; the ones kept show again in their bubbles
     const ids = list.map((r) => r.id);
     void ready().then(() => host.pruneFiles(ids).catch(() => undefined));
@@ -2516,6 +2546,12 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     histBack.delete(id);
     termAgain.delete(id);
     fgBack.delete(id);
+    progBack.delete(id);
+    // a paused row whose program asked to be started again: closing it removes that record (the rest stay)
+    if (r?.resumeProgram) {
+      const keep = state.list.filter((x) => x.id !== id && x.resumeProgram && x.linkId).map((x) => x.linkId!);
+      void getShellHost().resumeRecords(keep).catch(() => undefined);
+    }
     if (r && isTerminalRec(state.agents, { ...r, status: "exited" })) forgetHistory(host, id);
     disposeTerm(id);
     void stopChat(id).then(() => host.removeFiles(id).catch(() => undefined));

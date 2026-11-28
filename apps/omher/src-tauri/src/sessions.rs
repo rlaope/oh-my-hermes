@@ -1043,13 +1043,21 @@ impl Sessions {
     where
         F: FnMut(Output) + Send + 'static,
     {
-        self.spawn_cmd(command_for(argv, cwd, path_env, account_env), cwd, account_env, None, cols, rows, sink)
+        self.spawn_cmd(command_for(argv, cwd, path_env, account_env), cwd, account_env, cols, rows, sink)
     }
 
     /// [`Sessions::spawn`] with the command already built (gh's sign-in: [`gh_login_command`]).
-    /// `program`: the TERMINALS row's link id and the record store when it may ask to be restarted
+    fn spawn_cmd<F>(&self, cmd: CommandBuilder, cwd: &Path, account_env: &[(String, String)], cols: u16, rows: u16, sink: F) -> Result<u32, String>
+    where
+        F: FnMut(Output) + Send + 'static,
+    {
+        self.spawn_cmd_with(cmd, cwd, account_env, None, cols, rows, sink)
+    }
+
+    /// [`Sessions::spawn_cmd`] for a program that may ask to be restarted. `program`: the TERMINALS row's link id and the record store when it may ask to be restarted
     /// ([`crate::program_resume`]): its program gets a new `OSC7577_TOKEN` and its output is watched for reports.
-    fn spawn_cmd<F>(&self, mut cmd: CommandBuilder, cwd: &Path, account_env: &[(String, String)], program: Option<(String, Arc<crate::program_resume::Store>)>, cols: u16, rows: u16, sink: F) -> Result<u32, String>
+    #[allow(clippy::too_many_arguments)]
+    fn spawn_cmd_with<F>(&self, mut cmd: CommandBuilder, cwd: &Path, account_env: &[(String, String)], program: Option<(String, Arc<crate::program_resume::Store>)>, cols: u16, rows: u16, sink: F) -> Result<u32, String>
     where
         F: FnMut(Output) + Send + 'static,
     {
@@ -1227,7 +1235,11 @@ impl Sessions {
     where
         F: FnMut(Output) + Send + 'static,
     {
-        self.start_shell_resumable(cwd, shell, link, None, home, cols, rows, sink).map(|s| (s.id, s.cwd, s.missing))
+        let env = terminal_env("shell", link)?;
+        let etc_shells = std::fs::read_to_string("/etc/shells").unwrap_or_default();
+        let (argv, missing) = shell_argv_for(shell, &host_env, &etc_shells, is_program_file, Os::current())?;
+        let at = shell_cwd(cwd, home);
+        Ok((self.spawn(argv, &at, None, &env, cols, rows, sink)?, at, missing))
     }
 
     /// [`Sessions::start_shell`] for a TERMINALS Shell row that may ask to be restarted ([`ShellResume`]): its shell
@@ -1257,7 +1269,7 @@ impl Sessions {
             }
         }
         let program = resume.map(|r| (r.key, r.store));
-        let id = self.spawn_cmd(command_for(argv, &at, None, &env), &at, &env, program, cols, rows, sink)?;
+        let id = self.spawn_cmd_with(command_for(argv, &at, None, &env), &at, &env, program, cols, rows, sink)?;
         let (resume_line, resume_label) = line.unzip();
         Ok(ShellStart { id, cwd: at, missing, resume_line, resume_label })
     }
@@ -1270,7 +1282,7 @@ impl Sessions {
     where
         F: FnMut(Output) + Send + 'static,
     {
-        self.spawn_cmd(gh_login_command(gh, args, home), home, &[], None, cols, rows, sink)
+        self.spawn_cmd(gh_login_command(gh, args, home), home, &[], cols, rows, sink)
     }
 
     /// The shells a Shell terminal may run here ([`shells_available`] on this machine).
@@ -1521,7 +1533,7 @@ fn spawn_reader(id: u32, mut reader: Box<dyn Read + Send>, sink: Sink, out: Arc<
                         #[cfg(all(test, unix))]
                         PTY_READ_BYTES.fetch_add(n as u64, Ordering::SeqCst);
                         out.io.fetch_add(1, Ordering::Relaxed);
-                        // OSC 7577 reports are read here and nowhere else; the bytes go on to the page unchanged
+                        // Program Resume reports are read here and nowhere else; the bytes go on to the page unchanged
                         if let Some(t) = resume.as_mut() {
                             t.feed(&buf[..n]);
                         }

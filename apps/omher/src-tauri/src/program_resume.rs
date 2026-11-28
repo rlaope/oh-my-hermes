@@ -946,6 +946,8 @@ pub fn exec_command(program: &Path, argv: &[String], cwd: Option<&Path>) -> std:
         c.current_dir(d);
     }
     c.env_remove(TOKEN_ENV);
+    // inside a Linux AppImage the program gets the host's library paths, as every program omher starts
+    crate::appimage::host_env(&mut c);
     c
 }
 
@@ -994,7 +996,8 @@ pub fn b64(s: &str) -> String {
     b64_encode(s.as_bytes())
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
+#[cfg(unix)]
 mod tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;

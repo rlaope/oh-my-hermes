@@ -148,6 +148,8 @@ export const zh: Record<Key, string> = {
   "resume.paused": "omher 重启时已暂停",
   "resume.pausedShort": "已暂停",
   "resume.resume": "继续",
+  "resume.program": "点继续会再次运行 {program}",
+  "resume.programTip": "此终端中的程序请求在 omher 重启后再次启动。点继续会在其文件夹中打开你的 shell,并按它给出的参数运行 {program} 一次(不会当作 shell 命令解析)。Windows 上不可用。",
 
   // sidebar nav (the foot of the sidebar) and its search
   "nav.automations": "自动化",
@@ -608,6 +610,8 @@ export const zh: Record<Key, string> = {
   "term.osc52": "允许程序复制",
   "term.osc52Hint": "在终端里按键之后,该终端中的程序可以把文字放到剪贴板(OSC 52:tmux、Neovim 复制,经 SSH 复制)。程序永远无法读取剪贴板。",
   "term.osc52Refused": "程序尝试复制,但此终端没有键盘焦点,或之前没有按键,已被阻止。请在这里再按一次复制键。",
+  "term.programResume": "允许程序请求重新启动",
+  "term.programResumeHint": "TERMINALS shell 中的程序(编辑器、代理)可以请求 omher 在重启后再次启动它(OSC 7577)。它要用只交给该 shell 的密钥证明自己在这个终端中运行;omher 把命令保存在只有你能读的 ~/.omher/resume 中,在你点继续时运行一次。不支持 Windows。",
   "paste.label": "确认粘贴",
   "paste.title": "粘贴 {n} 行?",
   "paste.titleOne": "粘贴以换行结尾的文本?",
