@@ -2894,7 +2894,6 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
         self.assertIn("std::fs::symlink_metadata(p).map(|m| m.is_dir())", self.past)
         self.assertIn("const HEAD: u64 = 256 * 1024;", self.past)
         self.assertIn("const TAIL: u64 = 1024 * 1024;", self.past)
-        self.assertIn("pub const MSG_MAX: usize = 40;", self.past)
         # a listing is bounded by work, not by a window of newest files: at most 20,000 files, 200 lines of a head, the
         # last 128 KB for the last line, and it stops once the list is full
         self.assertIn("const FILES_MAX: usize = 20_000;", self.past)
@@ -2906,17 +2905,16 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
             self.assertIn("if out.len() >= LIST_MAX + LIST_MARGIN {", body, fn)
         self.assertIn("codex_rollouts(root, FILES_MAX)", self.past)
         self.assertIn("if files.len() >= FILES_MAX {", self.past)
-        # every file read goes through inside(): the listing and the messages (a Claude Code conversation's file, by
-        # its id, in its folder's project folder or any other)
-        for fn in ("pub fn claude_list(", "fn claude_path(", "pub fn codex_list(", "pub fn codex_messages(", "fn codex_names(",
-                   "pub fn rollout_id("):
+        # every file read goes through inside(): the listings, the thread names, a rollout's id
+        for fn in ("pub fn claude_list(", "pub fn codex_list(", "fn codex_names(", "pub fn rollout_id("):
             body = self.past.split(fn, 1)[1].split("\n}\n", 1)[0]
             self.assertIn("inside(root, ", body, fn)
-        self.assertIn("let path = claude_path(root, id, cwd).ok_or(", self.past.split("pub fn claude_messages(", 1)[1].split("\n}\n", 1)[0])
-        # an id is a UUID before it names a file
-        for fn in ("pub fn claude_messages(", "pub fn codex_messages("):
-            body = self.past.split(fn, 1)[1].split("\n}\n", 1)[0]
-            self.assertIn("if !is_uuid(id) {", body, fn)
+        # a listed file is named by a UUID; nothing reads a conversation's messages for the page any more (picking one
+        # opens the CLI's own terminal, which shows its history)
+        self.assertIn("p.file_stem().and_then(|x| x.to_str()).is_some_and(is_uuid)", self.past)
+        for gone in ("pub fn messages(", "fn claude_messages(", "fn codex_messages(", "MSG_MAX"):
+            self.assertNotIn(gone, self.past, gone)
+        self.assertNotIn("past_chat_messages", self.lib)
         text = _flat(DOC.read_text(encoding="utf-8"))
         self.assertIn("It refuses a symlink anywhere under those folders (except `conversation_state` below, which only stats names and"
                       " follows links as the CLI does) and any file that is not inside that home once its links are resolved", text)
@@ -2936,7 +2934,8 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
         self.assertIn(
             "the last line the person or the agent said in it (from the last 128 KB of its file), folder and age; picking"
             " one opens a TERMINALS terminal of that agent in that folder continuing the conversation (`--resume <id>` for"
-            " Claude Code, `codex resume <id>` for Codex, rule 11), where the CLI shows its own history.",
+            " Claude Code, `codex resume <id>` for Codex, rule 11), where the CLI shows its own history; a conversation whose"
+            " folder no longer exists starts nothing, and its row says so.",
             text,
         )
 
@@ -2957,7 +2956,7 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
             self.assertNotIn(banned, look, banned)
 
     def test_the_commands_take_only_an_agent_folders_and_an_id(self) -> None:
-        for cmd, params in (("past_chats_list", "agent: String, cwds: Vec<String>, all: bool"), ("past_chat_messages", "agent: String, id: String, cwd: String"),
+        for cmd, params in (("past_chats_list", "agent: String, cwds: Vec<String>, all: bool"),
                             ("conversation_state", "agent: String, id: String, account: Option<String>"),
                             ("codex_conversation", "shell: State<'_, Shell>, id: u32"),
                             ("claude_conversation", "shell: State<'_, Shell>, id: u32"),

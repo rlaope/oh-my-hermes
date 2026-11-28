@@ -1904,6 +1904,7 @@ export const ko: Record<Key, string> = {
   "term.folderEmpty": "터미널이 없어요 · 우클릭해서 열어요",
   "term.folderGone": "이 폴더가 더 이상 없어요",
   "term.folderGoneRan": "{folder} 폴더가 더 이상 없어서 {at}에서 열었어요",
+  "term.folderGoneNothing": "{folder} 폴더가 더 이상 없어 아무것도 시작하지 않았어요",
   // spacing: the BOTS | TERMINALS divider and the sidebar's right edge
   "side.split": "봇과 터미널 높이 조절",
   "side.splitTip": "끌어서 봇이나 터미널 영역을 넓혀요. 더블클릭하면 자동 크기로 돌아가요.",

@@ -1904,6 +1904,7 @@ export const ja: Record<Key, string> = {
   "term.folderEmpty": "ターミナルなし · 右クリックで追加",
   "term.folderGone": "このフォルダはもうありません",
   "term.folderGoneRan": "{folder} はもうないため、{at} で開きました",
+  "term.folderGoneNothing": "{folder} はもうないため、何も開始しませんでした",
   // spacing: the BOTS | TERMINALS divider and the sidebar's right edge
   "side.split": "ボットとターミナルの高さを変える",
   "side.splitTip": "ドラッグでボットかターミナルを広げます。ダブルクリックで自動に戻ります。",

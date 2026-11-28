@@ -940,12 +940,6 @@ async fn claude_conversation(shell: State<'_, Shell>, id: u32) -> Result<Option<
         .map_err(|e| e.to_string())?
 }
 
-/// The last messages of one of those conversations, shown before the agent continues it (rule 30).
-#[tauri::command]
-async fn past_chat_messages(agent: String, id: String, cwd: String) -> Result<Vec<past_chats::PastMsg>, String> {
-    tauri::async_runtime::spawn_blocking(move || past_chats::messages(&past_home(&agent, None)?, &agent, &id, &cwd)).await.map_err(|e| e.to_string())?
-}
-
 /// Whether the file of a TERMINALS Claude Code or Codex session's own conversation `id` exists, asked before the
 /// session continues it (rule 30): `exists`, `absent`, or `unknown`, in the home of the account it runs with
 /// (`account`). Only names are looked at. An account whose folder is gone, or a home that cannot be read, is
@@ -1236,7 +1230,6 @@ pub fn run() {
             session_reveal,
             session_open_terminal,
             past_chats_list,
-            past_chat_messages,
             conversation_state,
             codex_conversation,
             claude_conversation,

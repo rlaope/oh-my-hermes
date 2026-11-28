@@ -41,15 +41,11 @@ const PEEK: u64 = 8 * 1024;
 const EXEC_MARK: &[u8] = br#""originator":"codex_exec""#;
 /// Claude Code shortens a project folder's name longer than this to its first this many characters and a hash.
 const SLUG_MAX: usize = 200;
-/// Messages shown from the conversation the person opens (the same cap as omher's own saved chats).
-pub const MSG_MAX: usize = 40;
-/// Characters kept of one message (as omher's saved chats, `resume.ts` MAX_TEXT).
-const TEXT_MAX: usize = 4_000;
 /// Characters of a title or first words.
 const TITLE_MAX: usize = 80;
 /// Bytes read from the start of a file (its folder, first message, early title).
 const HEAD: u64 = 256 * 1024;
-/// Bytes read from the end of a file (its latest title, its last messages).
+/// Bytes read from the end of a file for its latest title.
 const TAIL: u64 = 1024 * 1024;
 /// `session_index.jsonl` is read whole only up to this size.
 const INDEX_MAX: u64 = 4 * 1024 * 1024;
@@ -80,6 +76,7 @@ pub struct PastChat {
     file: PathBuf,
 }
 
+/// One thing said in a conversation: the person's typed text or the agent's answer text (a row's last line).
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct PastMsg {
     pub role: &'static str,
@@ -213,7 +210,7 @@ fn last_said(path: &Path, agent: &str) -> Option<PastMsg> {
     })
 }
 
-/// All of a file when small, else its tail: where the last messages are.
+/// All of a file when small, else its last [`TAIL`] bytes: where its latest title is.
 fn last_part(path: &Path) -> Vec<Value> {
     let size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
     lines_in(path, size.saturating_sub(TAIL), TAIL)
@@ -407,53 +404,6 @@ pub fn claude_list(root: &Path, cwds: Option<&[String]>) -> Vec<PastChat> {
     newest(out)
 }
 
-/// Claude Code conversation `id`'s file: in the project folder `cwd`'s slug names, else in whichever project folder
-/// holds it (a long path's shortened name, a folder reached through a link). Each candidate must pass [`inside`].
-fn claude_path(root: &Path, id: &str, cwd: &str) -> Option<PathBuf> {
-    let projects = root.join("projects");
-    if !plain_dir(&projects) {
-        return None;
-    }
-    let name = format!("{id}.jsonl");
-    let own = projects.join(claude_slug(cwd));
-    if plain_dir(&own) {
-        if let Some(p) = inside(root, &own.join(&name)) {
-            return Some(p);
-        }
-    }
-    claude_dirs(&projects, None).iter().find_map(|d| inside(root, &d.join(&name)))
-}
-
-/// The last messages of Claude Code conversation `id` in `cwd`: what the person typed and the agent's answers.
-pub fn claude_messages(root: &Path, id: &str, cwd: &str) -> Result<Vec<PastMsg>, String> {
-    if !is_uuid(id) {
-        return Err("not a conversation id".into());
-    }
-    let path = claude_path(root, id, cwd).ok_or("no such conversation")?;
-    // the transcript's own folder, as the list showed it
-    if !claude_cwd(&head_lines(&path, CWD_LINES, &|_| false)).is_some_and(|seen| same_folder(seen, cwd)) {
-        return Err("no such conversation".into());
-    }
-    let mut out: Vec<PastMsg> = Vec::new();
-    let mut last_answer = String::new();
-    for o in last_part(&path) {
-        let ts = iso_secs(s(&o, "timestamp")).unwrap_or(0.0);
-        if let Some(t) = claude_user_text(&o) {
-            out.push(PastMsg { role: "user", text: clip_text(&t), ts });
-            last_answer.clear();
-        } else if let Some(t) = claude_assistant_text(&o) {
-            // one answer is split over several lines (one per content block) with the same message id
-            let mid = s(&o["message"], "id").to_string();
-            match out.last_mut() {
-                Some(m) if m.role == "assistant" && !mid.is_empty() && mid == last_answer => m.text = clip_text(&format!("{}\n\n{t}", m.text)),
-                _ => out.push(PastMsg { role: "assistant", text: clip_text(&t), ts }),
-            }
-            last_answer = mid;
-        }
-    }
-    Ok(keep_last(out))
-}
-
 // ---- Codex ------------------------------------------------------------------------------------
 
 /// Codex rollout files, newest day first (names carry the time, so newest first within a day too), at most
@@ -644,50 +594,7 @@ pub fn rollout_id(root: &Path, path: &Path) -> Option<String> {
     (cut > 0 && stem.as_bytes()[cut - 1] == b'-' && is_uuid(id)).then(|| id.to_string())
 }
 
-/// The last messages of Codex thread `id` (its rollout found by name; the folder is checked against `cwd`).
-pub fn codex_messages(root: &Path, id: &str, cwd: &str) -> Result<Vec<PastMsg>, String> {
-    if !is_uuid(id) {
-        return Err("not a conversation id".into());
-    }
-    let suffix = format!("-{id}.jsonl");
-    let path = codex_rollouts(root, usize::MAX)
-        .into_iter()
-        .find(|p| p.file_name().and_then(|x| x.to_str()).is_some_and(|x| x.ends_with(&suffix)))
-        .and_then(|p| inside(root, &p))
-        .ok_or("no such conversation")?;
-    match codex_meta(&head_lines(&path, 1, &|_| false)) {
-        Some(m) if m.id == id && same_folder(&m.cwd, cwd) => {}
-        _ => return Err("no such conversation".into()),
-    }
-    let mut out = Vec::new();
-    for o in last_part(&path) {
-        let ts = iso_secs(s(&o, "timestamp")).unwrap_or(0.0);
-        if let Some(t) = codex_user_text(&o) {
-            out.push(PastMsg { role: "user", text: clip_text(&t), ts });
-        } else if let Some(t) = codex_assistant_text(&o) {
-            out.push(PastMsg { role: "assistant", text: clip_text(&t), ts });
-        }
-    }
-    Ok(keep_last(out))
-}
-
 // ---- both -------------------------------------------------------------------------------------
-
-fn clip_text(t: &str) -> String {
-    let t = t.trim();
-    if t.chars().count() <= TEXT_MAX {
-        t.to_string()
-    } else {
-        format!("{}…", t.chars().take(TEXT_MAX - 1).collect::<String>())
-    }
-}
-
-fn keep_last(mut v: Vec<PastMsg>) -> Vec<PastMsg> {
-    if v.len() > MSG_MAX {
-        v.drain(..v.len() - MSG_MAX);
-    }
-    v
-}
 
 /// A list row; its fork and last line are filled in once it is kept ([`list`]).
 fn row(agent: &'static str, id: String, cwd: &str, title: String, named: bool, path: &Path) -> PastChat {
@@ -849,18 +756,6 @@ fn seek(dir: &Path, depth: u32, want: &dyn Fn(&Path) -> bool) -> (bool, bool) {
     (false, unknown)
 }
 
-/// The last messages of `agent`'s conversation `id` in `cwd`.
-pub fn messages(root: &Path, agent: &str, id: &str, cwd: &str) -> Result<Vec<PastMsg>, String> {
-    if !absolute(cwd) {
-        return Err("not a folder".into());
-    }
-    match agent {
-        "claude" => claude_messages(root, id, cwd),
-        "codex" => codex_messages(root, id, cwd),
-        _ => Err(format!("{agent} conversations are not listed")),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -984,6 +879,8 @@ mod tests {
         // not a conversation file
         write(&dir.join("notes.jsonl"), &claude_file(cwd, "y"));
         let rows = list(&root, "claude", &[cwd.to_string(), "relative/x".to_string()], false).unwrap();
+        // an agent whose conversations are not looked at
+        assert!(list(&root, "omo", &[cwd.to_string()], false).is_err());
         assert_eq!(rows.len(), 1, "{rows:?}");
         assert_eq!((rows[0].id.as_str(), rows[0].title.as_str(), rows[0].named, rows[0].cwd.as_str()), (C1, "Remember a word", true, cwd));
         // a rename in Claude Code wins; without any title the first words name it
@@ -994,25 +891,6 @@ mod tests {
         write(&dir.join(format!("{C1}.jsonl")), &claude_file(cwd, C1)[..8]);
         let r = &claude_list(&root, Some(&[cwd.into()]))[0];
         assert_eq!((r.title.as_str(), r.named), ("Remember the word MARIGOLD for later", false));
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    #[test]
-    fn claude_messages_keep_what_was_typed_and_answered() {
-        let root = tmp("claude-msgs");
-        let cwd = "/w";
-        write(&root.join("projects").join(claude_slug(cwd)).join(format!("{C1}.jsonl")), &claude_file(cwd, C1));
-        let m = messages(&root, "claude", C1, cwd).unwrap();
-        let got: Vec<(&str, &str)> = m.iter().map(|x| (x.role, x.text.as_str())).collect();
-        assert_eq!(got, [("user", "Remember the word MARIGOLD for later"), ("assistant", "Noted.\n\nI will remember it.")]);
-        assert_eq!(m[0].ts, iso_secs("2026-11-12T10:00:02.000Z").unwrap());
-        // the id is a UUID, never a path
-        for bad in ["../x", "x", &format!("{C1}/../{C1}"), ""] {
-            assert!(messages(&root, "claude", bad, cwd).is_err(), "{bad}");
-        }
-        assert!(messages(&root, "claude", C2, cwd).is_err());
-        assert!(messages(&root, "claude", C1, "w").is_err());
-        assert!(messages(&root, "omo", C1, cwd).is_err());
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -1029,13 +907,11 @@ mod tests {
         std::fs::create_dir_all(root.join("projects").join(&slug)).unwrap();
         symlink(away.join(format!("{C1}.jsonl")), root.join("projects").join(&slug).join(format!("{C1}.jsonl"))).unwrap();
         assert!(claude_list(&root, Some(&[cwd.into()])).is_empty());
-        assert!(claude_messages(&root, C1, cwd).is_err());
         // a linked project folder
         let root2 = tmp("links2");
         std::fs::create_dir_all(root2.join("projects")).unwrap();
         symlink(&away, root2.join("projects").join(&slug)).unwrap();
         assert!(claude_list(&root2, Some(&[cwd.into()])).is_empty());
-        assert!(claude_messages(&root2, C1, cwd).is_err());
         // a linked projects folder
         let root3 = tmp("links3");
         let real = tmp("links3-real");
@@ -1050,7 +926,7 @@ mod tests {
         symlink(away.join("r.jsonl"), day.join(format!("rollout-2026-11-12T00-00-00-{X1}.jsonl"))).unwrap();
         symlink(&away, x.join("sessions/2026/11/13")).unwrap();
         assert!(codex_list(&x, Some(&[cwd.into()])).is_empty());
-        assert!(codex_messages(&x, X1, cwd).is_err());
+        assert!(codex_list(&x, None).is_empty());
         // inside() itself
         assert!(inside(&root, &away.join(format!("{C1}.jsonl"))).is_none());
         for d in [root, away, root2, root3, real, x] {
@@ -1133,11 +1009,8 @@ mod tests {
         let mut got: Vec<(&str, &str, bool)> = rows.iter().map(|r| (r.id.as_str(), r.title.as_str(), r.named)).collect();
         got.sort();
         assert_eq!(got, [(X1, "Remember a colour", true), (X2, "Remember COBALT please", false)]);
-        let m = messages(&root, "codex", X2, cwd).unwrap();
-        assert_eq!(m.iter().map(|x| (x.role, x.text.as_str())).collect::<Vec<_>>(), [("user", "Remember COBALT please"), ("assistant", "Remembered.")]);
-        // the thread must be in the folder asked for
-        assert!(messages(&root, "codex", X2, "/elsewhere").is_err());
-        assert!(messages(&root, "codex", "01a1d060-7a13-75e3-aa36-356cd0706c8a", cwd).is_err());
+        // the answer, not the imported tool result before it, is the last thing said
+        assert!(rows.iter().all(|r| r.last.as_ref().map(|l| (l.role, l.text.as_str())) == Some(("assistant", "Remembered.")) && r.fork.is_none()));
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -1156,11 +1029,10 @@ mod tests {
         let p = root.join("projects").join(claude_slug(cwd)).join(format!("{C1}.jsonl"));
         write(&p, &lines);
         assert!(std::fs::metadata(&p).unwrap().len() > HEAD + TAIL);
-        let r = &claude_list(&root, Some(&[cwd.into()]))[0];
+        let r = &list(&root, "claude", &[cwd.into()], false).unwrap()[0];
+        // the first words from the head, the latest title and the last line from the end
         assert_eq!(r.title, "Late title");
-        let m = claude_messages(&root, C1, cwd).unwrap();
-        // the early messages lie outside the tail; the last ones are there
-        assert_eq!(m.iter().map(|x| x.text.as_str()).collect::<Vec<_>>(), ["What was the word?", "MARIGOLD"]);
+        assert_eq!(r.last.as_ref().map(|l| (l.role, l.text.as_str())), Some(("assistant", "MARIGOLD")));
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -1302,11 +1174,12 @@ mod tests {
             user(none.clone(), "<system-reminder>remember</system-reminder>"),
         ];
         lines.extend(claude_file(cwd, C1)[2..8].iter().cloned());
+        // the same turns after the last answer are not the person's last line
+        lines.extend(lines[..8].to_vec());
         write(&root.join("projects").join(claude_slug(cwd)).join(format!("{C1}.jsonl")), &lines);
-        let r = &claude_list(&root, Some(&[cwd.into()]))[0];
+        let r = &list(&root, "claude", &[cwd.into()], false).unwrap()[0];
         assert_eq!((r.title.as_str(), r.named), ("Remember the word MARIGOLD for later", false));
-        let m = claude_messages(&root, C1, cwd).unwrap();
-        assert_eq!(m.iter().filter(|x| x.role == "user").map(|x| x.text.as_str()).collect::<Vec<_>>(), ["Remember the word MARIGOLD for later"]);
+        assert_eq!(r.last.as_ref().map(|l| (l.role, l.text.as_str())), Some(("assistant", "I will remember it.")));
         // Codex: a collaboration turn's boilerplate
         let id = xid(30);
         let mut c = codex_file(&id, cwd);
@@ -1318,8 +1191,6 @@ mod tests {
         rollout(&root, &id, &c, 1);
         let r = &list(&root, "codex", &[cwd.into()], false).unwrap()[0];
         assert_eq!(r.title, "Remember COBALT please");
-        let m = codex_messages(&root, &id, cwd).unwrap();
-        assert_eq!(m.iter().filter(|x| x.role == "user").map(|x| x.text.as_str()).collect::<Vec<_>>(), ["Remember COBALT please"]);
         // and the last line passes them over too
         assert_eq!(r.last.as_ref().map(|l| (l.role, l.text.as_str())), Some(("assistant", "Remembered.")));
         let _ = std::fs::remove_dir_all(&root);
@@ -1389,7 +1260,7 @@ mod tests {
     }
 
     #[test]
-    fn a_long_folder_claude_code_shortened_is_listed_and_opens() {
+    fn a_long_folder_claude_code_shortened_is_listed() {
         let root = tmp("long-slug");
         let cwd = format!("/Users/you/{}", "deep/".repeat(50));
         let cwd = cwd.trim_end_matches('/').to_string();
@@ -1400,9 +1271,8 @@ mod tests {
         write(&root.join("projects").join(&short).join(format!("{C1}.jsonl")), &claude_file(&cwd, C1));
         let rows = list(&root, "claude", &[cwd.clone()], false).unwrap();
         assert_eq!(rows.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), [C1]);
-        assert_eq!(claude_messages(&root, C1, &cwd).unwrap().len(), 2);
-        // a conversation found in another project folder opens only for the folder it ran in
-        assert!(claude_messages(&root, C1, "/Users/you").is_err());
+        // and the look before a terminal continues it finds its file there
+        assert_eq!(conversation_state(&root, "claude", C1).unwrap(), "exists");
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -1431,7 +1301,7 @@ mod tests {
     }
 
     /// A real conversation made in the Claude Code (or Codex) CLI outside omher: list it from the CLI's own files,
-    /// read its last messages, then continue it through omher's own chat path and ask about the first message.
+    /// then continue it through omher's own chat path and ask about the first message.
     /// `OMHER_REAL_AGENT` (claude | codex), `OMHER_REAL_DIR` (the scratch folder the CLI ran in). Prints what came
     /// back; run with `cargo test real_past -- --ignored --nocapture`.
     #[test]
@@ -1448,9 +1318,7 @@ mod tests {
         let rows = list(&root, &agent, &[cwd.clone()], false).unwrap();
         println!("LIST {rows:?}");
         let row = rows.first().expect("the CLI's conversation is listed");
-        let msgs = messages(&root, &agent, &row.id, &cwd).unwrap();
-        println!("MESSAGES {msgs:?}");
-        // OMHER_REAL_LIST_ONLY: only the read-only listing and messages (no model turn)
+        // OMHER_REAL_LIST_ONLY: only the read-only listing (no model turn)
         if std::env::var("OMHER_REAL_LIST_ONLY").is_ok() {
             return;
         }

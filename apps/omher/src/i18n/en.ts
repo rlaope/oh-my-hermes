@@ -1908,6 +1908,7 @@ export const en = {
   "term.folderEmpty": "No terminals · right-click to add",
   "term.folderGone": "This folder no longer exists",
   "term.folderGoneRan": "{folder} no longer exists, opened {at} instead",
+  "term.folderGoneNothing": "{folder} no longer exists: nothing was started",
   // spacing: the BOTS | TERMINALS divider and the sidebar's right edge
   "side.split": "Resize bots and terminals",
   "side.splitTip": "Drag to give bots or terminals more room. Double-click: back to automatic.",

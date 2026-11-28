@@ -1904,6 +1904,7 @@ export const zh: Record<Key, string> = {
   "term.folderEmpty": "暂无终端 · 右键新建",
   "term.folderGone": "此文件夹已不存在",
   "term.folderGoneRan": "{folder} 已不存在，已在 {at} 中打开",
+  "term.folderGoneNothing": "{folder} 已不存在，未启动任何程序",
   // spacing: the BOTS | TERMINALS divider and the sidebar's right edge
   "side.split": "调整机器人和终端的高度",
   "side.splitTip": "拖动为机器人或终端留出更多空间。双击恢复自动。",

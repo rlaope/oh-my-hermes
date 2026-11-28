@@ -5,7 +5,9 @@
 // 2. a Codex fork reads "fork of <title>" beside its title;
 // 3. This folder / All folders: All folders lists every folder's conversations (each row shows its own), the choice is
 //    kept for the next time, and the filter narrows by title, last line or folder;
-// 4. picking one opens a TERMINALS row in that folder whose CLI continues that conversation (`--resume <id>`).
+// 4. picking one opens a TERMINALS row in that folder whose CLI continues that conversation (`--resume <id>`); the
+//    same conversation picked again opens that row; a conversation whose folder is gone starts nothing and says so.
+// This replaces the chat-mode coverage of sessions-manage.spec.ts (skipped since TERMINALS replaced chat sessions).
 // Shots: OMHER_SHOTS=<dir> -> past-all-folders.png, past-codex-fork.png
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
@@ -168,4 +170,18 @@ test("Codex: a fork reads as a fork of the conversation it came from; an empty f
   await expect(page.getByTestId("session-past-none")).toHaveText("No Codex conversations in this folder");
   await page.getByTestId("session-past-scope-all").click();
   await expect(page.getByTestId("session-past-none")).toHaveText("No Codex conversations");
+});
+
+test("a conversation whose folder is gone starts nothing: its row and the folder's header say so", async ({ page }) => {
+  await open(page, "/home/you/code/web-app");
+  await page.evaluate(() => ((window as unknown as { __omherMockGoneFolders: string[] }).__omherMockGoneFolders = ["/home/you/code/web-app"]));
+  await plusMenu(page, "/home/you/code/web-app");
+  await page.getByTestId("session-past-codex").click();
+  await page.getByTestId(`session-past-row-${THEME}`).click();
+  await expect(page.getByTestId("terminal").locator(".xterm-rows")).toContainText("/home/you/code/web-app no longer exists: nothing was started");
+  await expect(page.getByTestId("term-group-gone")).toHaveText("This folder no longer exists");
+  // the refused start is the only one: no program runs, nothing is typed
+  const starts = (await calls(page)).filter((c) => c.op === "start");
+  expect(starts).toEqual([expect.objectContaining({ agent: "codex", cwd: "/home/you/code/web-app", resume: THEME })]);
+  expect((await calls(page)).some((c) => c.op === "write")).toBe(false);
 });

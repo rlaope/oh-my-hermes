@@ -4,9 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **omher: Continue a conversation is back in the TERMINALS + menu, and finds the ones you had.** The menu's last
-  rows open the Claude Code and Codex conversations kept on this computer again; picking one opens that agent's
-  terminal in the conversation's folder, continuing it as the CLI's own resume does. The list now skips `codex exec`
+- **omher: Continue a conversation is back in the TERMINALS + menu, and finds the ones you had.** Regression fixed:
+  since SESSIONS became TERMINALS (5073fdc04) the + menu had no way into this list, and continuing a conversation made
+  a chat row TERMINALS no longer shows. The menu's last rows open the Claude Code and Codex conversations kept on this
+  computer again; picking one opens that agent's terminal in the conversation's folder, continuing it as the CLI's own
+  resume does (picking it again opens that terminal; a folder that is gone starts nothing and says so). The list now skips `codex exec`
   runs and subagent threads (most of a busy Codex folder), so real conversations no longer fall out of view behind
   them; a Codex fork reads "fork of" the conversation it came from; titles and lines never come from text the CLI or
   another agent put in your place (compaction summaries, reminders, teammate and task messages, Codex collaboration

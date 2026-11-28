@@ -1703,7 +1703,11 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     } catch (e) {
       if (t.run !== run) return;
       t.closed = true;
-      const error = errText(e);
+      // the shell starts nothing in a folder that is gone (`not a folder`): the row and its folder's header say so in
+      // the person's words (a conversation continued from the + menu names the folder it ran in, which may be gone)
+      const gone = !ofChat && !shell && /^not a folder: /.test(errText(e));
+      if (gone) setFolderGone(r.cwd, true);
+      const error = gone ? tr("term.folderGoneNothing", { folder: r.cwd }) : errText(e);
       if (!ofChat) {
         patchRec(id, { status: "failed", error });
         tellEnd(id, "failed", { error });
