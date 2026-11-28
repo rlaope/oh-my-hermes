@@ -1953,8 +1953,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
           if (tt.settle !== null) clearTimeout(tt.settle);
           tt.settle = setTimeout(() => tellSize(tt), RESIZE_SETTLE_MS);
         });
-        // The program rang the terminal's bell, as agents do when they wait for the person. omher reads nothing the
-        // program prints: the bell is the one thing a terminal tells it. The row says so and a notification goes
+        // The program rang the terminal's bell, as agents do when they wait for the person. Apart from the row card's
+        // last line and, for a Claude Code or Codex row, its permission or choice dialog on screen (screenAsk.ts), omher
+        // reads nothing the program prints: the bell is what a terminal tells it. The row says so and a notification goes
         // out, once, until the person comes back to the session.
         const ring = () => {
           const r = rec(id);
