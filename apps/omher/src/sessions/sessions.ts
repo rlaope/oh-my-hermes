@@ -48,7 +48,7 @@ import { getDraft, setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type ConvState, type PastChat, type SessionHost } from "./host";
 import { localBot } from "../peers/peerKey";
 import { modeKnown, remoteOnly } from "../app/remote";
-import { folderKey, getStore, notifySessionEvent, notifySessionNote, onBridgeEvent, selectAsks, setChatRoute, setSessionKeyLookup, waitingIds, type OutFile, type SentFile, type Store } from "../state/store";
+import { folderKey, getStore, notifySessionEvent, notifySessionNote, onBridgeEvent, selectAsks, setChatRoute, setSessionKeyLookup, queueNext, waitingIds, type OutFile, type SentFile, type Store } from "../state/store";
 import { blobType, bytesOf, inlinePicture, parseSentFiles, pathsTyped, putSentFiles, SENT_FILES_KEY, shellQuote, wireText, type SavedFile, type SentFilesBook } from "./attach";
 import type { AccountCli, AccountGroup, ApprovalChoice, BridgeEvent, ClarifyAnswers, Msg } from "../lib/protocol";
 import { continuesItself, type SavedSession } from "../app/resume";
@@ -808,10 +808,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   /** The head held message goes out now: the row leaves the queue (moved to the end) before the request, once. */
   const sendHead = async (id: string) => {
     const key = keys.get(id);
-    const head = key ? chatOf(key)?.queue?.[0] : undefined;
-    if (!key || !head || chatOf(key)?.turn) return;
     // paused (the queue bar): only a row the person sent by hand goes out
-    if (chatOf(key)?.queuePaused && chatOf(key)?.queueRelease !== head) return;
+    const head = key ? queueNext(chatOf(key)) : undefined;
+    if (!key || !head || chatOf(key)?.turn) return;
     const h = heldInputs.get(head);
     heldInputs.delete(head);
     store().dispatch({ type: "queue.take", bot: key, id: head, now: Date.now() });
@@ -888,7 +887,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       // with the agent now: no longer held, "Waiting" until the agent says it took it
       st.dispatch({ type: "queue.take", bot: key, id: lid, now: Date.now() });
     } catch {
-      st.dispatch({ type: "queue.front", bot: key, id: lid });
+      // refused: it goes out next, but a pause still holds it
+      st.dispatch({ type: "queue.front", bot: key, id: lid, keepPaused: true });
     }
   };
 

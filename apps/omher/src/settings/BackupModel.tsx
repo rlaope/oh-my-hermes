@@ -74,11 +74,21 @@ export function BackupModel({ bot }: { bot: Bot }) {
     setBusy(true);
     setErr("");
     try {
-      const out = await s.fallbackSet(bot.name, next);
+      // the list this page read goes too: a change made elsewhere since then is refused, never written over
+      const out = await s.fallbackSet(bot.name, next, chain.map(({ provider, model }) => ({ provider, model })));
       setRead({ chain: out.chain, editable: out.editable });
       if (out.outcome !== "ok") setErr(t("page.failed", { error: out.line ?? "" }));
     } catch (e) {
-      setErr(errorLine(e, bot.display_name));
+      if ((e as { code?: string } | null)?.code !== "changed") setErr(errorLine(e, bot.display_name));
+      else {
+        // changed elsewhere: the list as it is now, and one line saying so
+        try {
+          setRead(await s.fallbackGet(bot.name));
+          setErr(t("backup.changed"));
+        } catch (again) {
+          setErr(errorLine(again, bot.display_name));
+        }
+      }
     }
     setBusy(false);
   };

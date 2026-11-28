@@ -3,7 +3,7 @@
 // order, exactly once; its ↵ buttons send it now (one interrupt), steer it again, edit or delete it. Holds across a
 // reconnect, a bot switch and Stop.
 import { describe, expect, it } from "vitest";
-import { answerSlot, createStore, heldDrafts, initialState, reduce, reduceQueue, type AppState, type BridgeLike, type Chat } from "./store";
+import { answerSlot, createStore, heldDrafts, initialState, reduce, reduceQueue, waitingIds, type AppState, type BridgeLike, type Chat } from "./store";
 import type { BridgeEvent } from "../lib/protocol";
 import type { BridgeStatus } from "../lib/bridge";
 
@@ -659,7 +659,8 @@ describe("steer queue: the queue bar (Pause, Resume, Clear)", () => {
     expect(read).toBe(0);
   });
 
-  it("Clear leaves a row being steered alone", async () => {
+  /** kami mid-turn, whose steers wait for `pending` to be answered. */
+  const slowSteers = async () => {
     const f = fake();
     const plain = f.bridge.request;
     const pending: ((v: unknown) => void)[] = [];
@@ -668,13 +669,81 @@ describe("steer queue: the queue bar (Pause, Resume, Clear)", () => {
     const store = createStore(f.bridge, { now: () => T0 });
     await store.actions.init();
     f.emit({ event: "turn.start", bot: "kami" });
-    void store.actions.send("steering now");
+    return { f, store, a: store.actions, pending, chat: () => store.getState().chats.kami };
+  };
+  const withFile = { name: "a.txt", attach: "file", size: 1, read: async () => "eA==" };
+
+  it("Clear leaves a row being steered alone and clears the plain one behind it", async () => {
+    const { a, pending, chat } = await slowSteers();
+    void a.send("steering now");
     await tick();
-    store.actions.queueClear();
-    expect(userTexts(store.getState().chats.kami)).toContain("steering now");
+    // a message with a file is never steered in: it waits
+    await a.sendWithFiles("plain one", [withFile] as never);
+    expect(waitingIds(chat())).toHaveLength(1);
+    a.queueClear();
+    expect(userTexts(chat())).toContain("steering now");
+    expect(userTexts(chat())).not.toContain("plain one");
     pending.shift()!({ status: "queued" });
     await tick();
-    expect(store.getState().chats.kami.items.find((i) => i.kind === "user" && i.text === "steering now")).toMatchObject({ steered: true });
+    expect(chat().items.find((i) => i.kind === "user" && i.text === "steering now")).toMatchObject({ steered: true });
+  });
+
+  it("a hand Steer of the last waiting row keeps the pause, and a refused one comes back paused, never sent", async () => {
+    const { f, a, chat } = await busy();
+    await a.send("only"); // refused at once: it waits
+    a.queuePause(true);
+    const [id] = heldIds(chat());
+    await a.queueSteer(id); // refused again
+    expect(chat().queuePaused).toBe(true);
+    expect(chat().items.find((i) => i.id === id)).toMatchObject({ held: true });
+    expect(waitingIds(chat())).toEqual([id]);
+    await turn(f);
+    for (let i = 0; i < 4; i++) await tick();
+    expect(f.sends()).toEqual([]);
+    expect(chat().queuePaused).toBe(true);
+  });
+
+  it("Send now on two rows while paused: both go out, in the order pressed; the rest stay paused", async () => {
+    const { f, a, chat } = await busy();
+    for (const text of ["a", "b", "c"]) await a.send(text);
+    a.queuePause(true);
+    const [A, , C] = heldIds(chat());
+    // pressed one after the other while the first press's interrupt is still out
+    await Promise.all([a.queueSendNow(C), a.queueSendNow(A)]);
+    expect(f.count("chat.interrupt")).toBe(1);
+    await turn(f, "interrupted");
+    expect(f.sends()).toEqual(["c"]);
+    await start(f);
+    await turn(f);
+    expect(f.sends()).toEqual(["c", "a"]);
+    await start(f);
+    await turn(f);
+    expect(f.sends()).toEqual(["c", "a"]);
+    expect(chat().queuePaused).toBe(true);
+    expect(userTexts(chat()).filter((t) => t === "b")).toHaveLength(1);
+  });
+
+  it("a row left to be steered in when the turn ends is counted, held by the pause and deleted by Clear", async () => {
+    const { f, a, pending, chat } = await slowSteers();
+    void a.send("R"); // steering, no answer yet
+    await tick();
+    void a.send("S"); // behind it, to be steered next
+    await tick();
+    await a.sendWithFiles("F", [withFile] as never); // never steered: waits
+    a.queuePause(true);
+    expect(chat().queuePaused).toBe(true);
+    f.emit({ event: "turn.end", bot: "kami", outcome: "done" });
+    await tick();
+    // R is still steering; S and F both wait, and the bar, the pause and Clear agree on them
+    expect(waitingIds(chat()).map((id) => (chat().items.find((i) => i.id === id) as { text: string }).text)).toEqual(["S", "F"]);
+    a.queueClear();
+    expect(userTexts(chat())).not.toContain("S");
+    expect(userTexts(chat())).not.toContain("F");
+    pending.shift()!({ status: "queued" });
+    for (let i = 0; i < 4; i++) await tick();
+    expect(f.sends()).toEqual([]);
+    expect(f.calls.filter((c) => c.op === "chat.steer").map((c) => c.params.text)).toEqual(["R"]);
+    expect(chat().queuePaused).toBe(false);
   });
 
   it("the pause ends by itself when the last waiting row is deleted, edited or sent by hand", async () => {

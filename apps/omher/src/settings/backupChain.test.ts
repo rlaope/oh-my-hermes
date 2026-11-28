@@ -48,17 +48,28 @@ describe("the switch notice", () => {
     expect(fallbackDetail(LINE)).toBe("gpt-6.1-sol via openai could not respond (rate limited); using x-ai/grok-4.7 via openrouter.");
     expect(fallbackDetail("⚠ Model fallback: a; using b.")).toBe("a; using b.");
     expect(fallbackDetail("Using another model now.")).toBe("Using another model now.");
+    // Hermes' pre-agent notice is the same status kind, with its own label
+    expect(fallbackDetail("⚠️ Provider fallback: openai could not be reached; using openrouter.")).toBe("openai could not be reached; using openrouter.");
+    expect(fallbackDetail("provider FALLBACK: a")).toBe("a");
   });
 
-  it("a marked status leaves one lasting row and keeps the passing status line", () => {
+  it("a marked status leaves a lasting row and keeps the passing status line; the title is not fixed in one language", () => {
     const s = run([
       { event: "turn.start", bot: "kami" },
       { event: "status", bot: "kami", text: LINE, fallback: true },
     ]);
     const rows = notices(s);
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ notice: "fallback", text: "Switched to the backup model", detail: fallbackDetail(LINE) });
+    expect(rows[0]).toMatchObject({ notice: "fallback", text: LINE, detail: fallbackDetail(LINE) });
+    expect(JSON.stringify(rows[0])).not.toContain("backup model");
     expect(s.chats.kami.turn?.status).toBe(LINE);
+    // a walk down the chain: each switch adds its own row
+    const walk = run([
+      { event: "turn.start", bot: "kami" },
+      { event: "status", bot: "kami", text: LINE, fallback: true },
+      { event: "status", bot: "kami", text: "⚠️ Model fallback: x-ai/grok-4.7 via openrouter could not respond; using qwen3:8b via ollama.", fallback: true },
+    ]);
+    expect(notices(walk)).toHaveLength(2);
     // the row stays after the turn ends; another status line adds none
     const after = run([
       { event: "turn.start", bot: "kami" },

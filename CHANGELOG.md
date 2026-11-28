@@ -30,16 +30,18 @@ All notable changes will be documented here.
   model, which picks from the models the chat's model picker lists for that bot. A change runs Hermes' own
   `hermes -p <bot> config set fallback_providers <list>` and shows the list read back from the bot's config; it
   applies from the next turn. Only each entry's provider and model are read out, and a list written by hand in
-  Hermes' config (an endpoint or key of its own, the legacy `fallback_model`) is shown read-only and never rewritten.
-  When Hermes switches a turn to a backup model, the chat keeps one quiet row there with Hermes' own sentence, until
-  a reload. A bot on another computer and remote-only mode are set where the bot runs. (`docs/OMHER-BOUNDARY.md`
+  Hermes' config (an endpoint or key of its own, the legacy `fallback_model`) is shown read-only and never rewritten;
+  a list changed elsewhere since the page read it is not written over, and the page shows it as it is now. Each time
+  Hermes switches a turn to a backup model, the chat keeps a quiet row there with Hermes' own sentence (a walk down
+  the list leaves one per step), until a reload. A bot on another computer and remote-only mode are set where the bot runs. (`docs/OMHER-BOUNDARY.md`
   rule 55; `apps/omher/src/settings/BackupModel.tsx`)
 
 - **omher: pause, resume and clear a chat's waiting messages.** Messages typed while a bot answers, and not steered
   in, wait in omher and went out one by one when the turn ended, with no way to hold them all or drop them at once. A
   quiet bar above the composer now shows how many wait, with Pause and Clear. Paused, nothing waiting goes out when
   the turn ends and a new message joins the line instead of being steered in; the running answer is not stopped, and
-  Resume sends them in order as before. A row's own Send now still sends just that one, and the rest stay paused.
+  Resume sends them in order as before. A row's own Send now still sends just that one (several, in the order
+  pressed), and the rest stay paused; a refused Steer puts its row back in the paused line.
   Clear asks for a second press within a few seconds and then deletes every waiting message with its files; a message
   Hermes already took, or one being steered in, is left alone. The pause ends by itself when nothing is left waiting,
   and never survives a reload. The same bar works in threads and SESSIONS agent chats. omher sends nothing new for it.

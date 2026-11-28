@@ -1702,7 +1702,7 @@ export const en = {
   "sq.pause": "Pause",
   "sq.pauseTip": "Keep these from going out until you resume",
   "sq.resume": "Resume",
-  "sq.resumeTip": "Send them again, in order",
+  "sq.resumeTip": "Send them in order",
   "sq.clear": "Clear",
   "sq.clearTip": "Delete every waiting message",
   "sq.clearConfirm": "Clear {n}?",
@@ -2200,5 +2200,6 @@ export const en = {
   "backup.noOptions": "No other model to pick.",
   "backup.offPeer": "{bot}'s backup model is set on {label}, the computer it runs on.",
   "backup.offRemote": "omher uses a server: a bot's backup model is set on the computer it runs on, so not from here.",
-  "backup.switched": "Switched to the backup model",
+  "backup.switched": "Hermes switched to a backup model",
+  "backup.changed": "The backup models were changed elsewhere; this is the list as it is now.",
 };

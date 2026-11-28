@@ -301,8 +301,8 @@ export type PluginAddedItem = { kind: "pluginAdded"; id: string; ts: number; nam
 /** omher set up its Slack briefing for this bot: one gray line, once per bot, with Turn off (the job's pause). */
 export type BriefNoticeItem = { kind: "briefNotice"; id: string; ts: number; bot: string };
 /** One quiet line from omher itself (e.g. "Switched to Claude #2 (limit on #1)"); never sent to the bot. `detail`: a
- *  second line under it; `notice: "fallback"`: Hermes switched the turn to the bot's backup model (rule 55), kept in
- *  the page only, gone after a reload. */
+ *  second line under it; `notice: "fallback"`: Hermes switched the turn to a backup model (rule 55), kept in the page
+ *  only, gone after a reload; `text` is then Hermes' own line, and the title is omher's, translated when shown. */
 export type SystemItem = { kind: "system"; id: string; ts: number; text: string; detail?: string; notice?: "fallback" };
 /** "→ thread: <title>" under a main-chat answer: the bot opened `thread` (or the person sent a message there). */
 export type ThreadLinkItem = { kind: "threadLink"; id: string; ts: number; bot: string; thread: string; title: string };
@@ -381,10 +381,12 @@ export interface Chat {
   /** The held row being steered right now: nothing goes out until Hermes answers. */
   steering?: string | null;
   /** The person paused the steer queue (the queue bar): nothing waiting goes out on its own, and a message typed now
-   *  joins the queue instead of being steered in. Ends with the last waiting row; never kept across a reload. */
+   *  joins the queue instead of being steered in. Ends with the last waiting row (a row being steered still counts);
+   *  never kept across a reload. */
   queuePaused?: boolean;
-  /** A waiting row the person sent by hand (Send now, Steer with no turn) while paused: only it may go out. */
-  queueRelease?: string | null;
+  /** The waiting rows the person sent by hand (Send now, Steer with no turn) while paused, in the order pressed: only
+   *  they may go out, one per turn, in that order. */
+  queueRelease?: string[];
   /** Rows steered into the running turn that it has not read yet (no tool step ended and no message came since):
    *  a Stop or Send now before then makes Hermes drop them, so they are marked not used (Send / Delete). */
   steeredUnread?: string[];
@@ -738,16 +740,18 @@ function withItems(chat: Chat, items: ChatItem[]): Chat {
   return { ...chat, items, messages };
 }
 
-/** Hermes' own switch sentence without its leading warning sign and "Model fallback:" label; nothing else is cut. */
+/** Hermes' own switch sentence without its leading warning sign and "Model fallback:" or "Provider fallback:" label
+ *  (the same status kind); nothing else is cut. */
 export const fallbackDetail = (text: string): string =>
-  text.trim().replace(/^⚠️?\s*/u, "").replace(/^Model fallback:\s*/i, "");
+  text.trim().replace(/^⚠️?\s*/u, "").replace(/^(Model|Provider) fallback:\s*/i, "");
 
-/** The row a chat keeps where Hermes switched its turn to the backup model (rule 55): our title, Hermes' sentence. */
+/** A row a chat keeps where Hermes switched its turn to a backup model (rule 55), one per switch: Hermes' line and
+ *  sentence; the title is translated when the row is shown, so a language change reaches it. */
 export const fallbackNotice = (text: string, now: number, n: number): SystemItem => ({
   kind: "system",
   id: `fallback-${now}-${n}`,
   ts: now / 1000,
-  text: tr("backup.switched"),
+  text: text.trim(),
   detail: fallbackDetail(text),
   notice: "fallback",
 });
@@ -1247,7 +1251,8 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
       const text = ev.retry ? tr("live.retrying", { n: ev.retry.attempt, max: ev.retry.max }) : ev.text;
       return touchChat(state, bot, (c) => {
         const shown = c.turn ? patchTurn(c, (t) => ({ ...t, status: text })) : { ...c, early: { text, at: now } };
-        // Hermes switched to the backup model: one lasting row where it happened, besides the passing status line
+        // Hermes switched to a backup model: a lasting row where it happened (each switch down the chain adds its
+        // own), besides the passing status line
         return ev.fallback ? withItems(shown, [...shown.items, fallbackNotice(ev.text, now, shown.items.length)]) : shown;
       });
     }
@@ -1434,6 +1439,10 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
         if (ev.outcome === "done" && c.turn && c.steerAck) base = ackSteer(base, c.turn.streaming.slice(c.steerAck.from));
         // stopped before the turn read what was steered in: Hermes dropped it, so it says so and waits for Send / Delete
         if (ev.outcome === "interrupted" && c.steeredUnread?.length) base = unsteer(base, c.steeredUnread);
+        // no turn left to steer into: a row still meant to be steered in waits as any other (the queue bar counts it,
+        // a pause holds it, Clear deletes it)
+        if (c.queue?.length && base.items.some((i) => i.kind === "user" && i.autoSteer))
+          base = withItems(base, base.items.map((i) => (i.kind === "user" && i.autoSteer && c.queue!.includes(i.id) ? (({ autoSteer: _a, ...m }) => m)(i) : i)));
         return { ...endTurn(base, now, ev.outcome, ev.error), early: null, pendingTurn: null, steeredUnread: undefined, steerAck: null };
       });
     case "bot.status":
@@ -1865,8 +1874,8 @@ export function reduce(state: AppState, a: Action): AppState {
 export type QueueAction =
   /** The head goes out now: no longer held, moved to the end of the timeline, its turn awaited. */
   | { type: "queue.take"; bot: string; id: string; now: number }
-  /** Send now / a refused steer: this one goes out next. */
-  | { type: "queue.front"; bot: string; id: string }
+  /** Send now / a refused steer: this one goes out next. `keepPaused`: a refused steer, which a pause still holds. */
+  | { type: "queue.front"; bot: string; id: string; keepPaused?: boolean }
   /** Delete, or Edit (the text goes back to the composer). */
   | { type: "queue.drop"; bot: string; id: string }
   | { type: "queue.steering"; bot: string; id: string | null }
@@ -1972,28 +1981,37 @@ export function waitingIds(c: Chat | undefined): string[] {
   return c.queue.filter((id) => id !== c.steering && c.items.some((i) => i.kind === "user" && i.id === id && i.held && !i.autoSteer));
 }
 
+/** The waiting row that may go out next: the head, or while paused the first row the person sent by hand (in the
+ *  order pressed) that still waits. */
+export function queueNext(c: Chat | undefined): string | undefined {
+  const queue = c?.queue ?? [];
+  return c?.queuePaused ? c.queueRelease?.find((id) => queue.includes(id)) : queue[0];
+}
+
 export function reduceQueue(c: Chat, a: QueueAction): Chat {
   const next = queueStep(c, a);
-  // a pause ends with the last waiting row: a chat never stays paused with nothing to resume
-  return next.queuePaused && !waitingIds(next).length ? { ...next, queuePaused: false, queueRelease: null } : next;
+  // a pause ends with the last waiting row: a chat never stays paused with nothing to resume. A row being steered
+  // still counts, so a refused steer comes back to a paused queue instead of going out at the turn's end.
+  const steered = !!next.steering && !!next.queue?.includes(next.steering);
+  return next.queuePaused && !waitingIds(next).length && !steered ? { ...next, queuePaused: false, queueRelease: undefined } : next;
 }
 
 function queueStep(c: Chat, a: QueueAction): Chat {
   const queue = c.queue ?? [];
   const without = queue.filter((x) => x !== a.id);
-  // a row the person sends by hand while paused: it alone goes out, the rest stay paused
-  const release = (id: string) => (c.queuePaused ? { queueRelease: id } : {});
+  // a row the person sends by hand while paused: it goes out after the ones pressed before it, the rest stay paused
+  const release = (id: string) => (c.queuePaused && !c.queueRelease?.includes(id) ? { queueRelease: [...(c.queueRelease ?? []), id] } : {});
   switch (a.type) {
     case "queue.take": {
       if (!queue.includes(a.id)) return c;
       const moved = toEnd(c, a.id, ({ held: _h, autoSteer: _a, ...m }) => ({ ...m, ts: a.now / 1000 }));
-      return { ...moved, queue: without, pendingTurn: a.id, ...(c.queueRelease === a.id ? { queueRelease: null } : {}) };
+      return { ...moved, queue: without, pendingTurn: a.id, ...(c.queueRelease?.includes(a.id) ? { queueRelease: c.queueRelease.filter((x) => x !== a.id) } : {}) };
     }
     case "queue.front":
-      return queue.includes(a.id) ? { ...c, queue: [a.id, ...without], ...release(a.id) } : c;
+      return queue.includes(a.id) ? { ...c, queue: [a.id, ...without], ...(a.keepPaused ? {} : release(a.id)) } : c;
     case "queue.pause":
       if (a.paused === !!c.queuePaused || (a.paused && !waitingIds(c).length)) return c;
-      return { ...c, queuePaused: a.paused, queueRelease: null };
+      return { ...c, queuePaused: a.paused, queueRelease: undefined };
     case "queue.clear": {
       const waiting = waitingIds(c);
       return a.ids.filter((id) => waiting.includes(id)).reduce((x, id) => queueStep(x, { type: "queue.drop", bot: a.bot, id }), c);
@@ -2050,8 +2068,7 @@ export function queueReady(state: AppState, bot: string): string | null {
   const c = state.chats[bot];
   if (!c?.queue?.length || state.conn !== "open" || !c.loaded || c.turn || c.pendingTurn || c.stale || c.steering) return null;
   // paused (the queue bar): only a row the person sent by hand goes out
-  if (c.queuePaused && c.queue[0] !== c.queueRelease) return null;
-  return c.queue[0];
+  return queueNext(c) ?? null;
 }
 
 /** The drafts to save before a reload or quit, with every chat's held messages (and unknown steers) put back in
@@ -2282,7 +2299,8 @@ export interface Actions {
   /** A bot's backup models (BOUNDARY rule 55): read from its config, set through Hermes' own `config set` with the
    *  whole new list. Only the bot and provider/model pairs go out. */
   fallbackGet(bot: string): Promise<BackupChain>;
-  fallbackSet(bot: string, chain: { provider: string; model: string }[]): Promise<BackupSet>;
+  /** `base`: the list read before (the bridge refuses with `changed` when the config now holds another one). */
+  fallbackSet(bot: string, chain: { provider: string; model: string }[], base: { provider: string; model: string }[]): Promise<BackupSet>;
   /** Settings › General › Language: saved on this computer, applied at once (no restart). */
   setLanguage(lang: Lang): void;
   loadModels(bot?: string): Promise<void>;
@@ -3334,7 +3352,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     voiceTranscribe: (bot, data_base64, mime) => bridge.request("voice.transcribe", { bot, data_base64, mime }),
     voiceSpeak: (bot, text, part) => bridge.request("voice.speak", { bot, text, part }),
     fallbackGet: (bot) => bridge.request("fallback.get", { bot }),
-    fallbackSet: (bot, chain) => bridge.request("fallback.set", { bot, chain }),
+    fallbackSet: (bot, chain, base) => bridge.request("fallback.set", { bot, chain, base }),
     setLanguage(lang) {
       try {
         if (typeof localStorage !== "undefined") localStorage.setItem(LANG_KEY, lang);

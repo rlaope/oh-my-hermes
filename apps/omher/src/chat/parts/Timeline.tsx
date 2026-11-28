@@ -229,7 +229,8 @@ export function Timeline({
           >
             {it.detail ? (
               <span className="sys-b">
-                <span className="line-t">{it.text}</span>
+                {/* a backup-model switch: omher's title, in the language the page shows now */}
+                <span className="line-t">{it.notice === "fallback" ? t("backup.switched") : it.text}</span>
                 <span className="sys-detail" data-testid="system-detail">
                   {it.detail}
                 </span>

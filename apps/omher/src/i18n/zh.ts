@@ -2195,5 +2195,6 @@ export const zh: Record<Key, string> = {
   "backup.noOptions": "没有其他可选的模型。",
   "backup.offPeer": "{bot} 的备用模型在它运行的电脑 {label} 上设置。",
   "backup.offRemote": "omher 正在使用服务器：机器人的备用模型在它运行的电脑上设置，所以这里不更改。",
-  "backup.switched": "已切换到备用模型",
+  "backup.switched": "Hermes 已切换到备用模型",
+  "backup.changed": "备用模型已在别处更改，这里显示的是现在的列表。",
 };

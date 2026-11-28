@@ -149,7 +149,15 @@ class Ops(unittest.TestCase):
         return self.effect(chain)
 
     def op(self, name: str, **p):
+        if name == "set" and "base" not in p:  # the page sends the list it read: here, the file's
+            p["base"] = [{"provider": e["provider"], "model": e["model"]} for e in self._read()]
         return asyncio.run(getattr(self.bridge, f"op_fallback_{name}")({"bot": BOT, **p}))
+
+    def _read(self) -> list:
+        try:
+            return ob.fallback_chain(self.config.parent)["chain"]
+        except Exception:  # noqa: BLE001 - a config that does not parse: the op says so itself
+            return []
 
     def refused(self, code: str, **p) -> ob.BridgeError:
         with self.assertRaises(ob.BridgeError) as cm:
@@ -167,7 +175,7 @@ class Ops(unittest.TestCase):
 
     def test_the_page_sends_a_bot_and_a_chain_and_nothing_else(self):
         chain = [{"provider": "openai", "model": "gpt-6.1-terra"}]
-        asyncio.run(self.bridge.op_fallback_set({"bot": BOT, "chain": chain, "key": "model.default", "value": "x",
+        asyncio.run(self.bridge.op_fallback_set({"bot": BOT, "chain": chain, "base": [], "key": "model.default", "value": "x",
                                                  "argv": ["rm"], "force": True, "base_url": "http://evil"}))
         self.assertEqual(self.runs, [("/stub/hermes", BOT, chain, self.home, ob.FALLBACK_TIMEOUT)])
         self.assertNotIn("evil", self.config.read_text(encoding="utf-8"))
@@ -196,8 +204,54 @@ class Ops(unittest.TestCase):
         with mock.patch.object(ob, "hermes_path", lambda *a, **k: None):
             self.refused("no_hermes", chain=[])
         with self.assertRaises(ob.BridgeError) as cm:
-            asyncio.run(self.bridge.op_fallback_set({"bot": "nobody", "chain": []}))
+            asyncio.run(self.bridge.op_fallback_set({"bot": "nobody", "chain": [], "base": []}))
         self.assertEqual(cm.exception.code, "unknown_bot")
+        for base in (None, "x", ["openai"]):
+            self.refused("bad_request", chain=[], base=base)
+        self.assertEqual(self.runs, [])
+
+    def test_two_sets_at_once_make_one_run(self):
+        """Frames are handled concurrently: the second set must find the bot taken even while the first one still
+        reads the config, before Hermes runs."""
+        async def both():
+            frames = [self.bridge.op_fallback_set({"bot": BOT, "chain": [{"provider": "openai", "model": f"gpt-6.1-{m}"}],
+                                                   "base": []}) for m in ("terra", "luna")]
+            return await asyncio.gather(*frames, return_exceptions=True)
+        got = asyncio.run(both())
+        self.assertEqual(len(self.runs), 1, got)
+        self.assertEqual(sorted(type(r).__name__ for r in got), ["BridgeError", "dict"])
+        self.assertEqual(next(r for r in got if isinstance(r, ob.BridgeError)).code, "busy")
+        self.assertEqual(self.bridge._fallback_busy, set())
+
+    def test_a_list_changed_elsewhere_is_refused_and_never_written_over(self):
+        self.store([{"provider": "openrouter", "model": "x-ai/grok-4.7"}])  # set elsewhere after the page read none
+        e = self.refused("changed", chain=[{"provider": "openai", "model": "gpt-6.1-terra"}], base=[])
+        self.assertIn("changed elsewhere", e.message)
+        self.assertEqual(self.runs, [])
+        self.assertEqual(self.op("get")["chain"], [{"provider": "openrouter", "model": "x-ai/grok-4.7"}])
+        # built on the list as it is now, it goes through
+        chain = [{"provider": "openrouter", "model": "x-ai/grok-4.7"}, {"provider": "openai", "model": "gpt-6.1-terra"}]
+        self.assertEqual(self.op("set", chain=chain, base=[{"provider": "openrouter", "model": "x-ai/grok-4.7"}])["chain"], chain)
+
+    def test_providers_compare_as_hermes_compares_them(self):
+        """Hermes' `_entry_identity` folds a provider's aliases through its own `normalize_provider`; so do the
+        duplicate, own-model and skipped-entry checks."""
+        try:
+            from hermes_cli.fallback_config import _entry_identity
+        except ImportError:
+            self.assertEqual(ob.fallback_provider_id(" OpenAI "), "openai")  # no Hermes: lowercased, as Hermes falls back
+            return
+        same = ({"provider": "opencode-zen", "model": "m"}, {"provider": "opencode", "model": "M"})
+        self.assertEqual(_entry_identity(same[0]), _entry_identity(same[1]))
+        with self.assertRaises(ValueError):
+            ob.fallback_check(list(same))
+        self.config.write_text(PRIMARY + "fallback_providers:\n  - {provider: opencode-zen, model: m}\n"
+                                         "  - {provider: opencode, model: m}\n", encoding="utf-8")
+        self.assertFalse(self.op("get")["editable"])  # Hermes skips the second: a rewrite would drop it
+        with mock.patch.object(self.bridge, "_profile_bot", lambda p: {"name": BOT, "provider": "opencode", "model": "gpt-6.1-sol",
+                                                                       "display_name": "Demo", "path": self.config.parent}):
+            e = self.refused("bad_request", chain=[{"provider": "opencode-zen", "model": "gpt-6.1-sol"}], base=[])
+        self.assertIn("own model", e.message)
         self.assertEqual(self.runs, [])
 
     def test_a_chain_written_in_hermes_config_is_never_rewritten(self):

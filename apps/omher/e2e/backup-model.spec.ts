@@ -13,6 +13,12 @@ const SHOTS = process.env.OMHER_SHOTS || "";
 test.use({ colorScheme: "dark" });
 
 async function mock(op: string, params: Record<string, unknown> = {}): Promise<any> {
+  const reply = await request(op, params);
+  expect(reply.ok, JSON.stringify(reply)).toBe(true);
+  return reply.result;
+}
+/** One request to the mock bridge, answered or refused. */
+async function request(op: string, params: Record<string, unknown> = {}): Promise<any> {
   const ws = new WebSocket(`ws://127.0.0.1:${MOCK}/?token=e2e`);
   await new Promise<void>((res, rej) => {
     ws.onopen = () => res();
@@ -26,8 +32,7 @@ async function mock(op: string, params: Record<string, unknown> = {}): Promise<a
     ws.send(JSON.stringify({ id: "x1", op, ...params }));
   });
   ws.close();
-  expect(reply.ok, JSON.stringify(reply)).toBe(true);
-  return reply.result;
+  return reply;
 }
 
 type Call = { op: string; params: Record<string, unknown> };
@@ -74,6 +79,8 @@ test("empty, then a backup added from the bot's own models, listed, and removed"
   await expect(section.getByTestId("backup-entry")).toContainText("OpenRouter · x-ai/grok-4.7");
   await expect(section.getByTestId("backup-saving")).toHaveCount(0);
   expect((await sets()).map((c) => c.params.chain)).toEqual([[{ provider: "openrouter", model: "x-ai/grok-4.7" }]]);
+  // with the list it was built from
+  expect((await sets())[0].params.base).toEqual([]);
   await shot(page, "backup-section.png", page.getByTestId("settings-view"));
 
   // a second one goes after it, and the picker no longer offers the first
@@ -92,7 +99,36 @@ test("empty, then a backup added from the bot's own models, listed, and removed"
   expect((await sets()).at(-1)!.params.chain).toEqual([{ provider: "openai", model: "gpt-6.1-terra" }]);
   await section.getByTestId("backup-remove").click();
   await expect(section.getByTestId("backup-empty")).toBeVisible();
-  expect((await sets()).at(-1)!.params).toEqual({ bot: "kami", chain: [] });
+  expect((await sets()).at(-1)!.params).toEqual({ bot: "kami", chain: [], base: [{ provider: "openai", model: "gpt-6.1-terra" }] });
+});
+
+test("a list changed elsewhere since the page read it is not written over: the page shows it as it is now", async ({ page }) => {
+  await botPage(page, "kami");
+  const section = page.getByTestId("backup-model");
+  await expect(section.getByTestId("backup-empty")).toBeVisible();
+  // someone else (Hermes' own `hermes fallback add`, another omher) sets a backup model after the page read none
+  await mock("mock.fallback", { bot: "kami", chain: [{ provider: "openrouter", model: "x-ai/grok-4.7" }] });
+  await section.getByTestId("backup-add").click();
+  await page.getByTestId("backup-search").fill("terra");
+  await page.getByTestId("backup-opt").click();
+  await expect(section.getByTestId("backup-error")).toHaveText("The backup models were changed elsewhere; this is the list as it is now.");
+  await expect(section.getByTestId("backup-entry")).toHaveCount(1);
+  await expect(section.getByTestId("backup-entry")).toContainText("OpenRouter · x-ai/grok-4.7");
+  expect((await mock("fallback.get", { bot: "kami" })).chain).toEqual([{ provider: "openrouter", model: "x-ai/grok-4.7" }]);
+  // the next press builds on the fresh list
+  await section.getByTestId("backup-add").click();
+  await page.getByTestId("backup-search").fill("terra");
+  await page.getByTestId("backup-opt").click();
+  await expect(section.getByTestId("backup-entry")).toHaveCount(2);
+  await expect(section.getByTestId("backup-error")).toHaveCount(0);
+});
+
+test("the mock, as the bridge, takes the bot's own model in any case as no backup model", async () => {
+  await mock("chat.set_model", { bot: "kami", provider: "openai", model: "gpt-6.1-terra" });
+  const reply = await request("fallback.set", { bot: "kami", chain: [{ provider: "OpenAI", model: "GPT-6.1-Terra" }], base: [] });
+  expect(reply.ok).toBe(false);
+  expect(reply.error.code).toBe("bad_request");
+  expect(reply.error.message).toContain("own model");
 });
 
 test("Hermes' refusal shows its words, and the list stays as Hermes keeps it", async ({ page }) => {
@@ -134,7 +170,7 @@ test("a switch to the backup model during a turn leaves a notice row in that cha
   await mock("mock.emit", { events: [ev("turn.start"), ev("status", { text: line, fallback: true })] });
   const notice = page.getByTestId("backup-notice");
   await expect(notice).toHaveCount(1);
-  await expect(notice).toContainText("Switched to the backup model");
+  await expect(notice).toContainText("Hermes switched to a backup model");
   await expect(notice.getByTestId("system-detail")).toHaveText(
     "Sonnet 5.5 via claude-proxy could not respond (rate limited); using x-ai/grok-4.7 via openrouter.",
   );
@@ -144,4 +180,14 @@ test("a switch to the backup model during a turn leaves a notice row in that cha
   await expect(page.getByTestId("activity").last()).toHaveAttribute("data-state", "done");
   await expect(notice).toHaveCount(1);
   await shot(page, "backup-notice.png");
+
+  // its title follows a language change made after the switch
+  await page.getByTestId("nav-settings").click();
+  await page.getByTestId("language").getByRole("radio", { name: "한국어" }).click();
+  await page.getByTestId("bot-friren").click();
+  await expect(notice).toHaveCount(1);
+  await expect(notice).toContainText("Hermes가 예비 모델로 전환했어요");
+  await expect(notice.getByTestId("system-detail")).toHaveText(
+    "Sonnet 5.5 via claude-proxy could not respond (rate limited); using x-ai/grok-4.7 via openrouter.",
+  );
 });

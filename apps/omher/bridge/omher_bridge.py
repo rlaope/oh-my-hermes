@@ -3609,6 +3609,17 @@ FALLBACK_TIMEOUT = 60.0     # seconds `hermes config set` may take
 FALLBACK_VALUE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9._:/@-]{0,126}[A-Za-z0-9])?")
 
 
+def fallback_provider_id(provider: str) -> str:
+    """*provider* as Hermes' fallback chain compares it (`_entry_identity`): through Hermes' own `normalize_provider`,
+    so an alias is its canonical id (`opencode-zen` is `opencode`); lowercased, as Hermes then does too, where that
+    is not importable."""
+    try:
+        from hermes_cli.providers import normalize_provider
+    except ImportError:  # Hermes' checkout is not on this interpreter's path
+        return provider.strip().lower()
+    return normalize_provider(provider)
+
+
 def fallback_literal(chain: list[dict]) -> str:
     """The value `config set` gets for *chain*: a YAML flow list of `{provider: <id>, model: <id>}`, no quote in it."""
     return "[" + ", ".join(f"{{provider: {e['provider']}, model: {e['model']}}}" for e in chain) + "]"
@@ -3628,9 +3639,10 @@ def fallback_check(chain) -> list[dict]:
         for k in ("provider", "model"):
             if not isinstance(e[k], str) or not FALLBACK_VALUE.fullmatch(e[k]):
                 raise ValueError(f"not a {k} id omher sets: {str(e[k])[:80]!r}")
-        if (e["provider"].lower(), e["model"].lower()) in seen:
+        route = (fallback_provider_id(e["provider"]), e["model"].lower())
+        if route in seen:
             raise ValueError(f"{e['provider']} · {e['model']} is listed twice")
-        seen.add((e["provider"].lower(), e["model"].lower()))
+        seen.add(route)
         out.append({"provider": e["provider"], "model": e["model"]})
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")  # ruamel warns about YAML 1.1 floats such as `1e3`
@@ -3690,7 +3702,7 @@ def fallback_chain(profile_dir: Path) -> dict:
             if not provider or not model:
                 editable = False
                 continue
-            route = (provider.lower(), model.lower(), str(e.get("base_url") or "").strip().rstrip("/").lower())
+            route = (fallback_provider_id(provider), model.lower(), str(e.get("base_url") or "").strip().rstrip("/").lower())
             if route in seen:
                 editable = False
                 continue
@@ -10392,28 +10404,39 @@ class Bridge:
 
     async def op_fallback_set(self, p) -> dict:
         """Set a bot's backup models: `hermes -p <bot> config set fallback_providers <list>`, then the chain read back.
-        The page sends the bot and the whole list of `{provider, model}` (empty clears it); the key is the bridge's."""
+        The page sends the bot, the whole list of `{provider, model}` (empty clears it) and `base`, the list it read and
+        built that from: when the file holds another list now (changed elsewhere since), nothing runs. The key is the
+        bridge's."""
         bot = self._profile_bot(p)
         name = bot["name"]
         try:
             chain = fallback_check(p.get("chain"))
         except ValueError as e:
             raise BridgeError("bad_request", str(e)) from None
-        primary = (bot["provider"].lower(), bot["model"].lower())
-        own = next((e for e in chain if (e["provider"].lower(), e["model"].lower()) == primary), None)
+        base = p.get("base")
+        if not isinstance(base, list) or not all(isinstance(e, dict) for e in base):
+            raise BridgeError("bad_request", "base is the list of backup models the page read")
+        base = [{"provider": e.get("provider"), "model": e.get("model")} for e in base]
+        primary = (fallback_provider_id(bot["provider"]), bot["model"].lower())
+        own = next((e for e in chain if (fallback_provider_id(e["provider"]), e["model"].lower()) == primary), None)
         if own:
             raise BridgeError("bad_request", f"{own['provider']} · {own['model']} is {bot['display_name']}'s own model; a "
                                              "backup model is another one")
+        # one run per bot: taken before the first await, since frames are handled concurrently
         if name in self._fallback_busy:
             raise BridgeError("busy", f"omher is still saving {bot['display_name']}'s backup models")
-        if not (await self._fallback_read(bot))["editable"]:
-            raise BridgeError("not_editable", f"{bot['display_name']}'s backup models were written in Hermes' config, and "
-                                              "omher does not rewrite them")
-        hermes = hermes_path()
-        if not hermes:
-            raise BridgeError("no_hermes", "Hermes is not on this computer.")
         self._fallback_busy.add(name)
         try:
+            now = await self._fallback_read(bot)
+            if not now["editable"]:
+                raise BridgeError("not_editable", f"{bot['display_name']}'s backup models were written in Hermes' config, "
+                                                  "and omher does not rewrite them")
+            if [{"provider": e["provider"], "model": e["model"]} for e in now["chain"]] != base:
+                raise BridgeError("changed", f"{bot['display_name']}'s backup models were changed elsewhere since they were "
+                                             "read; read them again")
+            hermes = hermes_path()
+            if not hermes:
+                raise BridgeError("no_hermes", "Hermes is not on this computer.")
             code, output = await asyncio.to_thread(run_hermes_fallback, hermes, name, chain, self.home, FALLBACK_TIMEOUT)
         finally:
             self._fallback_busy.discard(name)

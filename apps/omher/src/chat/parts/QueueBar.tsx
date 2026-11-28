@@ -61,6 +61,10 @@ export function QueueBar({ chat, onPause, onClear }: { chat: Chat | undefined; o
       >
         {confirm ? t("sq.clearConfirm", { n }) : t("sq.clear")}
       </button>
+      {/* Clear's confirm state, read out politely; on screen only the button's label changes */}
+      <span className="vh" aria-live="polite" data-testid="queue-clear-live">
+        {confirm ? t("sq.clearConfirmTip") : ""}
+      </span>
     </div>
   );
 }

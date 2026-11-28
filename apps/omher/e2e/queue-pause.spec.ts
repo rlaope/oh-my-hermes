@@ -73,6 +73,8 @@ test("Pause keeps three waiting messages from going out at the turn's end; Resum
   await expect(bar).toHaveAttribute("data-paused", "true");
   await expect(page.getByTestId("queue-bar-count")).toHaveText("Paused · 3 waiting");
   await expect(page.getByTestId("queue-pause")).toHaveText("Resume");
+  // they were never sent: Resume sends them, not "again"
+  await expect(page.getByTestId("queue-pause")).toHaveAttribute("title", "Send them in order");
   await expect(page.locator("[data-testid=bubble-user][data-queue-paused]")).toHaveCount(3);
   // a message typed while paused joins behind them
   await say(page, "fourth after");
@@ -102,9 +104,15 @@ test("Clear asks once more (Clear 3?), Escape and the wait take it back, a secon
   await clear.click();
   await expect(clear).toHaveText("Clear 3?");
   await expect(clear).toHaveAttribute("data-confirm", "true");
+  // the confirm state is read out politely, and adds no visible line
+  const live = page.getByTestId("queue-clear-live");
+  await expect(live).toHaveAttribute("aria-live", "polite");
+  await expect(live).toHaveText("Press again to delete them");
+  expect((await live.boundingBox())!.height).toBeLessThanOrEqual(1);
   // Escape takes it back, and does not stop the running answer
   await clear.press("Escape");
   await expect(clear).toHaveText("Clear");
+  await expect(live).toHaveText("");
   await expect(page.getByTestId("stop")).toBeVisible();
   // so does the wait
   await clear.click();

@@ -696,8 +696,10 @@ export interface OpMap {
   "voice.speak": { params: { bot: string; text: string; part: number }; result: VoiceSpeech };
   /** A bot's backup models (BOUNDARY rule 55), read from its config.yaml: provider and model of each, nothing else. */
   "fallback.get": { params: { bot: string }; result: BackupChain };
-  /** `hermes -p <bot> config set fallback_providers <list>` with the whole new list (empty clears it), then read back. */
-  "fallback.set": { params: { bot: string; chain: { provider: string; model: string }[] }; result: BackupSet };
+  /** `hermes -p <bot> config set fallback_providers <list>` with the whole new list (empty clears it), then read back.
+   *  `base`: the list the page read and built `chain` from; when the bot's config holds another one now (changed
+   *  elsewhere) the bridge refuses with `changed` and runs nothing. */
+  "fallback.set": { params: { bot: string; chain: { provider: string; model: string }[]; base: { provider: string; model: string }[] }; result: BackupSet };
   "models.options": { params: { bot: string }; result: ModelOptions };
   /** Can the bot answer (read-only)? With `provider` (openai-codex, anthropic or nous) the strict check for it. */
   "bots.ready": { params: { bot: string; provider?: string }; result: BotReady };

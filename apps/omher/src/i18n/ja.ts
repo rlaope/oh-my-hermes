@@ -2195,5 +2195,6 @@ export const ja: Record<Key, string> = {
   "backup.noOptions": "ほかに選べるモデルはありません。",
   "backup.offPeer": "{bot} の予備モデルは、ボットが動いているコンピュータ {label} で設定します。",
   "backup.offRemote": "omher はサーバーを使っています。ボットの予備モデルはボットが動いているコンピュータで設定するため、ここでは変更しません。",
-  "backup.switched": "予備モデルに切り替えました",
+  "backup.switched": "Hermes が予備モデルに切り替えました",
+  "backup.changed": "予備モデルが別の場所で変更されました。いまの一覧を表示しています。",
 };

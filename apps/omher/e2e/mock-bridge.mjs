@@ -1925,10 +1925,15 @@ const OPS = {
       const key = `${e.provider.toLowerCase()} ${e.model.toLowerCase()}`;
       if (seen.has(key)) throw new OpError("bad_request", `${e.provider} · ${e.model} is listed twice`);
       seen.add(key);
-      if (e.provider === b.provider && e.model === b.model) throw new OpError("bad_request", `${e.provider} · ${e.model} is ${b.display_name}'s own model; a backup model is another one`);
+      // as the bridge compares, against the bot's model as bots.list gives it: case does not matter
+      if (key === `${models[b.name].provider.toLowerCase()} ${models[b.name].model.toLowerCase()}`) throw new OpError("bad_request", `${e.provider} · ${e.model} is ${b.display_name}'s own model; a backup model is another one`);
     }
+    if (!Array.isArray(p.base)) throw new OpError("bad_request", "the page sends the backup list it read as base");
     const now = fallbackOf(b);
     if (!now.editable) throw new OpError("not_editable", `${b.display_name}'s backup models were written in Hermes' config, and omher does not rewrite them`);
+    const pair = (e) => `${e?.provider} ${e?.model}`;
+    if (p.base.map(pair).join("\n") !== now.chain.map(pair).join("\n"))
+      throw new OpError("changed", `${b.display_name}'s backup models were changed elsewhere since they were read; read them again`);
     return new Promise((res) => setTimeout(res, 300)).then(() => {
       if (now.fail) return { outcome: "failed", line: now.fail, ...fallbackRead(b) };
       fallbacks.set(b.name, { ...now, chain: chain.map((e) => ({ provider: e.provider, model: e.model })) });

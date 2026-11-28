@@ -678,13 +678,16 @@ RULES = (
     "A press runs one fixed argv, `hermes -p <bot> config set fallback_providers <list>` (`fallback.set`), with the whole"
     " new list (an empty one clears it), built by `fallback_argv` and run as rule 41 runs Hermes' commands"
     " (`_run_hermes_argv`), one run at a time per bot, stopped after 60 seconds.",
-    "The page sends only the bot's name and a list of providers and models: the key is the bridge's own constant, and no"
-    " key, value, flag or field of the page's reaches Hermes.",
+    "The page sends only the bot's name, the new list of providers and models, and the list it read and built that from"
+    " (`base`): the key is the bridge's own constant, and no key, value, flag or field of the page's reaches Hermes.",
+    "When the list the bridge reads fresh before the run is not `base` (it was changed elsewhere since the page read it),"
+    " `fallback.set` refuses it (`changed`) before anything runs,",
     "a YAML flow list of plain scalars (`[{provider: <id>, model: <id>}]`) with no quote in it, because on Windows"
     " `hermes` can be the `hermes.cmd` launcher, whose cmd.exe does not take the escaped quote a JSON list would need.",
     "and refuses it unless every value reads back as the same text (never `1.0`, `true`, `null` or `12:30`).",
-    "the bridge passes that line on marked (`status` with `fallback`), and the page adds one row to that chat where it"
-    " happened, a title of its own over Hermes' sentence, kept in the page's memory only and gone after a reload.",
+    "the bridge passes that line on marked (`status` with `fallback`), and the page adds a row to that chat where it"
+    " happened for each such line (a walk down the list adds several), a title of its own over Hermes' sentence, kept"
+    " in the page's memory only and gone after a reload.",
     "for a bot on another computer (rule 31: `fallback.get` and `fallback.set` are refused for it) and for every bot in"
     " remote-only mode (rule 47: the page's filter refuses both on a server):",
     "omher never runs `hermes fallback` (it needs a terminal), never sets `fallback_model` or any other key, never writes"
@@ -3945,11 +3948,15 @@ class BackupModelThroughHermesOwnConfigSet(unittest.TestCase):
                 p.write_text("parsed by the stub above\n", encoding="utf-8")
             bridge = ob.Bridge(token="t", hermes_home=home)
             with self.assertRaises(ob.BridgeError) as cm:
-                asyncio.run(bridge.op_fallback_set({"bot": "kami", "chain": []}))
+                asyncio.run(bridge.op_fallback_set({"bot": "kami", "chain": [], "base": []}))
         self.assertEqual(cm.exception.code, "not_editable")
         self.assertEqual(runs, [])
         run = self._body("op_fallback_set")
-        self.assertLess(run.index("if not (await self._fallback_read(bot))['editable']:"), run.index("self._fallback_busy.add(name)"))
+        # the bot is taken before the first await (frames run concurrently), then the fresh read decides
+        self.assertLess(run.index("self._fallback_busy.add(name)"), run.index("await"))
+        self.assertLess(run.index("now = await self._fallback_read(bot)"), run.index("if not now['editable']:"))
+        self.assertLess(run.index("if not now['editable']:"), run.index("raise BridgeError('changed'"))
+        self.assertLess(run.index("raise BridgeError('changed'"), run.index("run_hermes_fallback"))
 
     def test_the_page_sends_a_bot_and_a_chain_and_nothing_else(self) -> None:
         reads, other = set(), []
@@ -3967,7 +3974,7 @@ class BackupModelThroughHermesOwnConfigSet(unittest.TestCase):
                     continue
                 else:
                     other.append(f"{name}: {ast.unparse(up) if up is not None else 'p'}")
-        self.assertEqual(reads, {"bot", "chain"})
+        self.assertEqual(reads, {"bot", "chain", "base"})
         self.assertEqual(other, [])
         ops = next(n.value for n in ast.walk(self.tree) if isinstance(n, ast.Assign) and ast.unparse(n.targets[0]) == "self.ops")
         handlers = {k.value: v.attr for k, v in zip(ops.keys, ops.values)}
@@ -3988,7 +3995,7 @@ class BackupModelThroughHermesOwnConfigSet(unittest.TestCase):
         self.assertIn('const BACKUP: Key = "backup.offRemote";', ops)
         store = (UI_SRC / "state" / "store.ts").read_text(encoding="utf-8")
         self.assertIn('fallbackGet: (bot) => bridge.request("fallback.get", { bot }),', store)
-        self.assertIn('fallbackSet: (bot, chain) => bridge.request("fallback.set", { bot, chain }),', store)
+        self.assertIn('fallbackSet: (bot, chain, base) => bridge.request("fallback.set", { bot, chain, base }),', store)
         section = (UI_SRC / "settings" / "BackupModel.tsx").read_text(encoding="utf-8")
         self.assertIn("const away = !!bot.host || remote;", section)
         self.assertLess(section.index("if (away) return;"), section.index("s.fallbackGet(bot.name)"))
