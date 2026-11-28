@@ -139,27 +139,40 @@ class RealGit(unittest.TestCase):
 
     def test_every_read_omher_makes_answers_the_same_with_the_scrub(self):
         """The no-fetch keys change no local read: each GIT_READS command omher sends gives the same output with and
-        without them."""
-        repo = make_repo(self.root, "main", "first")
-        (repo / "a.txt").write_text("two\n", encoding="utf-8")
-        (repo / "new.txt").write_text("n\n", encoding="utf-8")
-        hard = ob._hardened(repo, ob.GIT_TIMEOUT)
-        self.assertIsNotNone(hard)
-        reads = [["worktree", "list", "--porcelain"], ["rev-parse", "--path-format=absolute", "--git-common-dir"],
-                 ["status", "--porcelain", "-z", "--ignore-submodules=all"], ["diff", "HEAD", *ob._DIFF_FLAGS],
-                 ["log", "-1", "--format=%h %s", "--patch", *ob._DIFF_FLAGS], ["version"], ob._FILTER_QUERY]
+        without them, in a plain repository, in a linked worktree (its objects and refs in the main one's .git) and in
+        a `git clone --shared` (its objects reached through `objects/info/alternates`, a path, not a transport)."""
+        env = {**os.environ, **ENV}
+        run = lambda cwd, *a: subprocess.run(["git", *a], cwd=cwd, check=True, env=env, capture_output=True)
+        main = make_repo(self.root, "main", "first")
+        linked = self.root / "linked"
+        run(main, "worktree", "add", "-q", "-b", "side", str(linked))
+        shared = self.root / "shared"
+        run(self.root, "clone", "-q", "--shared", str(main), str(shared))
+        self.assertTrue((shared / ".git" / "objects" / "info" / "alternates").is_file())
+        self.assertEqual(sorted(p.name for p in (shared / ".git" / "objects").iterdir() if p.name not in ("info", "pack")), [],
+                         "the shared clone holds no objects of its own")
         real_run = subprocess.run
 
         def without_no_fetch(argv, **kw):
             env = {k: v for k, v in kw["env"].items() if k not in ("GIT_NO_LAZY_FETCH", "GIT_ALLOW_PROTOCOL")}
             return real_run(argv, **{**kw, "env": env})
 
-        for args in reads:
-            with_keys = ob._git(args, repo, ob.GIT_TIMEOUT, hard)
-            with mock.patch.object(ob.subprocess, "run", without_no_fetch):
-                without = ob._git(args, repo, ob.GIT_TIMEOUT, hard)
-            self.assertIsNotNone(with_keys, args)
-            self.assertEqual(with_keys, without, args)
+        reads = [["worktree", "list", "--porcelain"], ["rev-parse", "--path-format=absolute", "--git-common-dir"],
+                 ["status", "--porcelain", "-z", "--ignore-submodules=all"], ["diff", "HEAD", *ob._DIFF_FLAGS],
+                 ["log", "-1", "--format=%h %s", "--patch", *ob._DIFF_FLAGS], ["version"], ob._FILTER_QUERY]
+        for repo in (main, linked, shared):
+            (repo / "a.txt").write_text("two\n", encoding="utf-8")
+            (repo / "new.txt").write_text("n\n", encoding="utf-8")
+            hard = ob._hardened(repo, ob.GIT_TIMEOUT)
+            self.assertIsNotNone(hard, repo.name)
+            for args in reads:
+                with_keys = ob._git(args, repo, ob.GIT_TIMEOUT, hard)
+                with mock.patch.object(ob.subprocess, "run", without_no_fetch):
+                    without = ob._git(args, repo, ob.GIT_TIMEOUT, hard)
+                self.assertIsNotNone(with_keys, (repo.name, args))
+                self.assertEqual(with_keys, without, (repo.name, args))
+            # and the reads see that repository's own content through its shared objects
+            self.assertIn("-main", ob._git(["diff", "HEAD", *ob._DIFF_FLAGS], repo, ob.GIT_TIMEOUT, hard) or "", repo.name)
 
 
 if __name__ == "__main__":
