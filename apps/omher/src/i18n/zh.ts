@@ -1978,4 +1978,13 @@ export const zh: Record<Key, string> = {
   "remote.notHere": "omher 正在使用服务器：不会读取这台电脑上那里的机器人看不到的文件夹或会话。",
   "remote.authOnServer": "omher 正在使用服务器：请在服务器的终端中运行 {cmd} 来登录或添加密钥。",
   "remote.noLocalHermes": "omher 正在使用服务器：不会启动这台电脑上的 oh-my-hermes。要再次运行，请改回使用这台电脑。",
+  "acc.loginDays": "登录：还剩 {n} 天",
+  "acc.loginDay": "登录：还剩 1 天",
+  "acc.loginHours": "登录：还剩 {n} 小时",
+  "acc.loginExpired": "登录：已过期",
+  "upd.waiting": "等待重启",
+  "upd.waitingBody": "omher {version} 已安装，但 omher 还没有重启。",
+  "upd.restartAgain": "再次重启",
+  "upd.later": "稍后",
+  "upd.restartTo": "重启到 {version}",
 };
