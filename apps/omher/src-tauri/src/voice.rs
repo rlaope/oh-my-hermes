@@ -50,9 +50,12 @@ mod tests {
         }
     }
 
+    // Not on Windows: a test binary that links the Wry builder imports common-controls entry points the test
+    // executable has no manifest for, and Windows refuses to load it (STATUS_ENTRYPOINT_NOT_FOUND) before any test runs.
+    #[cfg(not(windows))]
     #[test]
     fn the_builder_takes_the_answer() {
-        // lib.rs's Linux-only line, type-checked here on every system: the builder is made and dropped, never run
+        // lib.rs's Linux-only line, type-checked here on macOS too: the builder is made and dropped, never run
         let _ = tauri::Builder::<tauri::Wry>::default().on_permission_request(|_webview, kind| microphone_only(kind));
     }
 }
