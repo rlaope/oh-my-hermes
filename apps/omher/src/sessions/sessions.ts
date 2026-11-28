@@ -48,7 +48,9 @@ import { getDraft, setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type ConvState, type PastChat, type SessionHost } from "./host";
 import { localBot } from "../peers/peerKey";
 import { modeKnown, remoteOnly } from "../app/remote";
-import { folderKey, getStore, notifySessionEvent, notifySessionNote, onBridgeEvent, selectAsks, setChatRoute, setSessionKeyLookup, type OutFile, type SentFile, type Store } from "../state/store";
+import { folderKey, getStore, notifySessionEvent, notifySessionNote, onBridgeEvent, selectAsks, setChatRoute, setSessionKeyLookup, setTermAskOpen, type OutFile, type SentFile, type Store } from "../state/store";
+import { ASK_AGENTS, createAskDebounce, screenAsk } from "./term/screenAsk";
+import { clearTermAsk, notifyTermAsk, setTermAsk, termAsks } from "./termAsks";
 import { blobType, bytesOf, inlinePicture, parseSentFiles, pathsTyped, putSentFiles, SENT_FILES_KEY, shellQuote, wireText, type SavedFile, type SentFilesBook } from "./attach";
 import type { AccountCli, AccountGroup, ApprovalChoice, BridgeEvent, ClarifyAnswers, Msg } from "../lib/protocol";
 import { continuesItself, type SavedSession } from "../app/resume";
@@ -176,6 +178,8 @@ const SAID_MAX = 2_048;
 
 /** The row's last-output time is written at most this often (a flood would otherwise re-render the sidebar). */
 const OUT_MARK_MS = 500;
+/** A terminal agent's screen is read for a dialog at most this often while it prints (termAsks.ts). */
+const ASK_READ_MS = 250;
 
 /** A terminal's new size goes to its program once it has stopped changing for this long. Dragging a window gives
  *  one size per frame (16.7 ms at 60 Hz), so a wait of one frame or less collapses nothing; two frames does, and
@@ -1170,6 +1174,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     // once that line was typed (not a CLI the rc started first); any CLI in front ends what was kept for that line
     const back = r.fgBack?.typed && agent === r.fgBack.cli ? r.fgBack.session : undefined;
     patchRec(id, { fgAgent: agent, fgSession: back, ...(agent && r.fgBack ? { fgBack: undefined } : {}) });
+    // the agent that asked left the foreground: its dialog went with it
+    if (!agent || !ASK_AGENTS.includes(agent)) clearTermAsk(id);
     clearTimeout(fgIdTimer.get(id));
     fgIdTimer.delete(id);
     const t = terms.get(id);
@@ -1584,6 +1590,41 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       readLine();
     };
     t.el.addEventListener(PARKING_EVENT, lineBeforePark);
+    // a Claude Code or Codex in front stopped on its permission dialog or a choice menu: read off the screen after
+    // output (at most once per ASK_READ_MS), and once more ASK_CONFIRM_MS later while a dialog waits to be confirmed;
+    // nothing runs while the row is quiet
+    const askSeen = createAskDebounce();
+    let askTimer: ReturnType<typeof setTimeout> | null = null;
+    const readAsk = () => {
+      askTimer = null;
+      if (terms.get(id) !== t || t.run !== run || t.closed) return;
+      const r = rec(id);
+      const agent = r ? termMarkAgent(r) : null;
+      const lines: string[] = [];
+      if (agent && ASK_AGENTS.includes(agent)) {
+        const b = t.term.buffer.active;
+        for (let y = 0; y < t.term.rows; y++) lines.push(b.getLine(b.baseY + y)?.translateToString(true) ?? "");
+      }
+      const seen = askSeen.read(screenAsk(lines, agent), Date.now());
+      if (seen.confirmIn !== undefined) askTimer = setTimeout(readAsk, seen.confirmIn);
+      if (!seen.live || !r) return clearTermAsk(id);
+      const name = `${r.cwd.split(/[\\/]/).filter(Boolean).pop() ?? r.cwd} · ${agentLabel(agent!, state.agents)}`;
+      if (setTermAsk(id, { agent: agent!, kind: seen.live.kind, title: seen.live.title, options: seen.live.options, name })) {
+        const a = termAsks().find((x) => x.session === id);
+        if (a) notifyTermAsk(a);
+      }
+    };
+    const askOnOutput = () => {
+      if (askTimer === null) askTimer = setTimeout(readAsk, ASK_READ_MS);
+    };
+    // parked before that read came: read it now, from the xterm being parked
+    const askBeforePark = () => {
+      if (t.run !== run) return t.el.removeEventListener(PARKING_EVENT, askBeforePark);
+      if (askTimer === null) return;
+      clearTimeout(askTimer);
+      readAsk();
+    };
+    t.el.addEventListener(PARKING_EVENT, askBeforePark);
     // a CLI started with the row's conversation id: whether it set up its screen before the person pressed a key in
     // it, and the last of what it printed (a refusal), read when it ends (termEnd)
     let drew = false;
@@ -1619,6 +1660,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         termActs.patch(id, { lastOut: now, busySince: nextBusySince(termActs.get(id), now) });
       }
       if (!ofChat && lineTimer === null) lineTimer = setTimeout(readLine, OUT_MARK_MS);
+      if (!ofChat) askOnOutput();
     };
     // when this program was asked for: a CLI continuing its conversation that ends soon after could not continue it
     const began = Date.now();
@@ -1633,6 +1675,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         termActs.patch(id, { progress: undefined, busySince: undefined });
         if (lineTimer !== null) clearTimeout(lineTimer);
         lineTimer = null;
+        if (askTimer !== null) clearTimeout(askTimer);
+        askTimer = null;
+        clearTermAsk(id);
         fgOff.get(id)?.();
         fgOff.delete(id);
         if (rec(id)?.fgAgent) setSessionFg(id, null);
@@ -1790,6 +1835,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     fgIdTimer.delete(id);
     fgOff.get(id)?.();
     fgOff.delete(id);
+    clearTermAsk(id);
     if (t.hostId !== null && !t.closed) void t.io.close(t.hostId).catch(() => undefined);
     t.closed = true;
     if (t.settle !== null) clearTimeout(t.settle);
@@ -2677,6 +2723,14 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     setSessionFg,
     /** The pty id session `id`'s terminal runs on (the `session-fg` event's id), null before it started. */
     ptyOf: (id: string): number | null => terms.get(id)?.hostId ?? null,
+    /** Put the keyboard in session `id`'s terminal once its view has drawn (a terminal ask was picked). */
+    focusTerm(id: string) {
+      const go = () => {
+        const t = terms.get(id);
+        if (t && !t.closed && t.el.isConnected) t.term.focus();
+      };
+      requestAnimationFrame(() => requestAnimationFrame(go));
+    },
     /** The native folder dialog (TERMINALS + menu's "Choose folder…"); null when cancelled. */
     pickFolder: (at: string) => host.pickFolder(at),
     continuePast,
@@ -2780,6 +2834,11 @@ export function getSessions(): SessionsStore {
     // e2e (mock host only): drive a terminal's foreground CLI the way the shell's event will
     if (typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window)) (window as unknown as { __omherSessions?: SessionsStore }).__omherSessions = s;
     setSessionKeyLookup((id) => s.chatKey(id));
+    setTermAskOpen((id) => {
+      if (!s.getState().list.some((r) => r.id === id)) return;
+      getStore().actions.openSession(id);
+      s.focusTerm(id);
+    });
     s.setNotify((ev) => notifySessionEvent(ev, getStore().getState()));
     s.setNotifyState((id, n) => notifySessionNote(id, n, getStore().getState()));
   }

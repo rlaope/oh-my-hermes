@@ -75,6 +75,9 @@ export interface TermSettings {
   /** Colours the person changed by hand (Settings › Terminal › Customize colours), one set per app theme: editing
    *  under the light app theme edits the light set. Picked as `edited` in `themeDark` / `themeLight`. */
   edits: { dark: TermEdit | null; light: TermEdit | null };
+  /** A Claude Code or Codex in a TERMINALS row that stops on its permission dialog or a choice menu is an ask in Needs
+   *  you, ⌘J and the Dock count, read off its screen (termAsks.ts). Off: only its row's ring marks it, as before. */
+  agentAsks: boolean;
 }
 
 /** Colour slots a custom theme keeps: the sixteen ANSI ones and the four of the screen. */
@@ -164,6 +167,7 @@ export const TERM_DEFAULTS: TermSettings = {
   defaultShell: "",
   custom: null,
   edits: { dark: null, light: null },
+  agentAsks: true,
 };
 
 /** A shell id as `shells_available` makes them: a Windows name or `unix:<absolute path>`; anything else is "". */
@@ -232,6 +236,7 @@ export function parseTermSettings(raw: unknown): TermSettings {
       const e = (o.edits && typeof o.edits === "object" ? o.edits : {}) as Record<string, unknown>;
       return { dark: parseTermEdit(e.dark), light: parseTermEdit(e.light) };
     })(),
+    agentAsks: bool(o.agentAsks, d.agentAsks),
   };
 }
 
