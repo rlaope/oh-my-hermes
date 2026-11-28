@@ -9,7 +9,7 @@
 // control becomes a visible escape and cannot start a line of its own (a forged "Goal:"), and each name, its code
 // span's fences included, is at most NAME_CHARS. The goal is one line the same way. The whole message stays under
 // MESSAGE_CHARS by construction.
-import { pathKey } from "../sessions/folders";
+import { pathKey, pathSpelling } from "../sessions/folders";
 import type { Worktree, WorktreeDiff } from "../lib/protocol";
 
 /** The most files the diff stat lists by name; the rest are counted. */
@@ -87,7 +87,7 @@ export function codeSpan(s: string): string {
 
 const isWindows = (key: string) => /^[A-Za-z]:\\|^\\\\/.test(key);
 
-/** One spelling to compare folders by: pathKey's, and case folded for a Windows path. */
+/** One spelling to compare folders by: pathKey's (composed, a drive path case-folded), and a share path case-folded too. */
 const cmpKey = (path: string) => {
   const k = pathKey(path);
   return isWindows(k) ? k.toLowerCase() : k;
@@ -113,7 +113,7 @@ export function worktreeOf<T extends Pick<Worktree, "path">>(folder: string, tre
 }
 
 /** The last part of a path, `/` or `\` separated. */
-const leaf = (p: string) => pathKey(p).split(/[\\/]/).filter(Boolean).pop() ?? p;
+const leaf = (p: string) => pathSpelling(p).split(/[\\/]/).filter(Boolean).pop() ?? p;
 
 /** One line: the folder's last part and, when known, its branch. */
 export function handoverTitle(f: Pick<HandoverFacts, "folder" | "worktree">): string {

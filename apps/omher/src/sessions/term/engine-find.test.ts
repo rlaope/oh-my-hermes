@@ -3,7 +3,7 @@
 // index; without the fix one of them stays and its fill stays drawn.
 import { Terminal } from "@xterm/xterm";
 import { describe, expect, it } from "vitest";
-import { settleDecorationRemovals } from "./engine-find";
+import { FIND_PLAIN, findQuery, makeFinder, settleDecorationRemovals, validPattern, type FindResults } from "./engine-find";
 
 const write = (t: Terminal, d: string) => new Promise<void>((r) => t.write(d, r));
 type DS = { getDecorationsAtCell(x: number, line: number): Iterable<unknown> };
@@ -60,5 +60,94 @@ describe("settleDecorationRemovals", () => {
     expect(settleDecorationRemovals(t)).toBe(true);
     t.dispose();
     expect(settleDecorationRemovals({} as Terminal)).toBe(false);
+  });
+});
+
+// Find over text in either Unicode form: macOS hands `ls` file names decomposed (NFD), a person types them composed
+// (NFC). The fixture lines are built with String.normalize so this file holds no decomposed text of its own.
+const NFC = "보고서.pdf";
+const NFD = NFC.normalize("NFD");
+const WORD = "보고서";
+
+describe("findQuery", () => {
+  it("leaves a text with nothing to compose, and a regular expression, as typed", () => {
+    expect(findQuery("needle", FIND_PLAIN)).toEqual({ text: "needle", options: FIND_PLAIN });
+    const re = { caseSensitive: false, regex: true };
+    expect(findQuery("보고.*", re)).toEqual({ text: "보고.*", options: re });
+  });
+
+  it("turns a text with Hangul into one pattern that takes either form of each syllable, and escapes the rest", () => {
+    for (const typed of [NFC, NFD]) {
+      const q = findQuery(typed, FIND_PLAIN);
+      expect(q.options).toEqual({ caseSensitive: false, regex: true });
+      expect(validPattern(q.text)).toBe(true);
+      const re = RegExp(q.text, "g");
+      expect(`${NFD} ${NFC} 보고서xpdf`.match(re)).toEqual([NFD, NFC]);
+    }
+    expect(findQuery("é", { caseSensitive: true, regex: false }).options.caseSensitive).toBe(true);
+  });
+});
+
+/** A real xterm with the real search add-on, outside a page: xterm can only select in an open terminal, so the
+ *  selection is recorded here (it is where the add-on puts each match it moves to). */
+async function findIn(lines: string[]) {
+  const t = new Terminal({ cols: 40, rows: 10, allowProposedApi: true });
+  const picked: [number, number, number][] = [];
+  let sel: { start: { x: number; y: number }; end: { x: number; y: number } } | undefined;
+  Object.assign(t, {
+    select: (x: number, y: number, n: number) => {
+      picked.push([x, y, n]);
+      sel = { start: { x, y }, end: { x: x + n, y } };
+    },
+    getSelectionPosition: () => sel,
+    clearSelection: () => (sel = undefined),
+    scrollLines: () => undefined,
+    scrollToLine: () => undefined,
+  });
+  await write(t, lines.join("\r\n") + "\r\n");
+  const finder = makeFinder(t);
+  const results: FindResults[] = [];
+  finder.onResults((r) => results.push(r));
+  const step = async (text: string, dir: "next" | "previous", incremental = false, options = FIND_PLAIN) => {
+    const before = results.length;
+    finder.search(text, dir, incremental, options);
+    await expect.poll(() => results.length > before).toBe(true);
+    return { at: picked[picked.length - 1], result: results[results.length - 1] };
+  };
+  return { t, finder, step };
+}
+
+describe("find matches either Unicode form", () => {
+  it("finds the composed and the decomposed spelling in one buffer, each once, in order, over its own cells", async () => {
+    const { t, finder, step } = await findIn([NFD, NFC, `x ${NFD} ${NFC}`, "보고 only", "nothing"]);
+    for (const typed of [WORD, WORD.normalize("NFD")]) {
+      const first = await step(typed, "next", true);
+      expect(first.result.count).toBe(4);
+      // `보고서` is three wide cells (six columns), however it is spelled; the third line's matches start after `x ` and
+      // after the first match and a space
+      const order = [first.at];
+      for (let i = 0; i < 4; i++) order.push((await step(typed, "next")).at);
+      expect(order).toEqual([
+        [0, 0, 6],
+        [0, 1, 6],
+        [2, 2, 6],
+        [13, 2, 6],
+        [0, 0, 6],
+      ]);
+      expect((await step(typed, "previous")).at).toEqual([13, 2, 6]);
+      finder.clear();
+    }
+    finder.dispose();
+    t.dispose();
+  });
+
+  it("an accented Latin letter in either form, case ignored unless Match case is on", async () => {
+    const { t, finder, step } = await findIn([`${"Café".normalize("NFD")} au lait`, "café crème"]);
+    expect((await step("CAFÉ", "next", true)).result.count).toBe(2);
+    expect((await step("Café".normalize("NFD"), "next", true)).result.count).toBe(2);
+    expect((await step("CAFÉ", "next", true, { caseSensitive: true, regex: false })).result.count).toBe(0);
+    expect((await step("Café", "next", true, { caseSensitive: true, regex: false })).result.count).toBe(1);
+    finder.dispose();
+    t.dispose();
   });
 });

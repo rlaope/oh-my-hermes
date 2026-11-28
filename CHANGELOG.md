@@ -56,6 +56,17 @@ All notable changes will be documented here.
   Releases of different tags rewrite that file one at a time. Ideas from 2rami/kasaterm (MIT), code written fresh.
   (`apps/omher/scripts/release-guard.mjs`, `.github/workflows/omher-release.yml`)
 
+- **omher: Korean names match however macOS composed them.** macOS hands file and folder names over decomposed, so
+  find in a terminal did not find `보고서` in `보고서.pdf` printed by `ls`, a folder a shell reported and the same
+  folder picked in the dialog could be two TERMINALS groups, and the sidebar search missed such a folder. Find now
+  matches a typed text in either form (each match counted once, highlighted and stepped through in order), TERMINALS
+  groups a folder by one key in either form (and `C:\Users` with `c:\users` on Windows; macOS and Linux paths keep
+  their case), with saved collapsed folders and order found under the new key, and the searches over names and
+  folders (sidebar bots and TERMINALS, Settings › Bots, Apps, Tasks) compare composed text, case ignored. Nothing is
+  renamed on disk, and a session still starts in the folder as the system spelled it. Ideas from 2rami/kasaterm
+  (MIT), code written fresh. (`apps/omher/src/sessions/folders.ts`, `apps/omher/src/sessions/term/engine-find.ts`,
+  `apps/omher/src/lib/textMatch.ts`)
+
 - **TUI: a `/model` form Hermes runs itself waits for the turn instead of being refused.** During a turn, `/model`
   ran at once whenever every `--` word was `--refresh`, `--provider` or `--session`, so `/model --provider copilot`,
   `/model gpt-5.4 --refresh`, `/model --session`, `/model gpt-5.4 -g` and `/model gpt-5.4 extra` went straight to

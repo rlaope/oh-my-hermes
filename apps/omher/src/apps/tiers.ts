@@ -2,6 +2,7 @@
 // (the tiers of the platform list), each one's display name and mark, and what a card offers for each state. Pure
 // data and functions, so the page and its tests read the same thing.
 import type { AppRow, AppSkill } from "../lib/protocol";
+import { matchesSearch, searchKey } from "../lib/textMatch";
 
 export type Tier = "work" | "ops" | "more";
 export const TIERS: readonly Tier[] = ["work", "ops", "more"];
@@ -101,9 +102,8 @@ export type Card =
 /** The page's sections in order (work, ops, more), each card sorted with what the bot already has first, then by
  *  name; `query` keeps the cards whose name, title or description has it. Empty sections are left out. */
 export function sections(apps: AppRow[], skills: AppSkill[], query = ""): { tier: Tier; cards: Card[] }[] {
-  const q = query.trim().toLowerCase();
-  const hit = (name: string, desc: string) =>
-    !q || name.toLowerCase().includes(q) || titleOf(name).toLowerCase().includes(q) || desc.toLowerCase().includes(q);
+  const q = searchKey(query.trim());
+  const hit = (name: string, desc: string) => matchesSearch(q, name, titleOf(name), desc);
   const cards: Card[] = [
     ...apps.filter((a) => hit(a.name, a.description)).map((app): Card => ({ kind: "mcp", tier: tierOf(app.name), app })),
     ...skills.filter((s) => hit(s.name, s.description)).map((skill): Card => ({ kind: "skill", tier: tierOf(skill.name), skill })),
