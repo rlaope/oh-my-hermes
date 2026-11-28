@@ -2662,11 +2662,14 @@ const OPS = {
     const b = needBot(p);
     const kind = p.kind ?? "approval";
     if (!["approval", "clarify", "interview"].includes(kind)) throw new OpError("bad_request", "kind is approval, clarify or interview");
-    if (turns[b.name]) throw new OpError("bad_request", `${b.name} is busy`);
-    turns[b.name] = { timers: [], text: `(${kind})` };
-    bots[b.name].running = true;
-    ev(b.name, "bot.status", { status: bots[b.name].status, running: true });
-    ev(b.name, "turn.start");
+    // a manual turn already running (one the person started) asks inside that turn; any other running turn is busy
+    if (turns[b.name] && !manual.has(b.name)) throw new OpError("bad_request", `${b.name} is busy`);
+    if (!turns[b.name]) {
+      turns[b.name] = { timers: [], text: `(${kind})` };
+      bots[b.name].running = true;
+      ev(b.name, "bot.status", { status: bots[b.name].status, running: true });
+      ev(b.name, "turn.start");
+    }
     const timeout = Number.isInteger(p.timeout_ms) && p.timeout_ms > 0 ? p.timeout_ms : 0;
     const request_id = kind === "approval" ? raiseApproval(b.name, timeout) : kind === "clarify" ? raiseClarify(b.name, timeout) : raiseInterview(b.name, timeout);
     return { request_id };

@@ -1758,6 +1758,7 @@ export const ko: Record<Key, string> = {
   "sq.unused": "쓰이지 않음 · 답이 먼저 멈췄어요",
   "sq.send": "보내기",
   "sq.sendTip": "새 메시지로 보내요",
+  "sq.heldReread": "대기 중 · 연결이 돌아와 대화를 다시 읽는 중이에요",
   // steer queue sessions
   "sqs.handed": "이미 {agent}에게 넘어갔어요 · 곧 읽어요",
   "sqs.noSteer": "{agent}는 답하는 중에 메시지를 받을 수 없어요",

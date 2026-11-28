@@ -1758,6 +1758,7 @@ export const ja: Record<Key, string> = {
   "sq.unused": "使われませんでした · 回答が先に止まりました",
   "sq.send": "送信",
   "sq.sendTip": "新しいメッセージとして送信します",
+  "sq.heldReread": "待機中 · 接続が戻ったのでチャットを読み直しています",
   // steer queue sessions
   "sqs.handed": "すでに {agent} に渡しました · 次に読みます",
   "sqs.noSteer": "{agent} は回答中にメッセージを受け取れません",
