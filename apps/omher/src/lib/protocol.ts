@@ -383,6 +383,83 @@ export interface AppRun {
   line?: string;
 }
 
+/** One check of the computer-use driver (Hermes' `cua-driver doctor`): its label, state and Hermes' own message. */
+export interface ComputerCheck {
+  label: string;
+  status: string;
+  message: string;
+}
+
+/** "This computer" on Settings › Computer (`computer.status`, BOUNDARY rule 52): Hermes' own
+ *  `computer-use permissions status --json`, kept field by field, or `read: false` with what Hermes said.
+ *  `pinned`: `HERMES_TUI_TOOLSETS` names the toolsets, so the bots' switches change nothing. */
+export type ComputerStatus =
+  | { read: false; pinned: boolean; line: string }
+  | {
+      read: true;
+      pinned: boolean;
+      platform: string;
+      platform_supported: boolean;
+      installed: boolean;
+      version: string | null;
+      /** null: not known (no driver, or the probe failed). */
+      ready: boolean | null;
+      /** macOS only: Hermes can ask for Accessibility and Screen Recording. */
+      can_grant: boolean;
+      checks: ComputerCheck[];
+      error: string | null;
+      accessibility: boolean | null;
+      screen_recording: boolean | null;
+    };
+
+/** A bot's `computer_use` switch read from its gateway: `unknown` when it is offline or did not say. */
+export type ComputerSwitch = "on" | "off" | "unknown";
+
+export interface ComputerToggle {
+  outcome: "ok" | "failed";
+  state: ComputerSwitch;
+  /** The reason the readback gave with `state` (`disabled`, `unread`…), as `computer.bot` gives it. */
+  why?: "" | "offline" | "unread" | "disabled";
+  line?: string;
+}
+
+export interface ComputerDriverRun {
+  outcome: "ok" | "failed";
+  line?: string;
+  /** "This computer" read again after the run (null when Hermes is not on this computer). */
+  status: ComputerStatus | null;
+  /** Hermes' install exited 0 but omher could not read the state back: installed by Hermes' word, not confirmed. */
+  unconfirmed?: boolean;
+}
+
+/** Where a bot's speech goes, as its `config.yaml` names it (`voice.info`, BOUNDARY rule 54). `auto`: Hermes picks its
+ *  local model when installed, else a cloud provider whose key is set; `edge`: Hermes' default TTS, Microsoft's online
+ *  service; `off`: STT is turned off; `other`: a name omher does not know. */
+export type VoiceWhere = "local" | "online" | "auto" | "edge" | "off" | "other";
+
+export interface VoiceInfo {
+  /** This Hermes can take a voice request (ticket minting and the audio routes); `line` says why not. */
+  supported: boolean;
+  line: string;
+  stt: { enabled: boolean; provider: string; where: VoiceWhere };
+  tts: { provider: string; where: VoiceWhere };
+  /** Characters of one answer that one read-aloud covers at most. */
+  text_max: number;
+}
+
+/** One spoken part of an answer: its audio (absent when `empty`: Hermes found nothing to read in it), which part of
+ *  how many, and whether the answer was cut at `text_max`. */
+export interface VoiceSpeech {
+  part: number;
+  parts: number;
+  cut: boolean;
+  text_max: number;
+  empty: boolean;
+  mime?: string;
+  data_base64?: string;
+  provider?: string;
+}
+
 export interface CatalogResult {
   total: number;
   matched: number;
@@ -576,6 +653,31 @@ export interface OpMap {
   "apps.install": { params: { bot: string; name: string }; result: AppRun };
   "apps.login": { params: { bot: string; name: string }; result: AppRun };
   "apps.remove": { params: { bot: string; name: string }; result: AppRun };
+  /** Computer use (BOUNDARY rule 52): the driver and OS permissions, read through Hermes' own
+   *  `hermes -p default computer-use permissions status --json`. */
+  "computer.status": { params: Record<string, never>; result: ComputerStatus };
+  /** A bot's `computer_use` switch as a new session gets it: its gateway's `profiles.describe` (a gateway omher is
+   *  attached to only), off with why `disabled` when the profile's `agent.disabled_toolsets` names it. */
+  "computer.bot": {
+    params: { bot: string };
+    /** `code_focus`: the profile's `agent.coding_context` is `focus`, so its chats in a code folder use Hermes'
+     *  coding tool set, which leaves computer use out. */
+    result: { state: ComputerSwitch; why: "" | "offline" | "unread" | "disabled"; code_focus: boolean };
+  };
+  /** `hermes -p <bot> tools enable|disable computer_use`, then the switch read back. Only the bot and on/off go out. */
+  "computer.toggle": { params: { bot: string; on: boolean }; result: ComputerToggle };
+  /** `hermes -p default computer-use install`, then "This computer" read again. */
+  "computer.install": { params: Record<string, never>; result: ComputerDriverRun };
+  /** macOS: `hermes -p default computer-use permissions grant` (macOS' own dialog), then "This computer" read again. */
+  "computer.grant": { params: Record<string, never>; result: ComputerDriverRun };
+  /** Voice (BOUNDARY rule 54): whether this Hermes takes voice, and what the bot's `config.yaml` names for speech. */
+  "voice.info": { params: { bot: string }; result: VoiceInfo };
+  /** A recording to the bot's own Hermes (`POST /api/audio/transcribe` on its gateway's loopback listener). Only the
+   *  bot, the bytes and their type go out; the bridge picks the address, the path and the ticket. */
+  "voice.transcribe": { params: { bot: string; data_base64: string; mime: string }; result: { transcript: string; provider: string } };
+  /** Part `part` of an answer's text, read by the bot's own Hermes (`POST /api/audio/speak`); the bridge splits the
+   *  text, so the page sends the same text with each part number. */
+  "voice.speak": { params: { bot: string; text: string; part: number }; result: VoiceSpeech };
   "models.options": { params: { bot: string }; result: ModelOptions };
   /** Can the bot answer (read-only)? With `provider` (openai-codex, anthropic or nous) the strict check for it. */
   "bots.ready": { params: { bot: string; provider?: string }; result: BotReady };
@@ -794,6 +896,8 @@ export interface RequestFrame {
 export interface BridgeError {
   code: string;
   message: string;
+  /** false: the client refused the request before writing it to the socket, so the bridge never saw it. */
+  sent?: false;
 }
 
 export type ReplyFrame =
@@ -827,8 +931,13 @@ export type BridgeEvent =
       detail: string;
       /** delegate_task only: the `[dag:<run>/<node>]` parts it hands out. */
       dag?: { run: string; node: string }[];
+      /** computer_use only: Hermes' action (click, capture, type…); `detail` is then the app, never what is typed. */
+      action?: string;
     })
   | (EventBase & { event: "tool.end"; tool_id: string; name: string; ok: boolean; ms: number })
+  /** The screenshot a browser_exec or computer_use step captured (BOUNDARY rule 53): read by the bridge from the file
+   *  Hermes named, when the step ended. `mime` is what its first bytes say. Kept in memory only (SHOTS_KEPT a chat). */
+  | (EventBase & { event: "tool.shot"; tool_id: string; mime: string; data_base64: string })
   /** A subagent's latest state, in ONE agent-neutral shape: Hermes' `subagent.*` events of a bot's turn (clipped by the
    *  bridge), and every SESSIONS agent's subagents (Claude Code Agent/Task, Codex sub-agent threads, OmO `task`; any
    *  later agent emits the same). The same `id` updates the same row; `delegation` groups one fan-out. */

@@ -117,3 +117,20 @@ describe("reconnect after the bridge comes back", () => {
     b.close();
   });
 });
+
+describe("a request the client refuses before the socket", () => {
+  it("is marked sent: false; one lost with the socket is not", async () => {
+    const b = new BridgeClient({ url: OLD, WebSocketImpl: FakeSocket as unknown as typeof WebSocket, minDelay: 10, maxDelay: 40 });
+    await expect(b.request("bots.list")).rejects.toEqual({ code: "disconnected", message: "bridge is not connected", sent: false });
+    const opened = b.connect();
+    await vi.advanceTimersByTimeAsync(0);
+    FakeSocket.all[0].open();
+    await opened;
+    const lost = b.request("bots.list");
+    FakeSocket.all[0].drop();
+    const err = await lost.catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: "disconnected" });
+    expect((err as { sent?: unknown }).sent).toBeUndefined();
+    b.close();
+  });
+});

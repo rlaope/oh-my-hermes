@@ -221,6 +221,29 @@
 .act-step.stopped .s {
   color: var(--muted);
 }
+/* a browser or computer step's screenshot (rule 53): a small thumbnail that opens the lightbox */
+.act-shot {
+  flex: none;
+  align-self: center;
+  display: block;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--raise);
+  cursor: zoom-in;
+}
+.act-shot img {
+  display: block;
+  width: 44px;
+  height: 28px;
+  object-fit: cover;
+  object-position: top left;
+}
+.act-shot:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
 .act-step .act-ic {
   align-self: center;
   font-size: 8px;

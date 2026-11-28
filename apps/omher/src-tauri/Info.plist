@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Merged by Tauri into the app's Info.plist. Voice (BOUNDARY rule 54): macOS shows this line in its own microphone
+     dialog the first time the composer's microphone is pressed. -->
+<plist version="1.0">
+<dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>omher records your voice only after you press its microphone button, and sends the recording to your own Hermes to turn it into text.</string>
+</dict>
+</plist>

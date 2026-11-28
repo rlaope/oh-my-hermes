@@ -10,6 +10,9 @@ import { useClock } from "../../app/clock";
 import { t, t as tr, tx, type Key } from "../../i18n";
 import { FanoutCard, rowMs } from "./Subagents";
 import { DiffView, PlanList, ThinkingText } from "./Work";
+import { COMPUTER_TOOL, computerLine } from "./computerSteps";
+import { browserLine, isBrowserSentence } from "./browserSteps";
+import { Lightbox } from "../parts/Media";
 import "./activity.css";
 
 /** A fan-out still counts as running this long after its last event, though its turn ended (background). */
@@ -17,7 +20,9 @@ const FANOUT_QUIET_MS = 10 * 60_000;
 
 export const slot = "activity";
 
-/** Plain verbs for the detail rows. Unknown tools read as their own name, with underscores spaced. */
+/** Plain verbs for the detail rows. Unknown tools read as their own name, with underscores spaced. A computer_use step
+ *  reads as one sentence of its action and app (computerSteps.ts), never what the bot typed; a browser step as its
+ *  label or action (browserSteps.ts), and `browser_cdp` as this verb and its method, never its params. */
 const VERBS: Record<string, Key> = {
   terminal: "act.ran",
   read_file: "act.read",
@@ -30,6 +35,7 @@ const VERBS: Record<string, Key> = {
   skill_view: "act.usedSkill",
   skill_use: "act.usedSkill",
   browser_navigate: "act.opened",
+  browser_cdp: "act.br.cdp",
 };
 const stepVerb = (name: string) => (VERBS[name] ? tr(VERBS[name]) : name.replace(/_/g, " "));
 const DAG_STATUS: Record<string, Key> = { failed: "act.dag.failed", working: "act.dag.working", stopped: "act.dag.stopped", returned: "act.dag.returned" };
@@ -129,9 +135,46 @@ function stoppedTime(step: Step, ms: number): string {
   return tr(step.late.ok ? "act.stepLate" : "act.stepLateFailed", { t: stepTime(step.late.ms) });
 }
 
+/** The screenshot a browser or computer step captured (rule 53): a small thumbnail that opens the image lightbox. The
+ *  lightbox keeps the image it opened with until the person closes it, even when the page's bound (SHOTS_TOTAL) drops
+ *  the thumbnail meanwhile; StepRow renders this for every step so it stays mounted then. */
+function StepShot({ url, line }: { url?: string; line: string }) {
+  const [viewing, setViewing] = useState<string | null>(null);
+  const name = tr("act.shot", { step: line });
+  return (
+    <>
+      {url && (
+        <button
+          type="button"
+          className="act-shot"
+          data-testid="activity-step-shot"
+          aria-label={tr("act.shotOpen", { step: line })}
+          title={name}
+          onClick={() => setViewing(url)}
+        >
+          <img src={url} alt="" draggable={false} />
+        </button>
+      )}
+      {viewing && <Lightbox url={viewing} name={name} onClose={() => setViewing(null)} />}
+    </>
+  );
+}
+
 /** One step row. `io` (a read-only session view, `src/harness/AgentChat`): the call's full input and result, shown
- *  under the row when it is opened, the way a file edit opens to its diff. */
-export function StepRow({ step, live, now, io }: { step: Step; live: boolean; now: number; io?: { input: string; result: string } }) {
+ *  under the row when it is opened, the way a file edit opens to its diff. `shot`: the step's screenshot (rule 53). */
+export function StepRow({
+  step,
+  live,
+  now,
+  io,
+  shot,
+}: {
+  step: Step;
+  live: boolean;
+  now: number;
+  io?: { input: string; result: string };
+  shot?: string;
+}) {
   // a file edit that carries its change opens to it (closed by default: a long change never moves the chat)
   const [diffOpen, setDiffOpen] = useState(false);
   if (step.name === "delegate_task" && step.dag?.length) return <DagRows step={step} live={live} />;
@@ -141,6 +184,13 @@ export function StepRow({ step, live, now, io }: { step: Step; live: boolean; no
   const ms = (step.endedAt ?? now) - step.startedAt;
   const diff = step.diff?.length ? step.diff : null;
   const opens = !!diff || !!io;
+  const cu =
+    step.name === COMPUTER_TOOL
+      ? computerLine(step.action, step.detail, false)
+      : isBrowserSentence(step.name)
+        ? browserLine(step.name, step.action, step.detail, false)
+        : null;
+  const pic = <StepShot url={shot} line={cu ?? (step.detail ? `${stepVerb(step.name)} ${step.detail}` : stepVerb(step.name))} />;
   const row = (
     <div
       className={`act-step${failed ? " fail" : ""}${stopped ? " stopped" : ""}${opens ? " has-diff" : ""}${diffOpen ? " open" : ""}`}
@@ -163,8 +213,10 @@ export function StepRow({ step, live, now, io }: { step: Step; live: boolean; no
         : {})}
     >
       {stopped && <span className="act-ic interrupted" aria-hidden>■</span>}
-      <span className="k">{stopped ? tr("act.stoppedVerb") : stepVerb(step.name)}</span>
-      {step.detail &&
+      <span className="k">{stopped ? tr("act.stoppedVerb") : (cu ?? stepVerb(step.name))}</span>
+      {cu !== null
+        ? stopped && <span className="v prose">{cu}</span>
+        : step.detail &&
         (isCode(step.name) ? (
           <code className="v" title={step.detail}>
             {step.detail}
@@ -174,6 +226,7 @@ export function StepRow({ step, live, now, io }: { step: Step; live: boolean; no
             {step.detail}
           </span>
         ))}
+      {!opens && pic}
       <span className="s" data-testid="activity-step-time">
         {step.untimed ? "" : running && live ? "…" : stopped ? stoppedTime(step, ms) : failed ? tr("act.stepFailed", { t: stepTime(ms) }) : stepTime(ms)}
       </span>
@@ -188,6 +241,7 @@ export function StepRow({ step, live, now, io }: { step: Step; live: boolean; no
   return (
     <>
       {row}
+      {pic}
       {diffOpen && diff && <DiffView files={diff} />}
       {diffOpen && io && (
         <div className="act-io" data-testid="activity-step-io">
@@ -217,7 +271,8 @@ export default function Activity({ bot, item, live }: SlotProps["activity"]) {
   const canOpen = n > 0;
   // the turn waits on the person (an approval or a question of this chat is open): the needs dot, as the bot's
   // sidebar row shows, never the working spinner (a blocked turn is not busy)
-  const items = useStore().chats[bot]?.items;
+  const chat = useStore().chats[bot];
+  const items = chat?.items;
   const waits = live && !!items?.some((i) => (i.kind === "approval" || i.kind === "clarify") && askOpen(items, i));
 
   let summary = "";
@@ -278,7 +333,7 @@ export default function Activity({ bot, item, live }: SlotProps["activity"]) {
       {open && canOpen && (
         <div className="act-det" data-testid="activity-details">
           {t.steps.map((s) => (
-            <StepRow key={s.id} step={s} live={live} now={now} />
+            <StepRow key={s.id} step={s} live={live} now={now} shot={chat?.shots?.find((x) => x.id === s.id)?.url} />
           ))}
         </div>
       )}

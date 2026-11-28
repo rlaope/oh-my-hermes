@@ -1456,9 +1456,10 @@ wake pipe on real Windows pipes.
   colour of its face on the bot board, a blank row between bots), each
   session with its title or preview, source and last activity as room allows. Type to filter; Tab and Shift+Tab
   cycle profiles without clearing the filter. Ctrl+G loads older gateway
-  sessions when available. The footer tells you whether Enter switches to the
-  selected session or opens its read-only history. Only sessions authorized
-  by the connected gateway can be switched to, renamed or deleted.
+  sessions when available. Enter checks the gateway's listing before opening
+  local-only results in the connected profile. If the gateway doesn't offer
+  resume, or the row is from another profile, Enter opens read-only history.
+  Only the connected gateway can authorize switching, renaming or deleting.
 - Bare `/resume` uses the all-profile table too. The launcher's `omh --resume`
   session picker retains the connected gateway's card-style picker, with a
   rounded search box above its cards. Each session has a card,

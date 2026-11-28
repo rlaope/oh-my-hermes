@@ -1868,8 +1868,13 @@ class ReadOnlyRule(BridgeCase):
     def test_bridge_makes_no_model_or_http_call(self):
         src = (HERE.parent / "omher_bridge.py").read_text(encoding="utf-8")
         # Whole words: the gateway's own `open_requests` snapshot key is not the `requests` library.
-        for needle in ("urllib.request", "requests", "httpx", "aiohttp", "openai", "anthropic"):
+        for needle in ("urllib.request", "requests", "httpx", "aiohttp", "anthropic"):
             self.assertIsNone(re.search(rf"\b{re.escape(needle)}\b", src), needle)
+        # `openai` is also one of Hermes' speech provider ids, which the voice notice names (BOUNDARY rule 54): no
+        # client of it is imported or used
+        self.assertIsNone(re.search(r"\b(?:import openai|from openai|openai\.)", src))
+        # the one HTTP use is rule 54's `voice_request` (tests/test_omher_boundary.py pins its request)
+        self.assertEqual(re.findall(r"^\s*import http\.client$", src, re.M), ["    import http.client"])
 
     def test_the_only_programs_it_runs_are_read_only_git_one_gh_read_and_hermes_restart(self):
         """BOUNDARY rules 10, 21 and 29: `git` reads in _git, `gh pr view` in gh_pr_view (RunsPr pins its argv), and
