@@ -730,7 +730,7 @@ export const zh: Record<Key, string> = {
   "term.history": "历史",
   "term.keepHistory": "重启后保留终端历史",
   "term.keepHistoryHint": "omher 重启后，每个终端之前显示的内容会以淡色恢复。关闭后全部删除。",
-  "term.agentAsks": "在 Needs you 中显示终端代理的提问",
+  "term.agentAsks": "提问显示在 Needs you",
   "term.agentAsksHint": "终端里的 Claude Code 或 Codex 停在权限或选择对话框时，会显示在 Needs you、⌘J 和 Dock 计数中。",
   "term.undoClose": "关闭后可撤销的时间",
   "term.undoCloseHint": "关闭的终端会让程序继续运行这么久，以便撤销关闭",

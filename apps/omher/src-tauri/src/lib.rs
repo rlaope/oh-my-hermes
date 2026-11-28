@@ -498,7 +498,7 @@ fn resume_store(home: &std::path::Path) -> Arc<program_resume::Store> {
     STORE.get_or_init(|| program_resume::Store::open(program_resume::default_dir(home))).clone()
 }
 
-/// After omher started (Settings › Terminal "Let programs ask to be restarted" on): the TERMINALS Shell rows that came
+/// After omher started (Settings › Terminal "Programs may ask to restart" on): the TERMINALS Shell rows that came
 /// back (`keep`, link ids; a row whose own CLI comes back by its conversation id is not among them) keep their
 /// records, every other record goes. Each kept row's program name (escaped) comes back; argv, cwd and token never do.
 /// Nothing on Windows or as root.

@@ -56,7 +56,7 @@ export interface ShellHost {
    *  and that id go to the shell: never a program. */
   /** `link`: a TERMINALS Shell row's link id, which its shell gets as `OMHER_TERMINAL_LINK` (rule 11); none for the
    *  bottom panel's shells. */
-  /** `resume` (a Shell row with `link`, Settings › Terminal "Let programs ask to be restarted" on): its shell gets an
+  /** `resume` (a Shell row with `link`, Settings › Terminal "Programs may ask to restart" on): its shell gets an
    *  `OSC7577_TOKEN` the page never sees; `true` also brings back the program that row kept, once. */
   start(cwd: string | null, cols: number, rows: number, onData: (d: Uint8Array | string) => void, onExit: (code: number | null) => void, shell?: string, link?: string, resume?: boolean): Promise<ShellStarted>;
   /** Program Resume after omher started: the rows (link ids) that came back paused keep their records, every other

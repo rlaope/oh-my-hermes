@@ -1,7 +1,7 @@
 //! Program Resume Protocol, OSC 7577 revision 0.5: a program in an omher terminal can tell omher how to start it
 //! again after omher restarts.
 //!
-//! - Every terminal start (Settings › Terminal "Let programs ask to be restarted", on by default) gets its own
+//! - Every terminal start (Settings › Terminal "Programs may ask to restart", on by default) gets its own
 //!   `OSC7577_TOKEN`: 32 characters of `[A-Za-z0-9_-]` from 192 random bits ([`new_token`]). A token omher itself
 //!   inherited is never passed on (`sessions::command_for` removes it). The token lives in Rust only: it is in the
 //!   program's environment and in this module's memory, never in a message to the page and never in a log.

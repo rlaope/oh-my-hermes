@@ -3,7 +3,7 @@
 // which program Resume brings back. Resume asks the shell for that record once (`resume: true`) and types only the
 // line the shell made (omher's own program and a one-use launch file), never the program's command; a second restart
 // has nothing left. A row with no record says nothing; records of rows that are gone are dropped. Settings › Terminal
-// "Let programs ask to be restarted" (on by default) turned off: no row is told it may ask and no record is read.
+// "Programs may ask to restart" (on by default) turned off: no row is told it may ask and no record is read.
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -117,7 +117,7 @@ test("Settings › Terminal turns it off: no shell is told it may ask and no rec
   await open(page);
   await page.getByTestId("nav-settings").click();
   await page.getByTestId("settings-nav-terminal").click();
-  await expect(page.getByTestId("term-program-resume-row")).toContainText("Let programs ask to be restarted");
+  await expect(page.getByTestId("term-program-resume-row")).toContainText("Programs may ask to restart");
   const sw = page.getByTestId("term-program-resume");
   await expect(sw.getByRole("radio", { name: "On" })).toHaveAttribute("aria-checked", "true");
   if (SHOTS) {
