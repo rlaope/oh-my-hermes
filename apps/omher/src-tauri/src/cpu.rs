@@ -585,12 +585,6 @@ mod tests {
             if let (_, Some(w)) = tr.step(&a.into_iter().filter(|u| u.pid == pid).collect::<Vec<_>>(), i * 2) {
                 warned.get_or_insert(w);
             }
-            if i == 1 {
-                // the same process as another tool sees it, for comparison
-                if let Ok(o) = std::process::Command::new("/bin/ps").args(["-o", "pcpu=", "-p", &pid.to_string()]).output() {
-                    eprintln!("ps says {}% for pid {pid}", String::from_utf8_lossy(&o.stdout).trim());
-                }
-            }
             std::thread::sleep(Duration::from_millis(2000));
         }
         let _ = child.kill();
