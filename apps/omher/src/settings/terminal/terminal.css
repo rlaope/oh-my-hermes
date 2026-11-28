@@ -11,7 +11,7 @@
 .term-pv {
   --term-pad: 16px;
   /* as .ap-preview on General: without it a theme whose background is the page's has no edge at all */
-  border: 1px solid var(--line);
+  border: 1px solid var(--term-border, var(--line));
   border-radius: var(--r);
   overflow: hidden;
   padding: calc(var(--term-pad) * 0.875) calc(var(--term-pad) * 0.375) calc(var(--term-pad) * 0.5) var(--term-pad);
@@ -322,4 +322,86 @@
   margin: 0 0 8px;
   font-size: 12px;
   color: var(--muted);
+}
+
+/* Customize colours: a swatch, its name and its hex per colour, in rows of four */
+.tc-bar {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 8px;
+}
+.tc {
+  margin-top: 8px;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r);
+}
+.tc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.tc-for {
+  color: var(--muted);
+  font-size: 12px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.tc-reset {
+  flex: none;
+}
+.tc-gh {
+  margin: 12px 0 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.tc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 6px 10px;
+}
+.tc-sw {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.tc-pick {
+  flex: none;
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: none;
+  cursor: pointer;
+}
+.tc-pick::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.tc-pick::-webkit-color-swatch {
+  border: none;
+  border-radius: calc(var(--r-sm) - 1px);
+}
+.tc-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tc-hex {
+  flex: none;
+  width: 72px;
+  padding: 2px 6px;
+  font: 12px var(--mono);
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+.tc-hex[aria-invalid="true"] {
+  border-color: var(--danger, #d24);
 }
