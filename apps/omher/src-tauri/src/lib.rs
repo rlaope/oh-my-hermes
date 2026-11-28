@@ -892,10 +892,11 @@ fn past_home_in(home: &std::path::Path, agent: &str, account: Option<&str>, var:
     past_chats::cli_home(home, agent, &env, var).ok_or_else(|| "no home".to_string())
 }
 
-/// The recent conversations Claude Code or Codex keeps for `cwds` (the + menu's folders), read-only (rule 30).
+/// The recent conversations Claude Code or Codex keeps for `cwds` (the + menu's folders), or for every folder when
+/// `all`, read-only (rule 30).
 #[tauri::command]
-async fn past_chats_list(agent: String, cwds: Vec<String>) -> Result<Vec<past_chats::PastChat>, String> {
-    tauri::async_runtime::spawn_blocking(move || past_chats::list(&past_home(&agent, None)?, &agent, &cwds)).await.map_err(|e| e.to_string())?
+async fn past_chats_list(agent: String, cwds: Vec<String>, all: bool) -> Result<Vec<past_chats::PastChat>, String> {
+    tauri::async_runtime::spawn_blocking(move || past_chats::list(&past_home(&agent, None)?, &agent, &cwds, all)).await.map_err(|e| e.to_string())?
 }
 
 /// The conversation the Codex in the foreground of TERMINALS session `id` holds open, for the session to continue
@@ -937,12 +938,6 @@ async fn claude_conversation(shell: State<'_, Shell>, id: u32) -> Result<Option<
     tauri::async_runtime::spawn_blocking(move || Ok(sessions.claude_conversation(id, &user_home()?).filter(|c| sessions::is_uuid(c))))
         .await
         .map_err(|e| e.to_string())?
-}
-
-/// The last messages of one of those conversations, shown before the agent continues it (rule 30).
-#[tauri::command]
-async fn past_chat_messages(agent: String, id: String, cwd: String) -> Result<Vec<past_chats::PastMsg>, String> {
-    tauri::async_runtime::spawn_blocking(move || past_chats::messages(&past_home(&agent, None)?, &agent, &id, &cwd)).await.map_err(|e| e.to_string())?
 }
 
 /// Whether the file of a TERMINALS Claude Code or Codex session's own conversation `id` exists, asked before the
@@ -1235,7 +1230,6 @@ pub fn run() {
             session_reveal,
             session_open_terminal,
             past_chats_list,
-            past_chat_messages,
             conversation_state,
             codex_conversation,
             claude_conversation,

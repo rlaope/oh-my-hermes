@@ -39,6 +39,21 @@ All notable changes will be documented here.
   no account has room, the bot chat and the Accounts page say so once per limit window. Ideas from 2rami/kasaterm
   (MIT), code written fresh. (`apps/omher/src/settings/accounts/rules.ts`)
 
+- **omher: Continue a conversation is back in the TERMINALS + menu, and finds the ones you had.** Regression fixed:
+  since SESSIONS became TERMINALS (5073fdc04) the + menu had no way into this list, and continuing a conversation made
+  a chat row TERMINALS no longer shows. The menu's last rows open the Claude Code and Codex conversations kept on this
+  computer again; picking one opens that agent's terminal in the conversation's folder, continuing it as the CLI's own
+  resume does (picking it again opens that terminal; a folder that is gone starts nothing and says so). The list now skips `codex exec`
+  runs and subagent threads (most of a busy Codex folder), so real conversations no longer fall out of view behind
+  them; a Codex fork reads "fork of" the conversation it came from; titles and lines never come from text the CLI or
+  another agent put in your place (compaction summaries, reminders, teammate and task messages, Codex collaboration
+  turns). Each row shows the last thing you or the agent said. A This folder / All folders switch (remembered) lists
+  every folder's conversations with each row's own folder, a filter narrows by title, last line or folder, and a long
+  folder path Claude Code shortened is listed and opens. Reading stays read-only and bounded: 200 lines of a file's
+  start, its last 1 MB, and at most 20,000 files for one listing, stopping once the list is full. Ideas from
+  2rami/kasaterm (MIT), code written fresh. (`docs/OMHER-BOUNDARY.md` rule 30;
+  `apps/omher/src-tauri/src/past_chats.rs`, `apps/omher/src/sessions/SessionsSection.tsx`)
+
 - **omher: speak to a bot, and hear its answer.** A microphone in the composer of a bot's main chat and its threads
   records in omher's own window; the bot's own Hermes turns the recording into text, which lands in the draft at the
   caret and is never sent by omher. A recording stops by itself after 3 minutes. An answer's new speaker button, beside
