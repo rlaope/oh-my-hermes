@@ -35,6 +35,7 @@ import { reloadAccounts, useAccounts } from "./useAccounts";
 import { t, tx } from "../../i18n";
 import { holdImeEnter } from "../../lib/ime";
 import { GithubAccounts } from "./GithubAccounts";
+import { loginLeft } from "./loginLeft";
 
 const errText = (e: unknown) => (typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : String(e));
 const NOTE_MS = 8000;
@@ -78,6 +79,17 @@ export function AccountsPage() {
       )}
       <GithubAccounts />
     </div>
+  );
+}
+
+/** "Login: 12 days left" under the subtitle, red within three days; nothing when the CLI did not say. */
+function LoginLeftLine({ at, now }: { at: string | null; now: number }) {
+  const left = loginLeft(at, now);
+  if (!left) return null;
+  return (
+    <span className={`acc-sub acc-left${left.soon ? " soon" : ""}`} data-testid="account-login-left" data-soon={left.soon}>
+      {left.text}
+    </span>
   );
 }
 
@@ -148,7 +160,7 @@ function CliGroup({ g, status, version, note }: { g: AccountGroup; status: Recor
   const live = useRef<SignIn | null>(null);
   live.current = signIn;
 
-  const rows = g.accounts.map((a) => mergeRow(a, status[`${g.cli}:${a.id}`]));
+  const rows = g.accounts.map((a) => mergeRow(a, status[`${g.cli}:${a.id}`], g.cli));
   const cpaRows = rows.filter(isCpa).length;
   const now = Date.now() / 1000;
   const canAdd = SIGN_IN[g.cli] === "run" && host.canSignIn;
@@ -255,6 +267,7 @@ function CliGroup({ g, status, version, note }: { g: AccountGroup; status: Recor
                 <span className="acc-who" data-testid="account-name">
                   <span className="acc-n">{rowTitle(r, i)}</span>
                   <SubLine src={rowSub({ ...r, plan: "" })} plan={r.plan} usage={lines[0]} />
+                  <LoginLeftLine at={r.loginExpiresAt} now={now * 1000} />
                 </span>
               )}
               {p && !cpa ? (

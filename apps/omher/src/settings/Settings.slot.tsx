@@ -23,6 +23,7 @@ import { openChangeServer, serverLabel, useServerMode } from "../app/remote";
 import { gateShell } from "../app/BridgeGate";
 import { setBar, useTasks } from "../tasks/state";
 import { DISK_WARN_CHOICES, diskWarn, setDiskWarn } from "../lib/disk";
+import { cpuWarn, setCpuWarn } from "../lib/cpu";
 import { Toggle } from "../pages/kit";
 import { awakeEnabled, closeHides, isMacPlatform, setAwakeEnabled, setCloseHides } from "../lib/power";
 import { AgentsPage } from "./agents/AgentsPage";
@@ -483,6 +484,22 @@ function DiskWarnSeg() {
   );
 }
 
+/** Settings › General: warn when another app keeps a CPU core busy for over a minute (src/lib/cpu.ts). On by default. */
+function CpuWarnToggle() {
+  const [on, setOn] = useState(cpuWarn());
+  return (
+    <Toggle
+      on={on}
+      label={t("cpu.setting")}
+      onChange={(v) => {
+        setOn(v);
+        setCpuWarn(v);
+      }}
+      testId="set-cpu-warn"
+    />
+  );
+}
+
 function TasksBarToggle() {
   const tk = useTasks();
   return <Toggle on={tk.bar} label={t("tasks.barSetting")} onChange={setBar} testId="set-tasks-bar" />;
@@ -555,6 +572,9 @@ function GeneralPage() {
         </Row>
         <Row title={t("disk.setting")} hint={t("disk.settingHint")}>
           <DiskWarnSeg />
+        </Row>
+        <Row title={t("cpu.setting")} hint={t("cpu.settingHint")}>
+          <CpuWarnToggle />
         </Row>
       </div>
       <div className="st-gh">{t("set.sidebar")}</div>

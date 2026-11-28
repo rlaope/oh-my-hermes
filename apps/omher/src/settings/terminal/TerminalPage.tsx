@@ -29,7 +29,8 @@ import {
   type TermSettings,
 } from "../../sessions/term/settings";
 import { useShells } from "../../sessions/newMenu";
-import { ANSI_NORMAL, CUSTOM_THEME_ID, customTermTheme, TERM_THEMES, termThemePick, type TermTheme } from "../../sessions/term/themes";
+import { ANSI_NORMAL, CUSTOM_THEME_ID, customTermTheme, EDITED_THEME_ID, editedTermTheme, TERM_THEMES, termThemePick, type TermTheme } from "../../sessions/term/themes";
+import { TermColors } from "./TermColors";
 import { TermPreview } from "./TermPreview";
 import { TermImport, type ImportCandidate } from "./TermImport";
 
@@ -104,16 +105,16 @@ function Stepper({ value, min, max, step, label, onChange, testId }: { value: nu
   );
 }
 
-function ThemeRow({ theme, on, onPick }: { theme: TermTheme; on: boolean; onPick: () => void }) {
+function ThemeRow({ theme, on, onPick, name }: { theme: TermTheme; on: boolean; onPick: () => void; name?: string }) {
   const c = theme.theme;
   return (
-    <button type="button" role="radio" aria-checked={on} className={`tm-row${on ? " on" : ""}`} onClick={onPick} title={theme.name} data-testid={`term-theme-${theme.id}`}>
+    <button type="button" role="radio" aria-checked={on} className={`tm-row${on ? " on" : ""}`} onClick={onPick} title={name ?? theme.name} data-testid={`term-theme-${theme.id}`}>
       <span className="tm-sw" aria-hidden="true" style={{ background: c.background, color: c.foreground }}>
         {ANSI_NORMAL.map((k) => (
           <i key={k} style={{ background: c[k] }} />
         ))}
       </span>
-      <span className="tm-name">{theme.name}</span>
+      <span className="tm-name">{name ?? theme.name}</span>
       {on && <CheckIcon />}
     </button>
   );
@@ -133,8 +134,13 @@ export function TerminalPage() {
   const [candidate, setCandidate] = useState<ImportCandidate>(null);
   const mine = term.custom ? customTermTheme(term.custom) : null;
   const [importAt, setImportAt] = useState<HTMLDivElement | null>(null);
+  // Customize colours: the editor under the theme picker, for the slot being picked for
+  const [editing, setEditing] = useState(false);
 
   const picked = termThemePick(slot, term);
+  // the colours edited by hand for this slot, if any: picked again from Yours after another theme was picked
+  const edited = editedTermTheme(slot, term);
+  const editedName = edited ? t("term.cEdited", { name: edited.name }) : "";
   const needle = compact(q);
   const shown = needle ? TERM_THEMES.filter((th) => compact(th.name).includes(needle)) : TERM_THEMES;
   // the kind that suits the app theme being picked for comes first
@@ -170,11 +176,14 @@ export function TerminalPage() {
       </div>
       <div ref={setImportAt} />
       <div className="tm-list" role="radiogroup" aria-label={t(SLOT[slot])} data-testid="term-themes">
-        {mine && (!needle || compact(mine.name).includes(needle)) && (
+        {((mine && (!needle || compact(mine.name).includes(needle))) || (edited && (!needle || compact(editedName).includes(needle)))) && (
           <div data-testid="term-themes-custom">
             <div className="tm-gh">{t("term.yours")}</div>
             <div className="tm-grid">
-              <ThemeRow theme={mine} on={picked.id === CUSTOM_THEME_ID} onPick={() => pick(CUSTOM_THEME_ID)} />
+              {edited && (!needle || compact(editedName).includes(needle)) && (
+                <ThemeRow theme={edited} name={editedName} on={picked.id === EDITED_THEME_ID} onPick={() => pick(EDITED_THEME_ID)} />
+              )}
+              {mine && (!needle || compact(mine.name).includes(needle)) && <ThemeRow theme={mine} on={picked.id === CUSTOM_THEME_ID} onPick={() => pick(CUSTOM_THEME_ID)} />}
             </div>
           </div>
         )}
@@ -192,12 +201,18 @@ export function TerminalPage() {
             </div>
           );
         })}
-        {shown.length === 0 && !(mine && compact(mine.name).includes(needle)) && (
+        {shown.length === 0 && !(mine && compact(mine.name).includes(needle)) && !(edited && compact(editedName).includes(needle)) && (
           <div className="tm-none" data-testid="term-themes-none">
             {t("term.noMatch", { q: q.trim() })}
           </div>
         )}
       </div>
+      <div className="tc-bar">
+        <button type="button" className="st-btn tc-open" aria-expanded={editing} onClick={() => setEditing((v) => !v)} data-testid="term-colors-open">
+          {t(editing ? "term.cHide" : "term.cCustomize")}
+        </button>
+      </div>
+      {editing && <TermColors mode={slot} picked={picked} settings={term} />}
 
       <div className="st-gh">{t("term.text")}</div>
       <div className="st-grp">
@@ -303,6 +318,9 @@ export function TerminalPage() {
         <Row title={t("term.images")} hints={[t("term.imagesHint")]} testId="term-images-row">
           <Seg small label={t("term.images")} value={term.images ? "on" : "off"} options={ON_OFF()} onChange={(v) => set({ images: v === "on" })} testId="term-images" />
         </Row>
+        <Row title={t("term.agentAsks")} hints={[t("term.agentAsksHint")]} testId="term-agent-asks-row">
+          <Seg small label={t("term.agentAsks")} value={term.agentAsks ? "on" : "off"} options={ON_OFF()} onChange={(v) => set({ agentAsks: v === "on" })} testId="term-agent-asks" />
+        </Row>
       </div>
 
       <div className="st-gh">{t("term.clipboard")}</div>
@@ -318,6 +336,9 @@ export function TerminalPage() {
         </Row>
         <Row title={t("term.osc52")} hints={[t("term.osc52Hint")]} testId="term-osc52-row">
           <Seg small label={t("term.osc52")} value={term.osc52 ? "on" : "off"} options={ON_OFF()} onChange={(v) => set({ osc52: v === "on" })} testId="term-osc52" />
+        </Row>
+        <Row title={t("term.programResume")} hints={[t("term.programResumeHint")]} testId="term-program-resume-row">
+          <Seg small label={t("term.programResume")} value={term.programResume ? "on" : "off"} options={ON_OFF()} onChange={(v) => set({ programResume: v === "on" })} testId="term-program-resume" />
         </Row>
       </div>
 

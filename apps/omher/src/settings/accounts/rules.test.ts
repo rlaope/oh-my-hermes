@@ -103,6 +103,12 @@ describe("mergeRow + pill", () => {
   });
   it("without a status the bridge's file check stands", () => {
     expect(mergeRow(acc("default", "active"), undefined).signedIn).toBe(true);
+  });
+  it("keeps a login expiry for a signed-in Claude Code login only (Codex logins have no expiry)", () => {
+    const st = { logged_in: true, email: "owner@example.com", plan: "max_20x", method: "claude.ai", login_expires_at: "2026-12-10T00:00:00Z" };
+    expect(mergeRow(acc("default", "active"), st, "claude").loginExpiresAt).toBe("2026-12-10T00:00:00Z");
+    expect(mergeRow(acc("default", "active"), st, "codex").loginExpiresAt).toBeNull();
+    expect(mergeRow(acc("default", "active"), { ...st, logged_in: false }, "claude").loginExpiresAt).toBeNull();
     expect(mergeRow(acc("x", "login"), null).signedIn).toBe(false);
   });
   it("In use / Limited until / Not signed in / nothing", () => {

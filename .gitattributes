@@ -97,3 +97,7 @@ apps/omher/scripts/*.sh text eol=lf
 # The release guard's test-only signing fixtures: a minisign signature covers the payload's exact bytes, so
 # Windows autocrlf must not rewrite any of them (apps/omher/scripts/release-guard.test.mjs).
 apps/omher/scripts/release-guard-fixtures/** -text
+
+# Recorded terminal screens (raw pty bytes) that the terminal-agent dialog tests replay byte for byte: never
+# diffed as text (their trailing spaces are the screen) and never converted to CRLF.
+apps/omher/src/sessions/term/fixtures/*.bin binary

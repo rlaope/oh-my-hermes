@@ -6,6 +6,7 @@ mod app_menu;
 mod appimage;
 mod bridge;
 mod claude_usage;
+mod cpu;
 mod custom_agents;
 mod disk;
 mod dsh_chat;
@@ -18,6 +19,7 @@ mod hermes_auth;
 mod past_chats;
 mod peers;
 mod power;
+mod program_resume;
 #[cfg(all(test, unix))]
 mod pty_bench;
 mod remote;
@@ -411,6 +413,7 @@ async fn shell_start(
     cwd: Option<String>,
     shell_id: Option<String>,
     link: Option<String>,
+    resume: Option<bool>,
     cols: u16,
     rows: u16,
     on_data: Channel<InvokeResponseBody>,
@@ -419,7 +422,13 @@ async fn shell_start(
     let sessions = shell.sessions.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let home = user_home()?;
-        let (id, at, missing) = sessions.start_shell(cwd.as_deref(), shell_id.as_deref(), link.as_deref(), &home, cols, rows, move |ev| match ev {
+        // Program Resume (OSC 7577) for a TERMINALS Shell row with its link id while Settings › Terminal allows it
+        // (`resume` set; `true`: bring back the record that row kept, once)
+        let pr = match (resume, link.as_deref()) {
+            (Some(take), Some(key)) if term_link::is_link_id(key) && program_resume::supported() => Some(sessions::ShellResume { key: key.to_string(), store: resume_store(&home), take }),
+            _ => None,
+        };
+        let started = sessions.start_shell_resumable(cwd.as_deref(), shell_id.as_deref(), link.as_deref(), pr, &home, cols, rows, move |ev| match ev {
             Output::Data(b) => {
                 let _ = on_data.send(InvokeResponseBody::Raw(b));
             }
@@ -427,8 +436,9 @@ async fn shell_start(
                 let _ = on_exit.send(code);
             }
         })?;
+        let id = started.id;
         watch_foreground(&sessions, &app, id);
-        Ok(ShellStarted { id, cwd: at.to_string_lossy().into_owned(), missing })
+        Ok(ShellStarted { id, cwd: started.cwd.to_string_lossy().into_owned(), missing: started.missing, resume_line: started.resume_line, resume_program: started.resume_label })
     })
     .await
     .map_err(|e| e.to_string())?
@@ -465,12 +475,44 @@ struct SessionFg {
 
 /// A started terminal-panel shell: its session id and the folder it started in.
 #[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ShellStarted {
     id: u32,
     cwd: String,
     /// the shell asked for was not on this machine's list: its name (the default shell started instead)
     #[serde(skip_serializing_if = "Option::is_none")]
     missing: Option<String>,
+    /// Program Resume: the line the page types at the shell's first prompt to bring back the program the row kept
+    /// (omher's own path and a one-use launch file; never the program's command, never the token)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    resume_line: Option<String>,
+    /// that program's name, escaped, for the row
+    #[serde(skip_serializing_if = "Option::is_none")]
+    resume_program: Option<String>,
+}
+
+/// Program Resume's record store (`~/.omher/resume`), opened on first use: with Settings › Terminal's toggle off
+/// nothing calls this, so no record is read.
+fn resume_store(home: &std::path::Path) -> Arc<program_resume::Store> {
+    static STORE: std::sync::OnceLock<Arc<program_resume::Store>> = std::sync::OnceLock::new();
+    STORE.get_or_init(|| program_resume::Store::open(program_resume::default_dir(home))).clone()
+}
+
+/// After omher started (Settings › Terminal "Programs may ask to restart" on): the TERMINALS Shell rows that came
+/// back (`keep`, link ids; a row whose own CLI comes back by its conversation id is not among them) keep their
+/// records, every other record goes. Each kept row's program name (escaped) comes back; argv, cwd and token never do.
+/// Nothing on Windows or as root.
+#[tauri::command]
+async fn program_resume_records(keep: Vec<String>) -> Result<Vec<(String, String)>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        if !program_resume::supported() {
+            return Ok(Vec::new());
+        }
+        let keep: Vec<String> = keep.into_iter().filter(|k| term_link::is_link_id(k)).collect();
+        Ok(resume_store(&user_home()?).restore(&keep))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// This computer's name (empty when the system gives none), asked once when the page starts: the page uses it only to
@@ -690,7 +732,7 @@ async fn gh_login_start(
                 let _ = on_exit.send(code);
             }
         })?;
-        Ok(ShellStarted { id, cwd: home.to_string_lossy().into_owned(), missing: None })
+        Ok(ShellStarted { id, cwd: home.to_string_lossy().into_owned(), missing: None, resume_line: None, resume_program: None })
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1131,6 +1173,12 @@ async fn remote_status(shell: State<'_, Shell>) -> Result<remote::RemoteStatus, 
 
 /// `omher --statusline-relay <account>` (a TERMINALS Claude Code's status line, `claude_usage.rs`): records the usage
 /// Claude Code reports, runs the person's own status line and returns its exit code. No app start-up happens.
+/// `omher --resume-exec <launch file>` (Program Resume, typed at a restored Shell row's first prompt): runs the
+/// program a launch file names in place of this process, each element one argument. No app start-up happens.
+pub fn resume_exec(args: &[std::ffi::OsString]) -> Option<i32> {
+    program_resume::resume_exec(args, user_home().ok())
+}
+
 pub fn statusline_relay(args: &[std::ffi::OsString]) -> Option<i32> {
     if args.get(1)?.to_str()? != claude_usage::RELAY_FLAG {
         return None;
@@ -1204,6 +1252,7 @@ pub fn run() {
             session_resize,
             session_close,
             session_close_all,
+            program_resume_records,
             chat_start,
             chat_input,
             chat_close,
@@ -1257,7 +1306,8 @@ pub fn run() {
             power_busy,
             window_prefs,
             term_link::term_link_take,
-            disk::disk_watch
+            disk::disk_watch,
+            cpu::cpu_watch
         ])
         .setup(|app| {
             // Linux: WebKitGTK's media capture is off until the webview's `enable-media-stream` is on (rule 54)
@@ -1289,6 +1339,8 @@ pub fn run() {
             app.manage(Arc::new(gh_me::Me::default()));
             // free space on the home folder's volume, read once a minute (disk.rs)
             app.manage(disk::Disk::start(app.handle().clone(), user_home().ok()));
+            // another app keeping a CPU core busy, read every 5 s once the page turns it on (cpu.rs)
+            app.manage(cpu::Cpu::start(app.handle().clone()));
             // close = hide to the tray / menu bar, and the keep-awake assertion's worker (tray.rs, power.rs)
             app.manage(tray::TrayState::default());
             app.manage(power::Power::start());

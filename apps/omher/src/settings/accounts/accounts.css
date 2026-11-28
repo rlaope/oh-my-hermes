@@ -139,6 +139,10 @@
 .acc-plan {
   color: var(--body);
 }
+.acc-left.soon {
+  color: var(--danger);
+  font-weight: 560;
+}
 .acc-pill {
   font-size: 11px;
   line-height: 18px;

@@ -913,7 +913,7 @@ body.split-dragging .xterm {
   flex: none;
   width: 1px;
   position: relative;
-  background: var(--line-soft);
+  background: var(--term-border, var(--line-soft));
   cursor: col-resize;
   z-index: 2;
   user-select: none;

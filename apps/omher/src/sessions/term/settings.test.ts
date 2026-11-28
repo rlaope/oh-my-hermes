@@ -117,6 +117,13 @@ describe("terminal settings", () => {
     expect(parseTermSettings({ themeDark: "dracula", themeLight: "solarized-light" })).toMatchObject({ themeDark: "dracula", themeLight: "solarized-light" });
   });
 
+  it("programs may ask to be restarted by default; only a boolean turns it off", () => {
+    expect(TERM_DEFAULTS.programResume).toBe(true);
+    expect(parseTermSettings({}).programResume).toBe(true);
+    expect(parseTermSettings({ programResume: false }).programResume).toBe(false);
+    expect(parseTermSettings({ programResume: "no" }).programResume).toBe(true);
+  });
+
   it("a change is saved, read back after a restart, and handed to listeners until they leave", () => {
     const seen: number[] = [];
     const off = onTermSettings((s) => seen.push(s.fontSize));
