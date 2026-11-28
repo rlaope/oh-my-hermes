@@ -58,6 +58,7 @@ export function Composer({
   onNewThread,
   history,
   voice,
+  queueBar,
 }: {
   bot: Bot;
   running: boolean;
@@ -94,6 +95,8 @@ export function Composer({
   history?: string[];
   /** The bot whose own Hermes turns the composer's recordings into text (a bot's main chat or one of its threads). */
   voice?: Bot;
+  /** The steer queue's bar (QueueBar), right above the box. */
+  queueBar?: ReactNode;
 }) {
   // unsent text survives switching chats and restarts (drafts.ts; the composer is keyed by its chat)
   const [text, setText] = useState(() => getDraft(bot.name));
@@ -423,6 +426,7 @@ export function Composer({
             : tx("cmp.skillHint", { example: <code>/plan</code>, bot: bot.display_name })}
         </div>
       )}
+      {queueBar}
       <div className={`composer${has ? " has" : ""}`} data-testid="composer-box">
         {mic.line}
         <Chips chips={chips} onRemove={remove} />

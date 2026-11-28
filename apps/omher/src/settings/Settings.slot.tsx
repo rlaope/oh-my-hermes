@@ -30,6 +30,7 @@ import { AgentsPage } from "./agents/AgentsPage";
 import { ComputerPage } from "./computer/ComputerPage";
 import { AvatarEditor, BotFacts, NameEditor, PictureActions, placeName, useBotInfo, usePictureEditor } from "./BotIdentity";
 import { BotSections } from "./BotSections";
+import { BackupModel } from "./BackupModel";
 import { matchesSearch, searchKey } from "../lib/textMatch";
 
 export const slot = "settings";
@@ -225,6 +226,7 @@ function BotPage({ bot }: { bot: Bot }) {
             {provider && <small>{providerName(opts, provider)}</small>}
           </Value>
         </Row>
+        <BackupModel key={bot.name} bot={bot} />
         <Row title={t("set.reasoning")} hint={t("set.reasoningHint")}>
           <Value>{reasoningPill(reasoning, wire, opts?.reasoning_levels) || "—"}</Value>
         </Row>

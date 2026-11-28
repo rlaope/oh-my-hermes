@@ -730,6 +730,9 @@ let notReady = new Map();
 // Computer use (computer.*, BOUNDARY rule 52): what Hermes' `computer-use permissions status --json` answers (kept as the
 // bridge keeps it), each bot's computer_use switch, the next failing run, and how long a run takes.
 let computerState, computerBots, computerNext, computerMs, computerBusy;
+// A bot's backup models (fallback.*, BOUNDARY rule 57): bot -> { chain, editable, fail } in memory; `fail` is the line
+// Hermes refuses the next set with. mock.fallback seeds or changes one.
+let fallbacks;
 // Voice (voice.*, BOUNDARY rule 54): what voice.info answers, the next transcript, the next failure, and the delay.
 let voiceInfo, voiceTranscript, voiceProvider, voiceNext, voiceMs, voiceParts;
 const VOICE_INFO = () => ({
@@ -1024,6 +1027,7 @@ function reset() {
   computerNext = {};
   computerMs = 200;
   computerBusy = 0;
+  fallbacks = new Map();
   voiceInfo = VOICE_INFO();
   voiceTranscript = "check the deploy logs";
   voiceProvider = "local";
@@ -1257,6 +1261,26 @@ function computerSwitch(b) {
   const state = computerBots.get(b.name) ?? "off";
   if (state === "disabled") return { state: "off", why: "disabled" };
   return { state, why: state === "unknown" ? "unread" : "" };
+}
+// rule 57: the bridge's FALLBACK_VALUE and FALLBACK_MAX, and its refusal for a bot on another computer
+const FALLBACK_VALUE = /^[A-Za-z0-9](?:[A-Za-z0-9._:/@-]{0,126}[A-Za-z0-9])?$/;
+const FALLBACK_MAX = 4;
+// a provider as the bridge's checks compare it (Hermes' normalize_provider): lowercase, and one alias of Hermes' own
+// table, so the picker's alias handling has something to meet
+const PROVIDER_ALIAS = { openai: "openrouter" };
+const providerId = (slug) => PROVIDER_ALIAS[String(slug).trim().toLowerCase()] ?? String(slug).trim().toLowerCase();
+// models.options: each provider with its id, as the bridge adds it for the backup picker (rule 57)
+const withIds = (providers) => providers.map((pr) => ({ ...pr, id: providerId(pr.slug) }));
+const fallbackOf = (b) => fallbacks.get(b.name) ?? { chain: [], editable: true, fail: "" };
+const fallbackRead = (b) => {
+  const chain = structuredClone(fallbackOf(b).chain);
+  const names = new Set([...chain.map((e) => e.provider), models[b.name].provider]);
+  return { chain, editable: fallbackOf(b).editable, ids: Object.fromEntries([...names].map((n) => [n, providerId(n)])) };
+};
+function fallbackBot(p) {
+  const b = needBotAny(p);
+  if (b.host) throw new OpError("remote_bot", `A bot's backup model is set on the computer it runs on; ${b.host.label}'s bots run on another one.`);
+  return b;
 }
 // the bots whose config sets agent.coding_context: focus (mock.computer {codeFocus: [names]})
 const computerFocus = (b) => (computerState.codeFocus ?? []).includes(b.name);
@@ -1906,6 +1930,33 @@ const OPS = {
       if (!Number.isInteger(p.part) || p.part < 0 || p.part >= parts) throw new OpError("bad_request", `this text has ${parts} parts`);
       return { part: p.part, parts, cut: false, text_max: 20000, empty: false, mime: "audio/wav", data_base64: VOICE_AUDIO, provider: "edge" };
     }),
+  "fallback.get": (p) => fallbackRead(fallbackBot(p)),
+  "fallback.set": (p) => {
+    const b = fallbackBot(p);
+    const chain = p.chain;
+    if (!Array.isArray(chain) || chain.length > FALLBACK_MAX) throw new OpError("bad_request", `a backup chain is a list of at most ${FALLBACK_MAX} models`);
+    const seen = new Set();
+    for (const e of chain) {
+      if (!e || typeof e !== "object" || Object.keys(e).sort().join() !== "model,provider") throw new OpError("bad_request", "each backup model is a provider and a model, nothing else");
+      for (const k of ["provider", "model"]) if (typeof e[k] !== "string" || !FALLBACK_VALUE.test(e[k])) throw new OpError("bad_request", `not a ${k} id omher sets: '${e[k]}'`);
+      const key = `${providerId(e.provider)} ${e.model.toLowerCase()}`;
+      if (seen.has(key)) throw new OpError("bad_request", `${e.provider} · ${e.model} is listed twice`);
+      seen.add(key);
+      // as the bridge compares, against the bot's model as bots.list gives it: a provider's alias and case do not matter
+      if (key === `${providerId(models[b.name].provider)} ${models[b.name].model.toLowerCase()}`) throw new OpError("bad_request", `${e.provider} · ${e.model} is ${b.display_name}'s own model; a backup model is another one`);
+    }
+    if (!Array.isArray(p.base)) throw new OpError("bad_request", "the page sends the backup list it read as base");
+    const now = fallbackOf(b);
+    if (!now.editable) throw new OpError("not_editable", `${b.display_name}'s backup models were written in Hermes' config, and omher does not rewrite them`);
+    const pair = (e) => `${e?.provider} ${e?.model}`;
+    if (p.base.map(pair).join("\n") !== now.chain.map(pair).join("\n"))
+      throw new OpError("changed", `${b.display_name}'s backup models were changed elsewhere since they were read; read them again`);
+    return new Promise((res) => setTimeout(res, 300)).then(() => {
+      if (now.fail) return { outcome: "failed", line: now.fail, ...fallbackRead(b) };
+      fallbacks.set(b.name, { ...now, chain: chain.map((e) => ({ provider: e.provider, model: e.model })) });
+      return { outcome: "ok", ...fallbackRead(b) };
+    });
+  },
   "computer.grant": () => {
     if (computerState.platform !== "darwin") throw new OpError("bad_request", "Only macOS asks for computer-use permissions.");
     return computerDriver("grant");
@@ -2118,14 +2169,14 @@ const OPS = {
     const signed = notReady.get(b.name);
     const levels = routeLevels(b.name, models[b.name]);
     if (signed && SIGN_IN_MODELS[signed]) {
-      return { providers: [...PROVIDERS, SIGN_IN_MODELS[signed]], current: current(b.name), reasoning_levels: levels };
+      return { providers: withIds([...PROVIDERS, SIGN_IN_MODELS[signed]]), current: current(b.name), reasoning_levels: levels };
     }
     // a Hermes installed a minute ago with no account lists no provider at all (measured on Hermes 0.23.2)
     if (providerFixture === "empty") return { providers: [], current: current(b.name), reasoning_levels: levels };
     if (providerFixture === "long") {
-      return { providers: PROVIDERS_LONG.providers, current: { ...current(b.name), ...PROVIDERS_LONG.current }, reasoning_levels: levels };
+      return { providers: withIds(PROVIDERS_LONG.providers), current: { ...current(b.name), ...PROVIDERS_LONG.current }, reasoning_levels: levels };
     }
-    return { providers: providersOf(b.name), current: current(b.name), reasoning_levels: levels };
+    return { providers: withIds(providersOf(b.name)), current: current(b.name), reasoning_levels: levels };
   },
   "chat.set_model": (p) => {
     const b = needBot(p);
@@ -2523,6 +2574,18 @@ const OPS = {
     if (p.next && typeof p.next === "object") computerNext[String(p.next.verb)] = { line: String(p.next.line), unknown: p.next.unknown === true };
     if (typeof p.ms === "number") computerMs = p.ms;
     if (typeof p.busy === "number") computerBusy = p.busy;
+    return {};
+  },
+  // mock.fallback {bot, chain?, editable?, fail?}: a bot's backup models as its config holds them (an entry may carry
+  // `custom: true`), whether omher may rewrite them, and the line Hermes refuses the next set with ("" clears it)
+  "mock.fallback": (p) => {
+    const b = needBotAny(p);
+    const now = fallbackOf(b);
+    fallbacks.set(b.name, {
+      chain: Array.isArray(p.chain) ? structuredClone(p.chain) : now.chain,
+      editable: typeof p.editable === "boolean" ? p.editable : now.editable,
+      fail: typeof p.fail === "string" ? p.fail : now.fail,
+    });
     return {};
   },
   "mock.appsNext": (p) => {

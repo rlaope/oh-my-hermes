@@ -3245,7 +3245,7 @@ def _windows_kill_tree(pid: int) -> None:
 
 def _stop_run(proc, windows: bool | None = None, tree_killer=None) -> None:
     """End a run the bridge started past its time (rule 41's `hermes mcp`, rule 43's `omh` read, rule 44's `hermes profile create`, rule 52's
-    computer-use commands): on POSIX its whole
+    computer-use commands, rule 57's `hermes config set`): on POSIX its whole
     process group (it was started in a session of its own, so this reaches nothing else), on Windows its whole process tree
     (rule 49; the child is a launcher such as hermes.cmd) and then the child itself. `windows` and `tree_killer` are for tests.
     The wait after is bounded, so the run's bot is never left busy."""
@@ -3272,9 +3272,9 @@ def run_hermes_profile_create(hermes: str, name: str, home: Path, timeout: float
 
 def _run_hermes_argv(argv: list[str], home: Path, timeout: float) -> tuple[int | None, str]:
     """Run one pinned Hermes argv and return (exit code, its output); the code is None for a run stopped at *timeout*
-    (`_stop_run`), whose output so far is still returned. Only run_hermes_mcp, run_hermes_profile_create and
-    run_hermes_computer call it, each with its own checked argv (mcp_argv, profile_create_argv, computer_argv). No
-    shell, nothing on stdin (so Hermes asks nothing:
+    (`_stop_run`), whose output so far is still returned. Only run_hermes_mcp, run_hermes_profile_create,
+    run_hermes_computer and run_hermes_fallback call it, each with its own checked argv (mcp_argv, profile_create_argv,
+    computer_argv, fallback_argv). No shell, nothing on stdin (so Hermes asks nothing:
     a value it needs is refused in its own words), the Hermes root as HERMES_HOME, none of the gateway's own markers
     and no TUI gateway address (so Hermes acts here, not through a gateway the address names), and UTF-8 output on
     every system. The output goes to a temporary file, not a pipe, so a helper Hermes left running (a browser it
@@ -3635,6 +3635,140 @@ def computer_switch(described) -> str:
         if isinstance(row, dict) and row.get("name") == COMPUTER_TOOLSET and isinstance(row.get("enabled"), bool):
             return "on" if row["enabled"] else "off"
     return "unknown"
+
+
+# ---------------------------------------------------------------- a bot's backup model (BOUNDARY rule 57)
+# Hermes' own fallback chain, `fallback_providers` in the profile's config.yaml, read from that file as Hermes'
+# `get_fallback_chain` (hermes_cli/fallback_config.py) reads it, of which only each entry's provider and model leave
+# the bridge; written only through Hermes' own `hermes -p <bot> config set fallback_providers <list>` on a press. The
+# list goes as a YAML flow literal of plain scalars (`[{provider: x, model: y}]`), which Hermes' `config set` parses
+# with its YAML loader: on Windows `hermes` can be the `hermes.cmd` shim, whose arguments cmd.exe reads, and cmd.exe
+# does not take the `\"` that `subprocess` writes for a double quote inside an argument, so the literal holds no quote.
+FALLBACK_KEY = "fallback_providers"
+FALLBACK_MAX = 4            # backup models a bot gets from omher
+FALLBACK_SHOWN = 16         # entries of a chain written elsewhere that the page lists
+FALLBACK_TIMEOUT = 60.0     # seconds `hermes config set` may take
+# a provider or a model id: letters, digits and `. _ : / @ -`, a letter or digit at both ends, so it never reads as an
+# option, a YAML indicator or a cmd.exe metacharacter
+FALLBACK_VALUE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9._:/@-]{0,126}[A-Za-z0-9])?")
+
+
+def fallback_provider_id(provider: str) -> str:
+    """*provider* as Hermes' fallback chain compares it (`_entry_identity`): through Hermes' own `normalize_provider`,
+    so an alias is its canonical id (`opencode-zen` is `opencode`); lowercased, as Hermes' own guard falls back, where
+    that is not importable or the call fails (it scans the profiles' provider overlays, which can raise anything)."""
+    try:
+        from hermes_cli.providers import normalize_provider
+    except ImportError:  # Hermes' checkout is not on this interpreter's path
+        return provider.strip().lower()
+    try:
+        return normalize_provider(provider)
+    except Exception:  # noqa: BLE001 - Hermes' overlay scan reads profiles and plugins and raises its own errors
+        return provider.strip().lower()
+
+
+def fallback_literal(chain: list[dict]) -> str:
+    """The value `config set` gets for *chain*: a YAML flow list of `{provider: <id>, model: <id>}`, no quote in it."""
+    return "[" + ", ".join(f"{{provider: {e['provider']}, model: {e['model']}}}" for e in chain) + "]"
+
+
+def fallback_check(chain) -> list[dict]:
+    """*chain* as the page sent it, checked: a list of at most FALLBACK_MAX entries of exactly a provider and a model,
+    each a FALLBACK_VALUE that Hermes' YAML loader reads back as that same text (never `1.0`, `true`, `null`, `12:30`),
+    no entry twice. Returns fresh two-key dicts; raises ValueError."""
+    import warnings
+    if not isinstance(chain, list) or len(chain) > FALLBACK_MAX:
+        raise ValueError(f"a backup chain is a list of at most {FALLBACK_MAX} models")
+    out, seen = [], set()
+    for e in chain:
+        if not isinstance(e, dict) or set(e) != {"provider", "model"}:
+            raise ValueError("each backup model is a provider and a model, nothing else")
+        for k in ("provider", "model"):
+            if not isinstance(e[k], str) or not FALLBACK_VALUE.fullmatch(e[k]):
+                raise ValueError(f"not a {k} id omher sets: {str(e[k])[:80]!r}")
+        route = (fallback_provider_id(e["provider"]), e["model"].lower())
+        if route in seen:
+            raise ValueError(f"{e['provider']} · {e['model']} is listed twice")
+        seen.add(route)
+        out.append({"provider": e["provider"], "model": e["model"]})
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # ruamel warns about YAML 1.1 floats such as `1e3`
+        try:
+            parsed = _yaml_safe_load(fallback_literal(out))
+        except Exception:  # noqa: BLE001 - ruamel and PyYAML raise their own error classes
+            parsed = None
+    if parsed != out:
+        bad = next((e for i, e in enumerate(out) if not isinstance(parsed, list) or i >= len(parsed) or parsed[i] != e), out[0])
+        raise ValueError(f"{bad['provider']} · {bad['model']} would not read back as text in Hermes' config")
+    return out
+
+
+def fallback_argv(hermes: str, bot: str, chain) -> list[str]:
+    """`hermes -p <bot> config set fallback_providers <literal>` as a fixed argv. The profile is checked here and is one
+    argv element, the chain through fallback_check; the key is the bridge's own constant. `-p` always: without it
+    Hermes follows its sticky `active_profile` file."""
+    if not isinstance(bot, str) or not PROFILE_ID.fullmatch(bot):
+        raise ValueError(f"not a profile id: {bot!r}")
+    return [hermes, "-p", bot, "config", "set", FALLBACK_KEY, fallback_literal(fallback_check(chain))]
+
+
+def run_hermes_fallback(hermes: str, bot: str, chain: list[dict], home: Path, timeout: float) -> tuple[int | None, str]:
+    """Rule 57: one `hermes -p <bot> config set fallback_providers <list>` (fallback_argv) through `_run_hermes_argv`."""
+    return _run_hermes_argv(fallback_argv(hermes, bot, chain), home, timeout)
+
+
+def fallback_chain(profile_dir: Path) -> dict:
+    """The bot's backup models in Hermes' order (`get_fallback_chain`: `fallback_providers`, then the legacy
+    `fallback_model`; an entry without both a provider and a model is skipped, a route listed again is dropped), each
+    as `{provider, model}` and nothing else. An entry with any other field (`base_url`, `api_mode`, `api_key`, `key_env`
+    and the rest) or a value omher could not write back is `{provider, model, custom: true}`: no other field of it ever
+    leaves the bridge. `editable` is false when the chain holds such an entry, comes from `fallback_model`, holds what
+    Hermes skips or is longer than the page lists, since rewriting the list would drop that. The file is parsed by the
+    loader `_load_yaml` uses, but read fresh, so a config that does not parse raises instead of reading as no chain."""
+    path = profile_dir / "config.yaml"
+    cfg = _yaml_safe_load(path.read_text(encoding="utf-8")) if path.is_file() else {}
+    if cfg is None:
+        cfg = {}
+    if not isinstance(cfg, dict):
+        raise ValueError("config.yaml is not a mapping")
+    chain: list[dict] = []
+    editable, seen = True, set()
+    for key in (FALLBACK_KEY, "fallback_model"):
+        raw = cfg.get(key)
+        if raw is None or raw == [] or raw == {}:
+            continue
+        if key != FALLBACK_KEY:
+            editable = False  # the legacy key: omher writes only fallback_providers
+        entries = [raw] if isinstance(raw, dict) else raw if isinstance(raw, list) else None
+        if entries is None:
+            editable = False
+            continue
+        for e in entries:
+            provider = str(e.get("provider") or "").strip() if isinstance(e, dict) else ""
+            model = str(e.get("model") or "").strip() if isinstance(e, dict) else ""
+            if not provider or not model:
+                editable = False
+                continue
+            route = (fallback_provider_id(provider), model.lower(), str(e.get("base_url") or "").strip().rstrip("/").lower())
+            if route in seen:
+                editable = False
+                continue
+            seen.add(route)
+            if len(chain) == FALLBACK_SHOWN:
+                editable = False
+                continue
+            row = {"provider": _platform_text(provider, 128), "model": _platform_text(model, 128)}
+            if set(e) != {"provider", "model"} or not all(
+                    isinstance(e[k], str) and FALLBACK_VALUE.fullmatch(e[k]) for k in ("provider", "model")):
+                row["custom"] = True
+                editable = False
+            chain.append(row)
+    if editable:
+        try:  # a chain omher could not send back as it reads (more than FALLBACK_MAX, a value YAML reads as no text)
+            fallback_check(chain)
+        except ValueError:
+            editable = False
+    return {"chain": chain, "editable": editable}
 
 
 # ---------------------------------------------------------------- voice (BOUNDARY rule 54)
@@ -7251,6 +7385,9 @@ PEER_REFUSED = {
     "voice.info": "Voice works with bots on this computer only; {label}'s bots run on another one.",
     "voice.transcribe": "Voice works with bots on this computer only; {label}'s bots run on another one.",
     "voice.speak": "Voice works with bots on this computer only; {label}'s bots run on another one.",
+    # rule 57: a bot's backup model is in its own config, set on the computer it runs on
+    "fallback.get": "A bot's backup model is set on the computer it runs on; {label}'s bots run on another one.",
+    "fallback.set": "A bot's backup model is set on the computer it runs on; {label}'s bots run on another one.",
 }
 
 
@@ -7993,6 +8130,7 @@ class Bridge:
             "computer.grant": self.op_computer_grant,
             "voice.info": self.op_voice_info, "voice.transcribe": self.op_voice_transcribe,
             "voice.speak": self.op_voice_speak,
+            "fallback.get": self.op_fallback_get, "fallback.set": self.op_fallback_set,
             "bots.restart": self.op_bots_restart, "bots.restart_scope": self.op_bots_restart_scope,
             "peers.probe": self.op_peers_probe, "peers.attach": self.op_peers_attach, "peers.detach": self.op_peers_detach,
         }
@@ -8002,6 +8140,7 @@ class Bridge:
         self._restarting: set[str] = set()      # bots whose restart command runs now
         self._apps_busy: set[str] = set()       # bots whose `hermes mcp` run (rule 41) runs now
         self._computer_busy = False             # a computer-use command (rule 52) runs now
+        self._fallback_busy: set[str] = set()   # bots whose `hermes config set fallback_providers` (rule 57) runs now
         self._creating = False                  # a `hermes profile create` (rule 44) runs now
         self._refused: dict[str, float] = {}     # bot -> when Hermes last refused its restart (live work)
         self._reattaching: set[str] = set()     # bots that omher's own restart attaches again (`_reattach`)
@@ -8388,7 +8527,8 @@ class Bridge:
         elif typ == "status.update":
             text = p.get("text")
             if isinstance(text, str) and text.strip():
-                await out("status", text=text.strip())
+                # Hermes' own `fallback` kind: it switched this turn to the bot's backup model (rule 57)
+                await out("status", text=text.strip(), **({"fallback": True} if p.get("kind") == "fallback" else {}))
         elif typ in ("thinking.delta", "reasoning.delta"):
             now = self.clock()
             if now - t.last_thinking >= THINKING_MIN_GAP:
@@ -9505,6 +9645,11 @@ class Bridge:
             models = [m if isinstance(m, str) else str(m.get("id") or m.get("name") or "") for m in pr.get("models") or []]
             providers.append({"slug": str(pr.get("slug") or ""), "name": str(pr.get("name") or pr.get("slug") or ""),
                               "models": [m for m in models if m]})
+        # each provider as a bot's backup chain compares it (rule 57), so the backup picker offers no alias of a model
+        # already listed or of the bot's own
+        ids = await asyncio.to_thread(lambda: [fallback_provider_id(pr["slug"]) for pr in providers])
+        for pr, pid in zip(providers, ids):
+            pr["id"] = pid
         reasoning = conn.bot["reasoning"]
         sess_model = sess_provider = wire = ""
         if conn.main_id:
@@ -10329,8 +10474,8 @@ class Bridge:
         return state, "" if state != "unknown" else "unread"
 
     def _profile_bot(self, p) -> dict:
-        """The page's bot from the bridge's own list, whose name Hermes takes as a profile id: computer use (rule 52)
-        and voice (rule 54) read the bot only through here."""
+        """The page's bot from the bridge's own list, whose name Hermes takes as a profile id: computer use (rule 52),
+        voice (rule 54) and backup models (rule 57) read the bot only through here."""
         bot = self._bot(p.get("bot"))
         if not PROFILE_ID.fullmatch(bot["name"]):
             raise BridgeError("bad_request", f"{bot['name']} is not a profile id Hermes accepts")
@@ -10407,6 +10552,86 @@ class Bridge:
         if sys.platform != "darwin":
             raise BridgeError("bad_request", "Only macOS asks for computer-use permissions.")
         return await self._computer_driver("grant")
+
+    # ------------------------------------------------------------ a bot's backup model (BOUNDARY rule 57)
+    # Read: the profile's `fallback_providers` from its config.yaml, provider and model only. A press runs one fixed
+    # fallback_argv per bot at a time, and the page gets the chain read back from the file, what Hermes stored.
+
+    async def _fallback_read(self, bot: dict) -> dict:
+        """The chain (fallback_chain) and `ids`: each provider of it and the bot's own, as the checks compare it
+        (fallback_provider_id), so the page offers nothing `fallback.set` refuses as listed twice or the bot's own."""
+        try:
+            read = await asyncio.to_thread(fallback_chain, bot["path"])
+        except Exception as e:  # noqa: BLE001 - an unreadable file, or ruamel's or PyYAML's own parse error
+            raise BridgeError("unreadable", f"omher could not read {bot['display_name']}'s config.yaml, so it shows and "
+                                            "changes no backup model") from e
+        names = {e["provider"] for e in read["chain"]} | {bot["provider"]}
+        ids = await asyncio.to_thread(lambda: {n: _platform_text(fallback_provider_id(n), 128) for n in names})
+        return {**read, "ids": ids}
+
+    async def op_fallback_get(self, p) -> dict:
+        return await self._fallback_read(self._profile_bot(p))
+
+    async def op_fallback_set(self, p) -> dict:
+        """Set a bot's backup models: `hermes -p <bot> config set fallback_providers <list>`, then the chain read back.
+        The page sends the bot, the whole list of `{provider, model}` (empty clears it) and `base`, the list it read and
+        built that from: when the file holds another list now (changed elsewhere since), nothing runs. The key is the
+        bridge's."""
+        bot = self._profile_bot(p)
+        name = bot["name"]
+        try:
+            chain = fallback_check(p.get("chain"))
+        except ValueError as e:
+            raise BridgeError("bad_request", str(e)) from None
+        base = p.get("base")
+        if not isinstance(base, list) or not all(isinstance(e, dict) for e in base):
+            raise BridgeError("bad_request", "base is the list of backup models the page read")
+        base = [{"provider": e.get("provider"), "model": e.get("model")} for e in base]
+        primary = (fallback_provider_id(bot["provider"]), bot["model"].lower())
+        own = next((e for e in chain if (fallback_provider_id(e["provider"]), e["model"].lower()) == primary), None)
+        if own:
+            raise BridgeError("bad_request", f"{own['provider']} · {own['model']} is {bot['display_name']}'s own model; a "
+                                             "backup model is another one")
+        # one run per bot: taken before the first await, since frames are handled concurrently
+        if name in self._fallback_busy:
+            raise BridgeError("busy", f"omher is still saving {bot['display_name']}'s backup models")
+        self._fallback_busy.add(name)
+        release = True
+        try:
+            now = await self._fallback_read(bot)
+            if not now["editable"]:
+                raise BridgeError("not_editable", f"{bot['display_name']}'s backup models were written in Hermes' config, "
+                                                  "and omher does not rewrite them")
+            if [{"provider": e["provider"], "model": e["model"]} for e in now["chain"]] != base:
+                raise BridgeError("changed", f"{bot['display_name']}'s backup models were changed elsewhere since they were "
+                                             "read; read them again")
+            hermes = hermes_path()
+            if not hermes:
+                raise BridgeError("no_hermes", "Hermes is not on this computer.")
+            run = asyncio.ensure_future(
+                asyncio.to_thread(run_hermes_fallback, hermes, name, chain, self.home, FALLBACK_TIMEOUT))
+            try:
+                code, output = await asyncio.shield(run)
+            except asyncio.CancelledError:
+                # the frame is cancelled but `hermes` runs on in its thread: the bot stays taken until that run ends
+                release = False
+                run.add_done_callback(lambda f: (self._fallback_busy.discard(name), f.cancelled() or f.exception()))
+                raise
+            # read back before the bot is free again, so a second set cannot write in between
+            after = await self._fallback_read(bot)
+        finally:
+            if release:
+                self._fallback_busy.discard(name)
+        if code == 0 and after["editable"] and after["chain"] == chain:
+            return {"outcome": "ok", **after}
+        said = hermes_said(output)
+        if code is None:
+            line = f"Hermes did not finish in {int(FALLBACK_TIMEOUT)} seconds." + (f"\n{said}" if said else "")
+        elif code == 0:
+            line = f"Hermes finished, but {bot['display_name']}'s config.yaml reads another list."
+        else:
+            line = said or f"Hermes exited with code {code}."
+        return {"outcome": "failed", "line": line, **after}
 
     # ------------------------------------------------------------ voice (BOUNDARY rule 54)
     # The page sends a bot's name and either a recording (its bytes and type) or an answer's text and a part number.

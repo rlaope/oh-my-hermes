@@ -570,7 +570,9 @@ class BotsAndChat(BridgeCase):
             async with Env() as env:
                 s = await self.open(env)
                 r = (await s.req("models.options", bot="kami"))["result"]
-                self.assertEqual(r["providers"], [{"slug": "claude-proxy", "name": "Claude", "models": ["claude-opus-5-5", "x"]}])
+                # `id`: the provider as a backup chain compares it (rule 57)
+                self.assertEqual(r["providers"], [{"slug": "claude-proxy", "name": "Claude", "models": ["claude-opus-5-5", "x"],
+                                                   "id": ob.fallback_provider_id("claude-proxy")}])
                 self.assertEqual(r["current"]["model"], "claude-opus-5-5")
                 # a Claude route: no ultra next to max (Hermes clamps ultra to max there)
                 self.assertEqual(r["reasoning_levels"], list(self.COMPAT))

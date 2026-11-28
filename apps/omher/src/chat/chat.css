@@ -428,6 +428,48 @@
 .sq-x:hover:not(.off) {
   color: var(--danger);
 }
+/* paused by the queue bar: a held message keeps its look, with a dashed edge */
+.msg.u.held.qp .b {
+  outline: 1px dashed var(--quiet);
+  outline-offset: -1px;
+}
+/* the queue bar above the composer (QueueBar): one quiet line, never two, even at the composer's narrowest */
+.sq-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 0 0 6px;
+  padding: 0 2px;
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.sq-bar-n {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sq-bar-b {
+  flex: none;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: var(--r-sm);
+  font-size: 11.5px;
+  color: var(--muted);
+  background: var(--raise);
+  border: 1px solid var(--line);
+}
+.sq-bar-b:hover,
+.sq-bar-b:focus-visible {
+  color: var(--ink);
+  background: var(--raise2);
+}
+.sq-bar-clear.confirm,
+.sq-bar-clear.confirm:hover {
+  color: var(--danger);
+}
 /* Markdown in bubbles. One rhythm (8px between blocks), headings by size, code blocks as their own surface,
    tables that keep numbers on one line, GFM task lists without a second marker. */
 .md > * + * {
@@ -718,6 +760,27 @@
   flex: 0 1 48px;
   height: 1px;
   background: var(--line-strong);
+}
+/* the same with a second line under it: Hermes' own sentence when it switched to the backup model */
+.line.sys.sys-d {
+  height: auto;
+  padding: 4px 0;
+}
+.sys-b {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: min(560px, 80%);
+  text-align: center;
+}
+.sys-b .line-t {
+  color: var(--muted);
+}
+.sys-detail {
+  font-size: 11px;
+  overflow-wrap: anywhere;
 }
 .line-src {
   flex: none;

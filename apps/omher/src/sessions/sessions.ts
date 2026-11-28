@@ -48,7 +48,7 @@ import { getDraft, setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type ConvState, type PastChat, type SessionHost } from "./host";
 import { localBot } from "../peers/peerKey";
 import { modeKnown, remoteOnly } from "../app/remote";
-import { folderKey, getStore, notifySessionEvent, notifySessionNote, onBridgeEvent, selectAsks, setChatRoute, setSessionKeyLookup, setTermAskOpen, type OutFile, type SentFile, type Store } from "../state/store";
+import { folderKey, getStore, notifySessionEvent, notifySessionNote, onBridgeEvent, selectAsks, setChatRoute, setSessionKeyLookup, setTermAskOpen, queueNext, waitingIds, type OutFile, type SentFile, type Store } from "../state/store";
 import { ASK_AGENTS, createAskDebounce, screenAsk } from "./term/screenAsk";
 import { clearTermAsk, notifyTermAsk, setTermAsk, termAsks } from "./termAsks";
 import { blobType, bytesOf, inlinePicture, parseSentFiles, pathsTyped, putSentFiles, SENT_FILES_KEY, shellQuote, wireText, type SavedFile, type SentFilesBook } from "./attach";
@@ -815,7 +815,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   /** The head held message goes out now: the row leaves the queue (moved to the end) before the request, once. */
   const sendHead = async (id: string) => {
     const key = keys.get(id);
-    const head = key ? chatOf(key)?.queue?.[0] : undefined;
+    // paused (the queue bar): only a row the person sent by hand goes out
+    const head = key ? queueNext(chatOf(key)) : undefined;
     if (!key || !head || chatOf(key)?.turn) return;
     const h = heldInputs.get(head);
     heldInputs.delete(head);
@@ -893,8 +894,25 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       // with the agent now: no longer held, "Waiting" until the agent says it took it
       st.dispatch({ type: "queue.take", bot: key, id: lid, now: Date.now() });
     } catch {
-      st.dispatch({ type: "queue.front", bot: key, id: lid });
+      // refused: it goes out next, but a pause still holds it
+      st.dispatch({ type: "queue.front", bot: key, id: lid, keepPaused: true });
     }
+  };
+
+  /** The queue bar of session `id`'s chat: Pause / Resume (a resume with no turn running sends the head now). */
+  const queuePause = (id: string, paused: boolean) => {
+    const key = keys.get(id);
+    if (!key) return;
+    store().dispatch({ type: "queue.pause", bot: key, paused });
+    if (!paused && !chatOf(key)?.turn) void sendHead(id);
+  };
+  /** The queue bar's Clear: every message omher still holds for session `id` is deleted, as Delete deletes one. */
+  const queueClear = (id: string) => {
+    const key = keys.get(id);
+    const ids = key ? waitingIds(chatOf(key)) : [];
+    if (!key || !ids.length) return;
+    for (const lid of ids) heldInputs.delete(lid);
+    store().dispatch({ type: "queue.clear", bot: key, ids });
   };
 
   /** Send chat text: the bubble shows at once; a refusal marks it "Not sent". */
@@ -2811,6 +2829,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     },
     /** The ↵ ↓ × buttons of a waiting message (steer queue sessions): Send now or Steer, Edit, Delete. */
     queuePick,
+    queuePause,
+    queueClear,
     /** Esc / Stop: the agent's own interrupt. */
     interrupt: (id: string) => input(id, { kind: "interrupt" }).catch(() => undefined),
     /** Edit and resend: the agent takes back the last message (its own rewind), then the box holds its text. */

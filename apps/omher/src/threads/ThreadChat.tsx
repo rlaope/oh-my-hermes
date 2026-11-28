@@ -5,6 +5,7 @@ import { selectAsks, useStore } from "../state/store";
 import type { Bot } from "../lib/protocol";
 import { Timeline } from "../chat/parts/Timeline";
 import { Composer } from "../chat/parts/Composer";
+import { QueueBar } from "../chat/parts/QueueBar";
 import { LostTurnBlock } from "../chat/parts/LostTurnBlock";
 import { promptsOf } from "../chat/parts/promptHistory";
 import { Avatar } from "../ui";
@@ -51,6 +52,7 @@ export function ThreadChat({ bot, thread }: { bot: Bot; thread: string }) {
           face={<Avatar bot={bot.name} size={28} />}
           connectionNotice={false}
           speak={bot}
+          handoff={bot}
           afterAnswer={(it) =>
             cards
               .filter((c) => c.at === it.id)
@@ -72,6 +74,7 @@ export function ThreadChat({ bot, thread }: { bot: Bot; thread: string }) {
           running={!!chat?.turn}
           asking={selectAsks(s).some((a) => a.bot === key)}
           history={promptsOf(chat?.items)}
+          queueBar={<QueueBar chat={chat} onPause={(p) => s.queuePause(p, key)} onClear={() => s.queueClear(key)} />}
           offline={bot.status === "offline" || away}
           offlineText={away ? t("chat.connecting") : undefined}
           onSend={(text) => void s.threadSend(bot.name, thread, text)}

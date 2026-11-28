@@ -249,9 +249,10 @@ RULES = (
     "The browser sign-in happens inside the CLI: omher never asks for, accepts, reads, copies or shows a token or key.",
     "deletes only `~/.omher/accounts/<cli>/<id>/`. An account switch never stops a running session.",
     "Besides rule 21's one GitHub CLI read, rule 24's one `hermes -p <bot> cron create` for the briefing, the Hermes"
-    " commands of rules 29, 41, 44 (`hermes -p default profile create <name> --no-alias`) and 52 (`hermes computer-use`"
-    " and `hermes tools enable|disable computer_use`), and the read-only `omh` of"
-    " rules 43 and 44, the only program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`,",
+    " commands of rules 29, 41, 44 (`hermes -p default profile create <name> --no-alias`), 52 (`hermes computer-use`"
+    " and `hermes tools enable|disable computer_use`) and 57 (`hermes config set fallback_providers`), and the"
+    " read-only `omh` of rules 43 and 44, the only program the bridge runs is `git`, for reads (`worktree list`,"
+    " `rev-parse`, `status`,",
     # rule 10: no inherited git redirection reaches a read, and a read never fetches (_git's env, _GIT_REDIRECT)
     "Each read runs without the git redirection omher may have inherited (`GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`,"
     " `GIT_COMMON_DIR`, `GIT_OBJECT_DIRECTORY`, `GIT_ALTERNATE_OBJECT_DIRECTORIES`, `GIT_NAMESPACE`, and config added"
@@ -473,11 +474,11 @@ RULES = (
     "The provider id is checked against `^[a-z0-9][a-z0-9_-]{0,40}$` and passed as one argument;",
     "Hermes asks for the key in that terminal and stores it itself: omher never sees the key.",
     "never runs this in its own pseudo-terminal, so no keystroke passes through omher.",
-    "There are five exceptions. The first two are a bot's automations and plugins, which omher changes only by asking"
+    "There are six exceptions. The first two are a bot's automations and plugins, which omher changes only by asking"
     " that bot's own gateway (rules 24 and 25); omher writes no file of either itself, with one exception of its own:",
     "never signals a process (the exceptions are its own runs past their time, stopped through `_stop_run`, which only"
-    " two functions call: `_run_hermes_argv`, for rule 41's `hermes mcp` run, rule 44's `hermes profile create` run and"
-    " rule 52's computer-use runs,"
+    " two functions call: `_run_hermes_argv`, for rule 41's `hermes mcp` run, rule 44's `hermes profile create` run,"
+    " rule 52's computer-use runs and rule 57's `hermes config set` run,"
     " and `run_omh_read`, for rule 43's and rule 44's `omh` reads), never calls a service manager",
     "The fourth is a new bot (rule 44): on the person's press, Hermes' own `hermes -p default profile create <name>"
     " --no-alias` makes a new profile with its folder and files; omher writes none of them, and it changes no profile"
@@ -690,6 +691,72 @@ RULES = (
     " bot only.",
     "The fifth is a bot's computer use (rule 52): on the person's press, Hermes' own `hermes -p <bot> tools"
     " enable|disable computer_use` writes that profile's `config.yaml`; omher itself writes none of it.",
+    # rule 57: a bot's backup models, Hermes' own fallback chain, read from one key and set through one `config set`
+    "The sixth is a bot's backup models (rule 57): on the person's press, Hermes' own `hermes -p <bot> config set"
+    " fallback_providers <list>` writes that profile's `config.yaml` `fallback_providers`; omher itself writes none of it.",
+    "57. A bot's page (Settings › Bots › the bot) shows the bot's backup models, Hermes' own fallback chain, under its"
+    " model, and sets them only through Hermes' own command, only when the person presses Add backup model or Remove;",
+    "Of each entry only its provider and its model leave the bridge, each on one line, cleaned of control characters and"
+    " clipped: an entry that holds anything else (`base_url`, `api_mode`, `api_key`, `key_env` and the rest) is marked"
+    " custom with no other field, so its key, its key's name and its address never leave the bridge.",
+    "Beside the list `fallback.get` gives each of its providers and the bot's own provider as the bridge's checks"
+    " compare it (`ids`, through Hermes' own `normalize_provider`), and `models.options` gives each provider it lists"
+    " the same way (`id`); nothing else is added.",
+    "and `fallback.set` refuses it before anything runs.",
+    "A press runs one fixed argv, `hermes -p <bot> config set fallback_providers <list>` (`fallback.set`), with the whole"
+    " new list (an empty one clears it), built by `fallback_argv` and run as rule 41 runs Hermes' commands"
+    " (`_run_hermes_argv`), one run at a time per bot, stopped after 60 seconds; the bot stays taken until the list is"
+    " read back after the run, and when the page's request is dropped meanwhile, until that run has ended.",
+    "The models offered are the ones the chat's model picker lists for that bot (`models.options`), without its own"
+    " model, one already in the list or an id the bridge refuses, each provider compared by the id the bridge gave for"
+    " it, so the page offers nothing `fallback.set` refuses as listed twice or as the bot's own.",
+    "The page sends only the bot's name, the new list of providers and models, and the list it read and built that from"
+    " (`base`): the key is the bridge's own constant, and no key, value, flag or field of the page's reaches Hermes.",
+    "When the list the bridge reads fresh before the run is not `base` (it was changed elsewhere since the page read it),"
+    " `fallback.set` refuses it (`changed`) before anything runs,",
+    "a YAML flow list of plain scalars (`[{provider: <id>, model: <id>}]`) with no quote in it, because on Windows"
+    " `hermes` can be the `hermes.cmd` launcher, whose cmd.exe does not take the escaped quote a JSON list would need.",
+    "and refuses it unless every value reads back as the same text (never `1.0`, `true`, `null` or `12:30`).",
+    "the bridge passes that line on marked (`status` with `fallback`), and the page adds a row to that chat where it"
+    " happened for each such line (a walk down the list adds several), a title of its own over Hermes' sentence, kept"
+    " in the page's memory only and gone after a reload.",
+    "for a bot on another computer (rule 31: `fallback.get` and `fallback.set` are refused for it) and for every bot in"
+    " remote-only mode (rule 47: the page's filter refuses both on a server):",
+    "omher never runs `hermes fallback` (it needs a terminal), never sets `fallback_model` or any other key, never writes"
+    " a provider's key, address or API mode, and never tries a backup model itself.",
+    # rule 58: an answer handed to another bot and its answer given back, each only on a press, through existing ops
+    "58. One bot's answer goes to another bot only when the person presses Hand over, and that bot's answer comes back"
+    " only when the person presses Give to <bot>; nothing else carries text between bots.",
+    "Hand over starts a new thread under the picked bot through the existing `thread.create` and sends it one first"
+    " message through the existing `chat.send` with that thread as `session`, the path Start in thread takes"
+    " (`startTaskThread`); it adds no op and no Hermes command, and the person stays in the chat they are in.",
+    "That message starts with a fixed line naming the bot whose answer it is, then the person's note as one printable"
+    ' line after "Note: ", then the answer with each of its lines quoted, cut to its first 6,000 characters (closing a'
+    " code fence the cut leaves open) with a line saying so;",
+    "An `@name` of another bot in an answer only shows a chip that opens the same picker with that bot chosen; the chip"
+    " and the mention send nothing.",
+    "the bridge connection or the bot's gateway dropping stops it, a read of the thread after that drop settles it from"
+    " what the thread holds (a read with no drop before it settles nothing), and a refused first send stops it with the"
+    " error.",
+    "the picked bot (a mention chip's, else the first one when the picker opens) is never replaced by another: one that"
+    " goes offline while the picker is open is no longer picked, the picker says so, and Hand over waits for the person"
+    " to pick again.",
+    'once done, Give to <bot> sends "Answer from <bot>:" and that answer, under the same cap, once into the chat that'
+    " holds the card as the person's own message, as plain text through `chat.send` in a main chat and a thread alike:"
+    " no skill token in it is hoisted to a command and no Reply target is attached, so neither handed text can start"
+    " with `/` and run a Hermes command.",
+    "While a turn runs there it goes as a typed message does: steered into that turn, or held in the steer queue when"
+    " the queue is paused, other messages wait there, or the chat waits to be read again after a reconnect.",
+    "Give reads Given once pressed, and only the message that carries it undoes that: its send refused, or that"
+    " message deleted from the queue while it waits, offers Give again; deleting or clearing other messages, or reading"
+    " the chat again after it went out, does not.",
+    "That waiting message has no Edit (Delete and Send now stay) and is not put back in the message box at a reload, so"
+    " the other bot's text only ever goes as the plain text Give made.",
+    "Nothing returns by itself and nothing chains: an answer never goes on to a third bot, or back, without a press.",
+    "A bot on another computer is offered, because its bridge already takes `thread.create` and a thread's `chat.send`"
+    " (rule 31); in remote-only mode (rule 47) both bots run on the server, and the text goes only to that server's"
+    " bridge.",
+    "The card and its link to the thread are kept in the page's memory only and are gone after a reload;",
     # rule 13 names the one other file the page shows: a step's screenshot, under rule 53
     "or when Hermes names it as the screenshot of a browser or computer step under rule 53's limits; the desktop app"
     " opens only a file the bridge just served through `media.read`.",
@@ -888,10 +955,16 @@ class DocPins(unittest.TestCase):
         # 55: rule 55 (Program Resume: a Shell row's program asks with an OSC 7577 report signed over a per-start
         # token; records under ~/.omher/resume, 0700/0600; Resume runs it once through `omher --resume-exec`, each
         # element one argument, no shell); 56: rule 56 (CPU warning: the CPU time of the person's own processes every
-        # 5 s while the switch is on, no program run, nothing killed or sent).
+        # 5 s while the switch is on, no program run, nothing killed or sent); 57: rule 57 (a bot's backup models:
+        # Hermes' own `fallback_providers` read from its config.yaml, provider and model only, and set through one
+        # fixed `hermes -p <bot> config set fallback_providers <flow list>` on a press, a list written in Hermes' config
+        # never rewritten; Hermes' `fallback` status kept as one row in that chat; a peer bot and a server refused);
+        # 58: rule 58 (one bot's answer handed to another bot's new thread, and that bot's answer given back, each only
+        # on a press, through the existing `thread.create` and `chat.send`, no new op; a mention only suggests; nothing
+        # returns or chains by itself; the card kept in the page's memory only).
         # The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 56, len(rules))
+        self.assertTrue(6 <= len(rules) <= 58, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -2903,7 +2976,7 @@ class RestartOneBotOnAPress(unittest.TestCase):
         self.assertIn("subprocess.run(argv, stdin=subprocess.DEVNULL", body)
         self.assertNotIn("shell=True", self.src)
         # the bridge's own SIGTERM handler (it stops itself) is not a signal sent to anything; the one signal is
-        # `_stop_run`: the stop of its own rule 41 or rule 44 Hermes run past its time (`_run_hermes_argv`) and rule
+        # `_stop_run`: the stop of its own rule 41, 44, 52 or 57 Hermes run past its time (`_run_hermes_argv`) and rule
         # 43's of its own `omh` read (`run_omh_read`)
         rest = self.src
         for own in ("_run_hermes_argv", "run_omh_read", "_stop_run"):
@@ -3282,10 +3355,11 @@ class SshPeersOnlyOverTheOwnSsh(unittest.TestCase):
 
     def test_the_bridge_refuses_this_computers_ops_and_probes_read_only(self) -> None:
         refused = self.bridge.split("PEER_REFUSED = {", 1)[1].split("\n}\n", 1)[0]
-        # rule 52: a peer bot's computer use would act on that computer's screen; rule 54: voice is for a bot here only
+        # rule 52: a peer bot's computer use would act on that computer's screen; rule 54: voice is for a bot here only;
+        # rule 57: a bot's backup models are set on the computer it runs on
         self.assertEqual(re.findall(r'^    "([a-z.]+)":', refused, re.M),
                          ["folder.open", "folder.close", "folder.resume", "bots.restart", "computer.bot", "computer.toggle",
-                          "voice.info", "voice.transcribe", "voice.speak"])
+                          "voice.info", "voice.transcribe", "voice.speak", "fallback.get", "fallback.set"])
         forward = self.bridge.split("PEER_FORWARD = frozenset({", 1)[1].split("})", 1)[0]
         for op in ("folder.open", "folder.close", "folder.resume", "bots.restart", "accounts.list", "sessions.start", "usage.read"):
             self.assertNotIn(f'"{op}"', forward, op)
@@ -3530,7 +3604,8 @@ class TasksReadOnly(unittest.TestCase):
         start = store.split("async startTaskThread(", 1)[1].split("\n    },\n", 1)[0]
         # the task's thread starts through the store's one createThread (the + press's), its only request thread.create
         self.assertEqual(re.findall(r'(threadReq|bridge\.request)\("([a-z.]+)"', start), [])
-        self.assertIn("const thread = await createThread(bot, title);", start)
+        # (`from`, an answer handed to another bot under rule 58, only keeps the person in their chat)
+        self.assertIn("const thread = await createThread(bot, title, from?.chat);", start)
         self.assertIn("await actions.threadSend(bot, thread, text);", start)
         create = store.split("const createThread = async (", 1)[1].split("\n  };\n", 1)[0]
         self.assertEqual(re.findall(r'(threadReq|bridge\.request)\("([a-z.]+)"', create), [("threadReq", "thread.create")])
@@ -3663,6 +3738,142 @@ class HandToBotAddsNoRead(unittest.TestCase):
         unsafe = self.msg.split("const UNSAFE = /[", 1)[1].split("]/g;", 1)[0]
         for part in ("\\u0000-\\u001f", "\\u007f-\\u009f", "\\u2028\\u2029", "\\u200e\\u200f", "\\u202a-\\u202e", "\\u2066-\\u2069"):
             self.assertIn(part, unsafe, part)
+
+
+class HandAnAnswerToAnotherBot(unittest.TestCase):
+    """Rule 58: an answer reaches another bot only through Hand over (the store's `startTaskThread`: `thread.create`,
+    then one `chat.send` there), its answer comes back only through Give (one plain-text `chat.send` or the steer
+    queue), each from a press and never an effect, a mention only opens the picker, the bridge gained no op for it,
+    and the card is kept in the page only. That neither built text can start with `/` is pinned here only as its
+    shape (a fixed lead first); the hostile notes, answers and names are run in `src/handoff/message.test.ts`."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.dir = UI_SRC / "handoff"
+        cls.files = {p.name: p.read_text(encoding="utf-8") for p in sorted(cls.dir.iterdir()) if p.suffix in (".ts", ".tsx") and ".test." not in p.name}
+        cls.store = (UI_SRC / "state" / "store.ts").read_text(encoding="utf-8")
+
+    def _action(self, name: str) -> str:
+        """The body of one store action (`async <name>(` up to the next action at the same indent)."""
+        body = self.store.split(f"\n    async {name}(", 1)[1]
+        return body.split("\n    },\n", 1)[0]
+
+    def test_the_module_reaches_no_bridge_op_and_keeps_nothing(self) -> None:
+        self.assertEqual(set(self.files), {"HandoffAction.tsx", "HandoffCard.tsx", "card.ts", "message.ts"})
+        for name, src in self.files.items():
+            for bad in ("bridge.request", "invoke(", "@tauri-apps", "fetch(", "localStorage", "sessionStorage", "indexedDB", "getHost("):
+                self.assertNotIn(bad, src, f"{name}: {bad}")
+        # the popover's one action is Hand over; the card's are Open thread and Give
+        self.assertEqual(re.findall(r"\bs\.(\w+)\(", self.files["HandoffAction.tsx"]), ["startTaskThread"])
+        self.assertEqual(sorted(set(re.findall(r"\bs\.(\w+)\(", self.files["HandoffCard.tsx"]))), ["handoffGive", "openThread"])
+        for name in ("card.ts", "message.ts"):
+            self.assertEqual(re.findall(r"\bs\.(\w+)\(", self.files[name]), [], name)
+        # and no other sender: not the composer's, not a thread's, not the store's dispatch
+        for name, src in self.files.items():
+            code = re.sub(r"/\*.*?\*/|^\s*//[^\n]*", "", src, flags=re.S | re.M)
+            for bad in ("sendTo", "threadSend", "sendWithFiles", ".send(", "chat.send", "dispatch(", "getState("):
+                self.assertNotIn(bad, code, f"{name}: {bad}")
+            for line in re.findall(r'^import [^;]+ from "\.\./state/store";$', src, re.M):
+                names = {n.strip().removeprefix("type ") for n in line.split("{", 1)[1].split("}", 1)[0].split(",")}
+                self.assertLessEqual(names, {"selectSidebarBots", "useStore", "AppState", "chatTarget", "botNames", "HandoffItem", "Chat"}, name)
+
+    @staticmethod
+    def _effects(src: str) -> list[str]:
+        """The bodies of every useEffect and useLayoutEffect in `src`, up to their dependency list."""
+        return [part.split("}, [", 1)[0] for part in re.split(r"\buse(?:Layout)?Effect\(", src)[1:]]
+
+    def test_each_send_starts_from_a_press_never_from_an_effect(self) -> None:
+        # Give: one call, inside the card's give(), which only its button's click runs
+        users = sorted(p.relative_to(UI_SRC).as_posix() for p in UI_SRC.rglob("*.ts*") if ".test." not in p.name and "handoffGive(" in p.read_text(encoding="utf-8"))
+        self.assertEqual(users, ["handoff/HandoffCard.tsx", "state/store.ts"])
+        card = self.files["HandoffCard.tsx"]
+        self.assertEqual(card.count("handoffGive("), 1)
+        self.assertIn("    await s.handoffGive(chat, item.id);", card.split("const give = async () => {", 1)[1].split("\n  };\n", 1)[0])
+        self.assertEqual(re.findall(r"\bgive\(\)", card), ["give()"])
+        self.assertIn("onClick={() => void give()}", card)
+        # Hand over: send() runs from the confirm button's click and the list's and note's Enter only (never a repeat)
+        act = self.files["HandoffAction.tsx"]
+        self.assertEqual(act.count("void send()"), 3)
+        self.assertEqual(act.count("if (!e.repeat) void send();"), 2)
+        self.assertIn('onClick={() => void send()} data-testid="handoff-confirm"', act)
+        for name, src in self.files.items():
+            for body in self._effects(src):
+                for bad in ("send(", "give(", "startTaskThread", "handoffGive"):
+                    self.assertNotIn(bad, body, f"{name}: an effect reaches {bad}")
+        # the store's reducer never sends either
+        reducer = self.store.split("export function reduce(", 1)[1].split("\n// ---- store", 1)[0]
+        for bad in ("handoffGive", "startTaskThread", "bridge.request"):
+            self.assertNotIn(bad, reducer)
+
+    def test_the_store_sends_through_thread_create_and_chat_send_only(self) -> None:
+        start = self._action("startTaskThread")
+        self.assertIn("const thread = await createThread(bot, title, from?.chat);", start)
+        self.assertIn("if (thread) await actions.threadSend(bot, thread, text);", start)
+        self.assertNotIn("bridge.request", start)
+        give = self._action("handoffGive")
+        # once: marked given (with the row that carries it) before anything goes, only a done card with an answer
+        self.assertIn('if (!card || card.phase !== "done" || card.given || !card.answer?.trim()) return;', give)
+        for want in ('dispatch({ type: "handoff.given", chat, id, row });', "holdIfBusy("):
+            self.assertIn(want, give)
+        self.assertLess(give.index('dispatch({ type: "handoff.given", chat, id, row });'), give.index("holdIfBusy("))
+        # plain text on both paths: the wire is the text, no skill token hoisted, no Reply chip taken, one chat.send
+        self.assertIn("if (holdIfBusy(chat, row, { text, wire: text }, { type: \"local.user\", bot: chat, id: row, text, now: now() })) return;", give)
+        self.assertEqual(re.findall(r'bridge\.request\("([\w.]+)"', give), ["chat.send"])
+        self.assertIn('bridge.request("chat.send", session ? { bot, session, text } : { bot, text })', give)
+        for bad in ("toWire", "replyTo", "reply_to", "skillNames", "actions.send", "sendTo", "runNow"):
+            self.assertNotIn(bad, give)
+        create = self.store.split("const createThread = async (", 1)[1].split("\n  };\n", 1)[0]
+        self.assertIn('threadReq("thread.create"', create)
+        self.assertIn('if (!stay) dispatch({ type: "ui.thread"', create)
+        send = self._action("threadSend")
+        self.assertEqual(re.findall(r'bridge\.request\("([\w.]+)"', send), ["chat.send"])
+        # no event of a thread ever sends: the reducer only moves the card
+        self.assertNotIn("handoffGive", self.store.split("export function reduce(", 1)[1].split("\n// ---- store", 1)[0])
+
+    def test_the_bridge_and_protocol_gained_no_op_and_peers_already_forward_both(self) -> None:
+        bridge = BRIDGE.read_text(encoding="utf-8")
+        ops = re.findall(r"def op_(\w+)\(", bridge)
+        self.assertFalse([o for o in ops if "hand" in o or "relay" in o], ops)
+        # the page's op tables name no such op either
+        for table in (UI_SRC / "lib" / "protocol.ts", UI_SRC / "threads" / "types.ts"):
+            names = re.findall(r'^\s+"([a-z_]+\.[\w.]+)": \{ params', table.read_text(encoding="utf-8"), re.M)
+            self.assertIn("thread.create" if table.name == "types.ts" else "chat.send", names)
+            self.assertFalse([n for n in names if "hand" in n or "relay" in n], names)
+        forward = bridge.split("PEER_FORWARD = frozenset({", 1)[1].split("})", 1)[0]
+        for op in ('"thread.create"', '"chat.send"'):
+            self.assertIn(op, forward)
+        self.assertIn('"chat.send"', bridge.split("PEER_SESSION_OPS = frozenset({", 1)[1].split("})", 1)[0])
+
+    def test_the_text_is_quoted_capped_and_the_note_one_line(self) -> None:
+        msg = self.files["message.ts"]
+        self.assertIn("export const ANSWER_CHARS = 6000;", msg)
+        self.assertIn(".split(/\\r\\n|[\\r\\n\\u2028\\u2029]/)", msg)
+        self.assertIn('.map((l) => (l ? `> ${l}` : ">"))', msg)
+        self.assertEqual(msg.count("const note = goalLine(f.note);"), 2)
+        self.assertIn("if (a.cut) parts.push(cutLine(a.cut));", msg)
+        # each text starts with a fixed lead, never with the note, the answer or a name, so none can start with `/`
+        self.assertEqual(
+            re.findall(r"const parts = \[`([^$`]*)\$\{", msg),
+            ["Handoff from omher: ", "Answer from "],
+        )
+        self.assertIn("if (note) parts.push(`Note: ${note}`);", msg)
+        self.assertIn("return `From ${printable(f.from, NAME)}: ", msg)
+
+    def test_a_mention_only_opens_the_picker(self) -> None:
+        act = self.files["HandoffAction.tsx"]
+        chips = act.split("function HandoffChips(", 1)[1].split("\nconst W = ", 1)[0]
+        self.assertIn("onClick={(e) => onPick(b.name, e.currentTarget)}", chips)
+        self.assertNotIn("startTaskThread", chips)
+        self.assertEqual(act.count("startTaskThread("), 1)
+        self.assertIn("const send = async () => {", act.split("function HandoffPopover(", 1)[1])
+
+    def test_the_card_lives_in_the_page_only(self) -> None:
+        resume = (UI_SRC / "app" / "resume.ts").read_text(encoding="utf-8")
+        self.assertNotIn("handoff", resume.lower())
+        self.assertIn("handoffs: {},", self.store)
+        for line in self.store.splitlines():
+            if "handoff" in line.lower():
+                self.assertNotIn("localStorage", line)
 
 
 class GithubMeReadOnly(unittest.TestCase):
@@ -3861,6 +4072,196 @@ class TerminalLinksAndBotRequests(unittest.TestCase):
         self.assertIn("window_close,", (SHELL / "lib.rs").read_text(encoding="utf-8"))
         split = (UI_SRC / "sessions" / "splitState.ts").read_text(encoding="utf-8")
         self.assertIn('export const SPLITS_KEY = "omher.splits";', split)
+
+
+class BackupModelThroughHermesOwnConfigSet(unittest.TestCase):
+    """Rule 57: a bot's backup models are Hermes' own `fallback_providers`, read with only each entry's provider and
+    model leaving the bridge, and set through one fixed `hermes -p <bot> config set fallback_providers <flow list>` run
+    by rule 41's runner on a press; a list written in Hermes' config is never rewritten; a peer bot and a server are
+    refused; Hermes' `fallback` status is passed on marked."""
+
+    OPS = ("op_fallback_get", "op_fallback_set")
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.src = BRIDGE.read_text(encoding="utf-8")
+        cls.tree = ast.parse(cls.src)
+        cls.fns = {f.name: f for f in ast.walk(cls.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+    def _body(self, name: str) -> str:
+        fn = self.fns[name]
+        return ast.unparse(ast.Module(body=fn.body[1:] if ast.get_docstring(fn) else fn.body, type_ignores=[]))
+
+    def _const(self, name: str):
+        return next(n.value for n in self.tree.body if isinstance(n, ast.Assign)
+                    and any(getattr(t, "id", "") == name for t in n.targets))
+
+    def _callers(self, name: str) -> list[str]:
+        return sorted(n for n, f in self.fns.items() if n != name
+                      and any(isinstance(c, ast.Name) and c.id == name for c in ast.walk(f)))
+
+    def _bridge(self):
+        import importlib.util
+        import sys
+
+        spec = importlib.util.spec_from_file_location("omher_bridge_fallback", BRIDGE)
+        ob = importlib.util.module_from_spec(spec)
+        sys.modules["omher_bridge_fallback"] = ob
+        spec.loader.exec_module(ob)
+        return ob
+
+    def test_the_argv_is_exactly_that_list(self) -> None:
+        self.assertEqual(ast.literal_eval(self._const("FALLBACK_KEY")), "fallback_providers")
+        self.assertEqual(ast.literal_eval(self._const("FALLBACK_MAX")), 4)
+        self.assertEqual(ast.literal_eval(self._const("FALLBACK_TIMEOUT")), 60.0)
+        body = self._body("fallback_argv")
+        self.assertIn("PROFILE_ID.fullmatch(bot)", body)
+        self.assertIn("return [hermes, '-p', bot, 'config', 'set', FALLBACK_KEY, fallback_literal(fallback_check(chain))]", body)
+        # the only list naming `config` is fallback_argv's, and only run_hermes_fallback builds one, for op_fallback_set
+        lists = {n for n, f in self.fns.items() for lst in ast.walk(f) if isinstance(lst, ast.List)
+                 and any(isinstance(c, ast.Constant) and c.value == "config" for c in lst.elts)}
+        self.assertEqual(lists, {"fallback_argv"})
+        self.assertEqual(self._callers("fallback_argv"), ["run_hermes_fallback"])
+        self.assertEqual(self._body("run_hermes_fallback"), "return _run_hermes_argv(fallback_argv(hermes, bot, chain), home, timeout)")
+        self.assertEqual(self._callers("run_hermes_fallback"), ["op_fallback_set"])
+        run = self._body("op_fallback_set")
+        self.assertIn("run_hermes_fallback, hermes, name, chain, self.home, FALLBACK_TIMEOUT", run)
+        self.assertLess(run.index("if name in self._fallback_busy:"), run.index("self._fallback_busy.add(name)"))
+        # what runs, for a real list: one argument, a flow literal with no quote, the key the bridge's own
+        ob = self._bridge()
+        ob._yaml_safe_load = lambda text: [{"provider": "openrouter", "model": "x-ai/grok-4.7"}] if text.startswith("[{") else []
+        self.assertEqual(ob.fallback_argv("/h", "kami", [{"provider": "openrouter", "model": "x-ai/grok-4.7"}]),
+                         ["/h", "-p", "kami", "config", "set", "fallback_providers", "[{provider: openrouter, model: x-ai/grok-4.7}]"])
+        self.assertEqual(ob.fallback_argv("/h", "kami", []), ["/h", "-p", "kami", "config", "set", "fallback_providers", "[]"])
+
+    def test_the_strict_charset_refuses_shell_cmd_and_yaml_metacharacters(self) -> None:
+        pattern = ast.literal_eval(self._const("FALLBACK_VALUE").args[0])
+        self.assertEqual(pattern, "[A-Za-z0-9](?:[A-Za-z0-9._:/@-]{0,126}[A-Za-z0-9])?")
+        for bad in ("-p", "--force", "a b", "x;y", "$(id)", "`id`", "a|b", "a&b", "a%b", "a^b", "a!b", "a\"b", "a'b",
+                    "a,b", "a{b", "a}b", "a[b", "a]b", "a#b", "*x", "&x", "@x", ":x", "x:", "a\nb", "a\\b", "", "x" * 129):
+            self.assertIsNone(re.fullmatch(pattern, bad), bad)
+        ob = self._bridge()
+        for bad in ("a b", "x;y", "a,b", "a}b", "a: b", "-p"):
+            for key in ("provider", "model"):
+                with self.assertRaises(ValueError, msg=bad):
+                    ob.fallback_check([{"provider": "openai", "model": "gpt-6.1-sol", key: bad}])
+        # a field besides the two, more than four entries, or one twice, never reaches Hermes
+        for chain in ([{"provider": "a", "model": "b", "base_url": "http://x"}], [{"provider": "a", "model": f"m{i}"} for i in range(5)],
+                      [{"provider": "a", "model": "b"}] * 2, {"provider": "a", "model": "b"}, None):
+            with self.assertRaises(ValueError, msg=repr(chain)):
+                ob.fallback_check(chain)
+        # every value must read back as the same text through Hermes' YAML loader: a loader that reads it otherwise refuses
+        ob._yaml_safe_load = lambda text: [{"provider": "a", "model": 1.0}]
+        with self.assertRaises(ValueError):
+            ob.fallback_check([{"provider": "a", "model": "1.0"}])
+
+    def test_fallback_get_never_returns_a_secret_bearing_field(self) -> None:
+        import tempfile
+
+        ob = self._bridge()
+        cfg = {"model": {"default": "gpt-6.1-sol", "provider": "openai"}, "fallback_providers": [
+            {"provider": "custom", "model": "local", "base_url": "https://gw.example/v1", "api_key": "sk-SECRET-55",
+             "api_mode": "chat_completions"},
+            {"provider": "openrouter", "model": "x", "key_env": "OPENROUTER_KEY_2"},
+            {"provider": "openai", "model": "gpt-6.1-terra"},
+        ]}
+        ob._yaml_safe_load = lambda text: cfg
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "config.yaml").write_text("parsed by the stub above\n", encoding="utf-8")
+            got = ob.fallback_chain(Path(d))
+        self.assertEqual(got, {"chain": [{"provider": "custom", "model": "local", "custom": True},
+                                         {"provider": "openrouter", "model": "x", "custom": True},
+                                         {"provider": "openai", "model": "gpt-6.1-terra"}], "editable": False})
+        for word in ("sk-SECRET-55", "gw.example", "OPENROUTER_KEY_2", "chat_completions", "api_key", "base_url", "key_env"):
+            self.assertNotIn(word, repr(got), word)
+        # each row is built from the two fields alone: nothing else of an entry is copied out
+        body = self._body("fallback_chain")
+        self.assertIn("row = {'provider': _platform_text(provider, 128), 'model': _platform_text(model, 128)}", body)
+        self.assertNotIn("**e", body)
+        self.assertNotIn("dict(e", body)
+        for bad in ("write", "open(", "dump", "subprocess"):
+            self.assertNotIn(bad, body, bad)
+
+    def test_a_chain_written_in_hermes_config_is_not_rewritten(self) -> None:
+        import asyncio
+        import tempfile
+
+        ob = self._bridge()
+        cfg = {"model": {"default": "gpt-6.1-sol", "provider": "openai"},
+               "fallback_providers": [{"provider": "custom", "model": "m", "base_url": "http://127.0.0.1:9/v1"}]}
+        ob._yaml_safe_load = lambda text: [] if text == "[]" else cfg
+        runs = []
+        ob.run_hermes_fallback = lambda *a: runs.append(a) or (0, "")
+        ob.hermes_path = lambda *a, **k: "/stub/hermes"
+        with tempfile.TemporaryDirectory() as d:
+            home = Path(d)
+            (home / "profiles" / "kami").mkdir(parents=True)
+            for p in (home / "config.yaml", home / "profiles" / "kami" / "config.yaml"):
+                p.write_text("parsed by the stub above\n", encoding="utf-8")
+            bridge = ob.Bridge(token="t", hermes_home=home)
+            with self.assertRaises(ob.BridgeError) as cm:
+                asyncio.run(bridge.op_fallback_set({"bot": "kami", "chain": [], "base": []}))
+        self.assertEqual(cm.exception.code, "not_editable")
+        self.assertEqual(runs, [])
+        run = self._body("op_fallback_set")
+        # the bot is taken before the first await (frames run concurrently), then the fresh read decides
+        self.assertLess(run.index("self._fallback_busy.add(name)"), run.index("await"))
+        self.assertLess(run.index("now = await self._fallback_read(bot)"), run.index("if not now['editable']:"))
+        self.assertLess(run.index("if not now['editable']:"), run.index("raise BridgeError('changed'"))
+        self.assertLess(run.index("raise BridgeError('changed'"), run.index("run_hermes_fallback"))
+
+    def test_the_page_sends_a_bot_and_a_chain_and_nothing_else(self) -> None:
+        reads, other = set(), []
+        for name in self.OPS + ("_profile_bot", "_fallback_read"):
+            fn = self.fns[name]
+            parent = {child: node for node in ast.walk(fn) for child in ast.iter_child_nodes(node)}
+            for node in ast.walk(fn):
+                if not (isinstance(node, ast.Name) and node.id == "p"):
+                    continue
+                up = parent.get(node)
+                if isinstance(up, ast.Attribute) and up.attr == "get" and isinstance(parent.get(up), ast.Call) \
+                        and isinstance(parent[up].args[0], ast.Constant) and len(parent[up].args) == 1:
+                    reads.add(parent[up].args[0].value)
+                elif isinstance(up, ast.Call) and ast.unparse(up.func) == "self._profile_bot" and up.args == [node]:
+                    continue
+                else:
+                    other.append(f"{name}: {ast.unparse(up) if up is not None else 'p'}")
+        self.assertEqual(reads, {"bot", "chain", "base"})
+        self.assertEqual(other, [])
+        ops = next(n.value for n in ast.walk(self.tree) if isinstance(n, ast.Assign) and ast.unparse(n.targets[0]) == "self.ops")
+        handlers = {k.value: v.attr for k, v in zip(ops.keys, ops.values)}
+        self.assertEqual({k: v for k, v in handlers.items() if k.startswith("fallback.")},
+                         {"fallback.get": "op_fallback_get", "fallback.set": "op_fallback_set"})
+        self.assertIn("chain = fallback_check(p.get('chain'))", self._body("op_fallback_set"))
+        self.assertIn("if own:", self._body("op_fallback_set"))  # the bot's own model is no backup
+
+    def test_a_peer_bot_and_a_server_are_refused(self) -> None:
+        refused = ast.literal_eval(self._const("PEER_REFUSED"))
+        forward = ast.literal_eval(self._const("PEER_FORWARD").args[0])
+        for op in ("fallback.get", "fallback.set"):
+            self.assertIn("set on the computer it runs on", refused[op])
+            self.assertNotIn(op, forward)
+        ops = (UI_SRC / "lib" / "remoteOps.ts").read_text(encoding="utf-8")
+        for op in ("fallback.get", "fallback.set"):
+            self.assertIn(f'"{op}": {{ send: "never", key: BACKUP,', ops)
+        self.assertIn('const BACKUP: Key = "backup.offRemote";', ops)
+        store = (UI_SRC / "state" / "store.ts").read_text(encoding="utf-8")
+        self.assertIn('fallbackGet: (bot) => bridge.request("fallback.get", { bot }),', store)
+        self.assertIn('fallbackSet: (bot, chain, base) => bridge.request("fallback.set", { bot, chain, base }),', store)
+        section = (UI_SRC / "settings" / "BackupModel.tsx").read_text(encoding="utf-8")
+        self.assertIn("const away = !!bot.host || remote;", section)
+        self.assertLess(section.index("if (away) return;"), section.index("s.fallbackGet(bot.name)"))
+
+    def test_hermes_fallback_status_is_marked_and_kept_in_the_page_only(self) -> None:
+        main = ast.unparse(self.fns["_main_event"])
+        self.assertIn("await out('status', text=text.strip(), **{'fallback': True} if p.get('kind') == 'fallback' else {})", main)
+        store = (UI_SRC / "state" / "store.ts").read_text(encoding="utf-8")
+        self.assertIn('notice: "fallback",', store)
+        # the row is never written anywhere: no storage key names it
+        for name in ("BackupModel.tsx", "backupChain.ts"):
+            ui = (UI_SRC / "settings" / name).read_text(encoding="utf-8")
+            self.assertNotIn("localStorage", ui, name)
+            self.assertNotIn("setItem(", ui, name)
 
 
 class ComputerUseThroughHermesOwnCommands(unittest.TestCase):
@@ -4268,9 +4669,10 @@ class AppsThroughTheBotsOwnHermes(unittest.TestCase):
 
     def test_one_run_with_no_shell_nothing_on_stdin_and_a_timeout(self) -> None:
         self.assertEqual(self._body("run_hermes_mcp"), "return _run_hermes_argv(mcp_argv(hermes, bot, verb, name), home, timeout)")
-        # the runner rule 44's profile create and rule 52's computer-use commands share: it takes only an argv one of the
-        # three checked builders made
-        self.assertEqual(self._callers("_run_hermes_argv"), ["run_hermes_computer", "run_hermes_mcp", "run_hermes_profile_create"])
+        # the runner rule 44's profile create, rule 52's computer-use commands and rule 57's config set share: it takes
+        # only an argv one of the four checked builders made
+        self.assertEqual(self._callers("_run_hermes_argv"),
+                         ["run_hermes_computer", "run_hermes_fallback", "run_hermes_mcp", "run_hermes_profile_create"])
         body = self._body("_run_hermes_argv")
         self.assertIn("proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, env=env, **kw)", body)
         self.assertIn("k not in _GATEWAY_MARKERS and k != 'HERMES_TUI_GATEWAY_URL'", body)

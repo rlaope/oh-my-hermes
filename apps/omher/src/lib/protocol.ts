@@ -383,6 +383,24 @@ export interface AppRun {
   line?: string;
 }
 
+/** One of a bot's backup models (`fallback_providers` in its config.yaml, BOUNDARY rule 57): its provider and model only.
+ *  `custom`: the entry holds more than that (an endpoint, a key name), which omher never sees and never rewrites. */
+export interface BackupModelEntry {
+  provider: string;
+  model: string;
+  custom?: true;
+}
+/** A bot's backup models in Hermes' order. `editable` false: the list was written in Hermes' config (a custom entry,
+ *  the legacy `fallback_model` key), so omher shows it and changes nothing. `ids`: each provider of the list and the
+ *  bot's own, as `fallback.set` compares it (Hermes' `normalize_provider`: `openai` is `openrouter`). */
+export interface BackupChain {
+  chain: BackupModelEntry[];
+  editable: boolean;
+  ids?: Record<string, string>;
+}
+/** `fallback.set`: `ok`, or `failed` with Hermes' own words; either way the chain as read back from the file. */
+export type BackupSet = BackupChain & { outcome: "ok" | "failed"; line?: string };
+
 /** One check of the computer-use driver (Hermes' `cua-driver doctor`): its label, state and Hermes' own message. */
 export interface ComputerCheck {
   label: string;
@@ -492,6 +510,8 @@ export interface ModelProvider {
   slug: string;
   name: string;
   models: string[];
+  /** The provider as a bot's backup chain compares it (Hermes' `normalize_provider`, BOUNDARY rule 57). */
+  id?: string;
 }
 
 export interface ModelCurrent {
@@ -678,6 +698,12 @@ export interface OpMap {
   /** Part `part` of an answer's text, read by the bot's own Hermes (`POST /api/audio/speak`); the bridge splits the
    *  text, so the page sends the same text with each part number. */
   "voice.speak": { params: { bot: string; text: string; part: number }; result: VoiceSpeech };
+  /** A bot's backup models (BOUNDARY rule 57), read from its config.yaml: provider and model of each, nothing else. */
+  "fallback.get": { params: { bot: string }; result: BackupChain };
+  /** `hermes -p <bot> config set fallback_providers <list>` with the whole new list (empty clears it), then read back.
+   *  `base`: the list the page read and built `chain` from; when the bot's config holds another one now (changed
+   *  elsewhere) the bridge refuses with `changed` and runs nothing. */
+  "fallback.set": { params: { bot: string; chain: { provider: string; model: string }[]; base: { provider: string; model: string }[] }; result: BackupSet };
   "models.options": { params: { bot: string }; result: ModelOptions };
   /** Can the bot answer (read-only)? With `provider` (openai-codex, anthropic or nous) the strict check for it. */
   "bots.ready": { params: { bot: string; provider?: string }; result: BotReady };
@@ -925,8 +951,9 @@ export type BridgeEvent =
   | (EventBase & { event: "turn.start" })
   /** What Hermes now says of the chat's lost turns (`session.info`'s `pending`): one discarded elsewhere, or a new one. */
   | (EventBase & { event: "chat.lost"; lost: LostTurn[] })
-  /** `retry`: the agent tries the turn again by itself (OmO's `auto_retry_start`); the line says which try. */
-  | (EventBase & { event: "status"; text: string; retry?: { attempt: number; max: number } })
+  /** `retry`: the agent tries the turn again by itself (OmO's `auto_retry_start`); the line says which try.
+   *  `fallback`: Hermes switched the turn to the bot's backup model (its own `fallback` status kind, rule 57). */
+  | (EventBase & { event: "status"; text: string; retry?: { attempt: number; max: number }; fallback?: boolean })
   /** The agent is thinking; `text` is what it thought, when the agent sends it (SESSIONS agents). */
   | (EventBase & { event: "thinking"; text?: string })
   | (EventBase & {

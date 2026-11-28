@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { RestartAction, RestartLine } from "../../sidebar/RestartLine";
 import type { Bot } from "../../lib/protocol";
-import { answerSlot, answerSoFar, askOpen, selectTimeline, turnHasActivity, useStore, type TimelineItem } from "../../state/store";
+import { answerSlot, answerSoFar, askOpen, givenRow, selectTimeline, turnHasActivity, useStore, type TimelineItem } from "../../state/store";
 import { slots } from "../../features";
 import { dayLabel, hhmm, sameDay } from "../../app/time";
 import { Bubble } from "./Bubble";
@@ -20,6 +20,7 @@ import { liveFaceRow } from "./liveFace";
 import { ActivityFallback, CardFallback, RoutineFallback } from "./fallbacks";
 import { PluginAddedCard, RoutineAddedCard } from "../../pages/ChatCards";
 import { ThreadLinkLine, ThreadRouteCard } from "../cards/ThreadNotes";
+import { HandoffCard } from "../../handoff/HandoffCard";
 import { BriefNotice, WatchLine } from "../../routines/WatchLine";
 import { t } from "../../i18n";
 import { Avatar } from "../../ui";
@@ -50,6 +51,7 @@ export function Timeline({
   emptyHint,
   afterAnswer,
   speak,
+  handoff,
 }: {
   bot: Bot;
   face?: ReactNode;
@@ -62,6 +64,8 @@ export function Timeline({
   afterAnswer?: (it: MessageItem) => ReactNode;
   /** A bot's main chat or thread: its answers can be read aloud through this bot's own Hermes (BOUNDARY rule 54). */
   speak?: Bot;
+  /** The same chats: their answers can be handed to another bot (BOUNDARY rule 58); the bot they are from. */
+  handoff?: Bot;
 }) {
   const s = useStore();
   const items = selectTimeline(s, bot.name);
@@ -129,17 +133,23 @@ export function Timeline({
     el.classList.add("lit");
   };
 
+  // Hand to bot is offered on a finished answer only: not on a row of the turn still running (rule 58)
+  const handId = (it: MessageItem) => (handoff && !(chat?.turn && it.ts * 1000 >= chat.turn.startedAt) ? it.id : undefined);
+
   const render = (it: TimelineItem, prev?: TimelineItem, at = -1): ReactNode => {
     switch (it.kind) {
       case "user": {
         // a held slash command is no text for the running answer: its ↵ is Send now (stop it, send this first), as
-        // Claude Code's ctrl+x ctrl+s runs a queued command; never a steer
+        // Claude Code's ctrl+x ctrl+s runs a queued command; never a steer. A held answer Give sent back has no Edit:
+        // it goes as the plain text Give made, or is deleted (rule 58)
         const off = queue
           ? queue.off(it)
           : (it.held && !it.autoSteer) || it.steerUnknown
             ? it.held && it.text.trimStart().startsWith("/")
               ? { steer: t("sq.commandNoSteer") }
-              : {}
+              : givenRow(chat, it.id)
+                ? { edit: t("sq.givenNoEdit") }
+                : {}
             : null;
         return (
           <Bubble
@@ -151,6 +161,7 @@ export function Timeline({
             queueOff={off ?? undefined}
             last={it.id === lastSent}
             paused={!!chat?.lost?.length}
+            queuePaused={!!chat?.queuePaused}
           />
         );
       }
@@ -171,13 +182,23 @@ export function Timeline({
           return (
             <>
               <WatchLine name={it.watch.name} ts={it.watch.ts} text={it.text} />
-              <Bubble item={it} bot={bot.name} face faceEl={face} speak={speak} />
+              <Bubble item={it} bot={bot.name} face faceEl={face} speak={speak} handId={handId(it)} handFrom={handoff?.name} />
               {afterAnswer?.(it)}
             </>
           );
         return (
           <>
-            <Bubble item={it} bot={bot.name} face={!botSpoke(prev)} faceEl={face} quote={quoteFor(items, at)} onQuote={showMessage} speak={speak} />
+            <Bubble
+              item={it}
+              bot={bot.name}
+              face={!botSpoke(prev)}
+              faceEl={face}
+              quote={quoteFor(items, at)}
+              onQuote={showMessage}
+              speak={speak}
+              handId={handId(it)}
+              handFrom={handoff?.name}
+            />
             {afterAnswer?.(it)}
           </>
         );
@@ -202,12 +223,27 @@ export function Timeline({
         return <ThreadLinkLine item={it} />;
       case "threadRoute":
         return <ThreadRouteCard item={it} />;
+      case "handoff":
+        return <HandoffCard chat={bot.name} item={it} />;
       case "briefNotice":
         return <BriefNotice bot={bot} />;
       case "system":
         return (
-          <div className="line sys" data-testid="system-line">
-            <span className="line-t">{it.text}</span>
+          <div
+            className={`line sys${it.detail ? " sys-d" : ""}`}
+            data-testid={it.notice === "fallback" ? "backup-notice" : "system-line"}
+          >
+            {it.detail ? (
+              <span className="sys-b">
+                {/* a backup-model switch: omher's title, in the language the page shows now */}
+                <span className="line-t">{it.notice === "fallback" ? t("backup.switched") : it.text}</span>
+                <span className="sys-detail" data-testid="system-detail">
+                  {it.detail}
+                </span>
+              </span>
+            ) : (
+              <span className="line-t">{it.text}</span>
+            )}
           </div>
         );
     }
