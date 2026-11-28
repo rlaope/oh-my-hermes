@@ -1,14 +1,16 @@
 // A SESSIONS chat's right panel: Plans for that session alone. The agent's own record of the subagents this
-// session started (`runs.cli` for its agent and folder, the run whose owner is the session's agent id), drawn with
+// session started (`runs.get` by the session's agent id, else `runs.cli` for its agent and folder), drawn with
 // the same header, graph and node detail as a bot's Plans, re-read while the session works and when a subagent
 // moves. Before the agent's record exists, the subagents the chat has seen are listed from the chat itself.
 // Read-only: nothing here assigns, steers or stops a subagent. A TERMINALS session in a split gets the split drawn
 // small at the top (each pane a rounded box in the layout's proportions with its CLI mark and title, the focused one
-// filled); a click on a box focuses that pane, and the Plans below follow it.
+// filled); a click on a box focuses that pane, and the panel below follows it. Under the map, what the focused pane
+// runs (SessionDetails): a Shell row with Claude Code or Codex typed in it is read as that harness, its run found by the
+// conversation id the shell named (`fgSession`), as an agent row's is by its own (`agentSession`).
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Bot } from "../lib/protocol";
 import type { AgentRun, AgentRunSummary, CliAgent, RunDetail } from "../lib/runs";
-import { CLI_AGENTS } from "../lib/runs";
+import { CLI_AGENTS, countsOf } from "../lib/runs";
 import { getStore, useStore, subagentEnded, type Chat, type SubagentRow } from "../state/store";
 import { CloseIcon, IconButton, Spinner } from "../ui";
 import { useNow } from "../elsewhere/useNow";
@@ -27,13 +29,16 @@ import { groupOf, sessionOf, useSplit } from "./splitState";
 import { paneRects } from "../terminal/layout";
 import { pickTitle } from "./titles";
 import { useServerMode } from "../app/remote";
+import { paneHarness } from "./paneHarness";
+import { SessionDetails } from "./SessionDetails";
+import { fgName } from "./TermRowMark";
+import { termActs } from "./termActivity";
 import "../runs/runs.css";
 
 /** The Plans graph's run id of a session: `<agent>:<its agent session id>`, for the agents whose records omher
- *  reads (rule 16). */
-export function sessionRunId(rec: Pick<SessionRec, "agent" | "agentSession">): string | null {
-  if (!rec.agentSession || !(CLI_AGENTS as string[]).includes(rec.agent)) return null;
-  return `${rec.agent}:${rec.agentSession}`;
+ *  reads (rule 16); for a Shell row, the CLI in its front and the conversation the shell named (paneHarness). */
+export function sessionRunId(rec: Pick<SessionRec, "agent" | "agentSession" | "fgAgent" | "fgSession">): string | null {
+  return paneHarness(rec).runId;
 }
 
 /** The subagents a session's chat has seen, newest fan-out last. */
@@ -59,34 +64,60 @@ function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] 
   return [ref, w];
 }
 
+type RunReader = Pick<ReturnType<typeof getStore>["actions"], "runsGet" | "runsCli">;
+
+/** A session's run: read by its own id (`runs.get`; a CLI run needs no bot), so a resumed conversation older than any
+ *  list window keeps its subagents; only when that read fails, looked up in its folder's list (`runs.cli`, from
+ *  `since`) and read from there. Null when neither has it. */
+export async function readSessionRun(
+  a: RunReader,
+  runId: string,
+  agent: CliAgent,
+  cwd: string,
+  since?: number,
+): Promise<{ id: string; summary: AgentRunSummary; detail: RunDetail } | null> {
+  try {
+    const detail = await a.runsGet("", runId);
+    const { nodes, ...run } = detail.run;
+    return { id: runId, summary: { ...run, counts: countsOf({ nodes }) }, detail };
+  } catch {
+    const r = await a.runsCli({ agent, cwd, ...(since !== undefined ? { since } : {}) });
+    const summary = r.runs.find((x) => x.id === runId);
+    if (!summary) return null;
+    return { id: runId, summary, detail: await a.runsGet("", runId) };
+  }
+}
+
 /** The session's run from the agent's own files, re-read every few seconds while a subagent works and once more
  *  when one ends. Null until found (the agent writes its record as it goes). */
 function useSessionRun(rec: SessionRec, working: number, moved: string) {
-  const runId = sessionRunId(rec);
-  const [got, setGot] = useState<{ summary: AgentRunSummary; detail: RunDetail } | null>(null);
+  const h = paneHarness(rec);
+  const runId = h.runId;
+  // a harness typed in a Shell row runs where the shell is now (OSC 7), which may not be where the row started
+  const cwd = h.inShell ? (termActs.get(rec.id).cwd ?? rec.cwd) : rec.cwd;
+  const [got, setGot] = useState<{ id: string; summary: AgentRunSummary; detail: RunDetail } | null>(null);
   const [n, setN] = useState(0);
   useEffect(() => {
-    if (!runId) return;
+    if (!runId || !h.runAgent) return;
     let live = true;
     const a = getStore().actions;
-    a.runsCli({ agent: rec.agent as CliAgent, cwd: rec.cwd, since: Math.floor(rec.startedAt / 1000) - 60 })
-      .then((r) => {
-        const summary = r.runs.find((x) => x.id === runId);
-        if (!summary) return live && setGot(null);
-        // a CLI run is found by its id alone: no bot is named
-        return a.runsGet("", runId).then((detail) => live && setGot({ summary, detail }));
-      })
+    // a conversation typed in a shell (or resumed there) can be older than the row: its own id finds it
+    const since = h.inShell ? undefined : Math.floor(rec.startedAt / 1000) - 60;
+    readSessionRun(a, runId, h.runAgent, cwd, since)
+      .then((r) => live && setGot(r))
       .catch(() => undefined);
     return () => {
       live = false;
     };
-  }, [runId, rec.cwd, rec.agent, rec.startedAt, n, moved]);
+  }, [runId, cwd, h.runAgent, h.inShell, rec.startedAt, n, moved]);
+  // a shell's harness has no chat to say a subagent moved: its record is re-read while the pane is shown
+  const poll = working > 0 || (h.inShell && !!runId);
   useEffect(() => {
-    if (!working) return;
-    const h = setInterval(() => setN((x) => x + 1), LIVE_POLL_MS);
-    return () => clearInterval(h);
-  }, [working]);
-  return got;
+    if (!poll) return;
+    const t = setInterval(() => setN((x) => x + 1), LIVE_POLL_MS);
+    return () => clearInterval(t);
+  }, [poll]);
+  return got && got.id === runId ? got : null;
 }
 
 /** The graph, measured once it is on screen (it mounts when the agent's record is found). */
@@ -123,8 +154,9 @@ export function SessionPlans({ rec, chat, onClose }: { rec: SessionRec; chat: Ch
   const moved = subs.map((x) => `${x.id}:${x.state}`).join(",");
   const got = useSessionRun(rec, working, moved);
   // the same clock as the chat's card, which re-reads it every quarter second
-  const nowMs = useNow(working > 0, 250);
+  const nowMs = useNow(working > 0 || got?.summary.state === "running", 250);
   const nowS = nowMs / 1000;
+  const h = paneHarness(rec);
   const name = pickTitle(rec, folderName(rec.cwd)).title;
   // the record's own title is the agent's ("Claude Code session" when it wrote none): the session row's name reads
   const summary = got ? { ...got.summary, title: name } : null;
@@ -143,6 +175,7 @@ export function SessionPlans({ rec, chat, onClose }: { rec: SessionRec; chat: Ch
       </div>
       <div className="pn-body rn" data-testid="panel-runs" data-session={rec.id}>
         <SplitMap rec={rec} />
+        <SessionDetails rec={rec} />
         <div className="pn-sec">{t("plans.session")}</div>
         {summary && run ? (
           <div className="rn-run" data-testid="run-graph-box" data-run={summary.id} data-state={summary.state}>
@@ -158,7 +191,13 @@ export function SessionPlans({ rec, chat, onClose }: { rec: SessionRec; chat: Ch
           </div>
         ) : (
           <div className="pn-empty rn-empty" data-testid="plans-empty">
-            <div>{t("plans.sessionNone")}</div>
+            <div>
+              {h.inShell && h.cli
+                ? h.runAgent
+                  ? t("plans.harnessNone", { name: fgName(h.cli) })
+                  : t("plans.harnessUnread", { name: fgName(h.cli) })
+                : t("plans.sessionNone")}
+            </div>
           </div>
         )}
       </div>

@@ -192,8 +192,23 @@ export function optionTyped(e: KeyLike, mac: boolean): string | null {
 
 const MODIFIERS = ["Shift", "Control", "Alt", "Meta", "CapsLock"];
 
+/** Each terminal by its element, while its input is attached (a remade terminal replaces the old one). */
+const termOf = new WeakMap<HTMLElement, Terminal>();
+
+/** The terminal holding `target` (a key's target: xterm's input inside the element) has a program that turned the
+ *  Kitty keyboard protocol on (`CSI > flags u`), so xterm sends it keys the legacy encoding has no bytes for (Ctrl+.
+ *  as `CSI 46;5u`). False outside a terminal and while the terminal is in legacy keyboard mode. */
+export function programReadsKeys(target: EventTarget | null): boolean {
+  for (let el = target as HTMLElement | null; el; el = el.parentElement) {
+    const term = termOf.get(el);
+    if (term) return kittyKeysOn(term);
+  }
+  return false;
+}
+
 /** Keyboard and mouse handling for one terminal; `onFind` runs when the person asks for find. Returns what undoes it. */
 export function attachInput(term: Terminal, host: HTMLElement, onFind: () => void): () => void {
+  termOf.set(host, term);
   const os = keyOs();
   const mac = os === "mac";
   const linux = !mac && typeof navigator !== "undefined" && /Linux/.test(navigator.platform);
@@ -378,6 +393,7 @@ export function attachInput(term: Terminal, host: HTMLElement, onFind: () => voi
   const undoPaste = attachPasteGuard(term, host);
 
   return () => {
+    if (termOf.get(host) === term) termOf.delete(host);
     undoPaste();
     host.removeEventListener("focusout", letGo);
     host.removeEventListener("mousedown", down);

@@ -355,6 +355,7 @@ RULES = (
     "the CLI agents' own session files on this machine",
     "never a prompt or a message body, skips symlinked folders and files, and never starts, resumes or stops a CLI session.",
     "For a SESSIONS row omher reads the same files for one more thing, the title of the conversation that row runs",
+    "and from the same Claude Code transcript the model id of its last main-thread reply and the time of its first stamped line, each taken only from that line's own top-level fields (never a key inside a message or a tool result),",
     "A `claude`, `codex` or `grok` session gets one more environment variable, the home folder of the account",
     "omher's own `active.json`; \"This computer\" adds nothing, and no login file or token is read for it.",
     "A chat session of the same agent gets the same single variable from the same lookup, and nothing else.",
@@ -810,6 +811,19 @@ class SubagentEvents(unittest.TestCase):
         for w in ("fs::write", "create_dir", "remove_file", "OpenOptions", "children"):
             self.assertNotIn(w, body, w)
         self.assertEqual(code.count("omo_record("), 2)
+
+    def test_the_session_title_read_takes_only_a_line_s_own_top_level_fields(self) -> None:
+        # rule 16: `cli.title` keeps a Claude Code session's title lines, the model id of its last main-thread reply
+        # and its first line's time, each from that line's own top-level fields (`o.get(...)` on the parsed line,
+        # never a raw-byte match that could hit a key inside a message or a tool result); it keeps nothing else
+        src = BRIDGE.read_text(encoding="utf-8")
+        fold = src[src.index("def _title_fold("):src.index("def _claude_state(")]
+        self.assertEqual(fold.count("json.loads(raw)"), 1)
+        for key in ('o.get("timestamp")', 'o.get("type")', 'o.get("isSidechain")', 'o.get("message")'):
+            self.assertIn(key, fold)
+        self.assertNotIn(".search(raw", fold)
+        self.assertEqual(re.findall(r's\["(\w+)"\] =', fold), ["started", "model", "custom", "ai"])
+        self.assertIn('out = {"title": st["custom"] or st["ai"], "model": st["model"]}', src)
 
     def test_session_adapters_send_no_subagent_control(self) -> None:
         # a session's subagents are only shown: no adapter writes a message that assigns, steers or stops one

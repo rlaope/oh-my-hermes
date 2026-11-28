@@ -4550,21 +4550,38 @@ class _LineFeed:
 _SESSION_UUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
 
+# a model id as Claude Code writes it (`claude-opus-5-5`); `<synthetic>` and anything longer than a model id are not one
+_MODEL_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:@/-]{0,79}")
+
+
 def _title_state() -> dict:
-    return {"custom": "", "ai": ""}
+    return {"custom": "", "ai": "", "model": "", "started": None}
 
 
 def _title_fold(s: dict, raw: bytes) -> None:
     """One transcript line for a Claude Code session's name: its last `custom-title` (the person renamed it in Claude
-    Code) and last `ai-title` (Claude Code's own title). Only lines naming one of the two are parsed."""
-    if b'"custom-title"' not in raw and b'"ai-title"' not in raw:
+    Code) and last `ai-title` (Claude Code's own title); the line's own (top-level) `timestamp` of its first stamped
+    line; and `message.model` of its last main-thread assistant line (top-level `type` assistant, not a sidechain).
+    A key of the same name inside a message or a tool result is not the line's. Only lines that can carry one of
+    these are parsed, and nothing else is kept from them."""
+    start = s["started"] is None and b'"timestamp"' in raw
+    reply = b'"assistant"' in raw and b'"model"' in raw
+    if not (start or reply or b'"custom-title"' in raw or b'"ai-title"' in raw):
         return
     o = json.loads(raw)
     if not isinstance(o, dict):
         return
-    if o.get("type") == "custom-title" and isinstance(o.get("customTitle"), str) and o["customTitle"].strip():
+    if start:
+        s["started"] = _iso_ts(o.get("timestamp"))  # None (look on) when only a nested key had one
+    kind = o.get("type")
+    if kind == "assistant" and o.get("isSidechain") is not True:
+        msg = o.get("message")
+        model = msg.get("model") if isinstance(msg, dict) else None
+        if isinstance(model, str) and _MODEL_ID.fullmatch(model):
+            s["model"] = model
+    elif kind == "custom-title" and isinstance(o.get("customTitle"), str) and o["customTitle"].strip():
         s["custom"] = _one_line(o["customTitle"], CLI_TITLE)
-    elif o.get("type") == "ai-title" and isinstance(o.get("aiTitle"), str) and o["aiTitle"].strip():
+    elif kind == "ai-title" and isinstance(o.get("aiTitle"), str) and o["aiTitle"].strip():
         s["ai"] = _one_line(o["aiTitle"], CLI_TITLE)
 
 
@@ -4978,31 +4995,48 @@ class CliRuns:
             return names
         return (self._cached(idx, read) or {}) if _plain_file(idx) else {}
 
+    def _claude_transcript(self, session: str, cwd: str | None = None) -> Path | None:
+        """A Claude Code session's own transcript (`<claude>/projects/<cwd slug>/<id>.jsonl`, any project folder when
+        the cwd is unknown or moved), a plain file; None when there is none."""
+        root = self.homes["claude"] / "projects"
+        if not _SESSION_UUID.match(session) or not root.is_dir() or root.is_symlink():
+            return None
+        name = f"{session}.jsonl"
+        path = root / claude_slug(cwd) / name if cwd else None
+        if path is not None and _plain_file(path):
+            return path
+        try:
+            with os.scandir(root) as it:
+                return next((Path(d.path) / name for d in it
+                             if d.is_dir(follow_symlinks=False) and _plain_file(Path(d.path) / name)), None)
+        except OSError:
+            return None
+
     def title(self, agent: str, session: str, cwd: str | None = None) -> str:
         """The title a Claude Code session or Codex thread carries in the agent's own files, or "": Claude Code's
         last `custom-title` (a rename in Claude Code) else its last `ai-title`, read from the session's transcript
         (`<claude>/projects/<cwd slug>/<id>.jsonl`, any project folder when the cwd is unknown or moved); Codex's
         thread name from `session_index.jsonl`. Reads only those title lines, never a message."""
+        return self.about(agent, session, cwd)["title"]
+
+    def about(self, agent: str, session: str, cwd: str | None = None) -> dict:
+        """`title` as above, and for Claude Code the `model` id of the session's last main-thread reply ("" when
+        none) and `started`, the time of its first stamped line (absent when none), from the same read of the same
+        transcript."""
         if agent == "codex":
-            return self._codex_titles().get(session, "")
+            return {"title": self._codex_titles().get(session, ""), "model": ""}
         if agent != "claude":
-            return ""
-        root = self.homes["claude"] / "projects"
-        if not root.is_dir() or root.is_symlink():
-            return ""
-        name = f"{session}.jsonl"
-        path = root / claude_slug(cwd) / name if cwd else None
-        if path is None or not _plain_file(path):
-            try:
-                with os.scandir(root) as it:
-                    path = next((Path(d.path) / name for d in it
-                                 if d.is_dir(follow_symlinks=False) and _plain_file(Path(d.path) / name)), None)
-            except OSError:
-                path = None
+            return {"title": "", "model": ""}
+        path = self._claude_transcript(session, cwd)
         if path is None:
-            return ""
+            return {"title": "", "model": ""}
         st = self._titles.read(path)  # only the lines appended since the last look
-        return (st["custom"] or st["ai"]) if st else ""
+        if not st:
+            return {"title": "", "model": ""}
+        out = {"title": st["custom"] or st["ai"], "model": st["model"]}
+        if st["started"] is not None:
+            out["started"] = st["started"]
+        return out
 
     def _codex_meta(self, path: Path) -> dict | None:
         """The first line only (immutable once written): cached per file without reading the rest."""
@@ -5199,7 +5233,23 @@ class CliRuns:
 
     def get(self, run_id: str) -> dict:
         agent = run_id.split(":", 1)[0]
-        run = self._last.get(run_id)
+        run = None
+        if agent == "claude":
+            # by its own id on every read, however long ago it started: a resumed conversation keeps its subagents, and
+            # a transcript that grew since the last read shows its new subagents and their ends (the line feed reads
+            # only the lines appended since, the subagent files only when their stamp moved)
+            # its folder from the last read first, so a follow-up read looks in one folder, not every one
+            known = self._last.get(run_id)
+            path = self._claude_transcript(run_id.split(":", 1)[1], (known or {}).get("cwd") or None)
+            if path is not None:
+                with self._lock:
+                    run = self._claude_run(path, self.clock())
+                    if run is not None and run["id"] == run_id:
+                        self._last[run_id] = run
+                    else:
+                        run = None
+        if run is None:
+            run = self._last.get(run_id)
         if run is None and agent in ("claude", "codex", "omo"):
             self.list(agent, None, 0.0)
             run = self._last.get(run_id)
@@ -9986,8 +10036,10 @@ class Bridge:
         return await asyncio.to_thread(self.node_sessions.read, bot, self.runs, run, node, ref, goal, since)
 
     async def op_cli_title(self, p) -> dict:
-        """The title of one Claude Code session or Codex thread a SESSIONS chat runs (`agent`, `session`: the id the
-        agent reported, `cwd`: its folder), from the agent's own files; `""` when it has none yet."""
+        """The title of one Claude Code session or Codex thread a SESSIONS row runs (`agent`, `session`: the id the
+        agent reported, `cwd`: its folder), from the agent's own files; `""` when it has none yet. `model`: Claude
+        Code's model id from the same transcript (`""` for Codex, or before its first reply); `started`: when that
+        transcript's first line was stamped (Claude Code only, when it has one)."""
         agent, session, cwd = p.get("agent"), p.get("session"), p.get("cwd")
         if agent not in ("claude", "codex"):
             raise BridgeError("bad_request", "agent must be claude or codex")
@@ -9995,7 +10047,7 @@ class Bridge:
             raise BridgeError("bad_request", "session must be the agent's session id")
         if cwd is not None and (not isinstance(cwd, str) or not cwd):
             raise BridgeError("bad_request", "cwd must be a folder path")
-        return {"title": await asyncio.to_thread(self.cli.title, agent, session, cwd)}
+        return await asyncio.to_thread(self.cli.about, agent, session, cwd)
 
     async def op_routines_list(self, p) -> dict:
         return {"routines": read_routines(self._bot(p.get("bot"))["path"])}

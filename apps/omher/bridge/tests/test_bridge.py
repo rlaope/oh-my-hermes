@@ -3981,9 +3981,10 @@ class CliRunsClaude(unittest.TestCase):
         with open(self.main, "a", encoding="utf-8") as fh:
             fh.write(line[:40])  # mid-write
         self.assertEqual(cli.list("claude", None, 0.0)["runs"][0]["counts"]["nodes"], 3)
+        run = cli.get(f"claude:{CLAUDE_SID}")["run"]  # by id too: the half-written line waits
+        self.assertEqual(len(run["nodes"]), 3)
         with open(self.main, "a", encoding="utf-8") as fh:
             fh.write(line[40:])
-        run = cli.get(f"claude:{CLAUDE_SID}")["run"]
         self.assertEqual(cli.list("claude", None, 0.0)["runs"][0]["counts"]["nodes"], 4)
         self.assertIn("Trace the slow query", [n["label"] for n in cli.get(f"claude:{CLAUDE_SID}")["run"]["nodes"]])
         self.assertEqual(len(run["nodes"]), 3)  # the earlier object is not mutated by the later read
@@ -4235,6 +4236,52 @@ class CliRunsOps(BridgeCase):
             self.assertEqual(len(r["result"]["run"]["nodes"]), 3)
 
 
+class CliRunById(unittest.TestCase):
+    """`runs.get` for a focused conversation: its transcript by its own id, however old and however many newer ones."""
+
+    def test_a_resumed_conversation_outside_the_list_still_has_its_subagents(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            homes = _cli_home(root)
+            _claude_layout(root)
+            later = FIXED_NOW + 60 * 86400  # resumed two months on: outside the list's week
+            cli = ob.CliRuns(homes, clock=lambda: later)
+            self.assertEqual(cli.list("claude", "/w/web-app")["runs"], [])
+            # the newest-files cap leaves it out of any list, too
+            with mock.patch.object(ob, "CLI_FILES", 0):
+                run = cli.get(f"claude:{CLAUDE_SID}")["run"]
+                self.assertEqual((run["id"], len(run["nodes"])), (f"claude:{CLAUDE_SID}", 3))
+                with self.assertRaises(ob.BridgeError):
+                    cli.get("claude:00000000-0000-4000-8000-000000000000")
+                with self.assertRaises(ob.BridgeError):
+                    cli.get("claude:../-w-web-app/x")
+
+    def test_follow_up_reads_on_one_reader_see_the_transcript_grow(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            homes = _cli_home(root)
+            path = _claude_layout(root) / f"{CLAUDE_SID}.jsonl"
+            cli = ob.CliRuns(homes, clock=lambda: FIXED_NOW)
+            run_id = f"claude:{CLAUDE_SID}"
+            self.assertEqual(len(cli.get(run_id)["run"]["nodes"]), 3)
+            base = {"isSidechain": False, "cwd": "/w/web-app", "sessionId": CLAUDE_SID, "timestamp": "2026-11-03T00:00:00Z"}
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps({**base, "type": "assistant", "message": {"model": "claude-opus-5-5", "content": [{
+                    "type": "tool_use", "id": "toolu_grown_subagent", "name": "Agent",
+                    "input": {"description": "Subagent started after the first read", "subagent_type": "general-purpose"}}]}}) + "\n")
+            os.utime(path, (FIXED_NOW, FIXED_NOW))
+            node = next(n for n in cli.get(run_id)["run"]["nodes"] if n["id"].endswith("toolu_grown_subagent"))
+            self.assertEqual(node["state"], "running")
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps({**base, "type": "user", "message": {"role": "user", "content": [{
+                    "tool_use_id": "toolu_grown_subagent", "type": "tool_result",
+                    "content": [{"type": "text", "text": "Grown subagent finished."}]}]}}) + "\n")
+            nodes = cli.get(run_id)["run"]["nodes"]
+            self.assertEqual(len(nodes), 4)
+            node = next(n for n in nodes if n["id"].endswith("toolu_grown_subagent"))
+            self.assertEqual(node["state"], "done")
+
+
 class CliTitle(unittest.TestCase):
     """`cli.title`: the name a SESSIONS chat's conversation has in Claude Code's or Codex's own files."""
 
@@ -4277,6 +4324,60 @@ class CliTitle(unittest.TestCase):
             fh.write(json.dumps({"type": "custom-title", "customTitle": "x" * 300, "sessionId": CLAUDE_SID}) + "\n")
         self.assertEqual(len(cli.title("claude", CLAUDE_SID, "/w/web-app")), ob.CLI_TITLE)
 
+    def test_the_model_is_the_last_main_thread_reply_s_and_a_subagent_s_or_a_synthetic_one_is_not(self):
+        cli = self.cli()
+        first = cli.about("claude", CLAUDE_SID, "/w/web-app")
+        self.assertTrue(first["model"].startswith("claude-"), first)
+        # the transcript's first stamped line (2026-10-27T02:42:56.033Z in the fixture)
+        self.assertAlmostEqual(first["started"], 1793068976.033, places=2)
+        rows = _jsonl(self.main)
+        rows.append({"type": "assistant", "isSidechain": False, "sessionId": CLAUDE_SID,
+                     "message": {"model": "claude-opus-5-5", "role": "assistant", "content": [{"type": "text", "text": "hi"}]}})
+        rows.append({"type": "assistant", "isSidechain": True, "sessionId": CLAUDE_SID,
+                     "message": {"model": "claude-haiku-4-5", "role": "assistant", "content": []}})
+        rows.append({"type": "assistant", "isSidechain": False, "sessionId": CLAUDE_SID,
+                     "message": {"model": "<synthetic>", "role": "assistant", "content": []}})
+        _write_jsonl(self.main, rows)
+        self.assertEqual(cli.about("claude", CLAUDE_SID, "/w/web-app"), {"title": "Ship the API fix", "model": "claude-opus-5-5", "started": first["started"]})
+        # a reply's text that spells a model is not one: only the message's own head is matched
+        rows.append({"type": "user", "sessionId": CLAUDE_SID, "message": {"role": "user", "content": 'say "message":{"model":"fake"}'}})
+        _write_jsonl(self.main, rows)
+        self.assertEqual(cli.about("claude", CLAUDE_SID, "/w/web-app")["model"], "claude-opus-5-5")
+        self.assertEqual(cli.about("codex", CODEX_ROOT), {"title": "Harden the API server", "model": ""})
+        self.assertEqual(cli.about("pi", CLAUDE_SID), {"title": "", "model": ""})
+
+    def fold(self, *rows: dict) -> dict:
+        st = ob._title_state()
+        for r in rows:
+            ob._title_fold(st, json.dumps(r, separators=(",", ":")).encode() + b"\n")
+        return st
+
+    def test_the_checked_in_transcript_s_model_and_start_are_its_top_level_fields(self):
+        rows = _jsonl(self.main)
+        model = [r["message"]["model"] for r in rows if r.get("type") == "assistant" and not r.get("isSidechain")
+                 and not r["message"]["model"].startswith("<")][-1]
+        got = self.cli().about("claude", CLAUDE_SID, "/w/web-app")
+        self.assertEqual((got["model"], got["started"]), (model, ob._iso_ts(next(r["timestamp"] for r in rows if "timestamp" in r))))
+
+    def test_a_reply_s_model_is_read_in_any_key_order(self):
+        st = self.fold({"type": "assistant", "isSidechain": False,
+                        "message": {"id": "msg_1", "type": "message", "model": "claude-opus-5-5", "content": []}})
+        self.assertEqual(st["model"], "claude-opus-5-5")
+
+    def test_a_nested_assistant_in_a_tool_result_is_not_a_main_thread_reply(self):
+        st = self.fold({"type": "user", "toolUseResult": {"type": "assistant", "message": {"model": "claude-haiku-4-5"}}})
+        self.assertEqual(st["model"], "")
+        # nor a reply's text that spells one
+        st = self.fold({"type": "user", "message": {"role": "user", "content": '{"type":"assistant","message":{"model":"fake"}}'}})
+        self.assertEqual(st["model"], "")
+
+    def test_the_start_is_the_line_s_own_timestamp_never_a_nested_one(self):
+        st = self.fold({"type": "user", "toolUseResult": {"timestamp": "2020-04-01T00:00:00Z"}, "timestamp": "2026-11-28T00:00:00Z"})
+        self.assertEqual(st["started"], ob._iso_ts("2026-11-28T00:00:00Z"))
+        # a first line with only a nested stamp gives none; the next line's own does
+        st = self.fold({"type": "user", "toolUseResult": {"timestamp": "2020-04-01T00:00:00Z"}}, {"type": "user", "timestamp": "2026-11-28T01:00:00Z"})
+        self.assertEqual(st["started"], ob._iso_ts("2026-11-28T01:00:00Z"))
+
     def test_message_text_that_mentions_a_title_is_not_a_title(self):
         rows = [r for r in _jsonl(self.main) if r.get("type") != "ai-title"]
         rows.append({"type": "user", "message": {"role": "user", "content": 'say {"type":"ai-title","aiTitle":"fake"}'},
@@ -4306,9 +4407,10 @@ class CliTitleOps(BridgeCase):
             env.bridge.cli = ob.CliRuns(homes, clock=lambda: FIXED_NOW)
             s = await self.open(env)
             r = await s.req("cli.title", agent="claude", session=CLAUDE_SID, cwd="/w/web-app")
-            self.assertEqual(r["result"], {"title": "Ship the API fix"}, r)
+            self.assertEqual(r["result"]["title"], "Ship the API fix", r)
+            self.assertTrue(r["result"]["model"].startswith("claude-"), r)
             r = await s.req("cli.title", agent="codex", session=CODEX_ROOT)
-            self.assertEqual(r["result"], {"title": "Harden the API server"}, r)
+            self.assertEqual(r["result"], {"title": "Harden the API server", "model": ""}, r)
             for bad in ({"agent": "pi", "session": CLAUDE_SID}, {"agent": "claude", "session": "../../etc/passwd"},
                         {"agent": "claude", "session": CLAUDE_SID + "/x"}, {"agent": "claude"},
                         {"agent": "claude", "session": CLAUDE_SID, "cwd": ""}):
