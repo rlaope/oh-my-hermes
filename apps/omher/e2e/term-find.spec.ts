@@ -102,6 +102,26 @@ test("find also reaches text that scrolled out of the screen", async ({ page }) 
   await expect(count(page)).toHaveText(/ of 3$/);
 });
 
+test("a Korean name matches as `ls` prints it on macOS (decomposed) and as typed (composed), each once", async ({ page }) => {
+  await openApp(page);
+  await newTerminal(page);
+  const word = "보고서";
+  await feed(page, `\r\n${word.normalize("NFD")}.pdf\r\nbeta\r\n${word}.hwp\r\n`);
+  await find(page);
+  const selected = () =>
+    page.evaluate(() => [...(window as unknown as { __omherTerms: Set<{ getSelection(): string }> }).__omherTerms].map((t) => t.getSelection()).find(Boolean) ?? "");
+  for (const typedForm of [word, word.normalize("NFD")]) {
+    await input(page).fill(typedForm);
+    await expect(count(page)).toHaveText(/^[12] of 2$/);
+    // Enter moves from one spelling's match to the other's
+    await expect.poll(selected).not.toBe("");
+    const first = await selected();
+    await page.keyboard.press("Enter");
+    await expect.poll(selected).not.toBe(first);
+    expect([first, await selected()].sort()).toEqual([word, word.normalize("NFD")].sort());
+  }
+});
+
 test("the counter is not clipped and the bar stays inside a narrow window", async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 700 });
   await terminalWithText(page);

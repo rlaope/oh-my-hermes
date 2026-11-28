@@ -30,7 +30,7 @@ import { groupOf, groupSessions, paneOf } from "./splitState";
 import type { Layout } from "../terminal/layout";
 import { usePendingRequests } from "./termShare";
 import { countRender, useAnyFlowing, useTermFace } from "./termActivity";
-import { addFolder, addedFolders, allCollapsed, collapseOthers, folderGroups, pathKey, folderSummary, isCollapsed, isTildePath, getFolderPrefs, moveFolder, orderFolders, removeFolder, revealFolder as openFolder, setAllFolders, setFolderGone, setFolderPrefs, toggleFolder, useFolderPrefs, useGoneFolders, withAdded } from "./folders";
+import { addFolder, addedFolders, allCollapsed, collapseOthers, folderGroups, isAddedFolder, pathKey, pathSpelling, folderSummary, isCollapsed, isTildePath, getFolderPrefs, moveFolder, orderFolders, removeFolder, revealFolder as openFolder, setAllFolders, setFolderGone, setFolderPrefs, toggleFolder, useFolderPrefs, useGoneFolders, withAdded } from "./folders";
 import { ChevronDown, ChevronRight } from "../ui/icons";
 import { CUE_PX, useEdgeFade } from "../sidebar/edgeFade";
 import { getHost, type PastChat } from "./host";
@@ -45,6 +45,7 @@ import type { Account, AccountCli, AccountGroup } from "../lib/protocol";
 import { useAccounts } from "../settings/accounts/useAccounts";
 import { accountForNewSessions } from "../settings/accounts/rules";
 import { CloseToasts } from "./CloseToasts";
+import { matchesSearch } from "../lib/textMatch";
 
 /** The Accounts CLI a new session of `agent` signs in as (mirrors `session_cli` in src-tauri/src/accounts.rs). */
 const SESSION_CLI: Partial<Record<AgentId, AccountCli>> = { claude: "claude", codex: "codex", grok: "grok" };
@@ -72,8 +73,9 @@ export async function addTermFolder(): Promise<void> {
   const before = sx.getState();
   const picked = await sx.pickFolder(draftFolder(before.recent, before.home));
   if (!picked || isTildePath(picked)) return;
-  // the folder as the list names it: another spelling of a listed folder (`…/web-app/`) is that folder
-  const got = pathKey(picked);
+  // the folder as the dialog spelled it (another spelling of a listed folder, `…/web-app/` or a composed name of a
+  // folder a shell reported decomposed, is that folder: addFolder compares keys)
+  const got = pathSpelling(picked);
   const now = sx.getState();
   const listed = folderGroups(now.list.filter((r) => isTerminalRec(now.agents, r))).map((g) => g.cwd);
   const prefs = getFolderPrefs();
@@ -81,7 +83,7 @@ export async function addTermFolder(): Promise<void> {
   setFolderGone(got, false);
   setFolderPrefs(addFolder(prefs, got, [...listed, ...addedFolders(prefs)]));
   // the group comes into view (a long list may hold it below the fold)
-  requestAnimationFrame(() => [...document.querySelectorAll<HTMLElement>('[data-testid="term-group"]')].find((g) => g.dataset.cwd === got)?.scrollIntoView({ block: "nearest" }));
+  requestAnimationFrame(() => [...document.querySelectorAll<HTMLElement>('[data-testid="term-group"]')].find((g) => pathKey(g.dataset.cwd ?? "") === pathKey(got))?.scrollIntoView({ block: "nearest" }));
 }
 
 export function SessionsHeader() {
@@ -708,12 +710,12 @@ function SessionStart() {
   );
 }
 
-/** Whether session `rec` matches the sidebar search `needle` (lower case): by its name, as its row shows it, or its
- *  folder. */
+/** Whether session `rec` matches the sidebar search `needle` (a `searchKey`: case ignored, composed): by its name, as
+ *  its row shows it, or its folder (which a macOS shell reports decomposed). */
 export function sessionMatches(rec: SessionRec, needle: string): boolean {
   if (!needle) return true;
   const name = rec.status === "draft" ? t("ss.newTitle") : pickTitle(rec, folderName(rec.cwd)).title;
-  return [name, rec.cwd].some((v) => v.toLowerCase().includes(needle));
+  return matchesSearch(needle, name, rec.cwd);
 }
 
 /** Who shows a row's "Stop?" (the mounted SessionList). */
@@ -842,7 +844,7 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
   // is a group too, and a search keeps an added one only when its path matches
   const firsts = new Set(cards.map((g) => cardRecs(g)[0]!.id));
   const ordered = folderGroups(terms.filter((r) => firsts.has(r.id) || shown.includes(r))).map((g) => ({ cwd: g.cwd, rows: g.rows.filter((r) => !inCard.has(r.id)) }));
-  const groups = orderFolders(withAdded(ordered, needle ? added.filter((c) => c.toLowerCase().includes(needle)) : added), folders.order);
+  const groups = orderFolders(withAdded(ordered, needle ? added.filter((c) => matchesSearch(needle, c)) : added), folders.order);
   // asking before a running session closes, in its row's place (a split member's under its card)
   const confirmRow = (rec: SessionRec) => (
     <div
@@ -897,7 +899,7 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
             shut={shut}
             index={gi}
             all={all.map((x) => x.cwd)}
-            added={added.includes(g.cwd)}
+            added={isAddedFolder(folders, g.cwd)}
             summary={{ ...folderSummary(members.map((r) => (asks.has(r.id) ? "bell" : termStatus(r, ss.unseen[r.id], 0)))), running: members.filter((r) => (r.status === "running" || r.status === "starting") && termMarkAgent(r) !== null).length }}
             flowIds={shut ? members.filter((r) => (r.status === "running" || r.status === "starting") && !isNews(ss.unseen[r.id])).map((r) => r.id) : NO_IDS}
           />
@@ -939,7 +941,8 @@ function FolderGlyph() {
 function CollapseAllButton() {
   const ss = useSessions();
   const prefs = useFolderPrefs();
-  const all = [...new Set([...folderGroups(ss.list.filter((r) => isTerminalRec(ss.agents, r))).map((g) => g.cwd), ...addedFolders(prefs)])];
+  // one entry per folder, however a session and an added folder spell it
+  const all = withAdded(folderGroups(ss.list.filter((r) => isTerminalRec(ss.agents, r))), addedFolders(prefs)).map((g) => g.cwd);
   if (all.length < 2) return null;
   const shut = allCollapsed(prefs, all);
   const label = shut ? t("term.expandAll") : t("term.collapseAll");
@@ -1025,7 +1028,7 @@ function FolderHead({ cwd, home, shut, index, all, added, summary: base, flowIds
   }, [cwd]);
   const name = folderName(cwd);
   // a shell asked to start here ran in another folder: this one is no longer on disk (Remove from list still works)
-  const gone = useGoneFolders().includes(cwd);
+  const gone = useGoneFolders().includes(pathKey(cwd));
   const toggle = () => setFolderPrefs(toggleFolder(getFolderPrefs(), cwd));
   return (
     <div

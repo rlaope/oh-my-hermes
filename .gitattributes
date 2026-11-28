@@ -93,3 +93,7 @@ tests/fixtures/gateway_health/** text eol=lf
 
 # Run by bash in the omher workflow on windows-latest too, where a CRLF checkout breaks it.
 apps/omher/scripts/*.sh text eol=lf
+
+# The release guard's test-only signing fixtures: a minisign signature covers the payload's exact bytes, so
+# Windows autocrlf must not rewrite any of them (apps/omher/scripts/release-guard.test.mjs).
+apps/omher/scripts/release-guard-fixtures/** -text
