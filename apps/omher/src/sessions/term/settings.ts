@@ -72,6 +72,9 @@ export interface TermSettings {
   /** The person's own theme (Settings › Terminal › Import from…: a copy of another terminal app's profile), picked
    *  as `custom` in `themeDark` / `themeLight`. null: none. */
   custom: TermCustomTheme | null;
+  /** Colours the person changed by hand (Settings › Terminal › Customize colours), one set per app theme: editing
+   *  under the light app theme edits the light set. Picked as `edited` in `themeDark` / `themeLight`. */
+  edits: { dark: TermEdit | null; light: TermEdit | null };
 }
 
 /** Colour slots a custom theme keeps: the sixteen ANSI ones and the four of the screen. */
@@ -104,6 +107,36 @@ export interface TermCustomTheme {
   colors: Partial<Record<TermCustomKey, string>>;
 }
 
+/** What Customize colours keeps for one app theme: the theme it started from (Reset goes back to it) and each colour
+ *  changed, the theme's slots and the pane border (split dividers). */
+export const TERM_EDIT_KEYS = [...TERM_CUSTOM_KEYS, "border"] as const;
+export type TermEditKey = (typeof TERM_EDIT_KEYS)[number];
+export interface TermEdit {
+  base: string;
+  colors: Partial<Record<TermEditKey, string>>;
+}
+
+/** A colour as typed: `#rrggbb` (the `#` may be left out, any case) -> lower-case `#rrggbb`; anything else null. */
+export function cleanHex(v: string): string | null {
+  const m = /^#?([0-9a-f]{6})$/i.exec(v.trim());
+  return m ? `#${m[1].toLowerCase()}` : null;
+}
+
+/** A stored edit set: a base theme id and `#rrggbb` colours; anything else is dropped (no base: none). */
+export function parseTermEdit(v: unknown): TermEdit | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const o = v as Record<string, unknown>;
+  const base = typeof o.base === "string" && o.base.length <= 200 ? o.base : "";
+  if (!base) return null;
+  const raw = (o.colors && typeof o.colors === "object" ? o.colors : {}) as Record<string, unknown>;
+  const colors: TermEdit["colors"] = {};
+  for (const k of TERM_EDIT_KEYS) {
+    const c = raw[k];
+    if (typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c)) colors[k] = c.toLowerCase();
+  }
+  return { base, colors };
+}
+
 export const TERM_KEY = "omher.term";
 
 export const TERM_DEFAULTS: TermSettings = {
@@ -130,6 +163,7 @@ export const TERM_DEFAULTS: TermSettings = {
   undoClose: 10,
   defaultShell: "",
   custom: null,
+  edits: { dark: null, light: null },
 };
 
 /** A shell id as `shells_available` makes them: a Windows name or `unix:<absolute path>`; anything else is "". */
@@ -194,6 +228,10 @@ export function parseTermSettings(raw: unknown): TermSettings {
     undoClose: TERM_UNDO_CLOSE.includes(o.undoClose as number) ? (o.undoClose as number) : d.undoClose,
     defaultShell: cleanShellId(o.defaultShell),
     custom: parseCustomTheme(o.custom),
+    edits: (() => {
+      const e = (o.edits && typeof o.edits === "object" ? o.edits : {}) as Record<string, unknown>;
+      return { dark: parseTermEdit(e.dark), light: parseTermEdit(e.light) };
+    })(),
   };
 }
 
