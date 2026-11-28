@@ -1265,8 +1265,18 @@ function computerSwitch(b) {
 // rule 57: the bridge's FALLBACK_VALUE and FALLBACK_MAX, and its refusal for a bot on another computer
 const FALLBACK_VALUE = /^[A-Za-z0-9](?:[A-Za-z0-9._:/@-]{0,126}[A-Za-z0-9])?$/;
 const FALLBACK_MAX = 4;
+// a provider as the bridge's checks compare it (Hermes' normalize_provider): lowercase, and one alias of Hermes' own
+// table, so the picker's alias handling has something to meet
+const PROVIDER_ALIAS = { openai: "openrouter" };
+const providerId = (slug) => PROVIDER_ALIAS[String(slug).trim().toLowerCase()] ?? String(slug).trim().toLowerCase();
+// models.options: each provider with its id, as the bridge adds it for the backup picker (rule 57)
+const withIds = (providers) => providers.map((pr) => ({ ...pr, id: providerId(pr.slug) }));
 const fallbackOf = (b) => fallbacks.get(b.name) ?? { chain: [], editable: true, fail: "" };
-const fallbackRead = (b) => ({ chain: structuredClone(fallbackOf(b).chain), editable: fallbackOf(b).editable });
+const fallbackRead = (b) => {
+  const chain = structuredClone(fallbackOf(b).chain);
+  const names = new Set([...chain.map((e) => e.provider), models[b.name].provider]);
+  return { chain, editable: fallbackOf(b).editable, ids: Object.fromEntries([...names].map((n) => [n, providerId(n)])) };
+};
 function fallbackBot(p) {
   const b = needBotAny(p);
   if (b.host) throw new OpError("remote_bot", `A bot's backup model is set on the computer it runs on; ${b.host.label}'s bots run on another one.`);
@@ -1929,11 +1939,11 @@ const OPS = {
     for (const e of chain) {
       if (!e || typeof e !== "object" || Object.keys(e).sort().join() !== "model,provider") throw new OpError("bad_request", "each backup model is a provider and a model, nothing else");
       for (const k of ["provider", "model"]) if (typeof e[k] !== "string" || !FALLBACK_VALUE.test(e[k])) throw new OpError("bad_request", `not a ${k} id omher sets: '${e[k]}'`);
-      const key = `${e.provider.toLowerCase()} ${e.model.toLowerCase()}`;
+      const key = `${providerId(e.provider)} ${e.model.toLowerCase()}`;
       if (seen.has(key)) throw new OpError("bad_request", `${e.provider} · ${e.model} is listed twice`);
       seen.add(key);
-      // as the bridge compares, against the bot's model as bots.list gives it: case does not matter
-      if (key === `${models[b.name].provider.toLowerCase()} ${models[b.name].model.toLowerCase()}`) throw new OpError("bad_request", `${e.provider} · ${e.model} is ${b.display_name}'s own model; a backup model is another one`);
+      // as the bridge compares, against the bot's model as bots.list gives it: a provider's alias and case do not matter
+      if (key === `${providerId(models[b.name].provider)} ${models[b.name].model.toLowerCase()}`) throw new OpError("bad_request", `${e.provider} · ${e.model} is ${b.display_name}'s own model; a backup model is another one`);
     }
     if (!Array.isArray(p.base)) throw new OpError("bad_request", "the page sends the backup list it read as base");
     const now = fallbackOf(b);
@@ -2159,14 +2169,14 @@ const OPS = {
     const signed = notReady.get(b.name);
     const levels = routeLevels(b.name, models[b.name]);
     if (signed && SIGN_IN_MODELS[signed]) {
-      return { providers: [...PROVIDERS, SIGN_IN_MODELS[signed]], current: current(b.name), reasoning_levels: levels };
+      return { providers: withIds([...PROVIDERS, SIGN_IN_MODELS[signed]]), current: current(b.name), reasoning_levels: levels };
     }
     // a Hermes installed a minute ago with no account lists no provider at all (measured on Hermes 0.23.2)
     if (providerFixture === "empty") return { providers: [], current: current(b.name), reasoning_levels: levels };
     if (providerFixture === "long") {
-      return { providers: PROVIDERS_LONG.providers, current: { ...current(b.name), ...PROVIDERS_LONG.current }, reasoning_levels: levels };
+      return { providers: withIds(PROVIDERS_LONG.providers), current: { ...current(b.name), ...PROVIDERS_LONG.current }, reasoning_levels: levels };
     }
-    return { providers: providersOf(b.name), current: current(b.name), reasoning_levels: levels };
+    return { providers: withIds(providersOf(b.name)), current: current(b.name), reasoning_levels: levels };
   },
   "chat.set_model": (p) => {
     const b = needBot(p);

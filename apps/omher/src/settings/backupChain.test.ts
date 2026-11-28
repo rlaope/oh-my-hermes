@@ -20,6 +20,27 @@ describe("backup options", () => {
     expect(ids(got)).toEqual(["openai/gpt-6.1-terra", "openrouter/qwen/qwen3-coder"]);
   });
 
+  it("compare providers as the bridge does: an alias of a listed model or of the bot's own is not offered", () => {
+    // Hermes maps `openai` to `openrouter`: the bridge says so in `models.options` (each provider's id) and in
+    // `fallback.get` (the list's providers and the bot's own)
+    const providers = [
+      { slug: "openai", name: "OpenAI", models: ["x-ai/grok-4.7", "gpt-6.1-sol", "gpt-6.1-terra"] },
+      { slug: "openrouter", name: "OpenRouter", models: ["x-ai/grok-4.7", "qwen/qwen3-coder"] },
+    ];
+    const chain = [{ provider: "openrouter", model: "x-ai/grok-4.7" }];
+    const main = { provider: "openrouter", model: "gpt-6.1-sol" };
+    const withIds = modelRows(providers.map((p) => ({ ...p, id: "openrouter" })));
+    expect(ids(backupOptions(withIds, chain, main, { openrouter: "openrouter" }))).toEqual(["openai/gpt-6.1-terra", "openrouter/qwen/qwen3-coder"]);
+    // the list's provider given as an alias: still the same route
+    expect(ids(backupOptions(withIds, [{ provider: "openai", model: "qwen/qwen3-coder" }], main, { openai: "openrouter", openrouter: "openrouter" }))).toEqual([
+      "openai/x-ai/grok-4.7",
+      "openai/gpt-6.1-terra",
+      "openrouter/x-ai/grok-4.7",
+    ]);
+    // a bridge that gave no ids: lowercase, as before
+    expect(ids(backupOptions(modelRows(providers), chain, main))).toContain("openai/x-ai/grok-4.7");
+  });
+
   it("match the bridge's charset", () => {
     for (const ok of ["gpt-6.1-sol", "qwen3:8b", "claude-opus-4-5@20251101", "x-ai/grok-4.7"]) expect(BACKUP_VALUE.test(ok), ok).toBe(true);
     for (const bad of ["Opus 5.5", "-p", "a;b", "x:", "@x", "a,b", "a}b", "", "x".repeat(129)]) expect(BACKUP_VALUE.test(bad), bad).toBe(false);

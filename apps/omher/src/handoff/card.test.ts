@@ -112,8 +112,20 @@ describe("handoff card", () => {
     expect(card(reduce(settled, { type: "conn", status: "closed", now: T0 + 2000 }))).toEqual(card(settled));
   });
 
-  it("the thread is read again with no event (a restarted bot): its turn's end settles the card", () => {
-    let s = ev(handed(), { event: "turn.start" });
+  it("a read with no drop before it settles nothing: one between the handed text's send and its turn's start leaves it working", () => {
+    // the handed text is sent, the thread is read again (the person opens it) before Hermes starts the turn
+    let s = reduce(handed(), { type: "local.user", bot: "fold:friren:th1", id: "local-1", text: "Handoff from omher: …", now: T0 + 10 });
+    s = reduce(s, { type: "send.ok", bot: "fold:friren:th1", id: "local-1", now: T0 + 20 });
+    s = reduce(s, {
+      type: "chat.opened",
+      bot: "fold:friren:th1",
+      res: opened([{ id: "u1", role: "user", text: "Handoff from omher: …", ts: T0 / 1000 }]),
+      now: T0 + 30,
+      since: T0 + 25,
+    });
+    expect(card(s)).toEqual(card(handed()));
+    // an answer read while the turn's events still come does not settle it either: the turn's end does
+    s = ev(s, { event: "turn.start" }, T0 + 40);
     s = reduce(s, {
       type: "chat.opened",
       bot: "fold:friren:th1",
@@ -124,7 +136,24 @@ describe("handoff card", () => {
       now: T0 + 5000,
       since: T0 + 4000,
     });
+    expect(card(s).phase).toBe("working");
+    s = ev(s, { event: "message", id: "f1", text: "Done there." }, T0 + 5100);
+    s = ev(s, { event: "turn.end", outcome: "done" }, T0 + 5200);
     expect(card(s)).toMatchObject({ phase: "done", answer: "Done there." });
+  });
+
+  it("the bot's gateway drops before the turn starts: the card stops, and the thread's next read settles it", () => {
+    let s = reduce(handed(), { type: "local.user", bot: "fold:friren:th1", id: "local-1", text: "Handoff from omher: …", now: T0 + 10 });
+    s = ev(s, { event: "folder.closed", reason: "gateway disconnected" }, T0 + 20);
+    expect(card(s)).toMatchObject({ phase: "stopped", outcome: "interrupted", lost: true, error: "gateway disconnected" });
+    s = reduce(s, {
+      type: "chat.opened",
+      bot: "fold:friren:th1",
+      res: { ...opened([{ id: "u1", role: "user", text: "Handoff from omher: …", ts: T0 / 1000 }]), running: true },
+      now: T0 + 5000,
+      since: T0 + 4000,
+    });
+    expect(card(s)).toEqual({ ...card(handed()), phase: "working" });
   });
 
   it("the first send into the thread is refused: no turn starts, and the card stops with the error", () => {
@@ -153,6 +182,49 @@ describe("handoff card", () => {
     expect(card(reduce(h, { type: "queue.clear", bot: "kami", ids: ["local-7"] })).given).toBeUndefined();
     // it went out: given stays
     expect(card(reduce(h, { type: "queue.take", bot: "kami", id: "local-7", now: T0 + 20 })).given).toBe("local-7");
+  });
+
+  it("Given follows its own row only: sent, then the chat read again, deleting another waiting row leaves it given", () => {
+    const done = ev(ev(handed(), { event: "turn.start" }), { event: "turn.end", outcome: "done" });
+    const id = card(done).id;
+    // Give went out (its row local-7), then Kami's chat is read again: Hermes' copy replaces local-7
+    let s = reduce(done, { type: "handoff.given", chat: "kami", id, row: "local-7" });
+    s = reduce(s, { type: "local.user", bot: "kami", id: "local-7", text: "Answer from Friren: …", now: T0 + 10 });
+    s = reduce(s, { type: "send.ok", bot: "kami", id: "local-7", now: T0 + 20 });
+    s = reduce(s, {
+      type: "chat.opened",
+      bot: "kami",
+      res: opened([
+        { id: "a1", role: "assistant", text: "Retry three times.", ts: T0 / 1000 - 60 },
+        { id: "u7", role: "user", text: "Answer from Friren: …", ts: T0 / 1000 + 0.01 },
+      ]),
+      now: T0 + 30,
+    });
+    expect(s.chats.kami.items.some((i) => i.kind === "user" && i.id === "local-7")).toBe(false);
+    expect(card(s).given).toBe("local-7");
+    // a turn runs and the person types two messages, which wait; deleting one, or clearing both, keeps Give given
+    s = reduce(s, { type: "event", ev: { event: "turn.start", bot: "kami" }, now: T0 + 40 });
+    s = reduce(s, { type: "local.user", bot: "kami", id: "local-8", text: "and then?", now: T0 + 50, held: true });
+    s = reduce(s, { type: "local.user", bot: "kami", id: "local-9", text: "also", now: T0 + 60, held: true });
+    expect(s.chats.kami.queue).toEqual(["local-8", "local-9"]);
+    const dropped = reduce(s, { type: "queue.drop", bot: "kami", id: "local-8" });
+    expect(dropped.chats.kami.queue).toEqual(["local-9"]);
+    expect(card(dropped).given).toBe("local-7");
+    expect(card(reduce(s, { type: "queue.clear", bot: "kami", ids: ["local-8", "local-9"] })).given).toBe("local-7");
+    // a drop of the given row itself, which already went out and is no longer there, changes nothing either
+    expect(card(reduce(s, { type: "queue.drop", bot: "kami", id: "local-7" })).given).toBe("local-7");
+  });
+
+  it("a held Give deleted before it went out offers Give again; deleting a row beside it does not", () => {
+    const done = ev(ev(handed(), { event: "turn.start" }), { event: "turn.end", outcome: "done" });
+    const id = card(done).id;
+    let h = reduce(done, { type: "handoff.given", chat: "kami", id, row: "local-7" });
+    h = reduce(h, { type: "local.user", bot: "kami", id: "local-7", text: "Answer from Friren: …", now: T0 + 10, held: true });
+    h = reduce(h, { type: "local.user", bot: "kami", id: "local-8", text: "and then?", now: T0 + 20, held: true });
+    expect(card(reduce(h, { type: "queue.drop", bot: "kami", id: "local-8" })).given).toBe("local-7");
+    expect(card(reduce(h, { type: "queue.clear", bot: "kami", ids: ["local-8"] })).given).toBe("local-7");
+    expect(card(reduce(h, { type: "queue.drop", bot: "kami", id: "local-7" })).given).toBeUndefined();
+    expect(card(reduce(h, { type: "queue.clear", bot: "kami", ids: ["local-7", "local-8"] })).given).toBeUndefined();
   });
 
   it("a thread's link line under the answer goes below its handoff card, not above it", () => {

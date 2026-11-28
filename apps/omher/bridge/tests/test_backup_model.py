@@ -22,6 +22,11 @@ BOT = "demo-bot"
 PRIMARY = "model:\n  default: gpt-6.1-sol\n  provider: openai\n"
 
 
+def ids(*providers: str) -> dict:
+    """`fallback.get`'s `ids`: each provider as the bridge's checks compare it."""
+    return {p: ob.fallback_provider_id(p) for p in providers}
+
+
 class Argv(unittest.TestCase):
     def test_one_fixed_argv_with_a_flow_literal_and_no_quote(self):
         chain = [{"provider": "openrouter", "model": "anthropic/claude-sonnet-4.5"}, {"provider": "ollama", "model": "qwen3:8b"}]
@@ -168,9 +173,9 @@ class Ops(unittest.TestCase):
     def test_set_runs_once_and_returns_what_hermes_stored(self):
         chain = [{"provider": "openrouter", "model": "x-ai/grok-4.7"}]
         got = self.op("set", chain=chain)
-        self.assertEqual(got, {"outcome": "ok", "chain": chain, "editable": True})
+        self.assertEqual(got, {"outcome": "ok", "chain": chain, "editable": True, "ids": ids("openrouter", "openai")})
         self.assertEqual(self.runs, [("/stub/hermes", BOT, chain, self.home, ob.FALLBACK_TIMEOUT)])
-        self.assertEqual(self.op("get"), {"chain": chain, "editable": True})
+        self.assertEqual(self.op("get"), {"chain": chain, "editable": True, "ids": ids("openrouter", "openai")})
         self.assertEqual(self.op("set", chain=[])["chain"], [])
 
     def test_the_page_sends_a_bot_and_a_chain_and_nothing_else(self):
@@ -223,6 +228,86 @@ class Ops(unittest.TestCase):
         self.assertEqual(next(r for r in got if isinstance(r, ob.BridgeError)).code, "busy")
         self.assertEqual(self.bridge._fallback_busy, set())
 
+    def test_the_read_back_runs_while_the_bot_is_still_taken(self):
+        """A second set must not slip in between the run and the read the first one reports."""
+        taken = []
+        read = self.bridge._fallback_read
+
+        async def watched(bot):
+            taken.append(BOT in self.bridge._fallback_busy)
+            return await read(bot)
+        with mock.patch.object(self.bridge, "_fallback_read", watched):
+            self.op("set", chain=[{"provider": "openrouter", "model": "x-ai/grok-4.7"}], base=[])
+        self.assertEqual(taken, [True, True])
+        self.assertEqual(self.bridge._fallback_busy, set())
+
+    def test_a_cancelled_set_keeps_the_bot_taken_until_hermes_ends(self):
+        import threading
+        started, finish = threading.Event(), threading.Event()
+
+        def slow(chain):
+            started.set()
+            finish.wait(10)
+            return self.store(chain)
+        self.effect = slow
+
+        async def go():
+            task = asyncio.ensure_future(self.bridge.op_fallback_set(
+                {"bot": BOT, "chain": [{"provider": "openrouter", "model": "x-ai/grok-4.7"}], "base": []}))
+            while not started.is_set():
+                await asyncio.sleep(0.01)
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+            # `hermes` still runs: a second set is refused, not run beside it
+            self.assertIn(BOT, self.bridge._fallback_busy)
+            with self.assertRaises(ob.BridgeError) as cm:
+                await self.bridge.op_fallback_set({"bot": BOT, "chain": [], "base": []})
+            self.assertEqual(cm.exception.code, "busy")
+            finish.set()
+            for _ in range(500):
+                if BOT not in self.bridge._fallback_busy:
+                    break
+                await asyncio.sleep(0.01)
+            self.assertEqual(self.bridge._fallback_busy, set())
+        asyncio.run(go())
+        self.assertEqual(len(self.runs), 1)
+
+    def test_a_normalizer_that_raises_reads_as_lowercase(self):
+        """Hermes' `normalize_provider` scans the profiles' provider overlays and can raise anything: the bridge then
+        compares in lowercase, as Hermes' own guard falls back, instead of failing the read or the set."""
+        import types
+
+        def boom(name, overlay_profiles=None):
+            raise RuntimeError("overlay scan broke")
+        fake = types.ModuleType("hermes_cli.providers")
+        fake.normalize_provider = boom
+        with mock.patch.dict(sys.modules, {"hermes_cli": types.ModuleType("hermes_cli"), "hermes_cli.providers": fake}):
+            self.assertEqual(ob.fallback_provider_id(" OpenAI "), "openai")
+            self.assertEqual(self.op("get"), {"chain": [], "editable": True, "ids": {"openai": "openai"}})
+            chain = [{"provider": "openrouter", "model": "x-ai/grok-4.7"}]
+            self.assertEqual(self.op("set", chain=chain)["outcome"], "ok")
+            e = self.refused("bad_request", chain=[{"provider": "OpenAI", "model": "gpt-6.1-sol"}],
+                             base=[{"provider": "openrouter", "model": "x-ai/grok-4.7"}])
+            self.assertIn("own model", e.message)
+
+    def test_get_gives_each_provider_as_the_checks_compare_it(self):
+        """`ids`: the page offers no alias of a listed model or of the bot's own (Hermes maps `openai` to
+        `openrouter`, so `openai · m` is `openrouter · m` to `fallback.set`)."""
+        self.store([{"provider": "openrouter", "model": "x-ai/grok-4.7"}])
+        got = self.op("get")
+        self.assertEqual(got["ids"], ids("openrouter", "openai"))
+        self.assertEqual(set(got), {"chain", "editable", "ids"})
+        try:
+            from hermes_cli.providers import normalize_provider  # noqa: F401
+        except ImportError:
+            return
+        self.assertEqual(got["ids"]["openai"], "openrouter")
+        e = self.refused("bad_request", chain=[{"provider": "openrouter", "model": "x-ai/grok-4.7"},
+                                               {"provider": "openai", "model": "x-ai/grok-4.7"}],
+                         base=[{"provider": "openrouter", "model": "x-ai/grok-4.7"}])
+        self.assertIn("listed twice", e.message)
+
     def test_a_list_changed_elsewhere_is_refused_and_never_written_over(self):
         self.store([{"provider": "openrouter", "model": "x-ai/grok-4.7"}])  # set elsewhere after the page read none
         e = self.refused("changed", chain=[{"provider": "openai", "model": "gpt-6.1-terra"}], base=[])
@@ -257,7 +342,8 @@ class Ops(unittest.TestCase):
     def test_a_chain_written_in_hermes_config_is_never_rewritten(self):
         text = PRIMARY + "fallback_providers:\n  - provider: custom\n    model: m\n    base_url: http://127.0.0.1:9/v1\n"
         self.config.write_text(text, encoding="utf-8")
-        self.assertEqual(self.op("get"), {"chain": [{"provider": "custom", "model": "m", "custom": True}], "editable": False})
+        self.assertEqual(self.op("get"), {"chain": [{"provider": "custom", "model": "m", "custom": True}], "editable": False,
+                                          "ids": ids("custom", "openai")})
         self.refused("not_editable", chain=[])
         self.config.write_text(PRIMARY + "fallback_model: {provider: a, model: b}\n", encoding="utf-8")
         self.refused("not_editable", chain=[{"provider": "c", "model": "d"}])

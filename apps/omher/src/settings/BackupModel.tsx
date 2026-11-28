@@ -56,7 +56,7 @@ export function BackupModel({ bot }: { bot: Bot }) {
 
   const chain = read?.chain ?? [];
   const rows = useMemo(
-    () => backupOptions(modelRows(opts?.providers ?? []), chain, { provider: bot.provider, model: bot.model }),
+    () => backupOptions(modelRows(opts?.providers ?? []), chain, { provider: bot.provider, model: bot.model }, read?.ids),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [opts, read, bot.provider, bot.model],
   );
@@ -76,7 +76,7 @@ export function BackupModel({ bot }: { bot: Bot }) {
     try {
       // the list this page read goes too: a change made elsewhere since then is refused, never written over
       const out = await s.fallbackSet(bot.name, next, chain.map(({ provider, model }) => ({ provider, model })));
-      setRead({ chain: out.chain, editable: out.editable });
+      setRead({ chain: out.chain, editable: out.editable, ids: out.ids });
       if (out.outcome !== "ok") setErr(t("page.failed", { error: out.line ?? "" }));
     } catch (e) {
       if ((e as { code?: string } | null)?.code !== "changed") setErr(errorLine(e, bot.display_name));

@@ -391,10 +391,12 @@ export interface BackupModelEntry {
   custom?: true;
 }
 /** A bot's backup models in Hermes' order. `editable` false: the list was written in Hermes' config (a custom entry,
- *  the legacy `fallback_model` key), so omher shows it and changes nothing. */
+ *  the legacy `fallback_model` key), so omher shows it and changes nothing. `ids`: each provider of the list and the
+ *  bot's own, as `fallback.set` compares it (Hermes' `normalize_provider`: `openai` is `openrouter`). */
 export interface BackupChain {
   chain: BackupModelEntry[];
   editable: boolean;
+  ids?: Record<string, string>;
 }
 /** `fallback.set`: `ok`, or `failed` with Hermes' own words; either way the chain as read back from the file. */
 export type BackupSet = BackupChain & { outcome: "ok" | "failed"; line?: string };
@@ -508,6 +510,8 @@ export interface ModelProvider {
   slug: string;
   name: string;
   models: string[];
+  /** The provider as a bot's backup chain compares it (Hermes' `normalize_provider`, BOUNDARY rule 57). */
+  id?: string;
 }
 
 export interface ModelCurrent {

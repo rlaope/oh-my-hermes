@@ -3655,13 +3655,16 @@ FALLBACK_VALUE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9._:/@-]{0,126}[A-Za-z0-9])
 
 def fallback_provider_id(provider: str) -> str:
     """*provider* as Hermes' fallback chain compares it (`_entry_identity`): through Hermes' own `normalize_provider`,
-    so an alias is its canonical id (`opencode-zen` is `opencode`); lowercased, as Hermes then does too, where that
-    is not importable."""
+    so an alias is its canonical id (`opencode-zen` is `opencode`); lowercased, as Hermes' own guard falls back, where
+    that is not importable or the call fails (it scans the profiles' provider overlays, which can raise anything)."""
     try:
         from hermes_cli.providers import normalize_provider
     except ImportError:  # Hermes' checkout is not on this interpreter's path
         return provider.strip().lower()
-    return normalize_provider(provider)
+    try:
+        return normalize_provider(provider)
+    except Exception:  # noqa: BLE001 - Hermes' overlay scan reads profiles and plugins and raises its own errors
+        return provider.strip().lower()
 
 
 def fallback_literal(chain: list[dict]) -> str:
@@ -9642,6 +9645,11 @@ class Bridge:
             models = [m if isinstance(m, str) else str(m.get("id") or m.get("name") or "") for m in pr.get("models") or []]
             providers.append({"slug": str(pr.get("slug") or ""), "name": str(pr.get("name") or pr.get("slug") or ""),
                               "models": [m for m in models if m]})
+        # each provider as a bot's backup chain compares it (rule 57), so the backup picker offers no alias of a model
+        # already listed or of the bot's own
+        ids = await asyncio.to_thread(lambda: [fallback_provider_id(pr["slug"]) for pr in providers])
+        for pr, pid in zip(providers, ids):
+            pr["id"] = pid
         reasoning = conn.bot["reasoning"]
         sess_model = sess_provider = wire = ""
         if conn.main_id:
@@ -10550,11 +10558,16 @@ class Bridge:
     # fallback_argv per bot at a time, and the page gets the chain read back from the file, what Hermes stored.
 
     async def _fallback_read(self, bot: dict) -> dict:
+        """The chain (fallback_chain) and `ids`: each provider of it and the bot's own, as the checks compare it
+        (fallback_provider_id), so the page offers nothing `fallback.set` refuses as listed twice or the bot's own."""
         try:
-            return await asyncio.to_thread(fallback_chain, bot["path"])
+            read = await asyncio.to_thread(fallback_chain, bot["path"])
         except Exception as e:  # noqa: BLE001 - an unreadable file, or ruamel's or PyYAML's own parse error
             raise BridgeError("unreadable", f"omher could not read {bot['display_name']}'s config.yaml, so it shows and "
                                             "changes no backup model") from e
+        names = {e["provider"] for e in read["chain"]} | {bot["provider"]}
+        ids = await asyncio.to_thread(lambda: {n: _platform_text(fallback_provider_id(n), 128) for n in names})
+        return {**read, "ids": ids}
 
     async def op_fallback_get(self, p) -> dict:
         return await self._fallback_read(self._profile_bot(p))
@@ -10583,6 +10596,7 @@ class Bridge:
         if name in self._fallback_busy:
             raise BridgeError("busy", f"omher is still saving {bot['display_name']}'s backup models")
         self._fallback_busy.add(name)
+        release = True
         try:
             now = await self._fallback_read(bot)
             if not now["editable"]:
@@ -10594,10 +10608,20 @@ class Bridge:
             hermes = hermes_path()
             if not hermes:
                 raise BridgeError("no_hermes", "Hermes is not on this computer.")
-            code, output = await asyncio.to_thread(run_hermes_fallback, hermes, name, chain, self.home, FALLBACK_TIMEOUT)
+            run = asyncio.ensure_future(
+                asyncio.to_thread(run_hermes_fallback, hermes, name, chain, self.home, FALLBACK_TIMEOUT))
+            try:
+                code, output = await asyncio.shield(run)
+            except asyncio.CancelledError:
+                # the frame is cancelled but `hermes` runs on in its thread: the bot stays taken until that run ends
+                release = False
+                run.add_done_callback(lambda f: (self._fallback_busy.discard(name), f.cancelled() or f.exception()))
+                raise
+            # read back before the bot is free again, so a second set cannot write in between
+            after = await self._fallback_read(bot)
         finally:
-            self._fallback_busy.discard(name)
-        after = await self._fallback_read(bot)
+            if release:
+                self._fallback_busy.discard(name)
         if code == 0 and after["editable"] and after["chain"] == chain:
             return {"outcome": "ok", **after}
         said = hermes_said(output)

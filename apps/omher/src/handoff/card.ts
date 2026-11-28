@@ -24,13 +24,14 @@ export function handoffLost(card: HandoffItem, error: string): HandoffItem {
   return open(card) ? { ...card, phase: "stopped", outcome: "interrupted", error, lost: true } : card;
 }
 
-/** The target thread was read again (`target`: its chat after the read; a reconnect, a restarted bot), when no event
- *  may tell how its turn went: still running, the card works on; else it is done with the answer the thread holds, or
- *  stopped when it holds none. */
+/** The target thread was read again (`target`: its chat after the read) after the connection dropped and stopped the
+ *  card (`lost`), when no event may tell how its turn went: still running, the card works on; else it is done with the
+ *  answer the thread holds, or stopped when it holds none. A card the drop did not stop is left to the thread's own
+ *  events: a read between the handed text's send and its turn's start sees neither a turn nor an answer yet. */
 export function handoffOpened(card: HandoffItem, target: Chat | undefined): HandoffItem {
-  if (!open(card) && !card.lost) return card;
+  if (!card.lost) return card;
   const { lost: _l, outcome: _o, error: _e, ...base } = card;
-  if (target?.turn) return card.lost ? { ...base, phase: "working" } : card;
+  if (target?.turn) return { ...base, phase: "working" };
   const answer = lastAnswer(target);
   return answer ? { ...base, phase: "done", answer } : { ...base, phase: "stopped", outcome: "ended" };
 }
@@ -59,6 +60,10 @@ export function handoffStep(card: HandoffItem, ev: BridgeEvent, target: Chat | u
     case "turn.end":
       if (ev.outcome === "done" && !ev.error) return { ...card, phase: "done", answer: lastAnswer(target) };
       return { ...card, phase: "stopped", outcome: ev.outcome, ...(ev.error ? { error: ev.error } : {}) };
+    // the bot's gateway dropped before the handed text's turn started (a running one ends with turn.end first): as a
+    // dropped bridge connection, the thread's next read settles it
+    case "folder.closed":
+      return handoffLost(card, ev.reason ?? "");
     default:
       return card;
   }

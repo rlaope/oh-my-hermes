@@ -699,10 +699,17 @@ RULES = (
     "Of each entry only its provider and its model leave the bridge, each on one line, cleaned of control characters and"
     " clipped: an entry that holds anything else (`base_url`, `api_mode`, `api_key`, `key_env` and the rest) is marked"
     " custom with no other field, so its key, its key's name and its address never leave the bridge.",
+    "Beside the list `fallback.get` gives each of its providers and the bot's own provider as the bridge's checks"
+    " compare it (`ids`, through Hermes' own `normalize_provider`), and `models.options` gives each provider it lists"
+    " the same way (`id`); nothing else is added.",
     "and `fallback.set` refuses it before anything runs.",
     "A press runs one fixed argv, `hermes -p <bot> config set fallback_providers <list>` (`fallback.set`), with the whole"
     " new list (an empty one clears it), built by `fallback_argv` and run as rule 41 runs Hermes' commands"
-    " (`_run_hermes_argv`), one run at a time per bot, stopped after 60 seconds.",
+    " (`_run_hermes_argv`), one run at a time per bot, stopped after 60 seconds; the bot stays taken until the list is"
+    " read back after the run, and when the page's request is dropped meanwhile, until that run has ended.",
+    "The models offered are the ones the chat's model picker lists for that bot (`models.options`), without its own"
+    " model, one already in the list or an id the bridge refuses, each provider compared by the id the bridge gave for"
+    " it, so the page offers nothing `fallback.set` refuses as listed twice or as the bot's own.",
     "The page sends only the bot's name, the new list of providers and models, and the list it read and built that from"
     " (`base`): the key is the bridge's own constant, and no key, value, flag or field of the page's reaches Hermes.",
     "When the list the bridge reads fresh before the run is not `base` (it was changed elsewhere since the page read it),"
@@ -728,16 +735,23 @@ RULES = (
     " code fence the cut leaves open) with a line saying so;",
     "An `@name` of another bot in an answer only shows a chip that opens the same picker with that bot chosen; the chip"
     " and the mention send nothing.",
-    "the bridge connection dropping stops it, a read of the thread afterwards settles it from what the thread holds,"
-    " and a refused first send stops it with the error.",
+    "the bridge connection or the bot's gateway dropping stops it, a read of the thread after that drop settles it from"
+    " what the thread holds (a read with no drop before it settles nothing), and a refused first send stops it with the"
+    " error.",
+    "the picked bot (a mention chip's, else the first one when the picker opens) is never replaced by another: one that"
+    " goes offline while the picker is open is no longer picked, the picker says so, and Hand over waits for the person"
+    " to pick again.",
     'once done, Give to <bot> sends "Answer from <bot>:" and that answer, under the same cap, once into the chat that'
     " holds the card as the person's own message, as plain text through `chat.send` in a main chat and a thread alike:"
     " no skill token in it is hoisted to a command and no Reply target is attached, so neither handed text can start"
     " with `/` and run a Hermes command.",
     "While a turn runs there it goes as a typed message does: steered into that turn, or held in the steer queue when"
     " the queue is paused, other messages wait there, or the chat waits to be read again after a reconnect.",
-    "Give reads Given only while the message that carries it stands: a refused send, or a held one deleted from the"
-    " queue, offers Give again.",
+    "Give reads Given once pressed, and only the message that carries it undoes that: its send refused, or that"
+    " message deleted from the queue while it waits, offers Give again; deleting or clearing other messages, or reading"
+    " the chat again after it went out, does not.",
+    "That waiting message has no Edit (Delete and Send now stay) and is not put back in the message box at a reload, so"
+    " the other bot's text only ever goes as the plain text Give made.",
     "Nothing returns by itself and nothing chains: an answer never goes on to a third bot, or back, without a press.",
     "A bot on another computer is offered, because its bridge already takes `thread.create` and a thread's `chat.send`"
     " (rule 31); in remote-only mode (rule 47) both bots run on the server, and the text goes only to that server's"

@@ -114,11 +114,34 @@ test("a list changed elsewhere since the page read it is not written over: the p
   await expect(section.getByTestId("backup-error")).toHaveText("The backup models were changed elsewhere; this is the list as it is now.");
   await expect(section.getByTestId("backup-entry")).toHaveCount(1);
   await expect(section.getByTestId("backup-entry")).toContainText("OpenRouter · x-ai/grok-4.7");
-  expect((await mock("fallback.get", { bot: "kami" })).chain).toEqual([{ provider: "openrouter", model: "x-ai/grok-4.7" }]);
+  expect(await mock("fallback.get", { bot: "kami" })).toEqual({
+    chain: [{ provider: "openrouter", model: "x-ai/grok-4.7" }],
+    editable: true,
+    // each provider of the list and the bot's own, as the bridge compares it
+    ids: { openrouter: "openrouter", "claude-proxy": "claude-proxy" },
+  });
   // the next press builds on the fresh list
   await section.getByTestId("backup-add").click();
   await page.getByTestId("backup-search").fill("terra");
   await page.getByTestId("backup-opt").click();
+  await expect(section.getByTestId("backup-entry")).toHaveCount(2);
+  await expect(section.getByTestId("backup-error")).toHaveCount(0);
+});
+
+test("the picker offers nothing the bridge refuses: a provider's alias names the same route", async ({ page }) => {
+  // Hermes reads `openai` as `openrouter` (the mock keeps that one alias): a listed openai · x-ai/grok-4.7 is the
+  // OpenRouter grok, so the picker does not offer it again
+  await mock("mock.fallback", { bot: "kami", chain: [{ provider: "openai", model: "x-ai/grok-4.7" }] });
+  await botPage(page, "kami");
+  const section = page.getByTestId("backup-model");
+  await expect(section.getByTestId("backup-entry")).toHaveCount(1);
+  await section.getByTestId("backup-add").click();
+  const pop = page.getByTestId("backup-pop");
+  await pop.getByTestId("backup-search").fill("grok");
+  await expect(pop.getByTestId("backup-none")).toBeVisible();
+  await pop.getByTestId("backup-search").fill("qwen3");
+  await expect(pop.getByTestId("backup-opt")).toHaveCount(1);
+  await pop.getByTestId("backup-opt").click();
   await expect(section.getByTestId("backup-entry")).toHaveCount(2);
   await expect(section.getByTestId("backup-error")).toHaveCount(0);
 });

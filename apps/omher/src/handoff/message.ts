@@ -14,20 +14,31 @@ export const ANSWER_CHARS = 6000;
 /** The most characters of a bot's name as the text writes it. */
 const NAME = 60;
 
-/** A fenced code block's opening or closing line (CommonMark: up to three spaces, then three or more ` or ~). */
-const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+/** A line's block quote markers (CommonMark: each `>` after up to three spaces, with one optional space after it). */
+const QUOTES = /^(?: {0,3}> ?)*/;
+/** A fenced code block's opening or closing line (CommonMark: up to three spaces, then three or more ` or ~), after
+ *  the line's quote markers. A line indented four or more spaces there is no fence: CommonMark reads it as a line of an
+ *  indented code block, so it neither opens nor closes one. */
+const FENCE = /^((?: {0,3}> ?)*) {0,3}(`{3,}|~{3,})(.*)$/;
+const depth = (quotes: string) => quotes.split(">").length - 1;
 
-/** The line that closes the code fence `text` leaves open at its end, or "" when none is open. */
+/** The line that closes the code fence `text` leaves open at its end (with that fence's quote markers, when it is
+ *  inside a block quote of the answer), or "" when none is open. */
 function openFence(text: string): string {
-  let open: string | null = null;
+  let open: { mark: string; quotes: string } | null = null;
   for (const line of text.split(/\r\n|[\r\n\u2028\u2029]/)) {
+    // a fence inside a block quote ends with the quote: a line with fewer markers is outside it (no lazy line
+    // continues a fence)
+    if (open && depth(QUOTES.exec(line)![0]) < depth(open.quotes)) open = null;
     const m = FENCE.exec(line);
     if (!m) continue;
-    // a backtick fence's info string holds no backtick; a closing fence is the same mark, as long or longer, alone
-    if (open === null) open = m[1][0] === "`" && m[2].includes("`") ? null : m[1];
-    else if (m[1][0] === open[0] && m[1].length >= open.length && !m[2].trim()) open = null;
+    const [, quotes, mark, info] = m;
+    // a backtick fence's info string holds no backtick; a closing fence is the same mark, as long or longer, alone,
+    // in the same block quote
+    if (open === null) open = mark[0] === "`" && info.includes("`") ? null : { mark, quotes };
+    else if (depth(quotes) === depth(open.quotes) && mark[0] === open.mark[0] && mark.length >= open.mark.length && !info.trim()) open = null;
   }
-  return open ?? "";
+  return open ? `${open.quotes}${open.mark}` : "";
 }
 
 /** `text` cut to ANSWER_CHARS characters (whole code points), and how long it was when it was cut. A cut inside a

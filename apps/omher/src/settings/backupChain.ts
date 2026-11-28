@@ -10,22 +10,27 @@ export const BACKUP_VALUE = /^[A-Za-z0-9](?:[A-Za-z0-9._:/@-]{0,126}[A-Za-z0-9])
 export type BackupPair = { provider: string; model: string };
 
 const pair = (e: BackupPair): BackupPair => ({ provider: e.provider, model: e.model });
-const same = (a: BackupPair, b: BackupPair) =>
-  a.provider.toLowerCase() === b.provider.toLowerCase() && a.model.toLowerCase() === b.model.toLowerCase();
 
 /** What the picker offers as a backup: the bot's own model list (`models.options`), without its main model, a model
- *  already in the list, or an id the bridge would refuse. */
-export function backupOptions(rows: ModelRow[], chain: readonly BackupPair[], main: BackupPair): ModelRow[] {
-  return rows.filter((r) => {
-    const p = { provider: r.provider.slug, model: r.model };
-    return (
-      BACKUP_VALUE.test(p.provider) &&
-      BACKUP_VALUE.test(p.model) &&
+ *  already in the list, or an id the bridge would refuse. Providers compare as the bridge compares them: through the
+ *  ids the bridge gave (`ids` from `fallback.get` for the list's providers and the bot's own, each option's own `id`
+ *  from `models.options`), so an alias (`openai` for `openrouter`) is never offered beside the model it names; a
+ *  provider without one compares in lowercase. */
+export function backupOptions(
+  rows: ModelRow[],
+  chain: readonly BackupPair[],
+  main: BackupPair,
+  ids: Readonly<Record<string, string>> = {},
+): ModelRow[] {
+  const key = (provider: string, model: string, id = ids[provider]) => `${(id || provider).toLowerCase()} ${model.toLowerCase()}`;
+  const taken = new Set([key(main.provider, main.model), ...chain.map((e) => key(e.provider, e.model))]);
+  return rows.filter(
+    (r) =>
+      BACKUP_VALUE.test(r.provider.slug) &&
+      BACKUP_VALUE.test(r.model) &&
       !isCurrent(r, main.model, main.provider) &&
-      !same(p, main) &&
-      !chain.some((e) => same(e, p))
-    );
-  });
+      !taken.has(key(r.provider.slug, r.model, r.provider.id)),
+  );
 }
 
 /** The whole list with `add` last, as `fallback.set` takes it (provider and model only). */

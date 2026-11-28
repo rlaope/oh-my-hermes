@@ -96,26 +96,29 @@ All notable changes will be documented here.
   together: an `@bot` in an answer only opened that bot's chat. A finished answer in a bot's main chat or thread now
   has Hand to bot beside copy and read aloud: pick another bot, add a one-line note if you like, and Hand over starts
   a new thread there with your note and the answer quoted (cut, and saying so, past 6,000 characters), while you stay
-  where you are. An answer that names another bot with `@name` shows a quiet "Hand this to <bot>" chip, which only
-  opens the same picker. A card under the answer follows that thread: working, waiting for you there, its answer when
-  done, or how it stopped, with Open thread; Give to <bot> then sends that answer back once as your own message, as
-  plain text (a skill named in it never runs as a command). While that bot is busy it goes as a typed message does:
-  into the running turn, or held in the waiting line when the line is paused or other messages wait there. Nothing
-  goes between bots without a press, nothing comes back by itself, and the card lasts until a reload; the thread
-  stays in the bot's list. omher adds no bridge op for it.
+  where you are. If the bot you picked goes offline while the picker is open, no other bot is picked in its place:
+  the picker says so and Hand over waits for your pick. An answer that names another bot with `@name` shows a quiet
+  "Hand this to <bot>" chip, which only opens the same picker. A card under the answer follows that thread: working,
+  waiting for you there, its answer when done, or how it stopped, with Open thread; Give to <bot> then sends that
+  answer back once as your own message, as plain text (a skill named in it never runs as a command). While that bot
+  is busy it goes as a typed message does: into the running turn, or held in the waiting line when the line is paused
+  or other messages wait there; held, it has Send now and Delete but no Edit, so the answer goes only as it is, and
+  deleting it offers Give again. Nothing goes between bots without a press, nothing comes back by itself, and the
+  card lasts until a reload; the thread stays in the bot's list. omher adds no bridge op for it.
   (`docs/OMHER-BOUNDARY.md` rule 58; `apps/omher/src/handoff/`)
 
 - **omher: a bot's backup model, set from Settings and named when Hermes switches.** Hermes can go on with another
   model when a bot's own cannot respond (rate limits, outages, failed sign-ins), but omher neither showed nor set that
   list. A bot's page now has Backup model under its model: the list in Hermes' order, Remove on each, and Add backup
-  model, which picks from the models the chat's model picker lists for that bot. A change runs Hermes' own
-  `hermes -p <bot> config set fallback_providers <list>` and shows the list read back from the bot's config; it
-  applies from the next turn. Only each entry's provider and model are read out, and a list written by hand in
-  Hermes' config (an endpoint or key of its own, the legacy `fallback_model`) is shown read-only and never rewritten;
-  a list changed elsewhere since the page read it is not written over, and the page shows it as it is now. Each time
-  Hermes switches a turn to a backup model, the chat keeps a quiet row there with Hermes' own sentence (a walk down
-  the list leaves one per step), until a reload. A bot on another computer and remote-only mode are set where the bot runs. (`docs/OMHER-BOUNDARY.md`
-  rule 57; `apps/omher/src/settings/BackupModel.tsx`)
+  model, which picks from the models the chat's model picker lists for that bot, leaving out any the bridge would
+  refuse, also under another name Hermes reads as the same provider (`openai` is `openrouter`). A change runs
+  Hermes' own `hermes -p <bot> config set fallback_providers <list>` and shows the list read back from the bot's
+  config; it applies from the next turn. Only each entry's provider and model are read out, and a list written by
+  hand in Hermes' config (an endpoint or key of its own, the legacy `fallback_model`) is shown read-only and never
+  rewritten; a list changed elsewhere since the page read it is not written over, and the page shows it as it is
+  now. Each time Hermes switches a turn to a backup model, the chat keeps a quiet row there with Hermes' own sentence
+  (a walk down the list leaves one per step), until a reload. A bot on another computer and remote-only mode are set
+  where the bot runs. (`docs/OMHER-BOUNDARY.md` rule 57; `apps/omher/src/settings/BackupModel.tsx`)
 
 - **omher: pause, resume and clear a chat's waiting messages.** Messages typed while a bot answers, and not steered
   in, wait in omher and went out one by one when the turn ended, with no way to hold them all or drop them at once. A

@@ -2,7 +2,8 @@
 // chat's and a thread's, so a skill token in the other bot's answer never becomes a command, and a Reply chip the
 // person left set stays theirs.
 import { describe, expect, it } from "vitest";
-import { createStore, type BridgeLike, type HandoffItem } from "../state/store";
+import { createStore, givenRow, heldDrafts, type BridgeLike, type HandoffItem } from "../state/store";
+import { getDraft } from "../app/drafts";
 import type { BridgeEvent } from "../lib/protocol";
 import type { BridgeStatus } from "../lib/bridge";
 import { en } from "../i18n/en";
@@ -120,6 +121,31 @@ describe("Give to <bot>", () => {
     store.actions.queueDelete(row, "kami");
     expect(card().given).toBeUndefined();
     expect(sends()).toEqual([]);
+  });
+
+  it("a held Give has no Edit and never reaches the message box: it goes as the plain text Give made", async () => {
+    const { f, store, card, sends } = await doneCard("$deploy now.");
+    f.emit({ event: "turn.start", bot: "kami" });
+    await store.actions.handoffGive("kami", card().id);
+    await tick();
+    const row = card().given!;
+    expect(store.getState().chats.kami.queue).toEqual([row]);
+    expect(givenRow(store.getState().chats.kami, row)).toBe(true);
+    // Edit does nothing: the row waits, Give stays given, the box stays as the person left it
+    store.actions.queueEdit(row, "kami");
+    expect(store.getState().chats.kami.queue).toEqual([row]);
+    expect(card().given).toBe(row);
+    expect(getDraft("kami")).toBe("");
+    // a reload puts no held Give back in the box (its card is gone after it); a typed held message is
+    store.actions.send("and typed by me");
+    expect(heldDrafts(store.getState(), {})).toEqual({ kami: "and typed by me" });
+    // Send now: once the turn ends it goes as Give made it, no `$deploy` hoisted to a leading `/deploy`
+    await store.actions.queueSendNow(row, "kami");
+    f.emit({ event: "turn.end", bot: "kami", outcome: "interrupted" });
+    await tick();
+    await tick();
+    expect(sends()[0]).toEqual({ bot: "kami", text: "Answer from Friren:\n\n$deploy now.", queued: true });
+    expect(card().given).toBe(row);
   });
 
   it("a refused send offers Give again", async () => {

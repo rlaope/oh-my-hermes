@@ -207,7 +207,7 @@ test("a held Enter hands over once: its repeat neither opens the popover again n
   await expect(page.getByTestId("handoff-card")).toHaveCount(1);
 });
 
-test("the picked bot goes offline while the popover is open: the first bot left is picked", async ({ page }) => {
+test("the picked bot goes offline while the popover is open: nothing is picked in its place, and Hand over waits", async ({ page }) => {
   const answer = await kami(page);
   await answer.hover();
   await answer.getByTestId("handoff-action").click();
@@ -217,11 +217,22 @@ test("the picked bot goes offline while the popover is open: the first bot left 
   await expect(friren).toHaveAttribute("aria-selected", "true");
   await mock("mock.botStatus", { bot: "friren", status: "offline" });
   await expect(friren).toHaveCount(0);
+  // the list stays, no bot picked, and one line says why
+  await expect(pop.getByTestId("handoff-bot").first()).toBeVisible();
+  await expect(pop.locator('[data-testid=handoff-bot][aria-selected="true"]')).toHaveCount(0);
+  await expect(pop.getByTestId("handoff-what")).toHaveText("Friren went offline. Pick a bot to hand this to.");
+  await expect(pop.getByTestId("handoff-confirm")).toBeDisabled();
+  // Enter in the note sends nothing either
+  await pop.getByTestId("handoff-note").press("Enter");
+  // the person picks again: that one is the one Hand over sends to
   const first = pop.getByTestId("handoff-bot").first();
+  const to = (await first.getAttribute("data-bot"))!;
+  await first.click();
   await expect(first).toHaveAttribute("aria-selected", "true");
-  const name = (await first.locator(".hf-name").textContent())!;
-  await expect(pop.locator(".ho-note")).toHaveText(`${name} gets a new thread with your note and this answer. You stay here.`);
   await expect(pop.getByTestId("handoff-confirm")).toBeEnabled();
+  await pop.getByTestId("handoff-confirm").click();
+  await expect(pop).toHaveCount(0);
+  await expect.poll(async () => (await calls("thread.create")).map((c) => c.params.bot)).toEqual([to]);
   await mock("mock.botStatus", { bot: "friren", status: "online" });
 });
 

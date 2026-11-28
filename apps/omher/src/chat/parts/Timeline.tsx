@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { RestartAction, RestartLine } from "../../sidebar/RestartLine";
 import type { Bot } from "../../lib/protocol";
-import { answerSlot, answerSoFar, askOpen, selectTimeline, turnHasActivity, useStore, type TimelineItem } from "../../state/store";
+import { answerSlot, answerSoFar, askOpen, givenRow, selectTimeline, turnHasActivity, useStore, type TimelineItem } from "../../state/store";
 import { slots } from "../../features";
 import { dayLabel, hhmm, sameDay } from "../../app/time";
 import { Bubble } from "./Bubble";
@@ -140,13 +140,16 @@ export function Timeline({
     switch (it.kind) {
       case "user": {
         // a held slash command is no text for the running answer: its ↵ is Send now (stop it, send this first), as
-        // Claude Code's ctrl+x ctrl+s runs a queued command; never a steer
+        // Claude Code's ctrl+x ctrl+s runs a queued command; never a steer. A held answer Give sent back has no Edit:
+        // it goes as the plain text Give made, or is deleted (rule 58)
         const off = queue
           ? queue.off(it)
           : (it.held && !it.autoSteer) || it.steerUnknown
             ? it.held && it.text.trimStart().startsWith("/")
               ? { steer: t("sq.commandNoSteer") }
-              : {}
+              : givenRow(chat, it.id)
+                ? { edit: t("sq.givenNoEdit") }
+                : {}
             : null;
         return (
           <Bubble

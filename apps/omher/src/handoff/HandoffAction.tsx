@@ -103,10 +103,12 @@ const W = 300;
 function HandoffPopover({ chat, id, from, text, open, onClose }: { chat: string; id: string; from: string; text: string; open: Open; onClose: () => void }) {
   const s = useStore();
   const bots = handoffBots(s, from);
-  const [chosen, setPick] = useState<string | null>(open.pick);
-  // the chosen bot, or the first one left when it went offline (or none was chosen)
-  const to = bots.find((b) => b.name === chosen) ?? bots[0] ?? null;
+  // the bot chosen (a chip's), else the first one when the popover opened: never another one in its place
+  const [chosen, setPick] = useState<string | null>(() => open.pick ?? bots[0]?.name ?? null);
+  // a pick that went offline is no pick: Hand over waits until the person picks again, and the note says why
+  const to = bots.find((b) => b.name === chosen) ?? null;
   const pick = to?.name ?? null;
+  const gone = chosen && !to ? s.bots.find((b) => b.name === chosen)?.display_name || chosen : null;
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -204,7 +206,7 @@ function HandoffPopover({ chat, id, from, text, open, onClose }: { chat: string;
               type="button"
               role="option"
               aria-selected={b.name === pick}
-              tabIndex={b.name === pick ? 0 : -1}
+              tabIndex={b.name === pick || (!pick && b === bots[0]) ? 0 : -1}
               className={b.name === pick ? "on" : undefined}
               onClick={() => setPick(b.name)}
               data-testid="handoff-bot"
@@ -237,7 +239,15 @@ function HandoffPopover({ chat, id, from, text, open, onClose }: { chat: string;
           data-testid="handoff-note"
         />
       </label>
-      <p className="ho-note">{to ? t("handoff.what", { bot: to.display_name }) : t("handoff.none")}</p>
+      <p className="ho-note" data-testid="handoff-what">
+        {to
+          ? t("handoff.what", { bot: to.display_name })
+          : !bots.length
+            ? t("handoff.none")
+            : gone
+              ? t("handoff.pickGone", { bot: gone })
+              : t("handoff.pickOne")}
+      </p>
       <div className="ho-b">
         <button type="button" onClick={done} data-testid="handoff-cancel">
           {t("hand.cancel")}

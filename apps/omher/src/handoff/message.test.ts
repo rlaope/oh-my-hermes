@@ -67,6 +67,24 @@ describe("givenMessage", () => {
     const cut = givenMessage("Friren", `~~~~py\n${"z".repeat(ANSWER_CHARS)}\n~~~~`);
     expect(cut).toMatch(/z\n~~~~\n\n\(The answer was cut/);
   });
+
+  it("a fence inside a block quote of the answer is closed inside that quote", () => {
+    const cut = givenMessage("Friren", `It said:\n> \`\`\`sh\n${"> echo x\n".repeat(ANSWER_CHARS)}> \`\`\``);
+    expect(cut).toMatch(/\n> ```\n\n\(The answer was cut/);
+    // nested quotes keep their markers
+    expect(givenMessage("Friren", `> > ~~~\n${"> > z\n".repeat(ANSWER_CHARS)}`)).toMatch(/\n> > ~~~\n\n\(The answer was cut/);
+    // a quoted fence the quote already left is closed by the quote's end: nothing to add
+    expect(givenMessage("Friren", `> \`\`\`\n> a\nout of the quote\n${"y".repeat(ANSWER_CHARS)}`)).toMatch(/y\n\n\(The answer was cut/);
+    // a fence mark in a deeper quote does not close one outside it
+    expect(givenMessage("Friren", `\`\`\`\n> \`\`\`\n${"z".repeat(ANSWER_CHARS)}`)).toMatch(/z\n```\n\n\(The answer was cut/);
+  });
+
+  it("a line indented four spaces is no fence (CommonMark: an indented code line): it neither opens nor closes one", () => {
+    expect(givenMessage("Friren", `Code:\n    \`\`\`\n${"z".repeat(ANSWER_CHARS)}`)).toMatch(/z\n\n\(The answer was cut/);
+    expect(givenMessage("Friren", `\`\`\`\n    \`\`\`\n${"z".repeat(ANSWER_CHARS)}`)).toMatch(/z\n```\n\n\(The answer was cut/);
+    // inside a quote too, past its marker
+    expect(givenMessage("Friren", `> Code:\n>     \`\`\`\n${"z".repeat(ANSWER_CHARS)}`)).toMatch(/z\n\n\(The answer was cut/);
+  });
 });
 
 describe("no text the handoff sends can start with /", () => {

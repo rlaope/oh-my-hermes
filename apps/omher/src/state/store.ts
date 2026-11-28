@@ -926,6 +926,13 @@ function ungive(state: AppState, chat: string, unsent: (row: string) => boolean)
   return { ...state, chats: { ...state.chats, [chat]: withItems(c, items) } };
 }
 
+/** Whether row `id` of chat `c` carries an answer Give sent back (rule 58): another bot's text, which goes only as
+ *  the plain text Give made, so it is never put back in the message box (no Edit, no draft at a reload), where a send
+ *  could hoist a `$skill` of it into a command. */
+export function givenRow(c: Chat | undefined, id: string): boolean {
+  return !!c?.items.some((i) => i.kind === "handoff" && i.given === id);
+}
+
 /** The thread-to-card links whose card is no longer there, or already says its thread is gone (nothing moves it). */
 function pruneHandoffs(state: AppState): AppState {
   const live = Object.entries(state.handoffs).filter(([, l]) =>
@@ -1745,8 +1752,11 @@ export function reduce(state: AppState, a: Action): AppState {
     case "queue.clear": {
       if (!state.chats[a.bot]) return state;
       const next = touchChat(state, a.bot, (c) => reduceQueue(c, a));
-      // a Give whose row was deleted before it went out is not given (rule 58)
-      return ungive(next, a.bot, (row) => !next.chats[a.bot].items.some((i) => i.kind === "user" && i.id === row));
+      // a Give whose own row this deleted before it went out is not given (rule 58); any other card's row is not
+      // looked at: a sent one is replaced by Hermes' copy when the chat is read again, and stays given
+      const asked = a.type === "queue.drop" ? [a.id] : a.ids;
+      const had = (c: Chat, row: string) => c.items.some((i) => i.kind === "user" && i.id === row);
+      return ungive(next, a.bot, (row) => asked.includes(row) && had(state.chats[a.bot], row) && !had(next.chats[a.bot], row));
     }
     case "queue.take":
     case "queue.front":
@@ -2119,12 +2129,16 @@ export function queueReady(state: AppState, bot: string): string | null {
 }
 
 /** The drafts to save before a reload or quit, with every chat's held messages (and unknown steers) put back in
- *  its box in queue order, above what was typed there: nothing typed is lost (files are not kept, only the text). */
+ *  its box in queue order, above what was typed there: nothing typed is lost (files are not kept, only the text). A
+ *  held answer Give sent back is not typed text and is not put back (givenRow): its card is gone after the reload, and
+ *  the thread keeps that answer. */
 export function heldDrafts(state: AppState, drafts: Record<string, string>): Record<string, string> {
   const out = { ...drafts };
   for (const [key, c] of Object.entries(state.chats)) {
     const byId = new Map(c.items.flatMap((i) => (i.kind === "user" ? [[i.id, i] as const] : [])));
-    const waiting = [...(c.queue ?? []), ...c.items.filter((i) => i.kind === "user" && i.steerUnknown).map((i) => i.id)];
+    const waiting = [...(c.queue ?? []), ...c.items.filter((i) => i.kind === "user" && i.steerUnknown).map((i) => i.id)].filter(
+      (id) => !givenRow(c, id),
+    );
     const texts = waiting.map((id) => byId.get(id)?.text?.trim() ?? "").filter(Boolean);
     if (!texts.length) continue;
     const typed = out[key]?.trim();
@@ -3260,7 +3274,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     queueEdit(id, which) {
       const bot = botArg(which);
       const p = bot ? heldRow(bot, id) : null;
-      if (!bot || !p) return;
+      // a given answer is not the person's text to edit: Delete it, or let it go as it is (rule 58)
+      if (!bot || !p || givenRow(state.chats[bot], id)) return;
       held.delete(id);
       dispatch({ type: "queue.drop", bot, id });
       const typed = getDraft(bot).trim();
