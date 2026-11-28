@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // The release workflow's guard for omher's in-app update pointer (`omher-latest/latest.json`, BOUNDARY rule 20).
 // Every omher on every computer reads that one file, so a bad write moves all of them at once. The guard refuses the
 // three ways that has gone wrong or could:
