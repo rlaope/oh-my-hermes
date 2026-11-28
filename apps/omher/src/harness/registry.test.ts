@@ -161,6 +161,21 @@ describe("session view mapping", () => {
     expect(codexExecCommands(none)).toEqual([]);
     expect(codexExecCommands('tools.exec_command({cmd:"never closed')).toEqual([]);
     expect(stepDetail("exec", none)).toBe(none);
+    // `cmd:` inside another call's string, or in a comment, is no command, and that code is not hidden behind one
+    const yml = `await tools.write_file({path:"ci.yml", content:"steps:\\n  - cmd: 'rm -rf dist'"})`;
+    expect(codexExecCommands(yml)).toEqual([]);
+    expect(stepDetail("exec", yml)).toMatch(/^await tools\.write_file\(/);
+    expect(codexExecCommands('// cmd: "x"\nconst r = 1;')).toEqual([]);
+    expect(codexExecCommands('/* cmd: "x" */ const r = await tools.exec_command({cmd:"ls"}) // then cmd: "y"')).toEqual(["ls"]);
+    // a step that runs a command and does something else too: left as it was, so the other code shows
+    const mixed = 'const r = await tools.exec_command({cmd:"ls"}); await tools.apply_patch({input:"*** Begin Patch\\n*** End Patch"})';
+    expect(codexExecCommands(mixed)).toEqual([]);
+    expect(stepDetail("exec", mixed)).toBe(mixed);
+    expect(codexExecCommands('const r = await tools.exec_command({cmd:"ls"}); if (r.exit_code) text("failed")')).toEqual([]);
+    // only the call's own `cmd` key: not one nested deeper in its argument, not one of a string's text
+    expect(codexExecCommands('tools.exec_command({env:{cmd:"x"}, cmd:"pwd", justification:"cmd: rm"})')).toEqual(["pwd"]);
+    // a template's ${…} is skipped as written, quotes inside it included
+    expect(codexExecCommands('tools.exec_command({cmd:`echo ${"}"} done`})')).toEqual(['echo ${"}"} done']);
     // the chat shows it as a shell step: one command reads on its row, several in its box
     const pieces = chatPieces({
       items: [
