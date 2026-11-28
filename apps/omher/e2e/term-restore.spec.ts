@@ -546,9 +546,9 @@ test("the bottom panel's tabs come back after a restart in their folders, with t
   await page.addInitScript(() => ((window as unknown as Record<string, unknown>).__omherMockHistoryDelay = 400));
   await page.reload();
   await expect(page.getByTestId("bot-kami")).toBeVisible();
-  // nothing starts until the panel shows
+  // nothing starts until the panel shows; the only call is Program Resume keeping the records of the tabs put back
   await page.waitForTimeout(300);
-  expect(await page.evaluate(() => (window as unknown as { __omherShellCalls?: unknown[] }).__omherShellCalls ?? [])).toEqual([]);
+  expect(await page.evaluate(() => (window as unknown as { __omherShellCalls?: unknown[] }).__omherShellCalls ?? [])).toEqual([{ op: "resume-records", keep: ["panel-1", "panel-2"] }]);
   await page.keyboard.press("Control+Backquote");
   await expect(page.getByTestId("termpanel-tab")).toHaveText(["api", "api"]);
   await page.getByTestId("termpanel-tab").first().getByRole("tab").click();
