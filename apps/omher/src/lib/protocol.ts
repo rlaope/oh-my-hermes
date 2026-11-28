@@ -821,6 +821,11 @@ export interface UsageWindow {
   resets_at?: number;
   /** The reset time has passed since the source was written: no number is shown. */
   stale?: boolean;
+  /** Claude only: this window holds for one model ("opus", "sonnet"), not the whole account. It never sets the
+   *  provider's `state`; it counts for an account only while a running session of it uses that model. */
+  model?: string;
+  /** A model's window that refused a request (no % known). */
+  limited?: boolean;
 }
 
 export interface UsageProvider {

@@ -18,11 +18,11 @@ export interface FolderPrefs {
   added?: string[];
 }
 
-/** One spelling per folder: what every list here is keyed on (a session's folder, the folder dialog's answer, the
- *  saved `collapsed` / `order` / `added`). Repeated separators become one and a trailing one goes; the root stays
- *  (`/`, `C:\\`). A Windows path (`C:\\…`, `C:/…`, `\\\\server\\…`) is spelled with backslashes. Nothing is looked up on
- *  disk and `~` is never expanded: a path is only compared with another as written. */
-export function pathKey(path: string): string {
+/** A folder as the list shows it and starts sessions in: the path as written, with repeated separators made one and
+ *  a trailing one dropped; the root stays (`/`, `C:\\`). A Windows path (`C:\\…`, `C:/…`, `\\\\server\\…`) is spelled with
+ *  backslashes. Letters and their case are left as they came, so what a shell is started in is still a path the
+ *  system gave. Nothing is looked up on disk and `~` is never expanded. */
+export function pathSpelling(path: string): string {
   if (!path) return path;
   const unc = path.startsWith("\\\\");
   if (unc || /^[A-Za-z]:[\\/]/.test(path)) {
@@ -31,6 +31,31 @@ export function pathKey(path: string): string {
   }
   const p = path.replace(/\/+/g, "/");
   return p.length > 1 ? p.replace(/\/$/, "") : p;
+}
+
+/** One key per folder: what every comparison here goes by (a session's folder, the folder dialog's answer, the saved
+ *  `collapsed` / `order`, an added folder, a folder found gone). `pathSpelling`, then composed Unicode (NFC): macOS
+ *  hands a shell's folder over decomposed (NFD), so a Korean folder name reported by the shell and the same folder
+ *  picked in the dialog were two groups. A drive-letter path (`C:\\…`) is also case-folded, as Windows compares
+ *  names: `C:\\Users` and `c:\\users` are one folder. A macOS or Linux path keeps its case (a macOS volume can be
+ *  case-sensitive and Linux always is), and so does a `\\\\server\\share` path, whose case rules are the server's. A key
+ *  is for comparing only: it is never shown and never sent to a shell. */
+export function pathKey(path: string): string {
+  const p = pathSpelling(path).normalize("NFC");
+  return /^[A-Za-z]:\\/.test(p) ? p.toLowerCase() : p;
+}
+
+/** `paths` as spelled, once per folder (the first spelling of each wins). */
+function onePerFolder(paths: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const c of paths) {
+    const key = pathKey(c);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(pathSpelling(c));
+  }
+  return out;
 }
 
 /** `~` or `~/…`: a shell's shorthand, not a folder a program can start in. It is never expanded here and never kept
@@ -53,10 +78,16 @@ const MAX = 200;
 export function parseFolderPrefs(raw: string | null): FolderPrefs {
   try {
     const v = JSON.parse(raw ?? "null") as Partial<FolderPrefs> | null;
-    // a record saved with another spelling of a folder (`/a/b/`) reads as that folder, once
-    const list = (x: unknown) => (Array.isArray(x) ? [...new Set(x.filter((s): s is string => typeof s === "string").map(pathKey))].slice(0, MAX) : []);
-    // `added` is newer than the other two: a record saved before it reads as none added
-    return setAdded({ collapsed: list(v?.collapsed), order: list(v?.order) }, list(v?.added).filter((c) => c !== "" && !isTildePath(c)));
+    const strings = (x: unknown) => (Array.isArray(x) ? x.filter((s): s is string => typeof s === "string") : []);
+    // a record saved with another spelling of a folder (`/a/b/`) reads as that folder, once. This is also how a
+    // record saved under an older key reads: `collapsed` and `order` were keyed by the spelling alone, so a folder
+    // saved decomposed (NFD) or as `C:\\Users` is mapped to its key here and stays collapsed and in its place; two
+    // saved names of one folder become one, at the first one's place
+    const keys = (x: unknown) => [...new Set(strings(x).map(pathKey))].slice(0, MAX);
+    // `added` is newer than the other two: a record saved before it reads as none added. It keeps each folder's own
+    // spelling (it is shown and started in), once per folder
+    const added = onePerFolder(strings(v?.added).filter((c) => c !== "" && !isTildePath(c))).slice(0, MAX);
+    return setAdded({ collapsed: keys(v?.collapsed), order: keys(v?.order) }, added);
   } catch {
     return EMPTY;
   }
@@ -73,7 +104,7 @@ export function orderFolders<T extends { cwd: string }>(groups: readonly T[], or
     .map((x) => x.g);
 }
 
-/** Move folder `cwd` to place `to` among `shown` (the folders as the list shows them now). */
+/** Move folder `cwd` to place `to` among `shown` (the folders as the list shows them now). The saved order holds keys. */
 export function moveFolder(shown: readonly string[], cwd: string, to: number): string[] {
   cwd = pathKey(cwd);
   shown = [...new Set(shown.map(pathKey))];
@@ -100,42 +131,46 @@ export function collapseOthers(p: FolderPrefs, all: readonly string[], keep: str
   return toggleFolder(setAllFolders(p, all.filter((c) => pathKey(c) !== pathKey(keep)), true), keep, false);
 }
 
+/** Whether `cwd` is one of the folders the person added, however either is spelled. */
+export const isAddedFolder = (p: FolderPrefs, cwd: string): boolean => addedFolders(p).some((c) => pathKey(c) === pathKey(cwd));
+
 /** The person picked folder `cwd` in "New folder…". A folder already in the list (`listed`: the groups shown now, by
- *  a session or added before) only opens; a new one is added, open, at the top of the saved order. */
+ *  a session or added before) only opens; a new one is added, open, at the top of the saved order, kept as the
+ *  dialog spelled it. */
 export function addFolder(p: FolderPrefs, cwd: string, listed: readonly string[] = []): FolderPrefs {
-  cwd = pathKey(cwd);
-  listed = listed.map(pathKey);
-  if (!cwd || isTildePath(cwd)) return p;
-  const open = p.collapsed.includes(cwd) ? toggleFolder(p, cwd, false) : p;
-  if (addedFolders(p).includes(cwd) || listed.includes(cwd)) return open;
+  const key = pathKey(cwd);
+  const keys = listed.map(pathKey);
+  if (!key || isTildePath(key)) return p;
+  const open = p.collapsed.includes(key) ? toggleFolder(p, key, false) : p;
+  if (isAddedFolder(p, key) || keys.includes(key)) return open;
   // the folders shown now keep their places under it, named or not
-  const order = [...new Set([cwd, ...orderFolders(listed.map((c) => ({ cwd: c })), p.order).map((g) => g.cwd), ...p.order])].slice(0, MAX);
-  return setAdded({ ...open, order }, [cwd, ...addedFolders(p)].slice(0, MAX));
+  const order = [...new Set([key, ...orderFolders(keys.map((c) => ({ cwd: c })), p.order).map((g) => g.cwd), ...p.order])].slice(0, MAX);
+  return setAdded({ ...open, order }, [pathSpelling(cwd), ...addedFolders(p)].slice(0, MAX));
 }
 
 /** "Remove from list": `cwd` is no longer an added folder. Nothing on disk changes, and while a session runs there
  *  its group stays (sessions make their own group). */
 export function removeFolder(p: FolderPrefs, cwd: string): FolderPrefs {
-  cwd = pathKey(cwd);
-  if (!addedFolders(p).includes(cwd)) return p;
-  return setAdded(p, addedFolders(p).filter((c) => c !== cwd));
+  if (!isAddedFolder(p, cwd)) return p;
+  return setAdded(p, addedFolders(p).filter((c) => pathKey(c) !== pathKey(cwd)));
 }
 
 /** `groups` (the folders sessions run in) and, after them, an empty group for each added folder none runs in. */
 export function withAdded<T>(groups: readonly { cwd: string; rows: T[] }[], added: readonly string[]): { cwd: string; rows: T[] }[] {
   const have = new Set(groups.map((g) => pathKey(g.cwd)));
-  return [...groups, ...[...new Set(added.map(pathKey))].filter((c) => !have.has(c)).map((cwd) => ({ cwd, rows: [] as T[] }))];
+  return [...groups, ...onePerFolder(added.filter((c) => !have.has(pathKey(c)))).map((cwd) => ({ cwd, rows: [] as T[] }))];
 }
 
-/** TERMINALS groups: sessions by folder (one group per folder however its path is spelled, named by `pathKey`), in
- *  the order each folder first appears in `list` (newest first). */
+/** TERMINALS groups: sessions by folder (one group per folder however its path is spelled or composed, by `pathKey`),
+ *  in the order each folder first appears in `list` (newest first). A group is named by its first session's folder as
+ *  spelled (`pathSpelling`), which is also the folder its `+` starts in. */
 export function folderGroups<T extends { cwd: string }>(list: readonly T[]): { cwd: string; rows: T[] }[] {
   const out = new Map<string, { cwd: string; rows: T[] }>();
   for (const r of list) {
-    const cwd = pathKey(r.cwd);
-    const g = out.get(cwd);
+    const key = pathKey(r.cwd);
+    const g = out.get(key);
     if (g) g.rows.push(r);
-    else out.set(cwd, { cwd, rows: [r] });
+    else out.set(key, { cwd: pathSpelling(r.cwd), rows: [r] });
   }
   return [...out.values()];
 }

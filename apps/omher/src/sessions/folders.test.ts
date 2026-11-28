@@ -2,7 +2,7 @@
 // "New folder…" are parsed defensively, listed once, put at the top of the saved order, and removed without
 // touching the rest.
 import { describe, expect, it } from "vitest";
-import { addFolder, addedFolders, allCollapsed, folderSummary, goneFolders, isFolderGone, ranElsewhere, setFolderGone, collapseOthers, folderGroups, pathKey, isCollapsed, moveFolder, orderFolders, parseFolderPrefs, removeFolder, setAllFolders, toggleFolder, withAdded, type FolderPrefs } from "./folders";
+import { addFolder, addedFolders, allCollapsed, folderSummary, goneFolders, isFolderGone, ranElsewhere, setFolderGone, collapseOthers, folderGroups, isAddedFolder, pathKey, pathSpelling, isCollapsed, moveFolder, orderFolders, parseFolderPrefs, removeFolder, setAllFolders, toggleFolder, withAdded, type FolderPrefs } from "./folders";
 
 const NONE: FolderPrefs = { collapsed: [], order: [] };
 const shown = (p: FolderPrefs, sessions: string[]) => orderFolders(withAdded(sessions.map((cwd) => ({ cwd, rows: [cwd] })), addedFolders(p)), p.order).map((g) => g.cwd);
@@ -143,20 +143,44 @@ describe("pathKey", () => {
   });
 
   it("spells a Windows path with backslashes, keeping the drive root and a share's two leading ones", () => {
-    expect(pathKey("C:\\")).toBe("C:\\");
-    expect(pathKey("C:/")).toBe("C:\\");
-    expect(pathKey("C:\\\\")).toBe("C:\\");
-    expect(pathKey("C:\\Users\\you\\app\\")).toBe("C:\\Users\\you\\app");
-    expect(pathKey("C:/Users//you/app/")).toBe("C:\\Users\\you\\app");
-    expect(pathKey("\\\\server\\share\\app\\")).toBe("\\\\server\\share\\app");
+    expect(pathSpelling("C:\\")).toBe("C:\\");
+    expect(pathSpelling("C:/")).toBe("C:\\");
+    expect(pathSpelling("C:\\\\")).toBe("C:\\");
+    expect(pathSpelling("C:\\Users\\you\\app\\")).toBe("C:\\Users\\you\\app");
+    expect(pathSpelling("C:/Users//you/app/")).toBe("C:\\Users\\you\\app");
+    expect(pathSpelling("\\\\server\\share\\app\\")).toBe("\\\\server\\share\\app");
     // a backslash in a Unix folder's name is part of the name
+    expect(pathSpelling("/home/you/odd\\name/")).toBe("/home/you/odd\\name");
     expect(pathKey("/home/you/odd\\name/")).toBe("/home/you/odd\\name");
+  });
+
+  it("is one key for a folder composed (NFC) or decomposed (NFD), as macOS hands a shell's folder over", () => {
+    const nfc = "/Users/you/문서/보고서";
+    const nfd = nfc.normalize("NFD");
+    expect(nfd).not.toBe(nfc);
+    expect(pathKey(nfd)).toBe(pathKey(nfc));
+    expect(pathKey(`${nfd}/`)).toBe(nfc);
+    expect(pathKey("/Users/you/Cafe\u0301")).toBe(pathKey("/Users/you/Caf\u00e9"));
+    // the spelling keeps the letters as they came: what a shell is started in is the system's own path
+    expect(pathSpelling(`${nfd}/`)).toBe(nfd);
+  });
+
+  it("folds case for a drive-letter path only: never for a macOS or Linux path, nor a share", () => {
+    expect(pathKey("C:\\Users\\You\\App")).toBe(pathKey("c:/users/you/app/"));
+    expect(pathKey("C:\\")).toBe(pathKey("c:\\"));
+    expect(pathKey("C:\\보고서")).toBe(pathKey("c:\\" + "보고서".normalize("NFD")));
+    expect(pathKey("/Users/you/App")).not.toBe(pathKey("/users/you/app"));
+    expect(pathKey("/home/you/Code")).toBe("/home/you/Code");
+    expect(pathKey("\\\\Server\\Share")).toBe("\\\\Server\\Share");
+    // and the spelling keeps the case
+    expect(pathSpelling("C:/Users/You/")).toBe("C:\\Users\\You");
   });
 
   it("never expands `~`, and is the same again when applied twice", () => {
     expect(pathKey("~/code/")).toBe("~/code");
     expect(pathKey("~")).toBe("~");
     for (const p of ["/a/b/", "C:/x//y/", "\\\\s\\t\\", "/", "C:\\", "~/x/"]) expect(pathKey(pathKey(p))).toBe(pathKey(p));
+    for (const p of ["/a/b/", "C:/X//y/", "\\\\s\\t\\", "/", "~/x/", "/한/".normalize("NFD")]) expect(pathSpelling(pathSpelling(p))).toBe(pathSpelling(p));
   });
 });
 
@@ -220,6 +244,68 @@ describe("one group per folder, however its path is spelled", () => {
     expect(collapseOthers(p, [WEB, "/b"], `${WEB}/`).collapsed).toEqual(["/b"]);
     expect(moveFolder([WEB, "/b", "/c"], `${WEB}/`, 2)).toEqual(["/b", "/c", WEB]);
     expect(removeFolder(p, `${WEB}/`)).toEqual({ collapsed: [], order: [] });
+  });
+});
+
+// A Korean folder from a shell (decomposed on macOS) and the same folder from the dialog (composed), and a Windows
+// drive path in either case: one group, one saved state. Records saved while the key was the spelling alone read
+// with their collapsed and order state found under the new key.
+describe("one group per folder, however it is composed or (on Windows) cased", () => {
+  const NFC = "/Users/you/문서";
+  const NFD = NFC.normalize("NFD");
+
+  it("sessions in both forms are one group, named and started in as the first session spelled it", () => {
+    const g = folderGroups([{ cwd: NFD, id: 1 }, { cwd: NFC, id: 2 }, { cwd: "C:\\Users\\you", id: 3 }, { cwd: "c:/users/you/", id: 4 }]);
+    expect(g.map((x) => x.cwd)).toEqual([NFD, "C:\\Users\\you"]);
+    expect(g.map((x) => x.rows.map((r) => r.id))).toEqual([[1, 2], [3, 4]]);
+  });
+
+  it("a folder picked composed that a shell reported decomposed only opens that group; picked again, it adds nothing", () => {
+    const base: FolderPrefs = { collapsed: [pathKey(NFD)], order: [] };
+    const listed = folderGroups([{ cwd: NFD }]).map((g) => g.cwd);
+    const p = addFolder(base, NFC, listed);
+    expect(p).toEqual({ collapsed: [], order: [] });
+    const added = addFolder(NONE, NFD, []);
+    // kept as the dialog spelled it, found by either form
+    expect(added.added).toEqual([NFD]);
+    expect(isAddedFolder(added, NFC)).toBe(true);
+    expect(addFolder(added, NFC, addedFolders(added))).toBe(added);
+    // a session there in the other form makes the one group
+    expect(shown(added, [NFC])).toEqual([NFC]);
+    expect(removeFolder(added, NFC)).toEqual({ collapsed: [], order: [NFC] });
+  });
+
+  it("collapse and order follow the folder in either form", () => {
+    const p = toggleFolder(NONE, NFD);
+    expect(isCollapsed(p, NFC)).toBe(true);
+    expect(orderFolders([{ cwd: "/b" }, { cwd: NFC }], moveFolder(["/b", NFD], NFD, 0)).map((g) => g.cwd)).toEqual([NFC, "/b"]);
+    expect(isCollapsed(toggleFolder(NONE, "C:\\Users\\You"), "c:\\users\\you")).toBe(true);
+    expect(isCollapsed(toggleFolder(NONE, "/Users/You"), "/users/you")).toBe(false);
+  });
+
+  it("a record saved under the old keys keeps its collapsed folders and its order", () => {
+    // as saved before: keyed by the spelling only, so a decomposed name and a Windows path in its own case
+    const old = JSON.stringify({ collapsed: [NFD, "C:\\Users\\You\\App"], order: ["/b", NFD, "C:\\Users\\You\\App", NFC], added: [NFD, NFC] });
+    const p = parseFolderPrefs(old);
+    expect(p.collapsed).toEqual([NFC, "c:\\users\\you\\app"]);
+    // two saved names of one folder are one, at the first one's place
+    expect(p.order).toEqual(["/b", NFC, "c:\\users\\you\\app"]);
+    expect(p.added).toEqual([NFD]);
+    for (const cwd of [NFC, NFD]) expect(isCollapsed(p, cwd)).toBe(true);
+    expect(isCollapsed(p, "c:/users/you/app")).toBe(true);
+    const groups = orderFolders(withAdded(folderGroups([{ cwd: "C:\\Users\\You\\App" }, { cwd: NFC }, { cwd: "/b" }]), addedFolders(p)), p.order);
+    expect(groups.map((g) => g.cwd)).toEqual(["/b", NFC, "C:\\Users\\You\\App"]);
+    // saved again and read back, it is the same record
+    expect(parseFolderPrefs(JSON.stringify(p))).toEqual(p);
+  });
+
+  it("a folder found gone is found in either form", () => {
+    setFolderGone(NFD, true);
+    expect(isFolderGone(NFC)).toBe(true);
+    expect(ranElsewhere(NFC, NFD)).toBeNull();
+    expect(ranElsewhere("C:\\Users\\you", "c:\\users\\you")).toBeNull();
+    setFolderGone(NFC, false);
+    expect(goneFolders()).toEqual([]);
   });
 });
 

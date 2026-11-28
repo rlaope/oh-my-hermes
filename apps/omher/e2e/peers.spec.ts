@@ -273,6 +273,72 @@ test("a remote bot: folder chats and Restart refuse it; Settings removes the com
   expect((await calls()).some((c) => c.op === "peers.detach")).toBe(true);
 });
 
+test("Settings › Remote machines shows when the link was up, the next try, and its history newest first", async ({ page }) => {
+  await open(page);
+  await attachMini(page);
+  await page.keyboard.press(process.platform === "darwin" ? "Meta+," : "Control+,");
+  await page.getByTestId("settings-nav-general").click();
+  const row = page.getByTestId("remote-machines").getByTestId("remote-mac-mini");
+  // the shell's status after a link that was up 40 s and dropped 20 s ago, then waiting 8 s
+  await page.evaluate(() => {
+    const now = Date.now();
+    (window as any).__omherPeerState("mac-mini", {
+      state: "reconnecting",
+      attempt: 3,
+      kind: "dropped",
+      url: undefined,
+      connected_at: now - 60_000,
+      retry_at: now + 8_000,
+      events: [
+        { at: now - 60_000, what: "connected" },
+        { at: now - 20_000, what: "dropped", kind: "dropped", reason: "Connection to host.example closed by remote host." },
+        { at: now - 20_000, what: "retrying", wait: 8 },
+      ],
+    });
+  });
+  const line = row.getByTestId("remote-line-mac-mini");
+  // last connected when it dropped, not when it came up
+  await expect(line).toContainText(/next try in [5-8]s · last connected 2\ds ago/);
+  // the countdown ticks
+  await expect(line).toContainText(/next try in [0-6]s/, { timeout: 4000 });
+  const toggle = row.getByTestId("remote-history-mac-mini");
+  await expect(toggle).toHaveText("History (3)");
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  const items = row.getByTestId("remote-events-mac-mini").locator("li");
+  await expect(items).toHaveCount(3);
+  await expect(items.nth(0)).toContainText("retrying in 8s");
+  await expect(items.nth(1)).toContainText("dropped");
+  await expect(items.nth(1)).toContainText("Connection to host.example closed by remote host.");
+  await expect(items.nth(2)).toContainText(/1m ago/);
+  await expect(items.nth(2)).toContainText("connected");
+  await shot(page, "peer-history-dark.png");
+  // back up: the line says for how long, the history stays
+  await page.evaluate(() => (window as any).__omherPeerState("mac-mini", { state: "connected", kind: undefined, retry_at: undefined, connected_at: Date.now() - 3 * 60_000 }));
+  await expect(line).toContainText("up for 3m");
+  await expect(items).toHaveCount(3);
+  await toggle.click();
+  await expect(row.getByTestId("remote-events-mac-mini")).toHaveCount(0);
+});
+
+test("the card warns when the host names this computer, and not for another one", async ({ page }) => {
+  await open(page);
+  await page.getByRole("button", { name: "Add a bot" }).click();
+  await page.getByTestId("addbot-ssh").click();
+  const card = page.getByTestId("peer-card");
+  const warn = card.getByTestId("peer-this-computer");
+  for (const host of ["localhost", "me@127.0.0.1", "mybox", "MyBox.local"]) {
+    await card.getByTestId("peer-host").fill(host);
+    await expect(warn, host).toContainText(`${host} is this computer`);
+  }
+  await card.getByTestId("peer-host").fill("demo@host.example");
+  await expect(warn).toHaveCount(0);
+  // a warning, not a refusal: Check still runs
+  await card.getByTestId("peer-host").fill("mybox");
+  await expect(card.getByTestId("peer-check")).toBeEnabled();
+});
+
 test("a remote bot has threads (#3172): the row's + opens one, a send goes into it, its page lists it", async ({ page }) => {
   await open(page);
   await attachMini(page);

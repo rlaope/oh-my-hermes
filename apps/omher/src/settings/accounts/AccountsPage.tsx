@@ -9,6 +9,7 @@ import type { AccountGroup } from "../../lib/protocol";
 import { getStore } from "../../state/store";
 import { AgentIcon, Popover } from "../../ui";
 import { Ring } from "../../sidebar/Usage";
+import { Seg } from "../../chat/model/Seg";
 import { accountHost, type LoginStatus, type SignInEvent } from "./native";
 import {
   CLI_NAME,
@@ -23,7 +24,10 @@ import {
   resetFirstOn,
   setAutoSwitch,
   setResetFirst as saveResetFirst,
+  setSwitchAt,
   splitGroups,
+  switchAt as savedSwitchAt,
+  SWITCH_AT_STEPS,
   usageLines,
   type Row,
 } from "./rules";
@@ -146,6 +150,7 @@ function CliGroup({ g, status, version, note }: { g: AccountGroup; status: Recor
   const host = accountHost();
   const [auto, setAuto] = useState(() => autoSwitchOn(g.cli));
   const [resetFirst, setResetFirst] = useState(() => resetFirstOn(g.cli));
+  const [switchAt, setSwitchAtState] = useState(() => savedSwitchAt(g.cli));
   const [adding, setAdding] = useState(false);
   const [label, setLabel] = useState("");
   const [signIn, setSignIn] = useState<SignIn | null>(null);
@@ -327,6 +332,26 @@ function CliGroup({ g, status, version, note }: { g: AccountGroup; status: Recor
           <span className="acc-auto-t">
             <b>{t("acc.autoSwitch")}</b>
             <span>{t("acc.autoSwitchLine")}</span>
+          </span>
+        </div>
+      )}
+      {signedIn > 1 && (
+        <div className={`acc-auto acc-at${auto ? "" : " off"}`} data-testid={`switchat-row-${g.cli}`}>
+          <span className="acc-auto-t">
+            <b>{t("acc.switchAt")}</b>
+            <span>{t("acc.switchAtLine")}</span>
+            <Seg
+              small
+              label={t("acc.switchAtOf", { cli: CLI_NAME[g.cli] })}
+              value={String(switchAt)}
+              options={SWITCH_AT_STEPS.map((n) => ({ value: String(n), label: `${n}%` }))}
+              disabled={!auto}
+              onChange={(v) => {
+                setSwitchAt(g.cli, Number(v));
+                setSwitchAtState(Number(v));
+              }}
+              testId={`switchat-${g.cli}`}
+            />
           </span>
         </div>
       )}

@@ -17,6 +17,15 @@
 //
 // Two options go with every search: Match case and Regular expression. A pattern the add-on could not compile finds
 // nothing (the bar shows the field in an error state); it is never handed to the add-on, which would throw.
+//
+// A plain text matches however its letters were composed. macOS hands programs file names decomposed (NFD: `보고서`
+// as six jamo, `é` as `e` and an accent), so `ls` prints them that way, while a person types them composed (NFC).
+// The add-on compares code units, so `보고서` found nothing in `보고서.pdf` from `ls`. `findQuery` turns such a text
+// into one regular expression whose every letter with two forms accepts either (a group of its composed and its
+// decomposed spelling), and the add-on runs that once: one search, so each match is counted once, highlighted over
+// its own cells and stepped through in the order the add-on keeps. A text with nothing to compose (most of them)
+// goes to the add-on exactly as typed. A text the person marked as a regular expression is theirs and goes as
+// written.
 import type { IBufferRange, IDecoration, IDisposable, IMarker, Terminal } from "@xterm/xterm";
 import type { SearchAddon } from "@xterm/addon-search";
 import { findColors, type FindColors } from "./find-colors";
@@ -46,6 +55,23 @@ export function validPattern(text: string): boolean {
   } catch {
     return false;
   }
+}
+
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+
+/** What the add-on is asked to find for `text` with `options`: the same, unless it is a plain text with a letter whose
+ *  composed (NFC) and decomposed (NFD) forms differ; then a regular expression that takes either form of each such
+ *  letter. Match case keeps its meaning (the add-on's regular expressions ignore case unless it is on). Only these
+ *  two forms are matched: a syllable left half composed (`가` + `ᆨ` for `각`) is not. No `u` flag is needed: the
+ *  pattern has no character class, and a letter outside the BMP is escaped as its two code units, in sequence. */
+export function findQuery(text: string, options: FindOptions): { text: string; options: FindOptions } {
+  if (options.regex || text.normalize("NFC") === text.normalize("NFD")) return { text, options };
+  let pattern = "";
+  for (const c of text.normalize("NFC")) {
+    const d = c.normalize("NFD");
+    pattern += d === c ? escapeRegExp(c) : `(?:${escapeRegExp(c)}|${escapeRegExp(d)})`;
+  }
+  return { text: pattern, options: { ...options, regex: true } };
 }
 
 export interface FindResults {
@@ -218,12 +244,13 @@ export function makeFinder(term: Terminal): Finder {
       // closed, or looking for something else by now (the add-on's chunk loads on the first search)
       if (!a || gone || wanted !== text || !same(how, options)) return;
       colors = findColors(term.options.theme ?? {});
+      const q = findQuery(text, how);
       // the add-on stores the new options before it compares them with the last ones, so a change of option alone
       // would keep the old matches: dropping its cached text makes it find them all again
-      if (searched && !same(searched, how)) a.clearDecorations();
-      searched = how;
-      const opts = { ...how, incremental, decorations: colors };
-      const found = direction === "next" ? a.findNext(text, opts) : a.findPrevious(text, opts);
+      if (searched && !same(searched, q.options)) a.clearDecorations();
+      searched = q.options;
+      const opts = { ...q.options, incremental, decorations: colors };
+      const found = direction === "next" ? a.findNext(q.text, opts) : a.findPrevious(q.text, opts);
       // nothing matched: the add-on fires no event then
       if (!found) {
         unmark();
@@ -263,7 +290,8 @@ export function makeFinder(term: Terminal): Finder {
       const m = matchNow();
       a.clearDecorations();
       if (m) term.select(m.x, m.y, m.length);
-      if (!a.findNext(wanted, { ...how, incremental: true, decorations: colors })) {
+      const q = findQuery(wanted, how);
+      if (!a.findNext(q.text, { ...q.options, incremental: true, decorations: colors })) {
         unmark();
         emit({ index: -1, count: 0, capped: false });
       }

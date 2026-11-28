@@ -349,6 +349,54 @@
   font-size: 11px;
   color: var(--muted);
 }
+.st-k .peer-row-l {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--quiet);
+}
+.peer-hist-b {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.peer-hist-b:hover,
+.peer-hist-b[aria-expanded="true"] {
+  color: var(--ink);
+}
+.peer-hist {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+  color: var(--quiet);
+}
+.peer-hist li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 6px;
+  padding: 1px 0;
+}
+.st-k .peer-hist span {
+  display: inline;
+}
+.peer-hist-t {
+  min-width: 52px;
+  font-variant-numeric: tabular-nums;
+}
+.peer-hist li[data-what="dropped"] .peer-hist-w,
+.peer-hist li[data-what="failed"] .peer-hist-w {
+  color: var(--danger);
+}
 .peer-dot {
   width: 6px;
   height: 6px;
