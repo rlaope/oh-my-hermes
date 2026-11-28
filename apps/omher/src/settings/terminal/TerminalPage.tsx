@@ -337,6 +337,9 @@ export function TerminalPage() {
         <Row title={t("term.osc52")} hints={[t("term.osc52Hint")]} testId="term-osc52-row">
           <Seg small label={t("term.osc52")} value={term.osc52 ? "on" : "off"} options={ON_OFF()} onChange={(v) => set({ osc52: v === "on" })} testId="term-osc52" />
         </Row>
+        <Row title={t("term.programResume")} hints={[t("term.programResumeHint")]} testId="term-program-resume-row">
+          <Seg small label={t("term.programResume")} value={term.programResume ? "on" : "off"} options={ON_OFF()} onChange={(v) => set({ programResume: v === "on" })} testId="term-program-resume" />
+        </Row>
       </div>
 
       <div className="st-gh">{t("term.history")}</div>

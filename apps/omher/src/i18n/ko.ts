@@ -148,6 +148,8 @@ export const ko: Record<Key, string> = {
   "resume.paused": "omher가 다시 시작되면서 멈춤",
   "resume.pausedShort": "멈춤",
   "resume.resume": "이어하기",
+  "resume.program": "이어하기를 누르면 다시 실행: {program}",
+  "resume.programTip": "이 터미널의 프로그램이 omher가 다시 시작된 뒤 자기를 다시 실행해 달라고 요청했어요. 이어하기를 누르면 그 폴더에서 셸을 열고, 프로그램이 준 인자 그대로 한 번 실행해요({program}, 셸 명령으로 읽지 않아요). Windows에서는 쓸 수 없어요.",
 
   // sidebar nav (the foot of the sidebar) and its search
   "nav.automations": "자동화",
@@ -642,6 +644,8 @@ export const ko: Record<Key, string> = {
   "term.osc52": "프로그램 클립보드 복사 허용",
   "term.osc52Hint": "터미널에서 키를 누른 직후, 그 터미널의 프로그램이 클립보드에 텍스트를 넣을 수 있어요(OSC 52: tmux, Neovim yank, SSH 원격 복사). 클립보드를 읽을 수는 없어요.",
   "term.osc52Refused": "프로그램이 복사하려 했지만, 이 터미널에 포커스가 없었거나 직전에 누른 키가 없어서 막았어요. 여기서 복사 키를 다시 누르세요.",
+  "term.programResume": "프로그램의 다시 시작 요청 허용",
+  "term.programResumeHint": "TERMINALS 셸 안의 프로그램(편집기, 에이전트)이 omher가 다시 시작된 뒤 자기를 다시 실행해 달라고 요청할 수 있어요(OSC 7577). 그 셸에만 주어지는 비밀값으로 그 터미널에서 돌고 있음을 증명해야 하고, omher는 명령을 나만 읽을 수 있는 ~/.omher/resume에 두었다가 이어하기를 누를 때 한 번 실행해요. Windows에서는 지원하지 않아요.",
   "paste.label": "붙여넣기 확인",
   "paste.title": "{n}줄을 붙여넣을까요?",
   "paste.titleOne": "줄바꿈으로 끝나는 텍스트를 붙여넣을까요?",

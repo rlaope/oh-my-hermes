@@ -66,6 +66,10 @@ export interface TermSettings {
   dimUnfocused: number;
   /** Seconds a closed TERMINALS row's program keeps running so the close can be undone (closeGrace.ts); 0 = Off. */
   undoClose: number;
+  /** Program Resume (OSC 7577): a program in a TERMINALS Shell row may ask to be started again after omher restarts
+   *  (its shell gets an `OSC7577_TOKEN`; Resume on its paused row runs it again in its folder, once). Off: no token,
+   *  no record read. On by default; not on Windows. */
+  programResume: boolean;
   /** The shell a new TERMINALS Shell row runs: an id from the shell's `shells_available` list. "" = the login shell
    *  (Windows PowerShell on Windows), as before. An id no longer on the list opens the default. */
   defaultShell: string;
@@ -164,6 +168,7 @@ export const TERM_DEFAULTS: TermSettings = {
   keepHistory: true,
   dimUnfocused: 0.72,
   undoClose: 10,
+  programResume: true,
   defaultShell: "",
   custom: null,
   edits: { dark: null, light: null },
@@ -230,6 +235,7 @@ export function parseTermSettings(raw: unknown): TermSettings {
     keepHistory: bool(o.keepHistory, d.keepHistory),
     dimUnfocused: Math.round(num(o.dimUnfocused, TERM_DIM.min, TERM_DIM.max, d.dimUnfocused) * 100) / 100,
     undoClose: TERM_UNDO_CLOSE.includes(o.undoClose as number) ? (o.undoClose as number) : d.undoClose,
+    programResume: bool(o.programResume, d.programResume),
     defaultShell: cleanShellId(o.defaultShell),
     custom: parseCustomTheme(o.custom),
     edits: (() => {

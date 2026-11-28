@@ -894,6 +894,25 @@ struct Live {
     /// An Antigravity row: the id Antigravity's workspace cache named for its folder right before its program started
     /// (`fg::agy_cache_entry`), never taken as its own.
     agy_before: Option<String>,
+    /// A Shell row that may ask to be restarted: how it ended, for its record ([`crate::program_resume::TapState`]).
+    resume: Option<Arc<crate::program_resume::TapState>>,
+}
+
+/// A Shell row's part in Program Resume: its link id, the record store, and whether to bring back its record now.
+pub struct ShellResume {
+    pub key: String,
+    pub store: Arc<crate::program_resume::Store>,
+    pub take: bool,
+}
+
+/// A started shell: its id, its folder, the shell asked for that is missing, and the line that brings back the
+/// program its row kept, with that program's name (escaped) for the row.
+pub struct ShellStart {
+    pub id: u32,
+    pub cwd: PathBuf,
+    pub missing: Option<String>,
+    pub resume_line: Option<String>,
+    pub resume_label: Option<String>,
 }
 
 impl Live {
@@ -1032,8 +1051,23 @@ impl Sessions {
     where
         F: FnMut(Output) + Send + 'static,
     {
+        self.spawn_cmd_with(cmd, cwd, account_env, None, cols, rows, sink)
+    }
+
+    /// [`Sessions::spawn_cmd`] for a program that may ask to be restarted. `program`: the TERMINALS row's link id and the record store when it may ask to be restarted
+    /// ([`crate::program_resume`]): its program gets a new `OSC7577_TOKEN` and its output is watched for reports.
+    #[allow(clippy::too_many_arguments)]
+    fn spawn_cmd_with<F>(&self, mut cmd: CommandBuilder, cwd: &Path, account_env: &[(String, String)], program: Option<(String, Arc<crate::program_resume::Store>)>, cols: u16, rows: u16, sink: F) -> Result<u32, String>
+    where
+        F: FnMut(Output) + Send + 'static,
+    {
         if !cwd.is_absolute() || !cwd.is_dir() {
             return Err(format!("not a folder: {}", cwd.display()));
+        }
+        // the token stays here and in the program's environment: it is never handed to the page
+        let program = program.filter(|_| crate::program_resume::supported()).and_then(|(key, store)| Some((crate::program_resume::new_token()?, key, store)));
+        if let Some((token, ..)) = &program {
+            cmd.env(crate::program_resume::TOKEN_ENV, token);
         }
         let pair = native_pty_system().openpty(clamp_size(cols, rows)).map_err(|e| e.to_string())?;
         let started = std::time::SystemTime::now();
@@ -1048,7 +1082,12 @@ impl Sessions {
 
         let id = self.next.fetch_add(1, Ordering::SeqCst) + 1;
         let out = Out::new(self.marks);
-        spawn_reader(id, reader, sink.clone(), out.clone());
+        let resume = program.map(|(token, key, store)| {
+            let state = Arc::new(crate::program_resume::TapState { end: std::sync::atomic::AtomicU8::new(crate::program_resume::LIVE), exited: exited.clone(), key: Some(key), run: crate::program_resume::new_run(), store });
+            crate::program_resume::Tap::new(token, pid, state)
+        });
+        let resume_state = resume.as_ref().map(|t| t.state.clone());
+        spawn_reader(id, reader, sink.clone(), out.clone(), resume);
         let (input, queued) = mpsc::sync_channel::<Vec<u8>>(INPUT_QUEUE);
         let writer_done = Arc::new(AtomicBool::new(false));
         {
@@ -1065,13 +1104,17 @@ impl Sessions {
             });
         }
         {
-            let (exited, out) = (exited.clone(), out.clone());
+            let (exited, out, resume) = (exited.clone(), out.clone(), resume_state.clone());
             named(format!("omher-pty-{id}-wait"), move || {
                 let code = match child.wait() {
                     Ok(st) if st.signal().is_none() => Some(st.exit_code()),
                     _ => None,
                 };
                 exited.store(true, Ordering::SeqCst);
+                // the terminal ended for good (not omher quitting): its record goes
+                if let Some(r) = &resume {
+                    r.program_ended();
+                }
                 // what the program printed last is handed on before its exit is, whatever the page has drawn
                 out.flow.drain(Duration::from_millis(120));
                 if let Ok(mut f) = sink.lock() {
@@ -1079,7 +1122,7 @@ impl Sessions {
                 }
             });
         }
-        self.live.lock().unwrap().insert(id, Live { master: pair.master, input, writer_done, killer, pid, exited, out, account_env: account_env.to_vec(), cwd: cwd.to_path_buf(), started, agy_before: None });
+        self.live.lock().unwrap().insert(id, Live { master: pair.master, input, writer_done, killer, pid, exited, out, account_env: account_env.to_vec(), cwd: cwd.to_path_buf(), started, agy_before: None, resume: resume_state });
         Ok(id)
     }
 
@@ -1199,6 +1242,38 @@ impl Sessions {
         Ok((self.spawn(argv, &at, None, &env, cols, rows, sink)?, at, missing))
     }
 
+    /// [`Sessions::start_shell`] for a TERMINALS Shell row that may ask to be restarted ([`ShellResume`]): its shell
+    /// gets an `OSC7577_TOKEN` and its reports are kept under the row's link id; with `take`, the record that row kept
+    /// leaves the store before the shell starts, and the line that brings it back comes with the answer
+    /// ([`crate::program_resume::typed_line`]: omher's own program and a one-use launch file, never the command).
+    #[allow(clippy::too_many_arguments)]
+    pub fn start_shell_resumable<F>(&self, cwd: Option<&str>, shell: Option<&str>, link: Option<&str>, resume: Option<ShellResume>, home: &Path, cols: u16, rows: u16, sink: F) -> Result<ShellStart, String>
+    where
+        F: FnMut(Output) + Send + 'static,
+    {
+        let env = terminal_env("shell", link)?;
+        let etc_shells = std::fs::read_to_string("/etc/shells").unwrap_or_default();
+        let (argv, missing) = shell_argv_for(shell, &host_env, &etc_shells, is_program_file, Os::current())?;
+        let at = shell_cwd(cwd, home);
+        let mut line = None;
+        if let Some(r) = resume.as_ref().filter(|r| r.take) {
+            // one-shot: the record is out of the store before anything starts, whatever happens next
+            if let Some(rec) = r.store.take(&r.key) {
+                let typed = argv.first().is_some_and(|s| crate::program_resume::types_into(Path::new(s)));
+                if let (true, Some(l)) = (typed, crate::program_resume::prepare(&rec, r.store.dir())) {
+                    line = std::env::current_exe().ok().and_then(|exe| crate::program_resume::typed_line(&exe, &l.file)).map(|t| (t, l.label));
+                    if line.is_none() {
+                        let _ = std::fs::remove_file(&l.file);
+                    }
+                }
+            }
+        }
+        let program = resume.map(|r| (r.key, r.store));
+        let id = self.spawn_cmd_with(command_for(argv, &at, None, &env), &at, &env, program, cols, rows, sink)?;
+        let (resume_line, resume_label) = line.unzip();
+        Ok(ShellStart { id, cwd: at, missing, resume_line, resume_label })
+    }
+
     /// Settings › Accounts › GitHub "Sign in to another account": gh's own sign-in (`gh auth login`, or with
     /// `--hostname <host>`: gh_me::login_argv) in a pseudo-terminal in `home`, shown in the terminal panel. The program
     /// is the `gh` found on this computer, the arguments are those fixed words with at most a checked host, and
@@ -1241,10 +1316,14 @@ impl Sessions {
         s.master.resize(clamp_size(cols, rows)).map_err(|e| e.to_string())
     }
 
-    /// Stop the session's program (hang-up, then a hard kill after a grace period) and forget it.
+    /// Stop the session's program (hang-up, then a hard kill after a grace period) and forget it. Its row was
+    /// closed: a record its program kept goes.
     pub fn close(&self, id: u32) {
         let live = self.live.lock().unwrap().remove(&id);
         if let Some(s) = live {
+            if let Some(r) = &s.resume {
+                r.closed();
+            }
             named(format!("omher-pty-{id}-close"), move || stop(s, Duration::from_millis(1500)));
         }
     }
@@ -1252,6 +1331,12 @@ impl Sessions {
     /// Stop every session now (the app is quitting).
     pub fn close_all(&self) {
         let all: Vec<(u32, Live)> = self.live.lock().unwrap().drain().collect();
+        // omher is quitting (or its page reloaded): the records stay for the next start
+        for (_, s) in &all {
+            if let Some(r) = &s.resume {
+                r.quitting();
+            }
+        }
         let handles: Vec<_> = all.into_iter().map(|(id, s)| named(format!("omher-pty-{id}-close"), move || stop(s, Duration::from_millis(400)))).collect();
         for h in handles {
             let _ = h.join();
@@ -1399,6 +1484,8 @@ fn command_for(argv: Vec<OsString>, cwd: &Path, path_env: Option<OsString>, acco
         cmd.env(k, v);
     }
     crate::appimage::host_env(&mut cmd);
+    // a token omher itself inherited is never passed on (spawn_cmd sets the terminal's own)
+    cmd.env_remove(crate::program_resume::TOKEN_ENV);
     cmd
 }
 
@@ -1430,7 +1517,7 @@ pub(crate) static PTY_READ_BYTES: std::sync::atomic::AtomicU64 = std::sync::atom
 /// One thread reads the PTY (macOS hands out at most 1 KB per read) into the session's [`Pipe`]; another takes one
 /// message per [`COALESCE_WINDOW`] / [`COALESCE_BYTES`] out of it and hands it to the sink, so a big dump is a few
 /// dozen Channel sends instead of one per KB. The reader holds off while the page is behind ([`Flow`]).
-fn spawn_reader(id: u32, mut reader: Box<dyn Read + Send>, sink: Sink, out: Arc<Out>) {
+fn spawn_reader(id: u32, mut reader: Box<dyn Read + Send>, sink: Sink, out: Arc<Out>, mut resume: Option<crate::program_resume::Tap>) {
     {
         let out = out.clone();
         named(format!("omher-pty-{id}-reader"), move || {
@@ -1446,6 +1533,10 @@ fn spawn_reader(id: u32, mut reader: Box<dyn Read + Send>, sink: Sink, out: Arc<
                         #[cfg(all(test, unix))]
                         PTY_READ_BYTES.fetch_add(n as u64, Ordering::SeqCst);
                         out.io.fetch_add(1, Ordering::Relaxed);
+                        // Program Resume reports are read here and nowhere else; the bytes go on to the page unchanged
+                        if let Some(t) = resume.as_mut() {
+                            t.feed(&buf[..n]);
+                        }
                         forward = forward && out.pipe.push(&buf[..n]);
                     }
                 }
@@ -3370,6 +3461,110 @@ mod tests {
             assert_eq!(s.count(), 0);
         }
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// Program Resume end to end: a script in a Shell row reports a command with the token only its shell was given;
+    /// omher quits (the record stays) and starts again; the row's next shell takes the record out of the store once,
+    /// starts in its folder, and the line it hands the page names omher and a launch file only; that file starts the
+    /// command with each element one argument, so `$(touch pwned)` stays text.
+    #[cfg(unix)]
+    #[test]
+    fn program_resume_a_reported_command_comes_back_once_after_a_restart() {
+        use crate::program_resume as pr;
+        let base = std::env::temp_dir().join(format!("omher-pr-live-{}-{}", std::process::id(), pr::new_run()));
+        let (home, work, dir) = (base.join("home"), base.join("work"), base.join("resume"));
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::create_dir_all(&work).unwrap();
+        let script = base.join("report.sh");
+        let b = |x: &str| pr::b64(x);
+        let body = format!("pid=$PPID:time=$(date +%s):argv={},{},{}:cwd={}", b("/usr/bin/touch"), b("came-back"), b("$(touch pwned)"), b(work.to_str().unwrap()));
+        std::fs::write(
+            &script,
+            format!("[ -n \"$OSC7577_TOKEN\" ] || {{ echo NO-TOKEN; exit 1; }}\nbody=\"{body}\"\nm=$(printf '%s:%s' \"$body\" \"$OSC7577_TOKEN\" | (sha256sum 2>/dev/null || shasum -a 256) | cut -c1-64)\nprintf '\\033]7577;%s:mac=%s\\033\\\\' \"$body\" \"$m\"\necho REPORTED\n"),
+        )
+        .unwrap();
+        let key = "q2w3e4r5t6";
+        let s = Sessions::default();
+        let store = pr::Store::open(dir.clone());
+        let out = Arc::new(Mutex::new(Vec::<u8>::new()));
+        let o = out.clone();
+        let started = s
+            .start_shell_resumable(Some(work.to_str().unwrap()), None, Some(key), Some(ShellResume { key: key.into(), store: store.clone(), take: false }), &home, 120, 24, move |ev| {
+                if let Output::Data(b) = ev {
+                    o.lock().unwrap().extend(b);
+                }
+            })
+            .unwrap();
+        assert!(started.resume_line.is_none());
+        s.write(started.id, format!("sh '{}'\r", script.display()).as_bytes()).unwrap();
+        assert!(wait_for(|| store.get(key).is_some()), "{:?}", String::from_utf8_lossy(&out.lock().unwrap()));
+        assert_eq!(store.get(key).unwrap().argv, vec!["/usr/bin/touch".to_string(), "came-back".into(), "$(touch pwned)".into()]);
+        // a copy of the report with another token never counts: the shell's environment holds the only one
+        assert!(!String::from_utf8_lossy(&out.lock().unwrap()).contains("NO-TOKEN"));
+        // omher quits: the record stays on disk
+        s.close_all();
+        drop(store);
+        let store = pr::Store::open(dir.clone());
+        assert!(store.get(key).is_some());
+        // omher starts again; the row comes back and its shell is started to bring the record back
+        let s = Sessions::default();
+        let again = s.start_shell_resumable(None, None, Some(key), Some(ShellResume { key: key.into(), store: store.clone(), take: true }), &home, 120, 24, |_| {}).unwrap();
+        // one-shot: gone from memory and from the file before it runs (opening the store also clears launch files, so
+        // the file is read directly here)
+        assert!(store.get(key).is_none());
+        assert!(!std::fs::read_to_string(dir.join("resume.json")).unwrap().contains(key));
+        let shell_name = shell_argv(&host_env, &std::fs::read_to_string("/etc/shells").unwrap_or_default(), is_program_file, Os::current()).unwrap()[0].clone();
+        if pr::types_into(Path::new(&shell_name)) {
+            let line = again.resume_line.clone().expect("a line for the page to type");
+            assert_eq!(again.resume_label.as_deref(), Some("touch"));
+            assert!(!line.contains("came-back") && !line.contains("pwned") && !line.contains("touch"), "{line}");
+            let file = line.rsplit_once(" '").unwrap().1.trim_end_matches('\'');
+            let (program, argv, cwd) = pr::exec_plan(Path::new(file), &dir, std::env::var_os("PATH").as_deref()).unwrap();
+            assert!(pr::exec_command(&program, &argv, cwd.as_deref()).status().unwrap().success());
+            assert!(work.join("came-back").exists() && work.join("$(touch pwned)").exists());
+            assert!(!work.join("pwned").exists() && !base.join("pwned").exists() && !home.join("pwned").exists());
+        }
+        // a second start takes nothing: a failed or finished resume is not tried again
+        let third = s.start_shell_resumable(None, None, Some(key), Some(ShellResume { key: key.into(), store: store.clone(), take: true }), &home, 120, 24, |_| {}).unwrap();
+        assert!(third.resume_line.is_none());
+        s.close_all();
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// The token a session gets is its own: omher's inherited one is never passed on, and a program that may not
+    /// ask (no row link, the bottom panel) gets none.
+    #[cfg(unix)]
+    #[test]
+    fn program_resume_token_is_new_per_start_and_never_inherited() {
+        let cmd = command_for(vec!["/bin/sh".into()], &std::env::temp_dir(), None, &[]);
+        assert!(cmd.get_env(crate::program_resume::TOKEN_ENV).is_none());
+        let home = std::env::temp_dir();
+        let dir = home.join(format!("omher-pr-tok-{}-{}", std::process::id(), crate::program_resume::new_run()));
+        let store = crate::program_resume::Store::open(dir.clone());
+        let s = Sessions::default();
+        let grab = |r: Option<ShellResume>| {
+            let out = Arc::new(Mutex::new(Vec::<u8>::new()));
+            let o = out.clone();
+            let st = s
+                .start_shell_resumable(None, None, Some("q2w3e4r5t6"), r, &home, 120, 24, move |ev| {
+                    if let Output::Data(b) = ev {
+                        o.lock().unwrap().extend(b);
+                    }
+                })
+                .unwrap();
+            s.write(st.id, b"echo \"to\"\"k:[${OSC7577_TOKEN:-none}]\"\r").unwrap();
+            assert!(wait_for(|| String::from_utf8_lossy(&out.lock().unwrap()).contains("tok:[")));
+            let text = String::from_utf8_lossy(&out.lock().unwrap()).into_owned();
+            let at = text.rfind("tok:[").unwrap() + 5;
+            text[at..].split(']').next().unwrap().to_string()
+        };
+        let a = grab(Some(ShellResume { key: "q2w3e4r5t6".into(), store: store.clone(), take: false }));
+        let b2 = grab(Some(ShellResume { key: "q2w3e4r5t6".into(), store: store.clone(), take: false }));
+        assert_eq!(a.len(), 32, "{a}");
+        assert_ne!(a, b2);
+        assert_eq!(grab(None), "none");
+        s.close_all();
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// A TERMINALS Shell row's shell is told its row's link (an `omh` typed there reopens what it dropped); a link that

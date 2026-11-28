@@ -149,6 +149,8 @@ export const en = {
   "resume.paused": "Paused when omher restarted",
   "resume.pausedShort": "Paused",
   "resume.resume": "Resume",
+  "resume.program": "Resume runs {program} again",
+  "resume.programTip": "A program in this terminal asked to be started again after omher restarts. Resume opens your shell in its folder and runs {program} there, once, with the arguments it gave (never read as shell commands). Not available on Windows.",
 
   // sidebar nav (the foot of the sidebar) and its search
   "nav.automations": "Automations",
@@ -644,6 +646,8 @@ export const en = {
   "term.osc52": "Programs may copy",
   "term.osc52Hint": "A program in the terminal can put text on the clipboard (OSC 52: tmux and Neovim yanks, copying over SSH) right after you press a key in that terminal. It can never read the clipboard.",
   "term.osc52Refused": "A program tried to copy, but this terminal did not have your keyboard or no key was pressed just before. Press its copy key again here.",
+  "term.programResume": "Let programs ask to be restarted",
+  "term.programResumeHint": "A program in a TERMINALS shell (an editor, an agent) may ask omher to start it again after omher restarts (OSC 7577). It proves it runs in that terminal with a secret only its shell is given; omher keeps its command in ~/.omher/resume, readable only by you, and runs it once, when you press Resume. Not on Windows.",
   "paste.label": "Confirm paste",
   "paste.title": "Paste {n} lines?",
   "paste.titleOne": "Paste text that ends with a line break?",
