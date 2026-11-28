@@ -28,12 +28,14 @@ use serde::{Deserialize, Serialize};
 use crate::bridge::{bridge_ws_url, hex, new_token, no_console_window, parse_ready_line};
 
 /// The fixed `-o` options every link runs with: key or agent login only, a bounded connect, and an exit (not a
-/// half-open tunnel) when the forward cannot be set up or the link goes quiet.
+/// half-open tunnel) when the forward cannot be set up or the link goes quiet. A keepalive every 5 s, three missed,
+/// ends a dead link in about 15 s: at 15 s x 3 a link whose far end was gone still read as connected for most of a
+/// minute.
 pub const SSH_OPTIONS: [&str; 5] = [
     "BatchMode=yes",
     "ConnectTimeout=10",
     "ExitOnForwardFailure=yes",
-    "ServerAliveInterval=15",
+    "ServerAliveInterval=5",
     "ServerAliveCountMax=3",
 ];
 /// How long a link may take from `ssh` start to the remote bridge's ready line (a first copy of the script included).
@@ -1040,7 +1042,7 @@ mod tests {
             a,
             [
                 "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ExitOnForwardFailure=yes", "-o",
-                "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3", "-T", "-L", "127.0.0.1:50001:127.0.0.1:40002",
+                "ServerAliveInterval=5", "-o", "ServerAliveCountMax=3", "-T", "-L", "127.0.0.1:50001:127.0.0.1:40002",
                 "--", "demo@host.example", "sh -c 'echo hi'",
             ]
         );
