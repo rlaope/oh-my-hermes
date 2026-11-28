@@ -411,15 +411,22 @@ Developer or Windows signing certificate is involved: macOS builds use an ad-hoc
 
 The same run then points the in-app updater at the release by rewriting `latest.json` on the rolling `omher-latest`
 prerelease, which every omher reads. `scripts/release-guard.mjs` (Node built-ins only; its tests run in `pnpm test`)
-guards that write:
+guards that write. It always runs from the workflow's own revision, so a hand run on an older tag uses today's guard;
+from the tag being released come only the build and its `src-tauri/tauri.conf.json` (version and pinned key):
 
 - Before the release is made, each updater payload's signature must verify against the key pinned in
   `src-tauri/tauri.conf.json`, the way the updater checks it, and be signed for the manifest's version. A signing-key
   mismatch fails the run instead of publishing an update nobody can install.
 - Before the pointer moves, the version it serves now must be lower than the new one (semver, pre-release aware).
   Re-running an old tag, or an older run finishing last, fails with a message instead of moving every omher back. The
-  first publish (no file yet) passes. To publish the same version again on purpose, run the workflow by hand with the
-  `republish` input checked; a lower version is refused either way.
+  first publish (no file yet) passes, and so does a re-run of the pointer job whose read-back failed: the same version
+  with the same payloads and signatures changes nothing. To publish the same version with other contents on purpose,
+  run the workflow by hand with the `republish` input checked; a lower version is refused either way.
+- Also before the pointer moves, each payload, as the tag's release serves it, must verify against the key pinned at
+  the served version's tag (`omher-v<served>`, read with `gh api`): an installed omher checks an update with the key
+  of the version it runs, not the new tag's, so changing `plugins.updater.pubkey` together with the signing secret
+  would publish an update no installed omher accepts. A deliberate key rotation is a hand run with the separate
+  `key_rotation` input checked (off by default). The first publish skips this check.
 - After the upload, the public file is read back (up to 30 times, 10 s apart), and the run fails unless it is the
   manifest just uploaded.
 

@@ -4511,6 +4511,33 @@ class Usage(unittest.TestCase):
         # limited by the 5-hour window: it lifts when that one resets, not when Opus's does
         self.assertEqual((rows["work"]["state"], rows["work"]["resets_at"]), ("limited", 1794210000.0))
 
+    def test_an_account_row_on_the_meter_counts_its_account_wide_windows_only(self):
+        """The meter's account rows say what limits the account: a model's full week neither reads as the account's
+        percent nor sets when a limited account lifts."""
+        h = self.home()
+        (h / ".claude.json").write_text(json.dumps({"oauthAccount": {"emailAddress": "me@example.com"}}), encoding="utf-8")
+        ob.add_account("claude", "Work", h)
+        (h / ".omher/accounts/claude/work/.claude.json").write_text(
+            json.dumps({"oauthAccount": {"emailAddress": "work@example.com"}}), encoding="utf-8")
+        self.record(h, "default", 1794199000.0, {"seven_day": {"used_percent": 6.0, "resets_at": 1794600000}})
+        self.record(h, "work", 1794199000.0, {"five_hour": {"used_percent": 20.0, "resets_at": 1794210000},
+                                             "seven_day": {"used_percent": 20.0, "resets_at": 1794600000},
+                                             "seven_day_opus": {"used_percent": 100.0, "resets_at": 1794500000}})
+        work = ob.read_usage(h, now=1794200000.0, which=lambda _: None)["providers"][0]["accounts"][1]
+        self.assertEqual((work["state"], work["used_percent"], work["resets_at"]), ("ok", 20.0, 1794210000.0))
+        # limited by the 5-hour window: the row's reset is that window's, not the later Opus week's
+        self.record(h, "work", 1794199000.0, {"five_hour": {"used_percent": 100.0, "resets_at": 1794210000},
+                                             "seven_day_opus": {"used_percent": 100.0, "resets_at": 1794900000}},
+                    status="rejected", source="chat")
+        work = ob.read_usage(h, now=1794200000.0, which=lambda _: None)["providers"][0]["accounts"][1]
+        self.assertEqual((work["state"], work["resets_at"]), ("limited", 1794210000.0))
+        # only a model's window on record: no account-wide number to show
+        self.record(h, "work", 1794199000.0, {"seven_day_opus": {"used_percent": 100.0, "resets_at": 1794500000}})
+        work = ob.read_usage(h, now=1794200000.0, which=lambda _: None)["providers"][0]["accounts"][1]
+        self.assertEqual(work["state"], "ok")
+        self.assertNotIn("used_percent", work)
+        self.assertNotIn("resets_at", work)
+
     def test_claude_record_past_its_reset_is_stale_and_a_broken_record_is_none(self):
         h = self.home()
         self.record(h, "default", 1794100000.0, {"seven_day": {"used_percent": 60.0, "resets_at": 1794150000}})

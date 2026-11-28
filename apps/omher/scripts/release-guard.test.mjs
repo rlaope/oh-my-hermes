@@ -13,7 +13,10 @@ import {
   decodePublicKey,
   decodeSignature,
   fetchPublished,
+  pinnedKeyAt,
+  precheck,
   readUpdaterConfig,
+  samePayloads,
   verifySignature,
 } from "./release-guard.mjs";
 
@@ -74,6 +77,102 @@ describe("decidePublish", () => {
     expect(decidePublish("1.2.4", "1.2.4").ok).toBe(false);
     expect(decidePublish("1.2.4", "1.2.4").message).toContain("republish input");
     expect(decidePublish("1.2.4", "1.2.4", true).ok).toBe(true);
+  });
+
+  it("passes the same version when the served manifest already has these payloads (a re-run)", () => {
+    expect(decidePublish("1.2.4", "1.2.4", false, true).ok).toBe(true);
+    expect(decidePublish("1.2.4", "1.2.4", false, true).message).toContain("a re-run changes nothing");
+    // never a lower version, whatever it holds
+    expect(decidePublish("1.2.3", "1.2.4", true, true).ok).toBe(false);
+  });
+});
+
+describe("precheck", () => {
+  const repo = "rlaope/oh-my-hermes";
+  const manifest = (version, sig = SIG, pubDate = "2026-11-28T03:00:00Z") => ({
+    version,
+    notes: `omher ${version}`,
+    pub_date: pubDate,
+    platforms: Object.fromEntries(
+      ["darwin-aarch64", "darwin-x86_64", "windows-x86_64", "linux-x86_64"].map((t) => [
+        t,
+        { signature: sig, url: `https://github.com/${repo}/releases/download/omher-v${version}/omher-${version}-${t}` },
+      ]),
+    ),
+  });
+  const files = (m) => Object.fromEntries(Object.keys(m.platforms).map((t) => [t, `payload-${t}`]));
+  const payload = () => PAYLOAD;
+  const asked = [];
+  const keyAt = (key) => async (tag) => {
+    asked.push(tag);
+    return key;
+  };
+
+  it("passes when every payload verifies against the key the published version pins", async () => {
+    asked.length = 0;
+    const m = manifest("1.2.5");
+    const lines = await precheck(m, files(m), manifest("1.2.4"), { keyAt: keyAt(KEY), payload });
+    expect(asked).toEqual(["omher-v1.2.4"]);
+    expect(lines[1]).toContain("verifies against the key pinned at omher-v1.2.4");
+  });
+
+  it("refuses a tag whose payloads an installed omher cannot verify (the key changed with the secret)", async () => {
+    const m = manifest("1.2.5", OTHER_SIG);
+    await expect(precheck(m, files(m), manifest("1.2.4"), { keyAt: keyAt(KEY), payload })).rejects.toThrow(
+      /installed omher 1\.2\.4 verifies updates with the key pinned at omher-v1\.2\.4.*key_rotation input/,
+    );
+    // a payload changed after signing is refused the same way
+    const n = manifest("1.2.5");
+    await expect(precheck(n, files(n), manifest("1.2.4"), { keyAt: keyAt(KEY), payload: () => Buffer.from("other") })).rejects.toThrow(
+      GuardError,
+    );
+  });
+
+  it("lets a deliberate key rotation through only with its own switch, not the republish one", async () => {
+    const m = manifest("1.2.5", OTHER_SIG);
+    await expect(precheck(m, files(m), manifest("1.2.4"), { allowSame: true, keyAt: keyAt(KEY), payload })).rejects.toThrow(GuardError);
+    const lines = await precheck(m, files(m), manifest("1.2.4"), { rotate: true, keyAt: keyAt(KEY), payload });
+    expect(lines[1]).toContain("key rotation (OMHER_RELEASE_KEY_ROTATION is set)");
+  });
+
+  it("skips the key check on a first publish", async () => {
+    const m = manifest("1.2.5", OTHER_SIG);
+    const never = async () => {
+      throw new Error("no published version to read a key from");
+    };
+    const lines = await precheck(m, files(m), null, { keyAt: never, payload });
+    expect(lines).toEqual(["no latest.json is published yet: first publish of 1.2.5", "first publish: no installed omher pins a key yet"]);
+  });
+
+  it("passes a re-run that would publish what is already served, and refuses other contents of the same version", async () => {
+    const m = manifest("1.2.5");
+    // the pointer upload landed, the read-back did not: the job runs again with the same manifest
+    expect((await precheck(m, files(m), manifest("1.2.5"), { keyAt: keyAt(KEY), payload }))[0]).toContain("a re-run changes nothing");
+    // a rebuilt release of the same version writes a new pub_date only: still the same payloads
+    expect(samePayloads(m, manifest("1.2.5", SIG, "2026-11-29T00:00:00Z"))).toBe(true);
+    // other signatures under the same version need the republish switch
+    const resigned = manifest("1.2.5", rewrap(SIG, (l) => (l[0] = "untrusted comment: re-signed")));
+    expect(samePayloads(resigned, m)).toBe(false);
+    await expect(precheck(resigned, files(resigned), m, { keyAt: keyAt(KEY), payload })).rejects.toThrow(/republish input/);
+    expect((await precheck(resigned, files(resigned), m, { allowSame: true, keyAt: keyAt(KEY), payload }))[0]).toContain("re-publishing");
+    // another URL is other contents too
+    const moved = manifest("1.2.5");
+    moved.platforms["linux-x86_64"].url += "?x";
+    expect(samePayloads(moved, m)).toBe(false);
+  });
+
+  it("reads the pinned key at a tag with one fixed gh call", () => {
+    const calls = [];
+    const run = (cmd, argv) => {
+      calls.push([cmd, ...argv]);
+      return JSON.stringify({ plugins: { updater: { pubkey: KEY } } });
+    };
+    expect(pinnedKeyAt(repo, "omher-v1.2.4", run)).toBe(KEY);
+    expect(calls).toEqual([
+      ["gh", "api", "-H", "Accept: application/vnd.github.raw+json", `repos/${repo}/contents/apps/omher/src-tauri/tauri.conf.json?ref=omher-v1.2.4`],
+    ]);
+    expect(() => pinnedKeyAt(repo, "omher-v1.2.4", () => "{}")).toThrow(/pins no updater key/);
+    expect(() => pinnedKeyAt(repo, "omher-v1.2.4", () => "<html>")).toThrow(/not JSON/);
   });
 });
 

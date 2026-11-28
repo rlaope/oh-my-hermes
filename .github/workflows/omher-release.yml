@@ -12,12 +12,23 @@ name: omher release
 # tauri.conf.json. The release job writes latest.json and keeps it on a rolling `omher-latest` prerelease,
 # the one fixed URL the app checks (omher releases are not the repo's "latest", which stays OMH's package).
 #
-# Every omher reads that one file, so apps/omher/scripts/release-guard.mjs guards it (Node built-ins only):
+# Every omher reads that one file, so apps/omher/scripts/release-guard.mjs guards it (Node built-ins only). The
+# guard script always comes from this workflow's own revision (github.sha: the tag's commit on a tag push, the
+# dispatching branch's head on a hand run), so the workflow and its guard never differ and a tag older than the guard
+# can still be rebuilt; from the tag being released come only the build itself and its tauri.conf.json (the version
+# and the pinned updater key the guard checks against). The published version's own pinned key is read from its tag
+# with `gh api`. Any of these missing fails the run:
 # - before the tag's release is made, every payload's signature must verify against the key pinned in the tag's
 #   tauri.conf.json, as the updater checks it, and be signed for the manifest's version;
 # - before the pointer moves, the version it serves must be lower than this one (semver, pre-release aware), so
 #   re-running an old tag or an older run finishing last never moves every omher back; a first publish (404)
-#   passes, and the `republish` input (off by default) allows the same version again, never a lower one;
+#   passes, the same version passes when the served manifest already has these payloads and signatures (a re-run of
+#   the pointer job whose read-back failed), and the `republish` input (off by default) allows the same version with
+#   other contents, never a lower one;
+# - before the pointer moves, every payload (read back from the tag's release) must also verify against the key
+#   pinned at the served version's tag, since an installed omher checks updates with the key of the version it runs;
+#   a tag that changes the pinned key together with the signing secret is refused unless the separate `key_rotation`
+#   input (off by default) is checked;
 # - after the upload, the public file is read back (up to 30 times, 10 s apart) and the job fails unless it is
 #   the manifest just uploaded.
 # The `pointer` job does those last two under one concurrency group for every tag, so two releases never
@@ -40,6 +51,13 @@ on:
         description: >-
           Point omher-latest at this tag again even when it is already the published version (a deliberate
           re-publish). A lower version is refused either way.
+        required: false
+        default: false
+        type: boolean
+      key_rotation:
+        description: >-
+          Point omher-latest at this tag even though its payloads do not verify against the updater key the
+          published version pins (a deliberate key rotation: installed omher builds cannot install this update).
         required: false
         default: false
         type: boolean
@@ -166,13 +184,21 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
     steps:
-      # Only the guard and the tag's tauri.conf.json (its version and pinned updater key).
+      # The guard from this workflow's own revision (github.sha), so the workflow and the script it runs are always
+      # one revision and an old tag can be rebuilt with today's guard; from the tag only its tauri.conf.json (its
+      # version and pinned updater key). Either checkout failing fails the job.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          path: guard
+          sparse-checkout: |
+            apps/omher/scripts/release-guard.mjs
+          sparse-checkout-cone-mode: false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ inputs.tag || github.ref }}
           path: src
           sparse-checkout: |
-            apps/omher/scripts/release-guard.mjs
             apps/omher/src-tauri/tauri.conf.json
           sparse-checkout-cone-mode: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -214,7 +240,7 @@ jobs:
       # A signing-key mismatch or a payload changed after signing would publish a manifest every omher refuses.
       - name: Verify every updater signature against the pinned key
         run: |
-          node src/apps/omher/scripts/release-guard.mjs verify --config src/apps/omher/src-tauri/tauri.conf.json \
+          node guard/apps/omher/scripts/release-guard.mjs verify --config src/apps/omher/src-tauri/tauri.conf.json \
             --manifest dist/latest.json --dir dist --repo "$GH_REPO"
       - name: Checksums
         working-directory: dist
@@ -265,15 +291,23 @@ jobs:
       TAG: ${{ inputs.tag || github.ref_name }}
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      # The documented re-publish switch: only from the dispatch input, never on a tag push.
+      # The documented re-publish and key-rotation switches: only from the dispatch inputs, never on a tag push.
       OMHER_RELEASE_REPUBLISH: ${{ inputs.republish && '1' || '' }}
+      OMHER_RELEASE_KEY_ROTATION: ${{ inputs.key_rotation && '1' || '' }}
     steps:
+      # As in the release job: the guard from github.sha, only tauri.conf.json from the tag.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          path: guard
+          sparse-checkout: |
+            apps/omher/scripts/release-guard.mjs
+          sparse-checkout-cone-mode: false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ inputs.tag || github.ref }}
           path: src
           sparse-checkout: |
-            apps/omher/scripts/release-guard.mjs
             apps/omher/src-tauri/tauri.conf.json
           sparse-checkout-cone-mode: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -283,10 +317,17 @@ jobs:
         with:
           name: omher-latest-json
           path: dist
-      - name: Refuse a version not newer than the published one
+      # The four updater payloads as the tag's release serves them, for the installed key's check.
+      - name: Download the updater payloads
         run: |
-          node src/apps/omher/scripts/release-guard.mjs precheck --config src/apps/omher/src-tauri/tauri.conf.json \
-            --manifest dist/latest.json --repo "$GH_REPO"
+          v="${TAG#omher-v}"
+          gh release download "$TAG" --dir dist \
+            --pattern "omher-$v-macos-arm64.app.tar.gz" --pattern "omher-$v-macos-x64.app.tar.gz" \
+            --pattern "omher-$v-windows-x64-setup.exe" --pattern "omher-$v-linux-x64.AppImage"
+      - name: Refuse a version not newer than the published one, or one installed omher builds cannot verify
+        run: |
+          node guard/apps/omher/scripts/release-guard.mjs precheck --config src/apps/omher/src-tauri/tauri.conf.json \
+            --manifest dist/latest.json --dir dist --repo "$GH_REPO"
       - name: Point the in-app updater at this release
         run: |
           # The app checks releases/download/omher-latest/latest.json. Keep that one asset current; the
@@ -302,5 +343,5 @@ jobs:
       - name: Read the public latest.json back
         timeout-minutes: 8
         run: |
-          node src/apps/omher/scripts/release-guard.mjs confirm --config src/apps/omher/src-tauri/tauri.conf.json \
+          node guard/apps/omher/scripts/release-guard.mjs confirm --config src/apps/omher/src-tauri/tauri.conf.json \
             --manifest dist/latest.json --repo "$GH_REPO" --attempts 30 --delay 10

@@ -1030,12 +1030,12 @@ fn no_peer_links_in_remote_mode(remote: &remote::Remote) -> Result<(), String> {
     Ok(())
 }
 
-/// The host field's suggestions: `Host` aliases from `~/.ssh/config` (read only; patterns skipped).
+/// The host field's suggestions: `Host` aliases from `~/.ssh/config` (read only, bounded, a regular file only:
+/// `peers::read_ssh_config`; patterns skipped).
 #[tauri::command]
 async fn peers_hosts() -> Result<Vec<String>, String> {
     let home = user_home()?;
-    let text = std::fs::read_to_string(home.join(".ssh").join("config")).unwrap_or_default();
-    Ok(peers::ssh_config_hosts(&text))
+    Ok(peers::ssh_config_hosts(&peers::read_ssh_config(&home)))
 }
 
 /// Check a host for the confirm card: the fixed `ssh` link comes up, and the card reads the remote's bots through

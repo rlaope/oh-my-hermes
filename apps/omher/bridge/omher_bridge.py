@@ -1877,7 +1877,10 @@ def claude_accounts(user_home: Path, now: float, default_usage: dict | None) -> 
     """Every Claude login on this computer for the sidebar meter, in the Accounts page's order: Claude Code's own,
     the omher accounts, then a local CLIProxyAPI's other logins (from its auth file names). Each carries only its
     own usage record (`state`, and `resets_at` when limited, else the fullest window's `used_percent` and its
-    `resets_at`); a CLIProxyAPI-only login has none (`no_record`)."""
+    `resets_at`); a CLIProxyAPI-only login has none (`no_record`). Only the account-wide windows count: a model's own
+    window (Opus weekly) neither limits the account nor says when it lifts (as `_omher_rows`), so a full Opus week
+    under a 20% account reads 20%, not "100% used" beside an `ok` state. The model windows stay in the record's
+    `windows` for the meter's detail."""
     rows = _with_cpa(_omher_rows("claude", user_home, now, default_usage, {}, lambda _: None), user_home)
     out = []
     for r in rows:
@@ -1886,7 +1889,7 @@ def claude_accounts(user_home: Path, now: float, default_usage: dict | None) -> 
         u = r.get("usage") or {}
         item = {"email": r["email"], "label": r["label"], "source": r.get("source") or ("cli" if r["id"] == "default" else "omher"),
                 "in_cpa": bool(r.get("in_cpa")), "state": u.get("state") or "no_record"}
-        live = [w for w in u.get("windows") or [] if not w.get("stale")]
+        live = [w for w in u.get("windows") or [] if not w.get("stale") and "model" not in w]
         resets = [w["resets_at"] for w in live if "resets_at" in w]
         pct = [w for w in live if "used_percent" in w]
         if item["state"] == "limited" and resets:
@@ -5317,11 +5320,16 @@ def _ns_norm(text) -> str:
 _CODEX_PREAMBLE = ("# AGENTS.md", "<environment_context>", "<user_instructions>", "<permissions", "<INSTRUCTIONS>")
 
 # What Claude Code puts into a user turn that nobody typed: reminders, a slash command's name, arguments and output, the
-# caveat before that output, and a background task's notice. Each block is taken out of the person's text; a block that
-# is never closed ends the text where it opens. A paste is wrapped in a `<pasted_content …>` tag whose inner text is
-# what the person pasted, so only the tag goes; an `[Image #N]` line stands for a picture the view does not show.
+# caveat before that output, and a background task's notice. Claude Code writes each block whole, its opener at the start
+# of the text or of a line (indented in a slash command's three lines), or right after another such block; there each one
+# is taken out of the person's text. An opener anywhere else (`why does my hook print <system-reminder> twice?`), one with
+# no closer after it, or one inside a fenced code block is the person's own text and stays. A paste is wrapped in a
+# `<pasted_content …>` tag whose inner text is what the person pasted, so only the tag goes; an `[Image #N]` line stands
+# for a picture the view does not show.
 _CLAUDE_BLOCKS = ("system-reminder", "command-message", "command-name", "command-args", "local-command-stdout",
                   "local-command-caveat", "task-notification")
+_CLAUDE_BLOCK_LINE = re.compile(r"^[ \t]*<(" + "|".join(_CLAUDE_BLOCKS) + r")>", re.M)
+_CLAUDE_BLOCK_NEXT = re.compile(r"[ \t\n]*<(" + "|".join(_CLAUDE_BLOCKS) + r")>")
 _CLAUDE_PASTE_TAG = re.compile(r"</?pasted_content\b[^>]*>")
 _CLAUDE_IMAGE_LINE = re.compile(r"\[Image #[0-9]+\]")
 # user lines Claude Code writes itself: injected meta text, a compaction's summary, lines kept for the transcript only
@@ -5331,13 +5339,35 @@ _CLAUDE_INTERRUPTED = "[Request interrupted by user"  # also "… for tool use]"
 NS_STATUS = 120  # chars of an API error's own text: enough for a usage limit's reset time
 
 
+def _in_fence(text: str) -> bool:
+    """Whether the end of `text` lies inside a fenced code block (a ``` or ~~~ line opens one, the same fence closes it)."""
+    fence = ""
+    for line in text.split("\n")[:-1]:
+        mark = line.lstrip(" \t")[:3]
+        if not fence and mark in ("```", "~~~"):
+            fence = mark
+        elif fence and mark == fence:
+            fence = ""
+    return bool(fence)
+
+
 def _claude_user_text(text: str) -> str:
     """A person's words in a Claude Code user turn, without the blocks the harness adds (see _CLAUDE_BLOCKS)."""
-    for name in _CLAUDE_BLOCKS:
-        opener, closer = f"<{name}>", f"</{name}>"
-        while (at := text.find(opener)) >= 0:
-            end = text.find(closer, at + len(opener))
-            text = text[:at] if end < 0 else text[:at] + text[end + len(closer):]
+    kept, pos, at = [], 0, 0
+    while True:
+        # right after a block taken out the next may follow on the same line; else only at the start of a line
+        m = _CLAUDE_BLOCK_NEXT.match(text, pos) if pos and pos == at else None
+        m = m or _CLAUDE_BLOCK_LINE.search(text, at)
+        if not m:
+            break
+        start, closer = m.start(1) - 1, f"</{m.group(1)}>"
+        end = text.find(closer, m.end())
+        if end < 0 or _in_fence("".join(kept) + text[pos:start]):
+            at = m.end()
+            continue
+        kept.append(text[pos:start])
+        pos = at = end + len(closer)
+    text = "".join(kept) + text[pos:]
     text = _CLAUDE_PASTE_TAG.sub("", text)
     return "\n".join(ln for ln in text.split("\n") if not _CLAUDE_IMAGE_LINE.fullmatch(ln.strip())).strip()
 

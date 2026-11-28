@@ -86,9 +86,31 @@ class ClaudeChatItems(unittest.TestCase):
             user("<task-notification>\n<task-id>b1</task-id>\n</task-notification>"),
             user("[Image #1]"),
             user("<command-name>/clear</command-name><command-args></command-args>"),
-            user("<system-reminder>never closed"),
         ])
         self.assertEqual(got, [])
+
+    def test_a_tag_the_person_typed_is_their_text(self):
+        """Claude Code writes a block whole, at the start of the text or of a line: an opener with no closer, one in the
+        middle of a sentence and one quoted in a fenced code block are what the person wrote."""
+        cases = [
+            "<system-reminder>never closed",
+            "why does my hook print <system-reminder> twice?",
+            "it prints <system-reminder>x</system-reminder> before each turn",
+            "my hook prints this:\n```\n<system-reminder>\nToday is Monday.\n</system-reminder>\n```\nwhy twice?",
+            "~~~xml\n<task-notification><task-id>b1</task-id></task-notification>\n~~~",
+        ]
+        for text in cases:
+            self.assertEqual(self.items([user(text)]), [{"type": "user", "text": text}], text)
+        # a real leading block, then the person's own text (which may quote a tag itself)
+        got = self.items([user("<system-reminder>\nToday is Monday.\n</system-reminder>\n"
+                               "why does my hook print <system-reminder> twice?")])
+        self.assertEqual(got, [{"type": "user", "text": "why does my hook print <system-reminder> twice?"}])
+        # a slash command's lines as Claude Code writes them (indented), after a closed fence: taken out
+        got = self.items([user("<command-name>/compact</command-name>\n            <command-message>compact</command-message>\n"
+                               "            <command-args></command-args>")])
+        self.assertEqual(got, [])
+        got = self.items([user("```\nx\n```\n<system-reminder>r</system-reminder>\nhello")])
+        self.assertEqual(got, [{"type": "user", "text": "```\nx\n```\n\nhello"}])
 
     def test_an_interrupt_is_one_status_row(self):
         got = self.items([

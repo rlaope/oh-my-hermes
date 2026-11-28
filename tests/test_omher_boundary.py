@@ -2943,7 +2943,8 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
                       " follows links as the CLI does) and any file that is not inside that home once its links are resolved", text)
         self.assertIn("never opens a credential, token or config file of either CLI", text)
         self.assertIn(
-            "for the folder the TERMINALS + menu starts in or, when the person switches its list to All folders, for every"
+            "for the folder the TERMINALS + menu starts in (the page sends that one folder, or none; a listing asked for"
+            " more than one is refused) or, when the person switches its list to All folders, for every"
             " folder that agent keeps conversations for in that same home (every project folder under"
             " `<claude config>/projects`, every rollout under `<codex home>/sessions`), each conversation's folder taken"
             " from its own file.",
@@ -2990,6 +2991,14 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
             self.assertIsNotNone(sig, cmd)
             self.assertEqual(sig.group(1).strip(), params, cmd)
         self.assertIn('matches!(agent, "claude" | "codex")', self.past)
+        # one folder, the one the + menu starts in, as the page sends it; more is refused, not cut down (the rule's
+        # sentence is pinned in test_links_and_paths_outside_the_home_are_refused_and_reads_are_bounded)
+        checked = self.past.split("pub fn checked_cwds(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("if cwds.len() > 1 {\n        return Err(", checked)
+        self.assertNotIn("take(", checked)
+        self.assertIn("let cwds = checked_cwds(cwds)?;", self.past.split("pub fn list(", 1)[1].split("\n}\n", 1)[0])
+        page = (ROOT / "apps" / "omher" / "src" / "sessions" / "SessionsSection.tsx").read_text(encoding="utf-8")
+        self.assertIn(".pastChats(agent, folder ? [folder] : [], all)", page)
         # a TERMINALS Codex session's conversation is the rollout its own Codex holds open (rule 11): only a path in
         # the home, under sessions/YYYY/MM/DD/rollout-*-<uuid>.jsonl, and only its UUID; no file is opened
         rid = self.past.split("pub fn rollout_id(", 1)[1].split("\n}\n", 1)[0]
@@ -3142,6 +3151,46 @@ class SshPeersOnlyOverTheOwnSsh(unittest.TestCase):
         rule = self.doc.split("\n31. ", 1)[1].split("\n32. ", 1)[0]
         self.assertIn("`hermes.cmd` shim", rule)
         self.assertIn("each bin's `.exe` before its `.cmd`", rule)
+
+    def test_the_ssh_config_is_read_only_at_two_sites_and_nothing_runs_for_it(self) -> None:
+        rule = self.doc.split("\n31. ", 1)[1].split("\n32. ", 1)[0]
+        self.assertIn("For the host field's suggestions and to refuse a second row for the same computer, the shell reads,"
+                      " never writes, only `~/.ssh/config`, and only when it resolves to a regular file of at most 1 MB"
+                      " (a pipe or device there is never opened for reading, so the read never blocks): it does not"
+                      " follow `Include` or evaluate `Match`, it runs nothing for this (never `ssh -G`), and the default"
+                      " user is `USER` (`USERNAME` on Windows).", rule)
+        # one helper reads it, for the suggestions (lib.rs) and the duplicate check (Peers::add); no other file under
+        # ~/.ssh is named anywhere
+        hosts = self.lib.split("async fn peers_hosts(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("peers::ssh_config_hosts(&peers::read_ssh_config(&home))", hosts)
+        add = self.peers.split("pub fn add(self: &Arc<Self>", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("let config = read_ssh_config(&self.home);", add)
+        self.assertEqual(self.lib.count("read_ssh_config("), 1)
+        self.assertEqual(self.peers.count("read_ssh_config("), 2)  # the helper and its call in add
+        self.assertEqual(self.lib.count('.join(".ssh")'), 0)
+        self.assertEqual(self.peers.count('.join(".ssh")'), 1)
+        helper = self.peers.split("pub fn read_ssh_config(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn('let path = home.join(".ssh").join("config");', helper)
+        # a regular file once links are resolved, checked again on the open handle, opened non-blocking, bounded
+        self.assertIn("m.is_file() && m.len() <= SSH_CONFIG_MAX", helper)
+        self.assertIn("if !regular(std::fs::metadata(&path)) {", helper)
+        self.assertIn("if !regular(f.metadata()) {", helper)
+        self.assertIn("open.custom_flags(libc::O_NONBLOCK);", helper)
+        self.assertIn("f.take(SSH_CONFIG_MAX + 1)", helper)
+        self.assertIn("const SSH_CONFIG_MAX: u64 = 1024 * 1024;", self.peers)
+        self.assertNotIn("write", helper)
+        # Include is not followed and Match not evaluated: the resolver answers unknown at either, the suggestions
+        # read `Host` lines only
+        target = self.peers.split("pub fn ssh_target(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn('if key.eq_ignore_ascii_case("match") || key.eq_ignore_ascii_case("include") {\n            return None;', target)
+        suggest = self.peers.split("pub fn ssh_config_hosts(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn('if !key.eq_ignore_ascii_case("host") {', suggest)
+        # nothing runs for it: `ssh` has one spawn site (the link) and `-G` is never an argument
+        self.assertNotIn('"-G"', self.peers)
+        self.assertNotIn('"-G"', self.lib)
+        # the default user
+        self.assertIn('let key = if cfg!(windows) { "USERNAME" } else { "USER" };', self.peers)
+        self.assertEqual(self.peers.count("std::env::var("), 1)
 
     def test_only_connect_writes_the_peer_list(self) -> None:
         self.assertEqual(self.peers.count("write_peers(&self.home"), 2)  # add (Connect) and remove (Remove)

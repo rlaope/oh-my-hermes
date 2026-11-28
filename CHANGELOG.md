@@ -6,14 +6,15 @@ All notable changes will be documented here.
 
 - **omher: a Claude Code or Codex session's chat shows what was said and done.** In the Plans session view a Claude
   Code chat no longer shows the harness's own lines as the person's words: reminders, slash command blocks, task
-  notices and compaction summaries are left out, a paste shows its text, and an interrupt, a compaction or an API
-  error is one dim line (the error's own words, its status and the retry it is on, for example "API error 529 · retry
-  3/10"). A current Codex shell step that only runs commands reads as its command instead of the JavaScript around it
-  ("git status + 2 more" for several); one that does anything else keeps its code. A file edit's change keeps its old
-  and new line numbers beside each line, with a thin rule between hunks. The side panel's git reads now ignore git
-  variables omher inherited that would point them at another repository, and never fetch a partial clone's missing
-  objects. (`docs/OMHER-BOUNDARY.md` rule 10; `apps/omher/src/harness/session.ts`,
-  `apps/omher/src/chat/activity/diffLines.ts`; ideas from 2rami/kasaterm (MIT), code written fresh)
+  notices and compaction summaries are left out (a tag the person typed or quoted stays), a paste shows its text, and
+  an interrupt, a compaction or an API error is one dim line (the error's own words, its status and the retry it is
+  on, for example "API error 529 · retry 3/10"). A current Codex shell step that only runs commands reads as its
+  command instead of the JavaScript around it ("git status + 2 more" for several); one that does anything else keeps
+  its code. A file edit's change keeps its old and new line numbers beside each line, with a thin rule between hunks.
+  The side panel's git reads now ignore git variables omher inherited that would point them at another repository,
+  and never fetch a partial clone's missing objects. (`docs/OMHER-BOUNDARY.md` rule 10;
+  `apps/omher/src/harness/session.ts`, `apps/omher/src/chat/activity/diffLines.ts`; ideas from 2rami/kasaterm (MIT),
+  code written fresh)
 
 - **omher: a link to another computer that keeps dying backs off, and says what happened.** A remote bridge that
   printed its ready line and died right after was retried every 2 seconds forever, running the remote script each
@@ -24,9 +25,10 @@ All notable changes will be documented here.
   next try while it waits, and a History of its last eight events (connected, dropped with the reason, retrying in N
   s, stopped), kept in memory only. Connect refuses a computer already in the list under another spelling (any case,
   port 22 written or not, the default user written or not, or an alias whose `~/.ssh/config` `HostName`, `User` and
-  `Port` name the same place), and the card warns when the host is this computer (`localhost`, a 127.x address, `::1`
-  in any spelling, or this computer's own name). Remote-only mode's link backs off the same way. Ideas from
-  2rami/kasaterm (MIT), code written fresh. (`docs/OMHER-BOUNDARY.md` rule 31; `apps/omher/src-tauri/src/peers.rs`)
+  `Port` name the same place, unless a jump host, proxy or other route-changing key makes the same address another
+  computer), and the card warns when the host is this computer (`localhost`, a 127.x address, `::1` in any spelling,
+  or this computer's own name). Remote-only mode's link backs off the same way. Ideas from 2rami/kasaterm (MIT), code
+  written fresh. (`docs/OMHER-BOUNDARY.md` rule 31; `apps/omher/src-tauri/src/peers.rs`)
 
 - **omher: the account auto-switch moves before the limit, and only to an account with room.** Settings › Accounts has
   a "Switch at" level under Auto-switch, 90% unless changed (80 to 100 in steps of 5; 100 waits for the limit as
@@ -103,10 +105,13 @@ All notable changes will be documented here.
   `apps/omher/src/tasks/DashView.tsx`, `apps/omher/src/tasks/dash.ts`, `apps/omher/src-tauri/src/gh_dash.rs`)
 
 - **omher releases can no longer move every omher back or publish an update nobody can install.** The release run
-  now checks each update's signature against the key the app pins before it makes the release, refuses to point the
-  in-app updater at a version that is not newer than the one it serves (re-running an old tag, or an older run
-  finishing last, fails with a message; a deliberate re-publish of the same version is a `republish` input, off by
-  default), and reads the public `latest.json` back after the upload, failing unless it is the one just written.
+  now checks each update's signature against the key the app pins before it makes the release, and again against
+  the key pinned by the version installed omher builds run now (a changed key is refused unless a `key_rotation`
+  input, off by default, is checked), refuses to point the in-app updater at a version that is not newer than the one
+  it serves (re-running an old tag, or an older run finishing last, fails with a message; re-running the pointer job
+  with what is already served passes; a deliberate re-publish of the same version with other contents is a
+  `republish` input, off by default), and reads the public `latest.json` back after the upload, failing unless it is
+  the one just written.
   Releases of different tags rewrite that file one at a time. Ideas from 2rami/kasaterm (MIT), code written fresh.
   (`apps/omher/scripts/release-guard.mjs`, `.github/workflows/omher-release.yml`)
 

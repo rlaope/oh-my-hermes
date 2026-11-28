@@ -629,6 +629,9 @@ mod tests {
         stopped: Arc<AtomicUsize>,
         /// every link it makes has already ended: a remote bridge that dies right after its ready line
         die_at_once: AtomicBool,
+        /// The remote's state and attempt as each connect began, read inside the connect itself (no sampling).
+        seen: Mutex<Vec<(Option<&'static str>, u32)>>,
+        remote: std::sync::OnceLock<std::sync::Weak<Remote>>,
     }
 
     fn fake(results: Vec<Result<u16, FailKind>>) -> (Arc<Remote>, Arc<Scripted>) {
@@ -639,9 +642,15 @@ mod tests {
             dead: Arc::new(AtomicBool::new(false)),
             stopped: Arc::new(AtomicUsize::new(0)),
             die_at_once: AtomicBool::new(false),
+            seen: Mutex::new(Vec::new()),
+            remote: std::sync::OnceLock::new(),
         });
         let p = Arc::clone(&plan);
         let connect: Connect = Arc::new(move |host: &str, port: Option<u16>| {
+            if let Some(r) = p.remote.get().and_then(std::sync::Weak::upgrade) {
+                let st = r.status();
+                p.seen.lock().unwrap().push((st.state, st.attempt));
+            }
             p.calls.fetch_add(1, Ordering::SeqCst);
             p.hosts.lock().unwrap().push((host.to_string(), port));
             match p.results.lock().unwrap().pop_front().unwrap_or(Err(FailKind::Timeout)) {
@@ -653,7 +662,9 @@ mod tests {
                 Err(kind) => Err(Failure { kind, line: format!("{kind:?}") }),
             }
         });
-        (Remote::with_pace(connect, Duration::from_millis(5), Duration::from_millis(20)), plan)
+        let r = Remote::with_pace(connect, Duration::from_millis(5), Duration::from_millis(20));
+        plan.remote.set(Arc::downgrade(&r)).ok();
+        (r, plan)
     }
 
     fn wait_for(r: &Remote, state: &str) -> RemoteStatus {
@@ -696,19 +707,16 @@ mod tests {
         let (r, plan) = fake(vec![Ok(5101), Ok(5102), Ok(5103), Ok(5104)]);
         plan.die_at_once.store(true, Ordering::SeqCst);
         r.start(mode(), None);
-        let mut seen: Vec<u32> = Vec::new();
+        // each connect records the attempt it was made for, so a loaded runner cannot miss a short reconnect window
         let deadline = Instant::now() + Duration::from_secs(5);
-        while seen.len() < 3 {
-            let st = r.status();
-            if st.state == Some("reconnecting") && seen.last() != Some(&st.attempt) {
-                seen.push(st.attempt);
-            }
-            assert!(Instant::now() < deadline, "{seen:?} {st:?}");
-            thread::sleep(Duration::from_millis(1));
+        while plan.calls.load(Ordering::SeqCst) < 4 {
+            assert!(Instant::now() < deadline, "{:?}", plan.seen.lock().unwrap());
+            thread::sleep(Duration::from_millis(5));
         }
-        // 8, 16, 32 s in the app (the test caps each wait)
-        assert_eq!(seen, [3, 4, 5]);
         r.stop();
+        // 8, 16, 32 s in the app (the test caps each wait)
+        let seen = plan.seen.lock().unwrap();
+        assert_eq!(seen[..4], [(Some("connecting"), 0), (Some("reconnecting"), 3), (Some("reconnecting"), 4), (Some("reconnecting"), 5)]);
     }
 
     #[test]
