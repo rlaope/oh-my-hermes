@@ -10,7 +10,7 @@ import type { PeerProbe } from "../lib/protocol";
 import { t } from "../i18n";
 import { Spinner } from "../ui";
 import { failKey, getPeersHost, type CheckResult, type Failure } from "./host";
-import { labelFor, validHost, validLabel } from "./draft";
+import { labelFor, namesThisComputer, validHost, validLabel } from "./draft";
 import { SshIcon } from "./SshMarker";
 import { markFresh } from "./links";
 import { CopyButton } from "../chat/parts/Copy";
@@ -73,6 +73,7 @@ export function AttachCard({ seed, onClose, onDone }: { seed: AttachSeed; onClos
   const [labelTouched, setLabelTouched] = useState(!!seed.label);
   const [step, setStep] = useState<Step>({ at: "form" });
   const [hosts, setHosts] = useState<string[]>([]);
+  const [me, setMe] = useState("");
   const [err, setErr] = useState("");
   const box = useRef<HTMLDivElement>(null);
   const checkId = useRef<string | null>(null);
@@ -83,6 +84,10 @@ export function AttachCard({ seed, onClose, onDone }: { seed: AttachSeed; onClos
       .hosts()
       .then(setHosts)
       .catch(() => setHosts([]));
+    void getPeersHost()
+      .thisName()
+      .then((n) => setMe(typeof n === "string" ? n : ""))
+      .catch(() => setMe(""));
   }, []);
   useEffect(() => {
     box.current?.querySelector<HTMLElement>(seed.host ? "[data-testid=peer-check]" : "input")?.focus();
@@ -232,6 +237,11 @@ export function AttachCard({ seed, onClose, onDone }: { seed: AttachSeed; onClos
             </div>
           )}
           {h && !hostOk && <p className="peer-warn" data-testid="peer-host-bad">{t("peer.badHost")}</p>}
+          {hostOk && namesThisComputer(h, me) && (
+            <p className="peer-warn" data-testid="peer-this-computer">
+              {t("peer.thisComputer", { host: h })}
+            </p>
+          )}
         </div>
 
         {step.at === "checking" && (

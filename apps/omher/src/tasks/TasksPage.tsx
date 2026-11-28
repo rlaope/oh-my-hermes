@@ -26,6 +26,7 @@ import { firstMessage, threadTitle } from "./message";
 import { SOURCE_NAME } from "./TasksBar";
 import { FILTERS, KINDS, SOURCES, accountId, repoOk, type ChosenAccount, type CliSource, type CliStatus, type TaskDetail, type TaskItem, type TaskPage as TPage } from "./types";
 import "./tasks.css";
+import { matchesSearch, searchKey } from "../lib/textMatch";
 
 const FILTER_KEY: Record<string, Key> = { open: "tasks.f.open", assigned: "tasks.f.assigned", created: "tasks.f.created", mentioned: "tasks.f.mentioned" };
 
@@ -229,9 +230,9 @@ export function TasksPage() {
   }, [ready, load]);
   useEffect(() => setSel(null), [cli, repo, tk.kind]);
 
-  const needle = q.trim().toLowerCase();
+  const needle = searchKey(q.trim());
   const rows = useMemo(
-    () => (page?.items ?? []).filter((i) => !needle || i.title.toLowerCase().includes(needle) || `#${i.number}`.includes(needle) || i.labels.some((l) => l.name.toLowerCase().includes(needle))),
+    () => (page?.items ?? []).filter((i) => matchesSearch(needle, i.title, `#${i.number}`, ...i.labels.map((l) => l.name))),
     [page, needle],
   );
   const folder = cli && repo ? (tk.folders[`${cli}:${repo}`] ?? null) : null;

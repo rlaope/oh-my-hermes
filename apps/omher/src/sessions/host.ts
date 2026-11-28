@@ -39,7 +39,10 @@ export type ChatInput =
 export type ChatEvent = { event: string; [k: string]: unknown };
 
 /** A conversation Claude Code or Codex keeps for a folder (src-tauri/src/past_chats.rs), listed read-only so it can be
- *  continued here. `at`: last change, seconds since the epoch. `named`: the title is a name, not the first words. */
+ *  continued here. `at`: last change, seconds since the epoch. `named`: the title is a name, not the first words.
+ *  `fork`: a Codex fork, the title of the listed conversation it came from (empty when that one is not listed); none
+ *  when it is not a fork. `last`: the last thing the person or the agent said in it, one line; none when the end of
+ *  its file holds no such line. */
 export interface PastChat {
   agent: "claude" | "codex";
   id: string;
@@ -47,12 +50,14 @@ export interface PastChat {
   title: string;
   named: boolean;
   at: number;
+  fork?: string | null;
+  last?: PastMsg | null;
 }
 
-/** One message of such a conversation (what the person typed, or the agent's answer text). */
 /** Whether a conversation's file is where its CLI looks for it (`conversation_state`). */
 export type ConvState = "exists" | "absent" | "unknown";
 
+/** One thing said in such a conversation (what the person typed, or the agent's answer text): a row's last line. */
 export interface PastMsg {
   role: "user" | "assistant";
   text: string;
@@ -113,10 +118,8 @@ export interface SessionHost extends HistoryHost {
   reveal(cwd: string): Promise<void>;
   /** Open the person's own system terminal in folder `cwd` (their shell; nothing typed into it). */
   openTerminal(cwd: string): Promise<void>;
-  /** The recent conversations `agent` keeps for `cwds`, newest first (read-only). */
-  pastChats(agent: "claude" | "codex", cwds: string[]): Promise<PastChat[]>;
-  /** The last messages of `agent`'s conversation `id` in `cwd`. */
-  pastMessages(agent: "claude" | "codex", id: string, cwd: string): Promise<PastMsg[]>;
+  /** The recent conversations `agent` keeps for `cwds` (for every folder when `all`), newest first (read-only). */
+  pastChats(agent: "claude" | "codex", cwds: string[], all?: boolean): Promise<PastChat[]>;
   /** Whether the file of `agent`'s conversation `id` is where the CLI looks for it, in the home of `account` (none =
    *  the account new sessions use): `unknown` when that could not be told (a folder that cannot be read, an account
    *  whose folder is gone). Only names are looked at (rule 30). */
@@ -274,13 +277,9 @@ export class TauriHost implements SessionHost {
     const { invoke } = await this.core();
     await invoke("session_open_terminal", { cwd });
   }
-  async pastChats(agent: "claude" | "codex", cwds: string[]) {
+  async pastChats(agent: "claude" | "codex", cwds: string[], all = false) {
     const { invoke } = await this.core();
-    return invoke<PastChat[]>("past_chats_list", { agent, cwds });
-  }
-  async pastMessages(agent: "claude" | "codex", id: string, cwd: string) {
-    const { invoke } = await this.core();
-    return invoke<PastMsg[]>("past_chat_messages", { agent, id, cwd });
+    return invoke<PastChat[]>("past_chats_list", { agent, cwds, all });
   }
   async conversationState(agent: "claude" | "codex", id: string, account?: string) {
     const { invoke } = await this.core();
@@ -526,7 +525,7 @@ type MockGlobals = {
   /** e2e: the conversations Claude Code and Codex keep (none = the built-in ones) */
   __omherPastChats?: PastChat[];
   /** e2e: reads of those conversations, apart from the session calls (opening the + menu lists them) */
-  __omherPastReads?: { op: "list" | "read" | "own"; agent: string; cwds?: string[]; id?: string; cwd?: string; pty?: number }[];
+  __omherPastReads?: { op: "list" | "own"; agent: string; cwds?: string[]; all?: boolean; id?: string; cwd?: string; pty?: number }[];
   /** e2e: the conversation each mock pty's Codex holds open (pty id -> UUID), as a real Codex once its rollout exists */
   __omherMockCodexOwn?: Record<number, string>;
   /** e2e: agents whose mock CLI is from before `--session-id` (it refuses the option and ends at once) */
@@ -546,11 +545,13 @@ type MockGlobals = {
   __omherMockCustomSignedOut?: AgentId[];
   /** e2e: CLIs that are not on this computer: a terminal of one is refused, as the shell refuses it */
   __omherMockMissing?: AgentId[];
+  /** e2e: folders that no longer exist: a terminal started in one is refused, as the shell refuses it (`not a folder`) */
+  __omherMockGoneFolders?: string[];
   /** e2e: conversations Claude Code and Codex cannot continue (the file, its account folder or the login is gone): a
    *  terminal that continues one prints the CLI's refusal and ends with code 1 at once, as the real CLI does */
   __omherMockGoneConversations?: string[];
   /** e2e: what the shell's look for a conversation's file answers, by id, whatever the mock's CLIs wrote (a file the
-   *  look misses answers `absent` while the CLI still finds it); the read of its messages misses it too */
+   *  look misses answers `absent` while the CLI still finds it) */
   __omherMockConvStates?: Record<string, ConvState>;
   /** e2e: Settings › Accounts accounts whose folder is gone: a conversation of one is `unknown`, and a CLI started
    *  as one runs in another home, where it finds none of its conversations */
@@ -565,18 +566,13 @@ type MockGlobals = {
 /** The programs the mock host finds unless a test says otherwise. */
 const MOCK_PROGRAMS: Record<string, string> = { "cursor-agent": "/opt/homebrew/bin/cursor-agent", "stub-acp": "/usr/local/bin/stub-acp" };
 
-/** The mock's past conversations: two Claude Code and one Codex conversation in the e2e folders. */
+/** The mock's past conversations: two Claude Code conversations and a Codex one with a fork of it in the e2e folders. */
 const MOCK_PAST: PastChat[] = [
-  { agent: "claude", id: "aaaaaaaa-1111-4222-8333-444444444444", cwd: "/home/you/code/web-app", title: "Fix the login redirect", named: true, at: Date.now() / 1000 - 3_600 },
-  { agent: "claude", id: "bbbbbbbb-1111-4222-8333-444444444444", cwd: "/home/you/code/omher", title: "Remember the word MARIGOLD for later", named: false, at: Date.now() / 1000 - 3 * 86_400 },
+  { agent: "claude", id: "aaaaaaaa-1111-4222-8333-444444444444", cwd: "/home/you/code/web-app", title: "Fix the login redirect", named: true, at: Date.now() / 1000 - 3_600, last: { role: "assistant", text: "The redirect now keeps the page you were on.", ts: 0 } },
+  { agent: "claude", id: "bbbbbbbb-1111-4222-8333-444444444444", cwd: "/home/you/code/omher", title: "Remember the word MARIGOLD for later", named: false, at: Date.now() / 1000 - 3 * 86_400, last: { role: "user", text: "Remember the word MARIGOLD for later", ts: 0 } },
   { agent: "codex", id: "01a1d060-4ab7-72b2-b02b-1dbee1d5f52c", cwd: "/home/you/code/web-app", title: "Add a dark theme", named: true, at: Date.now() / 1000 - 600 },
+  { agent: "codex", id: "01a1d060-4ab7-72b2-b02b-1dbee1d5f52d", cwd: "/home/you/code/web-app", title: "Add a dark theme", named: false, at: Date.now() / 1000 - 300, fork: "Add a dark theme" },
 ];
-const MOCK_PAST_MSGS: Record<string, PastMsg[]> = {
-  "bbbbbbbb-1111-4222-8333-444444444444": [
-    { role: "user", text: "Remember the word MARIGOLD for later", ts: Date.now() / 1000 - 3 * 86_400 },
-    { role: "assistant", text: "Noted: MARIGOLD.", ts: Date.now() / 1000 - 3 * 86_400 + 5 },
-  ],
-};
 
 /** Echoes typing, answers each line, ends on `exit` or Ctrl+D. Installed: claude, codex, omh. */
 export class MockHost implements SessionHost {
@@ -748,6 +744,7 @@ export class MockHost implements SessionHost {
     const id = nextMockPty();
     this.log({ op: "start", id, agent, cwd, cols, rows, ...(resume ? { resume } : {}), ...(sessionId ? { sessionId } : {}), ...(link ? { link } : {}), ...(account ? { account } : {}) });
     if (this.g.__omherMockMissing?.includes(agent)) throw new Error(`${agentDef(agent).label} is not installed (no \`${agentDef(agent).program}\` found)`);
+    if (this.g.__omherMockGoneFolders?.includes(cwd)) throw new Error(`not a folder: ${cwd}`);
     // as Claude Code: `--session-id` of a conversation it wrote is refused, `--resume` of one it never wrote too
     const convs = agent === "claude" ? this.convs() : {};
     const conv = agent === "claude" ? (resume ?? sessionId) : undefined;
@@ -982,22 +979,10 @@ export class MockHost implements SessionHost {
   async openTerminal(cwd: string) {
     this.log({ op: "terminal", cwd });
   }
-  async pastChats(agent: "claude" | "codex", cwds: string[]) {
-    (this.g.__omherPastReads ??= []).push({ op: "list", agent, cwds });
-    const all = this.g.__omherPastChats ?? MOCK_PAST;
-    return all.filter((c) => c.agent === agent && cwds.includes(c.cwd)).sort((a, b) => b.at - a.at);
-  }
-  async pastMessages(agent: "claude" | "codex", id: string, cwd: string) {
-    (this.g.__omherPastReads ??= []).push({ op: "read", agent, id, cwd });
-    if (this.g.__omherMockConvStates?.[id] === "absent") throw new Error("no such conversation");
-    const mine = agent === "claude" ? this.convs()[id] : undefined;
-    if (mine) {
-      if (mine.text === undefined || mine.cwd !== cwd) throw new Error("no such conversation");
-      return [{ role: "user" as const, text: mine.text, ts: 0 }];
-    }
-    const c = (this.g.__omherPastChats ?? MOCK_PAST).find((x) => x.agent === agent && x.id === id && x.cwd === cwd);
-    if (!c) throw new Error("no such conversation");
-    return MOCK_PAST_MSGS[id] ?? [{ role: "user" as const, text: c.title, ts: c.at }];
+  async pastChats(agent: "claude" | "codex", cwds: string[], all = false) {
+    (this.g.__omherPastReads ??= []).push({ op: "list", agent, cwds, ...(all ? { all } : {}) });
+    const kept = this.g.__omherPastChats ?? MOCK_PAST;
+    return kept.filter((c) => c.agent === agent && (all || cwds.includes(c.cwd))).sort((a, b) => b.at - a.at);
   }
   /** As the shell (`conversation_state`): a told answer first; an account whose folder is gone is `unknown`; a Claude
    *  Code conversation the mock's terminals named is there once something was said in it; anything else `unknown`. */

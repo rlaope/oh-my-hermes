@@ -47,6 +47,9 @@ export const noUsage = (id?: string) => (id === "claude" ? t("use.claudeNext") :
 /** A window's name as a limit: "5 hours" -> "5-hour limit", "Weekly" -> "Weekly limit" (Settings › Accounts says the same). */
 export function limitName(label: string): string {
   if (label === "Weekly") return t("acc.limitWeekly");
+  // a model's own weekly window, as the bridge labels it ("Weekly (Opus)")
+  const model = /^Weekly \((.+)\)$/.exec(label);
+  if (model) return t("acc.limitWeeklyOf", { model: model[1] });
   const m = /^(\d+) (hour|day)s?$/.exec(label);
   return m ? t(m[2] === "hour" ? "acc.limitHours" : "acc.limitDays", { n: m[1] }) : label;
 }
@@ -56,7 +59,7 @@ export function windowRow(p: UsageProvider, w: UsageWindow, now: number): [strin
   const name = limitName(w.label);
   const pct = !w.stale && typeof w.used_percent === "number" ? t("acc.pctUsed", { n: Math.round(w.used_percent) }) : "";
   if (w.stale) return [name, pct, stale()];
-  if (p.state === "limited" && pct === "" && typeof w.resets_at === "number") return [name, pct, t("acc.limitedUntil", { when: clock(w.resets_at, now) })];
+  if ((w.model ? w.limited === true : p.state === "limited") && pct === "" && typeof w.resets_at === "number") return [name, pct, t("acc.limitedUntil", { when: clock(w.resets_at, now) })];
   if (typeof w.resets_at === "number") return [name, pct, t("use.resetsIn", { t: duration(w.resets_at - now) })];
   return [name, pct, ""];
 }

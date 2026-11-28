@@ -30,6 +30,9 @@ plist = "1"
 # Tasks › 나: a non-active GitHub account's token is wiped from memory when its one `gh` call ends (gh_me.rs); already in
 # the tree via tauri
 zeroize = "1"
+# Continue a past conversation: one key per folder in NFC, and a Claude Code project folder's slug from the cwd's NFC
+# and NFD forms (past_chats.rs); already in the tree via tauri (url's IDNA), with only the baked data it uses there
+icu_normalizer = { version = "2", default-features = false, features = ["compiled_data"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

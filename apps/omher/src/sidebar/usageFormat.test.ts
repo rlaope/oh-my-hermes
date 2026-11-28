@@ -23,6 +23,7 @@ describe("usage format", () => {
     expect(windowRow(codex, codex.windows[1], NOW)).toEqual(["Weekly limit", "60% used", "Resets in 4d 23h"]);
     expect([duration(59), duration(600), duration(7200), duration(86400)]).toEqual(["<1m", "10m", "2h", "1d"]);
     expect(["5 hours", "Weekly", "2h", "1 day", "2d"].map(limitName)).toEqual(["5-hour limit", "Weekly limit", "2h", "1-day limit", "2d"]);
+    expect(limitName("Weekly (Opus)")).toBe("Weekly Opus limit");
   });
 
   it("never shows a % the source did not give", () => {

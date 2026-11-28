@@ -1413,6 +1413,8 @@ const NS_SESSIONS = {
     items: [
       { type: "user", text: "Code block colors: give code blocks a dark palette that matches the new tokens. Open a draft PR." },
       nsStep("exec_command", { cmd: "rg -n \"pre code\" docs/" }, "docs/theme.css:88: pre code {"),
+      // current Codex: an `exec` step whose input is JavaScript around the command (shown as the command)
+      { ...nsStep("exec", {}, "M docs/theme.css"), input: 'const r = await tools.exec_command({cmd:"git status --short",workdir:"/w/web-app-code-colors"})' },
       nsStep("apply_patch", { patch: "*** Update File: docs/theme.css\n@@\n-pre code { color: #333 }\n+pre code { color: var(--code-fg) }" }, "Success. Updated 1 file."),
       nsStep("exec_command", { cmd: "pnpm test --run" }, "Process exited with code 0\n12 passed"),
       nsStep("exec_command", { cmd: "gh pr create --draft --title \"docs: code block palette\"" }, "https://github.com/rlaope/oh-my-hermes/pull/2360"),
@@ -1425,6 +1427,11 @@ const NS_SESSIONS = {
     items: [
       { type: "user", text: "Page styles: apply the tokens to every docs page." },
       nsStep("Bash", { command: "ls docs/pages" }, "index.md\ninstall.md"),
+      // what happened to the session, as the bridge's `_claude_items` sends it: quiet status lines, nobody's words
+      { type: "status", code: "interrupted", ts: now() - 200 },
+      { type: "user", text: "Go on, but skip the changelog page." },
+      { type: "status", code: "api_error", text: "Overloaded", status: 529, retry: 3, retries: 10, ts: now() - 190 },
+      { type: "status", code: "compacted", ts: now() - 180 },
       { type: "assistant", text: "Both pages use the tokens now." },
     ],
   }),
@@ -2823,6 +2830,7 @@ function startTurn(bot, text, folder) {
   if (text.startsWith("/interview")) return schedule(bot, [[150, () => raiseInterview(bot, 0)]]);
   if (text.startsWith("/delegate")) return scriptDelegate(bot);
   if (text.startsWith("/browser")) return scriptBrowser(bot);
+  if (text.startsWith("/diff")) return scriptDiff(bot);
   if (peerAsk(text)) return scriptPeer(bot, text);
   scriptNormal(bot, text);
 }
@@ -3005,6 +3013,23 @@ function scriptBrowser(bot) {
     return out;
   });
   schedule(bot, [...steps, [880, () => say(bot, "Logged in and checked the cart.")], [960, () => endTurn(bot, "done")]]);
+}
+
+// `/diff`: one file edit whose change has two hunks with line numbers (a `tool.diff` the way the SESSIONS adapters send
+// Claude Code's structuredPatch), one with its counts left out, past line 100 so the gutter is three digits wide.
+function scriptDiff(bot) {
+  const files = [{
+    path: "src/calc.py", kind: "update", added: 3, removed: 1,
+    lines: ["@@ -5,3 +5,4 @@", " def sub(a, b):", "-    return a + b", "+    return a - b", "+", " ",
+            "@@ -98 +99,2 @@", " def mul(a, b):", "+    return a * b"],
+  }];
+  schedule(bot, [
+    [80, () => ev(bot, "tool.start", { tool_id: "df1", name: "patch", detail: "src/calc.py" })],
+    [120, () => ev(bot, "tool.diff", { tool_id: "df1", files })],
+    [160, () => ev(bot, "tool.end", { tool_id: "df1", name: "patch", ok: true, ms: 80 })],
+    [220, () => say(bot, "Fixed sub and added mul.")],
+    [300, () => endTurn(bot, "done")],
+  ]);
 }
 
 function scriptDelegate(bot) {

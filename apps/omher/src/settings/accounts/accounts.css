@@ -74,6 +74,14 @@
 .acc-auto.off {
   opacity: 0.55;
 }
+/* the switch threshold has no switch of its own: its words and steps sit on the switches' text column (26px + gap) */
+.acc-auto.acc-at {
+  padding-left: 34px;
+}
+.acc-at .mseg {
+  margin-top: 6px;
+  align-self: flex-start;
+}
 .acc-ver {
   font-size: 11.5px;
   color: var(--muted);

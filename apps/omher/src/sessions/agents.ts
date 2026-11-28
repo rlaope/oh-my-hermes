@@ -2,6 +2,7 @@ import { pickTitle, type TitleSource } from "./titles";
 import type { FgCli } from "./fgResume";
 import { t } from "../i18n";
 import { harness, harnessByName } from "../harness/registry";
+import { pathKey } from "./folders";
 
 // The agent programs a session can run, and the pure helpers the sidebar and the session views share.
 // Two kinds, both decided by the shell (it refuses anything else):
@@ -670,15 +671,30 @@ export function parseRecent(raw: string | null): Recent[] {
   }
 }
 
-/** `next` first, each folder only once (whichever agent used it last), at most RECENT_MAX. */
+/** `next` first, each folder only once (whichever agent used it last), at most RECENT_MAX. One folder is one
+ *  `pathKey` (the NFD and NFC spellings of a Korean name are one folder); the spelling kept is the newest one. */
 export function pushRecent(list: Recent[], next: Recent): Recent[] {
-  return [next, ...list.filter((r) => r.cwd !== next.cwd)].slice(0, RECENT_MAX);
+  const key = pathKey(next.cwd);
+  return [next, ...list.filter((r) => pathKey(r.cwd) !== key)].slice(0, RECENT_MAX);
 }
 
-/** The folders the new-session menu offers, for any agent: distinct, newest first, at most RECENT_MAX. */
+/** `list` without folder `cwd` (found gone: it is no longer offered, nor the folder a new terminal starts in). */
+export function dropRecent(list: Recent[], cwd: string): Recent[] {
+  const key = pathKey(cwd);
+  return list.filter((r) => pathKey(r.cwd) !== key);
+}
+
+/** The folders the new-session menu offers, for any agent: distinct by `pathKey`, newest first, at most RECENT_MAX,
+ *  each as spelled when it was used last. */
 export function recentFolders(list: Recent[]): string[] {
   const out: string[] = [];
-  for (const r of [...list].sort((a, b) => b.at - a.at)) if (!out.includes(r.cwd)) out.push(r.cwd);
+  const keys = new Set<string>();
+  for (const r of [...list].sort((a, b) => b.at - a.at)) {
+    const key = pathKey(r.cwd);
+    if (keys.has(key)) continue;
+    keys.add(key);
+    out.push(r.cwd);
+  }
   return out.slice(0, RECENT_MAX);
 }
 
@@ -748,5 +764,5 @@ export function draftFolder(list: Recent[], home: string | null): string {
 /** The folder chip's menu: the recent folders (newest first), then the home folder unless it is one of them. */
 export function folderChoices(list: Recent[], home: string | null): { recent: string[]; home: string | null } {
   const recent = recentFolders(list);
-  return { recent, home: home && !recent.includes(home) ? home : null };
+  return { recent, home: home && !recent.some((c) => pathKey(c) === pathKey(home)) ? home : null };
 }

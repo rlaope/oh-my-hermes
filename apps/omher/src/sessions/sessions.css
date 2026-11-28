@@ -370,12 +370,64 @@ body.side-resizing * {
   color: var(--muted);
   font-size: 14px;
 }
-/* a past conversation: its title over its folder and age, each one line */
+/* a past conversation: its title (and a fork's mark) over the last thing said and its folder and age, each one line */
 .ss-past {
-  max-height: 260px;
+  max-height: 300px;
 }
 .ss-past-row {
   height: 40px;
+}
+.ss-past-row:has(.ss-past-said) {
+  height: 54px;
+}
+.ss-past-fork {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--muted);
+}
+.ss-past-said {
+  white-space: nowrap;
+}
+/* This folder / All folders: two quiet segments; the one shown is raised */
+.ss-past-scope {
+  display: flex;
+  gap: 2px;
+  margin: 0 6px 4px;
+  padding: 2px;
+  border-radius: var(--r-sm);
+  background: var(--raise2);
+}
+.ss-past-scope > button {
+  flex: 1;
+  height: 22px;
+  border-radius: var(--r-sm);
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.ss-past-scope > button.on {
+  background: var(--bg);
+  color: var(--ink);
+}
+.ss-past-scope > button:focus-visible {
+  outline: 1px solid var(--accent);
+}
+.ss-past-filter {
+  display: block;
+  margin: 0 6px 4px;
+}
+.ss-past-filter input {
+  width: 100%;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 12px;
 }
 /* step 2 of the menu: ← and the agent picked, over its folder choices */
 .ss-agent {
