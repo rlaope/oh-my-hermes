@@ -3,7 +3,7 @@
 // order, exactly once; its ↵ buttons send it now (one interrupt), steer it again, edit or delete it. Holds across a
 // reconnect, a bot switch and Stop.
 import { afterEach, expect, it, vi } from "vitest";
-import { createStore, STEER_REPLY_MS, TURN_QUIET_MAX_MS, TURN_QUIET_MS, type BridgeLike, type Chat } from "./store";
+import { CHAT_READ_MS, createStore, STEER_REPLY_MS, TURN_QUIET_MAX_MS, TURN_QUIET_MS, type BridgeLike, type Chat } from "./store";
 import type { BridgeEvent } from "../lib/protocol";
 import type { BridgeStatus } from "../lib/bridge";
 
@@ -188,4 +188,76 @@ it("held when the link drops and the reconnect's re-read is lost: the watch read
   f.status("open");
   await vi.advanceTimersByTimeAsync(TURN_QUIET_MAX_MS);
   expect(f.sends()).toEqual(["after the link is back"]);
+});
+
+it("verifier: a quiet re-read whose reply is lost on an open socket does not strand a held follow-up", async () => {
+  const { f, a, chat, store } = await busy();
+  vi.useFakeTimers();
+  f.setRunning(false); // Hermes ended; its turn.end never reached the store
+  const original = f.bridge.request.bind(f.bridge);
+  let missing = 0;
+  f.bridge.request = (async (op: string, p: Record<string, unknown>) => {
+    if (op === "chat.open" && p.bot === "kami" && missing++ === 0) return new Promise(() => {});
+    return (original as (o: string, p: Record<string, unknown>) => Promise<unknown>)(op, p);
+  }) as BridgeLike["request"];
+  await a.send("follow-up after approval");
+  await vi.advanceTimersByTimeAsync(TURN_QUIET_MAX_MS * 3);
+  expect(store.getState().conn).toBe("open");
+  expect(f.sends(), JSON.stringify({attempts:missing, turn:!!chat().turn, held:heldOf(chat())})).toEqual(["follow-up after approval"]);
+});
+
+it("verifier: the watchdog and reconnect resync do not start overlapping reads of the same chat", async () => {
+  const { f, a } = await busy();
+  vi.useFakeTimers();
+  await a.send("queued before wake");
+  await vi.advanceTimersByTimeAsync(0);
+  const original = f.bridge.request.bind(f.bridge);
+  const reads: (() => void)[] = [];
+  f.setRunning(false);
+  f.bridge.request = (async (op: string, p: Record<string, unknown>) => {
+    if (op === "chat.open" && p.bot === "kami") await new Promise<void>((resolve) => reads.push(resolve));
+    return (original as (o: string, p: Record<string, unknown>) => Promise<unknown>)(op, p);
+  }) as BridgeLike["request"];
+  f.status("closed");
+  f.status("open");
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reads).toHaveLength(1); // the reconnect resync already started its open
+  await vi.advanceTimersByTimeAsync(TURN_QUIET_MS * 2);
+  const overlapping = reads.length;
+  for (const resolve of reads) resolve();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(f.sends()).toEqual(["queued before wake"]);
+  expect(overlapping, "chat.open was still in flight when the watchdog issued another").toBe(1);
+});
+
+it("a quiet re-read with no reply is given up after CHAT_READ_MS; its late reply, after a newer read, is dropped", async () => {
+  const { f, a, chat } = await busy();
+  vi.useFakeTimers();
+  f.setRunning(false);
+  const original = f.bridge.request.bind(f.bridge);
+  let late: ((v: unknown) => void) | null = null;
+  f.bridge.request = (async (op: string, p: Record<string, unknown>) => {
+    if (op === "chat.open" && p.bot === "kami" && !late) {
+      f.calls.push({ op, params: p });
+      return new Promise<unknown>((r) => (late = r));
+    }
+    return (original as (o: string, p: Record<string, unknown>) => Promise<unknown>)(op, p);
+  }) as BridgeLike["request"];
+  await a.send("late reply");
+  const opens = f.count("chat.open");
+  await vi.advanceTimersByTimeAsync(TURN_QUIET_MS);
+  expect(f.count("chat.open")).toBe(opens + 1);
+  // still in flight: no second read before the first is given up
+  await vi.advanceTimersByTimeAsync(CHAT_READ_MS - 1);
+  expect(f.count("chat.open")).toBe(opens + 1);
+  // given up: the next read comes after the doubled quiet time, finds Hermes idle, the message goes
+  await vi.advanceTimersByTimeAsync(1 + TURN_QUIET_MS * 2);
+  expect(f.count("chat.open")).toBe(opens + 2);
+  expect(f.sends()).toEqual(["late reply"]);
+  expect(chat().turn).toBeFalsy();
+  // the first read answers now, out of date (it saw the turn still running): dropped
+  late!({ session_id: "s-kami", messages: [], running: true, model: "m", provider: "p", reasoning: "high" });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(chat().turn).toBeFalsy();
+  expect(f.sends()).toEqual(["late reply"]);
 });

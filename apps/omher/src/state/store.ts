@@ -504,6 +504,10 @@ export const STEER_REPLY_MS = 8_000;
  *  each read that finds the turn still running doubles the wait (a long quiet tool call), up to TURN_QUIET_MAX_MS. */
 export const TURN_QUIET_MS = 3_000;
 export const TURN_QUIET_MAX_MS = 60_000;
+/** A re-read of a chat (chat.open after a quiet turn, a reconnect or a restart) with no reply after this long is given
+ *  up: the chat may be read again (the quiet watch's next wait), and the given-up read's late reply is dropped once a
+ *  newer read of that chat has started. Longer than a normal open, which may start the bot. */
+export const CHAT_READ_MS = 20_000;
 /** How much of a turn's thinking text is kept (the start; the rest is dropped, never shown cut mid-word). */
 export const THINKING_MAX = 20_000;
 
@@ -2497,20 +2501,38 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     rereadStale(key);
     return true;
   };
-  /** Chats being read again by reread: one read per chat at a time. */
-  const rereading = new Set<string>();
-  /** Reads chat `key` again (chat.open, or the thread reads for a thread), once per chat at a time. False when no
-   *  read started (not loaded, the bridge is down, or one is already running). */
+  /** Per chat: the re-read in flight (one at a time; a second ask joins it) and the number of the newest one started. */
+  const reading = new Map<string, { job: Promise<void>; n: number }>();
+  const newestRead = new Map<string, number>();
+  let reads = 0;
+  /** Reads chat `key` again (chat.open, or the thread reads for a thread): the quiet watch, a held message on a stale
+   *  chat, a reconnect and a restart all come here, so one read per chat is in flight and a second ask joins it. A
+   *  read with no reply after CHAT_READ_MS is given up (rejects `timeout`) and frees the chat for the next read; its
+   *  late reply is dropped when a newer read of the chat has started. */
+  const readChat = (key: string): Promise<void> => {
+    const on = reading.get(key);
+    if (on) return on.job;
+    const n = ++reads;
+    newestRead.set(key, n);
+    const work = key.startsWith("fold:") ? rereadThreads(chatTarget(key, botNames(state)).bot) : loadChat(key, () => newestRead.get(key) === n);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const job = new Promise<void>((resolve, reject) => {
+      timer = setTimeout(() => reject({ code: "timeout", message: "no reply to the chat read" }), CHAT_READ_MS);
+      work.then(resolve, reject);
+    }).finally(() => {
+      clearTimeout(timer);
+      if (reading.get(key)?.n === n) reading.delete(key);
+    });
+    reading.set(key, { job, n });
+    return job;
+  };
+  /** readChat for a loaded chat while the bridge is up, then `then`. False when no read started (not loaded, the
+   *  bridge is down, or one is already in flight). */
   const reread = (key: string, then?: () => void): boolean => {
-    if (!state.chats[key]?.loaded || state.conn !== "open" || rereading.has(key)) return false;
-    rereading.add(key);
-    const job = key.startsWith("fold:") ? rereadThreads(chatTarget(key, botNames(state)).bot) : loadChat(key);
-    void job
+    if (!state.chats[key]?.loaded || state.conn !== "open" || reading.has(key)) return false;
+    void readChat(key)
       .catch(() => {})
-      .finally(() => {
-        rereading.delete(key);
-        then?.();
-      });
+      .finally(() => then?.());
     return true;
   };
   /** A chat still unread since the bridge came back (`stale`) holds every message on that read. The reconnect's own
@@ -2573,16 +2595,18 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     dispatch({ type: "watch.missed", bot, count: rows.length });
     opts.onWatchMissed?.(bot, rows, state);
   };
-  const loadChat = async (bot: string) => {
+  /** `current`: false once a newer read of the chat has started (readChat), and then this read's answer is dropped. */
+  const loadChat = async (bot: string, current: () => boolean = () => true) => {
     let res: ChatOpenResult;
     const since = now();
     try {
       res = await bridge.request("chat.open", { bot });
     } catch (e) {
       // Without this the chat stays unloaded and the timeline shows "Loading…" forever (bot offline).
-      dispatch({ type: "chat.failed", bot, message: errText(e) });
+      if (current()) dispatch({ type: "chat.failed", bot, message: errText(e) });
       throw e;
     }
+    if (!current()) return;
     catchUpWatch(bot, res.messages);
     dispatch({ type: "chat.opened", bot, res, now: now(), since });
   };
@@ -2722,7 +2746,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const staleThreads = new Set(
         Object.entries(state.chats).filter(([n, c]) => c.stale && c.loaded && n.startsWith("fold:")).map(([n]) => chatTarget(n, names).bot),
       );
-      await Promise.allSettled([...stale.map(loadChat), ...[...staleThreads].filter((b) => names.has(b)).map(rereadThreads)]);
+      await Promise.allSettled([...stale.map(readChat), ...[...staleThreads].filter((b) => names.has(b)).map(rereadThreads)]);
       // a profile that appeared since: ask it too (only new names, so a bots.update storm asks nobody twice)
       await Promise.allSettled(
         selectUnlisted(state).filter((b) => !before.has(b.name) && !state.chats[b.name]?.loaded).map((b) => peekAsks(b.name)),
@@ -2746,7 +2770,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     const loaded = Object.entries(state.chats).filter(([n, c]) => c.loaded && names.has(n)).map(([n]) => n);
     const threaded = Object.keys(state.threads).filter((n) => names.has(n));
     await Promise.allSettled([
-      ...loaded.map(loadChat),
+      // through readChat: a chat the quiet watch is already reading is not read twice
+      ...loaded.map(readChat),
       ...threaded.map(rereadThreads),
       ...peekUnlisted(),
       loadElsewhere(),
@@ -2941,7 +2966,7 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         // a restarted bot is attached again: its chat re-reads itself, as after a reconnect; a bot outside the list
         // is asked again, because the restart dropped the bridge's link to its Bot Chat
         if (ev.event === "bot.restarted" && ev.ok) {
-          if (state.chats[ev.bot]?.loaded) void loadChat(ev.bot).catch(() => {});
+          if (state.chats[ev.bot]?.loaded) void readChat(ev.bot).catch(() => {});
           else if (selectUnlisted(state).some((b) => b.name === ev.bot)) void peekAsks(ev.bot);
           // its threads that were read are read again too (a turn lost in the restart shows there as well)
           if (state.threads[ev.bot]) void rereadThreads(ev.bot);
