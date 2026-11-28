@@ -111,9 +111,41 @@
   content: "−";
   color: var(--danger);
 }
-.dv-l.hunk,
 .dv-l.more {
   color: var(--quiet);
+}
+/* between two hunks: a thin rule where the lines in between are left out */
+.dv-l.hunk {
+  height: 0;
+  margin: 4px 10px;
+  padding: 0;
+  border-top: 1px dashed var(--line);
+}
+/* old and new line numbers: two right-aligned gutters as wide as the file's longest number (--dv-w), then the mark.
+   The numbers are pseudo-element text, so a copy of the lines takes no numbers. */
+.dv-body.num .dv-l:not(.hunk) {
+  padding-left: calc(2 * var(--dv-w) + 34px);
+}
+.dv-body.num .dv-l::before {
+  left: calc(2 * var(--dv-w) + 21px);
+}
+.dv-no {
+  position: absolute;
+  top: 0;
+  width: var(--dv-w);
+  text-align: right;
+  color: var(--muted);
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+.dv-no::before {
+  content: attr(data-n);
+}
+.dv-no.o {
+  left: 6px;
+}
+.dv-no.n {
+  left: calc(var(--dv-w) + 14px);
 }
 
 /* the agent's todo list: one compact checklist that changes in place; under way reads in ink */

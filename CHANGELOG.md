@@ -4,6 +4,17 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: a Claude Code or Codex session's chat shows what was said and done.** In the Plans session view a
+  Claude Code chat no longer shows the harness's own lines as the person's words: reminders, slash command blocks,
+  task notices and compaction summaries are left out, a paste shows its text, and an interrupt, a compaction or an
+  API error is one dim line (the error's own words, its status and the retry it is on, for example "API error 529 ·
+  retry 3/10"). A current Codex shell step reads as its command instead of the JavaScript around it ("git status +
+  2 more" for several). A file edit's change keeps its old and new line numbers beside each line, with a thin rule
+  between hunks. The side panel's git reads now ignore git variables omher inherited that would point them at
+  another repository, and never fetch a partial clone's missing objects. (`docs/OMHER-BOUNDARY.md` rule 10;
+  `apps/omher/src/harness/session.ts`, `apps/omher/src/chat/activity/diffLines.ts`; ideas from 2rami/kasaterm (MIT),
+  code written fresh)
+
 - **omher: speak to a bot, and hear its answer.** A microphone in the composer of a bot's main chat and its threads
   records in omher's own window; the bot's own Hermes turns the recording into text, which lands in the draft at the
   caret and is never sent by omher. A recording stops by itself after 3 minutes. An answer's new speaker button, beside

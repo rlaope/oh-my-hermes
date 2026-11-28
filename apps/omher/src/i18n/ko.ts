@@ -1734,6 +1734,11 @@ export const ko: Record<Key, string> = {
   "harness.none": "이 부분의 세션을 아직 찾지 못했어요.",
   "harness.noCli": "이 부분은 {agent}에서 맡았지만, 그 세션이 이 컴퓨터에 없어요.",
   "harness.openChild": "{name} 열기",
+  "harness.status.interrupted": "중단됨",
+  "harness.status.compacted": "대화 압축됨",
+  "harness.status.apiError": "API 오류",
+  "harness.status.retry": "재시도 {n}/{max}",
+  "harness.moreCommands": "{first} 외 {n}개",
   "harness.session": "세션",
   // termpanel (the bottom terminal panel, Ctrl+`)
   "termpanel.label": "터미널",

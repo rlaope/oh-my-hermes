@@ -1,14 +1,19 @@
 // What a SESSIONS agent showed of its work inside one turn's activity line: a file edit's change (DiffView), its
 // todo list (PlanList) and its thinking (ThinkingText). The adapters send all three in one agent-neutral shape
 // (`tool.diff`, `plan`, `thinking.text`); an agent that sends none of them shows none of these.
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { DiffFile, PlanItem } from "../../lib/protocol";
 import { t, type Key } from "../../i18n";
 import { ChevronRight } from "../../ui";
+import { diffRows, gutterWidth } from "./diffLines";
 import "./work.css";
 
-/** One file's change: path and counts, then its lines in mono, capped in height with their own scroll. */
+/** One file's change: path and counts, then its lines in mono with their old and new line numbers (diffLines.ts),
+ *  capped in height with their own scroll. A hunk header is a thin rule between hunks. The numbers are drawn from data
+ *  attributes, so a line's text (and what a copy takes) is the line alone. */
 function DiffFileView({ f }: { f: DiffFile }) {
+  const rows = diffRows(f.lines);
+  const w = gutterWidth(rows);
   return (
     <div className="dv-file" data-testid="diff-file">
       <div className="dv-head">
@@ -20,15 +25,27 @@ function DiffFileView({ f }: { f: DiffFile }) {
         {f.added > 0 && <span className="dv-add">+{f.added}</span>}
         {f.removed > 0 && <span className="dv-del">−{f.removed}</span>}
       </div>
-      <div className="dv-body" data-testid="diff-body">
-        {f.lines.map((l, i) => {
-          const k = l.startsWith("@@") ? "hunk" : l[0] === "+" ? "add" : l[0] === "-" ? "del" : "ctx";
-          return (
-            <div key={i} className={`dv-l ${k}`} data-kind={k}>
-              {k === "hunk" ? "⋯" : l.slice(1) || " "}
+      <div
+        className={`dv-body${w ? " num" : ""}`}
+        data-testid="diff-body"
+        style={w ? ({ "--dv-w": `${w}ch` } as CSSProperties) : undefined}
+      >
+        {rows.map((r, i) =>
+          r.kind === "hunk" ? (
+            // the first hunk needs no rule above it
+            i > 0 ? <div key={i} className="dv-l hunk" data-kind="hunk" aria-hidden /> : null
+          ) : (
+            <div key={i} className={`dv-l ${r.kind}`} data-kind={r.kind} data-old={r.old} data-new={r.new}>
+              {w ? (
+                <>
+                  <span className="dv-no o" data-n={r.old ?? ""} aria-hidden />
+                  <span className="dv-no n" data-n={r.new ?? ""} aria-hidden />
+                </>
+              ) : null}
+              {r.text || " "}
             </div>
-          );
-        })}
+          ),
+        )}
         {f.more ? <div className="dv-l more">{t("diff.more", { n: f.more })}</div> : null}
       </div>
     </div>

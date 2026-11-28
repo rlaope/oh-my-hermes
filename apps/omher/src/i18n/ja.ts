@@ -1734,6 +1734,11 @@ export const ja: Record<Key, string> = {
   "harness.none": "この部分のセッションはまだ見つかりません。",
   "harness.noCli": "{agent} がこの部分を担当しましたが、そのセッションはこのコンピュータにありません。",
   "harness.openChild": "{name} を開く",
+  "harness.status.interrupted": "中断されました",
+  "harness.status.compacted": "会話を圧縮しました",
+  "harness.status.apiError": "API エラー",
+  "harness.status.retry": "再試行 {n}/{max}",
+  "harness.moreCommands": "{first} ほか {n} 件",
   "harness.session": "セッション",
   // termpanel (the bottom terminal panel, Ctrl+`)
   "termpanel.label": "ターミナル",

@@ -233,6 +233,12 @@ RULES = (
     " commands of rules 29, 41, 44 (`hermes -p default profile create <name> --no-alias`) and 52 (`hermes computer-use`"
     " and `hermes tools enable|disable computer_use`), and the read-only `omh` of"
     " rules 43 and 44, the only program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`,",
+    # rule 10: no inherited git redirection reaches a read, and a read never fetches (_git's env, _GIT_REDIRECT)
+    "Each read runs without the git redirection omher may have inherited (`GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`,"
+    " `GIT_COMMON_DIR`, `GIT_OBJECT_DIRECTORY`, `GIT_ALTERNATE_OBJECT_DIRECTORIES`, `GIT_NAMESPACE`, and config added"
+    " through `GIT_CONFIG_PARAMETERS` or `GIT_CONFIG_COUNT`), so it answers for the folder asked, and it never fetches:",
+    "a partial clone's missing objects are not fetched (`GIT_NO_LAZY_FETCH=1`) and no transport is allowed"
+    " (`GIT_ALLOW_PROTOCOL` empty).",
     # rule 44: a new bot through Hermes' own profile create, on a press, the name by Hermes' rule, and OMH's templates
     "omher makes a new bot only when the person presses Create under the sidebar `+` › New bot, and only through Hermes'"
     " own command: one fixed argv, `hermes -p default profile create <name> --no-alias`,",
@@ -1492,6 +1498,23 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         # the one caller hands it the origin and ticket from Hermes' own discovery and mint, never from the page
         callers = sorted(n for n, f in fns.items() if n != "voice_request" and any(isinstance(c, ast.Name) and c.id == "voice_request" for c in ast.walk(f)))
         self.assertEqual(callers, ["_voice_send", "exchange"])  # `exchange` is the worker-thread step inside _voice_send
+
+    def test_git_reads_take_no_inherited_redirection_and_never_fetch(self) -> None:
+        """Rule 10: _git builds its child's environment from os.environ minus every name _GIT_REDIRECT matches, and
+        sets the two no-fetch keys; bridge/tests/test_git_env.py runs it against real repositories."""
+        fn = next(f for f in ast.walk(self.tree) if isinstance(f, ast.FunctionDef) and f.name == "_git")
+        body = ast.unparse(fn)
+        self.assertIn("if not _GIT_REDIRECT.fullmatch(k.upper())", body)
+        self.assertIn("'GIT_NO_LAZY_FETCH': '1'", body)
+        self.assertIn("'GIT_ALLOW_PROTOCOL': ''", body)
+        self.assertIn("env=env", body)
+        pattern = next(n.value for n in self.tree.body if isinstance(n, ast.Assign)
+                       and getattr(n.targets[0], "id", "") == "_GIT_REDIRECT")
+        rx = re.compile(ast.literal_eval(pattern.args[0]))
+        for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY",
+                     "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT",
+                     "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_7"):
+            self.assertTrue(rx.fullmatch(name), name)
 
     def test_the_only_gh_call_is_the_fixed_pr_view(self) -> None:
         """Rule 21: one `gh` call site, in gh_pr_view, with a fixed argv, a 3 s timeout, no prompt, and a repo and

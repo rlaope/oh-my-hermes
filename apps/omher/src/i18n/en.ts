@@ -1737,6 +1737,11 @@ export const en = {
   "harness.none": "No session found for this part yet.",
   "harness.noCli": "{agent} ran this part, but its session is not on this computer.",
   "harness.openChild": "Open {name}",
+  "harness.status.interrupted": "Interrupted",
+  "harness.status.compacted": "Conversation compacted",
+  "harness.status.apiError": "API error",
+  "harness.status.retry": "retry {n}/{max}",
+  "harness.moreCommands": "{first} + {n} more",
   "harness.session": "Session",
   // termpanel (the bottom terminal panel, Ctrl+`)
   "termpanel.label": "Terminal",

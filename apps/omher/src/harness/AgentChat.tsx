@@ -5,7 +5,8 @@
 // calls are our step rows between the bubbles, in order, each opening to its full input and result; its own children
 // are our subagent rows, a click opens their chat in place (breadcrumb Kami › child › grandchild). The last left
 // bubble is its answer; the parent's acceptance is not part of the child's session and never shows. No composer, no
-// edit, no resend. Polls every 3 s while the session runs.
+// edit, no resend. An interrupt, a compaction or an API error is one dim status line between them. Polls every 3 s
+// while the session runs.
 import { useEffect, useRef, useState } from "react";
 import { Bubble } from "../chat/parts/Bubble";
 import { StepRow } from "../chat/activity/Activity.slot";
@@ -200,6 +201,13 @@ function ChatBody({
           );
         }
         lastWasBot = false;
+        // an interrupt, a compaction or an API error: one dim line, nobody's words
+        if (p.kind === "status")
+          return (
+            <div key={p.key} className="ac-status" data-testid="agent-chat-status" data-code={p.code} title={p.text}>
+              {p.text}
+            </div>
+          );
         if (p.kind === "steps")
           return (
             <div key={p.key} className="act ac-steps" data-testid="agent-chat-steps">
