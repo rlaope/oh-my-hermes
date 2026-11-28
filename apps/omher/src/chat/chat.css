@@ -761,6 +761,27 @@
   height: 1px;
   background: var(--line-strong);
 }
+/* the same with a second line under it: Hermes' own sentence when it switched to the backup model */
+.line.sys.sys-d {
+  height: auto;
+  padding: 4px 0;
+}
+.sys-b {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: min(560px, 80%);
+  text-align: center;
+}
+.sys-b .line-t {
+  color: var(--muted);
+}
+.sys-detail {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
 .line-src {
   flex: none;
 }

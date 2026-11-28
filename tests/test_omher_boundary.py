@@ -230,9 +230,10 @@ RULES = (
     "The browser sign-in happens inside the CLI: omher never asks for, accepts, reads, copies or shows a token or key.",
     "deletes only `~/.omher/accounts/<cli>/<id>/`. An account switch never stops a running session.",
     "Besides rule 21's one GitHub CLI read, rule 24's one `hermes -p <bot> cron create` for the briefing, the Hermes"
-    " commands of rules 29, 41, 44 (`hermes -p default profile create <name> --no-alias`) and 52 (`hermes computer-use`"
-    " and `hermes tools enable|disable computer_use`), and the read-only `omh` of"
-    " rules 43 and 44, the only program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`,",
+    " commands of rules 29, 41, 44 (`hermes -p default profile create <name> --no-alias`), 52 (`hermes computer-use`"
+    " and `hermes tools enable|disable computer_use`) and 55 (`hermes config set fallback_providers`), and the"
+    " read-only `omh` of rules 43 and 44, the only program the bridge runs is `git`, for reads (`worktree list`,"
+    " `rev-parse`, `status`,",
     # rule 44: a new bot through Hermes' own profile create, on a press, the name by Hermes' rule, and OMH's templates
     "omher makes a new bot only when the person presses Create under the sidebar `+` › New bot, and only through Hermes'"
     " own command: one fixed argv, `hermes -p default profile create <name> --no-alias`,",
@@ -448,11 +449,11 @@ RULES = (
     "The provider id is checked against `^[a-z0-9][a-z0-9_-]{0,40}$` and passed as one argument;",
     "Hermes asks for the key in that terminal and stores it itself: omher never sees the key.",
     "never runs this in its own pseudo-terminal, so no keystroke passes through omher.",
-    "There are five exceptions. The first two are a bot's automations and plugins, which omher changes only by asking"
+    "There are six exceptions. The first two are a bot's automations and plugins, which omher changes only by asking"
     " that bot's own gateway (rules 24 and 25); omher writes no file of either itself, with one exception of its own:",
     "never signals a process (the exceptions are its own runs past their time, stopped through `_stop_run`, which only"
-    " two functions call: `_run_hermes_argv`, for rule 41's `hermes mcp` run, rule 44's `hermes profile create` run and"
-    " rule 52's computer-use runs,"
+    " two functions call: `_run_hermes_argv`, for rule 41's `hermes mcp` run, rule 44's `hermes profile create` run,"
+    " rule 52's computer-use runs and rule 55's `hermes config set` run,"
     " and `run_omh_read`, for rule 43's and rule 44's `omh` reads), never calls a service manager",
     "The fourth is a new bot (rule 44): on the person's press, Hermes' own `hermes -p default profile create <name>"
     " --no-alias` makes a new profile with its folder and files; omher writes none of them, and it changes no profile"
@@ -665,6 +666,29 @@ RULES = (
     " bot only.",
     "The fifth is a bot's computer use (rule 52): on the person's press, Hermes' own `hermes -p <bot> tools"
     " enable|disable computer_use` writes that profile's `config.yaml`; omher itself writes none of it.",
+    # rule 55: a bot's backup models, Hermes' own fallback chain, read from one key and set through one `config set`
+    "The sixth is a bot's backup models (rule 55): on the person's press, Hermes' own `hermes -p <bot> config set"
+    " fallback_providers <list>` writes that profile's `config.yaml` `fallback_providers`; omher itself writes none of it.",
+    "55. A bot's page (Settings › Bots › the bot) shows the bot's backup models, Hermes' own fallback chain, under its"
+    " model, and sets them only through Hermes' own command, only when the person presses Add backup model or Remove;",
+    "Of each entry only its provider and its model leave the bridge, each on one line, cleaned of control characters and"
+    " clipped: an entry that holds anything else (`base_url`, `api_mode`, `api_key`, `key_env` and the rest) is marked"
+    " custom with no other field, so its key, its key's name and its address never leave the bridge.",
+    "and `fallback.set` refuses it before anything runs.",
+    "A press runs one fixed argv, `hermes -p <bot> config set fallback_providers <list>` (`fallback.set`), with the whole"
+    " new list (an empty one clears it), built by `fallback_argv` and run as rule 41 runs Hermes' commands"
+    " (`_run_hermes_argv`), one run at a time per bot, stopped after 60 seconds.",
+    "The page sends only the bot's name and a list of providers and models: the key is the bridge's own constant, and no"
+    " key, value, flag or field of the page's reaches Hermes.",
+    "a YAML flow list of plain scalars (`[{provider: <id>, model: <id>}]`) with no quote in it, because on Windows"
+    " `hermes` can be the `hermes.cmd` launcher, whose cmd.exe does not take the escaped quote a JSON list would need.",
+    "and refuses it unless every value reads back as the same text (never `1.0`, `true`, `null` or `12:30`).",
+    "the bridge passes that line on marked (`status` with `fallback`), and the page adds one row to that chat where it"
+    " happened, a title of its own over Hermes' sentence, kept in the page's memory only and gone after a reload.",
+    "for a bot on another computer (rule 31: `fallback.get` and `fallback.set` are refused for it) and for every bot in"
+    " remote-only mode (rule 47: the page's filter refuses both on a server):",
+    "omher never runs `hermes fallback` (it needs a terminal), never sets `fallback_model` or any other key, never writes"
+    " a provider's key, address or API mode, and never tries a backup model itself.",
     # rule 13 names the one other file the page shows: a step's screenshot, under rule 53
     "or when Hermes names it as the screenshot of a browser or computer step under rule 53's limits; the desktop app"
     " opens only a file the bridge just served through `media.read`.",
@@ -859,10 +883,14 @@ class DocPins(unittest.TestCase):
         # bot's own gateway's loopback `api_origin`, a one-use `native-http` ticket per request, no Origin, no proxy, no
         # redirect, never `voice-config`; the microphone opened only on a press and closed on stop, cancel, error, chat
         # switch, hide and unmount; no recording or audio kept, the transcript left in the draft like typed text; on
-        # Linux only, WebKitGTK's media stream on and the microphone alone allowed; a peer bot and a server refused).
+        # Linux only, WebKitGTK's media stream on and the microphone alone allowed; a peer bot and a server refused); 55:
+        # rule 55 (a bot's backup models: Hermes' own `fallback_providers` read from its config.yaml, provider and model
+        # only, and set through one fixed `hermes -p <bot> config set fallback_providers <flow list>` on a press, a list
+        # written in Hermes' config never rewritten; Hermes' `fallback` status kept as one row in that chat; a peer bot
+        # and a server refused).
         # The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 54, len(rules))
+        self.assertTrue(6 <= len(rules) <= 55, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -2804,7 +2832,7 @@ class RestartOneBotOnAPress(unittest.TestCase):
         self.assertIn("subprocess.run(argv, stdin=subprocess.DEVNULL", body)
         self.assertNotIn("shell=True", self.src)
         # the bridge's own SIGTERM handler (it stops itself) is not a signal sent to anything; the one signal is
-        # `_stop_run`: the stop of its own rule 41 or rule 44 Hermes run past its time (`_run_hermes_argv`) and rule
+        # `_stop_run`: the stop of its own rule 41, 44, 52 or 55 Hermes run past its time (`_run_hermes_argv`) and rule
         # 43's of its own `omh` read (`run_omh_read`)
         rest = self.src
         for own in ("_run_hermes_argv", "run_omh_read", "_stop_run"):
@@ -3104,10 +3132,11 @@ class SshPeersOnlyOverTheOwnSsh(unittest.TestCase):
 
     def test_the_bridge_refuses_this_computers_ops_and_probes_read_only(self) -> None:
         refused = self.bridge.split("PEER_REFUSED = {", 1)[1].split("\n}\n", 1)[0]
-        # rule 52: a peer bot's computer use would act on that computer's screen; rule 54: voice is for a bot here only
+        # rule 52: a peer bot's computer use would act on that computer's screen; rule 54: voice is for a bot here only;
+        # rule 55: a bot's backup models are set on the computer it runs on
         self.assertEqual(re.findall(r'^    "([a-z.]+)":', refused, re.M),
                          ["folder.open", "folder.close", "folder.resume", "bots.restart", "computer.bot", "computer.toggle",
-                          "voice.info", "voice.transcribe", "voice.speak"])
+                          "voice.info", "voice.transcribe", "voice.speak", "fallback.get", "fallback.set"])
         forward = self.bridge.split("PEER_FORWARD = frozenset({", 1)[1].split("})", 1)[0]
         for op in ("folder.open", "folder.close", "folder.resume", "bots.restart", "accounts.list", "sessions.start", "usage.read"):
             self.assertNotIn(f'"{op}"', forward, op)
@@ -3684,6 +3713,192 @@ class TerminalLinksAndBotRequests(unittest.TestCase):
         self.assertIn('export const SPLITS_KEY = "omher.splits";', split)
 
 
+class BackupModelThroughHermesOwnConfigSet(unittest.TestCase):
+    """Rule 55: a bot's backup models are Hermes' own `fallback_providers`, read with only each entry's provider and
+    model leaving the bridge, and set through one fixed `hermes -p <bot> config set fallback_providers <flow list>` run
+    by rule 41's runner on a press; a list written in Hermes' config is never rewritten; a peer bot and a server are
+    refused; Hermes' `fallback` status is passed on marked."""
+
+    OPS = ("op_fallback_get", "op_fallback_set")
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.src = BRIDGE.read_text(encoding="utf-8")
+        cls.tree = ast.parse(cls.src)
+        cls.fns = {f.name: f for f in ast.walk(cls.tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+    def _body(self, name: str) -> str:
+        fn = self.fns[name]
+        return ast.unparse(ast.Module(body=fn.body[1:] if ast.get_docstring(fn) else fn.body, type_ignores=[]))
+
+    def _const(self, name: str):
+        return next(n.value for n in self.tree.body if isinstance(n, ast.Assign)
+                    and any(getattr(t, "id", "") == name for t in n.targets))
+
+    def _callers(self, name: str) -> list[str]:
+        return sorted(n for n, f in self.fns.items() if n != name
+                      and any(isinstance(c, ast.Name) and c.id == name for c in ast.walk(f)))
+
+    def _bridge(self):
+        import importlib.util
+        import sys
+
+        spec = importlib.util.spec_from_file_location("omher_bridge_fallback", BRIDGE)
+        ob = importlib.util.module_from_spec(spec)
+        sys.modules["omher_bridge_fallback"] = ob
+        spec.loader.exec_module(ob)
+        return ob
+
+    def test_the_argv_is_exactly_that_list(self) -> None:
+        self.assertEqual(ast.literal_eval(self._const("FALLBACK_KEY")), "fallback_providers")
+        self.assertEqual(ast.literal_eval(self._const("FALLBACK_MAX")), 4)
+        self.assertEqual(ast.literal_eval(self._const("FALLBACK_TIMEOUT")), 60.0)
+        body = self._body("fallback_argv")
+        self.assertIn("PROFILE_ID.fullmatch(bot)", body)
+        self.assertIn("return [hermes, '-p', bot, 'config', 'set', FALLBACK_KEY, fallback_literal(fallback_check(chain))]", body)
+        # the only list naming `config` is fallback_argv's, and only run_hermes_fallback builds one, for op_fallback_set
+        lists = {n for n, f in self.fns.items() for lst in ast.walk(f) if isinstance(lst, ast.List)
+                 and any(isinstance(c, ast.Constant) and c.value == "config" for c in lst.elts)}
+        self.assertEqual(lists, {"fallback_argv"})
+        self.assertEqual(self._callers("fallback_argv"), ["run_hermes_fallback"])
+        self.assertEqual(self._body("run_hermes_fallback"), "return _run_hermes_argv(fallback_argv(hermes, bot, chain), home, timeout)")
+        self.assertEqual(self._callers("run_hermes_fallback"), ["op_fallback_set"])
+        run = self._body("op_fallback_set")
+        self.assertIn("run_hermes_fallback, hermes, name, chain, self.home, FALLBACK_TIMEOUT", run)
+        self.assertLess(run.index("if name in self._fallback_busy:"), run.index("self._fallback_busy.add(name)"))
+        # what runs, for a real list: one argument, a flow literal with no quote, the key the bridge's own
+        ob = self._bridge()
+        ob._yaml_safe_load = lambda text: [{"provider": "openrouter", "model": "x-ai/grok-4.7"}] if text.startswith("[{") else []
+        self.assertEqual(ob.fallback_argv("/h", "kami", [{"provider": "openrouter", "model": "x-ai/grok-4.7"}]),
+                         ["/h", "-p", "kami", "config", "set", "fallback_providers", "[{provider: openrouter, model: x-ai/grok-4.7}]"])
+        self.assertEqual(ob.fallback_argv("/h", "kami", []), ["/h", "-p", "kami", "config", "set", "fallback_providers", "[]"])
+
+    def test_the_strict_charset_refuses_shell_cmd_and_yaml_metacharacters(self) -> None:
+        pattern = ast.literal_eval(self._const("FALLBACK_VALUE").args[0])
+        self.assertEqual(pattern, "[A-Za-z0-9](?:[A-Za-z0-9._:/@-]{0,126}[A-Za-z0-9])?")
+        for bad in ("-p", "--force", "a b", "x;y", "$(id)", "`id`", "a|b", "a&b", "a%b", "a^b", "a!b", "a\"b", "a'b",
+                    "a,b", "a{b", "a}b", "a[b", "a]b", "a#b", "*x", "&x", "@x", ":x", "x:", "a\nb", "a\\b", "", "x" * 129):
+            self.assertIsNone(re.fullmatch(pattern, bad), bad)
+        ob = self._bridge()
+        for bad in ("a b", "x;y", "a,b", "a}b", "a: b", "-p"):
+            for key in ("provider", "model"):
+                with self.assertRaises(ValueError, msg=bad):
+                    ob.fallback_check([{"provider": "openai", "model": "gpt-6.1-sol", key: bad}])
+        # a field besides the two, more than four entries, or one twice, never reaches Hermes
+        for chain in ([{"provider": "a", "model": "b", "base_url": "http://x"}], [{"provider": "a", "model": f"m{i}"} for i in range(5)],
+                      [{"provider": "a", "model": "b"}] * 2, {"provider": "a", "model": "b"}, None):
+            with self.assertRaises(ValueError, msg=repr(chain)):
+                ob.fallback_check(chain)
+        # every value must read back as the same text through Hermes' YAML loader: a loader that reads it otherwise refuses
+        ob._yaml_safe_load = lambda text: [{"provider": "a", "model": 1.0}]
+        with self.assertRaises(ValueError):
+            ob.fallback_check([{"provider": "a", "model": "1.0"}])
+
+    def test_fallback_get_never_returns_a_secret_bearing_field(self) -> None:
+        import tempfile
+
+        ob = self._bridge()
+        cfg = {"model": {"default": "gpt-6.1-sol", "provider": "openai"}, "fallback_providers": [
+            {"provider": "custom", "model": "local", "base_url": "https://gw.example/v1", "api_key": "sk-SECRET-55",
+             "api_mode": "chat_completions"},
+            {"provider": "openrouter", "model": "x", "key_env": "OPENROUTER_KEY_2"},
+            {"provider": "openai", "model": "gpt-6.1-terra"},
+        ]}
+        ob._yaml_safe_load = lambda text: cfg
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "config.yaml").write_text("parsed by the stub above\n", encoding="utf-8")
+            got = ob.fallback_chain(Path(d))
+        self.assertEqual(got, {"chain": [{"provider": "custom", "model": "local", "custom": True},
+                                         {"provider": "openrouter", "model": "x", "custom": True},
+                                         {"provider": "openai", "model": "gpt-6.1-terra"}], "editable": False})
+        for word in ("sk-SECRET-55", "gw.example", "OPENROUTER_KEY_2", "chat_completions", "api_key", "base_url", "key_env"):
+            self.assertNotIn(word, repr(got), word)
+        # each row is built from the two fields alone: nothing else of an entry is copied out
+        body = self._body("fallback_chain")
+        self.assertIn("row = {'provider': _platform_text(provider, 128), 'model': _platform_text(model, 128)}", body)
+        self.assertNotIn("**e", body)
+        self.assertNotIn("dict(e", body)
+        for bad in ("write", "open(", "dump", "subprocess"):
+            self.assertNotIn(bad, body, bad)
+
+    def test_a_chain_written_in_hermes_config_is_not_rewritten(self) -> None:
+        import asyncio
+        import tempfile
+
+        ob = self._bridge()
+        cfg = {"model": {"default": "gpt-6.1-sol", "provider": "openai"},
+               "fallback_providers": [{"provider": "custom", "model": "m", "base_url": "http://127.0.0.1:9/v1"}]}
+        ob._yaml_safe_load = lambda text: [] if text == "[]" else cfg
+        runs = []
+        ob.run_hermes_fallback = lambda *a: runs.append(a) or (0, "")
+        ob.hermes_path = lambda *a, **k: "/stub/hermes"
+        with tempfile.TemporaryDirectory() as d:
+            home = Path(d)
+            (home / "profiles" / "kami").mkdir(parents=True)
+            for p in (home / "config.yaml", home / "profiles" / "kami" / "config.yaml"):
+                p.write_text("parsed by the stub above\n", encoding="utf-8")
+            bridge = ob.Bridge(token="t", hermes_home=home)
+            with self.assertRaises(ob.BridgeError) as cm:
+                asyncio.run(bridge.op_fallback_set({"bot": "kami", "chain": []}))
+        self.assertEqual(cm.exception.code, "not_editable")
+        self.assertEqual(runs, [])
+        run = self._body("op_fallback_set")
+        self.assertLess(run.index("if not (await self._fallback_read(bot))['editable']:"), run.index("self._fallback_busy.add(name)"))
+
+    def test_the_page_sends_a_bot_and_a_chain_and_nothing_else(self) -> None:
+        reads, other = set(), []
+        for name in self.OPS + ("_profile_bot", "_fallback_read"):
+            fn = self.fns[name]
+            parent = {child: node for node in ast.walk(fn) for child in ast.iter_child_nodes(node)}
+            for node in ast.walk(fn):
+                if not (isinstance(node, ast.Name) and node.id == "p"):
+                    continue
+                up = parent.get(node)
+                if isinstance(up, ast.Attribute) and up.attr == "get" and isinstance(parent.get(up), ast.Call) \
+                        and isinstance(parent[up].args[0], ast.Constant) and len(parent[up].args) == 1:
+                    reads.add(parent[up].args[0].value)
+                elif isinstance(up, ast.Call) and ast.unparse(up.func) == "self._profile_bot" and up.args == [node]:
+                    continue
+                else:
+                    other.append(f"{name}: {ast.unparse(up) if up is not None else 'p'}")
+        self.assertEqual(reads, {"bot", "chain"})
+        self.assertEqual(other, [])
+        ops = next(n.value for n in ast.walk(self.tree) if isinstance(n, ast.Assign) and ast.unparse(n.targets[0]) == "self.ops")
+        handlers = {k.value: v.attr for k, v in zip(ops.keys, ops.values)}
+        self.assertEqual({k: v for k, v in handlers.items() if k.startswith("fallback.")},
+                         {"fallback.get": "op_fallback_get", "fallback.set": "op_fallback_set"})
+        self.assertIn("chain = fallback_check(p.get('chain'))", self._body("op_fallback_set"))
+        self.assertIn("if own:", self._body("op_fallback_set"))  # the bot's own model is no backup
+
+    def test_a_peer_bot_and_a_server_are_refused(self) -> None:
+        refused = ast.literal_eval(self._const("PEER_REFUSED"))
+        forward = ast.literal_eval(self._const("PEER_FORWARD").args[0])
+        for op in ("fallback.get", "fallback.set"):
+            self.assertIn("set on the computer it runs on", refused[op])
+            self.assertNotIn(op, forward)
+        ops = (UI_SRC / "lib" / "remoteOps.ts").read_text(encoding="utf-8")
+        for op in ("fallback.get", "fallback.set"):
+            self.assertIn(f'"{op}": {{ send: "never", key: BACKUP,', ops)
+        self.assertIn('const BACKUP: Key = "backup.offRemote";', ops)
+        store = (UI_SRC / "state" / "store.ts").read_text(encoding="utf-8")
+        self.assertIn('fallbackGet: (bot) => bridge.request("fallback.get", { bot }),', store)
+        self.assertIn('fallbackSet: (bot, chain) => bridge.request("fallback.set", { bot, chain }),', store)
+        section = (UI_SRC / "settings" / "BackupModel.tsx").read_text(encoding="utf-8")
+        self.assertIn("const away = !!bot.host || remote;", section)
+        self.assertLess(section.index("if (away) return;"), section.index("s.fallbackGet(bot.name)"))
+
+    def test_hermes_fallback_status_is_marked_and_kept_in_the_page_only(self) -> None:
+        main = ast.unparse(self.fns["_main_event"])
+        self.assertIn("await out('status', text=text.strip(), **{'fallback': True} if p.get('kind') == 'fallback' else {})", main)
+        store = (UI_SRC / "state" / "store.ts").read_text(encoding="utf-8")
+        self.assertIn('notice: "fallback",', store)
+        # the row is never written anywhere: no storage key names it
+        for name in ("BackupModel.tsx", "backupChain.ts"):
+            ui = (UI_SRC / "settings" / name).read_text(encoding="utf-8")
+            self.assertNotIn("localStorage", ui, name)
+            self.assertNotIn("setItem(", ui, name)
+
+
 class ComputerUseThroughHermesOwnCommands(unittest.TestCase):
     """Rule 52: Settings › Computer runs four fixed Hermes argvs (`computer-use permissions status --json`, `install`,
     `permissions grant`, and a bot's `tools enable|disable computer_use`) through rule 41's runner; the page sends a bot
@@ -4089,9 +4304,10 @@ class AppsThroughTheBotsOwnHermes(unittest.TestCase):
 
     def test_one_run_with_no_shell_nothing_on_stdin_and_a_timeout(self) -> None:
         self.assertEqual(self._body("run_hermes_mcp"), "return _run_hermes_argv(mcp_argv(hermes, bot, verb, name), home, timeout)")
-        # the runner rule 44's profile create and rule 52's computer-use commands share: it takes only an argv one of the
-        # three checked builders made
-        self.assertEqual(self._callers("_run_hermes_argv"), ["run_hermes_computer", "run_hermes_mcp", "run_hermes_profile_create"])
+        # the runner rule 44's profile create, rule 52's computer-use commands and rule 55's config set share: it takes
+        # only an argv one of the four checked builders made
+        self.assertEqual(self._callers("_run_hermes_argv"),
+                         ["run_hermes_computer", "run_hermes_fallback", "run_hermes_mcp", "run_hermes_profile_create"])
         body = self._body("_run_hermes_argv")
         self.assertIn("proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, env=env, **kw)", body)
         self.assertIn("k not in _GATEWAY_MARKERS and k != 'HERMES_TUI_GATEWAY_URL'", body)

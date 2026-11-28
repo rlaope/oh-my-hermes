@@ -13,6 +13,17 @@ All notable changes will be documented here.
   `.omh` or `$OMH_HOME` (`cd ~/.omh && rm -rf */*`, `find ~/.omh -name '*' -delete`). (#3271 by @probepark;
   `src/plugin_bundle/omh/pr_delivery_gate.py`)
 
+- **omher: a bot's backup model, set from Settings and named when Hermes switches.** Hermes can go on with another
+  model when a bot's own cannot respond (rate limits, outages, failed sign-ins), but omher neither showed nor set that
+  list. A bot's page now has Backup model under its model: the list in Hermes' order, Remove on each, and Add backup
+  model, which picks from the models the chat's model picker lists for that bot. A change runs Hermes' own
+  `hermes -p <bot> config set fallback_providers <list>` and shows the list read back from the bot's config; it
+  applies from the next turn. Only each entry's provider and model are read out, and a list written by hand in
+  Hermes' config (an endpoint or key of its own, the legacy `fallback_model`) is shown read-only and never rewritten.
+  When Hermes switches a turn to a backup model, the chat keeps one quiet row there with Hermes' own sentence, until
+  a reload. A bot on another computer and remote-only mode are set where the bot runs. (`docs/OMHER-BOUNDARY.md`
+  rule 55; `apps/omher/src/settings/BackupModel.tsx`)
+
 - **omher: pause, resume and clear a chat's waiting messages.** Messages typed while a bot answers, and not steered
   in, wait in omher and went out one by one when the turn ended, with no way to hold them all or drop them at once. A
   quiet bar above the composer now shows how many wait, with Pause and Clear. Paused, nothing waiting goes out when

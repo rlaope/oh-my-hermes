@@ -1300,3 +1300,46 @@ a.bp-row:hover {
 [data-theme="light"] .st-page .mseg {
   background: var(--raise2);
 }
+/* A bot's backup models under its main model (settings/BackupModel.tsx, BOUNDARY rule 55). */
+.bk-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.bk-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 30px;
+  font-size: 12.5px;
+  color: var(--body);
+}
+.bk-i {
+  flex: none;
+  width: 14px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--quiet);
+  font-variant-numeric: tabular-nums;
+}
+.bk-t {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+.bk-acts {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.bk-st {
+  font-size: 11.5px;
+  color: var(--muted);
+}

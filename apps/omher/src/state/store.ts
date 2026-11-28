@@ -58,6 +58,8 @@ import type {
   ComputerDriverRun,
   ComputerStatus,
   ComputerToggle,
+  BackupChain,
+  BackupSet,
   VoiceInfo,
   VoiceSpeech,
   DiffFile,
@@ -296,8 +298,10 @@ export type RoutineAddedItem = {
 export type PluginAddedItem = { kind: "pluginAdded"; id: string; ts: number; name: string; title: string; tools: number; hooks: number };
 /** omher set up its Slack briefing for this bot: one gray line, once per bot, with Turn off (the job's pause). */
 export type BriefNoticeItem = { kind: "briefNotice"; id: string; ts: number; bot: string };
-/** One quiet line from omher itself (e.g. "Switched to Claude #2 (limit on #1)"); never sent to the bot. */
-export type SystemItem = { kind: "system"; id: string; ts: number; text: string };
+/** One quiet line from omher itself (e.g. "Switched to Claude #2 (limit on #1)"); never sent to the bot. `detail`: a
+ *  second line under it; `notice: "fallback"`: Hermes switched the turn to the bot's backup model (rule 55), kept in
+ *  the page only, gone after a reload. */
+export type SystemItem = { kind: "system"; id: string; ts: number; text: string; detail?: string; notice?: "fallback" };
 /** "→ thread: <title>" under a main-chat answer: the bot opened `thread` (or the person sent a message there). */
 export type ThreadLinkItem = { kind: "threadLink"; id: string; ts: number; bot: string; thread: string; title: string };
 /** "Send this to <title>?" under a main-chat answer whose bot thought the person's message belongs in `thread`.
@@ -709,6 +713,20 @@ function withItems(chat: Chat, items: ChatItem[]): Chat {
     .map((i) => ({ id: i.id, role: i.kind, text: i.text, ts: i.ts }));
   return { ...chat, items, messages };
 }
+
+/** Hermes' own switch sentence without its leading warning sign and "Model fallback:" label; nothing else is cut. */
+export const fallbackDetail = (text: string): string =>
+  text.trim().replace(/^⚠️?\s*/u, "").replace(/^Model fallback:\s*/i, "");
+
+/** The row a chat keeps where Hermes switched its turn to the backup model (rule 55): our title, Hermes' sentence. */
+export const fallbackNotice = (text: string, now: number, n: number): SystemItem => ({
+  kind: "system",
+  id: `fallback-${now}-${n}`,
+  ts: now / 1000,
+  text: tr("backup.switched"),
+  detail: fallbackDetail(text),
+  notice: "fallback",
+});
 
 /** The person answered a card: the running turn's "Waiting for approval / your answer" goes back to what the turn
  *  was doing (its latest step), or to the plain working line, unless another card still waits. */
@@ -1190,7 +1208,11 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
     case "status": {
       // the agent's own retry of this turn: the line says which try, in the person's language
       const text = ev.retry ? tr("live.retrying", { n: ev.retry.attempt, max: ev.retry.max }) : ev.text;
-      return touchChat(state, bot, (c) => (c.turn ? patchTurn(c, (t) => ({ ...t, status: text })) : { ...c, early: { text, at: now } }));
+      return touchChat(state, bot, (c) => {
+        const shown = c.turn ? patchTurn(c, (t) => ({ ...t, status: text })) : { ...c, early: { text, at: now } };
+        // Hermes switched to the backup model: one lasting row where it happened, besides the passing status line
+        return ev.fallback ? withItems(shown, [...shown.items, fallbackNotice(ev.text, now, shown.items.length)]) : shown;
+      });
     }
     case "thinking":
       return touchChat(state, bot, (c) => {
@@ -2187,6 +2209,10 @@ export interface Actions {
   voiceInfo(bot: string): Promise<VoiceInfo>;
   voiceTranscribe(bot: string, data_base64: string, mime: string): Promise<{ transcript: string; provider: string }>;
   voiceSpeak(bot: string, text: string, part: number): Promise<VoiceSpeech>;
+  /** A bot's backup models (BOUNDARY rule 55): read from its config, set through Hermes' own `config set` with the
+   *  whole new list. Only the bot and provider/model pairs go out. */
+  fallbackGet(bot: string): Promise<BackupChain>;
+  fallbackSet(bot: string, chain: { provider: string; model: string }[]): Promise<BackupSet>;
   /** Settings › General › Language: saved on this computer, applied at once (no restart). */
   setLanguage(lang: Lang): void;
   loadModels(bot?: string): Promise<void>;
@@ -3222,6 +3248,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     voiceInfo: (bot) => bridge.request("voice.info", { bot }),
     voiceTranscribe: (bot, data_base64, mime) => bridge.request("voice.transcribe", { bot, data_base64, mime }),
     voiceSpeak: (bot, text, part) => bridge.request("voice.speak", { bot, text, part }),
+    fallbackGet: (bot) => bridge.request("fallback.get", { bot }),
+    fallbackSet: (bot, chain) => bridge.request("fallback.set", { bot, chain }),
     setLanguage(lang) {
       try {
         if (typeof localStorage !== "undefined") localStorage.setItem(LANG_KEY, lang);

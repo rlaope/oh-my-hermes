@@ -207,8 +207,20 @@ export function Timeline({
         return <BriefNotice bot={bot} />;
       case "system":
         return (
-          <div className="line sys" data-testid="system-line">
-            <span className="line-t">{it.text}</span>
+          <div
+            className={`line sys${it.detail ? " sys-d" : ""}`}
+            data-testid={it.notice === "fallback" ? "backup-notice" : "system-line"}
+          >
+            {it.detail ? (
+              <span className="sys-b">
+                <span className="line-t">{it.text}</span>
+                <span className="sys-detail" data-testid="system-detail">
+                  {it.detail}
+                </span>
+              </span>
+            ) : (
+              <span className="line-t">{it.text}</span>
+            )}
           </div>
         );
     }
