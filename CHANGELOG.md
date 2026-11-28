@@ -4,6 +4,30 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: a Claude Code or Codex waiting on you in a terminal shows in Needs you.** When a terminal agent stops on its
+  permission dialog or a choice menu, it appears in Needs you with the bot asks, counts in the Dock badge and marks its
+  row. ⌘J (Ctrl+J off macOS) or a click opens that terminal with the keyboard in it, so you answer it there; omher types
+  nothing into it. Settings › Terminal › "Show terminal agents' questions in Needs you" (on by default) turns it off.
+  (`docs/OMHER-BOUNDARY.md` rule 11; `apps/omher/src/sessions/term/screenAsk.ts`)
+- **omher: see how long your Claude Code login has left.** Settings › Accounts shows "Login: 12 days left" under a
+  Claude Code login, hours under a day and "expired" past it, in red from three days out. Codex logins have no expiry
+  and show nothing. (`docs/OMHER-BOUNDARY.md` rule 18)
+- **omher: an update restart that does not happen no longer spins forever.** After installing an update, if omher has
+  not restarted 10 seconds later the user row shows "Waiting to restart" with Restart again and Later. Restart again
+  saves what is open and relaunches; it never downloads or installs the update again. (`docs/OMHER-BOUNDARY.md` rule 20)
+- **omher: warns when another app keeps a CPU core busy.** When an app of yours keeps a CPU core busy for over a minute,
+  omher sends one notification ("<App> has kept a CPU core busy for over a minute · 99 %") and shows a sidebar chip until
+  it cools. Two busy apps taking turns warn once; the same app warns again only after an hour or after it cooled.
+  Settings › General › "Warn when another app keeps the CPU busy" (on by default). macOS and Linux; omher reads only your
+  own processes' CPU time and runs no program. (`docs/OMHER-BOUNDARY.md` rule 56)
+- **omher: programs in a terminal can ask to come back after a restart.** A program in a TERMINALS Shell row (an editor,
+  an agent) can report its command with a signed OSC 7577 message; after omher restarts, its paused row says "Resume
+  runs nvim again", and Resume runs it once in its folder, with its arguments never read as shell commands. Settings ›
+  Terminal › "Let programs ask to be restarted" (on by default). Not on Windows. (`docs/OMHER-BOUNDARY.md` rule 55)
+- **omher: edit your terminal's colours.** Settings › Terminal › Customize colours edits the 16 ANSI colours,
+  background, text, cursor, selection and the split-pane border, with a live preview. Each app theme (dark, light) keeps
+  its own set, open terminals restyle at once, and "Reset to <theme>" goes back. (`docs/OMHER-BOUNDARY.md` rule 11)
+
 - **omher: speak to a bot, and hear its answer.** A microphone in the composer of a bot's main chat and its threads
   records in omher's own window; the bot's own Hermes turns the recording into text, which lands in the draft at the
   caret and is never sent by omher. A recording stops by itself after 3 minutes. An answer's new speaker button, beside
