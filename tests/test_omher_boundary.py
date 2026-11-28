@@ -3143,6 +3143,32 @@ class SshPeersOnlyOverTheOwnSsh(unittest.TestCase):
         self.assertIn("`hermes.cmd` shim", rule)
         self.assertIn("each bin's `.exe` before its `.cmd`", rule)
 
+    def test_the_ssh_config_is_read_only_at_two_sites_and_nothing_runs_for_it(self) -> None:
+        rule = self.doc.split("\n31. ", 1)[1].split("\n32. ", 1)[0]
+        self.assertIn("For the host field's suggestions and to refuse a second row for the same computer, the shell reads,"
+                      " never writes, only `~/.ssh/config`: it does not follow `Include` or evaluate `Match`, it runs"
+                      " nothing for this (never `ssh -G`), and the default user is `USER` (`USERNAME` on Windows).", rule)
+        read = 'std::fs::read_to_string({}.join(".ssh").join("config")).unwrap_or_default()'
+        # the suggestions (lib.rs) and the duplicate check (Peers::add): one read each, and no other file under ~/.ssh
+        hosts = self.lib.split("async fn peers_hosts(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn(read.format("home"), hosts)
+        add = self.peers.split("pub fn add(self: &Arc<Self>", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn(read.format("self.home"), add)
+        self.assertEqual(self.lib.count('.join(".ssh")'), 1)
+        self.assertEqual(self.peers.count('.join(".ssh")'), 1)
+        # Include is not followed and Match not evaluated: the resolver answers unknown at either, the suggestions
+        # read `Host` lines only
+        target = self.peers.split("pub fn ssh_target(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn('if key.eq_ignore_ascii_case("match") || key.eq_ignore_ascii_case("include") {\n            return None;', target)
+        suggest = self.peers.split("pub fn ssh_config_hosts(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn('if !key.eq_ignore_ascii_case("host") {', suggest)
+        # nothing runs for it: `ssh` has one spawn site (the link) and `-G` is never an argument
+        self.assertNotIn('"-G"', self.peers)
+        self.assertNotIn('"-G"', self.lib)
+        # the default user
+        self.assertIn('let key = if cfg!(windows) { "USERNAME" } else { "USER" };', self.peers)
+        self.assertEqual(self.peers.count("std::env::var("), 1)
+
     def test_only_connect_writes_the_peer_list(self) -> None:
         self.assertEqual(self.peers.count("write_peers(&self.home"), 2)  # add (Connect) and remove (Remove)
         add = self.peers.split("pub fn add(self: &Arc<Self>", 1)[1].split("\n    }\n", 1)[0]
