@@ -1,4 +1,4 @@
-// A bot's backup model (BOUNDARY rule 55): Settings › Bots › <bot> lists Hermes' own fallback chain under the model line
+// A bot's backup model (BOUNDARY rule 57): Settings › Bots › <bot> lists Hermes' own fallback chain under the model line
 // (`fallback.get`), Add picks from the bot's own model list and Remove takes one out, each sending the whole list through
 // `fallback.set` (Hermes' `config set`); a chain written in Hermes' config is shown read-only. When Hermes switches a
 // turn to the backup model, its marked status line leaves one lasting row in that chat.

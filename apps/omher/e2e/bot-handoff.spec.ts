@@ -1,4 +1,4 @@
-// Hand to bot from an answer (BOUNDARY rule 56): Kami's answer goes to a new Friren thread only on Hand over (one
+// Hand to bot from an answer (BOUNDARY rule 58): Kami's answer goes to a new Friren thread only on Hand over (one
 // thread.create, one chat.send there), the person stays in Kami's chat, and the card under the answer follows that
 // thread: working, then Friren's answer, which Give to Kami sends once into Kami's chat as the person's own message.
 // A mention only suggests (its chip opens the popover and sends nothing). Shots: OMHER_SHOTS=<dir>.

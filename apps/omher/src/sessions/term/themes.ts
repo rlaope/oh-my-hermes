@@ -11,6 +11,8 @@ export interface TermTheme {
   name: string;
   kind: "dark" | "light";
   theme: ITheme;
+  /** An edited theme (Customize colours): the theme its edits started from. */
+  base?: TermTheme;
 }
 
 // Matched to omher's tokens (--bg, --body, --ink) so the terminal reads as part of the page.
@@ -92,12 +94,37 @@ export function customTermTheme(c: TermCustomTheme): TermTheme {
   return { id: CUSTOM_THEME_ID, name: c.name, kind, theme };
 }
 
+/** The id the colours edited by hand (Customize colours) are picked by, one set per app theme. */
+export const EDITED_THEME_ID = "edited";
+
+const borders = new WeakMap<ITheme, string>();
+/** The pane border (split dividers) an edited theme sets; undefined: the page's own line colour. */
+export const themeBorder = (theme: ITheme): string | undefined => borders.get(theme);
+
+/** A catalog or imported theme by id; omher's own for `mode` when it is not there. */
+function basePick(mode: "dark" | "light", id: string, s: TermSettings): TermTheme {
+  if (id === CUSTOM_THEME_ID && s.custom) return customTermTheme(s.custom);
+  return termThemeById(id) ?? termThemeById(mode === "light" ? "omher-light" : "omher-dark")!;
+}
+
+/** The theme edited by hand for app theme `mode`: its base theme with each changed colour; null when none. */
+export function editedTermTheme(mode: "dark" | "light", s: TermSettings): TermTheme | null {
+  const e = s.edits[mode];
+  if (!e) return null;
+  const base = basePick(mode, e.base, s);
+  const { border, ...colors } = e.colors;
+  const theme: ITheme = { ...base.theme, ...colors };
+  // a picked selection is opaque; the inactive one is it, fainter
+  if (colors.selectionBackground) theme.selectionInactiveBackground = `${colors.selectionBackground}99`;
+  if (border) borders.set(theme, border);
+  return { id: EDITED_THEME_ID, name: base.name, kind: isLightBackground(theme.background) ? "light" : "dark", theme, base };
+}
+
 /** The catalog entry a terminal uses under app theme `mode`: the pick for that mode, else omher's own for it. */
 export function termThemePick(mode: "dark" | "light", s: TermSettings): TermTheme {
   const id = mode === "light" ? s.themeLight : s.themeDark;
-  if (id === CUSTOM_THEME_ID && s.custom) return customTermTheme(s.custom);
-  const picked = termThemeById(id);
-  return picked ?? termThemeById(mode === "light" ? "omher-light" : "omher-dark")!;
+  if (id === EDITED_THEME_ID) return editedTermTheme(mode, s) ?? basePick(mode, "", s);
+  return basePick(mode, id, s);
 }
 
 /** The theme a terminal uses under app theme `mode`. */

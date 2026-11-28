@@ -31,6 +31,7 @@ import { SidebarResizer } from "./SidebarResizer";
 import { useAutoSplit } from "./autoSplit";
 import { GhDashBar, TasksBar } from "../tasks/TasksBar";
 import { DiskChip } from "./DiskChip";
+import { CpuChip } from "./CpuChip";
 import { PLATFORMS_POLL_MS } from "../platforms/platforms";
 
 const sessionBackground = (target: EventTarget) => target instanceof Element && !target.closest(".ss-row, .tg-h, button, input, textarea, select, a, [contenteditable], [role=menu], [role=menuitem]");
@@ -221,6 +222,8 @@ export function Sidebar() {
       <div className="side-foot">
         {/* little disk space left on the home folder's volume (src/lib/disk.ts); nothing while it is fine */}
         <DiskChip />
+        {/* another app keeping a CPU core busy (src/lib/cpu.ts); nothing while none does */}
+        <CpuChip />
         {/* one compact row: Automations, Plugins, Apps and Settings as icon buttons (their names in the tooltip and to a
             screen reader), the usage marks after them */}
         <div className="foot-row" data-testid="foot-row">

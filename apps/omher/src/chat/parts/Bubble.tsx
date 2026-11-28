@@ -80,7 +80,7 @@ export const Bubble = memo(function Bubble({
   onQuote?: (id: string) => void;
   /** A bot answer in that bot's main chat or one of its threads: read aloud through this bot's own Hermes (rule 54). */
   speak?: Bot;
-  /** The same answers: their id and their bot's name, for Hand to bot (rule 56); `bot` is the chat's key. */
+  /** The same answers: their id and their bot's name, for Hand to bot (rule 58); `bot` is the chat's key. */
   handId?: string;
   handFrom?: string;
 }) {
@@ -251,7 +251,7 @@ export const Bubble = memo(function Bubble({
 });
 
 /** An answer's text in its bubble, with its quiet copy control and, in a bot's main chat or thread (`speak`), its read
- *  aloud control (BOUNDARY rule 54), whose notice and state go under the bubble, and its Hand to bot (`hand`, rule 56),
+ *  aloud control (BOUNDARY rule 54), whose notice and state go under the bubble, and its Hand to bot (`hand`, rule 58),
  *  whose chips and popover do too. */
 function AnswerText({ text, streaming, speak, hand }: { text: string; streaming: boolean; speak?: Bot; hand?: { chat: string; id?: string; from?: string } }) {
   const voice = useReadAloud(speak && text.trim() ? speak : undefined, text);

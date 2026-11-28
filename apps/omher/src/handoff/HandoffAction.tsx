@@ -1,4 +1,4 @@
-// "Hand to bot" on a finished answer (BOUNDARY rule 56): a quiet button in the answer's action column, beside copy and
+// "Hand to bot" on a finished answer (BOUNDARY rule 58): a quiet button in the answer's action column, beside copy and
 // read aloud, and one suggestion chip per other bot the answer names with `@name`. Either opens the small popover: the
 // other bots, an optional note, and Hand over, which starts a thread in the picked bot through the store's one
 // `startTaskThread` (thread.create, then chat.send) and leaves the person where they are. Nothing is sent by the

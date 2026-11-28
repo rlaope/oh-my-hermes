@@ -1300,7 +1300,7 @@ a.bp-row:hover {
 [data-theme="light"] .st-page .mseg {
   background: var(--raise2);
 }
-/* A bot's backup models under its main model (settings/BackupModel.tsx, BOUNDARY rule 55). */
+/* A bot's backup models under its main model (settings/BackupModel.tsx, BOUNDARY rule 57). */
 .bk-list {
   list-style: none;
   margin: 0;

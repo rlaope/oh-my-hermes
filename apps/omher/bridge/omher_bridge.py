@@ -3201,7 +3201,7 @@ def _windows_kill_tree(pid: int) -> None:
 
 def _stop_run(proc, windows: bool | None = None, tree_killer=None) -> None:
     """End a run the bridge started past its time (rule 41's `hermes mcp`, rule 43's `omh` read, rule 44's `hermes profile create`, rule 52's
-    computer-use commands, rule 55's `hermes config set`): on POSIX its whole
+    computer-use commands, rule 57's `hermes config set`): on POSIX its whole
     process group (it was started in a session of its own, so this reaches nothing else), on Windows its whole process tree
     (rule 49; the child is a launcher such as hermes.cmd) and then the child itself. `windows` and `tree_killer` are for tests.
     The wait after is bounded, so the run's bot is never left busy."""
@@ -3593,7 +3593,7 @@ def computer_switch(described) -> str:
     return "unknown"
 
 
-# ---------------------------------------------------------------- a bot's backup model (BOUNDARY rule 55)
+# ---------------------------------------------------------------- a bot's backup model (BOUNDARY rule 57)
 # Hermes' own fallback chain, `fallback_providers` in the profile's config.yaml, read from that file as Hermes'
 # `get_fallback_chain` (hermes_cli/fallback_config.py) reads it, of which only each entry's provider and model leave
 # the bridge; written only through Hermes' own `hermes -p <bot> config set fallback_providers <list>` on a press. The
@@ -3666,7 +3666,7 @@ def fallback_argv(hermes: str, bot: str, chain) -> list[str]:
 
 
 def run_hermes_fallback(hermes: str, bot: str, chain: list[dict], home: Path, timeout: float) -> tuple[int | None, str]:
-    """Rule 55: one `hermes -p <bot> config set fallback_providers <list>` (fallback_argv) through `_run_hermes_argv`."""
+    """Rule 57: one `hermes -p <bot> config set fallback_providers <list>` (fallback_argv) through `_run_hermes_argv`."""
     return _run_hermes_argv(fallback_argv(hermes, bot, chain), home, timeout)
 
 
@@ -7225,7 +7225,7 @@ PEER_REFUSED = {
     "voice.info": "Voice works with bots on this computer only; {label}'s bots run on another one.",
     "voice.transcribe": "Voice works with bots on this computer only; {label}'s bots run on another one.",
     "voice.speak": "Voice works with bots on this computer only; {label}'s bots run on another one.",
-    # rule 55: a bot's backup model is in its own config, set on the computer it runs on
+    # rule 57: a bot's backup model is in its own config, set on the computer it runs on
     "fallback.get": "A bot's backup model is set on the computer it runs on; {label}'s bots run on another one.",
     "fallback.set": "A bot's backup model is set on the computer it runs on; {label}'s bots run on another one.",
 }
@@ -7980,7 +7980,7 @@ class Bridge:
         self._restarting: set[str] = set()      # bots whose restart command runs now
         self._apps_busy: set[str] = set()       # bots whose `hermes mcp` run (rule 41) runs now
         self._computer_busy = False             # a computer-use command (rule 52) runs now
-        self._fallback_busy: set[str] = set()   # bots whose `hermes config set fallback_providers` (rule 55) runs now
+        self._fallback_busy: set[str] = set()   # bots whose `hermes config set fallback_providers` (rule 57) runs now
         self._creating = False                  # a `hermes profile create` (rule 44) runs now
         self._refused: dict[str, float] = {}     # bot -> when Hermes last refused its restart (live work)
         self._reattaching: set[str] = set()     # bots that omher's own restart attaches again (`_reattach`)
@@ -8367,7 +8367,7 @@ class Bridge:
         elif typ == "status.update":
             text = p.get("text")
             if isinstance(text, str) and text.strip():
-                # Hermes' own `fallback` kind: it switched this turn to the bot's backup model (rule 55)
+                # Hermes' own `fallback` kind: it switched this turn to the bot's backup model (rule 57)
                 await out("status", text=text.strip(), **({"fallback": True} if p.get("kind") == "fallback" else {}))
         elif typ in ("thinking.delta", "reasoning.delta"):
             now = self.clock()
@@ -10310,7 +10310,7 @@ class Bridge:
 
     def _profile_bot(self, p) -> dict:
         """The page's bot from the bridge's own list, whose name Hermes takes as a profile id: computer use (rule 52),
-        voice (rule 54) and backup models (rule 55) read the bot only through here."""
+        voice (rule 54) and backup models (rule 57) read the bot only through here."""
         bot = self._bot(p.get("bot"))
         if not PROFILE_ID.fullmatch(bot["name"]):
             raise BridgeError("bad_request", f"{bot['name']} is not a profile id Hermes accepts")
@@ -10388,7 +10388,7 @@ class Bridge:
             raise BridgeError("bad_request", "Only macOS asks for computer-use permissions.")
         return await self._computer_driver("grant")
 
-    # ------------------------------------------------------------ a bot's backup model (BOUNDARY rule 55)
+    # ------------------------------------------------------------ a bot's backup model (BOUNDARY rule 57)
     # Read: the profile's `fallback_providers` from its config.yaml, provider and model only. A press runs one fixed
     # fallback_argv per bot at a time, and the page gets the chain read back from the file, what Hermes stored.
 

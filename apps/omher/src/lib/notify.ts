@@ -117,6 +117,11 @@ export function watchMissedNote(who: string, bot: string, rows: { text: string; 
   return { title: t("note.watchMany", { bot: who, n: rows.length }), body: say(last.text), bot, tag: `${bot}:watch` };
 }
 
+/** A system warning, not a bot's: another app has kept a CPU core busy for over a minute (src/lib/cpu.ts). Pure. */
+export function cpuHogNote(h: { name: string; pct: number }): Note {
+  return { title: t("cpu.note", { name: h.name, pct: h.pct }), body: t("cpu.noteBody"), bot: "", tag: `cpu:${h.name}` };
+}
+
 /** Something a SESSIONS session did that is not a chat event: its program ended, it could not start, or its
  *  terminal rang (a bell or an OSC 9 message: the note says it rang, not that it waits, since it may have finished). */
 export interface SessionNote {

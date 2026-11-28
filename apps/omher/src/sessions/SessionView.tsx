@@ -603,6 +603,12 @@ function Paused({ rec }: { rec: SessionRec }) {
         {t("resume.paused")}
         {why ? ` · ${why}` : ""}
       </span>
+      {/* a program in this Shell row asked to be started again (Program Resume): Resume runs it in its folder, once */}
+      {rec.resumeProgram ? (
+        <span className="ss-ended-t" title={t("resume.programTip", { program: rec.resumeProgram })} data-testid="session-resume-program">
+          {` · ${t("resume.program", { program: rec.resumeProgram })}`}
+        </span>
+      ) : null}
       <button
         type="button"
         className="ss-restart"

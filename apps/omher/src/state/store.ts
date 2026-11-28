@@ -301,7 +301,7 @@ export type PluginAddedItem = { kind: "pluginAdded"; id: string; ts: number; nam
 /** omher set up its Slack briefing for this bot: one gray line, once per bot, with Turn off (the job's pause). */
 export type BriefNoticeItem = { kind: "briefNotice"; id: string; ts: number; bot: string };
 /** One quiet line from omher itself (e.g. "Switched to Claude #2 (limit on #1)"); never sent to the bot. `detail`: a
- *  second line under it; `notice: "fallback"`: Hermes switched the turn to a backup model (rule 55), kept in the page
+ *  second line under it; `notice: "fallback"`: Hermes switched the turn to a backup model (rule 57), kept in the page
  *  only, gone after a reload; `text` is then Hermes' own line, and the title is omher's, translated when shown. */
 export type SystemItem = { kind: "system"; id: string; ts: number; text: string; detail?: string; notice?: "fallback" };
 /** "→ thread: <title>" under a main-chat answer: the bot opened `thread` (or the person sent a message there). */
@@ -319,7 +319,7 @@ export type ThreadRouteItem = {
   done?: "sent" | "kept";
   error?: string;
 };
-/** Where a handed-over answer's thread is (BOUNDARY rule 56): working, waiting on the person there, done (its answer
+/** Where a handed-over answer's thread is (BOUNDARY rule 58): working, waiting on the person there, done (its answer
  *  came), stopped (its turn ended otherwise) or gone (the thread was removed). */
 export type HandoffPhase = "working" | "waiting" | "done" | "stopped" | "gone";
 /** "Handed to <bot>" under an answer the person handed to another bot: `thread` of `bot` and how its first turn went
@@ -492,7 +492,7 @@ export interface AppState {
   replyTo: Record<string, ReplyChip | null>;
   /** Per bot: its threads (bridge `thread.list`), newest first; absent until read. */
   threads: Record<string, ThreadRow[]>;
-  /** Answers handed to another bot (rule 56): the target thread's chat key → the chat and id of its card. Never kept. */
+  /** Answers handed to another bot (rule 58): the target thread's chat key → the chat and id of its card. Never kept. */
   handoffs: Record<string, { chat: string; id: string }>;
   ui: Ui;
 }
@@ -748,7 +748,7 @@ function withItems(chat: Chat, items: ChatItem[]): Chat {
 export const fallbackDetail = (text: string): string =>
   text.trim().replace(/^⚠️?\s*/u, "").replace(/^(Model|Provider) fallback:\s*/i, "");
 
-/** A row a chat keeps where Hermes switched its turn to a backup model (rule 55), one per switch: Hermes' line and
+/** A row a chat keeps where Hermes switched its turn to a backup model (rule 57), one per switch: Hermes' line and
  *  sentence; the title is translated when the row is shown, so a language change reaches it. */
 export const fallbackNotice = (text: string, now: number, n: number): SystemItem => ({
   kind: "system",
@@ -1166,7 +1166,7 @@ export type Action =
   | { type: "thread.note"; bot: string; message: string; item: ThreadLinkItem | ThreadRouteItem }
   /** The person answered a route card. */
   | { type: "thread.routed"; bot: string; id: string; done?: "sent" | "kept"; error?: string }
-  /** The answer `message` of chat `chat` was handed to `bot`'s new `thread` (rule 56): its card goes under the answer. */
+  /** The answer `message` of chat `chat` was handed to `bot`'s new `thread` (rule 58): its card goes under the answer. */
   | { type: "handoff.add"; chat: string; message: string; bot: string; thread: string; now: number }
   /** The person gave that thread's answer back (one press, one message): `row`, the user row of `chat` carrying it. */
   | { type: "handoff.given"; chat: string; id: string; row: string };
@@ -1197,6 +1197,13 @@ export function setChatRoute(key: string, route: ChatRoute | null): void {
   else chatRoutes.delete(key);
 }
 export const chatRoute = (key: string): ChatRoute | undefined => chatRoutes.get(key);
+/** The key prefix of a terminal agent's ask (sessions/termAsks.ts): `term:<session id>`. */
+export const TERM_ASK = "term:";
+let termAskOpen: ((session: string) => void) | null = null;
+/** Set by SESSIONS: open a TERMINALS row with the keyboard in its terminal (a terminal ask was picked). */
+export function setTermAskOpen(fn: ((session: string) => void) | null): void {
+  termAskOpen = fn;
+}
 /** Key of a folder chat's events. */
 export const folderKey = (bot: string, session: string) => `fold:${bot}:${session}`;
 /** True for a SESSIONS chat key (not a bot's main chat). */
@@ -1579,7 +1586,7 @@ export function reduce(state: AppState, a: Action): AppState {
         const thread = !!session && !!state.threads[owner]?.some((r) => r.thread === session);
         chats[b] = isSessionChat(b) && !thread ? ended : { ...ended, stale: true, pendingTurn: null, steeredUnread: undefined, steerAck: null };
       }
-      // a card following a thread's turn stops with it; the thread's read after the reconnect settles it (rule 56)
+      // a card following a thread's turn stops with it; the thread's read after the reconnect settles it (rule 58)
       return Object.values(state.handoffs).reduce(
         (s, link) => withHandoff(s, link, (h) => handoffLost(h, tr("live.lost"))),
         { ...state, conn: a.status, chats } as AppState,
@@ -1684,7 +1691,7 @@ export function reduce(state: AppState, a: Action): AppState {
         : state;
     case "chat.opened": {
       const next = touchChat(state, a.bot, (c) => ({ ...applyOpened(c, a.res, a.now, a.bot, a.since), openError: null }));
-      // a thread an answer was handed to, read again: its turn may have ended with no event to say so (rule 56)
+      // a thread an answer was handed to, read again: its turn may have ended with no event to say so (rule 58)
       const link = next.handoffs[a.bot];
       return link ? withHandoff(next, link, (h) => handoffOpened(h, next.chats[a.bot])) : next;
     }
@@ -1729,7 +1736,7 @@ export function reduce(state: AppState, a: Action): AppState {
         ),
         ...(c.pendingTurn === a.id ? { pendingTurn: null } : {}),
       }));
-      // a refused Give is not given; a refused first send into a handed thread stops its card (rule 56)
+      // a refused Give is not given; a refused first send into a handed thread stops its card (rule 58)
       const link = next.handoffs[a.bot];
       const failed = link ? withHandoff(next, link, (h) => handoffFailed(h, next.chats[a.bot], a.error)) : next;
       return ungive(failed, a.bot, (row) => row === a.id);
@@ -1738,7 +1745,7 @@ export function reduce(state: AppState, a: Action): AppState {
     case "queue.clear": {
       if (!state.chats[a.bot]) return state;
       const next = touchChat(state, a.bot, (c) => reduceQueue(c, a));
-      // a Give whose row was deleted before it went out is not given (rule 56)
+      // a Give whose row was deleted before it went out is not given (rule 58)
       return ungive(next, a.bot, (row) => !next.chats[a.bot].items.some((i) => i.kind === "user" && i.id === row));
     }
     case "queue.take":
@@ -1751,7 +1758,7 @@ export function reduce(state: AppState, a: Action): AppState {
       return state.chats[a.bot] ? touchChat(state, a.bot, (c) => reduceQueue(c, a)) : state;
     case "event": {
       const next = reduceEvent(state, a.ev, a.now);
-      // an event of a thread an answer was handed to moves that answer's card (rule 56)
+      // an event of a thread an answer was handed to moves that answer's card (rule 58)
       const key = a.ev.session ? folderKey(a.ev.bot, a.ev.session) : a.ev.bot;
       const link = next.handoffs[key];
       return link ? withHandoff(next, link, (h) => handoffStep(h, a.ev, next.chats[key])) : next;
@@ -2301,7 +2308,7 @@ export interface Actions {
   /** Tasks › Linear: whether `bot`'s config names a Linear MCP server (bridge `tasks.linear`, config only). */
   tasksLinear(bot: string): Promise<{ configured: boolean; server: string }>;
   /** Tasks › Start in thread: a new thread under `bot` titled `title`, opened, whose first message is `text`. With
-   *  `from` (an answer handed to `bot`, rule 56) the person stays in chat `from.chat`, where a refusal is noted, and a
+   *  `from` (an answer handed to `bot`, rule 58) the person stays in chat `from.chat`, where a refusal is noted, and a
    *  card under the answer `from.message` follows the thread. */
   startTaskThread(bot: string, title: string, text: string, from?: { chat: string; message: string }): Promise<string | null>;
   /** That card's Give to <bot>: the thread's answer goes once into the card's chat as the person's own message, as
@@ -2336,7 +2343,7 @@ export interface Actions {
   voiceInfo(bot: string): Promise<VoiceInfo>;
   voiceTranscribe(bot: string, data_base64: string, mime: string): Promise<{ transcript: string; provider: string }>;
   voiceSpeak(bot: string, text: string, part: number): Promise<VoiceSpeech>;
-  /** A bot's backup models (BOUNDARY rule 55): read from its config, set through Hermes' own `config set` with the
+  /** A bot's backup models (BOUNDARY rule 57): read from its config, set through Hermes' own `config set` with the
    *  whole new list. Only the bot and provider/model pairs go out. */
   fallbackGet(bot: string): Promise<BackupChain>;
   /** `base`: the list read before (the bridge refuses with `changed` when the config now holds another one). */
@@ -3475,6 +3482,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     },
     async jumpToAsk(bot, id) {
       dispatch({ type: "ui.focusAsk", bot, id });
+      // a terminal agent's ask opens its TERMINALS row, the keyboard in its terminal (1/2/3/Enter answer it there)
+      if (bot.startsWith(TERM_ASK)) return termAskOpen?.(bot.slice(TERM_ASK.length));
       // a SESSIONS chat's ask opens that session; a bot's opens the bot's chat
       const route = isSessionChat(bot) ? chatRoute(bot) : undefined;
       if (route) route.open();

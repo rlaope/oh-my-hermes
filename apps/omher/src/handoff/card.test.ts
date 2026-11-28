@@ -1,4 +1,4 @@
-// The "Handed to <bot>" card as the store's reducer moves it from the target thread's own events (rule 56).
+// The "Handed to <bot>" card as the store's reducer moves it from the target thread's own events (rule 58).
 import { describe, expect, it } from "vitest";
 import { initialState, reduce, type Action, type AppState, type HandoffItem } from "../state/store";
 import type { BridgeEvent, ChatOpenResult } from "../lib/protocol";

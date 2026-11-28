@@ -1,4 +1,4 @@
-"""A bot's backup model (BOUNDARY rule 55): Hermes' own fallback chain, `fallback_providers` in the profile's
+"""A bot's backup model (BOUNDARY rule 57): Hermes' own fallback chain, `fallback_providers` in the profile's
 config.yaml, read with only each entry's provider and model leaving the bridge, and set through one fixed
 `hermes -p <bot> config set fallback_providers <list>`. The op tests use a temp Hermes home and a fake runner; the one
 real run (`RealHermes`) runs the exact argv against a scratch profile in a temp Hermes home, never a real profile."""

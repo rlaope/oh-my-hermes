@@ -1,4 +1,4 @@
-// "Hand to bot" from an answer (BOUNDARY rule 56): the new thread's title and first message, and the message "Give to
+// "Hand to bot" from an answer (BOUNDARY rule 58): the new thread's title and first message, and the message "Give to
 // <bot>" sends back. Fixed English text, like the terminal handover's (src/handover/message.ts), whose printable() and
 // goalLine() it reuses. Each text starts with a fixed lead, so neither can ever start with `/` and run as a Hermes
 // command (the bridge and the page read a text as one when it starts with `/` after white space), whatever the note,

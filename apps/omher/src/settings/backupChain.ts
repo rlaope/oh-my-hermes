@@ -1,4 +1,4 @@
-// Pure helpers of a bot's Backup model section (BackupModel.tsx, BOUNDARY rule 55): which models the picker offers as a
+// Pure helpers of a bot's Backup model section (BackupModel.tsx, BOUNDARY rule 57): which models the picker offers as a
 // backup and the whole new list `fallback.set` sends. Nothing here reads or writes anything.
 import { isCurrent, type ModelRow } from "../chat/model/modelSearch";
 

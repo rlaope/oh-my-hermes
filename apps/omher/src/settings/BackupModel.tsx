@@ -1,4 +1,4 @@
-// Settings › Bots › <bot> › Model › Backup model (BOUNDARY rule 55): Hermes' own fallback chain for this bot, the models
+// Settings › Bots › <bot> › Model › Backup model (BOUNDARY rule 57): Hermes' own fallback chain for this bot, the models
 // Hermes goes on with when the bot's model cannot respond. The list is read from the bot's config.yaml through
 // `fallback.get` (each entry's provider and model, nothing else); Add and Remove send the whole new list through
 // `fallback.set`, which runs Hermes' own `config set`, and the section shows the list Hermes stored. The models to pick

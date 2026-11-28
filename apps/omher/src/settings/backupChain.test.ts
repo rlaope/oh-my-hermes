@@ -1,4 +1,4 @@
-// A bot's backup model (BOUNDARY rule 55): what the picker offers, the whole list `fallback.set` sends, and the row a
+// A bot's backup model (BOUNDARY rule 57): what the picker offers, the whole list `fallback.set` sends, and the row a
 // chat keeps where Hermes switched its turn to the backup model.
 import { describe, expect, it } from "vitest";
 import { modelRows } from "../chat/model/modelSearch";

@@ -1,4 +1,4 @@
-// The "Handed to <bot>" card's state (BOUNDARY rule 56): how the first turn of the thread it started goes, read from
+// The "Handed to <bot>" card's state (BOUNDARY rule 58): how the first turn of the thread it started goes, read from
 // that thread's own events as the store reduces them, and from what ends a turn without an event (the connection
 // dropping, the thread read again, the first send refused). Pure; the store keeps the card in the origin chat and a
 // map from the thread's chat key to it, in the page only.

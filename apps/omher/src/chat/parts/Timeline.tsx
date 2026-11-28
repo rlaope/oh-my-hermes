@@ -64,7 +64,7 @@ export function Timeline({
   afterAnswer?: (it: MessageItem) => ReactNode;
   /** A bot's main chat or thread: its answers can be read aloud through this bot's own Hermes (BOUNDARY rule 54). */
   speak?: Bot;
-  /** The same chats: their answers can be handed to another bot (BOUNDARY rule 56); the bot they are from. */
+  /** The same chats: their answers can be handed to another bot (BOUNDARY rule 58); the bot they are from. */
   handoff?: Bot;
 }) {
   const s = useStore();
@@ -133,7 +133,7 @@ export function Timeline({
     el.classList.add("lit");
   };
 
-  // Hand to bot is offered on a finished answer only: not on a row of the turn still running (rule 56)
+  // Hand to bot is offered on a finished answer only: not on a row of the turn still running (rule 58)
   const handId = (it: MessageItem) => (handoff && !(chat?.turn && it.ts * 1000 >= chat.turn.startedAt) ? it.id : undefined);
 
   const render = (it: TimelineItem, prev?: TimelineItem, at = -1): ReactNode => {

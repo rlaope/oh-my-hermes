@@ -48,7 +48,9 @@ import { getDraft, setDraft as setUnsent } from "../app/drafts";
 import { getHost, type ChatEvent, type ChatInput, type ConvState, type PastChat, type SessionHost } from "./host";
 import { localBot } from "../peers/peerKey";
 import { modeKnown, remoteOnly } from "../app/remote";
-import { folderKey, getStore, notifySessionEvent, notifySessionNote, onBridgeEvent, selectAsks, setChatRoute, setSessionKeyLookup, queueNext, waitingIds, type OutFile, type SentFile, type Store } from "../state/store";
+import { folderKey, getStore, notifySessionEvent, notifySessionNote, onBridgeEvent, selectAsks, setChatRoute, setSessionKeyLookup, setTermAskOpen, queueNext, waitingIds, type OutFile, type SentFile, type Store } from "../state/store";
+import { ASK_AGENTS, createAskDebounce, screenAsk } from "./term/screenAsk";
+import { clearTermAsk, notifyTermAsk, setTermAsk, termAsks } from "./termAsks";
 import { blobType, bytesOf, inlinePicture, parseSentFiles, pathsTyped, putSentFiles, SENT_FILES_KEY, shellQuote, wireText, type SavedFile, type SentFilesBook } from "./attach";
 import type { AccountCli, AccountGroup, ApprovalChoice, BridgeEvent, ClarifyAnswers, Msg } from "../lib/protocol";
 import { continuesItself, type SavedSession } from "../app/resume";
@@ -176,6 +178,8 @@ const SAID_MAX = 2_048;
 
 /** The row's last-output time is written at most this often (a flood would otherwise re-render the sidebar). */
 const OUT_MARK_MS = 500;
+/** A terminal agent's screen is read for a dialog at most this often while it prints (termAsks.ts). */
+const ASK_READ_MS = 250;
 
 /** A terminal's new size goes to its program once it has stopped changing for this long. Dragging a window gives
  *  one size per frame (16.7 ms at 60 Hz), so a wait of one frame or less collapses nothing; two frames does, and
@@ -322,6 +326,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
   /** TERMINALS Shell rows put back after a restart with Claude Code, Codex or oh-my-hermes in front: the line their
    *  next start types once its shell is ready (once; fgResume.ts `restoreLine`). */
   const fgBack = new Map<string, string>();
+  /** Paused Shell rows whose program asked to be started again (Program Resume): their next start (Resume) asks the
+   *  shell to bring that program back, once. */
+  const progBack = new Set<string>();
   /** TERMINALS sessions put back after a restart whose kept history goes into their terminal before their program's
    *  first output (once). */
   const histBack = new Set<string>();
@@ -1188,6 +1195,8 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     // once that line was typed (not a CLI the rc started first); any CLI in front ends what was kept for that line
     const back = r.fgBack?.typed && agent === r.fgBack.cli ? r.fgBack.session : undefined;
     patchRec(id, { fgAgent: agent, fgSession: back, ...(agent && r.fgBack ? { fgBack: undefined } : {}) });
+    // the agent that asked left the foreground: its dialog went with it
+    if (!agent || !ASK_AGENTS.includes(agent)) clearTermAsk(id);
     clearTimeout(fgIdTimer.get(id));
     fgIdTimer.delete(id);
     const t = terms.get(id);
@@ -1575,7 +1584,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       typing = true;
       void typeRestore(id, t, run);
     };
-    const stopPrompt = t.restore ? onPrompt(t.el, () => readyIn(PROMPT_SETTLE_MS)) : null;
+    let stopPrompt = t.restore ? onPrompt(t.el, () => readyIn(PROMPT_SETTLE_MS)) : null;
     const { cols, rows } = t.term;
     let marked = 0;
     // this program's pty id once known, and what was drawn of its output before that
@@ -1602,6 +1611,41 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       readLine();
     };
     t.el.addEventListener(PARKING_EVENT, lineBeforePark);
+    // a Claude Code or Codex in front stopped on its permission dialog or a choice menu: read off the screen after
+    // output (at most once per ASK_READ_MS), and once more ASK_CONFIRM_MS later while a dialog waits to be confirmed;
+    // nothing runs while the row is quiet
+    const askSeen = createAskDebounce();
+    let askTimer: ReturnType<typeof setTimeout> | null = null;
+    const readAsk = () => {
+      askTimer = null;
+      if (terms.get(id) !== t || t.run !== run || t.closed) return;
+      const r = rec(id);
+      const agent = r ? termMarkAgent(r) : null;
+      const lines: string[] = [];
+      if (agent && ASK_AGENTS.includes(agent)) {
+        const b = t.term.buffer.active;
+        for (let y = 0; y < t.term.rows; y++) lines.push(b.getLine(b.baseY + y)?.translateToString(true) ?? "");
+      }
+      const seen = askSeen.read(screenAsk(lines, agent), Date.now());
+      if (seen.confirmIn !== undefined) askTimer = setTimeout(readAsk, seen.confirmIn);
+      if (!seen.live || !r) return clearTermAsk(id);
+      const name = `${r.cwd.split(/[\\/]/).filter(Boolean).pop() ?? r.cwd} · ${agentLabel(agent!, state.agents)}`;
+      if (setTermAsk(id, { agent: agent!, kind: seen.live.kind, title: seen.live.title, options: seen.live.options, name })) {
+        const a = termAsks().find((x) => x.session === id);
+        if (a) notifyTermAsk(a);
+      }
+    };
+    const askOnOutput = () => {
+      if (askTimer === null) askTimer = setTimeout(readAsk, ASK_READ_MS);
+    };
+    // parked before that read came: read it now, from the xterm being parked
+    const askBeforePark = () => {
+      if (t.run !== run) return t.el.removeEventListener(PARKING_EVENT, askBeforePark);
+      if (askTimer === null) return;
+      clearTimeout(askTimer);
+      readAsk();
+    };
+    t.el.addEventListener(PARKING_EVENT, askBeforePark);
     // a CLI started with the row's conversation id: whether it set up its screen before the person pressed a key in
     // it, and the last of what it printed (a refusal), read when it ends (termEnd)
     let drew = false;
@@ -1637,6 +1681,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         termActs.patch(id, { lastOut: now, busySince: nextBusySince(termActs.get(id), now) });
       }
       if (!ofChat && lineTimer === null) lineTimer = setTimeout(readLine, OUT_MARK_MS);
+      if (!ofChat) askOnOutput();
     };
     // when this program was asked for: a CLI continuing its conversation that ends soon after could not continue it
     const began = Date.now();
@@ -1651,6 +1696,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         termActs.patch(id, { progress: undefined, busySince: undefined });
         if (lineTimer !== null) clearTimeout(lineTimer);
         lineTimer = null;
+        if (askTimer !== null) clearTimeout(askTimer);
+        askTimer = null;
+        clearTermAsk(id);
         fgOff.get(id)?.();
         fgOff.delete(id);
         if (rec(id)?.fgAgent) setSessionFg(id, null);
@@ -1702,8 +1750,19 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
       await learnThisHost();
       let hostId: number;
       if (shell) {
-        const got = await getShellHost().start(r.cwd || null, cols, rows, onData, onExit, rec(id)?.shell, link);
+        // Program Resume (Settings › Terminal, on by default): a Shell row's shell may let its program ask to be started
+        // again; a paused row whose program asked brings it back on Resume, once (the shell takes the record out first)
+        const prog = link && readTermSettings().programResume ? progBack.has(id) : undefined;
+        progBack.delete(id);
+        const got = await getShellHost().start(r.cwd || null, cols, rows, onData, onExit, rec(id)?.shell, link, prog);
         hostId = got.id;
+        // the line the shell made (omher's own program and a one-use file: never the command) is typed once the shell
+        // is at its first prompt, as a CLI put back after a restart is (typeRestore)
+        if (got.resumeLine && t.run === run && !t.restore) {
+          t.restore = got.resumeLine;
+          stopPrompt = onPrompt(t.el, () => readyIn(PROMPT_SETTLE_MS));
+          readyIn(RESTORE_QUIET_MS);
+        }
         if (got.missing && t.run === run) {
           // the shell it was made with is gone from this computer: the default one runs, and the row says so once
           feed(t.term, `\x1b[33m${tr("term.shellMissing", { shell: got.missing })}\x1b[0m\r\n`);
@@ -1808,6 +1867,7 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     fgIdTimer.delete(id);
     fgOff.get(id)?.();
     fgOff.delete(id);
+    clearTermAsk(id);
     if (t.hostId !== null && !t.closed) void t.io.close(t.hostId).catch(() => undefined);
     t.closed = true;
     if (t.settle !== null) clearTimeout(t.settle);
@@ -1911,8 +1971,9 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
           if (tt.settle !== null) clearTimeout(tt.settle);
           tt.settle = setTimeout(() => tellSize(tt), RESIZE_SETTLE_MS);
         });
-        // The program rang the terminal's bell, as agents do when they wait for the person. omher reads nothing the
-        // program prints: the bell is the one thing a terminal tells it. The row says so and a notification goes
+        // The program rang the terminal's bell, as agents do when they wait for the person. Apart from the row card's
+        // last line and, for a Claude Code or Codex row, its permission or choice dialog on screen (screenAsk.ts), omher
+        // reads nothing the program prints: the bell is what a terminal tells it. The row says so and a notification goes
         // out, once, until the person comes back to the session.
         const ring = () => {
           const r = rec(id);
@@ -2219,8 +2280,10 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
         patchRec(id, { error: tr("remote.noLocalHermes") });
         return;
       }
+      // a Shell row whose program asked to be started again: this start brings it back (once)
+      if (r.resumeProgram) progBack.add(id);
       // the terminal view starts the program when it mounts
-      patchRec(id, { paused: undefined, status: "starting", error: undefined, exitCode: null });
+      patchRec(id, { paused: undefined, status: "starting", error: undefined, exitCode: null, resumeProgram: undefined });
       return;
     }
     // oh-my-hermes on a server: nothing of this folder is sent; the row stays paused with why (rule 47)
@@ -2372,6 +2435,20 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     }
     set({ list: [...list, ...state.list] });
     for (const r of list) if (keys.has(r.id)) registerRoute(r.id);
+    // Program Resume: a paused Shell row keeps the record its program left (shown on the row; Resume runs it once);
+    // every other record goes, a row that comes back by its own CLI's conversation id included. Off: none is read.
+    if (readTermSettings().programResume) {
+      const paused = list.filter((r) => r.paused && isShell(r.agent) && r.linkId);
+      void getShellHost()
+        .resumeRecords(paused.map((r) => r.linkId!))
+        .then((kept) => {
+          for (const [link, program] of kept) {
+            const r = state.list.find((x) => x.linkId === link);
+            if (r?.paused && isShell(r.agent)) patchRec(r.id, { resumeProgram: program });
+          }
+        })
+        .catch(() => undefined);
+    }
     // the saved copies of sessions that are gone go; the ones kept show again in their bubbles
     const ids = list.map((r) => r.id);
     void ready().then(() => host.pruneFiles(ids).catch(() => undefined));
@@ -2534,6 +2611,12 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     histBack.delete(id);
     termAgain.delete(id);
     fgBack.delete(id);
+    progBack.delete(id);
+    // a paused row whose program asked to be started again: closing it removes that record (the rest stay)
+    if (r?.resumeProgram) {
+      const keep = state.list.filter((x) => x.id !== id && x.resumeProgram && x.linkId).map((x) => x.linkId!);
+      void getShellHost().resumeRecords(keep).catch(() => undefined);
+    }
     if (r && isTerminalRec(state.agents, { ...r, status: "exited" })) forgetHistory(host, id);
     disposeTerm(id);
     void stopChat(id).then(() => host.removeFiles(id).catch(() => undefined));
@@ -2695,6 +2778,14 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
     setSessionFg,
     /** The pty id session `id`'s terminal runs on (the `session-fg` event's id), null before it started. */
     ptyOf: (id: string): number | null => terms.get(id)?.hostId ?? null,
+    /** Put the keyboard in session `id`'s terminal once its view has drawn (a terminal ask was picked). */
+    focusTerm(id: string) {
+      const go = () => {
+        const t = terms.get(id);
+        if (t && !t.closed && t.el.isConnected) t.term.focus();
+      };
+      requestAnimationFrame(() => requestAnimationFrame(go));
+    },
     /** The native folder dialog (TERMINALS + menu's "Choose folder…"); null when cancelled. */
     pickFolder: (at: string) => host.pickFolder(at),
     continuePast,
@@ -2800,6 +2891,11 @@ export function getSessions(): SessionsStore {
     // e2e (mock host only): drive a terminal's foreground CLI the way the shell's event will
     if (typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window)) (window as unknown as { __omherSessions?: SessionsStore }).__omherSessions = s;
     setSessionKeyLookup((id) => s.chatKey(id));
+    setTermAskOpen((id) => {
+      if (!s.getState().list.some((r) => r.id === id)) return;
+      getStore().actions.openSession(id);
+      s.focusTerm(id);
+    });
     s.setNotify((ev) => notifySessionEvent(ev, getStore().getState()));
     s.setNotifyState((id, n) => notifySessionNote(id, n, getStore().getState()));
   }

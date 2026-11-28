@@ -4,6 +4,29 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **omher: a Claude Code or Codex waiting on you in a terminal shows in Needs you.** When a terminal agent stops on its
+  permission dialog or a choice menu, it appears in Needs you with the bot asks, counts in the Dock badge and marks its
+  row. ⌘J (Ctrl+J off macOS) or a click opens that terminal with the keyboard in it, so you answer it there; omher types
+  nothing into it. Settings › Terminal › "Agent asks in Needs you" (on by default) turns it off.
+  (`docs/OMHER-BOUNDARY.md` rule 11; `apps/omher/src/sessions/term/screenAsk.ts`)
+- **omher: see how long your Claude Code login has left.** Settings › Accounts shows "Login: 12 days left" under a
+  Claude Code login, hours under a day and "expired" past it, in red from three days out. Codex logins have no expiry
+  and show nothing. (`docs/OMHER-BOUNDARY.md` rule 18)
+- **omher: an update restart that does not happen no longer spins forever.** After installing an update, if omher has
+  not restarted 10 seconds later the user row shows "Waiting to restart" with Restart again and Later. Restart again
+  saves what is open and relaunches; it never downloads or installs the update again. (`docs/OMHER-BOUNDARY.md` rule 20)
+- **omher: warns when another app keeps a CPU core busy.** When an app of yours keeps a CPU core busy for over a minute,
+  omher sends one notification ("<App> has kept a CPU core busy for over a minute · 99 %") and shows a sidebar chip until
+  it cools. Two busy apps taking turns warn once; the same app warns again only after an hour or after it cooled.
+  Settings › General › "Warn when another app keeps the CPU busy" (on by default). macOS and Linux; omher reads only your
+  own processes' CPU time and runs no program. (`docs/OMHER-BOUNDARY.md` rule 56)
+- **omher: programs in a terminal can ask to come back after a restart.** A program in a TERMINALS Shell row (an editor,
+  an agent) can report its command with a signed OSC 7577 message; after omher restarts, its paused row says "Resume
+  runs nvim again", and Resume runs it once in its folder, with its arguments never read as shell commands. Settings ›
+  Terminal › "Programs may ask to restart" (on by default). Not on Windows. (`docs/OMHER-BOUNDARY.md` rule 55)
+- **omher: edit your terminal's colours.** Settings › Terminal › Customize colours edits the 16 ANSI colours,
+  background, text, cursor, selection and the split-pane border, with a live preview. Each app theme (dark, light) keeps
+  its own set, open terminals restyle at once, and "Reset to <theme>" goes back. (`docs/OMHER-BOUNDARY.md` rule 11)
 - **PR delivery gate: a bare `*` is no longer the grant store, unless it can still reach it.** The gate that keeps a
   bot from turning the PR delivery grant on or off read any glob part `pr_delivery` matched as the store, a bare `*`
   included, so `mysql -e "select count(*) ..."` and `ls *` were refused with "Only the person turns the PR delivery
@@ -24,7 +47,7 @@ All notable changes will be documented here.
   into the running turn, or held in the waiting line when the line is paused or other messages wait there. Nothing
   goes between bots without a press, nothing comes back by itself, and the card lasts until a reload; the thread
   stays in the bot's list. omher adds no bridge op for it.
-  (`docs/OMHER-BOUNDARY.md` rule 56; `apps/omher/src/handoff/`)
+  (`docs/OMHER-BOUNDARY.md` rule 58; `apps/omher/src/handoff/`)
 
 - **omher: a bot's backup model, set from Settings and named when Hermes switches.** Hermes can go on with another
   model when a bot's own cannot respond (rate limits, outages, failed sign-ins), but omher neither showed nor set that
@@ -36,7 +59,7 @@ All notable changes will be documented here.
   a list changed elsewhere since the page read it is not written over, and the page shows it as it is now. Each time
   Hermes switches a turn to a backup model, the chat keeps a quiet row there with Hermes' own sentence (a walk down
   the list leaves one per step), until a reload. A bot on another computer and remote-only mode are set where the bot runs. (`docs/OMHER-BOUNDARY.md`
-  rule 55; `apps/omher/src/settings/BackupModel.tsx`)
+  rule 57; `apps/omher/src/settings/BackupModel.tsx`)
 
 - **omher: pause, resume and clear a chat's waiting messages.** Messages typed while a bot answers, and not steered
   in, wait in omher and went out one by one when the turn ended, with no way to hold them all or drop them at once. A

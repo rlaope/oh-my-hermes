@@ -76,7 +76,7 @@ export const REMOTE_OPS: Record<PageOp, OpRule> = {
   "voice.info": { send: "never", key: VOICE, why: "voice is for a Hermes on this computer only" },
   "voice.transcribe": { send: "never", key: VOICE, why: "data_base64 is a recording made on this computer" },
   "voice.speak": { send: "never", key: VOICE, why: "voice is for a Hermes on this computer only" },
-  // rule 55: a bot's backup model is in its own config, set on the computer it runs on
+  // rule 57: a bot's backup model is in its own config, set on the computer it runs on
   "fallback.get": { send: "never", key: BACKUP, why: "a bot's backup model is set on the computer it runs on" },
   "fallback.set": { send: "never", key: BACKUP, why: "runs `hermes config set` on the computer the bot runs on" },
   "models.options": ok("bot name only"),

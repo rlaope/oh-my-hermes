@@ -1,4 +1,4 @@
-// Give to <bot> on a handoff card (rule 56) through the store: the answer goes as plain text on both paths, a main
+// Give to <bot> on a handoff card (rule 58) through the store: the answer goes as plain text on both paths, a main
 // chat's and a thread's, so a skill token in the other bot's answer never becomes a command, and a Reply chip the
 // person left set stays theirs.
 import { describe, expect, it } from "vitest";

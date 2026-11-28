@@ -730,7 +730,7 @@ let notReady = new Map();
 // Computer use (computer.*, BOUNDARY rule 52): what Hermes' `computer-use permissions status --json` answers (kept as the
 // bridge keeps it), each bot's computer_use switch, the next failing run, and how long a run takes.
 let computerState, computerBots, computerNext, computerMs, computerBusy;
-// A bot's backup models (fallback.*, BOUNDARY rule 55): bot -> { chain, editable, fail } in memory; `fail` is the line
+// A bot's backup models (fallback.*, BOUNDARY rule 57): bot -> { chain, editable, fail } in memory; `fail` is the line
 // Hermes refuses the next set with. mock.fallback seeds or changes one.
 let fallbacks;
 // Voice (voice.*, BOUNDARY rule 54): what voice.info answers, the next transcript, the next failure, and the delay.
@@ -1262,7 +1262,7 @@ function computerSwitch(b) {
   if (state === "disabled") return { state: "off", why: "disabled" };
   return { state, why: state === "unknown" ? "unread" : "" };
 }
-// rule 55: the bridge's FALLBACK_VALUE and FALLBACK_MAX, and its refusal for a bot on another computer
+// rule 57: the bridge's FALLBACK_VALUE and FALLBACK_MAX, and its refusal for a bot on another computer
 const FALLBACK_VALUE = /^[A-Za-z0-9](?:[A-Za-z0-9._:/@-]{0,126}[A-Za-z0-9])?$/;
 const FALLBACK_MAX = 4;
 const fallbackOf = (b) => fallbacks.get(b.name) ?? { chain: [], editable: true, fail: "" };

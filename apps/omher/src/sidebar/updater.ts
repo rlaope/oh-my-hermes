@@ -60,6 +60,37 @@ function tauriHost(): UpdateHost {
   };
 }
 
+/** After asking for the restart, the page waits this long; still here means the restart did not happen. */
+export const RESTART_WAIT_MS = 10 * 1000;
+
+/** The wait, or the e2e stand-in's shorter one (`window.__omherRestartWaitMs`). */
+export function restartWaitMs(): number {
+  const w = typeof window === "undefined" ? undefined : (window as unknown as { __omherRestartWaitMs?: unknown }).__omherRestartWaitMs;
+  return typeof w === "number" && w >= 0 ? w : RESTART_WAIT_MS;
+}
+
+/**
+ * One restart attempt for an update that is already installed: saves what is open (`save`, so the new version opens
+ * it again), asks the host to relaunch, and calls `onStuck` once when the relaunch was refused or the page is still
+ * here `waitMs` later. Never installs anything. Returns a function that drops the pending wait.
+ */
+export function relaunchOrWait(host: Pick<UpdateHost, "relaunch">, save: () => void, onStuck: () => void, waitMs = restartWaitMs()): () => void {
+  let done = false;
+  const stuck = () => {
+    if (done) return;
+    done = true;
+    clearTimeout(timer);
+    onStuck();
+  };
+  const timer = setTimeout(stuck, waitMs);
+  save();
+  host.relaunch().catch(stuck);
+  return () => {
+    done = true;
+    clearTimeout(timer);
+  };
+}
+
 export function updateHost(): UpdateHost | null {
   if (typeof window === "undefined") return null;
   const injected = (window as unknown as { __omherUpdateHost?: UpdateHost }).__omherUpdateHost;

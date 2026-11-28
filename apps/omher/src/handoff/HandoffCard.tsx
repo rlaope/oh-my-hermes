@@ -1,4 +1,4 @@
-// "Handed to <bot>": the card under an answer the person handed to another bot (BOUNDARY rule 56). It follows the new
+// "Handed to <bot>": the card under an answer the person handed to another bot (BOUNDARY rule 58). It follows the new
 // thread's first turn (src/handoff/card.ts): working, waiting for the person there, done with that turn's answer, or
 // stopped. Open thread always opens it; once done, Give to <bot> sends that answer once into this chat as the person's
 // own message, from its click only (never an effect), and nothing comes back by itself. Given lasts while the row that
