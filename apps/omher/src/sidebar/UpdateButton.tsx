@@ -61,7 +61,11 @@ export function UpdateButton() {
     stopWait.current = relaunchOrWait(host, saveResumeNow, () => setSt({ kind: "waiting", update }));
   }, []);
 
+  /** The update already installed this run: confirming again only restarts, it never downloads again. */
+  const installedUpdate = useRef<PendingUpdate | null>(null);
+
   const install = useCallback(async (update: PendingUpdate) => {
+    if (installedUpdate.current === update) return restart(update);
     const host = updateHost();
     if (!host || busy.current) return;
     busy.current = true;
@@ -74,6 +78,7 @@ export function UpdateButton() {
       return;
     }
     // installed: busy stays set, so no later check offers (and installs) it again
+    installedUpdate.current = update;
     restart(update);
   }, [restart]);
 
@@ -91,11 +96,10 @@ export function UpdateButton() {
     const update = st.update;
     return (
       <>
-        <span className="upd upd-busy" data-testid="update-progress">
-          {t("upd.waiting")}
-        </span>
         <div className="upd-wait" role="alertdialog" aria-label={t("upd.waiting")} data-testid="update-waiting">
-          <p className="upd-dlg-t">{t("upd.waiting")}</p>
+          <p className="upd-dlg-t" data-testid="update-waiting-title">
+            {t("upd.waiting")}
+          </p>
           <p className="upd-wait-b">{t("upd.waitingBody", { version: update.version })}</p>
           <div className="upd-dlg-f">
             <button type="button" className="upd-dlg-btn" data-testid="update-later" onClick={() => setSt({ kind: "installed", update })}>
@@ -142,8 +146,7 @@ export function UpdateButton() {
           onCancel={close}
           onConfirm={() => {
             setAsking(false);
-            if (installed) restart(update);
-            else void install(update);
+            void install(update);
           }}
         />
       )}

@@ -560,24 +560,26 @@ button.upd:hover {
   outline: 2px solid var(--line-strong);
   outline-offset: 2px;
 }
-/* A restart that did not happen: a small card above the user row, not modal, with Restart again / Later. */
+/* A restart that did not happen: a small card on its own line under "You" (the row wraps), inside the sidebar and
+   not modal, with Restart again / Later. */
 .upd-wait {
-  position: fixed;
-  left: 12px;
-  bottom: 52px;
-  z-index: 60;
-  width: min(300px, calc(100vw - 24px));
-  padding: 14px;
+  flex: 1 0 100%;
+  min-width: 0;
+  padding: 10px 12px;
   border-radius: 8px;
   background: var(--pop);
   border: 1px solid var(--line-strong);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
   font-size: 12px;
   color: var(--body);
 }
 .upd-wait-b {
   margin: 0;
   color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.upd-wait .upd-dlg-f {
+  margin-top: 10px;
+  flex-wrap: wrap;
 }
 /* The update confirm: a small calm card over a dimmed app, the popovers' look (8px radius, --pop, one line). */
 .upd-veil {
