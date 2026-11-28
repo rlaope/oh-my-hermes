@@ -6,7 +6,7 @@ All notable changes will be documented here.
 
 - **omher: a Claude Code or Codex session's chat shows what was said and done.** In the Plans session view a
   Claude Code chat no longer shows the harness's own lines as the person's words: reminders, slash command blocks,
-  task notices and compaction summaries are left out, a paste shows its text, and an interrupt, a compaction or an
+  task notices and compaction summaries are left out (a tag the person typed or quoted stays), a paste shows its text, and an interrupt, a compaction or an
   API error is one dim line (the error's own words, its status and the retry it is on, for example "API error 529 ·
   retry 3/10"). A current Codex shell step reads as its command instead of the JavaScript around it ("git status +
   2 more" for several). A file edit's change keeps its old and new line numbers beside each line, with a thin rule
@@ -24,7 +24,8 @@ All notable changes will be documented here.
   it waits, and a History of its last eight events (connected, dropped with the reason, retrying in N s, stopped),
   kept in memory only. Connect refuses a computer already in the list under another spelling (any case, port 22
   written or not, the default user written or not, or an alias whose `~/.ssh/config` `HostName`, `User` and `Port`
-  name the same place), and the card warns when the host is this computer (`localhost`, a 127.x address, or this
+  name the same place, unless a jump host, proxy or other route-changing key makes the same address another computer),
+  and the card warns when the host is this computer (`localhost`, a 127.x address, or this
   computer's own name). Remote-only mode's link backs off the same way. Ideas from 2rami/kasaterm (MIT), code
   written fresh. (`docs/OMHER-BOUNDARY.md` rule 31; `apps/omher/src-tauri/src/peers.rs`)
 
