@@ -15,6 +15,19 @@ All notable changes will be documented here.
   `apps/omher/src/harness/session.ts`, `apps/omher/src/chat/activity/diffLines.ts`; ideas from 2rami/kasaterm (MIT),
   code written fresh)
 
+- **omher: a link to another computer that keeps dying backs off, and says what happened.** A remote bridge that
+  printed its ready line and died right after was retried every 2 seconds forever, running the remote script each
+  time, because any connect started the count again. Now only a link that stayed up 30 seconds does: a link that
+  dies sooner waits 8, 16, 32, then 60 seconds, while a healthy link that drops (a wifi blip) is still tried again
+  after 2 seconds. A dead link is noticed in about 15 seconds instead of 45 (`ssh` keepalive every 5 s, three
+  missed). Settings › Remote machines shows how long each link has been up or when it last was, the next try while
+  it waits, and a History of its last eight events (connected, dropped with the reason, retrying in N s, stopped),
+  kept in memory only. Connect refuses a computer already in the list under another spelling (any case, port 22
+  written or not, the default user written or not, or an alias whose `~/.ssh/config` `HostName`, `User` and `Port`
+  name the same place), and the card warns when the host is this computer (`localhost`, a 127.x address, or this
+  computer's own name). Remote-only mode's link backs off the same way. Ideas from 2rami/kasaterm (MIT), code
+  written fresh. (`docs/OMHER-BOUNDARY.md` rule 31; `apps/omher/src-tauri/src/peers.rs`)
+
 - **omher: speak to a bot, and hear its answer.** A microphone in the composer of a bot's main chat and its threads
   records in omher's own window; the bot's own Hermes turns the recording into text, which lands in the draft at the
   caret and is never sent by omher. A recording stops by itself after 3 minutes. An answer's new speaker button, beside

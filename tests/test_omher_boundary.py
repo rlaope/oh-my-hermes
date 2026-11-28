@@ -3046,7 +3046,7 @@ class SshPeersOnlyOverTheOwnSsh(unittest.TestCase):
         self.assertIn("no_console_window(&mut cmd);", self.peers)
         opts = re.search(r"pub const SSH_OPTIONS: \[&str; 5\] = \[(.*?)\];", self.peers, re.S).group(1)
         self.assertEqual(re.findall(r'"([^"]+)"', opts),
-                         ["BatchMode=yes", "ConnectTimeout=10", "ExitOnForwardFailure=yes", "ServerAliveInterval=15", "ServerAliveCountMax=3"])
+                         ["BatchMode=yes", "ConnectTimeout=10", "ExitOnForwardFailure=yes", "ServerAliveInterval=5", "ServerAliveCountMax=3"])
         args = self.peers.split("pub fn ssh_args(", 1)[1].split("\n}\n", 1)[0]
         # only fixed words, numbers made here, the checked host and port, and the script as one quoted word
         self.assertEqual(re.findall(r'a\.push\("([^"]*)"', args), ["-o", "-T", "-L", "-p", "--"])
@@ -3054,7 +3054,7 @@ class SshPeersOnlyOverTheOwnSsh(unittest.TestCase):
         self.assertIn('format!("sh -c {}", sh_quote(remote))', args)
         self.assertIn("a.push(host.into());", args)
         # the doc names the same argv
-        self.assertIn("`-o BatchMode=yes -o ConnectTimeout=10 -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 "
+        self.assertIn("`-o BatchMode=yes -o ConnectTimeout=10 -o ExitOnForwardFailure=yes -o ServerAliveInterval=5 "
                       "-o ServerAliveCountMax=3 -T -L 127.0.0.1:<local>:127.0.0.1:<remote> [-p <port>] -- <host>`", self.doc)
 
     def test_the_host_is_checked_and_no_command_comes_from_the_page(self) -> None:
