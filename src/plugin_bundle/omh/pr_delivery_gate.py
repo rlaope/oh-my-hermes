@@ -295,6 +295,7 @@ _GRANT_GROUP: Final = "capability-policy"
 _GRANT_COMMAND: Final = "pr-delivery"
 _STORE_GLOB: Final = frozenset("*?[{")
 _STORE_DIR: Final = pr_delivery.STORE_DIRNAME
+_GLOB_CLASS: Final = re.compile(r"\[[^\]]*\]")  # a `[...]` class: its letters are alternatives, not literals
 
 _BLOCK_SUFFIX: Final = "A blocked call did not run."
 
@@ -920,13 +921,27 @@ def _process_data(tool_input: object) -> str | None:
     return None
 
 
-def _names_store(token: str) -> bool:
+def _glob_names_store(part: str, after_runtime: bool) -> bool:
+    """Whether one glob path part would expand to the store's directory.
+
+    A part with no literal letter of the store's name (`*`, `?`, `[a-z]*` -- SQL
+    `count(*)`, `ls *`) names the store only when it sits in `runtime/` or the
+    command mentions `runtime`; `pr_*`, `pr_deliver?`, `*y` always do.
+    """
+    if not any(mark in part for mark in _STORE_GLOB) or not fnmatch.fnmatchcase(_STORE_DIR, part):
+        return False
+    literal = _GLOB_CLASS.sub("", part)
+    return after_runtime or any(ch in _STORE_DIR for ch in literal if ch not in _STORE_GLOB)
+
+
+def _names_store(token: str, near_runtime: bool = False) -> bool:
     lowered = token.lower()
     if "pr_delivery/" in lowered or lowered.endswith("/pr_delivery") or _STORE_PATH.search(lowered):
         return True
-    # A glob that the shell would expand to the store's directory (`pr_deliver?/`, `pr_*`).
-    return any(any(mark in part for mark in _STORE_GLOB) and fnmatch.fnmatchcase(_STORE_DIR, part)
-               for part in lowered.split("/"))
+    # A glob that the shell would expand to the store's directory (`pr_deliver?/`, `pr_*`, `runtime/*`).
+    parts = lowered.split("/")
+    return any(_glob_names_store(part, near_runtime or (i > 0 and parts[i - 1] == "runtime"))
+               for i, part in enumerate(parts))
 
 
 def _names_grant_change(command: str, depth: int = 0) -> bool:
@@ -939,7 +954,8 @@ def _names_grant_change(command: str, depth: int = 0) -> bool:
     if not tokens:
         lowered = command.lower()
         return _GRANT_COMMAND in lowered or "pr_delivery" in lowered
-    if any(_names_store(token) for token in tokens):  # redirection targets included
+    near_runtime = "runtime" in folded  # `cd ~/.omh/runtime && rm -rf *` still names the store
+    if any(_names_store(token, near_runtime) for token in tokens):  # redirection targets included
         return True
     for segment in _segments(tokens):
         lowered = [token.lower() for token in segment]
