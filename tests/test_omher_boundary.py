@@ -3146,16 +3146,30 @@ class SshPeersOnlyOverTheOwnSsh(unittest.TestCase):
     def test_the_ssh_config_is_read_only_at_two_sites_and_nothing_runs_for_it(self) -> None:
         rule = self.doc.split("\n31. ", 1)[1].split("\n32. ", 1)[0]
         self.assertIn("For the host field's suggestions and to refuse a second row for the same computer, the shell reads,"
-                      " never writes, only `~/.ssh/config`: it does not follow `Include` or evaluate `Match`, it runs"
-                      " nothing for this (never `ssh -G`), and the default user is `USER` (`USERNAME` on Windows).", rule)
-        read = 'std::fs::read_to_string({}.join(".ssh").join("config")).unwrap_or_default()'
-        # the suggestions (lib.rs) and the duplicate check (Peers::add): one read each, and no other file under ~/.ssh
+                      " never writes, only `~/.ssh/config`, and only when it resolves to a regular file of at most 1 MB"
+                      " (a pipe or device there is never opened for reading, so the read never blocks): it does not"
+                      " follow `Include` or evaluate `Match`, it runs nothing for this (never `ssh -G`), and the default"
+                      " user is `USER` (`USERNAME` on Windows).", rule)
+        # one helper reads it, for the suggestions (lib.rs) and the duplicate check (Peers::add); no other file under
+        # ~/.ssh is named anywhere
         hosts = self.lib.split("async fn peers_hosts(", 1)[1].split("\n}\n", 1)[0]
-        self.assertIn(read.format("home"), hosts)
+        self.assertIn("peers::ssh_config_hosts(&peers::read_ssh_config(&home))", hosts)
         add = self.peers.split("pub fn add(self: &Arc<Self>", 1)[1].split("\n    }\n", 1)[0]
-        self.assertIn(read.format("self.home"), add)
-        self.assertEqual(self.lib.count('.join(".ssh")'), 1)
+        self.assertIn("let config = read_ssh_config(&self.home);", add)
+        self.assertEqual(self.lib.count("read_ssh_config("), 1)
+        self.assertEqual(self.peers.count("read_ssh_config("), 2)  # the helper and its call in add
+        self.assertEqual(self.lib.count('.join(".ssh")'), 0)
         self.assertEqual(self.peers.count('.join(".ssh")'), 1)
+        helper = self.peers.split("pub fn read_ssh_config(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn('let path = home.join(".ssh").join("config");', helper)
+        # a regular file once links are resolved, checked again on the open handle, opened non-blocking, bounded
+        self.assertIn("m.is_file() && m.len() <= SSH_CONFIG_MAX", helper)
+        self.assertIn("if !regular(std::fs::metadata(&path)) {", helper)
+        self.assertIn("if !regular(f.metadata()) {", helper)
+        self.assertIn("open.custom_flags(libc::O_NONBLOCK);", helper)
+        self.assertIn("f.take(SSH_CONFIG_MAX + 1)", helper)
+        self.assertIn("const SSH_CONFIG_MAX: u64 = 1024 * 1024;", self.peers)
+        self.assertNotIn("write", helper)
         # Include is not followed and Match not evaluated: the resolver answers unknown at either, the suggestions
         # read `Host` lines only
         target = self.peers.split("pub fn ssh_target(", 1)[1].split("\n}\n", 1)[0]

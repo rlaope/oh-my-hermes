@@ -14,7 +14,7 @@
 //! quit, this process gone) ends the remote bridge. The UI never supplies a command: it names a host the shell checks.
 
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -171,6 +171,38 @@ pub fn id_for(label: &str, taken: &[String]) -> String {
         return base;
     }
     (2..).map(|n| format!("{base}-{n}")).find(|c| !taken.contains(c)).unwrap()
+}
+
+/// The most of `~/.ssh/config` read: a larger file is not read at all (no suggestions, and only the text as typed
+/// refuses a duplicate), so a cut-off config never resolves a host to the wrong computer.
+const SSH_CONFIG_MAX: u64 = 1024 * 1024;
+
+/// `~/.ssh/config`'s text for the host field's suggestions and the duplicate check (rule 31), or empty. Read only, and
+/// only when the path, links resolved, is a regular file of at most [`SSH_CONFIG_MAX`]: a pipe, a device or a folder
+/// there is never opened for reading. On macOS and Linux the file is opened non-blocking and checked again through
+/// the open handle, so one swapped for a pipe between the check and the open still never blocks the read.
+pub fn read_ssh_config(home: &Path) -> String {
+    let path = home.join(".ssh").join("config");
+    let regular = |m: std::io::Result<std::fs::Metadata>| m.is_ok_and(|m| m.is_file() && m.len() <= SSH_CONFIG_MAX);
+    if !regular(std::fs::metadata(&path)) {
+        return String::new();
+    }
+    let mut open = std::fs::OpenOptions::new();
+    open.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        open.custom_flags(libc::O_NONBLOCK);
+    }
+    let Ok(f) = open.open(&path) else { return String::new() };
+    if !regular(f.metadata()) {
+        return String::new();
+    }
+    let mut buf = Vec::new();
+    if f.take(SSH_CONFIG_MAX + 1).read_to_end(&mut buf).is_err() || buf.len() as u64 > SSH_CONFIG_MAX {
+        return String::new();
+    }
+    String::from_utf8(buf).unwrap_or_default()
 }
 
 /// The `Host` aliases in an ssh config's text, for the host field's suggestions: wildcard and negated patterns
@@ -1197,7 +1229,7 @@ impl Peers {
         let mut peers = read_peers(&self.home);
         // the same computer under another name is refused too: read from the ssh config the host field's
         // suggestions come from (read only), and the account running omher as ssh's default user
-        let config = std::fs::read_to_string(self.home.join(".ssh").join("config")).unwrap_or_default();
+        let config = read_ssh_config(&self.home);
         let me = local_user();
         if let Some(p) = peers.iter().find(|p| same_target(&config, &me, (&p.host, p.port), (host, port))) {
             return Err(format!("that computer is already connected as {}", p.label));
@@ -1777,6 +1809,56 @@ mod tests {
         assert_eq!(ssh_target("Host mini\n  HostName mini.local\nInclude more\n", "mini", None, "local"), None);
         assert!(same_target("Match all\n", "me", ("mini", None), ("MINI", None)), "the same text is the same computer whatever the config says");
         assert!(!same_target("Match all\n", "me", ("mini", None), ("me@mini", None)));
+    }
+
+    #[test]
+    fn the_ssh_config_is_read_only_as_a_bounded_regular_file_and_never_blocks() {
+        let home = std::env::temp_dir().join(format!("omher-ssh-config-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let dir = home.join(".ssh");
+        std::fs::create_dir_all(&dir).unwrap();
+        let cfg = dir.join("config");
+        assert_eq!(read_ssh_config(&home), "", "no file");
+        std::fs::write(&cfg, "Host mini\n").unwrap();
+        assert_eq!(read_ssh_config(&home), "Host mini\n");
+        // at the bound it is read; one byte over, nothing
+        let mut big = "#".repeat(SSH_CONFIG_MAX as usize - 1);
+        big.push('\n');
+        std::fs::write(&cfg, &big).unwrap();
+        assert_eq!(read_ssh_config(&home).len(), SSH_CONFIG_MAX as usize);
+        big.push('\n');
+        std::fs::write(&cfg, &big).unwrap();
+        assert_eq!(read_ssh_config(&home), "");
+        // a folder there
+        std::fs::remove_file(&cfg).unwrap();
+        std::fs::create_dir(&cfg).unwrap();
+        assert_eq!(read_ssh_config(&home), "");
+        std::fs::remove_dir(&cfg).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::symlink;
+            // a link to a regular file is read; a pipe, or a link to one, is never opened, so nothing blocks
+            std::fs::write(home.join("real"), "Host linked\n").unwrap();
+            symlink(home.join("real"), &cfg).unwrap();
+            assert_eq!(read_ssh_config(&home), "Host linked\n");
+            std::fs::remove_file(&cfg).unwrap();
+            let fifo = home.join("fifo");
+            let c = std::ffi::CString::new(fifo.to_str().unwrap()).unwrap();
+            assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0);
+            for (name, make) in [("a pipe", false), ("a link to a pipe", true)] {
+                let _ = std::fs::remove_file(&cfg);
+                if make {
+                    symlink(&fifo, &cfg).unwrap();
+                } else {
+                    assert_eq!(unsafe { libc::mkfifo(std::ffi::CString::new(cfg.to_str().unwrap()).unwrap().as_ptr(), 0o600) }, 0);
+                }
+                let (tx, rx) = mpsc::channel();
+                let h = home.clone();
+                thread::spawn(move || tx.send(read_ssh_config(&h)).unwrap());
+                assert_eq!(rx.recv_timeout(Duration::from_secs(3)).as_deref(), Ok(""), "{name}: blocked or read");
+            }
+        }
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]
