@@ -497,6 +497,13 @@ export const PENDING_TURN_MS = 15_000;
 /** Steer errors that are a clear refusal (the gateway answered no): the row is sent normally after the turn. Any
  *  other error (disconnected, bot_offline, timeout, internal) leaves it unknown: Hermes may have taken it. */
 const STEER_REFUSED = new Set(["gateway_error", "bad_request"]);
+/** A chat.steer with no reply after this long: unknown (Hermes may have taken it), the person decides. */
+export const STEER_REPLY_MS = 8_000;
+/** A message held behind a turn that has said nothing for this long: the chat is read again (its turn.end may have
+ *  been lost); when Hermes runs nothing there, the turn ends here and the message goes out. Only while one is held;
+ *  each read that finds the turn still running doubles the wait (a long quiet tool call), up to TURN_QUIET_MAX_MS. */
+export const TURN_QUIET_MS = 3_000;
+export const TURN_QUIET_MAX_MS = 60_000;
 /** How much of a turn's thinking text is kept (the start; the rest is dropped, never shown cut mid-word). */
 export const THINKING_MAX = 20_000;
 
@@ -1370,6 +1377,9 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
         if (ev.outcome === "done" && c.turn && c.steerAck) base = ackSteer(base, c.turn.streaming.slice(c.steerAck.from));
         // stopped before the turn read what was steered in: Hermes dropped it, so it says so and waits for Send / Delete
         if (ev.outcome === "interrupted" && c.steeredUnread?.length) base = unsteer(base, c.steeredUnread);
+        // the turn ended with a steer still unanswered: there is no answer left for it to join, so it reads as held
+        // (its ↵ mark, busy) until the reply, or the steer's deadline, says what became of it
+        if (c.steering) base = withItems(base, base.items.map((i) => (i.kind === "user" && i.id === c.steering && i.autoSteer ? (({ autoSteer: _a, ...m }) => m)(i) : i)));
         return { ...endTurn(base, now, ev.outcome, ev.error), early: null, pendingTurn: null, steeredUnread: undefined, steerAck: null };
       });
     case "bot.status":
@@ -2392,6 +2402,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       if (threadGone(bot)) continue;
       const id = queueReady(state, bot);
       if (id && !flushing.has(bot)) void sendHeld(bot, id);
+      // a message now held behind a turn (any path: typed, files, put back by Send now or a refused steer)
+      if (waitsOnRead(state.chats[bot]) && !quietFor.has(bot)) watchTurn(bot);
     }
   };
   const sendHeld = async (bot: string, id: string) => {
@@ -2485,17 +2497,57 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     rereadStale(key);
     return true;
   };
-  /** Chats being read again by rereadStale: one read per chat at a time. */
+  /** Chats being read again by reread: one read per chat at a time. */
   const rereading = new Set<string>();
+  /** Reads chat `key` again (chat.open, or the thread reads for a thread), once per chat at a time. False when no
+   *  read started (not loaded, the bridge is down, or one is already running). */
+  const reread = (key: string, then?: () => void): boolean => {
+    if (!state.chats[key]?.loaded || state.conn !== "open" || rereading.has(key)) return false;
+    rereading.add(key);
+    const job = key.startsWith("fold:") ? rereadThreads(chatTarget(key, botNames(state)).bot) : loadChat(key);
+    void job
+      .catch(() => {})
+      .finally(() => {
+        rereading.delete(key);
+        then?.();
+      });
+    return true;
+  };
   /** A chat still unread since the bridge came back (`stale`) holds every message on that read. The reconnect's own
    *  re-read can be lost (its bots.list fails when the link flaps again on wake) and nothing else asks: a message
    *  typed there would wait for good. So the message reads the chat again itself; once read, it goes out. */
   const rereadStale = (key: string) => {
+    if (state.chats[key]?.stale) reread(key);
+  };
+  /** A chat holding a message that only a read can release: behind a turn, or on a chat unread since a reconnect. */
+  const waitsOnRead = (c: Chat | undefined) => !!c?.queue?.length && (!!c.turn || !!c.stale);
+  /** Per chat: the timer of a turn that holds a message and has gone quiet, and how long it waits. */
+  const quiet = new Map<string, ReturnType<typeof setTimeout>>();
+  const quietFor = new Map<string, number>();
+  /** A message held behind a turn waits for that turn's end, and one held on a stale chat for its re-read. When the
+   *  end is lost (the socket stayed up, the event did not come) or the reconnect's re-read is lost, nothing else would
+   *  ever send it: after TURN_QUIET_MS with no event for the chat it is read again, and Hermes' `running` decides
+   *  (idle: the turn ends here and the queue flushes; running: wait again). Armed only while something is held there;
+   *  every event of that chat starts the wait over at its shortest. */
+  const watchTurn = (key: string, wait = TURN_QUIET_MS) => {
+    clearTimeout(quiet.get(key));
+    quiet.delete(key);
+    quietFor.delete(key);
     const c = state.chats[key];
-    if (!c?.stale || !c.loaded || state.conn !== "open" || rereading.has(key)) return;
-    rereading.add(key);
-    const job = key.startsWith("fold:") ? rereadThreads(chatTarget(key, botNames(state)).bot) : loadChat(key);
-    void job.catch(() => {}).finally(() => rereading.delete(key));
+    if (!waitsOnRead(c)) return;
+    quietFor.set(key, wait);
+    quiet.set(
+      key,
+      setTimeout(() => {
+        quiet.delete(key);
+        const c = state.chats[key];
+        const next = Math.min(wait * 2, TURN_QUIET_MAX_MS);
+        // no read now (the bridge is down, or one is running): wait again; the reconnect's own re-read may settle it
+        if (waitsOnRead(c)) {
+          if (!reread(key, () => watchTurn(key, next))) watchTurn(key, next);
+        } else quietFor.delete(key);
+      }, wait),
+    );
   };
   /** The queue head of `key`, when it is a message being steered in and nothing is steering: steer it now. */
   const steerNext = (key: string) => {
@@ -2840,6 +2892,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         for (const fn of [...eventFns]) fn(ev);
         if (ev.event === "elsewhere.update") void loadElsewhere(ev.bot);
         if (ev.event === "turn.end") pruneHeld(ev.session ? folderKey(ev.bot, ev.session) : ev.bot);
+        // the chat's turn spoke: a message held behind it waits the full quiet time again
+        if (quietFor.has(ev.session ? folderKey(ev.bot, ev.session) : ev.bot)) watchTurn(ev.session ? folderKey(ev.bot, ev.session) : ev.bot);
         // After a turn the person pointed at a thread, re-read the places so the bot's new reply shows there.
         if (ev.event === "turn.end" && lastUserReplied(state, ev.bot)) void loadElsewhere(ev.bot);
         if (ev.event === "routine.ran") void loadRoutines(ev.bot);
@@ -3047,6 +3101,13 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       dispatch({ type: "queue.steering", bot, id });
       let ok = false;
       let unknown = false;
+      // a reply that never comes (lost on a socket that stayed up) must not keep it steering for good: past the
+      // deadline it is unknown, as a timeout is (the person decides); a reply after that changes nothing
+      let late = false;
+      const deadline = setTimeout(() => {
+        late = true;
+        dispatch({ type: "queue.steered", bot, id, ok: false, now: now(), unknown: true });
+      }, STEER_REPLY_MS);
       try {
         const status = (await bridge.request("chat.steer", { ...chatTarget(bot, botNames(state)), text: p.wire })).status;
         ok = status === "queued";
@@ -3057,6 +3118,8 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         // offline, a timeout) may mean Hermes took it: never sent again on its own, the person decides
         unknown = !STEER_REFUSED.has((e as { code?: string } | null)?.code ?? "");
       }
+      clearTimeout(deadline);
+      if (late) return;
       dispatch({ type: "queue.steered", bot, id, ok, now: now(), ...(unknown ? { unknown } : {}) });
       // a message typed while this one was steering: steered next, in order
       if (ok) steerNext(bot);

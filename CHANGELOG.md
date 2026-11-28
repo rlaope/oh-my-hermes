@@ -170,7 +170,11 @@ All notable changes will be documented here.
 - **omher: a message to a bot goes out after the Mac wakes from sleep.** Sleep drops the link to the bridge, and the
   chat is read again when it comes back; when that re-read was lost (the link flapped again), the chat held every message
   typed afterwards, so Enter and Send seemed to do nothing. A message typed there now reads the chat again itself and
-  goes out, and while it waits for that read its bubble says why. (`apps/omher/src/state/store.ts`,
+  goes out, and while it waits for that read its bubble says why. A message held behind a turn whose end never arrived
+  (the socket stayed up) no longer waits for good: after a few quiet seconds the chat is read again, and when Hermes runs
+  nothing it goes out. A steer that gets no reply is marked "might already be in the answer" after a deadline instead of
+  hiding as sent. With a Korean input method, the Enter after a syllable is committed sends; only the Enter that
+  commits it is held. (`apps/omher/src/state/store.ts`, `apps/omher/src/lib/ime.ts`,
   `apps/omher/src/chat/parts/Bubble.tsx`)
 
 ## 5.0.1 - 2026-11-26
