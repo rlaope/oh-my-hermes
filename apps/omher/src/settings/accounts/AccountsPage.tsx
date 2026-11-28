@@ -155,7 +155,7 @@ function CliGroup({ g, status, version, note }: { g: AccountGroup; status: Recor
   const live = useRef<SignIn | null>(null);
   live.current = signIn;
 
-  const rows = g.accounts.map((a) => mergeRow(a, status[`${g.cli}:${a.id}`]));
+  const rows = g.accounts.map((a) => mergeRow(a, status[`${g.cli}:${a.id}`], g.cli));
   const cpaRows = rows.filter(isCpa).length;
   const now = Date.now() / 1000;
   const canAdd = SIGN_IN[g.cli] === "run" && host.canSignIn;

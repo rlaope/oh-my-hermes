@@ -103,11 +103,11 @@ export interface Row extends Account {
   plan: string;
   signedIn: boolean;
   method: string | null;
-  /** When this login runs out (ISO time from the CLI's status), or null when unknown. */
+  /** When this login runs out (ISO time from Claude Code's status), or null when unknown. Codex logins have no expiry. */
   loginExpiresAt: string | null;
 }
 
-export function mergeRow(a: Account, st: LoginStatus | null | undefined): Row {
+export function mergeRow(a: Account, st: LoginStatus | null | undefined, cli?: string): Row {
   const signedIn = st ? st.logged_in : a.state !== "login";
   const state = !signedIn ? "login" : a.state === "login" ? "ready" : a.state;
   return {
@@ -117,7 +117,7 @@ export function mergeRow(a: Account, st: LoginStatus | null | undefined): Row {
     plan: planName(st?.plan) || planName(a.usage?.plan),
     signedIn,
     method: st?.method ?? null,
-    loginExpiresAt: (st?.logged_in && st.login_expires_at) || null,
+    loginExpiresAt: (cli === "claude" && st?.logged_in && st.login_expires_at) || null,
   };
 }
 

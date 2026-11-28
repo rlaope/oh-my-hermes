@@ -302,16 +302,25 @@ test("auto-switch off: a limit does not move the account in use", async ({ page 
   expect(await callsOf("accounts.set_active")).toEqual([]);
 });
 
-test("login days left: under the row's subtitle, red within three days, nothing when the status has no time", async ({ page }) => {
+test("login days left: under the row's subtitle, nothing for Codex or a status with no time", async ({ page }) => {
   await openAccounts(page, "dark", { "claude:default": 12 * 24 + 5, "codex:work": 2 * 24 + 23 });
   const me = row(page, "claude", "default");
   await expect(me.getByTestId("account-login-left")).toHaveText("Login: 12 days left");
   await expect(me.getByTestId("account-login-left")).toHaveAttribute("data-soon", "false");
-  const work = row(page, "codex", "work").getByTestId("account-login-left");
-  await expect(work).toHaveText("Login: 2 days left");
-  await expect(work).toHaveAttribute("data-soon", "true");
+  // Codex logins have no expiry: a time in its status shows nothing
+  await expect(row(page, "codex", "work").getByTestId("account-login-left")).toHaveCount(0);
+  await expect(row(page, "codex", "default").getByTestId("account-login-left")).toHaveCount(0);
+  const html = await page.content();
+  for (const k of ["access_token", "refresh_token", "id_token", "api_key", "login_expires_at"]) expect(html).not.toContain(k);
+});
+
+test("login days left: red within three days", async ({ page }) => {
+  await openAccounts(page, "dark", { "claude:default": 2 * 24 + 23 });
+  const me = row(page, "claude", "default").getByTestId("account-login-left");
+  await expect(me).toHaveText("Login: 2 days left");
+  await expect(me).toHaveAttribute("data-soon", "true");
   // the theme's danger colour, not the muted subtitle grey
-  const [red, muted] = await work.evaluate((el) => {
+  const [red, danger] = await me.evaluate((el) => {
     const probe = document.createElement("span");
     probe.style.color = "var(--danger)";
     el.parentElement!.appendChild(probe);
@@ -319,16 +328,17 @@ test("login days left: under the row's subtitle, red within three days, nothing 
     probe.remove();
     return [out[0], out[1]];
   });
-  expect(red).toBe(muted);
-  await expect(row(page, "codex", "default").getByTestId("account-login-left")).toHaveCount(0);
-  const html = await page.content();
-  for (const k of ["access_token", "refresh_token", "id_token", "api_key", "login_expires_at"]) expect(html).not.toContain(k);
+  expect(red).toBe(danger);
 });
 
-test("login days left: hours under a day and expired past it", async ({ page }) => {
-  await openAccounts(page, "light", { "claude:default": 5.5, "codex:work": -3 });
+test("login days left: expired past the time", async ({ page }) => {
+  await openAccounts(page, "light", { "claude:default": -3 });
+  await expect(row(page, "claude", "default").getByTestId("account-login-left")).toHaveText("Login: expired");
+});
+
+test("login days left: hours under a day", async ({ page }) => {
+  await openAccounts(page, "light", { "claude:default": 5.5 });
   await expect(row(page, "claude", "default").getByTestId("account-login-left")).toHaveText("Login: 5 h left");
-  await expect(row(page, "codex", "work").getByTestId("account-login-left")).toHaveText("Login: expired");
   if (process.env.OMHER_SHOTS) {
     for (const theme of ["light", "dark"] as const) {
       if (theme === "dark") {
