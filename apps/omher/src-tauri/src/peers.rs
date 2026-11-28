@@ -201,6 +201,145 @@ pub fn ssh_config_hosts(text: &str) -> Vec<String> {
 }
 
 // ---------------------------------------------------------------------------------------------
+// The same computer under another name
+// ---------------------------------------------------------------------------------------------
+
+/// Where `ssh` would really go for a host: the user, the host name (lowercase, no trailing dot) and the port.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Target {
+    pub user: String,
+    pub name: String,
+    pub port: u16,
+}
+
+/// `*` and `?` as ssh_config(5) reads them in a `Host` pattern, without case. One pass with a single backtrack
+/// point (the last `*`), so a pattern full of `*` stays linear in practice.
+fn glob(pattern: &[u8], text: &[u8]) -> bool {
+    let (mut p, mut t) = (0, 0);
+    let mut star: Option<(usize, usize)> = None;
+    while t < text.len() {
+        if p < pattern.len() && pattern[p] == b'*' {
+            star = Some((p, t));
+            p += 1;
+        } else if p < pattern.len() && (pattern[p] == b'?' || pattern[p].eq_ignore_ascii_case(&text[t])) {
+            p += 1;
+            t += 1;
+        } else if let Some((sp, st)) = star {
+            p = sp + 1;
+            t = st + 1;
+            star = Some((sp, st + 1));
+        } else {
+            return false;
+        }
+    }
+    pattern[p..].iter().all(|&c| c == b'*')
+}
+
+/// Where `ssh` would go for `host` (an alias or `user@host`) and `port`, from the ssh config's text, the way ssh
+/// reads it: the lines before the first `Host` and every `Host` block whose patterns match the name (a matching `!`
+/// pattern rules its block out) give values, and the first value for each of `HostName`, `User` and `Port` wins; a
+/// `HostName` may name the alias as `%h`. With nothing set, the user is `local_user` (ssh's default) and the port 22.
+///
+/// `None` when the config could change the answer in a way read here cannot see: a `Match` or `Include` line before
+/// every value was found, a `HostName` with another `%` token, or no local user name. omher reads the file only; it
+/// runs nothing and never asks `ssh -G`.
+pub fn ssh_target(config: &str, host: &str, port: Option<u16>, local_user: &str) -> Option<Target> {
+    let (user, name) = match host.split_once('@') {
+        Some((u, h)) => (Some(u.to_string()), h),
+        None => (None, host),
+    };
+    let alias = name.trim_end_matches('.').to_ascii_lowercase();
+    let (mut host_name, mut cfg_user, mut cfg_port): (Option<String>, Option<String>, Option<u16>) = (None, None, None);
+    let mut applies = true;
+    let mut unsure = false;
+    for line in config.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let (key, rest) = match line.find(|c: char| c.is_whitespace() || c == '=') {
+            Some(i) => (&line[..i], line[i..].trim_start_matches(|c: char| c.is_whitespace() || c == '=')),
+            None => (line, ""),
+        };
+        let value = rest.split_whitespace().next().unwrap_or("").trim_matches('"');
+        if key.eq_ignore_ascii_case("match") || key.eq_ignore_ascii_case("include") {
+            unsure = true;
+            break;
+        }
+        if key.eq_ignore_ascii_case("host") {
+            let mut hit = false;
+            applies = true;
+            for p in rest.split_whitespace().take_while(|p| !p.starts_with('#')) {
+                let p = p.trim_matches('"');
+                if let Some(neg) = p.strip_prefix('!') {
+                    if glob(neg.as_bytes(), alias.as_bytes()) {
+                        applies = false;
+                    }
+                } else if glob(p.as_bytes(), alias.as_bytes()) {
+                    hit = true;
+                }
+            }
+            applies &= hit;
+            continue;
+        }
+        if !applies || value.is_empty() {
+            continue;
+        }
+        if key.eq_ignore_ascii_case("hostname") && host_name.is_none() {
+            host_name = Some(value.to_string());
+        } else if key.eq_ignore_ascii_case("user") && cfg_user.is_none() {
+            cfg_user = Some(value.to_string());
+        } else if key.eq_ignore_ascii_case("port") && cfg_port.is_none() {
+            cfg_port = Some(value.parse().ok()?);
+        }
+    }
+    let name = match host_name {
+        Some(h) => {
+            let h = h.replace("%h", &alias);
+            if h.contains('%') {
+                return None;
+            }
+            h.trim_end_matches('.').to_ascii_lowercase()
+        }
+        None if unsure => return None,
+        None => alias,
+    };
+    let user = match user.or(cfg_user) {
+        Some(u) => u,
+        None if unsure || local_user.is_empty() => return None,
+        None => local_user.to_string(),
+    };
+    let port = match port.or(cfg_port) {
+        Some(p) => p,
+        None if unsure => return None,
+        None => 22,
+    };
+    Some(Target { user, name, port })
+}
+
+/// True when `a` and `b` reach the same computer and account: the same text with the host name in any case, or
+/// the same [`ssh_target`] (`mini` with `HostName mini.local` and `User me` is `me@mini.local`; no port is port 22).
+pub fn same_target(config: &str, local_user: &str, a: (&str, Option<u16>), b: (&str, Option<u16>)) -> bool {
+    let plain = |(h, p): (&str, Option<u16>)| {
+        let (u, n) = h.split_once('@').map_or((None, h), |(u, n)| (Some(u), n));
+        (u.map(str::to_string), n.trim_end_matches('.').to_ascii_lowercase(), p)
+    };
+    if plain(a) == plain(b) {
+        return true;
+    }
+    matches!(
+        (ssh_target(config, a.0, a.1, local_user), ssh_target(config, b.0, b.1, local_user)),
+        (Some(x), Some(y)) if x == y
+    )
+}
+
+/// The name ssh logs in as when a host names no user: the account running omher.
+fn local_user() -> String {
+    let key = if cfg!(windows) { "USERNAME" } else { "USER" };
+    std::env::var(key).unwrap_or_default()
+}
+
+// ---------------------------------------------------------------------------------------------
 // The fixed command
 // ---------------------------------------------------------------------------------------------
 
@@ -432,21 +571,38 @@ pub fn backoff(attempt: u32) -> Duration {
     Duration::from_secs(2u64.saturating_pow(attempt.clamp(1, 6)).min(60))
 }
 
+/// A link that stayed up at least this long was healthy, and its drop starts the count again. One that ended sooner
+/// had a short life: the remote bridge printed its ready line and died (a broken Hermes there, a full disk), and
+/// reconnecting at once would only run the remote script again, every few seconds, for as long as omher is open.
+pub const HEALTHY_LIFE: Duration = Duration::from_secs(30);
+/// The attempt a short life counts as at least: [`backoff`] 3 is 8 s, so short lives in a row wait 8, 16, 32, 60 s.
+const SHORT_LIFE_ATTEMPT: u32 = 3;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Plan {
     Retry { attempt: u32, wait: Duration },
     Stop,
 }
 
-/// What follows a link that ended with `kind` after `attempt` failed tries in a row: a permanent failure stops and
-/// waits for the person; anything else tries again, later each time.
-pub fn after_exit(kind: FailKind, attempt: u32) -> Plan {
+/// What follows a link that ended with `kind` after `attempt` failed tries in a row. `lived` is how long the link
+/// had been up, `None` when the try never came up.
+///
+/// A permanent failure stops and waits for the person. Anything else tries again, and the streak decides when:
+/// - a try that never came up counts one more: 2, 4, 8, 16, 32, then 60 s;
+/// - a link that lived [`HEALTHY_LIFE`] or more resets the streak, so its drop (a wifi blip, a laptop lid) is tried
+///   again after 2 s as the first failure;
+/// - a link that died sooner keeps the streak and counts as attempt 3 at least, so short lives in a row wait 8, 16,
+///   32, then 60 s. A connect alone never resets the streak: only a link that stayed up does.
+pub fn after_exit(kind: FailKind, attempt: u32, lived: Option<Duration>) -> Plan {
     if kind.permanent() {
-        Plan::Stop
-    } else {
-        let next = attempt.saturating_add(1);
-        Plan::Retry { attempt: next, wait: backoff(next) }
+        return Plan::Stop;
     }
+    let next = match lived {
+        Some(up) if up >= HEALTHY_LIFE => 1,
+        Some(_) => attempt.saturating_add(1).max(SHORT_LIFE_ATTEMPT),
+        None => attempt.saturating_add(1),
+    };
+    Plan::Retry { attempt: next, wait: backoff(next) }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -653,18 +809,134 @@ pub struct PeerStatus {
     #[serde(skip_serializing_if = "String::is_empty")]
     pub reason: String,
     pub attempt: u32,
+    /// When the link last came up (ms since the Unix epoch), kept across drops and Retry.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub connected_at: Option<u64>,
+    /// While `reconnecting`: when the next try starts (ms since the Unix epoch).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub retry_at: Option<u64>,
+    /// The link's recent history, oldest first, at most [`HISTORY`]. Kept in memory only: a restart starts it empty.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub events: Vec<LinkEvent>,
+}
+
+/// How many link events a peer keeps.
+pub const HISTORY: usize = 8;
+
+/// One thing that happened to a link, for Settings › Remote machines.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct LinkEvent {
+    /// ms since the Unix epoch
+    pub at: u64,
+    /// `connected` | `dropped` | `retrying` | `failed`
+    pub what: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kind: Option<FailKind>,
+    /// The last line ssh or the remote printed (a drop's, or a failed try's).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub reason: String,
+    /// `retrying`: the wait before the next try, in seconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wait: Option<u64>,
+}
+
+impl LinkEvent {
+    fn new(at: u64, what: &'static str) -> LinkEvent {
+        LinkEvent { at, what, kind: None, reason: String::new(), wait: None }
+    }
+}
+
+/// Add `e` to a history, dropping the oldest past [`HISTORY`].
+pub fn push_event(events: &mut Vec<LinkEvent>, e: LinkEvent) {
+    events.push(e);
+    if events.len() > HISTORY {
+        let extra = events.len() - HISTORY;
+        events.drain(..extra);
+    }
+}
+
+/// Now, in ms since the Unix epoch (0 on a clock set before 1970).
+fn now_ms() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
 }
 
 impl PeerStatus {
     fn of(p: &Peer, state: &'static str) -> PeerStatus {
-        PeerStatus { id: p.id.clone(), label: p.label.clone(), host: p.host.clone(), port: p.port, state, url: None, kind: None, reason: String::new(), attempt: 0 }
+        PeerStatus {
+            id: p.id.clone(),
+            label: p.label.clone(),
+            host: p.host.clone(),
+            port: p.port,
+            state,
+            url: None,
+            kind: None,
+            reason: String::new(),
+            attempt: 0,
+            connected_at: None,
+            retry_at: None,
+            events: Vec::new(),
+        }
+    }
+
+    /// `state` for the same peer, keeping its history and its last connected time.
+    fn next(&self, state: &'static str) -> PeerStatus {
+        PeerStatus {
+            id: self.id.clone(),
+            label: self.label.clone(),
+            host: self.host.clone(),
+            port: self.port,
+            state,
+            url: None,
+            kind: None,
+            reason: String::new(),
+            attempt: 0,
+            connected_at: self.connected_at,
+            retry_at: None,
+            events: self.events.clone(),
+        }
+    }
+
+    /// The link came up at `now` on `url`.
+    pub fn came_up(&self, url: String, now: u64) -> PeerStatus {
+        let mut st = PeerStatus { url: Some(url), connected_at: Some(now), ..self.next("connected") };
+        push_event(&mut st.events, LinkEvent::new(now, "connected"));
+        st
+    }
+
+    /// A link ended, or a try failed, with `kind` and `line`, and `plan` follows. A link that was up records its drop
+    /// and the reason first, so the history says why before it says what comes next; then the retry (with its wait)
+    /// or the stop, and the state flips in the same step. A try that never came up records only the retry or the
+    /// stop, with the reason on it.
+    pub fn ended(&self, was_up: bool, kind: FailKind, line: &str, plan: &Plan, now: u64) -> PeerStatus {
+        let mut events = self.events.clone();
+        if was_up {
+            push_event(&mut events, LinkEvent { kind: Some(kind), reason: line.to_string(), ..LinkEvent::new(now, "dropped") });
+        }
+        let why = |e: LinkEvent| if was_up { e } else { LinkEvent { kind: Some(kind), reason: line.to_string(), ..e } };
+        let mut st = match plan {
+            Plan::Stop => {
+                push_event(&mut events, why(LinkEvent::new(now, "failed")));
+                PeerStatus { kind: Some(kind), reason: line.to_string(), ..self.next("failed") }
+            }
+            Plan::Retry { attempt, wait } => {
+                push_event(&mut events, why(LinkEvent { wait: Some(wait.as_secs()), ..LinkEvent::new(now, "retrying") }));
+                PeerStatus {
+                    kind: Some(kind),
+                    reason: line.to_string(),
+                    attempt: *attempt,
+                    retry_at: Some(now.saturating_add(wait.as_millis() as u64)),
+                    ..self.next("reconnecting")
+                }
+            }
+        };
+        st.events = events;
+        st
     }
 }
 
 type Sink = Arc<dyn Fn(PeerStatus) + Send + Sync>;
 
 struct Link {
-    peer: Peer,
     status: PeerStatus,
     generation: u64,
     up: Option<Up>,
@@ -736,15 +1008,18 @@ impl Peers {
 
     fn start(self: &Arc<Self>, peer: Peer) {
         let generation = self.next_generation();
-        let status = PeerStatus::of(&peer, "connecting");
+        let mut status = PeerStatus::of(&peer, "connecting");
         {
             let mut links = self.links.lock().unwrap();
             if let Some(old) = links.remove(&peer.id) {
+                // Retry keeps what happened so far: the history says why the person pressed it
+                status.connected_at = old.status.connected_at;
+                status.events = old.status.events;
                 if let Some(up) = old.up {
                     thread::spawn(move || up.stop());
                 }
             }
-            links.insert(peer.id.clone(), Link { peer: peer.clone(), status: status.clone(), generation, up: None });
+            links.insert(peer.id.clone(), Link { status: status.clone(), generation, up: None });
         }
         self.publish(status);
         let me = Arc::clone(self);
@@ -763,7 +1038,8 @@ impl Peers {
     }
 
     /// One peer's life: connect, watch the child, and on a drop reconnect with backoff until removed or stopped by
-    /// a failure a retry cannot fix.
+    /// a failure a retry cannot fix. The streak is reset only by a link that stayed up ([`after_exit`]), never by a
+    /// connect alone, so a bridge that dies right after its ready line backs off instead of re-running every 2 s.
     fn run(self: Arc<Self>, peer: Peer, generation: u64) {
         let mut attempt = 0u32;
         loop {
@@ -771,13 +1047,14 @@ impl Peers {
                 return;
             }
             let result = self.script_bytes().and_then(|s| connect(&peer.host, peer.port, &s));
+            let mut lived = None;
             let kind = match result {
                 Ok(up) => {
-                    attempt = 0;
                     let url = up.url.clone();
                     let mut up = Some(up);
+                    let since = Instant::now();
                     let st = self.set(&peer.id, generation, |l| {
-                        l.status = PeerStatus { state: "connected", url: Some(url), ..PeerStatus::of(&l.peer, "connected") };
+                        l.status = l.status.came_up(url, now_ms());
                         l.up = up.take();
                     });
                     match st {
@@ -801,27 +1078,27 @@ impl Peers {
                             break (code, lines);
                         }
                     };
-                    eprintln!("omher: peer {} link ended ({code})", peer.id);
+                    lived = Some(since.elapsed());
+                    eprintln!("omher: peer {} link ended ({code}) after {} s", peer.id, since.elapsed().as_secs());
                     let k = classify(&lines, true);
                     (if k == FailKind::Bridge { FailKind::Dropped } else { k }, last_line(&lines))
                 }
                 Err(f) => (f.kind, f.line),
             };
             let (kind, line) = kind;
-            match after_exit(kind, attempt) {
+            let plan = after_exit(kind, attempt, lived);
+            // the drop and its reason go into the history in the same step that flips the state
+            let st = self.set(&peer.id, generation, |l| l.status = l.status.ended(lived.is_some(), kind, &line, &plan, now_ms()));
+            match plan {
                 Plan::Stop => {
-                    if let Some(st) = self.set(&peer.id, generation, |l| {
-                        l.status = PeerStatus { kind: Some(kind), reason: line.clone(), ..PeerStatus::of(&l.peer, "failed") };
-                    }) {
+                    if let Some(st) = st {
                         self.publish(st);
                     }
                     return;
                 }
                 Plan::Retry { attempt: next, wait } => {
                     attempt = next;
-                    if let Some(st) = self.set(&peer.id, generation, |l| {
-                        l.status = PeerStatus { kind: Some(kind), reason: line.clone(), attempt: next, ..PeerStatus::of(&l.peer, "reconnecting") };
-                    }) {
+                    if let Some(st) = st {
                         self.publish(st);
                     }
                     let until = Instant::now() + wait;
@@ -899,8 +1176,12 @@ impl Peers {
             self.check_close(c);
         }
         let mut peers = read_peers(&self.home);
-        if peers.iter().any(|p| p.host == host && p.port == port) {
-            return Err("that computer is already connected".into());
+        // the same computer under another name is refused too: read from the ssh config the host field's
+        // suggestions come from (read only), and the account running omher as ssh's default user
+        let config = std::fs::read_to_string(self.home.join(".ssh").join("config")).unwrap_or_default();
+        let me = local_user();
+        if let Some(p) = peers.iter().find(|p| same_target(&config, &me, (&p.host, p.port), (host, port))) {
+            return Err(format!("that computer is already connected as {}", p.label));
         }
         if peers.len() >= MAX_PEERS {
             return Err(format!("at most {MAX_PEERS} remote machines"));
@@ -1335,13 +1616,163 @@ mod tests {
     #[test]
     fn reconnect_backs_off_and_stops_on_what_a_retry_cannot_fix() {
         assert_eq!((1..=8).map(|n| backoff(n).as_secs()).collect::<Vec<_>>(), [2, 4, 8, 16, 32, 60, 60, 60]);
-        assert_eq!(after_exit(FailKind::Dropped, 0), Plan::Retry { attempt: 1, wait: Duration::from_secs(2) });
-        assert_eq!(after_exit(FailKind::Unreachable, 3), Plan::Retry { attempt: 4, wait: Duration::from_secs(16) });
-        assert_eq!(after_exit(FailKind::Timeout, 9), Plan::Retry { attempt: 10, wait: Duration::from_secs(60) });
-        assert_eq!(after_exit(FailKind::Bridge, 0), Plan::Retry { attempt: 1, wait: Duration::from_secs(2) });
+        assert_eq!(after_exit(FailKind::Unreachable, 3, None), Plan::Retry { attempt: 4, wait: Duration::from_secs(16) });
+        assert_eq!(after_exit(FailKind::Timeout, 9, None), Plan::Retry { attempt: 10, wait: Duration::from_secs(60) });
+        assert_eq!(after_exit(FailKind::Bridge, 0, None), Plan::Retry { attempt: 1, wait: Duration::from_secs(2) });
         for k in [FailKind::Auth, FailKind::HostKey, FailKind::NoHermes, FailKind::BadCopy, FailKind::NoSsh] {
-            assert_eq!(after_exit(k, 0), Plan::Stop, "{k:?}");
+            assert_eq!(after_exit(k, 0, None), Plan::Stop, "{k:?}");
+            // a permanent failure stops however long the link had been up
+            assert_eq!(after_exit(k, 4, Some(Duration::from_secs(3600))), Plan::Stop, "{k:?}");
+            assert_eq!(after_exit(k, 4, Some(Duration::from_secs(1))), Plan::Stop, "{k:?}");
         }
+    }
+
+    /// Walk the plan the way `Peers::run` does: the streak carries from one end to the next.
+    fn waits(ends: &[Option<u64>]) -> Vec<u64> {
+        let mut attempt = 0;
+        ends.iter()
+            .map(|lived| match after_exit(FailKind::Dropped, attempt, lived.map(Duration::from_secs)) {
+                Plan::Retry { attempt: next, wait } => {
+                    attempt = next;
+                    wait.as_secs()
+                }
+                Plan::Stop => panic!("a drop is never permanent"),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_link_that_dies_right_after_it_came_up_backs_off_further_each_time() {
+        // the remote bridge prints its ready line and dies within a second, again and again
+        assert_eq!(waits(&[Some(1), Some(1), Some(1), Some(1), Some(1), Some(1)]), [8, 16, 32, 60, 60, 60]);
+        // just under the healthy life still counts as short
+        assert_eq!(waits(&[Some(29), Some(29)]), [8, 16]);
+        // tries that never come up mixed in keep the streak climbing
+        assert_eq!(waits(&[Some(1), None, Some(2), None]), [8, 16, 32, 60]);
+    }
+
+    #[test]
+    fn a_healthy_link_drops_and_comes_back_fast_and_a_long_life_resets_the_streak() {
+        // up for minutes, then a wifi blip: tried again after 2 s, as the first failure
+        assert_eq!(waits(&[Some(600)]), [2]);
+        assert_eq!(after_exit(FailKind::Dropped, 0, Some(HEALTHY_LIFE)), Plan::Retry { attempt: 1, wait: Duration::from_secs(2) });
+        // the blip lasts: the retries that fail climb from there as before
+        assert_eq!(waits(&[Some(600), None, None, None]), [2, 4, 8, 16]);
+        // a streak of short lives, then a link that held 30 s: the next drop is fast again
+        assert_eq!(waits(&[Some(1), Some(1), Some(1), Some(30), Some(1)]), [8, 16, 32, 2, 8]);
+        // a healthy link whose reconnect dies at once goes to 8 s, not 4
+        assert_eq!(waits(&[Some(600), Some(1)]), [2, 8]);
+    }
+
+    fn mini() -> PeerStatus {
+        PeerStatus::of(&Peer { id: "mini".into(), label: "Mac mini".into(), host: "mini".into(), port: None }, "connecting")
+    }
+
+    #[test]
+    fn the_history_keeps_the_last_eight_in_order() {
+        let mut ev = Vec::new();
+        for n in 0..11u64 {
+            push_event(&mut ev, LinkEvent::new(n, "connected"));
+        }
+        assert_eq!(ev.len(), HISTORY);
+        assert_eq!(ev.iter().map(|e| e.at).collect::<Vec<_>>(), (3..11).collect::<Vec<_>>());
+        // the same cap through the status transitions, a long loop of short lives
+        let mut st = mini();
+        for n in 0..20u64 {
+            st = st.came_up(format!("ws://127.0.0.1:{n}/"), n * 10);
+            st = st.ended(true, FailKind::Dropped, "closed", &Plan::Retry { attempt: 3, wait: Duration::from_secs(8) }, n * 10 + 1);
+        }
+        assert_eq!(st.events.len(), HISTORY);
+        assert!(st.events.windows(2).all(|w| w[0].at <= w[1].at));
+        assert_eq!(st.events.last().unwrap().what, "retrying");
+    }
+
+    #[test]
+    fn a_drop_records_its_reason_before_the_state_flips() {
+        let up = mini().came_up("ws://127.0.0.1:5/?token=t".into(), 1_000);
+        assert_eq!((up.state, up.connected_at, up.url.as_deref()), ("connected", Some(1_000), Some("ws://127.0.0.1:5/?token=t")));
+        assert_eq!(up.events.iter().map(|e| e.what).collect::<Vec<_>>(), ["connected"]);
+        let plan = after_exit(FailKind::Dropped, 0, Some(Duration::from_secs(1)));
+        let st = up.ended(true, FailKind::Dropped, "Connection to mini closed by remote host.", &plan, 5_000);
+        assert_eq!(st.state, "reconnecting");
+        assert_eq!((st.attempt, st.retry_at, st.url.clone()), (3, Some(13_000), None));
+        assert_eq!(st.connected_at, Some(1_000), "the last connected time stays");
+        let shown: Vec<_> = st.events.iter().map(|e| (e.what, e.reason.as_str(), e.wait)).collect();
+        assert_eq!(shown, [("connected", "", None), ("dropped", "Connection to mini closed by remote host.", None), ("retrying", "", Some(8))]);
+        assert_eq!(st.events[1].kind, Some(FailKind::Dropped));
+        // a try that never came up says why on the retry itself; a permanent one ends the history with `failed`
+        let st = st.ended(false, FailKind::Unreachable, "no route to host", &Plan::Retry { attempt: 4, wait: Duration::from_secs(16) }, 13_000);
+        assert_eq!((st.events[3].what, st.events[3].reason.as_str(), st.events[3].wait), ("retrying", "no route to host", Some(16)));
+        let st = st.ended(false, FailKind::Auth, "Permission denied", &Plan::Stop, 29_000);
+        assert_eq!((st.state, st.retry_at, st.kind), ("failed", None, Some(FailKind::Auth)));
+        assert_eq!((st.events[4].what, st.events[4].kind), ("failed", Some(FailKind::Auth)));
+        let j = serde_json::to_value(&st).unwrap();
+        assert_eq!(j["connected_at"], 1_000);
+        assert_eq!(j["events"][1], serde_json::json!({"at": 5000, "what": "dropped", "kind": "dropped", "reason": "Connection to mini closed by remote host."}));
+        assert_eq!(j["events"][2], serde_json::json!({"at": 5000, "what": "retrying", "wait": 8}));
+    }
+
+    #[test]
+    fn the_same_computer_under_another_name_is_one_target() {
+        let cfg = "User fallback-never-first\n";
+        // no config: case, a trailing dot, port 22 and the default user all fold
+        let none = "";
+        assert!(same_target(none, "me", ("mini", None), ("MINI", None)));
+        assert!(same_target(none, "me", ("mini", None), ("mini.", None)));
+        assert!(same_target(none, "me", ("mini", None), ("mini", Some(22))));
+        assert!(same_target(none, "me", ("mini", None), ("me@mini", None)));
+        assert!(same_target(none, "me", ("Me@Mini", Some(22)), ("Me@mini", None)));
+        assert!(!same_target(none, "me", ("mini", None), ("other@mini", None)), "another account is another row");
+        assert!(!same_target(none, "me", ("mini", None), ("mini", Some(2222))));
+        assert!(!same_target(none, "me", ("mini", None), ("mini.local", None)), "a name ssh would not rewrite stays apart");
+        assert!(!same_target(none, "", ("mini", None), ("me@mini", None)), "no local user: only the text decides");
+        // a global User before any Host block is ssh's first value for every host
+        assert!(same_target(cfg, "me", ("mini", None), ("fallback-never-first@mini", None)));
+        assert!(!same_target(cfg, "me", ("mini", None), ("me@mini", None)));
+        // an alias with its HostName, User and Port
+        let cfg = "Host mini macmini\n  HostName Mini.Local\n  User me\n  Port 2200\nHost *\n  User other\n  Port 22\n";
+        assert!(same_target(cfg, "local", ("mini", None), ("me@mini.local", Some(2200))));
+        assert!(same_target(cfg, "local", ("mini", None), ("macmini", None)));
+        assert!(!same_target(cfg, "local", ("mini", None), ("me@mini.local", None)), "Host * gives mini.local port 22");
+        assert!(same_target(cfg, "local", ("other@box", None), ("box", Some(22))), "Host * sets the user for any host");
+        // patterns, negation and %h
+        for (p, s, want) in [
+            ("*", "", true), ("*", "mini", true), ("*.lan", "pi.lan", true), ("*.lan", "pi.lan.x", false), ("m?ni", "MINI", true),
+            ("m?ni", "mni", false), ("a*b*c", "axxbyyc", true), ("a*b*c", "axxbyy", false), ("**", "x", true), ("mini", "mini2", false),
+        ] {
+            assert_eq!(glob(p.as_bytes(), s.as_bytes()), want, "{p} {s}");
+        }
+        assert!(!glob(&[b'*', b'a'].repeat(40), &b"a".repeat(200).iter().chain(b"b").copied().collect::<Vec<_>>()));
+        let cfg = "Host *.lan !nas.lan\n  HostName %h.example\n  User u\n";
+        assert!(same_target(cfg, "me", ("pi.lan", None), ("u@pi.lan.example", None)));
+        assert!(!same_target(cfg, "me", ("nas.lan", None), ("u@nas.lan.example", None)));
+        assert_eq!(ssh_target(cfg, "nas.lan", None, "me"), Some(Target { user: "me".into(), name: "nas.lan".into(), port: 22 }));
+        // what read here cannot see: Match or Include before a value, another % token, a bad port
+        assert_eq!(ssh_target("Match host mini\n  User x\n", "mini", None, "me"), None);
+        assert_eq!(ssh_target("Include ~/.ssh/more\n", "mini", None, "me"), None);
+        assert_eq!(ssh_target("Host mini\n  HostName %h.%d\n", "mini", None, "me"), None);
+        assert_eq!(ssh_target("Host mini\n  Port twenty\n", "mini", None, "me"), None);
+        // ... unless every value was found first, or given in the host itself
+        let cfg = "Host mini\n  HostName mini.local\n  User me\n  Port 22\nMatch all\n  User x\n";
+        assert_eq!(ssh_target(cfg, "mini", None, "local"), Some(Target { user: "me".into(), name: "mini.local".into(), port: 22 }));
+        assert!(same_target("Match all\n", "me", ("mini", None), ("MINI", None)), "the same text is the same computer whatever the config says");
+        assert!(!same_target("Match all\n", "me", ("mini", None), ("me@mini", None)));
+    }
+
+    #[test]
+    fn add_refuses_a_computer_already_in_the_list_under_another_name() {
+        let home = std::env::temp_dir().join(format!("omher-peers-dup-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(home.join(".ssh")).unwrap();
+        std::fs::write(home.join(".ssh/config"), "Host mini\n  HostName mini.local\n  User me\n").unwrap();
+        write_peers(&home, &[Peer { id: "mac-mini".into(), label: "Mac mini".into(), host: "mini".into(), port: None }]).unwrap();
+        let peers = Peers::new(home.clone());
+        for dup in ["mini", "MINI", "me@mini.local", "me@MINI.local."] {
+            assert_eq!(peers.add("Again", dup, None, None).unwrap_err(), "that computer is already connected as Mac mini", "{dup}");
+        }
+        assert_eq!(peers.add("Again", "me@mini.local", Some(22), None).unwrap_err(), "that computer is already connected as Mac mini");
+        assert_eq!(read_peers(&home).len(), 1, "nothing was written");
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]

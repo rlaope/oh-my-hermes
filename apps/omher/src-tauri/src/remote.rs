@@ -333,7 +333,8 @@ impl Remote {
     }
 
     /// The link's life, as a peer link's (`Peers::run`): connect, watch it, and on a drop reconnect with backoff until
-    /// the mode is left or a failure a retry cannot fix stops it.
+    /// the mode is left or a failure a retry cannot fix stops it. As there, only a link that stayed up
+    /// ([`peers::HEALTHY_LIFE`]) resets the streak; a connect alone does not.
     fn run(self: Arc<Self>, generation: u64, mode: RemoteMode, mut adopt: Option<Box<dyn Link>>) {
         let mut attempt = 0u32;
         loop {
@@ -347,9 +348,10 @@ impl Remote {
                 Some(l) => Ok(l),
                 None => (self.connect)(&mode.host, mode.port),
             };
+            let mut lived = None;
             let (kind, line) = match result {
                 Ok(link) => {
-                    attempt = 0;
+                    let since = Instant::now();
                     let url = link.url();
                     let mut link = Some(link);
                     let kept = self.update(generation, |g| {
@@ -380,13 +382,14 @@ impl Remote {
                             break lines;
                         }
                     };
-                    eprintln!("omher: remote link to {} ended", mode.host);
+                    lived = Some(since.elapsed());
+                    eprintln!("omher: remote link to {} ended after {} s", mode.host, since.elapsed().as_secs());
                     let k = classify(&lines, true);
                     (if k == FailKind::Bridge { FailKind::Dropped } else { k }, last_line(&lines))
                 }
                 Err(f) => (f.kind, f.line),
             };
-            match after_exit(kind, attempt) {
+            match after_exit(kind, attempt, lived) {
                 Plan::Stop => {
                     self.update(generation, |g| {
                         g.state = "failed";
@@ -624,6 +627,8 @@ mod tests {
         hosts: Mutex<Vec<(String, Option<u16>)>>,
         dead: Arc<AtomicBool>,
         stopped: Arc<AtomicUsize>,
+        /// every link it makes has already ended: a remote bridge that dies right after its ready line
+        die_at_once: AtomicBool,
     }
 
     fn fake(results: Vec<Result<u16, FailKind>>) -> (Arc<Remote>, Arc<Scripted>) {
@@ -633,6 +638,7 @@ mod tests {
             hosts: Mutex::new(Vec::new()),
             dead: Arc::new(AtomicBool::new(false)),
             stopped: Arc::new(AtomicUsize::new(0)),
+            die_at_once: AtomicBool::new(false),
         });
         let p = Arc::clone(&plan);
         let connect: Connect = Arc::new(move |host: &str, port: Option<u16>| {
@@ -641,7 +647,8 @@ mod tests {
             match p.results.lock().unwrap().pop_front().unwrap_or(Err(FailKind::Timeout)) {
                 Ok(n) => {
                     p.dead.store(false, Ordering::SeqCst);
-                    Ok(Box::new(Fake { url: format!("ws://127.0.0.1:{n}/?token=t"), dead: Arc::clone(&p.dead), stopped: Arc::clone(&p.stopped) }) as Box<dyn Link>)
+                    let dead = if p.die_at_once.load(Ordering::SeqCst) { Arc::new(AtomicBool::new(true)) } else { Arc::clone(&p.dead) };
+                    Ok(Box::new(Fake { url: format!("ws://127.0.0.1:{n}/?token=t"), dead, stopped: Arc::clone(&p.stopped) }) as Box<dyn Link>)
                 }
                 Err(kind) => Err(Failure { kind, line: format!("{kind:?}") }),
             }
@@ -681,6 +688,27 @@ mod tests {
         r.stop();
         assert!(!r.active());
         assert_eq!(plan.stopped.load(Ordering::SeqCst), 1, "leaving stops the live link");
+    }
+
+    #[test]
+    fn a_link_that_dies_right_after_it_comes_up_backs_off_instead_of_starting_over() {
+        // before, every connect set the streak back to 0, so this loop retried at the first step forever
+        let (r, plan) = fake(vec![Ok(5101), Ok(5102), Ok(5103), Ok(5104)]);
+        plan.die_at_once.store(true, Ordering::SeqCst);
+        r.start(mode(), None);
+        let mut seen: Vec<u32> = Vec::new();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while seen.len() < 3 {
+            let st = r.status();
+            if st.state == Some("reconnecting") && seen.last() != Some(&st.attempt) {
+                seen.push(st.attempt);
+            }
+            assert!(Instant::now() < deadline, "{seen:?} {st:?}");
+            thread::sleep(Duration::from_millis(1));
+        }
+        // 8, 16, 32 s in the app (the test caps each wait)
+        assert_eq!(seen, [3, 4, 5]);
+        r.stop();
     }
 
     #[test]
