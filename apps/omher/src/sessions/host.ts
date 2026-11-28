@@ -12,6 +12,7 @@ import type { ApprovalChoice, ClarifyAnswers } from "../lib/protocol";
 import { t } from "../i18n";
 import { steersOf } from "./controls";
 import type { DiskLevel, DiskState } from "../lib/disk";
+import type { CpuHog, CpuState } from "../lib/cpu";
 import type { ImportApp, ImportProfile } from "./term/import";
 
 /** What the person did in a chat. Mirrors `Input` in src-tauri/src/agent_chat.rs. `images`: saved copies
@@ -154,6 +155,12 @@ export interface SessionHost extends HistoryHost {
   diskWatch(warnGb: number): Promise<DiskState>;
   /** The shell's `disk-level` event: the level got worse. Returns what stops listening. */
   onDiskLevel(fn: (s: DiskState) => void): () => void;
+  /** Another app keeping a CPU core busy (src/lib/cpu.ts): the warning on or off, answered with the current hogs. */
+  cpuWatch(on: boolean): Promise<CpuState>;
+  /** The shell's `cpu-hog` event: one warning for a hog not told about yet. Returns what stops listening. */
+  onCpuHog(fn: (h: CpuHog) => void): () => void;
+  /** The shell's `cpu-hogs` event: the current hogs changed. Returns what stops listening. */
+  onCpuHogs(fn: (s: CpuState) => void): () => void;
   /** Settings › Terminal › Import from… (macOS): which of iTerm2 / Apple Terminal have a prefs file the shell can read
    *  (its fixed file, not a symlink, at most 8 MB). Nothing is read until the person presses the button. */
   termImportList(): Promise<ImportApp[]>;
@@ -334,7 +341,29 @@ export class TauriHost implements SessionHost {
       gone = true;
       stop?.();
     };
+  }  async cpuWatch(on: boolean) {
+    const { invoke } = await this.core();
+    return invoke<CpuState>("cpu_watch", { on });
   }
+  onCpuHog(fn: (h: CpuHog) => void) {
+    return this.listenTo<CpuHog>("cpu-hog", fn);
+  }
+  onCpuHogs(fn: (s: CpuState) => void) {
+    return this.listenTo<CpuState>("cpu-hogs", fn);
+  }
+  private listenTo<T>(name: string, fn: (v: T) => void) {
+    let stop: (() => void) | null = null;
+    let gone = false;
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) => listen<T>(name, (e) => fn(e.payload)))
+      .then((un) => (gone ? un() : (stop = un)))
+      .catch(() => {});
+    return () => {
+      gone = true;
+      stop?.();
+    };
+  }
+
   async write(id: number, data: string) {
     const { invoke } = await this.core();
     await invoke("session_write", { id, data });
@@ -464,6 +493,11 @@ const FLOOD_MESSAGE = `${"build output ".repeat(5).slice(0, 62)}\r\n`.repeat(102
 type MockGlobals = {
   /** Free bytes the mock's disk watch reads (src/lib/disk.ts); unset = 100 GB. */
   __omherDiskFree?: number;
+  /** e2e: the shell's CPU events (src/lib/cpu.ts): `__omherCpuHog({name, pct, pid})` sends a warning and makes it the
+   *  one current hog, `__omherCpuHog(null)` cools it. Set by the mock host. */
+  __omherCpuHog?: (h: CpuHog | null) => void;
+  /** e2e: every `cpuWatch(on)` the page made. */
+  __omherCpuWatch?: boolean[];
   __omherPickFolder?: string | null;
   __omherSessionCalls?: MockCall[];
   /** e2e: every message a mock terminal's program printed and every acknowledgement of one, in the order they happened */
@@ -675,6 +709,29 @@ export class MockHost implements SessionHost {
   onDiskLevel(fn: (s: DiskState) => void) {
     this.disk.heard.add(fn);
     return () => void this.disk.heard.delete(fn);
+  }
+  private cpu: { on: boolean; hogs: CpuHog[]; warn: Set<(h: CpuHog) => void>; state: Set<(s: CpuState) => void> } = { on: false, hogs: [], warn: new Set(), state: new Set() };
+  /** The shell's CPU watcher (src-tauri/src/cpu.rs) as e2e drives it: `__omherCpuHog` stands in for its readings. */
+  async cpuWatch(on: boolean) {
+    (this.g.__omherCpuWatch ??= []).push(on);
+    this.cpu.on = on;
+    if (!on) this.cpu.hogs = [];
+    this.g.__omherCpuHog ??= (h) => {
+      if (!this.cpu.on) return;
+      this.cpu.hogs = h ? [h] : [];
+      const s: CpuState = { hogs: this.cpu.hogs, supported: true };
+      for (const f of this.cpu.state) f(s);
+      if (h) for (const f of this.cpu.warn) f(h);
+    };
+    return { hogs: this.cpu.hogs, supported: true };
+  }
+  onCpuHog(fn: (h: CpuHog) => void) {
+    this.cpu.warn.add(fn);
+    return () => void this.cpu.warn.delete(fn);
+  }
+  onCpuHogs(fn: (s: CpuState) => void) {
+    this.cpu.state.add(fn);
+    return () => void this.cpu.state.delete(fn);
   }
   async home() {
     return "/home/you";

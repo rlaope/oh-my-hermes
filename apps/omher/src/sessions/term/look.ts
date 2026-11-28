@@ -2,7 +2,7 @@
 // a terminal that is already open (a theme switch, a changed setting).
 import type { ITerminalOptions, ITheme, Terminal } from "@xterm/xterm";
 import type { TermContrast, TermSettings } from "./settings";
-import { brightIsBrighter, isLightBackground } from "./themes";
+import { brightIsBrighter, isLightBackground, themeBorder } from "./themes";
 import { finderOf } from "./engine-find";
 import { BUNDLED_FAMILIES } from "./fonts";
 
@@ -103,6 +103,8 @@ export function snapBlockGlyphs(addon: object): boolean {
 const TERM_PAD_VAR = "--term-pad";
 /** The picked theme's background, so the space around the terminal is the terminal's colour, not the page's. */
 const TERM_BG_VAR = "--term-bg";
+/** The pane border an edited theme sets (split dividers; the Settings preview's frame); unset: the page's line. */
+export const TERM_BORDER_VAR = "--term-border";
 
 type DevWindow = { __omherTerms?: Set<Terminal> };
 /** e2e reads the terminals (their real options and size) through this; a release build has no such thing. A
@@ -139,6 +141,13 @@ export function applyLook(term: Terminal, theme: ITheme, s: TermSettings): void 
     wrap.style.setProperty(TERM_PAD_VAR, `${s.padding}px`);
     if (theme.background) wrap.style.setProperty(TERM_BG_VAR, theme.background);
     else wrap.style.removeProperty(TERM_BG_VAR);
+    const border = themeBorder(theme);
+    // a session's terminal sets it for the whole page: the dividers between panes are outside any one terminal
+    const at = wrap.classList?.contains("term-wrap") && typeof document !== "undefined" ? [wrap, document.documentElement] : [wrap];
+    for (const el of at) {
+      if (border) el.style.setProperty(TERM_BORDER_VAR, border);
+      else el.style.removeProperty(TERM_BORDER_VAR);
+    }
   }
   // find's highlights are the theme's colours
   finderOf(term)?.restyle();

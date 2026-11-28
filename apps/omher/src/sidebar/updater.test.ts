@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { percent, retryDelay, shortError, updateHost, watchForUpdates, type PendingUpdate } from "./updater";
+import { percent, relaunchOrWait, RESTART_WAIT_MS, retryDelay, shortError, updateHost, watchForUpdates, type PendingUpdate } from "./updater";
 
 describe("updater helpers", () => {
   it("rounds progress down and caps it at 100", () => {
@@ -216,5 +216,68 @@ describe("an app left open keeps looking for a newer release", () => {
     shown();
     await pass(0);
     expect(askedAt()).toEqual([31]);
+  });
+});
+
+describe("a restart that does not happen", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  /** A relaunch that never ends the page (resolves, or hangs when `hang`), recording each call after a save. */
+  const stand = (how: "resolve" | "hang" | "reject") => {
+    const log: string[] = [];
+    const host = {
+      relaunch: () => {
+        log.push("relaunch");
+        return how === "resolve" ? Promise.resolve() : how === "reject" ? Promise.reject(new Error("no")) : new Promise<void>(() => {});
+      },
+    };
+    return { log, host, save: () => log.push("save") };
+  };
+
+  it("saves what is open, asks once, and waits 10 s before saying it is stuck", async () => {
+    const { log, host, save } = stand("resolve");
+    const stuck = vi.fn();
+    relaunchOrWait(host, save, stuck, RESTART_WAIT_MS);
+    expect(log).toEqual(["save", "relaunch"]);
+    await vi.advanceTimersByTimeAsync(RESTART_WAIT_MS - 1);
+    expect(stuck).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(stuck).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(stuck).toHaveBeenCalledTimes(1);
+  });
+
+  it("a relaunch that never answers still ends in the waiting state", async () => {
+    const { host, save } = stand("hang");
+    const stuck = vi.fn();
+    relaunchOrWait(host, save, stuck, 500);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(stuck).toHaveBeenCalledTimes(1);
+  });
+
+  it("a refused relaunch says so at once, only once", async () => {
+    const { host, save } = stand("reject");
+    const stuck = vi.fn();
+    relaunchOrWait(host, save, stuck, RESTART_WAIT_MS);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(stuck).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(RESTART_WAIT_MS);
+    expect(stuck).toHaveBeenCalledTimes(1);
+  });
+
+  it("each retry saves again before it relaunches, and a dropped wait stays quiet", async () => {
+    const { log, host, save } = stand("resolve");
+    const stuck = vi.fn();
+    relaunchOrWait(host, save, stuck, 100);
+    await vi.advanceTimersByTimeAsync(100);
+    relaunchOrWait(host, save, stuck, 100);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(log).toEqual(["save", "relaunch", "save", "relaunch"]);
+    expect(stuck).toHaveBeenCalledTimes(2);
+    const stop = relaunchOrWait(host, save, stuck, 100);
+    stop();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(stuck).toHaveBeenCalledTimes(2);
   });
 });

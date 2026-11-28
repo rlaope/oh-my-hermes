@@ -17,6 +17,7 @@
 import { folderGroups, getFolderPrefs, orderFolders } from "../sessions/folders";
 import { useEffect } from "react";
 import { getStore, selectAsks, selectSidebarBots, type Ask, type FocusAsk } from "../state/store";
+import { termAskKey, termAsks } from "../sessions/termAsks";
 import { getSessions } from "../sessions/sessions";
 import { openNewSessionMenu } from "../sessions/newMenu";
 import { SESSIONS_ENTRY } from "../sessions/entry";
@@ -68,7 +69,7 @@ export function stepSession(ids: string[], current: string | null, step: 1 | -1)
 }
 
 /** The ask ⌘J goes to: the one after the last jumped-to (in age order), wrapping; the oldest first. */
-export function nextAsk(asks: Ask[], last: FocusAsk | null): Ask | null {
+export function nextAsk<A extends Pick<Ask, "bot"> & { item: { id: string } }>(asks: A[], last: FocusAsk | null): A | null {
   if (!asks.length) return null;
   const at = last ? asks.findIndex((a) => a.bot === last.bot && a.item.id === last.id) : -1;
   return asks[(at + 1) % asks.length];
@@ -176,7 +177,9 @@ export function useShortcuts(): void {
       } else if (hit.kind === "session") {
         stepTerminal(hit.step);
       } else if (hit.kind === "next-ask") {
-        const n = nextAsk(selectAsks(s), s.ui.focusAsk);
+        // bot asks and terminal agents' asks, oldest first
+        const all = [...selectAsks(s), ...termAsks().map((t) => ({ bot: termAskKey(t.session), item: { id: t.id }, ts: t.ts }))].sort((x, y) => x.ts - y.ts);
+        const n = nextAsk(all, s.ui.focusAsk);
         if (n) void a.jumpToAsk(n.bot, n.item.id);
       } else if (hit.kind === "search") {
         const el = document.querySelector<HTMLInputElement>('[data-testid="bot-search"]');

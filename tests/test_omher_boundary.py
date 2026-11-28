@@ -29,6 +29,25 @@ DOCS_INDEX = ROOT / "docs" / "README.md"
 
 RULES = (
     "omher never patches Hermes.",
+    # rule 11: terminal agents' permission and choice dialogs in Needs you, read off omher's own terminal buffer
+    "omher reads the visible screen of a TERMINALS row whose foreground program is Claude Code or Codex, only after that"
+    " row prints, to see whether the program is waiting on a permission or choice dialog,",
+    "The dialog stays in the terminal and the person answers it there; omher types nothing into it.",
+    # rule 11: colour edits stay in omher's own record
+    "the edits are kept in that same `omher.term` record, one set per app theme (dark, light), and are never written to"
+    " another terminal app's settings or theme files.",
+    # rule 18: the login expiry, a plain time only
+    "`loginExpiresAt`, only as a plain ISO-8601 time and only for a signed-in login, to show the days left; any other"
+    " value is dropped, never shown",
+    # rule 20: a restart that does not happen never installs again
+    "a retry saves what is open and relaunches again and never downloads or installs again.",
+    # rule 55: Program Resume
+    "No command hands it to the page, a token omher inherited is never passed on, and no other program omher starts"
+    " gets one.",
+    "No shell source is built from any element. Not as root, not on Windows, not for another uid, not when a reported"
+    " cwd is gone.",
+    # rule 56: the CPU warning
+    "It runs no program, kills nothing and sends nothing off the computer. Windows is not read.",
     # rule 42: the bot page's persona and memory, read-only, bounded, on the person's opening, kept in the app
     "omher reads, never writes, three files of that bot's own profile: its persona `SOUL.md` and Hermes' built-in memory"
     " `memories/MEMORY.md` and `memories/USER.md`,",
@@ -860,9 +879,13 @@ class DocPins(unittest.TestCase):
         # redirect, never `voice-config`; the microphone opened only on a press and closed on stop, cancel, error, chat
         # switch, hide and unmount; no recording or audio kept, the transcript left in the draft like typed text; on
         # Linux only, WebKitGTK's media stream on and the microphone alone allowed; a peer bot and a server refused).
+        # 55: rule 55 (Program Resume: a Shell row's program asks with an OSC 7577 report signed over a per-start
+        # token; records under ~/.omher/resume, 0700/0600; Resume runs it once through `omher --resume-exec`, each
+        # element one argument, no shell); 56: rule 56 (CPU warning: the CPU time of the person's own processes every
+        # 5 s while the switch is on, no program run, nothing killed or sent).
         # The rules stay numbered 1..n with no gap or repeat.
         rules = re.findall(r"^(\d+)\. ", DOC.read_text(encoding="utf-8"), re.M)
-        self.assertTrue(6 <= len(rules) <= 54, len(rules))
+        self.assertTrue(6 <= len(rules) <= 56, len(rules))
         self.assertEqual([int(n) for n in rules], list(range(1, len(rules) + 1)))
 
     def test_glossary_and_docs_index_name_omher(self) -> None:
@@ -948,9 +971,11 @@ class TheOneInstaller(unittest.TestCase):
         # Harness's headless profile (rule 11); folder_open.rs opens the person's own system terminal in a session's
         # folder with no command (rule 30); peers.rs starts the person's own `ssh` with a fixed argv (rule 31); tasks.rs
         # runs the person's own `gh` / `glab` with a fixed read-only argv (rule 33); claude_usage.rs is the status line
-        # relay, which runs the person's own Claude Code status line command as Claude Code would (rule 17).
+        # relay, which runs the person's own Claude Code status line command as Claude Code would (rule 17);
+        # program_resume.rs `exec_command` runs, under `omher --resume-exec`, a program a TERMINALS Shell row's program
+        # asked to be restarted, each element one argument and no shell (rule 55).
         # Terminal sessions start theirs through the PTY's `spawn_command`, not `Command::new`.
-        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "claude_usage.rs": 1, "dsh_chat.rs": 1, "folder_open.rs": 1, "hermes_auth.rs": 1, "peers.rs": 1, "setup.rs": 1, "tasks.rs": 1})
+        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "claude_usage.rs": 1, "dsh_chat.rs": 1, "folder_open.rs": 1, "hermes_auth.rs": 1, "peers.rs": 1, "program_resume.rs": 1, "setup.rs": 1, "tasks.rs": 1})
 
     def test_the_install_command_takes_nothing_from_the_page(self) -> None:
         lib = (SHELL_SRC / "lib.rs").read_text(encoding="utf-8")
@@ -1835,8 +1860,9 @@ class AccountsNeverCarryAToken(unittest.TestCase):
         # system terminal for `hermes auth add` (rule 23); dsh_chat.rs runs DeepSeek Harness's headless profile (rule 11);
         # folder_open.rs opens the system terminal in a session's folder with no command (rule 30); peers.rs starts the
         # person's own `ssh` with a fixed argv (rule 31); tasks.rs runs `gh` / `glab` read-only (rule 33);
-        # claude_usage.rs runs the person's own Claude Code status line command through the relay (rule 17).
-        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "claude_usage.rs": 1, "dsh_chat.rs": 1, "folder_open.rs": 1, "hermes_auth.rs": 1, "peers.rs": 1, "setup.rs": 1, "tasks.rs": 1})
+        # claude_usage.rs runs the person's own Claude Code status line command through the relay (rule 17);
+        # program_resume.rs runs a Shell row's resumed program under `omher --resume-exec`, no shell (rule 55).
+        self.assertEqual(spawns, {"accounts.rs": 2, "agent_chat.rs": 1, "bridge.rs": 1, "claude_usage.rs": 1, "dsh_chat.rs": 1, "folder_open.rs": 1, "hermes_auth.rs": 1, "peers.rs": 1, "program_resume.rs": 1, "setup.rs": 1, "tasks.rs": 1})
 
 
 
@@ -2212,12 +2238,13 @@ class SessionsStartOnlyAllowListedAgents(unittest.TestCase):
         rule 12), once in agent_chat.rs (the chat spawner), in accounts.rs (rule 18's fixed status /
         sign-in argv), in hermes_auth.rs (rule 23's terminal), in folder_open.rs (rule 30's terminal in a session's
         folder), in peers.rs (rule 31's `ssh`), in tasks.rs (rule 33's read-only `gh` / `glab`) and in claude_usage.rs
-        (rule 17's status line relay running the person's own status line command); `spawn_command` only
-        in sessions.rs."""
+        (rule 17's status line relay running the person's own status line command) and in program_resume.rs (rule
+        55's `omher --resume-exec`, a Shell row's resumed program with each element one argument); `spawn_command`
+        only in sessions.rs."""
         for path in sorted(SHELL.glob("*.rs")):
             text = path.read_text(encoding="utf-8")
             prod = text.split("#[cfg(test)]", 1)[0]
-            if path.name not in ("bridge.rs", "setup.rs", "agent_chat.rs", "dsh_chat.rs", "accounts.rs", "hermes_auth.rs", "folder_open.rs", "peers.rs", "tasks.rs", "claude_usage.rs"):
+            if path.name not in ("bridge.rs", "setup.rs", "agent_chat.rs", "dsh_chat.rs", "accounts.rs", "hermes_auth.rs", "folder_open.rs", "peers.rs", "tasks.rs", "claude_usage.rs", "program_resume.rs"):
                 self.assertNotIn("Command::new", prod, path.name)
             if path.name != "sessions.rs":
                 self.assertNotIn("spawn_command", text, path.name)
@@ -2544,6 +2571,55 @@ class AutomationsAndPlugins(unittest.TestCase):
             body = ast.unparse(self._fn(name))
             for write in ("write_text", "write_bytes", "open(", "unlink", "rename", "replace(", "os.remove", "dump("):
                 self.assertNotIn(write, body, f"{name}: {write}")
+
+
+class TerminalAgentsLoginCpuResumePins(unittest.TestCase):
+    """Rules 11, 18, 20, 55 and 56 as this run added them: the code says what the doc says."""
+
+    APP = ROOT / "apps" / "omher"
+
+    def _read(self, *parts: str) -> str:
+        return self.APP.joinpath(*parts).read_text(encoding="utf-8")
+
+    def test_terminal_agent_asks_read_the_screen_and_are_a_switch(self) -> None:
+        ask = self._read("src", "sessions", "term", "screenAsk.ts")
+        self.assertIn("export function screenAsk(", ask)
+        # it reads omher's own buffer: no host call, no write to the terminal
+        for word in ("invoke(", "getShellHost", ".write(", "fetch("):
+            self.assertNotIn(word, ask, word)
+        settings = self._read("src", "sessions", "term", "settings.ts")
+        for field in ("agentAsks: true,", "programResume: true,", "edits: { dark: null, light: null },"):
+            self.assertIn(field, settings)
+
+    def test_login_expiry_is_a_plain_time_for_a_signed_in_login(self) -> None:
+        accounts = self._read("src-tauri", "src", "accounts.rs")
+        self.assertIn("login_expires_at: if logged_in { iso_time(s.login_expires_at) } else { None },", accounts)
+
+    def test_a_retried_restart_only_restarts(self) -> None:
+        button = self._read("src", "sidebar", "UpdateButton.tsx")
+        self.assertIn("if (installedUpdate.current === update) return restart(update);", button)
+
+    def test_cpu_watch_reads_cpu_time_and_runs_nothing(self) -> None:
+        cpu = self._read("src-tauri", "src", "cpu.rs")
+        prod = cpu.split("#[cfg(test)]", 1)[0]
+        for word in ("proc_pid_rusage", "getuid", '"omher-cpu"'):
+            self.assertIn(word, prod, word)
+        for word in ("Command::new", "kill(", "TcpStream", "reqwest"):
+            self.assertNotIn(word, prod, word)
+
+    def test_program_resume_token_and_exec(self) -> None:
+        sessions = self._read("src-tauri", "src", "sessions.rs")
+        self.assertIn("cmd.env_remove(crate::program_resume::TOKEN_ENV);", sessions)
+        resume = self._read("src-tauri", "src", "program_resume.rs").split("#[cfg(test)]", 1)[0]
+        body = resume[resume.index("pub fn exec_command("):]
+        body = body[: body.index("\n}\n")]
+        self.assertIn("CommandExt::arg0(&mut c, &argv[0]);", body)
+        self.assertIn("c.args(&argv[1..]);", body)
+        self.assertIn("crate::appimage::host_env(&mut c);", body)
+        self.assertNotIn("\"sh\"", body)
+        self.assertNotIn("\"-c\"", body)
+        lib = self._read("src-tauri", "src", "lib.rs")
+        self.assertIn("async fn program_resume_records(keep: Vec<String>) -> Result<Vec<(String, String)>, String> {", lib)
 
 
 if __name__ == "__main__":
@@ -3215,10 +3291,11 @@ class BotThreads(unittest.TestCase):
         self.assertNotIn("startFolderChat", start)
         # the Shell row goes through the bottom panel's login-shell command: a folder, a size and at most a shell id
         # from the shell's own list, never a program, path or argument
-        self.assertIn("await getShellHost().start(r.cwd || null, cols, rows, onData, onExit, rec(id)?.shell, link)", sessions)
+        self.assertIn("await getShellHost().start(r.cwd || null, cols, rows, onData, onExit, rec(id)?.shell, link, prog)", sessions)
         lib = (self.APP / "src-tauri" / "src" / "lib.rs").read_text(encoding="utf-8")
         self.assertIn("shell_id: Option<String>,", lib)
-        self.assertIn("sessions.start_shell(cwd.as_deref(), shell_id.as_deref(), link.as_deref(), &home, cols, rows,", lib)
+        # rule 55: the Shell row starts through the resumable start, which adds the Program Resume key (`pr`) only
+        self.assertIn("sessions.start_shell_resumable(cwd.as_deref(), shell_id.as_deref(), link.as_deref(), pr, &home, cols, rows,", lib)
         rs = (self.APP / "src-tauri" / "src" / "sessions.rs").read_text(encoding="utf-8")
         self.assertIn("pub fn shells_available<E, X>(env: &E, etc_shells: &str, is_program: X, os: Os) -> Vec<ShellEntry>", rs)
         self.assertIn("#[serde(skip)]\n    pub args: Vec<&'static str>,", rs)

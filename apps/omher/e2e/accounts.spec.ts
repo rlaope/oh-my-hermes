@@ -64,9 +64,15 @@ function installHost() {
   };
 }
 
-async function openAccounts(page: Page, theme: "dark" | "light" = "dark") {
+async function openAccounts(page: Page, theme: "dark" | "light" = "dark", expiresIn?: Record<string, number>) {
   await page.addInitScript((t) => localStorage.setItem("omher.theme", t), theme);
   await page.addInitScript(installHost);
+  // `loginExpiresAt` of a CLI's status, this many hours from now
+  if (expiresIn)
+    await page.addInitScript((e: Record<string, number>) => {
+      const st = (window as any).__acct.status;
+      for (const [k, h] of Object.entries(e)) st[k] = { ...st[k], login_expires_at: new Date(Date.now() + h * 3600_000).toISOString() };
+    }, expiresIn);
   await page.goto("/");
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
   await page.getByTestId("me").click();
@@ -294,6 +300,58 @@ test("auto-switch off: a limit does not move the account in use", async ({ page 
   await page.waitForTimeout(300);
   await expect(row(page, "codex", "work").getByTestId("account-pill")).toHaveCount(0);
   expect(await callsOf("accounts.set_active")).toEqual([]);
+});
+
+test("login days left: under the row's subtitle, nothing for Codex or a status with no time", async ({ page }) => {
+  await openAccounts(page, "dark", { "claude:default": 12 * 24 + 5, "codex:work": 2 * 24 + 23 });
+  const me = row(page, "claude", "default");
+  await expect(me.getByTestId("account-login-left")).toHaveText("Login: 12 days left");
+  await expect(me.getByTestId("account-login-left")).toHaveAttribute("data-soon", "false");
+  // Codex logins have no expiry: a time in its status shows nothing
+  await expect(row(page, "codex", "work").getByTestId("account-login-left")).toHaveCount(0);
+  await expect(row(page, "codex", "default").getByTestId("account-login-left")).toHaveCount(0);
+  const html = await page.content();
+  for (const k of ["access_token", "refresh_token", "id_token", "api_key", "login_expires_at"]) expect(html).not.toContain(k);
+});
+
+test("login days left: red within three days", async ({ page }) => {
+  await openAccounts(page, "dark", { "claude:default": 2 * 24 + 23 });
+  const me = row(page, "claude", "default").getByTestId("account-login-left");
+  await expect(me).toHaveText("Login: 2 days left");
+  await expect(me).toHaveAttribute("data-soon", "true");
+  // the theme's danger colour, not the muted subtitle grey
+  const [red, danger] = await me.evaluate((el) => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--danger)";
+    el.parentElement!.appendChild(probe);
+    const out = [getComputedStyle(el).color, getComputedStyle(probe).color];
+    probe.remove();
+    return [out[0], out[1]];
+  });
+  expect(red).toBe(danger);
+});
+
+test("login days left: expired past the time", async ({ page }) => {
+  await openAccounts(page, "light", { "claude:default": -3 });
+  await expect(row(page, "claude", "default").getByTestId("account-login-left")).toHaveText("Login: expired");
+});
+
+test("login days left: hours under a day", async ({ page }) => {
+  await openAccounts(page, "light", { "claude:default": 5.5 });
+  await expect(row(page, "claude", "default").getByTestId("account-login-left")).toHaveText("Login: 5 h left");
+  if (process.env.OMHER_SHOTS) {
+    for (const theme of ["light", "dark"] as const) {
+      if (theme === "dark") {
+        await page.evaluate(() => localStorage.setItem("omher.theme", "dark"));
+        await page.reload();
+        await page.getByTestId("me").click();
+      }
+      await expect(row(page, "claude", "default").getByTestId("account-login-left")).toBeVisible();
+      mkdirSync(process.env.OMHER_SHOTS, { recursive: true });
+      await page.mouse.move(5, 5);
+      await page.getByTestId("accounts-page").screenshot({ path: join(process.env.OMHER_SHOTS, `accounts-login-left-${theme}.png`), animations: "disabled" });
+    }
+  }
 });
 
 test("screenshots: Accounts in dark and light (T11b)", async ({ page }) => {

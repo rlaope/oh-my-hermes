@@ -140,7 +140,7 @@
 .termpanel-divider {
   flex: none;
   position: relative;
-  background: var(--line-soft);
+  background: var(--term-border, var(--line-soft));
   z-index: 2;
 }
 .termpanel-split.row > .termpanel-divider {

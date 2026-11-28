@@ -93,3 +93,7 @@ tests/fixtures/gateway_health/** text eol=lf
 
 # Run by bash in the omher workflow on windows-latest too, where a CRLF checkout breaks it.
 apps/omher/scripts/*.sh text eol=lf
+
+# Recorded terminal screens (raw pty bytes) that the terminal-agent dialog tests replay byte for byte: never
+# diffed as text (their trailing spaces are the screen) and never converted to CRLF.
+apps/omher/src/sessions/term/fixtures/*.bin binary

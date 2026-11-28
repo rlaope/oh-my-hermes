@@ -356,6 +356,9 @@ export interface SessionRec {
    *  (and saved) until that CLI comes to the front or the line is dropped, so a second restart soon after keeps it;
    *  `typed` once the line went, so only the CLI it typed is handed that conversation. */
   fgBack?: { cli: FgCli; session?: string; typed?: true };
+  /** A paused Shell row whose program asked to be started again (Program Resume, OSC 7577): that program's name, as the
+   *  shell escaped it. Resume runs it again in its folder, once. Not saved: the shell keeps the record. */
+  resumeProgram?: string;
   /** ms since epoch of the terminal's last output (throttled), for the row's spinner and age. */
   lastOut?: number;
   /** The last line the terminal shows with text on it (read from its own screen, throttled): the card's second line. */
