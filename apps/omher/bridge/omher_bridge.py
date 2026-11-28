@@ -1615,6 +1615,13 @@ USAGE_FILES = 5               # newest session files read per CLI
 USAGE_TAIL = 512 * 1024       # bytes read from the end of each file
 _CLAUDE_WINDOWS = {"five_hour": "5 hours", "seven_day": "Weekly", "seven_day_opus": "Weekly (Opus)",
                    "seven_day_sonnet": "Weekly (Sonnet)"}
+# The Claude windows that hold for one model only, by the model's family name as it appears in a model id
+# (`claude-opus-4-5` -> "opus"). Such a window is kept and shown with its `model`, but it never makes the whole
+# account limited or near: a weekly Opus limit leaves Sonnet sessions working. Whether it limits the account for a
+# session is the app's decision, from the models its running sessions use (Settings › Accounts' auto-switch).
+_CLAUDE_MODEL_WINDOWS = {"seven_day_opus": "opus", "seven_day_sonnet": "sonnet"}
+# Codex's shared limit in its `rate_limits` events (`limit_id`); another id is one model's own bucket.
+_CODEX_SHARED_LIMIT = "codex"
 
 
 def _tail_lines(path: Path, needle: str, limit: int = USAGE_TAIL):
@@ -1664,6 +1671,7 @@ def _finish(provider: dict, now: float) -> dict:
     for w in windows:
         if w.get("resets_at") is not None and w["resets_at"] <= now:
             w.pop("used_percent", None)
+            w.pop("limited", None)
             w["stale"] = True
     if windows and all(w.get("stale") for w in windows):
         provider["state"] = "stale"
@@ -1684,6 +1692,10 @@ def _codex_usage(user_home: Path, now: float, root: Path | None = None) -> dict 
             payload = ev.get("payload") if isinstance(ev, dict) else None
             rl = payload.get("rate_limits") if isinstance(payload, dict) else None
             if not isinstance(rl, dict) or not (rl.get("primary") or rl.get("secondary")):
+                continue
+            # one model's own bucket is that model's limit, not the account's: only the shared one is read (an
+            # older Codex writes no `limit_id`, and its one limit is the shared one)
+            if rl.get("limit_id") not in (None, _CODEX_SHARED_LIMIT):
                 continue
             ts = _to_ts(ev.get("timestamp")) if ev.get("timestamp") else mtime
             if best is None or ts > best[0]:
@@ -1753,6 +1765,13 @@ def _claude_limit_hit(root: Path) -> tuple[float, dict] | None:
         window["resets_at"] = float(info["resetsAt"])
     status = str(info.get("status"))
     state = "limited" if status == "rejected" else "near" if status == "allowed_warning" else "ok"
+    model = _CLAUDE_MODEL_WINDOWS.get(kind)
+    if model:
+        # a request refused on one model's window: that window is limited (it has no %), the account is not
+        window["model"] = model
+        if state == "limited":
+            window["limited"] = True
+        state = "ok"
     return ts, {"id": "claude", "windows": [window], "state": state, "source_mtime": mtime}
 
 
@@ -1767,7 +1786,9 @@ def omher_usage_root(user_home: Path) -> Path:
 def _claude_record(user_home: Path, account: str) -> tuple[float, dict] | None:
     """omher's own record of the usage Claude Code reported for `account` (`~/.omher/usage/claude/<account>.json`,
     written by the desktop app from a chat's stream-json `rate_limit_event` or a TERMINALS status line's input;
-    `used_percent` 0..100), as (time, provider before `_finish`)."""
+    `used_percent` 0..100), as (time, provider before `_finish`). A model's own window carries its `model` and
+    takes no part in the account's state; a refusal (`rejected`) while only model windows are full is that model's
+    refusal, and one with no window full (which limit refused is unknown) limits the account."""
     data = _read_json(omher_usage_root(user_home) / f"{account}.json")
     raw = data.get("windows")
     if not isinstance(raw, dict) or not isinstance(data.get("at"), (int, float)):
@@ -1784,12 +1805,16 @@ def _claude_record(user_home: Path, account: str) -> tuple[float, dict] | None:
         if isinstance(w.get("resets_at"), (int, float)):
             out["resets_at"] = float(w["resets_at"])
         if len(out) > 1:
+            if kind in _CLAUDE_MODEL_WINDOWS:
+                out["model"] = _CLAUDE_MODEL_WINDOWS[kind]
             windows.append(out)
     if not windows:
         return None
-    top = max((w.get("used_percent", 0.0) for w in windows), default=0.0)
+    top = max((w.get("used_percent", 0.0) for w in windows if "model" not in w), default=0.0)
+    full_model = any(w.get("used_percent", 0.0) >= 100 for w in windows if "model" in w)
     status = data.get("status")
-    state = ("limited" if status == "rejected" or top >= 100 else
+    rejected = status == "rejected" and not (full_model and top < 100)
+    state = ("limited" if rejected or top >= 100 else
              "near" if status == "allowed_warning" or top >= 70 else "ok")
     return float(data["at"]), {"id": "claude", "windows": windows, "state": state, "source_mtime": float(data["at"])}
 
@@ -5938,7 +5963,9 @@ def _omher_rows(cli: str, user_home: Path, now: float, default_usage: dict | Non
         u = r["usage"]
         if r["state"] == "ready" and u and u.get("state") == "limited":
             r["state"] = "limited"
-            r["resets_at"] = max((w["resets_at"] for w in u["windows"] if "resets_at" in w), default=None)
+            # the account-wide windows: a model's own window does not limit the account, so it does not say when
+            r["resets_at"] = max((w["resets_at"] for w in u["windows"] if "resets_at" in w and "model" not in w),
+                                 default=None)
     return rows
 
 

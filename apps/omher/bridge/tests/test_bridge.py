@@ -4437,6 +4437,80 @@ class Usage(unittest.TestCase):
         p = ob._claude_usage(h, 1794200000.0)
         self.assertEqual((p["state"], p["windows"]), ("ok", [{"label": "Weekly", "used_percent": 3.0, "resets_at": 1794800000.0}]))
 
+    def test_codex_reads_the_shared_codex_limit_never_a_model_s_own_bucket(self):
+        h = self.home()
+        model = CODEX_LINE.replace("2026-11-04T02:33:18", "2026-11-04T03:00:00").replace(
+            '"limit_id":"codex","limit_name":null', '"limit_id":"codex_other","limit_name":"Other model"').replace(
+            '"used_percent":15.0', '"used_percent":100.0')
+        # the model's bucket is newer, in its own file and later in the same one: the shared one is still what counts
+        self.write(h / ".codex/sessions/2026/11/04/rollout-a.jsonl", CODEX_LINE, model, mtime=1794100000)
+        self.write(h / ".codex/sessions/2026/11/04/rollout-b.jsonl", model, mtime=1794200000)
+        p = ob.read_usage(h, now=1794300000.0, which=lambda _: None)["providers"][0]
+        self.assertEqual((p["state"], p["windows"]), ("ok", [{"label": "Weekly", "used_percent": 15.0, "resets_at": 1794331456.0}]))
+        # an older Codex writes no limit_id: that is the shared limit
+        self.write(h / ".codex/sessions/2026/11/04/rollout-a.jsonl", CODEX_LINE.replace('"limit_id":"codex",', ""), mtime=1794100000)
+        p = ob.read_usage(h, now=1794300000.0, which=lambda _: None)["providers"][0]
+        self.assertEqual(p["windows"][0]["used_percent"], 15.0)
+        # only a model's bucket on record: nothing to show for the account
+        (h / ".codex/sessions/2026/11/04/rollout-a.jsonl").unlink()
+        self.assertIsNone(ob._codex_usage(h, 1794300000.0))
+
+    def test_a_model_s_weekly_limit_is_kept_with_its_model_and_never_limits_the_account(self):
+        h = self.home()
+        self.record(h, "default", 1794199000.0, {"seven_day": {"used_percent": 40.0, "resets_at": 1794600000},
+                                                "seven_day_opus": {"used_percent": 100.0, "resets_at": 1794500000},
+                                                "seven_day_sonnet": {"used_percent": 12.0, "resets_at": 1794500000}})
+        p = ob._claude_usage(h, 1794200000.0)
+        self.assertEqual(p["state"], "ok")
+        self.assertEqual(p["windows"], [
+            {"label": "Weekly", "used_percent": 40.0, "resets_at": 1794600000.0},
+            {"label": "Weekly (Opus)", "used_percent": 100.0, "resets_at": 1794500000.0, "model": "opus"},
+            {"label": "Weekly (Sonnet)", "used_percent": 12.0, "resets_at": 1794500000.0, "model": "sonnet"}])
+        # a refusal while only a model's window is full is that model's refusal; with an account-wide window full,
+        # or with no window full (which limit refused is unknown), the account is limited
+        self.record(h, "default", 1794199000.0, {"seven_day": {"used_percent": 40.0, "resets_at": 1794600000},
+                                                "seven_day_opus": {"used_percent": 100.0, "resets_at": 1794500000}},
+                    status="rejected", source="chat")
+        self.assertEqual(ob._claude_usage(h, 1794200000.0)["state"], "ok")
+        self.record(h, "default", 1794199000.0, {"five_hour": {"used_percent": 100.0, "resets_at": 1794210000},
+                                                "seven_day_opus": {"used_percent": 100.0, "resets_at": 1794500000}},
+                    status="rejected", source="chat")
+        self.assertEqual(ob._claude_usage(h, 1794200000.0)["state"], "limited")
+        self.record(h, "default", 1794199000.0, {"seven_day_opus": {"used_percent": 60.0, "resets_at": 1794500000}},
+                    status="rejected", source="chat")
+        self.assertEqual(ob._claude_usage(h, 1794200000.0)["state"], "limited")
+        # near counts the account-wide windows only too
+        self.record(h, "default", 1794199000.0, {"seven_day": {"used_percent": 10.0, "resets_at": 1794600000},
+                                                "seven_day_opus": {"used_percent": 90.0, "resets_at": 1794500000}})
+        self.assertEqual(ob._claude_usage(h, 1794200000.0)["state"], "ok")
+
+    def test_a_refused_request_on_a_model_s_window_marks_that_window_not_the_account(self):
+        h = self.home()
+        line = CLAUDE_LINE.replace('"rateLimitType":"seven_day"', '"rateLimitType":"seven_day_opus"')
+        self.write(h / ".claude/projects/-w-repo/s1.jsonl", '{"type":"user"}', line)
+        p = ob._claude_usage(h, 1794200000.0)
+        self.assertEqual((p["state"], p["windows"]),
+                         ("ok", [{"label": "Weekly (Opus)", "resets_at": 1794211200.0, "model": "opus", "limited": True}]))
+        # past its reset the window is stale, and no longer says limited
+        p = ob._claude_usage(h, 1794300000.0)
+        self.assertEqual(p["windows"], [{"label": "Weekly (Opus)", "resets_at": 1794211200.0, "model": "opus", "stale": True}])
+
+    def test_an_account_whose_only_full_window_is_a_model_s_stays_ready(self):
+        h = self.home()
+        (h / ".claude.json").write_text(json.dumps({"oauthAccount": {"emailAddress": "me@example.com"}}), encoding="utf-8")
+        ob.add_account("claude", "Work", h)
+        (h / ".omher/accounts/claude/work/.claude.json").write_text(
+            json.dumps({"oauthAccount": {"emailAddress": "work@example.com"}}), encoding="utf-8")
+        self.record(h, "work", 1794199000.0, {"seven_day": {"used_percent": 30.0, "resets_at": 1794600000},
+                                             "seven_day_opus": {"used_percent": 100.0, "resets_at": 1794500000}})
+        rows = {a["id"]: a for a in ob.read_accounts(h, now=1794200000.0, which=lambda _: None)["groups"][0]["accounts"]}
+        self.assertEqual(rows["work"]["state"], "ready")
+        self.record(h, "work", 1794199000.0, {"five_hour": {"used_percent": 100.0, "resets_at": 1794210000},
+                                             "seven_day_opus": {"used_percent": 100.0, "resets_at": 1794500000}})
+        rows = {a["id"]: a for a in ob.read_accounts(h, now=1794200000.0, which=lambda _: None)["groups"][0]["accounts"]}
+        # limited by the 5-hour window: it lifts when that one resets, not when Opus's does
+        self.assertEqual((rows["work"]["state"], rows["work"]["resets_at"]), ("limited", 1794210000.0))
+
     def test_claude_record_past_its_reset_is_stale_and_a_broken_record_is_none(self):
         h = self.home()
         self.record(h, "default", 1794100000.0, {"seven_day": {"used_percent": 60.0, "resets_at": 1794150000}})
