@@ -2943,7 +2943,8 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
                       " follows links as the CLI does) and any file that is not inside that home once its links are resolved", text)
         self.assertIn("never opens a credential, token or config file of either CLI", text)
         self.assertIn(
-            "for the folder the TERMINALS + menu starts in or, when the person switches its list to All folders, for every"
+            "for the folder the TERMINALS + menu starts in (the page sends that one folder, or none; a listing asked for"
+            " more than one is refused) or, when the person switches its list to All folders, for every"
             " folder that agent keeps conversations for in that same home (every project folder under"
             " `<claude config>/projects`, every rollout under `<codex home>/sessions`), each conversation's folder taken"
             " from its own file.",
@@ -2990,6 +2991,14 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
             self.assertIsNotNone(sig, cmd)
             self.assertEqual(sig.group(1).strip(), params, cmd)
         self.assertIn('matches!(agent, "claude" | "codex")', self.past)
+        # one folder, the one the + menu starts in, as the page sends it; more is refused, not cut down (the rule's
+        # sentence is pinned in test_links_and_paths_outside_the_home_are_refused_and_reads_are_bounded)
+        checked = self.past.split("pub fn checked_cwds(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("if cwds.len() > 1 {\n        return Err(", checked)
+        self.assertNotIn("take(", checked)
+        self.assertIn("let cwds = checked_cwds(cwds)?;", self.past.split("pub fn list(", 1)[1].split("\n}\n", 1)[0])
+        page = (ROOT / "apps" / "omher" / "src" / "sessions" / "SessionsSection.tsx").read_text(encoding="utf-8")
+        self.assertIn(".pastChats(agent, folder ? [folder] : [], all)", page)
         # a TERMINALS Codex session's conversation is the rollout its own Codex holds open (rule 11): only a path in
         # the home, under sessions/YYYY/MM/DD/rollout-*-<uuid>.jsonl, and only its UUID; no file is opened
         rid = self.past.split("pub fn rollout_id(", 1)[1].split("\n}\n", 1)[0]

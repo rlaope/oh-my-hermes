@@ -695,15 +695,21 @@ fn absolute(c: &str) -> bool {
     Path::new(c).is_absolute() || c.starts_with('/')
 }
 
-/// Only absolute folders, at most 12 (the + menu offers the recent folders and home).
-pub fn checked_cwds(cwds: &[String]) -> Vec<String> {
-    cwds.iter().filter(|c| absolute(c)).take(12).cloned().collect()
+/// The folder a listing is for (rule 30): the one the TERMINALS + menu starts in, which is all the page sends (or none,
+/// with no folder picked). More than one is refused, not cut down; a folder that is not an absolute path lists
+/// nothing.
+pub fn checked_cwds(cwds: &[String]) -> Result<Vec<String>, String> {
+    if cwds.len() > 1 {
+        return Err("conversations are listed for one folder, the one the + menu starts in".into());
+    }
+    Ok(cwds.iter().filter(|c| absolute(c)).cloned().collect())
 }
 
-/// `agent`'s recent conversations, read from `root` (its home, [`cli_home`]): those in `cwds`, or in every folder
-/// that agent keeps conversations for when `all`. Only the rows kept get their last line read (the end of each file).
+/// `agent`'s recent conversations, read from `root` (its home, [`cli_home`]): those in the folder `cwds` names, or in
+/// every folder that agent keeps conversations for when `all` (the folder is then not used). Only the rows kept get
+/// their last line read (the end of each file).
 pub fn list(root: &Path, agent: &str, cwds: &[String], all: bool) -> Result<Vec<PastChat>, String> {
-    let cwds = checked_cwds(cwds);
+    let cwds = checked_cwds(cwds)?;
     let scope = (!all).then_some(cwds.as_slice());
     let mut rows = match agent {
         "claude" => claude_list(root, scope),
@@ -950,9 +956,16 @@ mod tests {
         write(&dir.join("33333333-2222-4333-8444-555555555555.jsonl"), &claude_file(other, "x"));
         // not a conversation file
         write(&dir.join("notes.jsonl"), &claude_file(cwd, "y"));
-        let rows = list(&root, "claude", &[cwd.to_string(), "relative/x".to_string()], false).unwrap();
+        let rows = list(&root, "claude", &[cwd.to_string()], false).unwrap();
         // an agent whose conversations are not looked at
         assert!(list(&root, "omo", &[cwd.to_string()], false).is_err());
+        // the page sends one folder (or none): more is refused, a relative one lists nothing
+        for all in [false, true] {
+            assert!(list(&root, "claude", &[cwd.to_string(), "/Users/you".to_string()], all).is_err());
+        }
+        assert!(list(&root, "claude", &["relative/x".to_string()], false).unwrap().is_empty());
+        assert!(list(&root, "claude", &[], false).unwrap().is_empty());
+        assert_eq!(list(&root, "claude", &[], true).unwrap().len(), 2, "this folder and the one sharing its slug");
         assert_eq!(rows.len(), 1, "{rows:?}");
         assert_eq!((rows[0].id.as_str(), rows[0].title.as_str(), rows[0].named, rows[0].cwd.as_str()), (C1, "Remember a word", true, cwd));
         // a rename in Claude Code wins; without any title the first words name it
@@ -1469,7 +1482,10 @@ mod tests {
         assert_eq!(iso_secs("2024-02-29T00:00:00Z"), Some(1_709_164_800.0));
         assert_eq!(iso_secs("nope"), None);
         assert!(typed("hello") && !typed("<command-name>/x</command-name>") && !typed("  ") && !typed("# AGENTS.md instructions for /w"));
-        assert_eq!(checked_cwds(&["/a".into(), "b".into(), "C:\\x".into()]).first().map(String::as_str), Some("/a"));
+        assert_eq!(checked_cwds(&["/a".into()]), Ok(vec!["/a".to_string()]));
+        assert_eq!(checked_cwds(&["b".into()]), Ok(vec![]));
+        assert_eq!(checked_cwds(&[]), Ok(vec![]));
+        assert!(checked_cwds(&["/a".into(), "/b".into()]).is_err());
     }
 
     /// A real conversation made in the Claude Code (or Codex) CLI outside omher: list it from the CLI's own files,
