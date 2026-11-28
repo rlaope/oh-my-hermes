@@ -46,8 +46,22 @@ describe("diff line numbers", () => {
     expect(nums(["@@ -1 +1 @@", "-a", "\\ No newline at end of file", "+a"])).toEqual([
       ["hunk", null, null, ""],
       ["del", 1, null, "a"],
-      ["ctx", null, null, " No newline at end of file"],
+      ["note", null, null, "No newline at end of file"],
       ["add", null, 1, "a"],
+    ]);
+    // the note advances neither side: the context line after it keeps counting from where the file left off
+    expect(nums(["@@ -4,2 +4,2 @@", "-x", "\\ No newline at end of file", "+y", "\\ No newline at end of file"]).map((r) => r[0])).toEqual([
+      "hunk",
+      "del",
+      "note",
+      "add",
+      "note",
+    ]);
+    expect(nums(["@@ -4,3 +4,3 @@", " a", "\\ No newline at end of file", " b"])).toEqual([
+      ["hunk", null, null, ""],
+      ["ctx", 4, 4, "a"],
+      ["note", null, null, "No newline at end of file"],
+      ["ctx", 5, 5, "b"],
     ]);
   });
 

@@ -25,13 +25,24 @@ function eventText(e: LinkEvent): string {
   return t(`peer.ev.${e.what}` as const);
 }
 
-/** The row's detail line: the next try while reconnecting, then how long it has been up or when it last was. */
+/** When a link that is down was last connected: its last drop after it came up (`dropped` in its history). When
+ *  the history (8 events) no longer holds the drop, the oldest event kept after it came up, the nearest time known;
+ *  with no history after it, when it came up. */
+function lastConnected(p: PeerStatus & { connected_at: number }): number {
+  const after = (p.events ?? []).filter((e) => e.at >= p.connected_at && e.what !== "connected");
+  const drop = after.filter((e) => e.what === "dropped").at(-1);
+  return drop?.at ?? after[0]?.at ?? p.connected_at;
+}
+
+/** The row's detail line: the next try while reconnecting, then how long it has been up, or how long ago it was last
+ *  connected (from its drop, not from when it came up). */
 export function linkLine(p: PeerStatus, now: number): string {
   const bits: string[] = [];
   if (p.state === "reconnecting" && p.retry_at) bits.push(t("peer.nextTry", { t: busyFor(Math.max(0, p.retry_at - now)) }));
   if (p.connected_at) {
-    const up = busyFor(Math.max(0, now - p.connected_at));
-    bits.push(p.state === "connected" ? t("peer.upFor", { t: up }) : t("peer.lastUp", { t: up }));
+    const up = p.state === "connected";
+    const since = busyFor(Math.max(0, now - (up ? p.connected_at : lastConnected({ ...p, connected_at: p.connected_at }))));
+    bits.push(up ? t("peer.upFor", { t: since }) : t("peer.lastUp", { t: since }));
   }
   return bits.join(" · ");
 }
