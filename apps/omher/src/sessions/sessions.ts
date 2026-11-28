@@ -1183,14 +1183,17 @@ export function createSessions(host: SessionHost, store: () => Store = getStore,
    * agent's own terminal in the conversation's folder, holding the conversation as a row does that continues it after
    * a restart (termStart: `claude --resume <id>`, `codex resume <id>`; rule 11), so the CLI shows its own history.
    * The conversation was used (it has the person's words), so a file of it that is gone was deleted and the row says
-   * so instead of starting a new one. A row that already holds that conversation is opened instead (started again
-   * when it ended).
+   * so instead of starting a new one. A row that already holds that conversation is opened instead, so no second CLI
+   * runs on the same id: that agent's own row (started again when it ended), or a Shell row with that CLI in front on
+   * that conversation.
    */
   const continuePast = (chat: PastChat): string | null => {
-    const there = state.list.find((r) => r.agent === chat.agent && r.agentSession === chat.id && isTerminalRec(state.agents, r));
+    const own = state.list.find((r) => r.agent === chat.agent && r.agentSession === chat.id && isTerminalRec(state.agents, r));
+    const inShell = state.list.find((r) => isShell(r.agent) && r.status === "running" && r.fgAgent === chat.agent && r.fgSession === chat.id);
+    const there = own ?? inShell;
     if (there) {
       store().actions.openSession(there.id);
-      if (there.status === "exited" || there.status === "failed") void restart(there.id);
+      if (there === own && (there.status === "exited" || there.status === "failed")) void restart(there.id);
       return there.id;
     }
     return startTerminal(chat.agent, chat.cwd, undefined, { agentSession: chat.id, used: true, ...(chat.named ? { agentTitle: chat.title } : { promptTitle: chat.title }) });

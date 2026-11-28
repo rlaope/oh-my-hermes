@@ -185,3 +185,30 @@ test("a conversation whose folder is gone starts nothing: its row and the folder
   expect(starts).toEqual([expect.objectContaining({ agent: "codex", cwd: "/home/you/code/web-app", resume: THEME })]);
   expect((await calls(page)).some((c) => c.op === "write")).toBe(false);
 });
+
+test("a conversation already running in a Shell row's Claude Code opens that row; no second Claude Code starts on it", async ({ page }) => {
+  await open(page, "/home/you/code/omher");
+  const menu = await plusMenu(page, "/home/you/code/omher");
+  await menu.getByTestId("session-agent-shell").click();
+  await expect(page.getByTestId("terminal")).toBeVisible();
+  const rows = page.locator(".ss-open");
+  const shellRow = await page.locator('[data-testid^="session-s"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")).find((x) => x && /^session-s\d+$/.test(x))!);
+  const id = shellRow.slice("session-".length);
+  const pty = await page.evaluate((i) => (window as unknown as { __omherSessions: { ptyOf(id: string): number | null } }).__omherSessions.ptyOf(i), id);
+  expect(pty).not.toBeNull();
+  // the person runs `claude --resume` there themselves; the shell names the conversation its Claude Code runs
+  await page.evaluate(([p, c]) => void (((window as unknown as { __omherMockFgOwn?: Record<number, string> }).__omherMockFgOwn ??= {})[p as number] = c as string), [pty, MARIGOLD] as const);
+  await page.evaluate((p) => (window as unknown as { __omherEmitSessionFg(x: { id: number; agent: string }): void }).__omherEmitSessionFg({ id: p as number, agent: "claude" }), pty);
+  const saved = () => page.evaluate((i) => JSON.parse(localStorage.getItem("omher.resume") || "null")?.sessions?.find((s: { id: string }) => s.id === i), id);
+  await expect.poll(saved, { timeout: 15_000 }).toMatchObject({ fgCli: "claude", fgSession: MARIGOLD });
+  // open another terminal so the Shell row is not the one shown
+  await plusMenu(page, "/home/you/code/omher");
+  await page.getByTestId("session-agent-codex").click();
+  const count = await rows.count();
+  await plusMenu(page, "/home/you/code/omher");
+  await page.getByTestId("session-past-claude").click();
+  await page.getByTestId(`session-past-row-${MARIGOLD}`).click();
+  await expect(page.getByTestId(`session-${id}`).locator(".ss-open")).toHaveAttribute("aria-current", "true");
+  expect(await rows.count()).toBe(count);
+  expect((await calls(page)).filter((c) => c.op === "start" && c.agent === "claude")).toEqual([]);
+});
