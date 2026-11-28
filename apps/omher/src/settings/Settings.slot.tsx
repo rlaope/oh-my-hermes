@@ -30,6 +30,7 @@ import { AgentsPage } from "./agents/AgentsPage";
 import { ComputerPage } from "./computer/ComputerPage";
 import { AvatarEditor, BotFacts, NameEditor, PictureActions, placeName, useBotInfo, usePictureEditor } from "./BotIdentity";
 import { BotSections } from "./BotSections";
+import { matchesSearch, searchKey } from "../lib/textMatch";
 
 export const slot = "settings";
 
@@ -267,12 +268,8 @@ function BotPage({ bot }: { bot: Bot }) {
 function BotsPage() {
   const s = useStore();
   const [q, setQ] = useState("");
-  const needle = q.trim().toLowerCase();
-  const bots = needle
-    ? s.bots.filter((b) =>
-        [b.display_name, b.name, b.description, b.model].some((t) => (t ?? "").toLowerCase().includes(needle)),
-      )
-    : s.bots;
+  const needle = searchKey(q.trim());
+  const bots = needle ? s.bots.filter((b) => matchesSearch(needle, b.display_name, b.name, b.description, b.model)) : s.bots;
   const online = s.bots.filter((b) => b.status === "online").length;
   const working = s.bots.filter((b) => b.running || !!s.chats[b.name]?.turn).length;
   return (

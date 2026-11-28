@@ -33,6 +33,7 @@ import { GhDashBar, TasksBar } from "../tasks/TasksBar";
 import { DiskChip } from "./DiskChip";
 import { CpuChip } from "./CpuChip";
 import { PLATFORMS_POLL_MS } from "../platforms/platforms";
+import { matchesSearch, searchKey } from "../lib/textMatch";
 
 const sessionBackground = (target: EventTarget) => target instanceof Element && !target.closest(".ss-row, .tg-h, button, input, textarea, select, a, [contenteditable], [role=menu], [role=menuitem]");
 
@@ -70,10 +71,10 @@ export function Sidebar() {
   // unread answers count on its row
   const [allThreads, setAllThreads] = useState<readonly string[]>([]);
   const AddBot = slots.addBot;
-  const needle = q.trim().toLowerCase();
+  const needle = searchKey(q.trim());
   const listed = selectSidebarBots(s);
   const bots = needle
-    ? listed.filter((b) => b.display_name.toLowerCase().includes(needle) || b.name.toLowerCase().includes(needle))
+    ? listed.filter((b) => matchesSearch(needle, b.display_name, b.name))
     : listed;
   const asks = selectAsks(s);
   // threads whose pull request is open with failing checks, still listed (rule 40: shown, never acted on)

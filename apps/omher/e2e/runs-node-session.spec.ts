@@ -138,21 +138,48 @@ test("a Codex fanout node opens as a chat with Codex's mark: prompt, commands in
   const chat = await openNode(page, "code-colors");
   await expect(chat).toHaveAttribute("data-kind", "codex");
   await expect(chat).toHaveAttribute("data-harness", "codex");
-  expect(await sides(chat)).toEqual(["R", "S4", "L"]);
+  expect(await sides(chat)).toEqual(["R", "S5", "L"]);
   await expect(chat.getByTestId("bubble-user")).toContainText("give code blocks a dark palette");
   await expect(chat.getByTestId("harness-face").first()).toHaveAttribute("data-harness", "codex");
   // a Codex session has no Hermes model badge
   await expect(chat.getByTestId("harness-model-mark")).toHaveCount(0);
   const steps = chat.getByTestId("activity-step");
-  await expect(steps).toHaveCount(4);
+  await expect(steps).toHaveCount(5);
   const lines = await steps.evaluateAll((els) => els.map((e) => e.querySelector(".v")?.textContent ?? ""));
-  expect(lines).toEqual(['rg -n "pre code" docs/', expect.stringContaining("*** Update File: docs/theme.css"), "pnpm test --run", 'gh pr create --draft --title "docs: code block palette"']);
+  // the exec step's JavaScript reads as the command it runs
+  expect(lines).toEqual(['rg -n "pre code" docs/', "git status --short", expect.stringContaining("*** Update File: docs/theme.css"), "pnpm test --run", 'gh pr create --draft --title "docs: code block palette"']);
+  await expect(chat.getByTestId("agent-chat-timeline")).not.toContainText("tools.exec_command");
   await expect(chat.getByTestId("agent-chat-answer")).toContainText("Draft PR #2360 is open.");
   await page.getByTestId("run-session").scrollIntoViewIfNeeded();
   await shot(page, "harness-drawer-codex.png");
   await chat.getByTestId("agent-chat-full").click();
   await shot(page, "harness-agentchat-codex.png");
 });
+
+for (const theme of ["dark", "light"] as const)
+  test(`a Claude Code session's interrupt, API error and compaction are dim one-line rows, not anyone's words (${theme})`, async ({ page }) => {
+    const box = await openFull(page, theme);
+    await nodeOf(box, "page-styles").click();
+    const chat = page.getByTestId("run-session").getByTestId("agent-chat");
+    await expect(chat).toHaveAttribute("data-kind", "claude");
+    await expect(chat.getByTestId("agent-chat-timeline")).toBeVisible();
+    expect(await sides(chat)).toEqual(["R", "S1", "agent-chat-status", "R", "agent-chat-status", "agent-chat-status", "L"]);
+    const rows = chat.getByTestId("agent-chat-status");
+    await expect(rows).toHaveText(["Interrupted", "API error 529 · retry 3/10 · Overloaded", "Conversation compacted"]);
+    await expect(rows.nth(1)).toHaveAttribute("data-code", "api_error");
+    // quiet: one line, smaller and dimmer than a bubble's text
+    const look = await rows.nth(1).evaluate((el) => {
+      const c = getComputedStyle(el);
+      const bubble = el.parentElement?.querySelector("[data-testid=bubble-user]") as HTMLElement | null;
+      return { h: el.getBoundingClientRect().height, size: parseFloat(c.fontSize), white: c.whiteSpace, color: c.color, ink: bubble ? getComputedStyle(bubble).color : "" };
+    });
+    expect(look.h).toBeLessThan(22);
+    expect(look.size).toBeLessThan(12.5);
+    expect(look.white).toBe("nowrap");
+    expect(look.color).not.toBe(look.ink);
+    await page.getByTestId("run-session").scrollIntoViewIfNeeded();
+    await shot(page, `harness-status-${theme}.png`);
+  });
 
 test("graph nodes keep one mark each from the registry: Codex and Claude Code lanes, Hermes children by model", async ({ page }) => {
   const box = await openFull(page);

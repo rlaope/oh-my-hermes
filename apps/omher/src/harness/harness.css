@@ -121,6 +121,16 @@ button.ac-crumb:hover {
 .ac-child:hover {
   border-color: var(--line-strong, var(--muted));
 }
+/* a status line (interrupted, compacted, an API error): one dim row on the step rows' column, cut to one line */
+.ac-status {
+  margin: 0 0 0 38px;
+  color: var(--muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
 /* durations of the steps: the secondary-text token, which passes 4.5:1 on dark and light (--quiet does not on dark) */
 .ac .act-step .s {
   color: var(--muted);

@@ -1,6 +1,6 @@
-//! Continue a conversation made outside omher (BOUNDARY rule 30). The SESSIONS + menu lists, read-only, the
-//! recent Claude Code and Codex conversations for the folders it offers, and opening one shows its last messages
-//! before the agent continues it (`--resume <id>`, Codex `thread/resume`; rule 11).
+//! Continue a conversation made outside omher (BOUNDARY rule 30). The TERMINALS + menu lists, read-only, the
+//! recent Claude Code and Codex conversations for the folders it offers (or for every folder the CLI keeps
+//! conversations for), and picking one continues it (rule 11).
 //!
 //! Only the CLIs' own conversation files are read, never written: Claude Code transcripts
 //! (`<claude config>/projects/<folder slug>/<uuid>.jsonl`) and Codex rollouts
@@ -9,7 +9,7 @@
 //! links are resolved. No credential, token or config file is opened. Each file is read in bounded pieces (its
 //! head and its tail), so a long conversation costs the same as a short one.
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
@@ -19,19 +19,34 @@ use serde_json::Value;
 use crate::sessions::is_uuid;
 
 /// Conversations listed per agent.
-pub const LIST_MAX: usize = 20;
-/// Messages shown from the conversation the person opens (the same cap as omher's own saved chats).
-pub const MSG_MAX: usize = 40;
-/// Characters kept of one message (as omher's saved chats, `resume.ts` MAX_TEXT).
-const TEXT_MAX: usize = 4_000;
+pub const LIST_MAX: usize = 40;
+/// Rows looked for beyond [`LIST_MAX`] before a listing stops walking (a conversation seen twice is listed once).
+const LIST_MARGIN: usize = 10;
+/// Conversation files one listing looks at, at most. The walk stops long before this once it has its rows: this only
+/// guards against a runaway tree, so it is not a window that hides real conversations behind other runs (`codex exec`
+/// runs are most of a Codex home; a fixed window of 400 newest files hid every real conversation for some people).
+const FILES_MAX: usize = 20_000;
+/// Lines read from the start of a file (its folder, its first message, an early title), within its first [`HEAD`].
+const HEAD_LINES: usize = 200;
+/// Of those, the lines a Claude Code transcript's own folder (`cwd`) is looked for in: Claude Code writes it in the
+/// first few lines, and the folder's slug cannot be turned back into it (`-` stands for every other character).
+const CWD_LINES: usize = 40;
+/// Bytes read from the end of a file for the last thing said in it.
+const LAST_TAIL: u64 = 128 * 1024;
+/// Characters of that line.
+const LAST_MAX: usize = 200;
+/// Bytes of a rollout's first line looked at for Codex's exec mark before the line is parsed.
+const PEEK: u64 = 8 * 1024;
+/// What Codex writes in the first line of a `codex exec` run.
+const EXEC_MARK: &[u8] = br#""originator":"codex_exec""#;
+/// Claude Code shortens a project folder's name longer than this to its first this many characters and a hash.
+const SLUG_MAX: usize = 200;
 /// Characters of a title or first words.
 const TITLE_MAX: usize = 80;
 /// Bytes read from the start of a file (its folder, first message, early title).
 const HEAD: u64 = 256 * 1024;
-/// Bytes read from the end of a file (its latest title, its last messages).
+/// Bytes read from the end of a file for its latest title.
 const TAIL: u64 = 1024 * 1024;
-/// Codex rollouts looked at for one listing, newest first.
-const CODEX_FILES_MAX: usize = 400;
 /// `session_index.jsonl` is read whole only up to this size.
 const INDEX_MAX: u64 = 4 * 1024 * 1024;
 
@@ -47,8 +62,21 @@ pub struct PastChat {
     pub named: bool,
     /// Last change, seconds since the epoch.
     pub at: f64,
+    /// A Codex fork: the title of the conversation it was forked from when that one is listed too, else empty. `None`
+    /// when it is not a fork. A fork starts with its parent's messages, so without this the two read the same.
+    pub fork: Option<String>,
+    /// The last thing the person or the agent said in it (one line, at most [`LAST_MAX`] characters), from the end of
+    /// the file; `None` when that end holds no such line (nothing is guessed).
+    pub last: Option<PastMsg>,
+    /// The conversation it was forked from (a Codex thread id), or empty.
+    #[serde(skip)]
+    parent: String,
+    /// Its file, for the last line once the row is kept.
+    #[serde(skip)]
+    file: PathBuf,
 }
 
+/// One thing said in a conversation: the person's typed text or the agent's answer text (a row's last line).
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct PastMsg {
     pub role: &'static str,
@@ -74,9 +102,20 @@ pub fn cli_home(home: &Path, agent: &str, account_env: &[(String, String)], env:
     Some(picked.or_else(|| env(var).filter(|v| !v.is_empty())).map(PathBuf::from).unwrap_or_else(|| home.join(dir)))
 }
 
-/// Claude Code's project folder for a cwd: every character that is not a letter or a digit becomes `-`.
+/// Claude Code's project folder for a cwd: every character that is not an ASCII letter or digit becomes `-`, once per
+/// UTF-16 unit as Claude Code's own replace counts them (a character outside the BMP, an emoji, is two `-`). The cwd is
+/// taken as given: a decomposed (NFD) Hangul syllable is three characters there, so its slug is longer than the
+/// composed one's ([`claude_dirs`] tries both).
 pub fn claude_slug(cwd: &str) -> String {
-    cwd.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect()
+    let mut out = String::with_capacity(cwd.len());
+    for c in cwd.chars() {
+        if c.is_ascii_alphanumeric() {
+            out.push(c);
+        } else {
+            out.extend(std::iter::repeat('-').take(c.len_utf16()));
+        }
+    }
+    out
 }
 
 /// `p` when it is a real file (not a link) inside `root` once both are resolved; else `None`.
@@ -95,9 +134,45 @@ fn plain_dir(p: &Path) -> bool {
     std::fs::symlink_metadata(p).map(|m| m.is_dir()).unwrap_or(false)
 }
 
+/// One key per folder, by the same rule as the TERMINALS list's `pathKey` (`src/sessions/folders.ts`), so "this
+/// folder" here is the folder the + menu offers: repeated separators made one and a trailing one dropped (the root
+/// stays); a Windows path (`C:\…`, `C:/…`, `\\server\…`) spelled with backslashes; composed Unicode (NFC), since
+/// macOS hands a shell's folder over decomposed; and a drive-letter path case-folded, as Windows compares names. A
+/// macOS or Linux path keeps its case (a macOS volume can be case-sensitive, Linux always is), and so does a
+/// `\\server\share` path. For comparing only, never shown.
+pub fn folder_key(path: &str) -> String {
+    let b = path.as_bytes();
+    let unc = path.starts_with("\\\\");
+    let drive = |b: &[u8]| b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && matches!(b[2], b'\\' | b'/');
+    let windows = unc || drive(b);
+    let mut p = String::with_capacity(path.len() + 1);
+    if unc {
+        p.push('\\');
+    }
+    let mut sep = false;
+    for c in path.chars() {
+        let is_sep = c == '/' || (windows && c == '\\');
+        if is_sep && !sep {
+            p.push(if windows { '\\' } else { '/' });
+        } else if !is_sep {
+            p.push(c);
+        }
+        sep = is_sep;
+    }
+    let root = if windows { drive(p.as_bytes()) && p.len() == 3 } else { p.len() == 1 };
+    if !root && p.ends_with(['/', '\\']) {
+        p.pop();
+    }
+    let p = icu_normalizer::ComposingNormalizerBorrowed::new_nfc().normalize(&p).into_owned();
+    if drive(p.as_bytes()) {
+        p.to_lowercase()
+    } else {
+        p
+    }
+}
+
 fn same_folder(a: &str, b: &str) -> bool {
-    let t = |s: &str| s.trim_end_matches(['/', '\\']).to_string();
-    !a.is_empty() && t(a) == t(b)
+    !a.is_empty() && folder_key(a) == folder_key(b)
 }
 
 fn mtime(p: &Path) -> f64 {
@@ -126,20 +201,63 @@ fn lines_in(path: &Path, start: u64, len: u64) -> Vec<Value> {
     parts.into_iter().filter(|l| !l.is_empty()).filter_map(|l| serde_json::from_slice(l).ok()).collect()
 }
 
-fn head(path: &Path) -> Vec<Value> {
-    lines_in(path, 0, HEAD)
-}
-
-/// The tail of a file, or nothing when the head already covered it.
-fn tail(path: &Path) -> Vec<Value> {
-    let size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
-    if size <= HEAD {
-        return Vec::new();
+/// The first whole lines of `path`, parsed: at most `max` lines, all within its first [`HEAD`] bytes, read one at a
+/// time so that a short file or an early `done` costs only what was read. A line cut by the [`HEAD`] edge is dropped,
+/// a line that is not JSON skipped (it still counts).
+fn head_lines(path: &Path, max: usize, done: &dyn Fn(&[Value]) -> bool) -> Vec<Value> {
+    let Ok(f) = File::open(path) else { return Vec::new() };
+    let mut r = BufReader::new(f.take(HEAD));
+    let (mut out, mut line, mut used) = (Vec::new(), Vec::new(), 0u64);
+    for _ in 0..max {
+        line.clear();
+        match r.read_until(b'\n', &mut line) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => used += n as u64,
+        }
+        if line.last() != Some(&b'\n') && used >= HEAD {
+            break; // cut by the edge
+        }
+        if let Ok(v) = serde_json::from_slice::<Value>(&line) {
+            out.push(v);
+            if done(&out) {
+                break;
+            }
+        }
     }
-    lines_in(path, size.saturating_sub(TAIL).max(HEAD), TAIL)
+    out
 }
 
-/// All of a file when small, else its tail: where the last messages are.
+/// The head of a file: [`head_lines`] read to its line cap.
+fn head(path: &Path) -> Vec<Value> {
+    head_lines(path, HEAD_LINES, &|_| false)
+}
+
+/// The folder a Claude Code transcript ran in, from its own first [`CWD_LINES`] lines.
+fn claude_cwd(lines: &[Value]) -> Option<&str> {
+    lines.iter().take(CWD_LINES).map(|o| s(o, "cwd")).find(|c| !c.is_empty())
+}
+
+/// The last thing the person or the agent said in `agent`'s conversation file `path`: the last such line in its final
+/// [`LAST_TAIL`] bytes, on one line, at most [`LAST_MAX`] characters. Meta lines, the turns a CLI or another agent put
+/// in the person's place (as for titles) and tool results are passed over; when that end holds none, `None`.
+fn last_said(path: &Path, agent: &str) -> Option<PastMsg> {
+    let size = std::fs::metadata(path).map(|m| m.len()).ok()?;
+    lines_in(path, size.saturating_sub(LAST_TAIL), LAST_TAIL).iter().rev().find_map(|o| {
+        let (user, answer) = match agent {
+            "claude" => (claude_user_text(o), claude_assistant_text(o)),
+            _ => (codex_user_text(o), codex_assistant_text(o)),
+        };
+        let (role, text) = match (user, answer) {
+            (Some(t), _) => ("user", t),
+            (None, Some(t)) => ("assistant", t),
+            _ => return None,
+        };
+        let text = clip(&text, LAST_MAX);
+        (!text.is_empty()).then(|| PastMsg { role, text, ts: iso_secs(s(o, "timestamp")).unwrap_or(0.0) })
+    })
+}
+
+/// All of a file when small, else its last [`TAIL`] bytes: where its latest title is.
 fn last_part(path: &Path) -> Vec<Value> {
     let size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
     lines_in(path, size.saturating_sub(TAIL), TAIL)
@@ -159,11 +277,29 @@ fn clip(t: &str, n: usize) -> String {
     }
 }
 
-/// Text the person typed, not what the CLI put in the user turn for itself (command tags, reminders, the
-/// AGENTS.md and environment blocks Codex sends first, interrupted-request notes).
+/// How a user turn begins when the person did not type it: the AGENTS.md block Codex sends first, Claude Code's
+/// caveat and interrupted-request notes, the summary Claude Code puts in after compacting a long conversation, its
+/// retry note after a malformed tool call, and the boilerplate of a Codex collaboration turn (another agent's task or
+/// message, or a worker's brief). A turn that starts with `<` (command tags, `<system-reminder>`,
+/// `<task-notification>`, `<teammate-message …>`, `<cross-session-message …>`, Codex's environment block) is never
+/// typed text either.
+const NOT_TYPED: [&str; 9] = [
+    "# AGENTS.md instructions",
+    "Caveat:",
+    "[Request interrupted",
+    "This session is being continued from a previous conversation",
+    "Your tool call was malformed",
+    "Message Type: NEW_TASK",
+    "Message Type: MESSAGE",
+    "Message Type: FINAL_ANSWER",
+    "You are a worker agent",
+];
+
+/// Text the person typed, not what the CLI or another agent put in the user turn: such a turn names no
+/// conversation and is not the person's side of it.
 fn typed(text: &str) -> bool {
     let t = text.trim_start();
-    !t.is_empty() && !t.starts_with('<') && !t.starts_with("# AGENTS.md instructions") && !t.starts_with("Caveat:") && !t.starts_with("[Request interrupted")
+    !t.is_empty() && !t.starts_with('<') && !NOT_TYPED.iter().any(|m| t.starts_with(m))
 }
 
 /// `2026-11-12T15:28:55.873Z` → seconds since the epoch (UTC; a fraction kept). `None` when it is not that shape.
@@ -191,15 +327,18 @@ pub fn iso_secs(t: &str) -> Option<f64> {
 
 // ---- Claude Code ------------------------------------------------------------------------------
 
-/// The text of a Claude Code user line the person typed (not a tool result, a meta line or a subagent's).
+/// The text of a Claude Code user line the person typed (not a tool result, a subagent's, or a line Claude Code marks
+/// as its own: meta, a compaction summary, one shown only in the transcript). In a list of text blocks each block is
+/// judged on its own, as for Codex: an editor's context block written before the prompt (`<ide_opened_file>…`,
+/// `<ide_selection>…`) is passed over and the prompt after it kept.
 fn claude_user_text(o: &Value) -> Option<String> {
-    if s(o, "type") != "user" || o.get("isMeta").and_then(Value::as_bool) == Some(true) || o.get("isSidechain").and_then(Value::as_bool) == Some(true) {
+    let flag = |k: &str| o.get(k).and_then(Value::as_bool) == Some(true);
+    if s(o, "type") != "user" || ["isMeta", "isSidechain", "isCompactSummary", "isVisibleInTranscriptOnly"].iter().any(|k| flag(k)) {
         return None;
     }
-    let c = &o["message"]["content"];
-    let text = match c {
+    let text = match &o["message"]["content"] {
         Value::String(t) => t.clone(),
-        Value::Array(blocks) => blocks.iter().filter(|b| s(b, "type") == "text").map(|b| s(b, "text")).collect::<Vec<_>>().join("\n"),
+        Value::Array(blocks) => blocks.iter().filter(|b| s(b, "type") == "text").map(|b| s(b, "text")).filter(|t| typed(t)).collect::<Vec<_>>().join("\n"),
         _ => return None,
     };
     typed(&text).then_some(text)
@@ -228,21 +367,25 @@ fn claude_title(lines: &[Value]) -> (String, String) {
     (custom, ai)
 }
 
-/// One Claude Code transcript as a list row, when it ran in `cwd` and the person said something in it.
-pub fn claude_row(path: &Path, cwd: &str) -> Option<PastChat> {
+/// One Claude Code transcript as a list row, when the person said something in it and it ran in one of `cwds` (any
+/// folder when `None`). Its folder is the transcript's own `cwd`, never its project folder's lossy slug.
+fn claude_row(path: &Path, cwds: Option<&[String]>) -> Option<PastChat> {
     let id = path.file_stem()?.to_str()?.to_string();
     if !is_uuid(&id) {
         return None;
     }
     let first = head(path);
     // the slug is lossy ("/a/b-c" and "/a/b/c" share it): the transcript's own cwd decides
-    let seen = first.iter().map(|o| s(o, "cwd")).find(|c| !c.is_empty())?;
-    if !same_folder(seen, cwd) {
-        return None;
-    }
+    let seen = claude_cwd(&first)?;
+    let cwd = match cwds {
+        Some(cwds) => cwds.iter().find(|c| same_folder(seen, c))?.as_str(),
+        None if absolute(seen) => seen,
+        None => return None,
+    };
     let words = first.iter().find_map(claude_user_text)?;
+    // a later name wins: one in the last part of the file (all of a small one) over one near the start
     let (mut custom, mut ai) = claude_title(&first);
-    let (c2, a2) = claude_title(&tail(path));
+    let (c2, a2) = claude_title(&last_part(path));
     if !c2.is_empty() {
         custom = c2;
     }
@@ -251,66 +394,75 @@ pub fn claude_row(path: &Path, cwd: &str) -> Option<PastChat> {
     }
     let named = !custom.is_empty() || !ai.is_empty();
     let title = if !custom.is_empty() { custom } else if !ai.is_empty() { ai } else { clip(&words, TITLE_MAX) };
-    Some(PastChat { agent: "claude", id, cwd: cwd.trim_end_matches(['/', '\\']).to_string(), title, named, at: mtime(path) })
+    Some(row("claude", id, cwd, title, named, path))
 }
 
-/// The recent Claude Code conversations in each of `cwds`, newest first.
-pub fn claude_list(root: &Path, cwds: &[String]) -> Vec<PastChat> {
+/// The project folders a Claude Code listing walks: every one when `cwds` is `None`, else each folder's own: the one
+/// its slug names and, for a long path, those Claude Code named by the slug's first [`SLUG_MAX`] characters and a
+/// hash (the transcript's own `cwd` still decides). Claude Code made the slug from the cwd as its process saw it,
+/// composed or decomposed (macOS hands a shell's folder over decomposed), so the slugs of both forms are looked for.
+/// Links are not followed.
+fn claude_dirs(projects: &Path, cwds: Option<&[String]>) -> Vec<PathBuf> {
+    let all: Vec<PathBuf> = std::fs::read_dir(projects).map(|rd| rd.flatten().map(|e| e.path()).filter(|p| plain_dir(p)).collect()).unwrap_or_default();
+    let Some(cwds) = cwds else { return all };
+    let mut slugs: Vec<String> = Vec::new();
+    for cwd in cwds {
+        for form in [
+            icu_normalizer::ComposingNormalizerBorrowed::new_nfc().normalize(cwd),
+            icu_normalizer::DecomposingNormalizerBorrowed::new_nfd().normalize(cwd),
+        ] {
+            let slug = claude_slug(&form);
+            if !slugs.contains(&slug) {
+                slugs.push(slug);
+            }
+        }
+    }
+    let mut out: Vec<PathBuf> = Vec::new();
+    for slug in slugs {
+        let short = (slug.len() > SLUG_MAX).then(|| format!("{}-", &slug[..SLUG_MAX]));
+        for d in &all {
+            let name = d.file_name().and_then(|x| x.to_str()).unwrap_or("");
+            if (name == slug || short.as_deref().is_some_and(|p| name.starts_with(p))) && !out.contains(d) {
+                out.push(d.clone());
+            }
+        }
+    }
+    out
+}
+
+/// The recent Claude Code conversations in any of `cwds` (in every folder when `None`), newest first. Transcripts are
+/// opened newest first until the list is full: a folder with thousands costs as much as one with a page of them.
+pub fn claude_list(root: &Path, cwds: Option<&[String]>) -> Vec<PastChat> {
     let projects = root.join("projects");
     if !plain_dir(&projects) {
         return Vec::new();
     }
-    let mut out = Vec::new();
-    for cwd in cwds {
-        let dir = projects.join(claude_slug(cwd));
-        if !plain_dir(&dir) {
-            continue;
-        }
+    let mut files: Vec<(f64, PathBuf)> = Vec::new();
+    'dirs: for dir in claude_dirs(&projects, cwds) {
         let Ok(rd) = std::fs::read_dir(&dir) else { continue };
-        let mut files: Vec<(f64, PathBuf)> = rd
-            .flatten()
-            .filter(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false))
-            .map(|e| e.path())
-            .filter(|p| p.extension().is_some_and(|x| x == "jsonl") && p.file_stem().and_then(|x| x.to_str()).is_some_and(is_uuid))
-            .filter_map(|p| inside(root, &p))
-            .map(|p| (mtime(&p), p))
-            .collect();
-        files.sort_by(|a, b| b.0.total_cmp(&a.0));
-        // a few more than shown: empty ones (only /clear) and other folders' are skipped
-        out.extend(files.iter().take(LIST_MAX * 2).filter_map(|(_, p)| claude_row(p, cwd)).take(LIST_MAX));
+        for e in rd.flatten() {
+            if files.len() >= FILES_MAX {
+                break 'dirs;
+            }
+            let p = e.path();
+            // the entry's own type: a link is not a file here
+            let plain = e.file_type().map(|t| t.is_file()).unwrap_or(false);
+            if plain && p.extension().is_some_and(|x| x == "jsonl") && p.file_stem().and_then(|x| x.to_str()).is_some_and(is_uuid) {
+                files.push((e.metadata().ok().and_then(|m| m.modified().ok()).and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_secs_f64()).unwrap_or(0.0), p));
+            }
+        }
+    }
+    files.sort_by(|a, b| b.0.total_cmp(&a.0));
+    let mut out = Vec::new();
+    for (_, p) in files {
+        if out.len() >= LIST_MAX + LIST_MARGIN {
+            break;
+        }
+        if let Some(r) = inside(root, &p).and_then(|p| claude_row(&p, cwds)) {
+            out.push(r);
+        }
     }
     newest(out)
-}
-
-/// The last messages of Claude Code conversation `id` in `cwd`: what the person typed and the agent's answers.
-pub fn claude_messages(root: &Path, id: &str, cwd: &str) -> Result<Vec<PastMsg>, String> {
-    if !is_uuid(id) {
-        return Err("not a conversation id".into());
-    }
-    let projects = root.join("projects");
-    let dir = projects.join(claude_slug(cwd));
-    if !plain_dir(&projects) || !plain_dir(&dir) {
-        return Err("no such conversation".into());
-    }
-    let path = inside(root, &dir.join(format!("{id}.jsonl"))).ok_or("no such conversation")?;
-    let mut out: Vec<PastMsg> = Vec::new();
-    let mut last_answer = String::new();
-    for o in last_part(&path) {
-        let ts = iso_secs(s(&o, "timestamp")).unwrap_or(0.0);
-        if let Some(t) = claude_user_text(&o) {
-            out.push(PastMsg { role: "user", text: clip_text(&t), ts });
-            last_answer.clear();
-        } else if let Some(t) = claude_assistant_text(&o) {
-            // one answer is split over several lines (one per content block) with the same message id
-            let mid = s(&o["message"], "id").to_string();
-            match out.last_mut() {
-                Some(m) if m.role == "assistant" && !mid.is_empty() && mid == last_answer => m.text = clip_text(&format!("{}\n\n{t}", m.text)),
-                _ => out.push(PastMsg { role: "assistant", text: clip_text(&t), ts }),
-            }
-            last_answer = mid;
-        }
-    }
-    Ok(keep_last(out))
 }
 
 // ---- Codex ------------------------------------------------------------------------------------
@@ -400,38 +552,99 @@ fn codex_assistant_text(o: &Value) -> Option<String> {
     (!text.trim().is_empty()).then_some(text)
 }
 
-/// A rollout's `session_meta`: (thread id, cwd), when it is a conversation of its own (not a subagent's thread).
-fn codex_meta(lines: &[Value]) -> Option<(String, String)> {
+/// A rollout's `session_meta`, when it is a conversation the person had: not a subagent's thread (its `source` names
+/// the parent that spawned it) and not a `codex exec` run (a script's one-off run, most of the files in a Codex home).
+struct Meta {
+    id: String,
+    cwd: String,
+    /// The thread it was forked from, or empty: the first of these that is not its own id.
+    parent: String,
+}
+
+fn codex_meta(lines: &[Value]) -> Option<Meta> {
     let first = lines.first()?;
     if s(first, "type") != "session_meta" {
         return None;
     }
     let p = &first["payload"];
-    // a subagent's thread names its parent in `source`; a fork names where it came from
-    if p.get("source").is_some_and(Value::is_object) || p.get("forked_from_id").is_some_and(|v| !v.is_null()) {
+    let exec = s(p, "originator").contains("exec") || s(p, "source") == "exec";
+    if exec || p.get("source").is_some_and(Value::is_object) {
         return None;
     }
     let id = s(p, "id").to_string();
-    is_uuid(&id).then(|| (id, s(p, "cwd").to_string()))
+    if !is_uuid(&id) {
+        return None;
+    }
+    let parent = ["forked_from_id", "parent_thread_id", "session_id"].iter().map(|k| s(p, k)).find(|x| !x.is_empty() && *x != id).unwrap_or("").to_string();
+    Some(Meta { id, cwd: s(p, "cwd").to_string(), parent })
 }
 
-/// One Codex rollout as a list row, when it ran in one of `cwds` and the person said something in it.
-pub fn codex_row(path: &Path, cwds: &[String], names: &std::collections::HashMap<String, String>) -> Option<PastChat> {
-    let first = head(path);
-    let (id, seen) = codex_meta(&first)?;
-    let cwd = cwds.iter().find(|c| same_folder(&seen, c))?;
+/// Whether rollout `path` is marked as a `codex exec` run in its first line, told from that line's first [`PEEK`]
+/// bytes as plain text, before any of it is parsed: that line carries the whole system prompt (often over 50 KB) and
+/// exec runs are most of the files, so this keeps a listing from parsing them. A change in how Codex writes it only
+/// misses this shortcut; [`codex_meta`] still drops the run once its line is parsed.
+fn exec_marked(path: &Path) -> bool {
+    let Ok(f) = File::open(path) else { return false };
+    let mut buf = Vec::new();
+    if f.take(PEEK).read_to_end(&mut buf).is_err() {
+        return false;
+    }
+    let line = buf.split(|b| *b == b'\n').next().unwrap_or(&[]);
+    line.windows(EXEC_MARK.len()).any(|w| w == EXEC_MARK)
+}
+
+/// The lines of rollout `path` a listing reads: up to the first words, and no further than the first line when that
+/// is not a conversation's meta or names a folder not in `cwds` (when given). A rollout's meta line carries the whole
+/// system prompt, and the instruction items after it are as long again, so another folder's conversation costs that
+/// one line, not everything up to its first words.
+fn codex_head(path: &Path, cwds: Option<&[String]>) -> Vec<Value> {
+    head_lines(path, HEAD_LINES, &|seen| match codex_meta(seen) {
+        None => true,
+        Some(m) if cwds.is_some_and(|cwds| !cwds.iter().any(|c| same_folder(&m.cwd, c))) => true,
+        Some(_) => seen.last().and_then(codex_user_text).is_some(),
+    })
+}
+
+/// One Codex rollout as a list row, when it is a conversation the person had (they said something in it) in one of
+/// `cwds` (any folder when `None`). Only its first [`HEAD_LINES`] lines are read, and the read stops once its folder
+/// and first words are known ([`codex_head`]).
+fn codex_row(path: &Path, cwds: Option<&[String]>, names: &std::collections::HashMap<String, String>) -> Option<PastChat> {
+    if exec_marked(path) {
+        return None;
+    }
+    let first = codex_head(path, cwds);
+    let meta = codex_meta(&first)?;
+    let cwd = match cwds {
+        Some(cwds) => cwds.iter().find(|c| same_folder(&meta.cwd, c))?.as_str(),
+        None if absolute(&meta.cwd) => meta.cwd.as_str(),
+        None => return None,
+    };
     let words = first.iter().find_map(codex_user_text)?;
-    let name = names.get(&id).cloned().unwrap_or_default();
+    let name = names.get(&meta.id).cloned().unwrap_or_default();
     let named = !name.is_empty();
     let title = if named { name } else { clip(&words, TITLE_MAX) };
-    Some(PastChat { agent: "codex", id, cwd: cwd.trim_end_matches(['/', '\\']).to_string(), title, named, at: mtime(path) })
+    let mut r = row("codex", meta.id.clone(), cwd, title, named, path);
+    r.parent = meta.parent;
+    Some(r)
 }
 
-/// The recent Codex conversations in any of `cwds`, newest first.
-pub fn codex_list(root: &Path, cwds: &[String]) -> Vec<PastChat> {
+/// The recent Codex conversations in any of `cwds` (in every folder when `None`), newest first. Rollouts are opened
+/// newest first until the list is full, so the exec runs and other folders' threads in between cost a short read each
+/// and hide nothing.
+pub fn codex_list(root: &Path, cwds: Option<&[String]>) -> Vec<PastChat> {
     let names = codex_names(root);
-    let rows = codex_rollouts(root, CODEX_FILES_MAX).iter().filter_map(|p| inside(root, p)).filter_map(|p| codex_row(&p, cwds, &names)).collect();
-    newest(rows)
+    let mut files: Vec<(f64, PathBuf)> = codex_rollouts(root, FILES_MAX).into_iter().map(|p| (mtime(&p), p)).collect();
+    files.sort_by(|a, b| b.0.total_cmp(&a.0));
+    let mut out = Vec::new();
+    for (_, p) in files {
+        if out.len() >= LIST_MAX + LIST_MARGIN {
+            break;
+        }
+        if let Some(r) = inside(root, &p).and_then(|p| codex_row(&p, cwds, &names)) {
+            out.push(r);
+        }
+    }
+    newest(out)
 }
 
 /// The Codex conversation id a rollout path names: the path must be a real file (no link) inside `root` (the Codex
@@ -453,49 +666,12 @@ pub fn rollout_id(root: &Path, path: &Path) -> Option<String> {
     (cut > 0 && stem.as_bytes()[cut - 1] == b'-' && is_uuid(id)).then(|| id.to_string())
 }
 
-/// The last messages of Codex thread `id` (its rollout found by name; the folder is checked against `cwd`).
-pub fn codex_messages(root: &Path, id: &str, cwd: &str) -> Result<Vec<PastMsg>, String> {
-    if !is_uuid(id) {
-        return Err("not a conversation id".into());
-    }
-    let suffix = format!("-{id}.jsonl");
-    let path = codex_rollouts(root, usize::MAX)
-        .into_iter()
-        .find(|p| p.file_name().and_then(|x| x.to_str()).is_some_and(|x| x.ends_with(&suffix)))
-        .and_then(|p| inside(root, &p))
-        .ok_or("no such conversation")?;
-    match codex_meta(&head(&path)) {
-        Some((tid, seen)) if tid == id && same_folder(&seen, cwd) => {}
-        _ => return Err("no such conversation".into()),
-    }
-    let mut out = Vec::new();
-    for o in last_part(&path) {
-        let ts = iso_secs(s(&o, "timestamp")).unwrap_or(0.0);
-        if let Some(t) = codex_user_text(&o) {
-            out.push(PastMsg { role: "user", text: clip_text(&t), ts });
-        } else if let Some(t) = codex_assistant_text(&o) {
-            out.push(PastMsg { role: "assistant", text: clip_text(&t), ts });
-        }
-    }
-    Ok(keep_last(out))
-}
-
 // ---- both -------------------------------------------------------------------------------------
 
-fn clip_text(t: &str) -> String {
-    let t = t.trim();
-    if t.chars().count() <= TEXT_MAX {
-        t.to_string()
-    } else {
-        format!("{}…", t.chars().take(TEXT_MAX - 1).collect::<String>())
-    }
-}
-
-fn keep_last(mut v: Vec<PastMsg>) -> Vec<PastMsg> {
-    if v.len() > MSG_MAX {
-        v.drain(..v.len() - MSG_MAX);
-    }
-    v
+/// A list row; its fork and last line are filled in once it is kept ([`list`]).
+fn row(agent: &'static str, id: String, cwd: &str, title: String, named: bool, path: &Path) -> PastChat {
+    let cwd = cwd.trim_end_matches(['/', '\\']).to_string();
+    PastChat { agent, id, cwd, title, named, at: mtime(path), fork: None, last: None, parent: String::new(), file: path.to_path_buf() }
 }
 
 fn newest(mut v: Vec<PastChat>) -> Vec<PastChat> {
@@ -506,24 +682,45 @@ fn newest(mut v: Vec<PastChat>) -> Vec<PastChat> {
     v
 }
 
+/// A fork's label: the title of the listed conversation it came from, else empty (the row reads just "fork").
+fn label_forks(rows: &mut [PastChat]) {
+    let titles: std::collections::HashMap<String, String> = rows.iter().map(|r| (r.id.clone(), r.title.clone())).collect();
+    for r in rows.iter_mut().filter(|r| !r.parent.is_empty()) {
+        r.fork = Some(titles.get(&r.parent).cloned().unwrap_or_default());
+    }
+}
+
 /// An absolute folder path, as each CLI records its cwd (`/…` on macOS and Linux, `C:\\…` on Windows).
 fn absolute(c: &str) -> bool {
     Path::new(c).is_absolute() || c.starts_with('/')
 }
 
-/// Only absolute folders, at most 12 (the + menu offers the recent folders and home).
-pub fn checked_cwds(cwds: &[String]) -> Vec<String> {
-    cwds.iter().filter(|c| absolute(c)).take(12).cloned().collect()
+/// The folder a listing is for (rule 30): the one the TERMINALS + menu starts in, which is all the page sends (or none,
+/// with no folder picked). More than one is refused, not cut down; a folder that is not an absolute path lists
+/// nothing.
+pub fn checked_cwds(cwds: &[String]) -> Result<Vec<String>, String> {
+    if cwds.len() > 1 {
+        return Err("conversations are listed for one folder, the one the + menu starts in".into());
+    }
+    Ok(cwds.iter().filter(|c| absolute(c)).cloned().collect())
 }
 
-/// `agent`'s recent conversations in `cwds`, read from `root` (its home, [`cli_home`]).
-pub fn list(root: &Path, agent: &str, cwds: &[String]) -> Result<Vec<PastChat>, String> {
-    let cwds = checked_cwds(cwds);
-    match agent {
-        "claude" => Ok(claude_list(root, &cwds)),
-        "codex" => Ok(codex_list(root, &cwds)),
-        _ => Err(format!("{agent} conversations are not listed")),
+/// `agent`'s recent conversations, read from `root` (its home, [`cli_home`]): those in the folder `cwds` names, or in
+/// every folder that agent keeps conversations for when `all` (the folder is then not used). Only the rows kept get
+/// their last line read (the end of each file).
+pub fn list(root: &Path, agent: &str, cwds: &[String], all: bool) -> Result<Vec<PastChat>, String> {
+    let cwds = checked_cwds(cwds)?;
+    let scope = (!all).then_some(cwds.as_slice());
+    let mut rows = match agent {
+        "claude" => claude_list(root, scope),
+        "codex" => codex_list(root, scope),
+        _ => return Err(format!("{agent} conversations are not listed")),
+    };
+    label_forks(&mut rows);
+    for r in &mut rows {
+        r.last = last_said(&r.file, agent);
     }
+    Ok(rows)
 }
 
 /// Whether `agent`'s conversation `id` has its file in `root` where the CLI looks for it when asked to continue it:
@@ -635,18 +832,6 @@ fn seek(dir: &Path, depth: u32, want: &dyn Fn(&Path) -> bool) -> (bool, bool) {
         }
     }
     (false, unknown)
-}
-
-/// The last messages of `agent`'s conversation `id` in `cwd`.
-pub fn messages(root: &Path, agent: &str, id: &str, cwd: &str) -> Result<Vec<PastMsg>, String> {
-    if !absolute(cwd) {
-        return Err("not a folder".into());
-    }
-    match agent {
-        "claude" => claude_messages(root, id, cwd),
-        "codex" => codex_messages(root, id, cwd),
-        _ => Err(format!("{agent} conversations are not listed")),
-    }
 }
 
 #[cfg(test)]
@@ -771,36 +956,26 @@ mod tests {
         write(&dir.join("33333333-2222-4333-8444-555555555555.jsonl"), &claude_file(other, "x"));
         // not a conversation file
         write(&dir.join("notes.jsonl"), &claude_file(cwd, "y"));
-        let rows = list(&root, "claude", &[cwd.to_string(), "relative/x".to_string()]).unwrap();
+        let rows = list(&root, "claude", &[cwd.to_string()], false).unwrap();
+        // an agent whose conversations are not looked at
+        assert!(list(&root, "omo", &[cwd.to_string()], false).is_err());
+        // the page sends one folder (or none): more is refused, a relative one lists nothing
+        for all in [false, true] {
+            assert!(list(&root, "claude", &[cwd.to_string(), "/Users/you".to_string()], all).is_err());
+        }
+        assert!(list(&root, "claude", &["relative/x".to_string()], false).unwrap().is_empty());
+        assert!(list(&root, "claude", &[], false).unwrap().is_empty());
+        assert_eq!(list(&root, "claude", &[], true).unwrap().len(), 2, "this folder and the one sharing its slug");
         assert_eq!(rows.len(), 1, "{rows:?}");
         assert_eq!((rows[0].id.as_str(), rows[0].title.as_str(), rows[0].named, rows[0].cwd.as_str()), (C1, "Remember a word", true, cwd));
         // a rename in Claude Code wins; without any title the first words name it
         let mut lines = claude_file(cwd, C1);
         lines.push(serde_json::json!({"type": "custom-title", "customTitle": "My  word\ngame"}));
         write(&dir.join(format!("{C1}.jsonl")), &lines);
-        assert_eq!(claude_list(&root, &[cwd.into()])[0].title, "My word game");
+        assert_eq!(claude_list(&root, Some(&[cwd.into()]))[0].title, "My word game");
         write(&dir.join(format!("{C1}.jsonl")), &claude_file(cwd, C1)[..8]);
-        let r = &claude_list(&root, &[cwd.into()])[0];
+        let r = &claude_list(&root, Some(&[cwd.into()]))[0];
         assert_eq!((r.title.as_str(), r.named), ("Remember the word MARIGOLD for later", false));
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    #[test]
-    fn claude_messages_keep_what_was_typed_and_answered() {
-        let root = tmp("claude-msgs");
-        let cwd = "/w";
-        write(&root.join("projects").join(claude_slug(cwd)).join(format!("{C1}.jsonl")), &claude_file(cwd, C1));
-        let m = messages(&root, "claude", C1, cwd).unwrap();
-        let got: Vec<(&str, &str)> = m.iter().map(|x| (x.role, x.text.as_str())).collect();
-        assert_eq!(got, [("user", "Remember the word MARIGOLD for later"), ("assistant", "Noted.\n\nI will remember it.")]);
-        assert_eq!(m[0].ts, iso_secs("2026-11-12T10:00:02.000Z").unwrap());
-        // the id is a UUID, never a path
-        for bad in ["../x", "x", &format!("{C1}/../{C1}"), ""] {
-            assert!(messages(&root, "claude", bad, cwd).is_err(), "{bad}");
-        }
-        assert!(messages(&root, "claude", C2, cwd).is_err());
-        assert!(messages(&root, "claude", C1, "w").is_err());
-        assert!(messages(&root, "omo", C1, cwd).is_err());
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -816,20 +991,18 @@ mod tests {
         write(&away.join(format!("{C1}.jsonl")), &claude_file(cwd, C1));
         std::fs::create_dir_all(root.join("projects").join(&slug)).unwrap();
         symlink(away.join(format!("{C1}.jsonl")), root.join("projects").join(&slug).join(format!("{C1}.jsonl"))).unwrap();
-        assert!(claude_list(&root, &[cwd.into()]).is_empty());
-        assert!(claude_messages(&root, C1, cwd).is_err());
+        assert!(claude_list(&root, Some(&[cwd.into()])).is_empty());
         // a linked project folder
         let root2 = tmp("links2");
         std::fs::create_dir_all(root2.join("projects")).unwrap();
         symlink(&away, root2.join("projects").join(&slug)).unwrap();
-        assert!(claude_list(&root2, &[cwd.into()]).is_empty());
-        assert!(claude_messages(&root2, C1, cwd).is_err());
+        assert!(claude_list(&root2, Some(&[cwd.into()])).is_empty());
         // a linked projects folder
         let root3 = tmp("links3");
         let real = tmp("links3-real");
         write(&real.join(&slug).join(format!("{C1}.jsonl")), &claude_file(cwd, C1));
         symlink(&real, root3.join("projects")).unwrap();
-        assert!(claude_list(&root3, &[cwd.into()]).is_empty());
+        assert!(claude_list(&root3, Some(&[cwd.into()])).is_empty());
         // Codex: a linked day folder and a linked rollout
         let x = tmp("links-codex");
         let day = x.join("sessions/2026/11/12");
@@ -837,8 +1010,8 @@ mod tests {
         write(&away.join("r.jsonl"), &codex_file(X1, cwd));
         symlink(away.join("r.jsonl"), day.join(format!("rollout-2026-11-12T00-00-00-{X1}.jsonl"))).unwrap();
         symlink(&away, x.join("sessions/2026/11/13")).unwrap();
-        assert!(codex_list(&x, &[cwd.into()]).is_empty());
-        assert!(codex_messages(&x, X1, cwd).is_err());
+        assert!(codex_list(&x, Some(&[cwd.into()])).is_empty());
+        assert!(codex_list(&x, None).is_empty());
         // inside() itself
         assert!(inside(&root, &away.join(format!("{C1}.jsonl"))).is_none());
         for d in [root, away, root2, root3, real, x] {
@@ -917,15 +1090,12 @@ mod tests {
         // another folder
         write(&root.join("sessions/2026/11/11").join("rollout-2026-11-11T00-00-00-01a1d060-0000-75e3-aa36-356cd0706c8a.jsonl"), &codex_file("01a1d060-0000-75e3-aa36-356cd0706c8a", "/elsewhere"));
         write(&root.join("session_index.jsonl"), &[serde_json::json!({"id": X1, "thread_name": "Old name"}), serde_json::json!({"id": X1, "thread_name": "Remember a colour"})]);
-        let rows = list(&root, "codex", &[cwd.to_string()]).unwrap();
+        let rows = list(&root, "codex", &[cwd.to_string()], false).unwrap();
         let mut got: Vec<(&str, &str, bool)> = rows.iter().map(|r| (r.id.as_str(), r.title.as_str(), r.named)).collect();
         got.sort();
         assert_eq!(got, [(X1, "Remember a colour", true), (X2, "Remember COBALT please", false)]);
-        let m = messages(&root, "codex", X2, cwd).unwrap();
-        assert_eq!(m.iter().map(|x| (x.role, x.text.as_str())).collect::<Vec<_>>(), [("user", "Remember COBALT please"), ("assistant", "Remembered.")]);
-        // the thread must be in the folder asked for
-        assert!(messages(&root, "codex", X2, "/elsewhere").is_err());
-        assert!(messages(&root, "codex", "01a1d060-7a13-75e3-aa36-356cd0706c8a", cwd).is_err());
+        // the answer, not the imported tool result before it, is the last thing said
+        assert!(rows.iter().all(|r| r.last.as_ref().map(|l| (l.role, l.text.as_str())) == Some(("assistant", "Remembered.")) && r.fork.is_none()));
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -944,11 +1114,250 @@ mod tests {
         let p = root.join("projects").join(claude_slug(cwd)).join(format!("{C1}.jsonl"));
         write(&p, &lines);
         assert!(std::fs::metadata(&p).unwrap().len() > HEAD + TAIL);
-        let r = &claude_list(&root, &[cwd.into()])[0];
+        let r = &list(&root, "claude", &[cwd.into()], false).unwrap()[0];
+        // the first words from the head, the latest title and the last line from the end
         assert_eq!(r.title, "Late title");
-        let m = claude_messages(&root, C1, cwd).unwrap();
-        // the early messages lie outside the tail; the last ones are there
-        assert_eq!(m.iter().map(|x| x.text.as_str()).collect::<Vec<_>>(), ["What was the word?", "MARIGOLD"]);
+        assert_eq!(r.last.as_ref().map(|l| (l.role, l.text.as_str())), Some(("assistant", "MARIGOLD")));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A rollout at `day` (sessions/YYYY/MM/DD), its file's time set to `at` seconds after an hour, newest last.
+    fn rollout(root: &Path, id: &str, lines: &[Value], at: u64) -> PathBuf {
+        let p = root.join("sessions/2026/11/12").join(format!("rollout-2026-11-12T10-00-00-{id}.jsonl"));
+        write(&p, lines);
+        let t = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_794_000_000 + at);
+        File::options().append(true).open(&p).unwrap().set_modified(t).unwrap();
+        p
+    }
+
+    /// A Codex id made from `n` (a valid UUID shape).
+    fn xid(n: usize) -> String {
+        format!("01a1d060-{:04x}-7000-8000-{:012x}", n / 65_536, n)
+    }
+
+    #[test]
+    fn codex_drops_exec_runs_without_parsing_them_and_finds_real_conversations_behind_hundreds() {
+        let root = tmp("codex-exec");
+        let cwd = "/Users/you/code/api";
+        // three conversations the person had, older than 500 `codex exec` runs
+        // (their names sort after the runs' too, as an older day's would: a window of the newest names misses them)
+        for n in 1..=3 {
+            rollout(&root, &xid(n), &codex_file(&xid(n), cwd), n as u64);
+        }
+        // an exec run's first line as Codex writes it (its fields in Codex's order, the system prompt after them)
+        let exec = |id: &str| {
+            let first = format!(
+                r#"{{"timestamp":"2026-11-12T10:00:00.000Z","type":"session_meta","payload":{{"id":"{id}","timestamp":"2026-11-12T10:00:00.000Z","cwd":"{cwd}","originator":"codex_exec","cli_version":"0.150.0","source":"exec","base_instructions":{{"text":"{}"}}}}}}"#,
+                "x".repeat(60_000)
+            );
+            let mut v: Vec<Value> = vec![serde_json::from_str(&first).unwrap()];
+            v.extend(codex_file(id, cwd)[1..].iter().cloned());
+            (first, v)
+        };
+        for n in 1_000..1_500 {
+            let p = rollout(&root, &xid(n), &[], n as u64);
+            let (first, rest) = exec(&xid(n));
+            let body: String = std::iter::once(first).chain(rest[1..].iter().map(|v| v.to_string())).map(|l| l + "\n").collect();
+            std::fs::write(&p, body).unwrap();
+            let t = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_794_000_000 + n as u64);
+            File::options().append(true).open(&p).unwrap().set_modified(t).unwrap();
+            assert!(exec_marked(&p));
+        }
+        let rows = list(&root, "codex", &[cwd.to_string()], false).unwrap();
+        assert_eq!(rows.iter().map(|r| r.id.clone()).collect::<Vec<_>>(), [xid(3), xid(2), xid(1)]);
+        let all = list(&root, "codex", &[], true).unwrap();
+        assert_eq!(all.len(), 3);
+        // the mark is found as text in the first line only, before any parse; a later line that quotes it is not it
+        let mut quoted = codex_file(&xid(2), cwd);
+        quoted[3]["payload"]["content"][0]["text"] = serde_json::json!(r#"why does "originator":"codex_exec" show up?"#);
+        let p = rollout(&root, &xid(2), &quoted, 0);
+        assert!(!exec_marked(&p));
+        // written another way (spaces, a newer originator name): the parsed first line still drops it
+        let other = vec![serde_json::json!({"type": "session_meta", "payload": {"id": xid(3), "cwd": cwd, "originator": "codex_exec_v2"}}), codex_file(&xid(3), cwd)[3].clone()];
+        assert!(codex_meta(&other).is_none());
+        let other = vec![serde_json::json!({"type": "session_meta", "payload": {"id": xid(3), "cwd": cwd, "originator": "codex-tui", "source": "exec"}})];
+        assert!(codex_meta(&other).is_none());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn codex_lists_forks_by_what_they_were_forked_from() {
+        let root = tmp("codex-fork");
+        let cwd = "/w";
+        let (parent, fork, orphan) = (xid(10), xid(11), xid(12));
+        rollout(&root, &parent, &codex_file(&parent, cwd), 1);
+        let mut f = codex_file(&fork, cwd);
+        f[0]["payload"]["forked_from_id"] = serde_json::json!(parent);
+        rollout(&root, &fork, &f, 2);
+        // its parent named by a field Codex used before, and not in the list
+        let mut o = codex_file(&orphan, cwd);
+        o[0]["payload"]["session_id"] = serde_json::json!(xid(99));
+        rollout(&root, &orphan, &o, 3);
+        // a thread whose `session_id` is its own id is not a fork
+        let own = xid(13);
+        let mut n = codex_file(&own, cwd);
+        n[0]["payload"]["session_id"] = serde_json::json!(own);
+        rollout(&root, &own, &n, 4);
+        let rows = list(&root, "codex", &[cwd.into()], false).unwrap();
+        let got: Vec<(String, Option<String>)> = rows.iter().map(|r| (r.id.clone(), r.fork.clone())).collect();
+        assert_eq!(got, [(own, None), (orphan, Some(String::new())), (fork, Some("Remember COBALT please".into())), (parent, None)]);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_head_is_read_line_by_line_to_its_cap_and_no_further() {
+        let root = tmp("head-cap");
+        let cwd = "/w";
+        // the first words after more than HEAD_LINES lines of other turns: not read, so not listed
+        let id = xid(20);
+        let mut lines = codex_file(&id, cwd)[..3].to_vec();
+        for _ in 0..HEAD_LINES {
+            lines.push(serde_json::json!({"type": "response_item", "payload": {"type": "reasoning", "summary": []}}));
+        }
+        lines.push(codex_file(&id, cwd)[3].clone());
+        let p = rollout(&root, &id, &lines, 1);
+        assert_eq!(head(&p).len(), HEAD_LINES);
+        assert!(list(&root, "codex", &[cwd.into()], false).unwrap().is_empty());
+        // the read stops at the first words
+        let q = rollout(&root, &xid(21), &codex_file(&xid(21), cwd), 2);
+        let names = std::collections::HashMap::new();
+        assert!(codex_row(&q, Some(&[cwd.into()]), &names).is_some());
+        assert_eq!(head_lines(&q, HEAD_LINES, &|seen| seen.last().and_then(codex_user_text).is_some()).len(), 4);
+        // a Claude Code transcript names its folder in its first CWD_LINES lines, or it is not listed
+        let late = claude_file(cwd, C1).into_iter().map(|mut v| {
+            v.as_object_mut().unwrap().remove("cwd");
+            v
+        });
+        let mut t: Vec<Value> = (0..CWD_LINES).map(|i| serde_json::json!({"type": "attachment", "n": i})).collect();
+        t.extend(late);
+        t.push(serde_json::json!({"type": "user", "cwd": cwd, "message": {"role": "user", "content": "late"}}));
+        write(&root.join("projects").join(claude_slug(cwd)).join(format!("{C1}.jsonl")), &t);
+        assert!(claude_list(&root, Some(&[cwd.into()])).is_empty());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn injected_turns_name_no_conversation_and_are_not_the_persons_turn() {
+        let root = tmp("injected");
+        let cwd = "/w";
+        let user = |extra: Value, text: &str| {
+            let mut v = serde_json::json!({"type": "user", "cwd": cwd, "message": {"role": "user", "content": text}, "timestamp": "2026-11-12T09:00:00.000Z"});
+            for (k, x) in extra.as_object().unwrap() {
+                v[k] = x.clone();
+            }
+            v
+        };
+        let none = serde_json::json!({});
+        let mut lines = vec![
+            user(serde_json::json!({"isCompactSummary": true}), "Summary of what came before"),
+            user(serde_json::json!({"isVisibleInTranscriptOnly": true}), "Shown in the transcript only"),
+            user(none.clone(), "This session is being continued from a previous conversation that ran out of context."),
+            user(none.clone(), "Your tool call was malformed and could not be parsed. Please retry."),
+            user(none.clone(), "<teammate-message teammate_id=\"lead\">do this</teammate-message>"),
+            user(none.clone(), "<cross-session-message from=\"x\">hi</cross-session-message>"),
+            user(none.clone(), "<task-notification>done</task-notification>"),
+            user(none.clone(), "<system-reminder>remember</system-reminder>"),
+        ];
+        lines.extend(claude_file(cwd, C1)[2..8].iter().cloned());
+        // the same turns after the last answer are not the person's last line
+        lines.extend(lines[..8].to_vec());
+        write(&root.join("projects").join(claude_slug(cwd)).join(format!("{C1}.jsonl")), &lines);
+        let r = &list(&root, "claude", &[cwd.into()], false).unwrap()[0];
+        assert_eq!((r.title.as_str(), r.named), ("Remember the word MARIGOLD for later", false));
+        assert_eq!(r.last.as_ref().map(|l| (l.role, l.text.as_str())), Some(("assistant", "I will remember it.")));
+        // Codex: a collaboration turn's boilerplate
+        let id = xid(30);
+        let mut c = codex_file(&id, cwd);
+        let said = |t: &str| serde_json::json!({"type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": t}]}});
+        for t in ["Message Type: NEW_TASK\nTask: x", "Message Type: MESSAGE\nhi", "Message Type: FINAL_ANSWER\nok", "You are a worker agent in a team."] {
+            c.insert(3, said(t));
+        }
+        c.push(said("Message Type: MESSAGE\nlater"));
+        rollout(&root, &id, &c, 1);
+        let r = &list(&root, "codex", &[cwd.into()], false).unwrap()[0];
+        assert_eq!(r.title, "Remember COBALT please");
+        // and the last line passes them over too
+        assert_eq!(r.last.as_ref().map(|l| (l.role, l.text.as_str())), Some(("assistant", "Remembered.")));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn each_row_carries_the_last_thing_said_from_the_end_of_its_file() {
+        let root = tmp("last");
+        let cwd = "/w";
+        let dir = root.join("projects").join(claude_slug(cwd));
+        write(&dir.join(format!("{C1}.jsonl")), &claude_file(cwd, C1));
+        let r = &claude_list(&root, Some(&[cwd.into()]))[0];
+        // before list() keeps it, no end is read
+        assert!(r.last.is_none());
+        let r = &list(&root, "claude", &[cwd.into()], false).unwrap()[0];
+        assert_eq!(r.last.as_ref().map(|l| (l.role, l.text.as_str())), Some(("assistant", "I will remember it.")));
+        // the person's turn, on one line, clipped
+        let mut lines = claude_file(cwd, C1);
+        lines.push(serde_json::json!({"type": "user", "cwd": cwd, "message": {"role": "user", "content": format!("and then\n\n{}", "y".repeat(300))}}));
+        lines.push(serde_json::json!({"type": "user", "cwd": cwd, "message": {"role": "user", "content": [{"type": "tool_result", "content": "ok"}]}}));
+        write(&dir.join(format!("{C1}.jsonl")), &lines);
+        let r = &list(&root, "claude", &[cwd.into()], false).unwrap()[0];
+        let l = r.last.as_ref().unwrap();
+        assert_eq!((l.role, l.text.chars().count()), ("user", LAST_MAX));
+        assert!(l.text.starts_with("and then yyy") && l.text.ends_with('…'), "{}", l.text);
+        // an end that holds only a large tool result says nothing rather than guess
+        let mut lines = claude_file(cwd, C1);
+        lines.push(serde_json::json!({"type": "user", "cwd": cwd, "message": {"role": "user", "content": [{"type": "tool_result", "content": "z".repeat(LAST_TAIL as usize + 10)}]}}));
+        write(&dir.join(format!("{C1}.jsonl")), &lines);
+        let r = &list(&root, "claude", &[cwd.into()], false).unwrap()[0];
+        assert!(r.last.is_none(), "{:?}", r.last);
+        // Codex: the answer
+        let id = xid(40);
+        rollout(&root, &id, &codex_file(&id, cwd), 1);
+        let r = &list(&root, "codex", &[cwd.into()], false).unwrap()[0];
+        assert_eq!(r.last.as_ref().map(|l| (l.role, l.text.as_str())), Some(("assistant", "Remembered.")));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn all_folders_lists_every_project_folder_by_each_transcripts_own_folder() {
+        let root = tmp("all");
+        // two folders that share one slug, and a third elsewhere
+        let (a, b, c) = ("/Users/you/code/web-app", "/Users/you/code/web/app", "/Users/you/notes");
+        let ids = ["44444444-2222-4333-8444-555555555555", "55555555-2222-4333-8444-555555555555", "66666666-2222-4333-8444-555555555555"];
+        for (cwd, id) in [(a, ids[0]), (b, ids[1]), (c, ids[2])] {
+            write(&root.join("projects").join(claude_slug(cwd)).join(format!("{id}.jsonl")), &claude_file(cwd, id));
+        }
+        let mut got: Vec<(String, String)> = list(&root, "claude", &[], true).unwrap().into_iter().map(|r| (r.id, r.cwd)).collect();
+        got.sort();
+        assert_eq!(got, [(ids[0].into(), a.into()), (ids[1].into(), b.into()), (ids[2].into(), c.into())]);
+        // this folder only
+        let here = list(&root, "claude", &[b.into()], false).unwrap();
+        assert_eq!(here.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), [ids[1]]);
+        // a transcript whose own folder is not an absolute path is not listed (nothing could continue it there)
+        write(&root.join("projects/-rel").join(format!("{C2}.jsonl")), &claude_file("rel/x", C2));
+        assert_eq!(list(&root, "claude", &[], true).unwrap().len(), 3);
+        // Codex: every folder, each row its own
+        let x = tmp("all-codex");
+        rollout(&x, &xid(50), &codex_file(&xid(50), a), 1);
+        rollout(&x, &xid(51), &codex_file(&xid(51), c), 2);
+        let got: Vec<String> = list(&x, "codex", &[], true).unwrap().into_iter().map(|r| r.cwd).collect();
+        assert_eq!(got, [c, a]);
+        for d in [root, x] {
+            let _ = std::fs::remove_dir_all(d);
+        }
+    }
+
+    #[test]
+    fn a_long_folder_claude_code_shortened_is_listed() {
+        let root = tmp("long-slug");
+        let cwd = format!("/Users/you/{}", "deep/".repeat(50));
+        let cwd = cwd.trim_end_matches('/').to_string();
+        let slug = claude_slug(&cwd);
+        assert!(slug.len() > SLUG_MAX);
+        // the name Claude Code gives it: the slug's first 200 characters and a hash
+        let short = format!("{}-1a2b3c", &slug[..SLUG_MAX]);
+        write(&root.join("projects").join(&short).join(format!("{C1}.jsonl")), &claude_file(&cwd, C1));
+        let rows = list(&root, "claude", &[cwd.clone()], false).unwrap();
+        assert_eq!(rows.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), [C1]);
+        // and the look before a terminal continues it finds its file there
+        assert_eq!(conversation_state(&root, "claude", C1).unwrap(), "exists");
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -967,17 +1376,120 @@ mod tests {
     }
 
     #[test]
+    fn a_scoped_codex_listing_stops_reading_another_folders_rollout_at_its_meta() {
+        let root = tmp("codex-other-folder");
+        let id = xid(60);
+        // another folder's conversation: its meta, then many instruction items before the first words
+        let mut lines = codex_file(&id, "/elsewhere")[..3].to_vec();
+        for _ in 0..100 {
+            lines.push(serde_json::json!({"type": "response_item", "payload": {"type": "message", "role": "developer", "content": [{"type": "input_text", "text": "rules"}]}}));
+        }
+        lines.push(codex_file(&id, "/elsewhere")[3].clone());
+        let p = rollout(&root, &id, &lines, 1);
+        // every line is JSON, so the lines kept are the lines read
+        assert_eq!(codex_head(&p, Some(&["/w".into()])).len(), 1, "only the meta line is read");
+        let names = std::collections::HashMap::new();
+        assert!(codex_row(&p, Some(&["/w".into()]), &names).is_none());
+        // the same rollout in its own folder, or with no folder scope, is read to its first words and listed
+        assert_eq!(codex_head(&p, Some(&["/elsewhere/".into()])).len(), lines.len());
+        assert_eq!(codex_head(&p, None).len(), lines.len());
+        assert!(codex_row(&p, Some(&["/elsewhere/".into()]), &names).is_some());
+        assert!(codex_row(&p, None, &names).is_some());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_claude_turn_that_starts_with_an_editor_context_block_is_still_the_persons() {
+        let root = tmp("ide-block");
+        let cwd = "/w";
+        let mut lines = claude_file(cwd, C1);
+        lines[2] = serde_json::json!({"type": "user", "cwd": cwd, "message": {"role": "user", "content": [
+            {"type": "text", "text": "<ide_opened_file>The user opened the file /w/src/main.rs in the IDE.</ide_opened_file>"},
+            {"type": "text", "text": "<ide_selection>fn main() {}</ide_selection>"},
+            {"type": "text", "text": "Why does main return nothing?"},
+            {"type": "image", "source": {"type": "base64", "data": "AAAA"}},
+        ]}, "timestamp": "2026-11-12T10:00:02.000Z"});
+        lines.truncate(8); // no title: the first words name it
+        lines.push(serde_json::json!({"type": "user", "cwd": cwd, "message": {"role": "user", "content": [
+            {"type": "text", "text": "<ide_opened_file>/w/README.md</ide_opened_file>"}, {"type": "text", "text": "and the readme?"}]}}));
+        write(&root.join("projects").join(claude_slug(cwd)).join(format!("{C1}.jsonl")), &lines);
+        let r = &list(&root, "claude", &[cwd.into()], false).unwrap()[0];
+        assert_eq!((r.title.as_str(), r.named), ("Why does main return nothing?", false));
+        assert_eq!(r.last.as_ref().map(|l| (l.role, l.text.as_str())), Some(("user", "and the readme?")));
+        // a turn of context blocks only is nobody's words
+        let only = serde_json::json!({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": "<ide_selection>x</ide_selection>"}]}});
+        assert!(claude_user_text(&only).is_none());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn this_folder_is_one_folder_however_it_is_spelled() {
+        // the same rule as folders.ts `pathKey`
+        for (a, b) in [
+            ("/Users/you/code", "/Users/you/code/"),
+            ("/Users/you//code", "/Users/you/code"),
+            ("C:\\x", "c:\\x"),
+            ("C:/x", "C:\\x"),
+            ("C:\\Users\\You\\", "c:/users/you"),
+            ("C:\\", "c:/"),
+            ("/Users/you/\u{1107}\u{1169}\u{1100}\u{1169}\u{1109}\u{1165}", "/Users/you/보고서"),
+            ("\\\\server\\share\\", "\\\\server/share"),
+        ] {
+            assert!(same_folder(a, b), "{a:?} {b:?}");
+            assert_eq!(folder_key(a), folder_key(b));
+        }
+        for (a, b) in [
+            ("/Users/you/Code", "/Users/you/code"),
+            ("/a/b", "/a/b/c"),
+            ("\\\\Server\\Share", "\\\\server\\share"),
+            ("/", ""),
+        ] {
+            assert!(!same_folder(a, b), "{a:?} {b:?}");
+        }
+        assert!(!same_folder("", ""));
+        assert_eq!(folder_key("/"), "/");
+        assert_eq!(folder_key("C:/"), "c:\\");
+        assert_eq!(folder_key("C:\\Work\\보고서"), "c:\\work\\보고서");
+    }
+
+    #[test]
+    fn a_slug_counts_utf16_units_and_a_decomposed_folder_is_found() {
+        assert_eq!(claude_slug("/a/보고서"), "-a----");
+        assert_eq!(claude_slug("/a/\u{1107}\u{1169}\u{1100}\u{1169}\u{1109}\u{1165}"), "-a-------");
+        // an emoji is two UTF-16 units, so two `-` as Claude Code writes it
+        assert_eq!(claude_slug("/x/🚀"), "-x---");
+        // Claude Code ran in the decomposed folder (macOS's spelling); the menu offers the composed one, and back
+        let nfd = "/Users/you/\u{1107}\u{1169}\u{1100}\u{1169}\u{1109}\u{1165}";
+        let nfc = "/Users/you/보고서";
+        for (ran, asked) in [(nfd, nfc), (nfc, nfd)] {
+            let root = tmp("nfd-slug");
+            write(&root.join("projects").join(claude_slug(ran)).join(format!("{C1}.jsonl")), &claude_file(ran, C1));
+            let rows = list(&root, "claude", &[asked.into()], false).unwrap();
+            assert_eq!(rows.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), [C1], "{ran:?} asked as {asked:?}");
+            let _ = std::fs::remove_dir_all(&root);
+        }
+        // Codex compares its recorded cwd by key too
+        let x = tmp("nfd-codex");
+        rollout(&x, &xid(70), &codex_file(&xid(70), nfd), 1);
+        assert_eq!(list(&x, "codex", &[nfc.into()], false).unwrap().len(), 1);
+        let _ = std::fs::remove_dir_all(&x);
+    }
+
+    #[test]
     fn iso_times_and_typed_text() {
         assert_eq!(iso_secs("1970-01-01T00:00:00.000Z"), Some(0.0));
         assert_eq!(iso_secs("2026-11-12T15:28:55.500Z"), Some(1_794_497_335.5));
         assert_eq!(iso_secs("2024-02-29T00:00:00Z"), Some(1_709_164_800.0));
         assert_eq!(iso_secs("nope"), None);
         assert!(typed("hello") && !typed("<command-name>/x</command-name>") && !typed("  ") && !typed("# AGENTS.md instructions for /w"));
-        assert_eq!(checked_cwds(&["/a".into(), "b".into(), "C:\\x".into()]).first().map(String::as_str), Some("/a"));
+        assert_eq!(checked_cwds(&["/a".into()]), Ok(vec!["/a".to_string()]));
+        assert_eq!(checked_cwds(&["b".into()]), Ok(vec![]));
+        assert_eq!(checked_cwds(&[]), Ok(vec![]));
+        assert!(checked_cwds(&["/a".into(), "/b".into()]).is_err());
     }
 
     /// A real conversation made in the Claude Code (or Codex) CLI outside omher: list it from the CLI's own files,
-    /// read its last messages, then continue it through omher's own chat path and ask about the first message.
+    /// then continue it through omher's own chat path and ask about the first message.
     /// `OMHER_REAL_AGENT` (claude | codex), `OMHER_REAL_DIR` (the scratch folder the CLI ran in). Prints what came
     /// back; run with `cargo test real_past -- --ignored --nocapture`.
     #[test]
@@ -991,12 +1503,10 @@ mod tests {
         let cwd = dir.to_string_lossy().into_owned();
         let home = PathBuf::from(std::env::var("HOME").unwrap());
         let root = cli_home(&home, &agent, &[], &|k| std::env::var(k).ok()).unwrap();
-        let rows = list(&root, &agent, &[cwd.clone()]).unwrap();
+        let rows = list(&root, &agent, &[cwd.clone()], false).unwrap();
         println!("LIST {rows:?}");
         let row = rows.first().expect("the CLI's conversation is listed");
-        let msgs = messages(&root, &agent, &row.id, &cwd).unwrap();
-        println!("MESSAGES {msgs:?}");
-        // OMHER_REAL_LIST_ONLY: only the read-only listing and messages (no model turn)
+        // OMHER_REAL_LIST_ONLY: only the read-only listing (no model turn)
         if std::env::var("OMHER_REAL_LIST_ONLY").is_ok() {
             return;
         }

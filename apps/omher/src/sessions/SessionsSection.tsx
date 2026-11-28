@@ -31,7 +31,7 @@ import type { Layout } from "../terminal/layout";
 import { usePendingRequests } from "./termShare";
 import { useTermAsked } from "./termAsks";
 import { countRender, useAnyFlowing, useTermFace } from "./termActivity";
-import { addFolder, addedFolders, allCollapsed, collapseOthers, folderGroups, pathKey, folderSummary, isCollapsed, isTildePath, getFolderPrefs, moveFolder, orderFolders, removeFolder, revealFolder as openFolder, setAllFolders, setFolderGone, setFolderPrefs, toggleFolder, useFolderPrefs, useGoneFolders, withAdded } from "./folders";
+import { addFolder, addedFolders, allCollapsed, collapseOthers, folderGroups, isAddedFolder, pathKey, pathSpelling, folderSummary, isCollapsed, isTildePath, getFolderPrefs, moveFolder, orderFolders, removeFolder, revealFolder as openFolder, setAllFolders, setFolderGone, setFolderPrefs, toggleFolder, useFolderPrefs, useGoneFolders, withAdded } from "./folders";
 import { ChevronDown, ChevronRight } from "../ui/icons";
 import { CUE_PX, useEdgeFade } from "../sidebar/edgeFade";
 import { getHost, type PastChat } from "./host";
@@ -46,6 +46,7 @@ import type { Account, AccountCli, AccountGroup } from "../lib/protocol";
 import { useAccounts } from "../settings/accounts/useAccounts";
 import { accountForNewSessions } from "../settings/accounts/rules";
 import { CloseToasts } from "./CloseToasts";
+import { matchesSearch, searchKey } from "../lib/textMatch";
 
 /** The Accounts CLI a new session of `agent` signs in as (mirrors `session_cli` in src-tauri/src/accounts.rs). */
 const SESSION_CLI: Partial<Record<AgentId, AccountCli>> = { claude: "claude", codex: "codex", grok: "grok" };
@@ -73,8 +74,9 @@ export async function addTermFolder(): Promise<void> {
   const before = sx.getState();
   const picked = await sx.pickFolder(draftFolder(before.recent, before.home));
   if (!picked || isTildePath(picked)) return;
-  // the folder as the list names it: another spelling of a listed folder (`…/web-app/`) is that folder
-  const got = pathKey(picked);
+  // the folder as the dialog spelled it (another spelling of a listed folder, `…/web-app/` or a composed name of a
+  // folder a shell reported decomposed, is that folder: addFolder compares keys)
+  const got = pathSpelling(picked);
   const now = sx.getState();
   const listed = folderGroups(now.list.filter((r) => isTerminalRec(now.agents, r))).map((g) => g.cwd);
   const prefs = getFolderPrefs();
@@ -82,7 +84,7 @@ export async function addTermFolder(): Promise<void> {
   setFolderGone(got, false);
   setFolderPrefs(addFolder(prefs, got, [...listed, ...addedFolders(prefs)]));
   // the group comes into view (a long list may hold it below the fold)
-  requestAnimationFrame(() => [...document.querySelectorAll<HTMLElement>('[data-testid="term-group"]')].find((g) => g.dataset.cwd === got)?.scrollIntoView({ block: "nearest" }));
+  requestAnimationFrame(() => [...document.querySelectorAll<HTMLElement>('[data-testid="term-group"]')].find((g) => pathKey(g.dataset.cwd ?? "") === pathKey(got))?.scrollIntoView({ block: "nearest" }));
 }
 
 export function SessionsHeader() {
@@ -289,10 +291,11 @@ function NewSessionMenu({ onClose, trigger, initialFolder }: { onClose: () => vo
     if (why === "escape") trigger.current?.focus();
   };
   // the default is the folder of the terminal open now (a new one goes under the folder the person works in), else
-  // the last folder used, else home
+  // the last folder used, else home; never a folder found gone (nothing starts there)
+  const goneNow = useGoneFolders();
   const openId = getStore().getSnapshot().ui.session;
   const openCwd = openId ? ss.list.find((r) => r.id === openId && isTerminalRec(ss.agents, r))?.cwd : undefined;
-  const at = folder ?? openCwd ?? draftFolder(ss.recent, ss.home);
+  const at = folder ?? (openCwd && !goneNow.includes(pathKey(openCwd)) ? openCwd : undefined) ?? draftFolder(ss.recent, ss.home);
   const pick = (id: AgentId) => {
     close("pick");
     getSessions().startTerminal(id, at || undefined);
@@ -321,6 +324,8 @@ function NewSessionMenu({ onClose, trigger, initialFolder }: { onClose: () => vo
     setFolders(false);
   };
   const { recent: recentFolders, home } = folderChoices(ss.recent, ss.home);
+  // the agents whose conversations can be continued, when this computer has them
+  const keeps = PAST_AGENTS.filter((id) => agents?.some((a) => a.id === id && a.path));
   // an agent that is not installed: its install line goes to the clipboard, as text (omher runs nothing)
   const copyInstall = (id: AgentId) => {
     void navigator.clipboard?.writeText(installLine(id)).then(
@@ -379,7 +384,7 @@ function NewSessionMenu({ onClose, trigger, initialFolder }: { onClose: () => vo
   if (past)
     return (
       <Popover open onClose={close} align="left" side={fit?.side ?? "bottom"} width={MENU_W} label={t("ss.past.title", { agent: agentLabel(past, ss.agents) })} className="ss-pop">
-        <PastList agent={past} onBack={() => setPast(null)} onPick={() => close("pick")} />
+        <PastList agent={past} folder={at} onBack={() => setPast(null)} onPick={() => close("pick")} />
       </Popover>
     );
   return (
@@ -436,7 +441,7 @@ function NewSessionMenu({ onClose, trigger, initialFolder }: { onClose: () => vo
                 key={cwd}
                 type="button"
                 role="menuitem"
-                className={`ss-item${cwd === at ? " on" : ""}`}
+                className={`ss-item${at && pathKey(cwd) === pathKey(at) ? " on" : ""}`}
                 title={cwd}
                 onClick={() => {
                   setFolder(cwd);
@@ -517,6 +522,23 @@ function NewSessionMenu({ onClose, trigger, initialFolder }: { onClose: () => vo
           </button>
         )}
         {unfold && parts?.more.map(row)}
+        {keeps.length > 0 && (
+          <>
+            <div className="ss-sep" />
+            <div className="ss-h">{t("ss.past.head")}</div>
+            {keeps.map((id) => (
+              <button key={id} type="button" role="menuitem" className="ss-item" onClick={() => setPast(id)} data-testid={`session-past-${id}`}>
+                <span className="ss-ic">
+                  <AgentMark agent={id} />
+                </span>
+                <span className="ss-n">{agentLabel(id, ss.agents)}</span>
+                <span className="ss-chev" aria-hidden="true">
+                  ›
+                </span>
+              </button>
+            ))}
+          </>
+        )}
         </div>
         {more && (
           <button
@@ -550,32 +572,83 @@ export function ageOf(at: number, nowMs = Date.now()): string {
   return t("unit.d", { n: Math.floor(s / 86_400) });
 }
 
-/** The + menu's second step: `agent`'s recent conversations for the folders the menu offers (the recent ones and
- *  home), newest first. Each row is its title or first words over its folder and age; picking one continues it as
- *  a session. ← (or Esc on the first row's left) goes back to the agents. */
-function PastList({ agent, onBack, onPick }: { agent: PastAgent; onBack: () => void; onPick: () => void }) {
+/** Which conversations the + menu's second step lists: those of the menu's folder, or of every folder. */
+export type PastScope = "here" | "all";
+const PAST_SCOPE_KEY = "omher.past.scope";
+
+/** The scope the person last picked (This folder unless they picked All folders). */
+export function readPastScope(): PastScope {
+  try {
+    return localStorage.getItem(PAST_SCOPE_KEY) === "all" ? "all" : "here";
+  } catch {
+    return "here";
+  }
+}
+
+export function savePastScope(scope: PastScope): void {
+  try {
+    localStorage.setItem(PAST_SCOPE_KEY, scope);
+  } catch {
+    /* no storage: it is asked again next time */
+  }
+}
+
+/** A row's dim line: the last thing said, as "You: …" or "Agent: …"; empty when the file's end held none. */
+export function pastSaid(c: Pick<PastChat, "last">): string {
+  if (!c.last?.text) return "";
+  return t(c.last.role === "user" ? "ss.past.you" : "ss.past.agentSaid", { text: c.last.text });
+}
+
+/** A Codex fork's mark: "fork of <title>" when the conversation it came from is listed, else "fork"; empty when it
+ *  is not a fork. */
+export function pastFork(c: Pick<PastChat, "fork">): string {
+  if (c.fork === undefined || c.fork === null) return "";
+  return c.fork ? t("ss.past.forkOf", { title: c.fork }) : t("ss.past.fork");
+}
+
+/** Whether conversation `c` matches the filter `needle`: by its title, its last line or its folder (as the row shows
+ *  it, or whole), as every list search compares (`matchesSearch`: case ignored, Unicode composed, so a decomposed
+ *  Korean folder name as the CLI wrote it matches the same name typed). */
+export function pastMatches(c: PastChat, needle: string, home: string | null): boolean {
+  const n = searchKey(needle.trim());
+  return matchesSearch(n, c.title, c.last?.text, c.cwd, tildePath(c.cwd.normalize("NFC"), home?.normalize("NFC") ?? null), pastFork(c));
+}
+
+/** The + menu's second step: `agent`'s recent conversations in the menu's folder (`folder`, its chip), or in every
+ *  folder that agent keeps conversations for (the switch, remembered), newest first. Each row is its title (and a
+ *  Codex fork's mark) over the last thing said and its folder and age; a filter narrows them. Picking one continues it
+ *  as a TERMINALS row. ← (from a row) goes back to the agents. */
+function PastList({ agent, folder, onBack, onPick }: { agent: PastAgent; folder: string; onBack: () => void; onPick: () => void }) {
   const ss = useSessions();
   const box = useRef<HTMLDivElement>(null);
   const [rows, setRows] = useState<PastChat[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { recent, home } = folderChoices(ss.recent, ss.home);
-  const cwds = [...recent, ...(home ? [home] : [])];
-  const key = cwds.join("\n");
+  const [scope, setScope] = useState<PastScope>(readPastScope);
+  const [needle, setNeedle] = useState("");
+  const all = scope === "all";
   useEffect(() => {
     let live = true;
+    setRows(null);
+    setError(null);
     getHost()
-      .pastChats(agent, cwds)
+      .pastChats(agent, folder ? [folder] : [], all)
       .then((r) => live && setRows(r))
       .catch((e: unknown) => live && (setRows([]), setError(e instanceof Error ? e.message : String(e))));
     return () => {
       live = false;
     };
-    // the folders, not the array's identity
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agent, key]);
+  }, [agent, folder, all]);
+  const loaded = rows !== null;
   useEffect(() => {
-    box.current?.querySelector<HTMLButtonElement>(rows?.length ? ".ss-past [role=menuitem]" : "[role=menuitem]")?.focus({ preventScroll: true });
-  }, [rows]);
+    if (!loaded) return;
+    // the filter once the list is there (typing narrows it at once); else the first row
+    (box.current?.querySelector<HTMLElement>(".ss-past-filter input") ?? box.current?.querySelector<HTMLElement>("[role=menuitem]"))?.focus({ preventScroll: true });
+  }, [loaded]);
+  const pick = (s: PastScope) => {
+    savePastScope(s);
+    setScope(s);
+  };
+  const shown = (rows ?? []).filter((c) => pastMatches(c, needle, ss.home));
   const label = agentLabel(agent, ss.agents);
   return (
     <div
@@ -584,13 +657,16 @@ function PastList({ agent, onBack, onPick }: { agent: PastAgent; onBack: () => v
       aria-label={t("ss.past.title", { agent: label })}
       data-testid="session-past-menu"
       onKeyDown={(e) => {
-        if (e.key === "ArrowLeft") {
+        const inField = (e.target as HTMLElement).tagName === "INPUT";
+        if (e.key === "ArrowLeft" && !inField) {
           e.preventDefault();
           onBack();
           return;
         }
-        const items = [...(box.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]") ?? [])];
-        const i = items.indexOf(document.activeElement as HTMLButtonElement);
+        // in the filter only ↓ and ↑ move (the other keys edit it)
+        if (inField && e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+        const items = [...(box.current?.querySelectorAll<HTMLElement>(".ss-past-filter input, [role=menuitem], [role=menuitemradio]") ?? [])];
+        const i = items.indexOf(document.activeElement as HTMLElement);
         const to = e.key === "ArrowDown" ? i + 1 : e.key === "ArrowUp" ? i - 1 : e.key === "Home" ? 0 : e.key === "End" ? items.length - 1 : null;
         if (to === null || !items.length) return;
         e.preventDefault();
@@ -609,35 +685,85 @@ function PastList({ agent, onBack, onPick }: { agent: PastAgent; onBack: () => v
         <span className="ss-n">{label}</span>
       </button>
       <div className="ss-h">{t("ss.past.head")}</div>
-      {rows === null && <div className="ss-empty">{t("ss.past.looking")}</div>}
-      {rows !== null && rows.length === 0 && (
+      <div className="ss-past-scope" role="group" aria-label={t("ss.past.scope")} data-testid="session-past-scope">
+        {(["here", "all"] as const).map((s) => (
+          <button
+            key={s}
+            type="button"
+            role="menuitemradio"
+            aria-checked={scope === s}
+            className={scope === s ? "on" : undefined}
+            title={s === "here" ? folder : undefined}
+            onClick={() => pick(s)}
+            data-testid={`session-past-scope-${s}`}
+          >
+            {t(s === "here" ? "ss.past.here" : "ss.past.all")}
+          </button>
+        ))}
+      </div>
+      {loaded && rows.length > 0 && (
+        <label className="ss-past-filter">
+          <input
+            type="search"
+            value={needle}
+            placeholder={t("ss.past.filter")}
+            aria-label={t("ss.past.filter")}
+            spellCheck={false}
+            onChange={(e) => setNeedle(e.target.value)}
+            data-testid="session-past-filter"
+          />
+        </label>
+      )}
+      {!loaded && <div className="ss-empty">{t("ss.past.looking")}</div>}
+      {loaded && rows.length === 0 && (
         <div className="ss-empty" data-testid="session-past-none" title={error ?? undefined}>
-          {t("ss.past.none", { agent: label })}
+          {all ? t("ss.past.noneAll", { agent: label }) : t("ss.past.none", { agent: label })}
         </div>
       )}
-      {rows !== null && rows.length > 0 && (
+      {loaded && rows.length > 0 && shown.length === 0 && (
+        <div className="ss-empty" data-testid="session-past-nomatch">
+          {t("ss.past.noMatch")}
+        </div>
+      )}
+      {shown.length > 0 && (
         <div className="ss-scroll ss-past" data-testid="session-past-list">
-          {rows.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              role="menuitem"
-              className="ss-item ss-past-row"
-              title={`${c.title}\n${c.cwd}`}
-              onClick={() => {
-                onPick();
-                void getSessions().continuePast(c);
-              }}
-              data-testid={`session-past-row-${c.id}`}
-            >
-              <span className="ss-n ss-n-as">
-                <span className="ss-l">{c.title}</span>
-                <span className="ss-as">
-                  {tildePath(c.cwd, ss.home)} · {ageOf(c.at)}
+          {shown.map((c) => {
+            const said = pastSaid(c);
+            const fork = pastFork(c);
+            return (
+              <button
+                key={c.id}
+                type="button"
+                role="menuitem"
+                className="ss-item ss-past-row"
+                title={[c.title, fork, said, c.cwd].filter(Boolean).join("\n")}
+                onClick={() => {
+                  onPick();
+                  getSessions().continuePast(c);
+                }}
+                data-testid={`session-past-row-${c.id}`}
+              >
+                <span className="ss-n ss-n-as">
+                  <span className="ss-head">
+                    <span className="ss-l">{c.title}</span>
+                    {fork && (
+                      <span className="ss-past-fork" data-testid="session-past-fork">
+                        {fork}
+                      </span>
+                    )}
+                  </span>
+                  {said && (
+                    <span className="ss-as ss-past-said" data-testid="session-past-said">
+                      {said}
+                    </span>
+                  )}
+                  <span className="ss-as">
+                    {tildePath(c.cwd, ss.home)} · {ageOf(c.at)}
+                  </span>
                 </span>
-              </span>
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
@@ -709,12 +835,12 @@ function SessionStart() {
   );
 }
 
-/** Whether session `rec` matches the sidebar search `needle` (lower case): by its name, as its row shows it, or its
- *  folder. */
+/** Whether session `rec` matches the sidebar search `needle` (a `searchKey`: case ignored, composed): by its name, as
+ *  its row shows it, or its folder (which a macOS shell reports decomposed). */
 export function sessionMatches(rec: SessionRec, needle: string): boolean {
   if (!needle) return true;
   const name = rec.status === "draft" ? t("ss.newTitle") : pickTitle(rec, folderName(rec.cwd)).title;
-  return [name, rec.cwd].some((v) => v.toLowerCase().includes(needle));
+  return matchesSearch(needle, name, rec.cwd);
 }
 
 /** Who shows a row's "Stop?" (the mounted SessionList). */
@@ -843,7 +969,7 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
   // is a group too, and a search keeps an added one only when its path matches
   const firsts = new Set(cards.map((g) => cardRecs(g)[0]!.id));
   const ordered = folderGroups(terms.filter((r) => firsts.has(r.id) || shown.includes(r))).map((g) => ({ cwd: g.cwd, rows: g.rows.filter((r) => !inCard.has(r.id)) }));
-  const groups = orderFolders(withAdded(ordered, needle ? added.filter((c) => c.toLowerCase().includes(needle)) : added), folders.order);
+  const groups = orderFolders(withAdded(ordered, needle ? added.filter((c) => matchesSearch(needle, c)) : added), folders.order);
   // asking before a running session closes, in its row's place (a split member's under its card)
   const confirmRow = (rec: SessionRec) => (
     <div
@@ -898,7 +1024,7 @@ export function SessionList({ needle = "", query = "" }: { needle?: string; quer
             shut={shut}
             index={gi}
             all={all.map((x) => x.cwd)}
-            added={added.includes(g.cwd)}
+            added={isAddedFolder(folders, g.cwd)}
             summary={{ ...folderSummary(members.map((r) => (asks.has(r.id) ? "bell" : termStatus(r, ss.unseen[r.id], 0)))), running: members.filter((r) => (r.status === "running" || r.status === "starting") && termMarkAgent(r) !== null).length }}
             flowIds={shut ? members.filter((r) => (r.status === "running" || r.status === "starting") && !isNews(ss.unseen[r.id])).map((r) => r.id) : NO_IDS}
           />
@@ -940,7 +1066,8 @@ function FolderGlyph() {
 function CollapseAllButton() {
   const ss = useSessions();
   const prefs = useFolderPrefs();
-  const all = [...new Set([...folderGroups(ss.list.filter((r) => isTerminalRec(ss.agents, r))).map((g) => g.cwd), ...addedFolders(prefs)])];
+  // one entry per folder, however a session and an added folder spell it
+  const all = withAdded(folderGroups(ss.list.filter((r) => isTerminalRec(ss.agents, r))), addedFolders(prefs)).map((g) => g.cwd);
   if (all.length < 2) return null;
   const shut = allCollapsed(prefs, all);
   const label = shut ? t("term.expandAll") : t("term.collapseAll");
@@ -1026,7 +1153,7 @@ function FolderHead({ cwd, home, shut, index, all, added, summary: base, flowIds
   }, [cwd]);
   const name = folderName(cwd);
   // a shell asked to start here ran in another folder: this one is no longer on disk (Remove from list still works)
-  const gone = useGoneFolders().includes(cwd);
+  const gone = useGoneFolders().includes(pathKey(cwd));
   const toggle = () => setFolderPrefs(toggleFolder(getFolderPrefs(), cwd));
   return (
     <div

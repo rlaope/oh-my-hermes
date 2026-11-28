@@ -7,5 +7,5 @@ export default defineConfig({
   // write one node_modules/.vite together. Unset, Vite's default applies.
   cacheDir: process.env.OMHER_VITE_CACHE_DIR || undefined,
   server: { port: 5207, strictPort: true },
-  test: { environment: "node", include: ["src/**/*.test.ts", "src/**/*.test.tsx"] },
+  test: { environment: "node", include: ["src/**/*.test.ts", "src/**/*.test.tsx", "scripts/**/*.test.mjs"] },
 } as never);

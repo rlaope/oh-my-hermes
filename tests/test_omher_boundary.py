@@ -255,6 +255,12 @@ RULES = (
     " commands of rules 29, 41, 44 (`hermes -p default profile create <name> --no-alias`) and 52 (`hermes computer-use`"
     " and `hermes tools enable|disable computer_use`), and the read-only `omh` of"
     " rules 43 and 44, the only program the bridge runs is `git`, for reads (`worktree list`, `rev-parse`, `status`,",
+    # rule 10: no inherited git redirection reaches a read, and a read never fetches (_git's env, _GIT_REDIRECT)
+    "Each read runs without the git redirection omher may have inherited (`GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`,"
+    " `GIT_COMMON_DIR`, `GIT_OBJECT_DIRECTORY`, `GIT_ALTERNATE_OBJECT_DIRECTORIES`, `GIT_NAMESPACE`, and config added"
+    " through `GIT_CONFIG_PARAMETERS` or `GIT_CONFIG_COUNT`), so it answers for the folder asked, and it never fetches:",
+    "a partial clone's missing objects are not fetched (`GIT_NO_LAZY_FETCH=1`) and no transport is allowed"
+    " (`GIT_ALLOW_PROTOCOL` empty).",
     # rule 44: a new bot through Hermes' own profile create, on a press, the name by Hermes' rule, and OMH's templates
     "omher makes a new bot only when the person presses Create under the sidebar `+` › New bot, and only through Hermes'"
     " own command: one fixed argv, `hermes -p default profile create <name> --no-alias`,",
@@ -1520,6 +1526,23 @@ class BridgeSubmitsOnlyToTheMainChat(unittest.TestCase):
         # the one caller hands it the origin and ticket from Hermes' own discovery and mint, never from the page
         callers = sorted(n for n, f in fns.items() if n != "voice_request" and any(isinstance(c, ast.Name) and c.id == "voice_request" for c in ast.walk(f)))
         self.assertEqual(callers, ["_voice_send", "exchange"])  # `exchange` is the worker-thread step inside _voice_send
+
+    def test_git_reads_take_no_inherited_redirection_and_never_fetch(self) -> None:
+        """Rule 10: _git builds its child's environment from os.environ minus every name _GIT_REDIRECT matches, and
+        sets the two no-fetch keys; bridge/tests/test_git_env.py runs it against real repositories."""
+        fn = next(f for f in ast.walk(self.tree) if isinstance(f, ast.FunctionDef) and f.name == "_git")
+        body = ast.unparse(fn)
+        self.assertIn("if not _GIT_REDIRECT.fullmatch(k.upper())", body)
+        self.assertIn("'GIT_NO_LAZY_FETCH': '1'", body)
+        self.assertIn("'GIT_ALLOW_PROTOCOL': ''", body)
+        self.assertIn("env=env", body)
+        pattern = next(n.value for n in self.tree.body if isinstance(n, ast.Assign)
+                       and getattr(n.targets[0], "id", "") == "_GIT_REDIRECT")
+        rx = re.compile(ast.literal_eval(pattern.args[0]))
+        for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY",
+                     "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT",
+                     "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_7"):
+            self.assertTrue(rx.fullmatch(name), name)
 
     def test_the_only_gh_call_is_the_fixed_pr_view(self) -> None:
         """Rule 21: one `gh` call site, in gh_pr_view, with a fixed argv, a 3 s timeout, no prompt, and a repo and
@@ -2973,20 +2996,51 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
         self.assertIn("std::fs::symlink_metadata(p).map(|m| m.is_dir())", self.past)
         self.assertIn("const HEAD: u64 = 256 * 1024;", self.past)
         self.assertIn("const TAIL: u64 = 1024 * 1024;", self.past)
-        self.assertIn("pub const MSG_MAX: usize = 40;", self.past)
-        # every file read goes through inside(): the listing and the messages
-        for fn in ("pub fn claude_list(", "pub fn claude_messages(", "pub fn codex_list(", "pub fn codex_messages(", "fn codex_names(",
-                   "pub fn rollout_id("):
+        # a listing is bounded by work, not by a window of newest files: at most 20,000 files, 200 lines of a head, the
+        # last 128 KB for the last line, and it stops once the list is full
+        self.assertIn("const FILES_MAX: usize = 20_000;", self.past)
+        self.assertIn("const HEAD_LINES: usize = 200;", self.past)
+        self.assertIn("const LAST_TAIL: u64 = 128 * 1024;", self.past)
+        self.assertIn("let mut r = BufReader::new(f.take(HEAD));", self.past)
+        for fn in ("pub fn claude_list(", "pub fn codex_list("):
+            body = self.past.split(fn, 1)[1].split("\n}\n", 1)[0]
+            self.assertIn("if out.len() >= LIST_MAX + LIST_MARGIN {", body, fn)
+        self.assertIn("codex_rollouts(root, FILES_MAX)", self.past)
+        self.assertIn("if files.len() >= FILES_MAX {", self.past)
+        # every file read goes through inside(): the listings, the thread names, a rollout's id
+        for fn in ("pub fn claude_list(", "pub fn codex_list(", "fn codex_names(", "pub fn rollout_id("):
             body = self.past.split(fn, 1)[1].split("\n}\n", 1)[0]
             self.assertIn("inside(root, ", body, fn)
-        # an id is a UUID before it names a file
-        for fn in ("pub fn claude_messages(", "pub fn codex_messages("):
-            body = self.past.split(fn, 1)[1].split("\n}\n", 1)[0]
-            self.assertIn("if !is_uuid(id) {", body, fn)
+        # a listed file is named by a UUID; nothing reads a conversation's messages for the page any more (picking one
+        # opens the CLI's own terminal, which shows its history)
+        self.assertIn("p.file_stem().and_then(|x| x.to_str()).is_some_and(is_uuid)", self.past)
+        for gone in ("pub fn messages(", "fn claude_messages(", "fn codex_messages(", "MSG_MAX"):
+            self.assertNotIn(gone, self.past, gone)
+        self.assertNotIn("past_chat_messages", self.lib)
         text = _flat(DOC.read_text(encoding="utf-8"))
         self.assertIn("It refuses a symlink anywhere under those folders (except `conversation_state` below, which only stats names and"
                       " follows links as the CLI does) and any file that is not inside that home once its links are resolved", text)
         self.assertIn("never opens a credential, token or config file of either CLI", text)
+        self.assertIn(
+            "for the folder the TERMINALS + menu starts in (the page sends that one folder, or none; a listing asked for"
+            " more than one is refused) or, when the person switches its list to All folders, for every"
+            " folder that agent keeps conversations for in that same home (every project folder under"
+            " `<claude config>/projects`, every rollout under `<codex home>/sessions`), each conversation's folder taken"
+            " from its own file.",
+            text,
+        )
+        self.assertIn(
+            "reads at most the first 256 KB (at most 200 lines) and the last 1 MB of a file, opens at most 20,000 files for"
+            " one listing, newest first, and stops once the list is full",
+            text,
+        )
+        self.assertIn(
+            "the last line the person or the agent said in it (from the last 128 KB of its file), folder and age; picking"
+            " one opens a TERMINALS terminal of that agent in that folder continuing the conversation (`--resume <id>` for"
+            " Claude Code, `codex resume <id>` for Codex, rule 11), where the CLI shows its own history; a conversation whose"
+            " folder no longer exists starts nothing, and its row says so.",
+            text,
+        )
 
     def test_a_conversation_is_looked_for_by_name_only_before_a_terminal_continues_it(self) -> None:
         text = _flat(DOC.read_text(encoding="utf-8"))
@@ -3005,7 +3059,7 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
             self.assertNotIn(banned, look, banned)
 
     def test_the_commands_take_only_an_agent_folders_and_an_id(self) -> None:
-        for cmd, params in (("past_chats_list", "agent: String, cwds: Vec<String>"), ("past_chat_messages", "agent: String, id: String, cwd: String"),
+        for cmd, params in (("past_chats_list", "agent: String, cwds: Vec<String>, all: bool"),
                             ("conversation_state", "agent: String, id: String, account: Option<String>"),
                             ("codex_conversation", "shell: State<'_, Shell>, id: u32"),
                             ("claude_conversation", "shell: State<'_, Shell>, id: u32"),
@@ -3016,6 +3070,14 @@ class PastConversationsAreOnlyRead(unittest.TestCase):
             self.assertIsNotNone(sig, cmd)
             self.assertEqual(sig.group(1).strip(), params, cmd)
         self.assertIn('matches!(agent, "claude" | "codex")', self.past)
+        # one folder, the one the + menu starts in, as the page sends it; more is refused, not cut down (the rule's
+        # sentence is pinned in test_links_and_paths_outside_the_home_are_refused_and_reads_are_bounded)
+        checked = self.past.split("pub fn checked_cwds(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("if cwds.len() > 1 {\n        return Err(", checked)
+        self.assertNotIn("take(", checked)
+        self.assertIn("let cwds = checked_cwds(cwds)?;", self.past.split("pub fn list(", 1)[1].split("\n}\n", 1)[0])
+        page = (ROOT / "apps" / "omher" / "src" / "sessions" / "SessionsSection.tsx").read_text(encoding="utf-8")
+        self.assertIn(".pastChats(agent, folder ? [folder] : [], all)", page)
         # a TERMINALS Codex session's conversation is the rollout its own Codex holds open (rule 11): only a path in
         # the home, under sessions/YYYY/MM/DD/rollout-*-<uuid>.jsonl, and only its UUID; no file is opened
         rid = self.past.split("pub fn rollout_id(", 1)[1].split("\n}\n", 1)[0]
@@ -3102,7 +3164,7 @@ class SshPeersOnlyOverTheOwnSsh(unittest.TestCase):
         self.assertIn("no_console_window(&mut cmd);", self.peers)
         opts = re.search(r"pub const SSH_OPTIONS: \[&str; 5\] = \[(.*?)\];", self.peers, re.S).group(1)
         self.assertEqual(re.findall(r'"([^"]+)"', opts),
-                         ["BatchMode=yes", "ConnectTimeout=10", "ExitOnForwardFailure=yes", "ServerAliveInterval=15", "ServerAliveCountMax=3"])
+                         ["BatchMode=yes", "ConnectTimeout=10", "ExitOnForwardFailure=yes", "ServerAliveInterval=5", "ServerAliveCountMax=3"])
         args = self.peers.split("pub fn ssh_args(", 1)[1].split("\n}\n", 1)[0]
         # only fixed words, numbers made here, the checked host and port, and the script as one quoted word
         self.assertEqual(re.findall(r'a\.push\("([^"]*)"', args), ["-o", "-T", "-L", "-p", "--"])
@@ -3110,7 +3172,7 @@ class SshPeersOnlyOverTheOwnSsh(unittest.TestCase):
         self.assertIn('format!("sh -c {}", sh_quote(remote))', args)
         self.assertIn("a.push(host.into());", args)
         # the doc names the same argv
-        self.assertIn("`-o BatchMode=yes -o ConnectTimeout=10 -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 "
+        self.assertIn("`-o BatchMode=yes -o ConnectTimeout=10 -o ExitOnForwardFailure=yes -o ServerAliveInterval=5 "
                       "-o ServerAliveCountMax=3 -T -L 127.0.0.1:<local>:127.0.0.1:<remote> [-p <port>] -- <host>`", self.doc)
 
     def test_the_host_is_checked_and_no_command_comes_from_the_page(self) -> None:
@@ -3168,6 +3230,46 @@ class SshPeersOnlyOverTheOwnSsh(unittest.TestCase):
         rule = self.doc.split("\n31. ", 1)[1].split("\n32. ", 1)[0]
         self.assertIn("`hermes.cmd` shim", rule)
         self.assertIn("each bin's `.exe` before its `.cmd`", rule)
+
+    def test_the_ssh_config_is_read_only_at_two_sites_and_nothing_runs_for_it(self) -> None:
+        rule = self.doc.split("\n31. ", 1)[1].split("\n32. ", 1)[0]
+        self.assertIn("For the host field's suggestions and to refuse a second row for the same computer, the shell reads,"
+                      " never writes, only `~/.ssh/config`, and only when it resolves to a regular file of at most 1 MB"
+                      " (a pipe or device there is never opened for reading, so the read never blocks): it does not"
+                      " follow `Include` or evaluate `Match`, it runs nothing for this (never `ssh -G`), and the default"
+                      " user is `USER` (`USERNAME` on Windows).", rule)
+        # one helper reads it, for the suggestions (lib.rs) and the duplicate check (Peers::add); no other file under
+        # ~/.ssh is named anywhere
+        hosts = self.lib.split("async fn peers_hosts(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("peers::ssh_config_hosts(&peers::read_ssh_config(&home))", hosts)
+        add = self.peers.split("pub fn add(self: &Arc<Self>", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("let config = read_ssh_config(&self.home);", add)
+        self.assertEqual(self.lib.count("read_ssh_config("), 1)
+        self.assertEqual(self.peers.count("read_ssh_config("), 2)  # the helper and its call in add
+        self.assertEqual(self.lib.count('.join(".ssh")'), 0)
+        self.assertEqual(self.peers.count('.join(".ssh")'), 1)
+        helper = self.peers.split("pub fn read_ssh_config(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn('let path = home.join(".ssh").join("config");', helper)
+        # a regular file once links are resolved, checked again on the open handle, opened non-blocking, bounded
+        self.assertIn("m.is_file() && m.len() <= SSH_CONFIG_MAX", helper)
+        self.assertIn("if !regular(std::fs::metadata(&path)) {", helper)
+        self.assertIn("if !regular(f.metadata()) {", helper)
+        self.assertIn("open.custom_flags(libc::O_NONBLOCK);", helper)
+        self.assertIn("f.take(SSH_CONFIG_MAX + 1)", helper)
+        self.assertIn("const SSH_CONFIG_MAX: u64 = 1024 * 1024;", self.peers)
+        self.assertNotIn("write", helper)
+        # Include is not followed and Match not evaluated: the resolver answers unknown at either, the suggestions
+        # read `Host` lines only
+        target = self.peers.split("pub fn ssh_target(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn('if key.eq_ignore_ascii_case("match") || key.eq_ignore_ascii_case("include") {\n            return None;', target)
+        suggest = self.peers.split("pub fn ssh_config_hosts(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn('if !key.eq_ignore_ascii_case("host") {', suggest)
+        # nothing runs for it: `ssh` has one spawn site (the link) and `-G` is never an argument
+        self.assertNotIn('"-G"', self.peers)
+        self.assertNotIn('"-G"', self.lib)
+        # the default user
+        self.assertIn('let key = if cfg!(windows) { "USERNAME" } else { "USER" };', self.peers)
+        self.assertEqual(self.peers.count("std::env::var("), 1)
 
     def test_only_connect_writes_the_peer_list(self) -> None:
         self.assertEqual(self.peers.count("write_peers(&self.home"), 2)  # add (Connect) and remove (Remove)

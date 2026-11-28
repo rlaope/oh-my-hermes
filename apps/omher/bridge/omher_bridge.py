@@ -524,6 +524,14 @@ GIT_READS = {("worktree", "list"), ("rev-parse",), ("status",), ("diff",), ("log
 _EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 _FILTER_QUERY = ["config", "--list", "--null", "--name-only"]
 _ATTR_SOURCE: list[bool] = []  # cached: does this git know --attr-source (git >= 2.40)?
+# Git variables omher may have inherited (from the shell that started it, or a git hook that did) that point a read at
+# another repository, work tree, index, object store or ref namespace, or add config the read did not ask for
+# (GIT_CONFIG_PARAMETERS is what `git -c` passes to its children; GIT_CONFIG_COUNT names GIT_CONFIG_KEY_<n> and
+# GIT_CONFIG_VALUE_<n> pairs). _git takes each out of its child's environment, so a read answers for the folder it was
+# asked about with that folder's own config and the flags _git adds. Matched on the upper-cased name: Windows names
+# are case-insensitive.
+_GIT_REDIRECT = re.compile(r"GIT_(?:DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES"
+                           r"|NAMESPACE|CONFIG_PARAMETERS|CONFIG_COUNT|CONFIG_(?:KEY|VALUE)_[0-9]+)")
 
 
 def _json_obj(raw):
@@ -617,11 +625,19 @@ def _git(args: list[str], cwd: str | Path, timeout: float = GIT_TIMEOUT, hardene
     kw = {}
     if os.name == "nt":
         kw["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
+    env = {k: v for k, v in os.environ.items() if not _GIT_REDIRECT.fullmatch(k.upper())}
+    env.update({
+        "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0", "GIT_ATTR_NOSYSTEM": "1",
+        # never the network: a partial clone's missing objects are not fetched on demand (git >= 2.44; an older git
+        # ignores the name), and an empty allow-list refuses every transport, so on an older git that lazy fetch
+        # fails too. None of the GIT_READS reads a local repository through a transport, so neither changes what a
+        # read of one answers (bridge/tests/test_git_env.py compares each read with and without them).
+        "GIT_NO_LAZY_FETCH": "1", "GIT_ALLOW_PROTOCOL": "",
+    })
     try:
         r = subprocess.run(["git", *pre, *args], cwd=str(cwd), capture_output=True, text=True,
                            encoding="utf-8", errors="replace", timeout=timeout, stdin=subprocess.DEVNULL,
-                           env={**os.environ, "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0",
-                                "GIT_ATTR_NOSYSTEM": "1"}, **kw)
+                           env=env, **kw)
     except (OSError, subprocess.SubprocessError):
         return None
     return r.stdout if r.returncode == 0 else None
@@ -1615,6 +1631,13 @@ USAGE_FILES = 5               # newest session files read per CLI
 USAGE_TAIL = 512 * 1024       # bytes read from the end of each file
 _CLAUDE_WINDOWS = {"five_hour": "5 hours", "seven_day": "Weekly", "seven_day_opus": "Weekly (Opus)",
                    "seven_day_sonnet": "Weekly (Sonnet)"}
+# The Claude windows that hold for one model only, by the model's family name as it appears in a model id
+# (`claude-opus-4-5` -> "opus"). Such a window is kept and shown with its `model`, but it never makes the whole
+# account limited or near: a weekly Opus limit leaves Sonnet sessions working. Whether it limits the account for a
+# session is the app's decision, from the models its running sessions use (Settings › Accounts' auto-switch).
+_CLAUDE_MODEL_WINDOWS = {"seven_day_opus": "opus", "seven_day_sonnet": "sonnet"}
+# Codex's shared limit in its `rate_limits` events (`limit_id`); another id is one model's own bucket.
+_CODEX_SHARED_LIMIT = "codex"
 
 
 def _tail_lines(path: Path, needle: str, limit: int = USAGE_TAIL):
@@ -1664,6 +1687,7 @@ def _finish(provider: dict, now: float) -> dict:
     for w in windows:
         if w.get("resets_at") is not None and w["resets_at"] <= now:
             w.pop("used_percent", None)
+            w.pop("limited", None)
             w["stale"] = True
     if windows and all(w.get("stale") for w in windows):
         provider["state"] = "stale"
@@ -1684,6 +1708,10 @@ def _codex_usage(user_home: Path, now: float, root: Path | None = None) -> dict 
             payload = ev.get("payload") if isinstance(ev, dict) else None
             rl = payload.get("rate_limits") if isinstance(payload, dict) else None
             if not isinstance(rl, dict) or not (rl.get("primary") or rl.get("secondary")):
+                continue
+            # one model's own bucket is that model's limit, not the account's: only the shared one is read (an
+            # older Codex writes no `limit_id`, and its one limit is the shared one)
+            if rl.get("limit_id") not in (None, _CODEX_SHARED_LIMIT):
                 continue
             ts = _to_ts(ev.get("timestamp")) if ev.get("timestamp") else mtime
             if best is None or ts > best[0]:
@@ -1753,6 +1781,13 @@ def _claude_limit_hit(root: Path) -> tuple[float, dict] | None:
         window["resets_at"] = float(info["resetsAt"])
     status = str(info.get("status"))
     state = "limited" if status == "rejected" else "near" if status == "allowed_warning" else "ok"
+    model = _CLAUDE_MODEL_WINDOWS.get(kind)
+    if model:
+        # a request refused on one model's window: that window is limited (it has no %), the account is not
+        window["model"] = model
+        if state == "limited":
+            window["limited"] = True
+        state = "ok"
     return ts, {"id": "claude", "windows": [window], "state": state, "source_mtime": mtime}
 
 
@@ -1767,7 +1802,9 @@ def omher_usage_root(user_home: Path) -> Path:
 def _claude_record(user_home: Path, account: str) -> tuple[float, dict] | None:
     """omher's own record of the usage Claude Code reported for `account` (`~/.omher/usage/claude/<account>.json`,
     written by the desktop app from a chat's stream-json `rate_limit_event` or a TERMINALS status line's input;
-    `used_percent` 0..100), as (time, provider before `_finish`)."""
+    `used_percent` 0..100), as (time, provider before `_finish`). A model's own window carries its `model` and
+    takes no part in the account's state; a refusal (`rejected`) while only model windows are full is that model's
+    refusal, and one with no window full (which limit refused is unknown) limits the account."""
     data = _read_json(omher_usage_root(user_home) / f"{account}.json")
     raw = data.get("windows")
     if not isinstance(raw, dict) or not isinstance(data.get("at"), (int, float)):
@@ -1784,12 +1821,16 @@ def _claude_record(user_home: Path, account: str) -> tuple[float, dict] | None:
         if isinstance(w.get("resets_at"), (int, float)):
             out["resets_at"] = float(w["resets_at"])
         if len(out) > 1:
+            if kind in _CLAUDE_MODEL_WINDOWS:
+                out["model"] = _CLAUDE_MODEL_WINDOWS[kind]
             windows.append(out)
     if not windows:
         return None
-    top = max((w.get("used_percent", 0.0) for w in windows), default=0.0)
+    top = max((w.get("used_percent", 0.0) for w in windows if "model" not in w), default=0.0)
+    full_model = any(w.get("used_percent", 0.0) >= 100 for w in windows if "model" in w)
     status = data.get("status")
-    state = ("limited" if status == "rejected" or top >= 100 else
+    rejected = status == "rejected" and not (full_model and top < 100)
+    state = ("limited" if rejected or top >= 100 else
              "near" if status == "allowed_warning" or top >= 70 else "ok")
     return float(data["at"]), {"id": "claude", "windows": windows, "state": state, "source_mtime": float(data["at"])}
 
@@ -1836,7 +1877,10 @@ def claude_accounts(user_home: Path, now: float, default_usage: dict | None) -> 
     """Every Claude login on this computer for the sidebar meter, in the Accounts page's order: Claude Code's own,
     the omher accounts, then a local CLIProxyAPI's other logins (from its auth file names). Each carries only its
     own usage record (`state`, and `resets_at` when limited, else the fullest window's `used_percent` and its
-    `resets_at`); a CLIProxyAPI-only login has none (`no_record`)."""
+    `resets_at`); a CLIProxyAPI-only login has none (`no_record`). Only the account-wide windows count: a model's own
+    window (Opus weekly) neither limits the account nor says when it lifts (as `_omher_rows`), so a full Opus week
+    under a 20% account reads 20%, not "100% used" beside an `ok` state. The model windows stay in the record's
+    `windows` for the meter's detail."""
     rows = _with_cpa(_omher_rows("claude", user_home, now, default_usage, {}, lambda _: None), user_home)
     out = []
     for r in rows:
@@ -1845,7 +1889,7 @@ def claude_accounts(user_home: Path, now: float, default_usage: dict | None) -> 
         u = r.get("usage") or {}
         item = {"email": r["email"], "label": r["label"], "source": r.get("source") or ("cli" if r["id"] == "default" else "omher"),
                 "in_cpa": bool(r.get("in_cpa")), "state": u.get("state") or "no_record"}
-        live = [w for w in u.get("windows") or [] if not w.get("stale")]
+        live = [w for w in u.get("windows") or [] if not w.get("stale") and "model" not in w]
         resets = [w["resets_at"] for w in live if "resets_at" in w]
         pct = [w for w in live if "used_percent" in w]
         if item["state"] == "limited" and resets:
@@ -5275,6 +5319,82 @@ def _ns_norm(text) -> str:
 # the harness's own preamble in a Codex rollout (AGENTS.md, environment): not what the parent said
 _CODEX_PREAMBLE = ("# AGENTS.md", "<environment_context>", "<user_instructions>", "<permissions", "<INSTRUCTIONS>")
 
+# What Claude Code puts into a user turn that nobody typed: reminders, a slash command's name, arguments and output, the
+# caveat before that output, and a background task's notice. Claude Code writes each block whole, its opener at the start
+# of the text or of a line (indented in a slash command's three lines), or right after another such block; there each one
+# is taken out of the person's text. An opener anywhere else (`why does my hook print <system-reminder> twice?`), one with
+# no closer after it, or one inside a fenced code block is the person's own text and stays. A paste is wrapped in a
+# `<pasted_content …>` tag whose inner text is what the person pasted, so only the tag goes; an `[Image #N]` line stands
+# for a picture the view does not show.
+_CLAUDE_BLOCKS = ("system-reminder", "command-message", "command-name", "command-args", "local-command-stdout",
+                  "local-command-caveat", "task-notification")
+_CLAUDE_BLOCK_LINE = re.compile(r"^[ \t]*<(" + "|".join(_CLAUDE_BLOCKS) + r")>", re.M)
+_CLAUDE_BLOCK_NEXT = re.compile(r"[ \t\n]*<(" + "|".join(_CLAUDE_BLOCKS) + r")>")
+_CLAUDE_PASTE_TAG = re.compile(r"</?pasted_content\b[^>]*>")
+_CLAUDE_IMAGE_LINE = re.compile(r"\[Image #[0-9]+\]")
+# user lines Claude Code writes itself: injected meta text, a compaction's summary, lines kept for the transcript only
+_CLAUDE_NOT_SAID = ("isMeta", "isCompactSummary", "isVisibleInTranscriptOnly")
+_CLAUDE_COMPACTED = "This session is being continued from a previous conversation"
+_CLAUDE_INTERRUPTED = "[Request interrupted by user"  # also "… for tool use]"
+NS_STATUS = 120  # chars of an API error's own text: enough for a usage limit's reset time
+
+
+def _in_fence(text: str) -> bool:
+    """Whether the end of `text` lies inside a fenced code block (a ``` or ~~~ line opens one, the same fence closes it)."""
+    fence = ""
+    for line in text.split("\n")[:-1]:
+        mark = line.lstrip(" \t")[:3]
+        if not fence and mark in ("```", "~~~"):
+            fence = mark
+        elif fence and mark == fence:
+            fence = ""
+    return bool(fence)
+
+
+def _claude_user_text(text: str) -> str:
+    """A person's words in a Claude Code user turn, without the blocks the harness adds (see _CLAUDE_BLOCKS)."""
+    kept, pos, at = [], 0, 0
+    while True:
+        # right after a block taken out the next may follow on the same line; else only at the start of a line
+        m = _CLAUDE_BLOCK_NEXT.match(text, pos) if pos and pos == at else None
+        m = m or _CLAUDE_BLOCK_LINE.search(text, at)
+        if not m:
+            break
+        start, closer = m.start(1) - 1, f"</{m.group(1)}>"
+        end = text.find(closer, m.end())
+        if end < 0 or _in_fence("".join(kept) + text[pos:start]):
+            at = m.end()
+            continue
+        kept.append(text[pos:start])
+        pos = at = end + len(closer)
+    text = "".join(kept) + text[pos:]
+    text = _CLAUDE_PASTE_TAG.sub("", text)
+    return "\n".join(ln for ln in text.split("\n") if not _CLAUDE_IMAGE_LINE.fullmatch(ln.strip())).strip()
+
+
+def _claude_api_error(o: dict) -> dict:
+    """A Claude Code API error line as one status item: the error's own short text, its HTTP status and the retry it
+    is on when the line says. A `system` line carries `error.formatted` ("529 Overloaded"); an assistant line marked
+    `isApiErrorMessage` carries the words Claude Code showed ("You've hit your weekly limit · resets …")."""
+    item: dict = {"type": "status", "code": "api_error"}
+    err = o.get("error") if isinstance(o.get("error"), dict) else {}
+    status = err.get("status")
+    if o.get("type") == "assistant":
+        msg = o.get("message") if isinstance(o.get("message"), dict) else {}
+        text = " ".join(t for t in _texts(msg.get("content")) if t.strip())
+    else:
+        text = str(err.get("formatted") or err.get("message") or "")
+    text = " ".join(text.split())
+    if isinstance(status, int) and not isinstance(status, bool):
+        item["status"] = status
+        text = text.removeprefix(f"{status} ")
+    if text:
+        item["text"] = _one_line(text, NS_STATUS)
+    for key, field in (("retry", "retryAttempt"), ("retries", "maxRetries")):
+        if isinstance(o.get(field), int) and not isinstance(o.get(field), bool):
+            item[key] = o[field]
+    return item
+
 
 NS_FIND_BEFORE = 60        # a CLI session may start this long before the unit's recorded start…
 NS_FIND_AFTER = 15 * 60    # …and this long after it
@@ -5424,16 +5544,48 @@ class NodeSessions:
 
     @staticmethod
     def _claude_items(path: Path, start_cut: bool = False) -> tuple[list[dict], dict]:
+        """A transcript's chat items: what the person and the agent said, the agent's tool calls, and quiet status
+        items (`interrupted`, `compacted`, `api_error`) for what happened to the session; nothing the harness wrote
+        into a user turn shows as the person's words. Side-chain lines are skipped in a session's own transcript; a
+        subagent's file (`…/subagents/agent-*.jsonl`) is all side chain, so there they are the conversation."""
         items: list[dict] = []
         calls: dict[str, dict] = {}
         info = {"model": "", "started": None, "ended": None, "cwd": ""}
+        own = path.parent.name != "subagents"
+
+        def status(code: str, ts) -> None:  # an interrupt or a compaction shows once, however many lines say it
+            last = items[-1] if items else {}
+            if not (last.get("type") == "status" and last.get("code") == code):
+                items.append({"type": "status", "code": code, "ts": ts})
+
+        def text_item(text: str, user: bool, ts) -> None:
+            if user:
+                lead = text.lstrip()
+                if lead.startswith(_CLAUDE_INTERRUPTED):
+                    return status("interrupted", ts)
+                if lead.startswith(_CLAUDE_COMPACTED):
+                    return status("compacted", ts)
+                text = _claude_user_text(text)
+            text = text.strip()
+            if text:
+                items.append({"type": "user" if user else "assistant", "text": _ns_clip(text, NS_TEXT), "ts": ts})
+
         with open(path, "rb") as fh:
             for raw in fh:
                 try:
                     o = json.loads(raw)
                 except ValueError:
                     continue
-                if not isinstance(o, dict) or o.get("type") not in ("user", "assistant"):
+                if not isinstance(o, dict) or (own and o.get("isSidechain") is True):
+                    continue
+                if o.get("type") == "system":
+                    ts = _iso_ts(o.get("timestamp"))
+                    if o.get("subtype") == "compact_boundary":
+                        status("compacted", ts)
+                    elif o.get("subtype") == "api_error":
+                        items.append({**_claude_api_error(o), "ts": ts})
+                    continue
+                if o.get("type") not in ("user", "assistant"):
                     continue
                 ts = _iso_ts(o.get("timestamp"))
                 info["started"] = info["started"] or ts
@@ -5441,20 +5593,23 @@ class NodeSessions:
                 info["cwd"] = info["cwd"] or str(o.get("cwd") or "")
                 msg = o.get("message") if isinstance(o.get("message"), dict) else {}
                 content = msg.get("content")
-                if o["type"] == "assistant" and isinstance(msg.get("model"), str):
+                user = o["type"] == "user"
+                if user and any(o.get(k) is True for k in _CLAUDE_NOT_SAID):
+                    continue
+                if not user and o.get("isApiErrorMessage") is True:
+                    items.append({**_claude_api_error(o), "ts": ts})
+                    continue
+                if not user and isinstance(msg.get("model"), str):
                     info["model"] = msg["model"]
                 if isinstance(content, str):
-                    if content.strip() and "<task-notification>" not in content:
-                        items.append({"type": "user" if o["type"] == "user" else "assistant",
-                                      "text": _ns_clip(content.strip(), NS_TEXT), "ts": ts})
+                    text_item(content, user, ts)
                     continue
                 for part in content if isinstance(content, list) else []:
                     if not isinstance(part, dict):
                         continue
                     kind = part.get("type")
-                    if kind == "text" and str(part.get("text") or "").strip():
-                        items.append({"type": "user" if o["type"] == "user" else "assistant",
-                                      "text": _ns_clip(part["text"].strip(), NS_TEXT), "ts": ts})
+                    if kind == "text" and isinstance(part.get("text"), str):
+                        text_item(part["text"], user, ts)
                     elif kind == "tool_use":
                         step = {"type": "step", "tool": str(part.get("name") or "tool"), "input": _ns_args(part.get("input")),
                                 "result": "", "ok": True, "ts": ts, "_id": str(part.get("id") or "")}
@@ -5938,7 +6093,9 @@ def _omher_rows(cli: str, user_home: Path, now: float, default_usage: dict | Non
         u = r["usage"]
         if r["state"] == "ready" and u and u.get("state") == "limited":
             r["state"] = "limited"
-            r["resets_at"] = max((w["resets_at"] for w in u["windows"] if "resets_at" in w), default=None)
+            # the account-wide windows: a model's own window does not limit the account, so it does not say when
+            r["resets_at"] = max((w["resets_at"] for w in u["windows"] if "resets_at" in w and "model" not in w),
+                                 default=None)
     return rows
 
 
