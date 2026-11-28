@@ -524,6 +524,14 @@ GIT_READS = {("worktree", "list"), ("rev-parse",), ("status",), ("diff",), ("log
 _EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 _FILTER_QUERY = ["config", "--list", "--null", "--name-only"]
 _ATTR_SOURCE: list[bool] = []  # cached: does this git know --attr-source (git >= 2.40)?
+# Git variables omher may have inherited (from the shell that started it, or a git hook that did) that point a read at
+# another repository, work tree, index, object store or ref namespace, or add config the read did not ask for
+# (GIT_CONFIG_PARAMETERS is what `git -c` passes to its children; GIT_CONFIG_COUNT names GIT_CONFIG_KEY_<n> and
+# GIT_CONFIG_VALUE_<n> pairs). _git takes each out of its child's environment, so a read answers for the folder it was
+# asked about with that folder's own config and the flags _git adds. Matched on the upper-cased name: Windows names
+# are case-insensitive.
+_GIT_REDIRECT = re.compile(r"GIT_(?:DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES"
+                           r"|NAMESPACE|CONFIG_PARAMETERS|CONFIG_COUNT|CONFIG_(?:KEY|VALUE)_[0-9]+)")
 
 
 def _json_obj(raw):
@@ -617,11 +625,19 @@ def _git(args: list[str], cwd: str | Path, timeout: float = GIT_TIMEOUT, hardene
     kw = {}
     if os.name == "nt":
         kw["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
+    env = {k: v for k, v in os.environ.items() if not _GIT_REDIRECT.fullmatch(k.upper())}
+    env.update({
+        "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0", "GIT_ATTR_NOSYSTEM": "1",
+        # never the network: a partial clone's missing objects are not fetched on demand (git >= 2.44; an older git
+        # ignores the name), and an empty allow-list refuses every transport, so on an older git that lazy fetch
+        # fails too. None of the GIT_READS reads a local repository through a transport, so neither changes what a
+        # read of one answers (bridge/tests/test_git_env.py compares each read with and without them).
+        "GIT_NO_LAZY_FETCH": "1", "GIT_ALLOW_PROTOCOL": "",
+    })
     try:
         r = subprocess.run(["git", *pre, *args], cwd=str(cwd), capture_output=True, text=True,
                            encoding="utf-8", errors="replace", timeout=timeout, stdin=subprocess.DEVNULL,
-                           env={**os.environ, "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0",
-                                "GIT_ATTR_NOSYSTEM": "1"}, **kw)
+                           env=env, **kw)
     except (OSError, subprocess.SubprocessError):
         return None
     return r.stdout if r.returncode == 0 else None
