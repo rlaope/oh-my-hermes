@@ -366,8 +366,16 @@
 [data-theme="light"] .pg-tog[aria-checked="true"] {
   background: var(--muted);
 }
-.pg-tog:disabled {
+/* not known: the knob waits in the middle */
+.pg-tog[aria-checked="mixed"] > span {
+  transform: translateX(6px);
+}
+.pg-tog:disabled,
+.pg-tog[aria-disabled="true"] {
   opacity: 0.5;
+}
+.pg-tog[aria-disabled="true"] {
+  cursor: default;
 }
 .pg-tog:focus-visible,
 .pg-btn:focus-visible,

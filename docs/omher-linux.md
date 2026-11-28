@@ -49,6 +49,15 @@ carries no `.deb`, so a `.deb` install is updated by installing the next release
   resource folder, as on the other platforms. The bridge's Hermes Python, the agent CLIs, and the sign-in and
   install commands get the same host environment as the link opener; AppRun's `PYTHONHOME` would otherwise send
   the host Python into the image.
+- **Voice** (the composer's microphone; `docs/OMHER-BOUNDARY.md` rule 54). WebKitGTK keeps media capture off and
+  refuses a microphone request nobody answers, so on Linux omher's code turns on the webview's `enable-media-stream`
+  setting and answers the webview's permission request with Allow for the microphone only (the camera, the screen and
+  the rest keep WebKitGTK's own refusal); there is no prompt of its own. That code is built and its Rust tests run on
+  every pull request's Linux CI job, but it has not been run on a Linux desktop with a microphone yet. Capture also
+  depends on the distribution's WebKitGTK build and on the GStreamer plugins it needs, which omher cannot check from
+  the outside. When the window has no recording API, the microphone button is off and says so; when the button is on
+  and a press still fails, the line in the composer says why (no microphone, one in use, access refused): check the
+  desktop's sound settings and that a microphone is connected. Read aloud plays through the same webview.
 
 ## Troubleshooting
 

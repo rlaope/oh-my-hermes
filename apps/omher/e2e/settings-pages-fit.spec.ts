@@ -124,10 +124,11 @@ test("light: a selected segment stands out from its track on the Settings pages"
   expect(c.track).toBe("rgb(233, 229, 235)");
 });
 
-test("Computer is marked Soon in the nav itself", async ({ page }) => {
+test("Computer is a page now: no Soon mark in the nav", async ({ page }) => {
   await open(page);
   await page.getByTestId("nav-settings").click();
-  await expect(page.getByTestId("settings-nav-computer").locator(".nav-soon")).toHaveText("Soon");
+  await expect(page.getByTestId("settings-nav-computer")).toHaveText("Computer");
+  await expect(page.getByTestId("settings-nav-computer").locator(".nav-soon")).toHaveCount(0);
 });
 
 test("Agents: the action comes first in every confirm, as on the other pages; the state column keeps one x", async ({ page }) => {

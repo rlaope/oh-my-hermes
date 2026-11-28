@@ -6,6 +6,8 @@ import { BridgeClient, type BridgeStatus } from "../lib/bridge";
 import { createNoteGate, noteFor, sessionNote, sessionRings, showNote, watchMissedNote, windowWatched, type SessionNote } from "../lib/notify";
 import { appSounds, soundFor, type SoundBoard } from "../lib/sounds";
 import { promptText } from "../chat/parts/attachFiles";
+import { COMPUTER_TOOL, computerLine } from "../chat/activity/computerSteps";
+import { browserLine, isBrowserSentence } from "../chat/activity/browserSteps";
 import { findTokens, toWire } from "../chat/parts/skillTokens";
 import { forBots, parseResume, RESUME_KEY, type ResumeSnap } from "../app/resume";
 import { getDraft } from "../app/drafts";
@@ -53,6 +55,11 @@ import type {
   OpMap,
   PluginRow,
   AppRun,
+  ComputerDriverRun,
+  ComputerStatus,
+  ComputerToggle,
+  VoiceInfo,
+  VoiceSpeech,
   DiffFile,
   PlanItem,
   Msg,
@@ -78,6 +85,8 @@ export interface Step {
   late?: { ok: boolean; endedAt: number; ms: number };
   /** delegate_task: the dag parts this call handed out (one plain line each in the activity details). */
   dag?: { run: string; node: string }[];
+  /** computer_use: Hermes' action (click, capture, type…); `detail` is then the app (rule 52). */
+  action?: string;
   /** A file edit's change, per file (SESSIONS agents), for the step's diff view. */
   diff?: DiffFile[];
   /** Read back from a record with no later timestamp (a child's session): its length is unknown, none is shown. */
@@ -355,6 +364,10 @@ export interface Chat {
   /** Turns Hermes lost when it stopped mid-turn (a crash or a kill): the chat is paused, and nothing sent to it runs,
    *  until the person discards them (LostTurnBlock). */
   lost?: LostTurn[];
+  /** The screenshots of this chat's browser and computer steps (BOUNDARY rule 53) by step id, oldest first, `n` their
+   *  arrival order across all chats: at most SHOTS_KEPT here and SHOTS_TOTAL in all, in memory only, so a reopened
+   *  chat's steps have none. */
+  shots?: { id: string; url: string; n: number }[];
 }
 
 /** The composer's "Reply there" chip: a thread elsewhere the next message points the bot at. */
@@ -460,16 +473,20 @@ const VERBS: Record<string, Key> = {
   delegate_task: "live.asking",
   skill_view: "live.usingSkill",
   skill_use: "live.usingSkill",
+  browser_cdp: "live.br.cdp",
 };
 
-/** "<Verb> <detail>" for a tool call, the verb in the current language; unknown tools keep their own name. */
-export function activityText(name: string, detail: string): string {
+/** "<Verb> <detail>" for a tool call, the verb in the current language; unknown tools keep their own name. A
+ *  computer_use call reads as its action in the app (`action`, rule 52): "Clicking in Safari"; a browser call as its
+ *  label or action (rule 53). */
+export function activityText(name: string, detail: string, action?: string): string {
+  if (name === COMPUTER_TOOL) return computerLine(action, detail, true);
+  if (isBrowserSentence(name)) return browserLine(name, action, detail, true);
   const verb = VERBS[name] ? tr(VERBS[name]) : name;
   const d = (detail ?? "").trim();
   return d ? `${verb} ${d}` : verb;
 }
 
-/** The live text split for display: when it is the latest tool's text, `code` holds its command or path. */
 /** The status of a turn found running on open, before any event: shown as "Working…" in the current language. */
 export const WORKING = "Working…";
 /** The status a turn gets from `thinking`, before any tool or status text. */
@@ -495,13 +512,42 @@ export function parsePlan(items: unknown): PlanItem[] {
   });
 }
 
+/** The live text split for display: when it is the latest tool's text, `code` holds its command or path. */
 export function liveLabel(t: Turn): { verb: string; code?: string } {
   const status = t.status || WORKING;
   const last = t.steps[t.steps.length - 1];
-  if (last && last.detail && status === activityText(last.name, last.detail)) {
+  if (last && last.detail && last.name !== COMPUTER_TOOL && !isBrowserSentence(last.name) && status === activityText(last.name, last.detail)) {
     return { verb: activityText(last.name, ""), code: last.detail };
   }
   return { verb: status };
+}
+
+/** How many step screenshots (rule 53) one chat keeps, and how many all chats and threads keep together, the newest
+ *  each time. Each is at most 5 MB (the bridge's SHOT_MAX, about 6.7 MB as base64 text), so however long the sessions
+ *  run the page holds at most 16 × 5 MB = 80 MB of screenshot bytes (about 107 MB of base64 text), 40 MB of it in
+ *  one chat. */
+export const SHOTS_KEPT = 8;
+export const SHOTS_TOTAL = 16;
+/** The image types the bridge sends a step screenshot as. */
+const SHOT_MIMES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+
+/** A chat's screenshots with one more for step `id` (replacing one it had), numbered `n` in arrival order, the
+ *  oldest dropped past SHOTS_KEPT. */
+export function keptShots(shots: Chat["shots"], id: string, url: string, n = 0): NonNullable<Chat["shots"]> {
+  return [...(shots ?? []).filter((s) => s.id !== id), { id, url, n }].slice(-SHOTS_KEPT);
+}
+
+/** Every chat with one more screenshot for step `id` in chat `key`, then the oldest across all chats dropped until
+ *  SHOTS_TOTAL remain. */
+export function withShot(chats: Record<string, Chat>, key: string, id: string, url: string): Record<string, Chat> {
+  const all = Object.values(chats).flatMap((c) => c.shots ?? []);
+  const n = all.reduce((m, s) => Math.max(m, s.n), 0) + 1;
+  const next = { ...chats, [key]: { ...chats[key], shots: keptShots(chats[key].shots, id, url, n) } };
+  const kept = Object.values(next).flatMap((c) => c.shots ?? []);
+  if (kept.length <= SHOTS_TOTAL) return next;
+  const cut = kept.map((s) => s.n).sort((a, b) => a - b)[kept.length - SHOTS_TOTAL];
+  for (const [k, c] of Object.entries(next)) if (c.shots?.some((s) => s.n < cut)) next[k] = { ...c, shots: c.shots.filter((s) => s.n >= cut) };
+  return next;
 }
 
 /** Whether a running turn has something for its activity line to say: a tool or skill ran, or the bot sent a
@@ -666,7 +712,7 @@ function doneWaiting(c: Chat): Chat {
   if (!t || (t.status !== tr("live.waitApproval") && t.status !== tr("live.waitAnswer"))) return c;
   if (c.items.some((i) => (i.kind === "approval" || i.kind === "clarify") && askOpen(c.items, i))) return c;
   const last = t.steps[t.steps.length - 1];
-  return patchTurn(c, (x) => ({ ...x, status: last && last.endedAt === undefined ? activityText(last.name, last.detail) : "" }));
+  return patchTurn(c, (x) => ({ ...x, status: last && last.endedAt === undefined ? activityText(last.name, last.detail, last.action) : "" }));
 }
 
 /** The agent took back the person's last message: it and everything after it leave the chat. */
@@ -1172,13 +1218,20 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
         const ask = ev.name === "clarify";
         return patchTurn(c, (t) => ({
           ...t,
-          status: activityText(ev.name, ev.detail),
+          status: activityText(ev.name, ev.detail, ev.action),
           ...(ask ? { askNote: hideSplitBlocks(t.streaming.slice(t.cut ?? 0).trim()) } : {}),
           // what was written before this call was commentary on it, not the answer
           cut: t.streaming.length,
           steps: [
             ...t.steps,
-            { id: ev.tool_id, name: ev.name, detail: ev.detail, startedAt: now, ...(ev.dag?.length ? { dag: ev.dag } : {}) },
+            {
+              id: ev.tool_id,
+              name: ev.name,
+              detail: ev.detail,
+              startedAt: now,
+              ...(ev.dag?.length ? { dag: ev.dag } : {}),
+              ...(ev.action ? { action: ev.action } : {}),
+            },
           ],
         }));
       });
@@ -1193,6 +1246,13 @@ function reduceEvent(state: AppState, ev: BridgeEvent, now: number): AppState {
             }))
           : lateStepEnd(c, ev, now);
       });
+    case "tool.shot": {
+      // only a step of the turn running in this chat; the bytes stay in memory (rule 53)
+      const c = state.chats[bot];
+      if (!c?.turn?.steps.some((s) => s.id === ev.tool_id) || !SHOT_MIMES.has(ev.mime) || typeof ev.data_base64 !== "string" || !ev.data_base64)
+        return state;
+      return { ...state, chats: withShot(state.chats, bot, ev.tool_id, `data:${ev.mime};base64,${ev.data_base64}`) };
+    }
     case "subagent": {
       const c = state.chats[bot];
       const next = c && withSubagent(c, ev, now);
@@ -2076,6 +2136,17 @@ export interface Actions {
    *  of `hermes -p <bot> mcp install|login|remove <name>`. */
   appsList(bot: string): Promise<OpMap["apps.list"]["result"]>;
   appsRun(verb: "install" | "login" | "remove", bot: string, name: string): Promise<AppRun>;
+  /** Computer use (BOUNDARY rule 52): "This computer" through Hermes' own read-only status command, and each bot's
+   *  switch from its gateway; a press runs one of Hermes' fixed computer-use commands. Only a bot name and on/off go out. */
+  computerStatus(): Promise<ComputerStatus>;
+  computerBot(bot: string): Promise<OpMap["computer.bot"]["result"]>;
+  computerToggle(bot: string, on: boolean): Promise<ComputerToggle>;
+  computerDriver(verb: "install" | "grant"): Promise<ComputerDriverRun>;
+  /** Voice (BOUNDARY rule 54): what the bot's config names for speech, a recording's transcript and one spoken part of
+   *  an answer, all through the bot's own Hermes. Only the bot, the bytes and their type, or the text and a part go out. */
+  voiceInfo(bot: string): Promise<VoiceInfo>;
+  voiceTranscribe(bot: string, data_base64: string, mime: string): Promise<{ transcript: string; provider: string }>;
+  voiceSpeak(bot: string, text: string, part: number): Promise<VoiceSpeech>;
   /** Settings › General › Language: saved on this computer, applied at once (no restart). */
   setLanguage(lang: Lang): void;
   loadModels(bot?: string): Promise<void>;
@@ -3092,6 +3163,13 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
         : verb === "login"
           ? bridge.request("apps.login", { bot, name })
           : bridge.request("apps.remove", { bot, name }),
+    computerStatus: () => bridge.request("computer.status", {}),
+    computerBot: (bot) => bridge.request("computer.bot", { bot }),
+    computerToggle: (bot, on) => bridge.request("computer.toggle", { bot, on }),
+    computerDriver: (verb) => (verb === "install" ? bridge.request("computer.install", {}) : bridge.request("computer.grant", {})),
+    voiceInfo: (bot) => bridge.request("voice.info", { bot }),
+    voiceTranscribe: (bot, data_base64, mime) => bridge.request("voice.transcribe", { bot, data_base64, mime }),
+    voiceSpeak: (bot, text, part) => bridge.request("voice.speak", { bot, text, part }),
     setLanguage(lang) {
       try {
         if (typeof localStorage !== "undefined") localStorage.setItem(LANG_KEY, lang);
