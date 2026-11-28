@@ -19,9 +19,11 @@ All notable changes will be documented here.
   a new thread there with your note and the answer quoted (cut, and saying so, past 6,000 characters), while you stay
   where you are. An answer that names another bot with `@name` shows a quiet "Hand this to <bot>" chip, which only
   opens the same picker. A card under the answer follows that thread: working, waiting for you there, its answer when
-  done, or how it stopped, with Open thread; Give to <bot> then sends that answer back once as your own message (a
-  busy bot holds it in the waiting line). Nothing goes between bots without a press, nothing comes back by itself,
-  and the card lasts until a reload; the thread stays in the bot's list. omher adds no bridge op for it.
+  done, or how it stopped, with Open thread; Give to <bot> then sends that answer back once as your own message, as
+  plain text (a skill named in it never runs as a command). While that bot is busy it goes as a typed message does:
+  into the running turn, or held in the waiting line when the line is paused or other messages wait there. Nothing
+  goes between bots without a press, nothing comes back by itself, and the card lasts until a reload; the thread
+  stays in the bot's list. omher adds no bridge op for it.
   (`docs/OMHER-BOUNDARY.md` rule 56; `apps/omher/src/handoff/`)
 
 - **omher: a bot's backup model, set from Settings and named when Hermes switches.** Hermes can go on with another

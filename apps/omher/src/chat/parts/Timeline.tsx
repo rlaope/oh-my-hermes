@@ -133,6 +133,9 @@ export function Timeline({
     el.classList.add("lit");
   };
 
+  // Hand to bot is offered on a finished answer only: not on a row of the turn still running (rule 56)
+  const handId = (it: MessageItem) => (handoff && !(chat?.turn && it.ts * 1000 >= chat.turn.startedAt) ? it.id : undefined);
+
   const render = (it: TimelineItem, prev?: TimelineItem, at = -1): ReactNode => {
     switch (it.kind) {
       case "user": {
@@ -176,7 +179,7 @@ export function Timeline({
           return (
             <>
               <WatchLine name={it.watch.name} ts={it.watch.ts} text={it.text} />
-              <Bubble item={it} bot={bot.name} face faceEl={face} speak={speak} handId={handoff && it.id} handFrom={handoff?.name} />
+              <Bubble item={it} bot={bot.name} face faceEl={face} speak={speak} handId={handId(it)} handFrom={handoff?.name} />
               {afterAnswer?.(it)}
             </>
           );
@@ -190,7 +193,7 @@ export function Timeline({
               quote={quoteFor(items, at)}
               onQuote={showMessage}
               speak={speak}
-              handId={handoff && it.id}
+              handId={handId(it)}
               handFrom={handoff?.name}
             />
             {afterAnswer?.(it)}

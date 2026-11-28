@@ -32,6 +32,12 @@ const HandIcon = () => (
 
 type Open = { pick: string | null; back: HTMLElement | null };
 
+/** A held Enter's auto-repeat does nothing: after a hand over the keyboard is back on the opener, and a repeat must not
+ *  open the popover again and confirm a second thread. */
+const held = (e: KeyboardEvent) => {
+  if (e.key === "Enter" && e.repeat) e.preventDefault();
+};
+
 /** The action of one answer `id` of chat `chat`, from bot `from`: its button (inside the bubble, in the action column)
  *  and what goes under the bubble (the mention chips, and the popover while open). None without `from`. */
 export function useHandoff(chat: string, id: string | undefined, from: string | undefined, text: string): { button: ReactNode; under: ReactNode } {
@@ -52,6 +58,7 @@ export function useHandoff(chat: string, id: string | undefined, from: string | 
         e.stopPropagation();
         setOpen(open ? null : { pick: null, back: e.currentTarget });
       }}
+      onKeyDown={held}
       data-testid="handoff-action"
     >
       <HandIcon />
@@ -74,7 +81,15 @@ function HandoffChips({ from, named, onPick }: { from: string; named: string[]; 
   return (
     <div className="hf-chips" data-testid="handoff-chips">
       {bots.map((b) => (
-        <button key={b.name} type="button" className="agent-chip hf-chip" onClick={(e) => onPick(b.name, e.currentTarget)} data-testid="handoff-chip" data-to={b.name}>
+        <button
+          key={b.name}
+          type="button"
+          className="agent-chip hf-chip"
+          onClick={(e) => onPick(b.name, e.currentTarget)}
+          onKeyDown={held}
+          data-testid="handoff-chip"
+          data-to={b.name}
+        >
           <Avatar bot={b.name} size={14} />
           <span className="agent-chip-t">{t("handoff.chip", { bot: b.display_name })}</span>
         </button>
@@ -88,8 +103,10 @@ const W = 300;
 function HandoffPopover({ chat, id, from, text, open, onClose }: { chat: string; id: string; from: string; text: string; open: Open; onClose: () => void }) {
   const s = useStore();
   const bots = handoffBots(s, from);
-  const [pick, setPick] = useState<string | null>(open.pick && bots.some((b) => b.name === open.pick) ? open.pick : (bots[0]?.name ?? null));
-  const to = bots.find((b) => b.name === pick) ?? null;
+  const [chosen, setPick] = useState<string | null>(open.pick);
+  // the chosen bot, or the first one left when it went offline (or none was chosen)
+  const to = bots.find((b) => b.name === chosen) ?? bots[0] ?? null;
+  const pick = to?.name ?? null;
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -155,7 +172,7 @@ function HandoffPopover({ chat, id, from, text, open, onClose }: { chat: string;
     else if (e.key === "End") go(bots.length - 1);
     else if (e.key === "Enter") {
       e.preventDefault();
-      void send();
+      if (!e.repeat) void send();
     }
   };
 
@@ -214,7 +231,7 @@ function HandoffPopover({ chat, id, from, text, open, onClose }: { chat: string;
           onKeyDown={(e) => {
             if (e.key === "Enter" && !composing(e)) {
               e.preventDefault();
-              void send();
+              if (!e.repeat) void send();
             }
           }}
           data-testid="handoff-note"

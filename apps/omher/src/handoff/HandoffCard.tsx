@@ -1,7 +1,8 @@
 // "Handed to <bot>": the card under an answer the person handed to another bot (BOUNDARY rule 56). It follows the new
 // thread's first turn (src/handoff/card.ts): working, waiting for the person there, done with that turn's answer, or
 // stopped. Open thread always opens it; once done, Give to <bot> sends that answer once into this chat as the person's
-// own message, and nothing comes back by itself. A thread or bot that is gone leaves one plain line.
+// own message, from its click only (never an effect), and nothing comes back by itself. Given lasts while the row that
+// carries it stands; a refused or deleted row offers Give again. A thread or bot that is gone leaves one plain line.
 import { useLayoutEffect, useRef, useState } from "react";
 import { chatTarget, botNames, useStore, type HandoffItem } from "../state/store";
 import { t, type Key } from "../i18n";
@@ -80,7 +81,7 @@ export function HandoffCard({ chat, item }: { chat: string; item: HandoffItem })
             {t("handoff.open")}
           </button>
           {phase === "done" && item.answer && (
-            <button type="button" className="card-btn primary" disabled={item.given || busy} onClick={() => void give()} data-testid="handoff-give">
+            <button type="button" className="card-btn primary" disabled={!!item.given || busy} onClick={() => void give()} data-testid="handoff-give">
               {item.given ? t("handoff.given") : t("handoff.give", { bot: fromName })}
             </button>
           )}

@@ -1,8 +1,11 @@
 // "Hand to bot" from an answer (BOUNDARY rule 56): the new thread's title and first message, and the message "Give to
 // <bot>" sends back. Fixed English text, like the terminal handover's (src/handover/message.ts), whose printable() and
-// goalLine() it reuses: the note is one printable line, a bot's name is printable, and every line of the answer is
-// quoted, so nothing in it can start a line of its own outside the quote. An answer longer than ANSWER_CHARS is cut on
-// whole characters and the text says so. Pure: the caller passes the names and the text.
+// goalLine() it reuses. Each text starts with a fixed lead, so neither can ever start with `/` and run as a Hermes
+// command (the bridge and the page read a text as one when it starts with `/` after white space), whatever the note,
+// the answer or a bot's name hold. The note is one printable line after "Note: ", a bot's name is printable, and every
+// line of the handed answer is quoted, so nothing in it can start a line of its own outside the quote. An answer
+// longer than ANSWER_CHARS is cut on whole characters, a code fence the cut leaves open is closed, and the text says
+// so. Pure: the caller passes the names and the text.
 import { goalLine, printable } from "../handover/message";
 import { firstWords } from "../threads/types";
 
@@ -11,10 +14,30 @@ export const ANSWER_CHARS = 6000;
 /** The most characters of a bot's name as the text writes it. */
 const NAME = 60;
 
-/** `text` cut to ANSWER_CHARS characters (whole code points), and how long it was when it was cut. */
+/** A fenced code block's opening or closing line (CommonMark: up to three spaces, then three or more ` or ~). */
+const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+
+/** The line that closes the code fence `text` leaves open at its end, or "" when none is open. */
+function openFence(text: string): string {
+  let open: string | null = null;
+  for (const line of text.split(/\r\n|[\r\n\u2028\u2029]/)) {
+    const m = FENCE.exec(line);
+    if (!m) continue;
+    // a backtick fence's info string holds no backtick; a closing fence is the same mark, as long or longer, alone
+    if (open === null) open = m[1][0] === "`" && m[2].includes("`") ? null : m[1];
+    else if (m[1][0] === open[0] && m[1].length >= open.length && !m[2].trim()) open = null;
+  }
+  return open ?? "";
+}
+
+/** `text` cut to ANSWER_CHARS characters (whole code points), and how long it was when it was cut. A cut inside a
+ *  code fence closes it, so the line saying it was cut is never read as code. */
 function capped(text: string): { text: string; cut: number | null } {
   const all = [...text.trim()];
-  return all.length <= ANSWER_CHARS ? { text: all.join(""), cut: null } : { text: all.slice(0, ANSWER_CHARS).join("").trimEnd(), cut: all.length };
+  if (all.length <= ANSWER_CHARS) return { text: all.join(""), cut: null };
+  const kept = all.slice(0, ANSWER_CHARS).join("").trimEnd();
+  const fence = openFence(kept);
+  return { text: fence ? `${kept}\n${fence}` : kept, cut: all.length };
 }
 
 const cutLine = (n: number) => `(The answer was cut: this is its first ${ANSWER_CHARS.toLocaleString("en-US")} of ${n.toLocaleString("en-US")} characters.)`;
@@ -41,21 +64,22 @@ export function handoffTitle(f: HandoffFacts): string {
   return `From ${printable(f.from, NAME)}: ${firstWords(note || goalLine(f.answer)) || "an answer"}`;
 }
 
-/** The new thread's first message: the note (when there is one), a line naming whose answer it is, the answer quoted,
- *  and a line when it was cut. */
+/** The new thread's first message: the fixed line naming whose answer it is, "Note: " and the note (when there is one),
+ *  the answer quoted, and a line when it was cut. */
 export function handoffMessage(f: HandoffFacts): string {
   const note = goalLine(f.note);
   const a = capped(f.answer);
-  const parts = note ? [note] : [];
-  parts.push(`${printable(f.from, NAME)} wrote this answer in omher, and the person handed it to you:`, quote(a.text));
+  const parts = [`Handoff from omher: ${printable(f.from, NAME)} wrote the answer below, and the person handed it to you.`];
+  if (note) parts.push(`Note: ${note}`);
+  parts.push(quote(a.text));
   if (a.cut) parts.push(cutLine(a.cut));
   return parts.join("\n\n");
 }
 
-/** What "Give to <origin bot>" sends there as the person's own message: "<bot> answered:" and that answer. */
+/** What "Give to <origin bot>" sends there as the person's own message: "Answer from <bot>:" and that answer. */
 export function givenMessage(from: string, answer: string): string {
   const a = capped(answer);
-  const parts = [`${printable(from, NAME)} answered:`, a.text];
+  const parts = [`Answer from ${printable(from, NAME)}:`, a.text];
   if (a.cut) parts.push(cutLine(a.cut));
   return parts.join("\n\n");
 }

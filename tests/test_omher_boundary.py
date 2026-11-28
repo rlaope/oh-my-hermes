@@ -698,12 +698,21 @@ RULES = (
     "Hand over starts a new thread under the picked bot through the existing `thread.create` and sends it one first"
     " message through the existing `chat.send` with that thread as `session`, the path Start in thread takes"
     " (`startTaskThread`); it adds no op and no Hermes command, and the person stays in the chat they are in.",
-    "That message holds the person's note as one printable line, a line naming the bot whose answer it is, and the"
-    " answer with each of its lines quoted, cut to its first 6,000 characters with a line saying so;",
+    "That message starts with a fixed line naming the bot whose answer it is, then the person's note as one printable"
+    ' line after "Note: ", then the answer with each of its lines quoted, cut to its first 6,000 characters (closing a'
+    " code fence the cut leaves open) with a line saying so;",
     "An `@name` of another bot in an answer only shows a chip that opens the same picker with that bot chosen; the chip"
     " and the mention send nothing.",
-    "once done, Give to <bot> sends that answer, under the same cap, once into the chat that holds the card as the"
-    " person's own message, through that chat's normal send (`chat.send`, or the steer queue while a turn runs there).",
+    "the bridge connection dropping stops it, a read of the thread afterwards settles it from what the thread holds,"
+    " and a refused first send stops it with the error.",
+    'once done, Give to <bot> sends "Answer from <bot>:" and that answer, under the same cap, once into the chat that'
+    " holds the card as the person's own message, as plain text through `chat.send` in a main chat and a thread alike:"
+    " no skill token in it is hoisted to a command and no Reply target is attached, so neither handed text can start"
+    " with `/` and run a Hermes command.",
+    "While a turn runs there it goes as a typed message does: steered into that turn, or held in the steer queue when"
+    " the queue is paused, other messages wait there, or the chat waits to be read again after a reconnect.",
+    "Give reads Given only while the message that carries it stands: a refused send, or a held one deleted from the"
+    " queue, offers Give again.",
     "Nothing returns by itself and nothing chains: an answer never goes on to a third bot, or back, without a press.",
     "A bot on another computer is offered, because its bridge already takes `thread.create` and a thread's `chat.send`"
     " (rule 31); in remote-only mode (rule 47) both bots run on the server, and the text goes only to that server's"
@@ -3540,8 +3549,10 @@ class HandToBotAddsNoRead(unittest.TestCase):
 
 class HandAnAnswerToAnotherBot(unittest.TestCase):
     """Rule 56: an answer reaches another bot only through Hand over (the store's `startTaskThread`: `thread.create`,
-    then one `chat.send` there), its answer comes back only through Give (the chat's own send), a mention only opens the
-    picker, the bridge gained no op for it, and the card is kept in the page only."""
+    then one `chat.send` there), its answer comes back only through Give (one plain-text `chat.send` or the steer
+    queue), each from a press and never an effect, a mention only opens the picker, the bridge gained no op for it,
+    and the card is kept in the page only. That neither built text can start with `/` is pinned here only as its
+    shape (a fixed lead first); the hostile notes, answers and names are run in `src/handoff/message.test.ts`."""
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -3564,19 +3575,60 @@ class HandAnAnswerToAnotherBot(unittest.TestCase):
         self.assertEqual(sorted(set(re.findall(r"\bs\.(\w+)\(", self.files["HandoffCard.tsx"]))), ["handoffGive", "openThread"])
         for name in ("card.ts", "message.ts"):
             self.assertEqual(re.findall(r"\bs\.(\w+)\(", self.files[name]), [], name)
+        # and no other sender: not the composer's, not a thread's, not the store's dispatch
+        for name, src in self.files.items():
+            code = re.sub(r"/\*.*?\*/|^\s*//[^\n]*", "", src, flags=re.S | re.M)
+            for bad in ("sendTo", "threadSend", "sendWithFiles", ".send(", "chat.send", "dispatch(", "getState("):
+                self.assertNotIn(bad, code, f"{name}: {bad}")
+            for line in re.findall(r'^import [^;]+ from "\.\./state/store";$', src, re.M):
+                names = {n.strip().removeprefix("type ") for n in line.split("{", 1)[1].split("}", 1)[0].split(",")}
+                self.assertLessEqual(names, {"selectSidebarBots", "useStore", "AppState", "chatTarget", "botNames", "HandoffItem", "Chat"}, name)
+
+    @staticmethod
+    def _effects(src: str) -> list[str]:
+        """The bodies of every useEffect and useLayoutEffect in `src`, up to their dependency list."""
+        return [part.split("}, [", 1)[0] for part in re.split(r"\buse(?:Layout)?Effect\(", src)[1:]]
+
+    def test_each_send_starts_from_a_press_never_from_an_effect(self) -> None:
+        # Give: one call, inside the card's give(), which only its button's click runs
+        users = sorted(p.relative_to(UI_SRC).as_posix() for p in UI_SRC.rglob("*.ts*") if ".test." not in p.name and "handoffGive(" in p.read_text(encoding="utf-8"))
+        self.assertEqual(users, ["handoff/HandoffCard.tsx", "state/store.ts"])
+        card = self.files["HandoffCard.tsx"]
+        self.assertEqual(card.count("handoffGive("), 1)
+        self.assertIn("    await s.handoffGive(chat, item.id);", card.split("const give = async () => {", 1)[1].split("\n  };\n", 1)[0])
+        self.assertEqual(re.findall(r"\bgive\(\)", card), ["give()"])
+        self.assertIn("onClick={() => void give()}", card)
+        # Hand over: send() runs from the confirm button's click and the list's and note's Enter only (never a repeat)
+        act = self.files["HandoffAction.tsx"]
+        self.assertEqual(act.count("void send()"), 3)
+        self.assertEqual(act.count("if (!e.repeat) void send();"), 2)
+        self.assertIn('onClick={() => void send()} data-testid="handoff-confirm"', act)
+        for name, src in self.files.items():
+            for body in self._effects(src):
+                for bad in ("send(", "give(", "startTaskThread", "handoffGive"):
+                    self.assertNotIn(bad, body, f"{name}: an effect reaches {bad}")
+        # the store's reducer never sends either
+        reducer = self.store.split("export function reduce(", 1)[1].split("\n// ---- store", 1)[0]
+        for bad in ("handoffGive", "startTaskThread", "bridge.request"):
+            self.assertNotIn(bad, reducer)
 
     def test_the_store_sends_through_thread_create_and_chat_send_only(self) -> None:
         start = self._action("startTaskThread")
         self.assertIn("const thread = await createThread(bot, title, from?.chat);", start)
         self.assertIn("if (thread) await actions.threadSend(bot, thread, text);", start)
+        self.assertNotIn("bridge.request", start)
         give = self._action("handoffGive")
-        # once: marked given before anything goes, only a done card with an answer, through the chat's own send
+        # once: marked given (with the row that carries it) before anything goes, only a done card with an answer
         self.assertIn('if (!card || card.phase !== "done" || card.given || !card.answer?.trim()) return;', give)
-        self.assertLess(give.index('dispatch({ type: "handoff.given"'), give.index("actions.threadSend("))
-        self.assertIn("if (session) await actions.threadSend(bot, session, text);", give)
-        self.assertIn("else await actions.sendTo(bot, text);", give)
-        for body in (start, give):
-            self.assertNotIn("bridge.request", body)
+        for want in ('dispatch({ type: "handoff.given", chat, id, row });', "holdIfBusy("):
+            self.assertIn(want, give)
+        self.assertLess(give.index('dispatch({ type: "handoff.given", chat, id, row });'), give.index("holdIfBusy("))
+        # plain text on both paths: the wire is the text, no skill token hoisted, no Reply chip taken, one chat.send
+        self.assertIn("if (holdIfBusy(chat, row, { text, wire: text }, { type: \"local.user\", bot: chat, id: row, text, now: now() })) return;", give)
+        self.assertEqual(re.findall(r'bridge\.request\("([\w.]+)"', give), ["chat.send"])
+        self.assertIn('bridge.request("chat.send", session ? { bot, session, text } : { bot, text })', give)
+        for bad in ("toWire", "replyTo", "reply_to", "skillNames", "actions.send", "sendTo", "runNow"):
+            self.assertNotIn(bad, give)
         create = self.store.split("const createThread = async (", 1)[1].split("\n  };\n", 1)[0]
         self.assertIn('threadReq("thread.create"', create)
         self.assertIn('if (!stay) dispatch({ type: "ui.thread"', create)
@@ -3606,6 +3658,13 @@ class HandAnAnswerToAnotherBot(unittest.TestCase):
         self.assertIn('.map((l) => (l ? `> ${l}` : ">"))', msg)
         self.assertEqual(msg.count("const note = goalLine(f.note);"), 2)
         self.assertIn("if (a.cut) parts.push(cutLine(a.cut));", msg)
+        # each text starts with a fixed lead, never with the note, the answer or a name, so none can start with `/`
+        self.assertEqual(
+            re.findall(r"const parts = \[`([^$`]*)\$\{", msg),
+            ["Handoff from omher: ", "Answer from "],
+        )
+        self.assertIn("if (note) parts.push(`Note: ${note}`);", msg)
+        self.assertIn("return `From ${printable(f.from, NAME)}: ", msg)
 
     def test_a_mention_only_opens_the_picker(self) -> None:
         act = self.files["HandoffAction.tsx"]

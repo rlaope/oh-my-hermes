@@ -73,7 +73,9 @@ test("Hand to bot: a Friren thread gets the note and the quoted answer, the card
   const first = (await calls("chat.send")).map((c) => c.params);
   expect(first).toHaveLength(1);
   expect(first[0]).toMatchObject({ bot: "friren", session: thread });
-  expect(first[0].text).toContain("Check this against the keep-alive docs\n\nKami wrote this answer in omher, and the person handed it to you:\n\n> 확인했어요.");
+  expect(first[0].text).toMatch(
+    /^Handoff from omher: Kami wrote the answer below, and the person handed it to you\.\n\nNote: Check this against the keep-alive docs\n\n> 확인했어요\./,
+  );
   expect(first[0].text).toContain("upstream timeout");
   await expect(page.getByTestId("bot-kami")).toHaveAttribute("aria-current", "true");
   await expect(page.getByTestId("thread-chat")).toHaveCount(0);
@@ -97,10 +99,10 @@ test("Hand to bot: a Friren thread gets the note and the quoted answer, the card
   await expect(give).toHaveText("Given");
   await expect(give).toBeDisabled();
   await expect.poll(async () => (await calls("chat.send")).slice(before).map((c) => c.params)).toEqual([
-    { bot: "kami", text: "Friren answered:\n\nThe keep-alive docs say 5 s idle, so the 3 retries fit.\nSource: docs/keepalive.md" },
+    { bot: "kami", text: "Answer from Friren:\n\nThe keep-alive docs say 5 s idle, so the 3 retries fit.\nSource: docs/keepalive.md" },
   ]);
   // the person's own message in Kami's chat; nothing else went anywhere
-  await expect(page.getByTestId("bubble-user").filter({ hasText: "Friren answered:" })).toBeVisible();
+  await expect(page.getByTestId("bubble-user").filter({ hasText: "Answer from Friren:" })).toBeVisible();
   await page.waitForTimeout(300);
   expect((await calls("chat.send")).length).toBe(before + 1);
   expect((await calls("thread.create")).length).toBe(1);
@@ -181,4 +183,55 @@ test("stopped: a turn that ends interrupted shows the outcome and offers no Give
   await expect(card.getByTestId("handoff-state")).toHaveText("Friren stopped before answering");
   await expect(card.getByTestId("handoff-give")).toHaveCount(0);
   await expect(card.getByTestId("handoff-open")).toBeVisible();
+});
+
+test("a held Enter hands over once: its repeat neither opens the popover again nor confirms a second thread", async ({ page }) => {
+  const answer = await kami(page);
+  await answer.hover();
+  await answer.getByTestId("handoff-action").click();
+  const pop = page.getByTestId("handoff-popover");
+  await pop.getByTestId("handoff-note").fill("once");
+  await pop.getByTestId("handoff-note").focus();
+  await page.keyboard.down("Enter");
+  await expect(pop).toHaveCount(0);
+  await expect(answer.getByTestId("handoff-action")).toBeFocused();
+  // the key is still held: each further keydown is a repeat
+  for (let i = 0; i < 4; i++) {
+    await page.keyboard.down("Enter");
+    await page.waitForTimeout(80);
+  }
+  await page.keyboard.up("Enter");
+  await expect(pop).toHaveCount(0);
+  await page.waitForTimeout(300);
+  expect((await calls("thread.create")).length).toBe(1);
+  await expect(page.getByTestId("handoff-card")).toHaveCount(1);
+});
+
+test("the picked bot goes offline while the popover is open: the first bot left is picked", async ({ page }) => {
+  const answer = await kami(page);
+  await answer.hover();
+  await answer.getByTestId("handoff-action").click();
+  const pop = page.getByTestId("handoff-popover");
+  const friren = pop.locator('[data-testid=handoff-bot][data-bot="friren"]');
+  await friren.click();
+  await expect(friren).toHaveAttribute("aria-selected", "true");
+  await mock("mock.botStatus", { bot: "friren", status: "offline" });
+  await expect(friren).toHaveCount(0);
+  const first = pop.getByTestId("handoff-bot").first();
+  await expect(first).toHaveAttribute("aria-selected", "true");
+  const name = (await first.locator(".hf-name").textContent())!;
+  await expect(pop.locator(".ho-note")).toHaveText(`${name} gets a new thread with your note and this answer. You stay here.`);
+  await expect(pop.getByTestId("handoff-confirm")).toBeEnabled();
+  await mock("mock.botStatus", { bot: "friren", status: "online" });
+});
+
+test("Hand to bot waits for the answer to finish: not on a row of the turn still running", async ({ page }) => {
+  await kami(page);
+  await mock("mock.emit", { events: [{ event: "turn.start", bot: "kami" }, { event: "message", bot: "kami", id: "hf-live", text: "Looking at the logs first." }] });
+  const live = page.getByTestId("bubble-bot").filter({ hasText: "Looking at the logs first." });
+  await expect(live).toBeVisible();
+  await expect(live.getByTestId("copy-answer")).toHaveCount(1);
+  await expect(live.getByTestId("handoff-action")).toHaveCount(0);
+  await mock("mock.emit", { events: [{ event: "turn.end", bot: "kami", outcome: "done" }] });
+  await expect(live.getByTestId("handoff-action")).toHaveCount(1);
 });

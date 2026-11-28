@@ -14,7 +14,7 @@ import { getDraft } from "../app/drafts";
 import { remoteOnly } from "../app/remote";
 import { openModelPicker } from "../lib/modelPickerEvent";
 import { moveInSidebar } from "./order";
-import { handoffStep } from "../handoff/card";
+import { handoffFailed, handoffLost, handoffOpened, handoffStep } from "../handoff/card";
 import { givenMessage } from "../handoff/message";
 import { lang, LANG_KEY, readLang, setLang, t as tr, type Key, type Lang } from "../i18n";
 import type {
@@ -323,7 +323,8 @@ export type ThreadRouteItem = {
  *  came), stopped (its turn ended otherwise) or gone (the thread was removed). */
 export type HandoffPhase = "working" | "waiting" | "done" | "stopped" | "gone";
 /** "Handed to <bot>" under an answer the person handed to another bot: `thread` of `bot` and how its first turn went
- *  (src/handoff/card.ts). `answer`: that turn's answer once done; `given`: the person gave it back. Page only. */
+ *  (src/handoff/card.ts). `answer`: that turn's answer once done; `given`: the person gave it back, the id of the row
+ *  that carries it (cleared when that row is refused or deleted before it went out). Page only. */
 export type HandoffItem = {
   kind: "handoff";
   id: string;
@@ -335,7 +336,9 @@ export type HandoffItem = {
   /** stopped: how the turn ended (`interrupted`, `ended`, `error`, or `done` with an error) and Hermes' error. */
   outcome?: string;
   error?: string;
-  given?: boolean;
+  /** stopped because the bridge connection dropped: the thread's next read settles it. */
+  lost?: boolean;
+  given?: string;
 };
 export type ChatItem =
   | MessageItem
@@ -914,6 +917,23 @@ function withHandoff(state: AppState, link: { chat: string; id: string }, fn: (h
   return { ...state, chats: { ...state.chats, [link.chat]: withItems(c, c.items.map((i) => (i === old ? next! : i))) } };
 }
 
+/** The handoff cards of `chat` whose given row `unsent` says never went out (refused, or deleted from the waiting
+ *  queue): Give can be pressed again. */
+function ungive(state: AppState, chat: string, unsent: (row: string) => boolean): AppState {
+  const c = state.chats[chat];
+  if (!c?.items.some((i) => i.kind === "handoff" && i.given && unsent(i.given))) return state;
+  const items = c.items.map((i) => (i.kind === "handoff" && i.given && unsent(i.given) ? (({ given: _g, ...h }) => h)(i) : i));
+  return { ...state, chats: { ...state.chats, [chat]: withItems(c, items) } };
+}
+
+/** The thread-to-card links whose card is no longer there, or already says its thread is gone (nothing moves it). */
+function pruneHandoffs(state: AppState): AppState {
+  const live = Object.entries(state.handoffs).filter(([, l]) =>
+    state.chats[l.chat]?.items.some((i) => i.kind === "handoff" && i.id === l.id && i.phase !== "gone"),
+  );
+  return live.length === Object.keys(state.handoffs).length ? state : { ...state, handoffs: Object.fromEntries(live) };
+}
+
 /** The selected bot's chat the person has open: its open thread's (`fold:<bot>:<thread>`), else its main chat. */
 function openChatKey(state: AppState): string | null {
   const bot = state.selectedBot;
@@ -1148,8 +1168,8 @@ export type Action =
   | { type: "thread.routed"; bot: string; id: string; done?: "sent" | "kept"; error?: string }
   /** The answer `message` of chat `chat` was handed to `bot`'s new `thread` (rule 56): its card goes under the answer. */
   | { type: "handoff.add"; chat: string; message: string; bot: string; thread: string; now: number }
-  /** The person gave that thread's answer back (one press, one message). */
-  | { type: "handoff.given"; chat: string; id: string };
+  /** The person gave that thread's answer back (one press, one message): `row`, the user row of `chat` carrying it. */
+  | { type: "handoff.given"; chat: string; id: string; row: string };
 
 // ---- chats that are not a bot's main chat ------------------------------------------------------
 //
@@ -1559,7 +1579,11 @@ export function reduce(state: AppState, a: Action): AppState {
         const thread = !!session && !!state.threads[owner]?.some((r) => r.thread === session);
         chats[b] = isSessionChat(b) && !thread ? ended : { ...ended, stale: true, pendingTurn: null, steeredUnread: undefined, steerAck: null };
       }
-      return { ...state, conn: a.status, chats };
+      // a card following a thread's turn stops with it; the thread's read after the reconnect settles it (rule 56)
+      return Object.values(state.handoffs).reduce(
+        (s, link) => withHandoff(s, link, (h) => handoffLost(h, tr("live.lost"))),
+        { ...state, conn: a.status, chats } as AppState,
+      );
     }
     case "chat.failed":
       // read again (or tried): the steer queue no longer waits on a re-read that is not coming
@@ -1603,7 +1627,7 @@ export function reduce(state: AppState, a: Action): AppState {
         if (at < 0) at = c.items.length;
         else {
           at += 1;
-          while (at < c.items.length && (c.items[at].kind === "threadLink" || c.items[at].kind === "threadRoute")) at += 1;
+          while (at < c.items.length && ["threadLink", "threadRoute", "handoff"].includes(c.items[at].kind)) at += 1;
         }
         return withItems(c, [...c.items.slice(0, at), a.item, ...c.items.slice(at)]);
       });
@@ -1633,7 +1657,7 @@ export function reduce(state: AppState, a: Action): AppState {
       return { ...next, handoffs: { ...next.handoffs, [threadKey(a.bot, a.thread)]: { chat: a.chat, id } } };
     }
     case "handoff.given":
-      return withHandoff(state, { chat: a.chat, id: a.id }, (h) => (h.phase === "done" ? { ...h, given: true } : h));
+      return withHandoff(state, { chat: a.chat, id: a.id }, (h) => (h.phase === "done" ? { ...h, given: a.row } : h));
     case "thread.gone": {
       const list = state.threads[a.bot];
       const key = threadKey(a.bot, a.thread);
@@ -1649,16 +1673,21 @@ export function reduce(state: AppState, a: Action): AppState {
         threads: { ...state.threads, [a.bot]: (list ?? []).filter((r) => r.thread !== a.thread) },
         ui: open ? { ...state.ui, thread: null } : state.ui,
       };
-      // a card that handed an answer to this thread now says the thread is gone
+      // a card that handed an answer to this thread now says the thread is gone; its link, and those of cards this
+      // thread's chat held, go
       const link = state.handoffs[key];
-      return link ? withHandoff(out, link, (h) => ({ ...h, phase: "gone" })) : out;
+      return pruneHandoffs(link ? withHandoff(out, link, (h) => ({ ...h, phase: "gone" })) : out);
     }
     case "watch.missed":
       return a.count > 0 && a.bot !== state.selectedBot
         ? { ...state, unread: { ...state.unread, [a.bot]: (state.unread[a.bot] ?? 0) + a.count } }
         : state;
-    case "chat.opened":
-      return touchChat(state, a.bot, (c) => ({ ...applyOpened(c, a.res, a.now, a.bot, a.since), openError: null }));
+    case "chat.opened": {
+      const next = touchChat(state, a.bot, (c) => ({ ...applyOpened(c, a.res, a.now, a.bot, a.since), openError: null }));
+      // a thread an answer was handed to, read again: its turn may have ended with no event to say so (rule 56)
+      const link = next.handoffs[a.bot];
+      return link ? withHandoff(next, link, (h) => handoffOpened(h, next.chats[a.bot])) : next;
+    }
     case "local.user":
       return touchChat(state, a.bot, (c0) => {
         // the running turn's answer stays above this message (answerSlot) when it is held (it goes out after the
@@ -1692,23 +1721,33 @@ export function reduce(state: AppState, a: Action): AppState {
       if (a.paused && state.chats[a.bot])
         return touchChat(state, a.bot, (c) => withItems(c, c.items.map((i) => (i.kind === "user" && i.id === a.id ? { ...i, waiting: true } : i))));
       return state.chats[a.bot] ? touchChat(state, a.bot, (c) => markRead(c, a.id, a.now)) : state;
-    case "send.failed":
-      return touchChat(state, a.bot, (c) => ({
+    case "send.failed": {
+      const next = touchChat(state, a.bot, (c) => ({
         ...withItems(
           c,
           c.items.map((i) => (i.kind === "user" && i.id === a.id ? (({ readAt: _r, ...m }) => ({ ...m, error: a.error }))(i) : i)),
         ),
         ...(c.pendingTurn === a.id ? { pendingTurn: null } : {}),
       }));
+      // a refused Give is not given; a refused first send into a handed thread stops its card (rule 56)
+      const link = next.handoffs[a.bot];
+      const failed = link ? withHandoff(next, link, (h) => handoffFailed(h, next.chats[a.bot], a.error)) : next;
+      return ungive(failed, a.bot, (row) => row === a.id);
+    }
+    case "queue.drop":
+    case "queue.clear": {
+      if (!state.chats[a.bot]) return state;
+      const next = touchChat(state, a.bot, (c) => reduceQueue(c, a));
+      // a Give whose row was deleted before it went out is not given (rule 56)
+      return ungive(next, a.bot, (row) => !next.chats[a.bot].items.some((i) => i.kind === "user" && i.id === row));
+    }
     case "queue.take":
     case "queue.front":
-    case "queue.drop":
     case "queue.steering":
     case "queue.steered":
     case "queue.resend":
     case "queue.idle":
     case "queue.pause":
-    case "queue.clear":
       return state.chats[a.bot] ? touchChat(state, a.bot, (c) => reduceQueue(c, a)) : state;
     case "event": {
       const next = reduceEvent(state, a.ev, a.now);
@@ -1858,7 +1897,8 @@ export function reduce(state: AppState, a: Action): AppState {
       delete chats[a.bot];
       // a removed thread's or replaced folder chat's unread goes with it (the Dock count sums every key)
       const { [a.bot]: _gone, ...unread } = state.unread;
-      return { ...state, chats, unread };
+      // with its handoff cards, their links
+      return pruneHandoffs({ ...state, chats, unread });
     }
     default:
       return state;
@@ -2264,8 +2304,8 @@ export interface Actions {
    *  `from` (an answer handed to `bot`, rule 56) the person stays in chat `from.chat`, where a refusal is noted, and a
    *  card under the answer `from.message` follows the thread. */
   startTaskThread(bot: string, title: string, text: string, from?: { chat: string; message: string }): Promise<string | null>;
-  /** That card's Give to <bot>: the thread's answer goes once into the card's chat as the person's own message,
-   *  through the chat's normal send (a busy bot holds it in the steer queue). */
+  /** That card's Give to <bot>: the thread's answer goes once into the card's chat as the person's own message, as
+   *  plain text (`chat.send`; a running turn there takes it in, or the steer queue holds it, as a typed message). */
   handoffGive(chat: string, id: string): Promise<void>;
   /** Open `bot`'s main chat and send `text` there (the pages' "say it in words" box, Run now). */
   sendTo(bot: string, text: string): Promise<void>;
@@ -3304,12 +3344,22 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
       const card = state.chats[chat]?.items.find((i): i is HandoffItem => i.kind === "handoff" && i.id === id);
       if (!card || card.phase !== "done" || card.given || !card.answer?.trim()) return;
       const name = state.bots.find((b) => b.name === card.bot)?.display_name || card.bot;
-      // marked first: a second press never sends a second message
-      dispatch({ type: "handoff.given", chat, id });
       const { bot, session } = chatTarget(chat, botNames(state));
       const text = givenMessage(name, card.answer);
-      if (session) await actions.threadSend(bot, session, text);
-      else await actions.sendTo(bot, text);
+      const row = `local-${++localSeq}`;
+      // marked first, with the row that carries it: a second press never sends a second message, and a row refused
+      // or deleted before it went out lets Give be pressed again
+      dispatch({ type: "handoff.given", chat, id, row });
+      // plain text in a main chat and a thread alike: the wire is the text (no skill token hoisted, no Reply chip
+      // taken), so nothing in the other bot's answer can become a command; a busy chat steers or holds it
+      if (holdIfBusy(chat, row, { text, wire: text }, { type: "local.user", bot: chat, id: row, text, now: now() })) return;
+      dispatch({ type: "local.user", bot: chat, id: row, text, now: now() });
+      try {
+        const r = await bridge.request("chat.send", session ? { bot, session, text } : { bot, text });
+        dispatch({ type: "send.ok", bot: chat, id: row, now: now(), paused: r?.paused });
+      } catch (e) {
+        dispatch({ type: "send.failed", bot: chat, id: row, error: errText(e) });
+      }
     },
     openPlugins: (bot) => dispatch({ type: "ui.plugins", bot: bot ?? state.ui.pluginsBot ?? state.selectedBot ?? state.bots[0]?.name ?? null }),
     openApps: (bot) => dispatch({ type: "ui.apps", bot: bot ?? state.ui.appsBot ?? state.selectedBot ?? state.bots[0]?.name ?? null }),
