@@ -38,6 +38,7 @@ export const Bubble = memo(function Bubble({
   paused,
   quote,
   onQuote,
+  heldWhy,
 }: {
   item: Pick<MessageItem, "kind" | "text" | "error" | "reply" | "files" | "skills" | "wait" | "held" | "steered" | "readAt" | "steerReply" | "steerUnknown" | "steerUnused" | "autoSteer" | "waiting">;
   streaming?: boolean;
@@ -57,6 +58,8 @@ export const Bubble = memo(function Bubble({
   from?: ReactNode;
   /** A held message (steer queue): its ↵ mark's menu. */
   onQueue?: (c: QueueChoice) => void;
+  /** Why a held message waits, when the turn is not the reason (the chat is being read again after a reconnect). */
+  heldWhy?: string;
   /** Its steer is on the way: the mark waits. */
   queueBusy?: boolean;
   /** The person's last message in the chat: it carries the "Read" mark. */
@@ -146,6 +149,11 @@ export const Bubble = memo(function Bubble({
         {item.steerUnknown && (
           <div className="msg-wait" data-testid="bubble-steer-unknown">
             {item.steerUnused ? t("sq.unused") : t("sq.unknown")}
+          </div>
+        )}
+        {held && heldWhy && (
+          <div className="msg-wait" data-testid="bubble-held-why">
+            {heldWhy}
           </div>
         )}
         {item.waiting && (

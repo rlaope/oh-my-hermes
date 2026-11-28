@@ -1588,6 +1588,7 @@ export const en = {
   "sq.unused": "Not used · the answer stopped first",
   "sq.send": "Send",
   "sq.sendTip": "Send it as a new message",
+  "sq.heldReread": "Waiting · reading the chat again after the connection came back",
   // steer queue sessions
   "sqs.handed": "Already with {agent} · it takes it next",
   "sqs.noSteer": "{agent} has no way to take a message mid-answer",

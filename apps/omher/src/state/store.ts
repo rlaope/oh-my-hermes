@@ -2411,7 +2411,20 @@ export function createStore(bridge: BridgeLike, opts: StoreOptions = {}): Store 
     const steer = !!c?.turn && !c.stale && !p.files?.length && !p.reply_to && !p.wire.trimStart().startsWith("/") && ahead;
     dispatch({ ...row, held: true, ...(steer ? { steer } : {}) });
     steerNext(key);
+    rereadStale(key);
     return true;
+  };
+  /** Chats being read again by rereadStale: one read per chat at a time. */
+  const rereading = new Set<string>();
+  /** A chat still unread since the bridge came back (`stale`) holds every message on that read. The reconnect's own
+   *  re-read can be lost (its bots.list fails when the link flaps again on wake) and nothing else asks: a message
+   *  typed there would wait for good. So the message reads the chat again itself; once read, it goes out. */
+  const rereadStale = (key: string) => {
+    const c = state.chats[key];
+    if (!c?.stale || !c.loaded || state.conn !== "open" || rereading.has(key)) return;
+    rereading.add(key);
+    const job = key.startsWith("fold:") ? rereadThreads(chatTarget(key, botNames(state)).bot) : loadChat(key);
+    void job.catch(() => {}).finally(() => rereading.delete(key));
   };
   /** The queue head of `key`, when it is a message being steered in and nothing is steering: steer it now. */
   const steerNext = (key: string) => {

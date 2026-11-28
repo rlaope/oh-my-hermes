@@ -1585,6 +1585,7 @@ export const zh: Record<Key, string> = {
   "sq.unused": "未使用 · 回答先停止了",
   "sq.send": "发送",
   "sq.sendTip": "作为新消息发送",
+  "sq.heldReread": "等待中 · 连接已恢复，正在重新读取对话",
   // steer queue sessions
   "sqs.handed": "已交给 {agent} · 它接下来会读",
   "sqs.noSteer": "{agent} 无法在回答中途接收消息",

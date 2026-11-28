@@ -145,6 +145,7 @@ export function Timeline({
             editKeepsFiles={it === lastUser && keptFiles}
             onQueue={off ? (queue ? (c: QueueChoice) => queue.pick(it.id, c) : queuePick(it.id)) : undefined}
             queueBusy={it.held && chat?.steering === it.id}
+            heldWhy={it.held && chat?.stale ? t("sq.heldReread") : undefined}
             queueOff={off ?? undefined}
             last={it.id === lastSent}
             paused={!!chat?.lost?.length}

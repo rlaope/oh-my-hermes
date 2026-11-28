@@ -129,6 +129,11 @@ All notable changes will be documented here.
   normal run with `fast_ineligible:<reasons>` in its lint, and a non-fast graph that qualifies gets `fast_eligible`.
   `settle settles=[...]` closes accepted, failed or blocked nodes together, all-or-nothing: an item refused writes nothing.
   (`src/plugin_bundle/omh/dag_run.py`, `src/plugin_bundle/omh/tools/dag_tool.py`, `src/skills/dag_ulw_skill.py`)
+- **omher: a message to a bot goes out after the Mac wakes from sleep.** Sleep drops the link to the bridge, and the
+  chat is read again when it comes back; when that re-read was lost (the link flapped again), the chat held every message
+  typed afterwards, so Enter and Send seemed to do nothing. A message typed there now reads the chat again itself and
+  goes out, and while it waits for that read its bubble says why. (`apps/omher/src/state/store.ts`,
+  `apps/omher/src/chat/parts/Bubble.tsx`)
 
 ## 5.0.1 - 2026-11-26
 
