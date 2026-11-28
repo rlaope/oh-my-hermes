@@ -411,7 +411,8 @@ Developer or Windows signing certificate is involved: macOS builds use an ad-hoc
 
 The same run then points the in-app updater at the release by rewriting `latest.json` on the rolling `omher-latest`
 prerelease, which every omher reads. `scripts/release-guard.mjs` (Node built-ins only; its tests run in `pnpm test`)
-guards that write:
+guards that write. It always runs from the workflow's own revision, so a hand run on an older tag uses today's guard;
+from the tag being released come only the build and its `src-tauri/tauri.conf.json` (version and pinned key):
 
 - Before the release is made, each updater payload's signature must verify against the key pinned in
   `src-tauri/tauri.conf.json`, the way the updater checks it, and be signed for the manifest's version. A signing-key
