@@ -45,7 +45,7 @@ import type { Account, AccountCli, AccountGroup } from "../lib/protocol";
 import { useAccounts } from "../settings/accounts/useAccounts";
 import { accountForNewSessions } from "../settings/accounts/rules";
 import { CloseToasts } from "./CloseToasts";
-import { matchesSearch } from "../lib/textMatch";
+import { matchesSearch, searchKey } from "../lib/textMatch";
 
 /** The Accounts CLI a new session of `agent` signs in as (mirrors `session_cli` in src-tauri/src/accounts.rs). */
 const SESSION_CLI: Partial<Record<AgentId, AccountCli>> = { claude: "claude", codex: "codex", grok: "grok" };
@@ -290,10 +290,11 @@ function NewSessionMenu({ onClose, trigger, initialFolder }: { onClose: () => vo
     if (why === "escape") trigger.current?.focus();
   };
   // the default is the folder of the terminal open now (a new one goes under the folder the person works in), else
-  // the last folder used, else home
+  // the last folder used, else home; never a folder found gone (nothing starts there)
+  const goneNow = useGoneFolders();
   const openId = getStore().getSnapshot().ui.session;
   const openCwd = openId ? ss.list.find((r) => r.id === openId && isTerminalRec(ss.agents, r))?.cwd : undefined;
-  const at = folder ?? openCwd ?? draftFolder(ss.recent, ss.home);
+  const at = folder ?? (openCwd && !goneNow.includes(pathKey(openCwd)) ? openCwd : undefined) ?? draftFolder(ss.recent, ss.home);
   const pick = (id: AgentId) => {
     close("pick");
     getSessions().startTerminal(id, at || undefined);
@@ -439,7 +440,7 @@ function NewSessionMenu({ onClose, trigger, initialFolder }: { onClose: () => vo
                 key={cwd}
                 type="button"
                 role="menuitem"
-                className={`ss-item${cwd === at ? " on" : ""}`}
+                className={`ss-item${at && pathKey(cwd) === pathKey(at) ? " on" : ""}`}
                 title={cwd}
                 onClick={() => {
                   setFolder(cwd);
@@ -605,11 +606,11 @@ export function pastFork(c: Pick<PastChat, "fork">): string {
 }
 
 /** Whether conversation `c` matches the filter `needle`: by its title, its last line or its folder (as the row shows
- *  it, or whole), ignoring case. */
+ *  it, or whole), as every list search compares (`matchesSearch`: case ignored, Unicode composed, so a decomposed
+ *  Korean folder name as the CLI wrote it matches the same name typed). */
 export function pastMatches(c: PastChat, needle: string, home: string | null): boolean {
-  const n = needle.trim().toLowerCase();
-  if (!n) return true;
-  return [c.title, c.last?.text ?? "", c.cwd, tildePath(c.cwd, home), pastFork(c)].some((v) => v.toLowerCase().includes(n));
+  const n = searchKey(needle.trim());
+  return matchesSearch(n, c.title, c.last?.text, c.cwd, tildePath(c.cwd.normalize("NFC"), home?.normalize("NFC") ?? null), pastFork(c));
 }
 
 /** The + menu's second step: `agent`'s recent conversations in the menu's folder (`folder`, its chip), or in every

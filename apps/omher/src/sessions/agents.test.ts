@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   AGENTS,
+  draftFolder,
+  dropRecent,
+  folderChoices,
   folderName,
   INSTALL,
   isAgentId,
@@ -166,6 +169,28 @@ describe("session agents", () => {
     expect(recentFolders([at("/a", 1), at("/b", 3, "codex"), at("/a", 2, "grok")])).toEqual(["/b", "/a"]);
     const many = Array.from({ length: 8 }, (_, i) => at(`/f${i}`, i));
     expect(recentFolders(many)).toEqual(["/f7", "/f6", "/f5", "/f4", "/f3"]);
+  });
+
+  it("one folder in two spellings (NFD as the shell reports it, NFC as the dialog picks it) is one recent folder", () => {
+    const nfc = "/Users/you/프로젝트";
+    const nfd = nfc.normalize("NFD");
+    expect(nfd).not.toBe(nfc);
+    let r = pushRecent([], { agent: "claude", cwd: nfc, at: 1 });
+    r = pushRecent(r, { agent: "codex", cwd: nfd, at: 2 });
+    // kept once, as spelled when it was used last
+    expect(r).toEqual([{ agent: "codex", cwd: nfd, at: 2 }]);
+    expect(recentFolders([{ agent: "claude", cwd: nfc, at: 1 }, { agent: "codex", cwd: nfd, at: 2 }])).toEqual([nfd]);
+    expect(folderChoices(r, nfc)).toEqual({ recent: [nfd], home: null });
+  });
+
+  it("a folder found gone leaves the recent list in any spelling, so it is no longer where a new terminal starts", () => {
+    const gone = "/Users/you/문서".normalize("NFD");
+    const r: Recent[] = [
+      { agent: "claude", cwd: gone, at: 3 },
+      { agent: "codex", cwd: "/b", at: 2 },
+    ];
+    expect(dropRecent(r, gone.normalize("NFC"))).toEqual([{ agent: "codex", cwd: "/b", at: 2 }]);
+    expect(draftFolder(dropRecent(r, gone), "/home")).toBe("/b");
   });
 });
 

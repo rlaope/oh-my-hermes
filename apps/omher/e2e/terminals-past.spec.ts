@@ -6,12 +6,14 @@
 // 3. This folder / All folders: All folders lists every folder's conversations (each row shows its own), the choice is
 //    kept for the next time, and the filter narrows by title, last line or folder;
 // 4. picking one opens a TERMINALS row in that folder whose CLI continues that conversation (`--resume <id>`); the
-//    same conversation picked again opens that row; a conversation whose folder is gone starts nothing and says so.
+//    same conversation picked again opens that row, also one closed moments ago (its close is undone); a conversation
+//    whose folder is gone starts nothing, says so and leaves the recent folders.
 // This replaces the chat-mode coverage of sessions-manage.spec.ts (skipped since TERMINALS replaced chat sessions).
 // Shots: OMHER_SHOTS=<dir> -> past-all-folders.png, past-codex-fork.png
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { closeFromSidebar } from "./split-drag-helpers";
 
 const MOCK = Number(process.env.OMHER_MOCK_PORT || 5308);
 const SHOTS = process.env.OMHER_SHOTS || "";
@@ -211,4 +213,54 @@ test("a conversation already running in a Shell row's Claude Code opens that row
   await expect(page.getByTestId(`session-${id}`).locator(".ss-open")).toHaveAttribute("aria-current", "true");
   expect(await rows.count()).toBe(count);
   expect((await calls(page)).filter((c) => c.op === "start" && c.agent === "claude")).toEqual([]);
+});
+
+test("a conversation whose row was closed moments ago (still in the undo window) undoes that close; no second Claude Code starts on it", async ({ page }) => {
+  await open(page, "/home/you/code/omher");
+  await page.evaluate(() => void ((window as unknown as { __omherCloseGraceMs: number }).__omherCloseGraceMs = 10_000));
+  await plusMenu(page, "/home/you/code/omher");
+  await page.getByTestId("session-past-claude").click();
+  await page.getByTestId(`session-past-row-${MARIGOLD}`).click();
+  type S = { getState(): { list: { id: string; agentSession?: string }[] }; ptyOf(id: string): number | null };
+  const onIt = () => page.evaluate((c) => (window as unknown as { __omherSessions: S }).__omherSessions.getState().list.filter((r) => r.agentSession === c).map((r) => r.id), MARIGOLD);
+  await expect.poll(async () => (await onIt()).length).toBe(1);
+  const [id] = await onIt();
+  await expect.poll(() => page.evaluate((i) => (window as unknown as { __omherSessions: S }).__omherSessions.ptyOf(i), id)).not.toBeNull();
+  // closed: the row leaves, its Claude Code runs on hidden for the undo window
+  await closeFromSidebar(page, id);
+  await expect(page.getByTestId(`close-toast-${id}`)).toBeVisible();
+  await expect(page.getByTestId(`session-${id}`)).toHaveCount(0);
+  // picked again inside the window: the close is undone and that row opens
+  await plusMenu(page, "/home/you/code/omher");
+  await page.getByTestId("session-past-claude").click();
+  await page.getByTestId(`session-past-row-${MARIGOLD}`).click();
+  await expect(page.getByTestId(`close-toast-${id}`)).toHaveCount(0);
+  await expect(page.getByTestId(`session-${id}`).locator(".ss-open")).toHaveAttribute("aria-current", "true");
+  expect(await onIt()).toEqual([id]);
+  expect((await calls(page)).filter((c) => c.op === "start" && c.agent === "claude")).toHaveLength(1);
+});
+
+test("a folder found gone leaves the recent folders: the next + does not start there", async ({ page }) => {
+  await open(page, "/home/you/code/omher");
+  // the omher folder is used first, then a conversation in web-app, which is gone
+  await plusMenu(page, "/home/you/code/omher");
+  await page.getByTestId("session-agent-shell").click();
+  await expect(page.getByTestId("terminal")).toBeVisible();
+  await page.evaluate(() => {
+    const w = window as unknown as { __omherMockGoneFolders: string[]; __omherPickFolder: string };
+    w.__omherMockGoneFolders = ["/home/you/code/web-app"];
+    w.__omherPickFolder = "/home/you/code/web-app";
+  });
+  await plusMenu(page, "/home/you/code/web-app");
+  await page.getByTestId("session-past-codex").click();
+  await page.getByTestId(`session-past-row-${THEME}`).click();
+  await expect(page.getByTestId("term-group-gone")).toHaveText("This folder no longer exists");
+  const recent = () => page.evaluate(() => (JSON.parse(localStorage.getItem("omher.sessions.recent") || "[]") as { cwd: string }[]).map((r) => r.cwd));
+  await expect.poll(recent).toEqual(["/home/you/code/omher"]);
+  // the + menu's folder chip is on the folder that is still there, and its list no longer offers the gone one
+  await page.getByTestId("session-new").or(page.getByTestId("session-start")).first().click();
+  const menu = page.getByTestId("session-menu");
+  await expect(menu.getByTestId("session-folder")).toHaveAttribute("title", "/home/you/code/omher");
+  await menu.getByTestId("session-folder").click();
+  await expect(menu.locator('[data-testid=session-folder-pick][title="/home/you/code/web-app"]')).toHaveCount(0);
 });

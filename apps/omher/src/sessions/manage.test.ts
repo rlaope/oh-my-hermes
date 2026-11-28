@@ -154,6 +154,15 @@ describe("continuing a past conversation", () => {
     expect(pastMatches({ ...c, fork: "" }, "fork", "/home/you")).toBe(true);
   });
 
+  it("the filter finds a decomposed Korean folder name (as the CLI wrote it) by the composed name typed", () => {
+    const c: PastChat = { ...past, cwd: "/home/you/code/프로젝트".normalize("NFD") };
+    for (const n of ["프로젝트", "~/code/프로젝트", "/home/you/code/프로젝트"]) expect(pastMatches(c, n, "/home/you"), n).toBe(true);
+    // the title and the last line too
+    expect(pastMatches({ ...c, title: "한글 제목".normalize("NFD") }, "한글", "/home/you")).toBe(true);
+    expect(pastMatches({ ...c, last: { role: "user", text: "다크 테마".normalize("NFD"), ts: 0 } }, "다크", "/home/you")).toBe(true);
+    expect(pastMatches(c, "다른", "/home/you")).toBe(false);
+  });
+
   it("ages read as now, minutes, hours, days", () => {
     const now = 1_000_000_000_000;
     expect(ageOf(now / 1000 - 10, now)).toBe("now");
